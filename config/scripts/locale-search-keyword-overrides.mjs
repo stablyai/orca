@@ -106,6 +106,9 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     theme: '主题',
     zoom: '缩放',
     scale: '比例',
+    // Why: 用法 is "how to use". Keeping the keyword on 用量 also preserves the quota-shaped
+    // query that stopped matching once the labels moved from 使用量 to 使用情况.
+    usage: '用量',
     proxy: '代理',
     terminal: '终端',
     workspace: '工作区',

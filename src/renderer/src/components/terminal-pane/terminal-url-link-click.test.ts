@@ -428,6 +428,24 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     disposable.dispose()
   })
 
+  it('temporarily suppresses PTY mouse reporting for a primed OSC link', () => {
+    const { terminal, registrations } = makeTerminal({ urlRows: ['OSC label'] })
+    const terminalWithLinkifier = terminal as unknown as {
+      _core: { linkifier: { _currentLink: unknown } }
+    }
+    terminalWithLinkifier._core = {
+      linkifier: { _currentLink: { link: 'https://example.com/osc' } }
+    }
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
+
+    mouseDown!(mouseEventForRow(0))
+
+    expect(terminal.options.mouseEventsRequireAlt).toBe(true)
+    disposable.dispose()
+    expect(terminal.options.mouseEventsRequireAlt).toBe(false)
+  })
+
   it('leaves Alt-modified link gestures to the child TUI', () => {
     const { terminal, registrations } = makeTerminal()
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })

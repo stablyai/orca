@@ -483,7 +483,6 @@ async function main() {
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
       ORCA_E2E_HOME_DIR: isolatedHome,
-      ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
       ...(options.headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
     }
   })

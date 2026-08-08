@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   detectFilePathSegments,
   isFilePathCodeSpan,
-  normalizeFilePath
+  normalizeFilePath,
+  splitFilePathLineSuffix
 } from './markdown-file-path-detection'
 
 describe('detectFilePathSegments', () => {
@@ -64,6 +65,69 @@ describe('detectFilePathSegments', () => {
     ])
   })
 
+  it('detects POSIX absolute paths', () => {
+    expect(detectFilePathSegments('Wrote /Users/me/wt/src/app.tsx today')).toEqual([
+      { type: 'text', value: 'Wrote ' },
+      { type: 'file', value: '/Users/me/wt/src/app.tsx', path: '/Users/me/wt/src/app.tsx' },
+      { type: 'text', value: ' today' }
+    ])
+    expect(detectFilePathSegments('/repo/src/index.ts')).toEqual([
+      { type: 'file', value: '/repo/src/index.ts', path: '/repo/src/index.ts' }
+    ])
+    expect(detectFilePathSegments('/root.ts')).toEqual([
+      { type: 'file', value: '/root.ts', path: '/root.ts' }
+    ])
+  })
+
+  it('detects files directly under explicit Windows and relative roots', () => {
+    expect(detectFilePathSegments(String.raw`C:\root.ts`)).toEqual([
+      { type: 'file', value: String.raw`C:\root.ts`, path: String.raw`C:\root.ts` }
+    ])
+    expect(detectFilePathSegments('./root.ts')).toEqual([
+      { type: 'file', value: './root.ts', path: 'root.ts' }
+    ])
+    expect(detectFilePathSegments('../root.ts')).toEqual([
+      { type: 'file', value: '../root.ts', path: '../root.ts' }
+    ])
+  })
+
+  it('detects paths with :line and :line:col suffixes', () => {
+    expect(detectFilePathSegments('see src/foo.ts:42 here')).toEqual([
+      { type: 'text', value: 'see ' },
+      { type: 'file', value: 'src/foo.ts:42', path: 'src/foo.ts:42' },
+      { type: 'text', value: ' here' }
+    ])
+    expect(
+      detectFilePathSegments('/wt/src/app.tsx:120:7 and C:\\repo\\a.ts:3').filter(
+        (s) => s.type === 'file'
+      )
+    ).toEqual([
+      { type: 'file', value: '/wt/src/app.tsx:120:7', path: '/wt/src/app.tsx:120:7' },
+      { type: 'file', value: 'C:\\repo\\a.ts:3', path: 'C:\\repo\\a.ts:3' }
+    ])
+  })
+
+  it('keeps a non-line colon tail out of the match', () => {
+    expect(detectFilePathSegments('edit src/foo.ts: then run')).toEqual([
+      { type: 'text', value: 'edit ' },
+      { type: 'file', value: 'src/foo.ts', path: 'src/foo.ts' },
+      { type: 'text', value: ': then run' }
+    ])
+  })
+
+  it('does not partially parse numeric-looking non-line tails', () => {
+    expect(detectFilePathSegments('log src/app.ts:1e3 oops')).toEqual([
+      { type: 'text', value: 'log ' },
+      { type: 'file', value: 'src/app.ts', path: 'src/app.ts' },
+      { type: 'text', value: ':1e3 oops' }
+    ])
+    expect(detectFilePathSegments('coverage src/app.ts:80% of lines')).toEqual([
+      { type: 'text', value: 'coverage ' },
+      { type: 'file', value: 'src/app.ts', path: 'src/app.ts' },
+      { type: 'text', value: ':80% of lines' }
+    ])
+  })
+
   it('does not match bare filenames without a slash', () => {
     expect(detectFilePathSegments('open Main.tsx please')).toEqual([
       { type: 'text', value: 'open Main.tsx please' }
@@ -73,6 +137,15 @@ describe('detectFilePathSegments', () => {
   it('does not match URLs', () => {
     expect(detectFilePathSegments('https://example.com/path/file.ts')).toEqual([
       { type: 'text', value: 'https://example.com/path/file.ts' }
+    ])
+    expect(detectFilePathSegments('see https://example.com/path/file.ts:42 now')).toEqual([
+      { type: 'text', value: 'see https://example.com/path/file.ts:42 now' }
+    ])
+  })
+
+  it('does not match protocol-relative URLs', () => {
+    expect(detectFilePathSegments('load //cdn.example.com/lib/app.js')).toEqual([
+      { type: 'text', value: 'load //cdn.example.com/lib/app.js' }
     ])
   })
 
@@ -171,9 +244,58 @@ describe('isFilePathCodeSpan', () => {
     expect(isFilePathCodeSpan('node_modules/@scope/pkg/file.ts')).toBe(true)
   })
 
+  it('accepts POSIX absolute paths and :line citations', () => {
+    expect(isFilePathCodeSpan('/Users/me/wt/src/app.tsx')).toBe(true)
+    expect(isFilePathCodeSpan('src/foo.ts:42')).toBe(true)
+    expect(isFilePathCodeSpan('src/foo.ts:42:7')).toBe(true)
+    expect(isFilePathCodeSpan('MobileNativeChatComposer.tsx:23')).toBe(true)
+    expect(isFilePathCodeSpan(String.raw`C:\repo\Main.tsx:12`)).toBe(true)
+  })
+
   it('rejects emails and git URLs with a mid-token @', () => {
     expect(isFilePathCodeSpan('git@github.com:user/repo.git')).toBe(false)
     expect(isFilePathCodeSpan('user@host.com/path/file.txt')).toBe(false)
+  })
+})
+
+describe('splitFilePathLineSuffix', () => {
+  it('splits :line and :line:col suffixes', () => {
+    expect(splitFilePathLineSuffix('src/foo.ts:42')).toEqual({
+      path: 'src/foo.ts',
+      line: 42,
+      column: null
+    })
+    expect(splitFilePathLineSuffix('src/foo.ts:42:7')).toEqual({
+      path: 'src/foo.ts',
+      line: 42,
+      column: 7
+    })
+  })
+
+  it('keeps Windows drive colons intact', () => {
+    expect(splitFilePathLineSuffix(String.raw`C:\repo\a.ts`)).toEqual({
+      path: String.raw`C:\repo\a.ts`,
+      line: null,
+      column: null
+    })
+    expect(splitFilePathLineSuffix(String.raw`C:\repo\a.ts:12`)).toEqual({
+      path: String.raw`C:\repo\a.ts`,
+      line: 12,
+      column: null
+    })
+  })
+
+  it('ignores non-numeric and zero suffixes', () => {
+    expect(splitFilePathLineSuffix('src/foo.ts')).toEqual({
+      path: 'src/foo.ts',
+      line: null,
+      column: null
+    })
+    expect(splitFilePathLineSuffix('src/foo.ts:0')).toEqual({
+      path: 'src/foo.ts:0',
+      line: null,
+      column: null
+    })
   })
 })
 

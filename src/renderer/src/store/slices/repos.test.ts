@@ -141,6 +141,7 @@ describe('repo slice runtime routing', () => {
 
     expect(store.getState().repos[0]?.displayName).toBe('SSH Renamed')
     expect(reposUpdate).toHaveBeenCalledWith({
+      hostId: 'ssh:ssh-1',
       repoId: sshRepo.id,
       updates: { displayName: 'SSH Renamed' }
     })
@@ -210,9 +211,10 @@ describe('repo slice runtime routing', () => {
 
   it('sets up a project on a local host through the project setup API', async () => {
     const project: Project = {
-      id: 'project-1',
+      id: 'github:stablyai/orca',
       displayName: 'Project',
       badgeColor: '#000',
+      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' },
       sourceRepoIds: ['local-repo'],
       createdAt: 1,
       updatedAt: 1
@@ -231,6 +233,7 @@ describe('repo slice runtime routing', () => {
     }
     projectsSetupExistingFolder.mockResolvedValue({ project, setup, repo: localRepo })
     const store = createTestStore()
+    store.setState({ projects: [project] })
 
     await expect(
       store.getState().setupProjectExistingFolder({
@@ -250,6 +253,7 @@ describe('repo slice runtime routing', () => {
     expect(store.getState().projectHostSetups).toEqual([setup])
     expect(projectsSetupExistingFolder).toHaveBeenCalledWith({
       projectId: project.id,
+      projectProviderIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' },
       hostId: 'local',
       path: '/local',
       kind: 'git'

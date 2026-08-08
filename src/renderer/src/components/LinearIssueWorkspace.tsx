@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Clipboard,
   FolderKanban,
+  FolderOpen,
   GitBranch,
   Link,
   LoaderCircle,
@@ -31,15 +32,30 @@ import {
   type LinearLocalComment
 } from '@/components/LinearItemDrawer'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { LinearIssueTextEditor } from '@/components/LinearIssueTextEditor'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildLinearIssueContextSnapshot } from '@/lib/linear-issue-context-snapshot'
+import {
+  findLinearIssueWorkspaceAttachment,
+  getLinearIssueWorkspaceAttachmentLabel
+} from '@/lib/linear-issue-workspace-attachment'
+import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { buildContainedLinkedContextBlock } from '@/lib/linked-work-item-context'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
+import { useAllWorktrees } from '@/store/selectors'
 import {
   buildLinearIssueBranchName,
   formatLinearIssueRelativeTime
@@ -109,6 +125,39 @@ function LinearIssueAvatar({
     >
       {initial}
     </span>
+  )
+}
+
+export function LinearSubIssueTitleInput({
+  value,
+  onChange,
+  onSubmit
+}: {
+  value: string
+  onChange: (value: string) => void
+  onSubmit: () => void
+}): React.JSX.Element {
+  const imeEnter = useImeEnterGestureOwnership()
+  return (
+    <input
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onCompositionStart={() => imeEnter.setComposing(true)}
+      onCompositionEnd={() => imeEnter.setComposing(false)}
+      onKeyDown={(event) => {
+        if (imeEnter.ownsKeyDown(event)) {
+          return
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          onSubmit()
+        }
+      }}
+      onKeyUp={imeEnter.onKeyUp}
+      onBlur={imeEnter.reset}
+      placeholder={translate('auto.components.LinearIssueWorkspace.c182e02de5', 'Sub-issue title')}
+      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    />
   )
 }
 
@@ -285,20 +334,10 @@ function LinearIssueSubIssueButton({
         </PopoverTrigger>
         <PopoverContent className="w-80 p-3" align="start">
           <div className="space-y-3">
-            <input
+            <LinearSubIssueTitleInput
               value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void handleCreate()
-                }
-              }}
-              placeholder={translate(
-                'auto.components.LinearIssueWorkspace.c182e02de5',
-                'Sub-issue title'
-              )}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              onChange={setTitle}
+              onSubmit={() => void handleCreate()}
             />
             <div className="flex justify-end">
               <Button
@@ -512,6 +551,12 @@ export default function LinearIssueWorkspace({
 }: LinearIssueWorkspaceProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const providerSettings = sourceContext ?? settings
+  const allWorktrees = useAllWorktrees()
+  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const attachmentWorkspaces = useMemo(
+    () => [...allWorktrees, ...folderWorkspaces.map(folderWorkspaceToWorktree)],
+    [allWorktrees, folderWorkspaces]
+  )
   const [fullIssue, setFullIssue] = useState<LinearIssue | null>(null)
   const [issueLoading, setIssueLoading] = useState(false)
   const [comments, setComments] = useState<LinearComment[]>([])
@@ -647,11 +692,26 @@ export default function LinearIssueWorkspace({
 
   const displayed = fullIssue ?? issue
 
+  const attachedWorkspace = useMemo(
+    () => (displayed ? findLinearIssueWorkspaceAttachment(attachmentWorkspaces, displayed) : null),
+    [attachmentWorkspaces, displayed]
+  )
+  const attachedWorkspaceLabel = attachedWorkspace
+    ? getLinearIssueWorkspaceAttachmentLabel(attachedWorkspace)
+    : null
+
   const handleUseIssue = useCallback((): void => {
     if (!displayed) {
       return
     }
     onUse(displayed)
+  }, [displayed, onUse])
+
+  const handleOpenOrUseIssue = useCallback((): void => {
+    if (!displayed) {
+      return
+    }
+    openLinearIssueWorkspaceOrStart(displayed, () => onUse(displayed))
   }, [displayed, onUse])
 
   const handleCommentAdded = useCallback((comment: LinearLocalComment) => {
@@ -779,24 +839,68 @@ export default function LinearIssueWorkspace({
               {translate('auto.components.LinearIssueWorkspace.30c1242f3a', 'Copy identifier')}
             </TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={handleUseIssue}
-                aria-label={translate(
-                  'auto.components.LinearIssueWorkspace.30a7f56c0a',
-                  'Start workspace from issue'
-                )}
-              >
-                <ArrowRight className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.LinearIssueWorkspace.e1e0a9bca9', 'Start workspace')}
-            </TooltipContent>
-          </Tooltip>
+          {attachedWorkspace ? (
+            <DropdownMenu modal={false}>
+              <ButtonGroup>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleOpenOrUseIssue}
+                  className="gap-1.5 whitespace-nowrap"
+                  aria-label={translate(
+                    'auto.components.LinearIssueWorkspace.openAttachedWorkspace',
+                    'Open workspace attached to issue'
+                  )}
+                >
+                  <FolderOpen className="size-3.5" />
+                  {translate(
+                    'auto.components.LinearIssueWorkspace.openWorkspace',
+                    'Open workspace'
+                  )}
+                </Button>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    aria-label={translate(
+                      'auto.components.LinearIssueWorkspace.moreWorkspaceActions',
+                      'More issue workspace actions'
+                    )}
+                  >
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </ButtonGroup>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={handleUseIssue}>
+                  <Plus className="size-4" />
+                  {translate(
+                    'auto.components.LinearIssueWorkspace.startNewWorkspace',
+                    'Start new workspace'
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={handleOpenOrUseIssue}
+                  aria-label={translate(
+                    'auto.components.LinearIssueWorkspace.30a7f56c0a',
+                    'Start workspace from issue'
+                  )}
+                >
+                  <ArrowRight className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {translate('auto.components.LinearIssueWorkspace.e1e0a9bca9', 'Start workspace')}
+              </TooltipContent>
+            </Tooltip>
+          )}
           {variant === 'sheet' ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -949,6 +1053,33 @@ export default function LinearIssueWorkspace({
               onProjectChanged={handleProjectChanged}
               sourceContext={sourceContext}
             />
+            <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
+              <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
+                <span>
+                  {translate('auto.components.LinearIssueWorkspace.workspaceSection', 'Workspace')}
+                </span>
+              </div>
+              <div className="p-3">
+                {attachedWorkspaceLabel ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenOrUseIssue}
+                    aria-label={translate(
+                      'auto.components.LinearIssueWorkspace.openAttachedWorkspace',
+                      'Open workspace attached to issue'
+                    )}
+                    className="flex min-h-9 w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <FolderOpen className="size-4 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{attachedWorkspaceLabel}</span>
+                  </button>
+                ) : (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    {translate('auto.components.LinearIssueWorkspace.noWorkspaceYet', 'None yet')}
+                  </div>
+                )}
+              </div>
+            </section>
             <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
               <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
                 <span>

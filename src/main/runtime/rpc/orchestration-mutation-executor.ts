@@ -22,13 +22,14 @@ export class OrchestrationMutationExecutor {
   async run(
     request: RpcRequest,
     params: unknown,
-    invoke: (mutation?: DurableMutationInvocation) => Promise<unknown> | unknown
+    invoke: (mutation?: DurableMutationInvocation) => Promise<unknown> | unknown,
+    callerFingerprintOverride?: string
   ): Promise<unknown> {
     const requestId = request.orchestrationRequestId
     if (!requestId || !isOrchestrationMutation(request.method, params)) {
       return await invoke()
     }
-    const callerFingerprint = authenticatedCallerFingerprint(request)
+    const callerFingerprint = callerFingerprintOverride ?? authenticatedCallerFingerprint(request)
     const payloadHash = createHash('sha256')
       .update(JSON.stringify(canonicalize({ method: request.method, params })))
       .digest('hex')
@@ -53,8 +54,14 @@ export class OrchestrationMutationExecutor {
           return { disposition: row.state, row }
         })()
       : db.beginMutationReceipt(identity)
+    const resumedPendingMutation =
+      begun.disposition === 'pending' && request.method === 'orchestration.workerRelease'
 
     if (begun.disposition === 'completed') {
+      const active = this.inFlight.get(key)
+      if (active) {
+        return attachMutationReceipt(await active, requestId, true)
+      }
       return attachMutationReceipt(JSON.parse(begun.row.receipt ?? 'null'), requestId, true)
     }
     if (begun.disposition === 'pending') {
@@ -62,33 +69,35 @@ export class OrchestrationMutationExecutor {
       if (active) {
         return attachMutationReceipt(await active, requestId, true)
       }
-      const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
-      throw new OrchestrationError(
-        'operation_unknown',
-        recovery
-          ? `Worker start ${requestId} was accepted as Dispatch ${recovery.dispatchId} before restart. Inspect that Dispatch; do not start another worker.`
-          : `Mutation ${requestId} may have been accepted before restart. Retry inspection or recovery with the same request ID.`,
-        recovery
-          ? {
-              requestId,
-              dispatchId: recovery.dispatchId,
-              recoveryCommand: `orca orchestration worker-show --dispatch ${recovery.dispatchId} --json`
-            }
-          : { requestId }
-      )
+      if (request.method !== 'orchestration.workerRelease') {
+        const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
+        throw new OrchestrationError(
+          'operation_unknown',
+          recovery
+            ? `Worker start ${requestId} was accepted as Dispatch ${recovery.dispatchId} before restart. Inspect that Dispatch; do not start another worker.`
+            : `Mutation ${requestId} may have been accepted before restart. Retry inspection or recovery with the same request ID.`,
+          recovery
+            ? {
+                requestId,
+                dispatchId: recovery.dispatchId,
+                recoveryCommand: `orca orchestration worker-show --dispatch ${recovery.dispatchId} --json`
+              }
+            : { requestId }
+        )
+      }
     }
 
     const recordReceipt = (result: unknown): void => {
       db.completeMutationReceipt({
         ...identity,
-        receipt: JSON.stringify(attachMutationReceipt(result, requestId, false))
+        receipt: JSON.stringify(attachMutationReceipt(result, requestId, resumedPendingMutation))
       })
     }
     const active = Promise.resolve().then(() => invoke({ identity, recordReceipt }))
     this.inFlight.set(key, active)
     try {
       const result = await active
-      const receipted = attachMutationReceipt(result, requestId, false)
+      const receipted = attachMutationReceipt(result, requestId, resumedPendingMutation)
       db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(receipted) })
       return receipted
     } catch (error) {
@@ -100,6 +109,20 @@ export class OrchestrationMutationExecutor {
       this.inFlight.delete(key)
     }
   }
+}
+
+const executorsByRuntime = new WeakMap<OrcaRuntimeService, OrchestrationMutationExecutor>()
+
+export function getOrchestrationMutationExecutor(
+  runtime: OrcaRuntimeService
+): OrchestrationMutationExecutor {
+  const existing = executorsByRuntime.get(runtime)
+  if (existing) {
+    return existing
+  }
+  const executor = new OrchestrationMutationExecutor(runtime)
+  executorsByRuntime.set(runtime, executor)
+  return executor
 }
 
 export function authenticatedCallerFingerprint(request: RpcRequest): string {

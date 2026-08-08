@@ -51,7 +51,6 @@ function createPane(
     webLinksAddon: { dispose: vi.fn() } as never,
     webglAddon: { dispose: vi.fn() } as never,
     ligaturesAddon: null,
-    compositionHandler: null,
     pendingSplitScrollState: null,
     pendingSplitScrollBufferDisposable: null,
     debugLabel: null,
@@ -121,7 +120,7 @@ describe('pane WebGL refresh lifecycle', () => {
     expect(pane.webglAddon).toBeNull()
   })
 
-  it('disposes WebGL whenever rendering is suspended', () => {
+  it('disposes WebGL when rendering is suspended', () => {
     const dispose = vi.fn()
     const pane = createPane({ webglAddon: { dispose } as never })
 

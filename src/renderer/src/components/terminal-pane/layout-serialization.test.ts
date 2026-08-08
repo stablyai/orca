@@ -33,13 +33,15 @@ beforeAll(() => {
 })
 
 import {
-  buildFontFamily,
   buildPostReplayLiveAgentReattachReset,
   POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_MODE_RESET,
   replayPayloadEndsWithCursorHidden,
   RESET_KITTY_KEYBOARD_PROTOCOL,
-  RESET_TERMINAL_CURSOR_STYLE,
+  RESET_TERMINAL_CURSOR_STYLE
+} from '../../../../shared/terminal-mode-reset-profiles'
+import {
+  buildFontFamily,
   restoreScrollbackBuffers,
   serializePaneTree,
   serializeTerminalLayout,

@@ -108,9 +108,17 @@ describe('simulator-palette-search', () => {
       }
     ]
 
-    expect(searchSimulatorTabs(entries, 'mobile')[0]?.secondaryRange).toEqual({ start: 0, end: 6 })
+    // Why no secondaryRange: type aliases match without a display secondary.
+    const mobileHit = searchSimulatorTabs(entries, 'mobile')[0]
+    expect(mobileHit?.secondaryText).toBe('')
+    expect(mobileHit?.secondaryRange).toBeNull()
+    expect(mobileHit?.typeAliasMatch).toEqual({
+      text: 'mobile emulator tab',
+      range: { start: 0, end: 6 }
+    })
     expect(searchSimulatorTabs(entries, 'simulator')).toHaveLength(1)
     expect(searchSimulatorTabs(entries, 'ios')).toHaveLength(1)
+    expect(searchSimulatorTabs(entries, 'emulator')).toHaveLength(1)
   })
 
   it('searches worktree and repo metadata', () => {
@@ -173,5 +181,50 @@ describe('simulator-palette-search', () => {
 
   it('rejects oversized whitespace before trimming simulator palette queries', () => {
     expect(searchSimulatorTabs([], ' '.repeat(SIMULATOR_PALETTE_QUERY_MAX_BYTES + 1))).toEqual([])
+  })
+
+  it('falls back to the branch label when a cleared display name left it undefined', () => {
+    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
+    // so the store-level display-name corruption reaches here too.
+    const entries = [
+      {
+        tab: makeTab(),
+        worktree: makeWorktree({
+          displayName: undefined as unknown as string,
+          branch: 'refs/heads/feature/mobile-emulator'
+        }),
+        repoName: 'orca',
+        worktreeSortIndex: 0,
+        isCurrentTab: false,
+        isCurrentWorktree: false
+      }
+    ]
+
+    expect(searchSimulatorTabs(entries, 'mobile-emulator')[0]).toMatchObject({
+      worktreeName: 'feature/mobile-emulator',
+      worktreeRange: { start: 'feature/'.length, end: 'feature/mobile-emulator'.length }
+    })
+  })
+
+  it('lists a branch-less row on the empty query without throwing', () => {
+    const entries = [
+      {
+        tab: makeTab(),
+        worktree: makeWorktree({
+          displayName: undefined as unknown as string,
+          branch: undefined as unknown as string,
+          path: '/repos/design-review'
+        }),
+        repoName: 'orca',
+        worktreeSortIndex: 0,
+        isCurrentTab: false,
+        isCurrentWorktree: false
+      }
+    ]
+
+    expect(searchSimulatorTabs(entries, '')[0]).toMatchObject({
+      worktreeName: 'design-review',
+      worktreeRange: null
+    })
   })
 })

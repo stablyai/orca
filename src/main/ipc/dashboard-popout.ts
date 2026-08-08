@@ -12,9 +12,11 @@ import {
 import { safelyRevealWindow } from '../window/focus-existing-window'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer, sendToTrustedUIRenderer } from './ui'
 import {
+  admitDashboardSnapshot,
   isDashboardPaneKey,
   isDashboardRevealAgentArgs,
-  isDashboardSnapshot
+  isDashboardSleepWorkspaceArgs,
+  isDashboardSpawnAgentArgs
 } from './dashboard-payload-validation'
 
 // The most recent snapshot the main renderer published, replayed to the popout
@@ -36,6 +38,8 @@ export function registerDashboardPopoutHandlers(
   ipcMain.removeHandler('dashboard:getPopoutOpen')
   ipcMain.removeHandler('dashboardPopout:revealAgent')
   ipcMain.removeHandler('dashboardPopout:ackAgent')
+  ipcMain.removeHandler('dashboardPopout:spawnAgent')
+  ipcMain.removeHandler('dashboardPopout:sleepWorkspace')
 
   onDashboardPopoutOpenChanged((open) => {
     if (!open) {
@@ -52,26 +56,42 @@ export function registerDashboardPopoutHandlers(
     }
   })
 
-  ipcMain.handle('dashboardPopout:open', (event): void => {
+  ipcMain.handle('dashboardPopout:open', (event, view: unknown): void => {
     if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
-    createOrFocusDashboardPopout(store, undefined, {
+    if (view !== undefined && view !== 'board' && view !== 'map') {
+      return
+    }
+    createOrFocusDashboardPopout(store, view, {
       getKeybindings: () => keybindings?.getOverrides()
     })
   })
 
   // Relay: the main renderer publishes derived snapshots; forward to the popout.
   ipcMain.handle('dashboard:publishSnapshot', (event, snapshot: unknown): void => {
-    if (
-      !isTrustedUIRenderer(event.sender) ||
-      !isDashboardEnabled(store) ||
-      !isDashboardSnapshot(snapshot)
-    ) {
+    if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
-    lastSnapshot = snapshot
-    getDashboardPopoutWindow()?.webContents.send('dashboard:snapshot', snapshot)
+    const admitted = admitDashboardSnapshot(snapshot)
+    // Why: silently dropping left the pop-out replaying a stale board with no
+    // trace of why it stopped updating.
+    if (!admitted) {
+      console.warn('[dashboard] rejected malformed snapshot; pop-out keeps its previous board')
+      return
+    }
+    if (admitted.droppedCardCount > 0) {
+      console.warn(`[dashboard] dropped ${admitted.droppedCardCount} invalid card(s) from snapshot`)
+    }
+    // The renderer omits repoIconsByRepoId once it is unchanged, so carry the
+    // last map into the cache — a popout mounting mid-session is replayed this
+    // and has no icons of its own to retain. The live popout does, so what is
+    // forwarded stays as slim as the renderer sent it.
+    lastSnapshot =
+      admitted.snapshot.repoIconsByRepoId === undefined && lastSnapshot?.repoIconsByRepoId
+        ? { ...admitted.snapshot, repoIconsByRepoId: lastSnapshot.repoIconsByRepoId }
+        : admitted.snapshot
+    getDashboardPopoutWindow()?.webContents.send('dashboard:snapshot', admitted.snapshot)
   })
 
   // The popout asks for a snapshot on mount: replay the cache immediately, then
@@ -127,5 +147,27 @@ export function registerDashboardPopoutHandlers(
     } catch {
       // Best-effort; the per-window focus above may still bring it forward.
     }
+  })
+
+  ipcMain.handle('dashboardPopout:spawnAgent', (event, args: unknown): void => {
+    if (
+      !isDashboardPopoutRenderer(event.sender) ||
+      !isDashboardEnabled(store) ||
+      !isDashboardSpawnAgentArgs(args)
+    ) {
+      return
+    }
+    sendToTrustedUIRenderer('ui:spawnDashboardAgent', args)
+  })
+
+  ipcMain.handle('dashboardPopout:sleepWorkspace', (event, args: unknown): void => {
+    if (
+      !isDashboardPopoutRenderer(event.sender) ||
+      !isDashboardEnabled(store) ||
+      !isDashboardSleepWorkspaceArgs(args)
+    ) {
+      return
+    }
+    sendToTrustedUIRenderer('ui:sleepDashboardWorkspace', args)
   })
 }

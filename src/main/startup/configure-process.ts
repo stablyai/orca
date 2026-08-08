@@ -99,15 +99,14 @@ export function patchPackagedProcessPath(): void {
   const extraPaths: string[] = []
 
   if (process.platform !== 'win32') {
-    extraPaths.push(
-      '/opt/homebrew/bin',
-      '/opt/homebrew/sbin',
-      '/usr/local/bin',
-      '/usr/local/sbin',
-      '/snap/bin',
-      '/home/linuxbrew/.linuxbrew/bin',
-      '/nix/var/nix/profiles/default/bin'
-    )
+    extraPaths.push('/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin')
+
+    if (process.platform === 'linux') {
+      // Why: snap and Linuxbrew ship on Linux only, so seeding them elsewhere adds phantom PATH entries every spawn must stat.
+      extraPaths.push('/snap/bin', '/home/linuxbrew/.linuxbrew/bin')
+    }
+
+    extraPaths.push('/nix/var/nix/profiles/default/bin')
 
     if (home) {
       extraPaths.push(
@@ -255,6 +254,23 @@ export function installDevParentSignalQuit(isDev: boolean): void {
 }
 
 export function enableMainProcessGpuFeatures(): void {
+  const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
+  const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
+  const isLinuxX11Override =
+    ozonePlatform === 'x11' || (ozonePlatform === '' && ozonePlatformHint === 'x11')
+  const isLinuxWaylandSession =
+    process.platform === 'linux' &&
+    !isLinuxX11Override &&
+    (Boolean(process.env.WAYLAND_DISPLAY) ||
+      process.env.XDG_SESSION_TYPE === 'wayland' ||
+      ozonePlatformHint === 'wayland' ||
+      ozonePlatform === 'wayland')
+
+  if (isLinuxWaylandSession) {
+    // Why: Chromium otherwise leaves Wayland text-input-v3 disconnected from native IME frameworks.
+    app.commandLine.appendSwitch('enable-wayland-ime')
+  }
+
   if (process.platform === 'linux' && getMainE2EConfig().userDataDir) {
     // Why: Ubuntu/Xvfb runners fail Electron startup with "GPU process isn't usable"; E2E needs no GPU, so use the software path.
     app.disableHardwareAcceleration()
@@ -273,17 +289,6 @@ export function enableMainProcessGpuFeatures(): void {
   // 128 raises the ceiling for real layouts while staying bounded so context leaks still surface.
   app.commandLine.appendSwitch('max-active-webgl-contexts', '128')
 
-  const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
-  const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
-  const isLinuxX11Override =
-    ozonePlatform === 'x11' || (ozonePlatform === '' && ozonePlatformHint === 'x11')
-  const isLinuxWaylandSession =
-    process.platform === 'linux' &&
-    !isLinuxX11Override &&
-    (Boolean(process.env.WAYLAND_DISPLAY) ||
-      process.env.XDG_SESSION_TYPE === 'wayland' ||
-      ozonePlatformHint === 'wayland' ||
-      ozonePlatform === 'wayland')
   if (isLinuxWaylandSession) {
     // Why: #5319 — Wayland loses the eager GPU channel; drop the GPU sandbox so Chromium opens it lazily.
     app.commandLine.appendSwitch('disable-gpu-sandbox')

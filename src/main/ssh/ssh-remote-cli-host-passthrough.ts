@@ -17,19 +17,53 @@ import {
   parsePositiveSafeIntegerNumericText,
   parsePositiveSafeIntegerText
 } from '../../shared/timer-delay'
+import {
+  ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
+} from '../../shared/orchestration-compatibility-evidence'
+import {
+  REMOTE_ARTIFACT_INPUT_ENV,
+  type RemoteArtifactInput
+} from '../../shared/artifact-cli-bridge'
+
+export type SshCliRuntimeAuthority = {
+  kind: 'ssh'
+  targetId: string
+  connectionIncarnation: string
+  attachmentId: string
+}
 
 export type RemoteOrcaCliRequest = {
   argv: string[]
   cwd: string
   env: Record<string, string>
   stdin?: string
+  artifactInput?: RemoteArtifactInput
+  runtimeAuthority?: SshCliRuntimeAuthority
 }
 
 export type RemoteOrcaCliResult = {
   stdout: string
   stderr: string
   exitCode: number
+  postOutput?: RemoteOrcaCliPostOutput
 }
+
+export type RemoteOrcaCliPostOutput =
+  | {
+      kind: 'legacy_check_ack'
+      terminal: string
+      messageIds: string[]
+      types?: string[]
+    }
+  | {
+      kind: 'legacy_question_ack'
+      terminal: string
+      questionId: string
+      answerMessageId: string
+    }
 
 export type HostCliPassthroughOptions = {
   execPath?: string
@@ -54,6 +88,7 @@ const REMOTE_CONTEXT_ENV_VARS = [
   'ORCA_TERMINAL_HANDLE',
   'ORCA_WORKTREE_ID',
   'ORCA_PANE_KEY',
+  'ORCA_AGENT_LAUNCH_TOKEN',
   'ORCA_WORKSPACE_ID'
 ] as const
 
@@ -106,6 +141,8 @@ export function buildHostCliEnv(args: {
   remoteEnv: Record<string, string>
   userDataPath: string
   remoteCwd: string
+  runtimeAuthority?: SshCliRuntimeAuthority
+  artifactInput?: RemoteArtifactInput
 }): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...args.hostEnv }
   for (const key of REMOTE_CONTEXT_ENV_VARS) {
@@ -127,6 +164,24 @@ export function buildHostCliEnv(args: {
   env.ORCA_NODE_REPL_EXTERNAL_MODULE = args.hostEnv.NODE_REPL_EXTERNAL_MODULE ?? ''
   delete env.NODE_OPTIONS
   delete env.NODE_REPL_EXTERNAL_MODULE
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]
+  delete env[REMOTE_ARTIFACT_INPUT_ENV]
+  if (args.runtimeAuthority) {
+    env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'ssh'
+    env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV] = args.runtimeAuthority.targetId
+    env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV] =
+      args.runtimeAuthority.connectionIncarnation
+    env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV] = args.runtimeAuthority.attachmentId
+  }
+  if (args.artifactInput) {
+    const sourceKey = args.runtimeAuthority
+      ? JSON.stringify(['ssh', args.runtimeAuthority.targetId, args.artifactInput.sourceKey])
+      : args.artifactInput.sourceKey
+    env[REMOTE_ARTIFACT_INPUT_ENV] = JSON.stringify({ ...args.artifactInput, sourceKey })
+  }
   env.ELECTRON_RUN_AS_NODE = '1'
   return env
 }
@@ -177,7 +232,9 @@ export async function runHostOrcaCliPassthrough(
     hostEnv,
     remoteEnv: request.env,
     userDataPath,
-    remoteCwd: request.cwd
+    remoteCwd: request.cwd,
+    runtimeAuthority: request.runtimeAuthority,
+    artifactInput: request.artifactInput
   })
 
   return await new Promise<RemoteOrcaCliResult>((resolve, reject) => {

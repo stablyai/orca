@@ -195,6 +195,14 @@ describe('browserManager grab operations', () => {
       expect(selection.opId).toBe('op-1')
     })
 
+    it('tears down an armed overlay when disabling before selection starts', async () => {
+      const result = await browserManager.setGrabMode('tab-1', false, guest)
+
+      expect(result).toBe(true)
+      expect(guestExecuteJavaScriptMock).toHaveBeenCalledTimes(1)
+      expect(guestExecuteJavaScriptMock.mock.calls[0][0]).toContain('grab.cleanup()')
+    })
+
     it('returns false if injection fails', async () => {
       guestExecuteJavaScriptMock.mockRejectedValue(new Error('Injection failed'))
       const result = await browserManager.setGrabMode('tab-1', true, guest)

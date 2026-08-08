@@ -7,6 +7,7 @@ import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types
 import { RemoteFileBrowser } from './RemoteFileBrowser'
 import { SshTargetRow } from './SshTargetRow'
 import { translate } from '@/i18n/i18n'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 
 type RemoteStepProps = {
   sshTargets: (SshTarget & { state?: SshConnectionState })[]
@@ -40,6 +41,7 @@ export function RemoteStep({
   onStopNestedScan
 }: RemoteStepProps): React.JSX.Element {
   const [browsing, setBrowsing] = useState(false)
+  const imeEnter = useImeEnterGestureOwnership()
   const selectedTarget = selectedTargetId
     ? sshTargets.find((target) => target.id === selectedTargetId)
     : null
@@ -171,8 +173,15 @@ export function RemoteStep({
             <Input
               value={remotePath}
               onChange={(event) => onRemotePathChange(event.target.value)}
+              onBlur={imeEnter.reset}
+              onCompositionStart={() => imeEnter.setComposing(true)}
+              onCompositionEnd={() => imeEnter.setComposing(false)}
+              onKeyUp={imeEnter.onKeyUp}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                if (imeEnter.ownsKeyDown(event)) {
+                  return
+                }
+                if (event.key === 'Enter') {
                   event.preventDefault()
                   if (selectedTargetId && remotePath.trim() && !isAddingRemote) {
                     onAdd()

@@ -10,6 +10,8 @@ body:
       value: |
         Use this form for new features or workflow improvements.
 
+        Please write your issue in English.
+
   - type: textarea
     id: problem
     attributes:

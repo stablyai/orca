@@ -1,7 +1,11 @@
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { readAgentStateFileSync } from '../agent-state-file-reader'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import {
+  recoverInterruptedGuardedFileOperation,
+  writeFileAtomically,
+  writeFileAtomicallyIfUnchanged
+} from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
 import { normalizeDeprecatedCodexHookFeatureFlag } from './config-toml-deprecated-hook-flag'
@@ -85,6 +89,48 @@ export function syncSystemConfigIntoManagedCodexHome(
       [...promotionPlan.conflicts].filter(([key]) => mirrorResult.preservedConflictKeys.has(key))
     )
   )
+}
+
+/**
+ * Refreshes the retired shared home for PTYs that survived real-home rollout.
+ *
+ * This is deliberately one-way: a retained PTY may hold pre-rollout settings,
+ * so treating that home as a promotion source could overwrite the live config.
+ */
+export function syncSystemConfigIntoLegacySharedCodexHome(
+  homes: CodexSettingsPromotionHomes = {
+    runtimeHomePath: getOrcaManagedCodexHomePath(),
+    systemHomePath: getSystemCodexHomePath()
+  }
+): void {
+  const systemConfigPath = join(homes.systemHomePath, 'config.toml')
+  const runtimeConfigPath = join(homes.runtimeHomePath, 'config.toml')
+  recoverInterruptedGuardedFileOperation(runtimeConfigPath)
+  const rawSystemConfig = existsSync(systemConfigPath)
+    ? readAgentStateFileSync(systemConfigPath)
+    : ''
+  // Why: a missing cloud-synced source is not proof the user cleared config.
+  if (rawSystemConfig.trim() === '') {
+    return
+  }
+
+  const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(homes.systemHomePath)
+  const runtimeConfigBeforeMirror = existsSync(runtimeConfigPath)
+    ? readAgentStateFileSync(runtimeConfigPath)
+    : null
+  const nextRuntimeConfig =
+    runtimeConfigBeforeMirror !== null
+      ? mergeSystemCodexConfigIntoRuntime(
+          runtimeConfigBeforeMirror,
+          prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
+        )
+      : prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
+  if (runtimeConfigBeforeMirror === nextRuntimeConfig) {
+    return
+  }
+  // Why: stage first, then compare immediately before replace so a retained
+  // Codex trust write during mirror preparation wins.
+  writeFileAtomicallyIfUnchanged(runtimeConfigPath, runtimeConfigBeforeMirror, nextRuntimeConfig)
 }
 
 type CodexConfigMirrorResult =

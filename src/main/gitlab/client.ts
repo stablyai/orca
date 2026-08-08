@@ -25,7 +25,9 @@ import { derivePipelineStatus, mapIssueToWorkItem, mapMRInfo, mapMRToWorkItem } 
 import {
   acquire,
   classifyGlabError,
+  classifyJobLogError,
   classifyListIssuesError,
+  isMissingJobLogError,
   getGlabKnownHosts,
   getProjectRef,
   getProjectRefForRemote,
@@ -39,6 +41,7 @@ import {
   type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
+import { rememberGlabKnownHosts } from './gitlab-known-host-probe'
 import type { IssueListState } from './issues'
 import {
   hasHostedReviewLocalGitOptions,
@@ -100,6 +103,8 @@ export async function diagnoseAuth(): Promise<GitLabAuthDiagnostic> {
     })
     const output = `${stdout}\n${stderr}`
     const hosts = parseGlabAuthStatusHosts(output)
+    // Why: refreshing auth must advance the provider cache key past a stale null result.
+    rememberGlabKnownHosts(hosts)
     return {
       glabAvailable: true,
       authenticated:
@@ -316,7 +321,11 @@ export async function getMergeRequestForBranch(
         [
           'api',
           ...glabHostnameArgs(projectRef, connectionId),
-          `projects/${encodedProject(projectRef.path)}/merge_requests?source_branch=${encodeURIComponent(branchName)}&order_by=updated_at&sort=desc&per_page=1`
+          // Why: GitLab does not proactively recompute merge status on list endpoints, so this row
+          // can sit at `unchecked` forever — and the sidebar merge button gates on MERGEABLE. Ask
+          // for the async recalculation (best-effort; ignored for non-Developers when
+          // `restrict_merge_status_recheck` is on) so polling converges instead of stalling.
+          `projects/${encodedProject(projectRef.path)}/merge_requests?source_branch=${encodeURIComponent(branchName)}&order_by=updated_at&sort=desc&per_page=1&with_merge_status_recheck=true`
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
@@ -1233,7 +1242,12 @@ export async function getJobTrace(
         return { ok: true, trace: stdout }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        return { ok: false, error: classifyGlabError(msg).message }
+        // A job with no log is an empty log, not a failure: surfacing the 404 would
+        // pin an error on the Checks row for a job canceled before it started.
+        if (isMissingJobLogError(msg)) {
+          return { ok: true, trace: '' }
+        }
+        return { ok: false, error: classifyJobLogError(msg).message }
       } finally {
         release()
       }

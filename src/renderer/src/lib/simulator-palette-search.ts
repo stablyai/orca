@@ -1,5 +1,6 @@
 import type { Tab, TabGroup, Worktree } from '../../../shared/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
+import { resolveWorktreeDisplayName } from './worktree-default-display-name'
 import type { MatchRange } from './worktree-palette-search'
 
 export type SearchableSimulatorTab = {
@@ -23,6 +24,7 @@ export type SimulatorPaletteSearchResult = {
   secondaryRange: MatchRange | null
   repoRange: MatchRange | null
   worktreeRange: MatchRange | null
+  typeAliasMatch?: { text: string; range: MatchRange } | null
   isCurrentTab: boolean
   isCurrentWorktree: boolean
   score: number
@@ -31,6 +33,16 @@ export type SimulatorPaletteSearchResult = {
 type SimulatorPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
 
 export const SIMULATOR_PALETTE_QUERY_MAX_BYTES = 2 * 1024
+
+// Why search-only: the row icon already says "emulator"; a fixed secondary label
+// crowds Cmd+J the same way "Terminal tab" did. Keep these strings matchable so
+// typing "mobile" / "simulator" still finds emulator tabs.
+const SIMULATOR_TYPE_SEARCH_ALIASES = [
+  'mobile emulator tab',
+  'mobile emulator',
+  'ios simulator',
+  'emulator'
+] as const
 
 export function isSimulatorPaletteQueryTooLarge(
   query: string,
@@ -179,7 +191,11 @@ export function searchSimulatorTabs(
 
   for (const entry of entries) {
     const title = entry.tab.label || 'Mobile Emulator'
-    const secondaryText = 'Mobile Emulator tab'
+    // Why: type is already clear from the smartphone icon; a fixed label only
+    // crowds the row (and used to leave a bare "· ·" under width pressure).
+    const secondaryText = ''
+    // Why: a cleared display name leaves this undefined at runtime; findRange would throw.
+    const worktreeName = resolveWorktreeDisplayName(entry.worktree)
     const baseResult = {
       tabId: entry.tab.id,
       worktreeId: entry.worktree.id,
@@ -187,7 +203,7 @@ export function searchSimulatorTabs(
       title,
       secondaryText,
       repoName: entry.repoName,
-      worktreeName: entry.worktree.displayName,
+      worktreeName,
       isCurrentTab: entry.isCurrentTab,
       isCurrentWorktree: entry.isCurrentWorktree
     }
@@ -223,37 +239,33 @@ export function searchSimulatorTabs(
       continue
     }
 
-    const secondaryRange = findRange(secondaryText, trimmedQuery)
-    if (secondaryRange) {
+    let typeAliasHit: { text: string; range: MatchRange } | null = null
+    for (const alias of SIMULATOR_TYPE_SEARCH_ALIASES) {
+      const range = findRange(alias, trimmedQuery)
+      if (range) {
+        typeAliasHit = { text: alias, range }
+        break
+      }
+    }
+    if (typeAliasHit) {
       results.push({
         ...baseResult,
         titleRange: null,
-        secondaryRange,
+        // Why null: aliases are search keys only — nothing to highlight in the row.
+        secondaryRange: null,
         repoRange: null,
         worktreeRange: null,
+        typeAliasMatch: typeAliasHit,
         score: scoreSimulatorTabMatch({
           fieldWeight: 20,
-          matchIndex: secondaryRange.start,
+          matchIndex: typeAliasHit.range.start,
           entry
         })
       })
       continue
     }
 
-    const aliasRange = findRange('ios simulator', trimmedQuery)
-    if (aliasRange) {
-      results.push({
-        ...baseResult,
-        titleRange: null,
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange: null,
-        score: scoreSimulatorTabMatch({ fieldWeight: 24, matchIndex: aliasRange.start, entry })
-      })
-      continue
-    }
-
-    const worktreeRange = findRange(entry.worktree.displayName, trimmedQuery)
+    const worktreeRange = findRange(worktreeName, trimmedQuery)
     if (worktreeRange) {
       results.push({
         ...baseResult,

@@ -20,7 +20,7 @@ import {
 } from '../../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
-import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
+import { resolveNativeChatLaunchSessionOptions } from '@/components/native-chat/native-chat-session-option-enrichment'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 
 type FloatingTerminalWindowControlsProps = {
@@ -80,7 +80,7 @@ export function FloatingTerminalWindowControls({
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(defaultAgent, state.settings?.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(defaultAgent, state.settings?.agentDefaultEnv),
-      sessionOptions: resolveNativeChatSessionOptionDefaults(
+      sessionOptions: resolveNativeChatLaunchSessionOptions(
         state.settings?.nativeChatSessionOptions,
         defaultAgent
       ),

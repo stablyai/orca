@@ -3,6 +3,10 @@ import { Loader2 } from 'lucide-react'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { PASTE_TERMINAL_TEXT_EVENT, type PasteTerminalTextDetail } from '@/constants/terminal'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import {
+  ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
+  type TerminalCommandFinishedEventDetail
+} from '@/hooks/terminal-command-finished-event'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
@@ -29,6 +33,8 @@ type OnboardingInlineCommandTerminalProps = {
   onOpened?: () => void
   onInteracted?: (method: 'keyboard' | 'pointer', event?: KeyboardEvent<HTMLElement>) => void
   onTerminalExit?: () => void
+  // OSC 133;D reports the command outcome while the shell remains alive.
+  onCommandFinished?: (bestEffortExitCode: number | null) => void
 }
 
 /**
@@ -48,7 +54,8 @@ export function OnboardingInlineCommandTerminal({
   shellOverride,
   onOpened,
   onInteracted,
-  onTerminalExit
+  onTerminalExit,
+  onCommandFinished
 }: OnboardingInlineCommandTerminalProps): React.JSX.Element {
   // Why: brand the id so a remote runtime scopes this ephemeral terminal to the
   // floating terminal instead of rejecting the synthetic id.
@@ -79,6 +86,24 @@ export function OnboardingInlineCommandTerminal({
   useEffect(() => {
     onOpened?.()
   }, [onOpened])
+
+  // Why: the branded id isolates command outcomes to this inline terminal.
+  useEffect(() => {
+    if (!onCommandFinished) {
+      return
+    }
+    const handleCommandFinished = (event: Event): void => {
+      const detail = (event as CustomEvent<TerminalCommandFinishedEventDetail>).detail
+      if (detail?.worktreeId !== worktreeId) {
+        return
+      }
+      onCommandFinished(detail.exitCode)
+    }
+    window.addEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, handleCommandFinished)
+    return () => {
+      window.removeEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, handleCommandFinished)
+    }
+  }, [onCommandFinished, worktreeId])
 
   useEffect(() => {
     let cancelled = false

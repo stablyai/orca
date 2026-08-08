@@ -48,6 +48,7 @@ import {
   loadIssueImageAttachments,
   type MediaResolutionStats
 } from './attachment-images'
+import { JiraSummaryLookupError } from '../../shared/jira-summary-lookup'
 
 const ISSUE_FIELDS = [
   'summary',
@@ -63,9 +64,17 @@ const ISSUE_FIELDS = [
   'updated'
 ]
 
+// Why: list/typeahead only need identity + metadata; description ADF parse is the hot-path cost.
+const ISSUE_LIST_FIELDS = ISSUE_FIELDS.filter((field) => field !== 'description')
+
 // Why: detail reads need attachment metadata so inline ADF media can be resolved
 // to downloadable image content; list/search omit this for payload size.
 const ISSUE_DETAIL_FIELDS = [...ISSUE_FIELDS, 'attachment']
+// `created`/`updated` are required: mapJiraIssue falls back to "now" when they're absent,
+// which would silently report the lookup time as the issue's timestamps.
+const ISSUE_SUMMARY_FIELDS = ['summary', 'project', 'issuetype', 'status', 'created', 'updated']
+const ISSUE_SUMMARY_TIMEOUT_MS = 30_000
+const ISSUE_SEARCH_TIMEOUT_MS = 30_000
 
 type JiraRecord = Record<string, unknown>
 
@@ -93,6 +102,51 @@ function clampLimit(limit: number | undefined, fallback = 30): number {
 type JiraIssueSearchFailure = {
   error: unknown
   auth: boolean
+}
+
+/** Run against one signal that trips on the caller's abort or the request deadline. */
+async function withJiraDeadline<T>(
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+  run: (deadlineSignal: AbortSignal) => Promise<T>
+): Promise<T> {
+  const controller = new AbortController()
+  const abort = (): void => controller.abort()
+  signal?.addEventListener('abort', abort, { once: true })
+  if (signal?.aborted) {
+    controller.abort()
+  }
+  const timer = setTimeout(abort, timeoutMs)
+  try {
+    return await run(controller.signal)
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', abort)
+  }
+}
+
+function settleJiraSummaryRead<T>(read: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(new Error('Jira summary lookup aborted'))
+  }
+  return new Promise((resolve, reject) => {
+    const handleAbort = (): void => {
+      cleanup()
+      reject(new Error('Jira summary lookup aborted'))
+    }
+    const cleanup = (): void => signal.removeEventListener('abort', handleAbort)
+    signal.addEventListener('abort', handleAbort, { once: true })
+    void read.then(
+      (value) => {
+        cleanup()
+        resolve(value)
+      },
+      (error: unknown) => {
+        cleanup()
+        reject(error)
+      }
+    )
+  })
 }
 
 function getErrorStatus(error: unknown): number | null {
@@ -474,7 +528,8 @@ function filterToJql(filter: JiraIssueFilter): string {
 async function searchIssuesForClient(
   entry: JiraClientForSite,
   jql: string,
-  limit: number
+  limit: number,
+  signal?: AbortSignal
 ): Promise<JiraIssue[]> {
   // Server/DC only has the classic /search resource; /search/jql is Cloud-only.
   const searchPath =
@@ -486,8 +541,9 @@ async function searchIssuesForClient(
     body: JSON.stringify({
       jql,
       maxResults: limit,
-      fields: ISSUE_FIELDS
-    })
+      fields: ISSUE_LIST_FIELDS
+    }),
+    signal
   })
   return (result.issues ?? []).map((issue) => mapJiraIssue(entry.site, issue))
 }
@@ -503,7 +559,8 @@ export async function listIssues(
 export async function searchIssues(
   jql: string,
   limit = 30,
-  siteId?: JiraSiteSelection | null
+  siteId?: JiraSiteSelection | null,
+  signal?: AbortSignal
 ): Promise<JiraIssue[]> {
   const entries = getClients(siteId)
   if (entries.length === 0 || !jql.trim()) {
@@ -512,26 +569,33 @@ export async function searchIssues(
   const safeLimit = clampLimit(limit)
   const failures: (JiraIssueSearchFailure | undefined)[] = Array.from({ length: entries.length })
   const surfaceSiteFailure = shouldSurfaceSiteFailure(siteId, entries.length)
-  const results = await Promise.all(
-    entries.map(async (entry, index) => {
-      await acquire()
-      try {
-        return await searchIssuesForClient(entry, jql.trim(), safeLimit)
-      } catch (error) {
-        const authFailure = isAuthError(error)
-        if (authFailure) {
-          clearToken(entry.site.id)
+  const results = await withJiraDeadline(signal, ISSUE_SEARCH_TIMEOUT_MS, (requestSignal) =>
+    Promise.all(
+      entries.map(async (entry, index) => {
+        // Why: queueing on an abandoned search would keep occupying the shared Jira pool.
+        await acquire(requestSignal)
+        try {
+          return await searchIssuesForClient(entry, jql.trim(), safeLimit, requestSignal)
+        } catch (error) {
+          if (requestSignal.aborted) {
+            // Abandoned by the caller: not a site failure, so don't clear tokens or mask a real one.
+            throw error
+          }
+          const authFailure = isAuthError(error)
+          if (authFailure) {
+            clearToken(entry.site.id)
+          }
+          if (surfaceSiteFailure) {
+            throw toIssueSearchFailureError(error)
+          }
+          console.warn('[jira] searchIssues failed:', error)
+          failures[index] = { error: toIssueSearchFailureError(error), auth: authFailure }
+          return [] as JiraIssue[]
+        } finally {
+          release()
         }
-        if (surfaceSiteFailure) {
-          throw toIssueSearchFailureError(error)
-        }
-        console.warn('[jira] searchIssues failed:', error)
-        failures[index] = { error: toIssueSearchFailureError(error), auth: authFailure }
-        return [] as JiraIssue[]
-      } finally {
-        release()
-      }
-    })
+      })
+    )
   )
   // 'all' fan-out: only surface an error when every connected site failed, so a
   // partial success (or a genuinely empty result) is not reported as an error.
@@ -601,6 +665,49 @@ export async function getIssue(
     }
   }
   return null
+}
+
+export async function getIssueSummary(
+  key: string,
+  siteId: string,
+  signal?: AbortSignal
+): Promise<JiraIssue | null> {
+  let entries: JiraClientForSite[]
+  try {
+    entries = getClients(siteId)
+  } catch (error) {
+    throw new JiraSummaryLookupError('auth', error)
+  }
+  const entry = entries.find((candidate) => candidate.site.id === siteId)
+  if (!entry) {
+    throw new JiraSummaryLookupError('disconnected')
+  }
+
+  return withJiraDeadline(signal, ISSUE_SUMMARY_TIMEOUT_MS, async (requestSignal) => {
+    await acquire(requestSignal)
+    try {
+      const params = new URLSearchParams({ fields: ISSUE_SUMMARY_FIELDS.join(',') })
+      const issue = await settleJiraSummaryRead(
+        jiraRequest<JiraRecord>(
+          entry,
+          `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}?${params.toString()}`,
+          { signal: requestSignal }
+        ),
+        requestSignal
+      )
+      return mapJiraIssue(entry.site, issue)
+    } catch (error) {
+      if (isAuthError(error)) {
+        throw new JiraSummaryLookupError('auth', error)
+      }
+      if (getErrorStatus(error) === 404) {
+        throw new JiraSummaryLookupError('not-found', error)
+      }
+      throw new JiraSummaryLookupError('read-failed', error)
+    } finally {
+      release()
+    }
+  })
 }
 
 export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreateIssueResult> {

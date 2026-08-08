@@ -1,4 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
+import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
@@ -19,6 +20,12 @@ import {
   installCodexEchoLatencyProbe,
   summarizeLatencies
 } from './codex-composer-echo-latency-probe'
+import {
+  attachTerminalImeBoundaryEvidence,
+  disposeTerminalImeBoundaryProbe,
+  installTerminalImeBoundaryProbe,
+  readTerminalImeBoundaryTrace
+} from './terminal-ime-boundary-probe'
 
 // Why: only the live composer draws this status bar. Banner text like "OpenAI's
 // command-line coding agent" also renders on the sign-in screen, and the
@@ -44,10 +51,57 @@ const TERMINAL_DUMP_CHARS = 4_000
 const MAX_P50_ECHO_LATENCY_MS = 35
 const MAX_P95_ECHO_LATENCY_MS = 80
 const MAX_WORST_ECHO_LATENCY_MS = 150
+const TWO_SET_KOREAN_ID = 'com.apple.inputmethod.Korean.2SetKorean'
+const KOREAN_TUI_TEXT = '가나다라마바사아자차카타파하'
+const KOREAN_TUI_REPETITIONS = 5
+const KOREAN_TUI_EXPECTED = KOREAN_TUI_TEXT.repeat(KOREAN_TUI_REPETITIONS)
+const ESC = String.fromCharCode(27)
+const KEY_RELEASE_REPORT_RE = new RegExp(`${ESC}\\[\\d+;1:3u`, 'g')
+const CSI_RE = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, 'g')
+const KOREAN_TUI_KEY_CODES = [
+  15, 40, 1, 40, 14, 40, 3, 40, 0, 40, 12, 40, 17, 40, 2, 40, 13, 40, 8, 40, 6, 40, 7, 40, 9, 40
+]
+const KOREAN_TUI_REMAINING_KEY_CODES = Array.from({ length: KOREAN_TUI_REPETITIONS - 1 }, () => [
+  ...KOREAN_TUI_KEY_CODES,
+  5,
+  40
+]).flat()
 
 type CodexCursorBlinkSample = {
   elapsedMs: number
   paintedCursorCellCount: number
+}
+
+function typeNativeKorean(keyCodes: readonly number[]): void {
+  execFileSync('osascript', [
+    '-e',
+    `tell application "System Events" to key code {${keyCodes.join(', ')}}`
+  ])
+}
+
+function focusApplication(processId: number): void {
+  execFileSync('osascript', [
+    '-e',
+    `tell application "System Events" to set frontmost of first application process whose unix id is ${processId} to true`
+  ])
+}
+
+async function readActiveComposition(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
+    const textarea = document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea:focus')
+    const composition = textarea?.parentElement?.querySelector<HTMLElement>(
+      '.composition-view.active'
+    )
+    return composition?.textContent?.replaceAll('\u200e', '') ?? null
+  })
+}
+
+function stripKeyReleaseReports(data: string): string {
+  return data.replace(KEY_RELEASE_REPORT_RE, '')
+}
+
+function stripCsi(data: string): string {
+  return data.replace(CSI_RE, '')
 }
 
 // Why the focus assert: a run that types into an unfocused pane records zero
@@ -258,10 +312,18 @@ test.describe('local Codex terminal typing latency', () => {
       const echo = summarizeLatencies(parseLatencies)
       const painted = summarizeLatencies(renderLatencies)
 
+      const inputLatencies = report.dataSamples
+        .filter((sample) => sample.index >= WARMUP_KEYSTROKES)
+        .map((sample) => sample.keyToDataMs)
+      const input = summarizeLatencies(inputLatencies)
       const summary =
         `${formatDistribution('echo(key->parse)', echo)} | ` +
         `${formatDistribution('paint(key->render)', painted)} | ` +
-        `keys=${report.keysObserved} parseEvents=${report.parseEvents}`
+        `${formatDistribution('input(key->onData)', input)} | ` +
+        `keys=${report.keysObserved} parseEvents=${report.parseEvents} ` +
+        `dataSamples=${report.dataSamples.length} dataEvents=${report.dataEvents} ` +
+        `unattributedData=${report.unattributedDataEvents} imeKeys=${report.imeKeysObserved} ` +
+        `inputMeasured=${inputLatencies.length}`
       testInfo.annotations.push({ type: 'codex-local-typing-latency', description: summary })
       // Why stdout too: annotations are invisible in the default list reporter,
       // and these numbers are the whole point of the run.
@@ -278,10 +340,104 @@ test.describe('local Codex terminal typing latency', () => {
       // Why: a dropped keystroke means the composer stopped echoing, which the
       // latency percentiles alone would silently hide.
       expect(report.samples.length).toBe(TOTAL_KEYSTROKES)
+      // Why counts before percentiles on the input arm too: an unhooked `onData`
+      // records nothing, and a distribution over nothing reads as perfect latency.
+      expect(report.dataSamples.length).toBe(TOTAL_KEYSTROKES)
+      expect(input.count).toBe(TOTAL_KEYSTROKES - WARMUP_KEYSTROKES)
       expect(echo.p50).toBeLessThan(MAX_P50_ECHO_LATENCY_MS)
       expect(echo.p95).toBeLessThan(MAX_P95_ECHO_LATENCY_MS)
       expect(echo.max).toBeLessThan(MAX_WORST_ECHO_LATENCY_MS)
     } finally {
+      await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+    }
+  })
+
+  test('preserves native Korean composition in the Codex prompt @headful', async ({
+    electronApp,
+    orcaPage
+  }, testInfo) => {
+    test.skip(
+      process.platform !== 'darwin' || process.env.ORCA_E2E_NATIVE_MACOS_KOREAN !== '1',
+      'Requires macOS with 2-Set Korean selected and Accessibility access'
+    )
+    test.skip(
+      process.env.ORCA_E2E_REAL_CODEX !== '1',
+      'Set ORCA_E2E_REAL_CODEX=1 to exercise the locally installed Codex TUI'
+    )
+
+    const homeDir = process.env.HOME ?? ''
+    const codexSource = path.join(homeDir, 'projects', 'codex')
+    const realCodexHome = path.join(homeDir, '.codex')
+    test.skip(!existsSync(path.join(realCodexHome, 'auth.json')), 'Codex auth.json is missing')
+    test.skip(!existsSync(codexSource), 'local Codex checkout is missing')
+
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await expect(orcaPage.evaluate(() => window.api.app.getKeyboardInputSourceId())).resolves.toBe(
+      TWO_SET_KOREAN_ID
+    )
+
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const launchCommand =
+      `cd ${JSON.stringify(codexSource)} && CODEX_HOME=${JSON.stringify(realCodexHome)} ` +
+      'codex --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust\r'
+
+    try {
+      await sendToTerminal(orcaPage, ptyId, launchCommand)
+      await dismissCodexPromptsIfPresent(orcaPage)
+      await waitForCodexComposer(orcaPage)
+      await focusActiveTerminalInput(orcaPage)
+      focusApplication(electronApp.process().pid!)
+      await orcaPage.waitForTimeout(300)
+      await focusActiveTerminalInput(orcaPage)
+      await installTerminalImeBoundaryProbe(orcaPage)
+      typeNativeKorean(KOREAN_TUI_KEY_CODES)
+      typeNativeKorean([5])
+      await expect.poll(() => readActiveComposition(orcaPage)).toBe('팧')
+      typeNativeKorean([40])
+      await expect.poll(() => readActiveComposition(orcaPage)).toBe('하')
+      await testInfo.attach('native-macos-codex-korean-preedit.png', {
+        body: await orcaPage.screenshot(),
+        contentType: 'image/png'
+      })
+      typeNativeKorean([...KOREAN_TUI_REMAINING_KEY_CODES, 49])
+
+      await orcaPage.waitForTimeout(1_000)
+      const nativeTrace = await readTerminalImeBoundaryTrace(orcaPage)
+      const nativeContent = await getTerminalContent(orcaPage, TERMINAL_DUMP_CHARS)
+      console.log(
+        `[codex-korean-ime] onData=${JSON.stringify(nativeTrace.onData.join(''))} ` +
+          `screen=${JSON.stringify(nativeContent.slice(-500))}`
+      )
+      await testInfo.attach('native-macos-codex-korean.png', {
+        body: await orcaPage.screenshot(),
+        contentType: 'image/png'
+      })
+
+      const committedKorean = stripKeyReleaseReports(nativeTrace.onData.join(''))
+
+      await orcaPage.keyboard.type('abc')
+      await expect
+        .poll(async () =>
+          stripKeyReleaseReports((await readTerminalImeBoundaryTrace(orcaPage)).onData.join(''))
+        )
+        .toBe(`${committedKorean}abc`)
+      await expect
+        .poll(async () =>
+          stripCsi(await getTerminalContent(orcaPage, TERMINAL_DUMP_CHARS))
+            .replaceAll('\r', '')
+            .replaceAll('\n', '')
+        )
+        .toContain(`${committedKorean.trim()}abc`)
+
+      await attachTerminalImeBoundaryEvidence(orcaPage, testInfo, 'native-macos-codex-korean')
+
+      expect(committedKorean).toBe(`${KOREAN_TUI_EXPECTED} `)
+      expect(nativeContent).toContain(KOREAN_TUI_TEXT)
+    } finally {
+      await disposeTerminalImeBoundaryProbe(orcaPage).catch(() => undefined)
       await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
     }
   })

@@ -6,43 +6,24 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from './execution-host'
-import type { GlobalSettings, ProjectProviderIdentity, Repo } from './types'
-import { githubRepoIdentityKey } from './github-repository-identity-key'
+import {
+  areTaskProviderIdentitiesEqual,
+  isStoredTaskProviderIdentity,
+  normalizeTaskProviderIdentity,
+  taskProviderIdentityCachePart,
+  type TaskProviderIdentity
+} from './task-provider-identity'
+import type { TaskProvider } from './task-providers'
+import type { GlobalSettings, Repo } from './types'
 
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
-
-export type GitHubTaskProviderIdentity = ProjectProviderIdentity & {
-  provider: 'github'
-}
-
-export type GitLabTaskProviderIdentity = {
-  provider: 'gitlab'
-  projectId?: string | null
-  namespace?: string | null
-  project?: string | null
-  webUrl?: string | null
-}
-
-export type LinearTaskProviderIdentity = {
-  provider: 'linear'
-  workspaceId?: string | null
-  workspaceName?: string | null
-  teamId?: string | null
-  teamKey?: string | null
-}
-
-export type JiraTaskProviderIdentity = {
-  provider: 'jira'
-  siteId?: string | null
-  siteUrl?: string | null
-  projectKey?: string | null
-}
-
-export type TaskProviderIdentity =
-  | GitHubTaskProviderIdentity
-  | GitLabTaskProviderIdentity
-  | LinearTaskProviderIdentity
-  | JiraTaskProviderIdentity
+export type {
+  GitHubTaskProviderIdentity,
+  GitLabTaskProviderIdentity,
+  JiraTaskProviderIdentity,
+  LinearTaskProviderIdentity,
+  TaskProviderIdentity
+} from './task-provider-identity'
+export type { TaskProvider } from './task-providers'
 
 export type TaskSourceContext = {
   kind: 'task-source'
@@ -92,6 +73,34 @@ export function normalizeTaskSourceContext(
   }
 }
 
+export function normalizeStoredTaskSourceContext(value: unknown): TaskSourceContext | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const input = value as Record<string, unknown>
+  const provider = normalizeTaskProvider(input.provider)
+  if (
+    !provider ||
+    typeof input.projectId !== 'string' ||
+    (input.kind !== undefined && input.kind !== 'task-source') ||
+    !isNullableOptionalString(input.hostId) ||
+    !isNullableOptionalString(input.projectHostSetupId) ||
+    !isNullableOptionalString(input.repoId) ||
+    !isNullableOptionalString(input.accountLabel) ||
+    !isStoredTaskProviderIdentity(provider, input.providerIdentity)
+  ) {
+    return null
+  }
+  if (
+    typeof input.hostId === 'string' &&
+    input.hostId.trim().length > 0 &&
+    normalizeExecutionHostId(input.hostId) === null
+  ) {
+    return null
+  }
+  return normalizeTaskSourceContext(input as TaskSourceContextInput)
+}
+
 export function buildTaskSourceContextFromRepo(args: {
   provider: TaskProvider
   projectId: string
@@ -109,6 +118,27 @@ export function buildTaskSourceContextFromRepo(args: {
     providerIdentity: args.providerIdentity,
     accountLabel: args.accountLabel
   })
+}
+
+export function areTaskSourceContextsEqual(
+  a: TaskSourceContext | null | undefined,
+  b: TaskSourceContext | null | undefined
+): boolean {
+  if (a === b) {
+    return true
+  }
+  if (!a || !b) {
+    return !a && !b
+  }
+  return (
+    a.provider === b.provider &&
+    a.projectId === b.projectId &&
+    a.hostId === b.hostId &&
+    (a.projectHostSetupId ?? null) === (b.projectHostSetupId ?? null) &&
+    (a.repoId ?? null) === (b.repoId ?? null) &&
+    (a.accountLabel ?? null) === (b.accountLabel ?? null) &&
+    areTaskProviderIdentitiesEqual(a.providerIdentity, b.providerIdentity)
+  )
 }
 
 export function getTaskSourceRuntimeSettings(
@@ -132,7 +162,7 @@ export function getTaskSourceCacheScope(
     context.projectId,
     context.projectHostSetupId ?? '',
     context.repoId ?? '',
-    providerIdentityCachePart(context.providerIdentity)
+    taskProviderIdentityCachePart(context.providerIdentity)
   ]
     .map(encodeCachePart)
     .join(':')
@@ -162,12 +192,6 @@ export function buildWorkspaceRunContext(args: {
   }
 }
 
-export function getWorkspaceRunRuntimeSettings(
-  context: Pick<WorkspaceRunContext, 'hostId'> | null | undefined
-): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {
-  return getTaskSourceRuntimeSettings(context ? { hostId: context.hostId } : null)
-}
-
 function getRepoHostId(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): ExecutionHostId {
   const explicit = normalizeExecutionHostId(repo.executionHostId)
   if (explicit) {
@@ -177,7 +201,7 @@ function getRepoHostId(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): Ex
   return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
-function normalizeTaskProvider(value: string): TaskProvider | null {
+function normalizeTaskProvider(value: unknown): TaskProvider | null {
   switch (value) {
     case 'github':
     case 'gitlab':
@@ -189,35 +213,13 @@ function normalizeTaskProvider(value: string): TaskProvider | null {
   }
 }
 
-function normalizeTaskProviderIdentity(
-  provider: TaskProvider,
-  identity: TaskProviderIdentity | null | undefined
-): TaskProviderIdentity | null {
-  if (!identity || identity.provider !== provider) {
-    return null
-  }
-  return identity
-}
-
-function normalizeNonEmptyString(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
+function normalizeNonEmptyString(value: unknown): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
   return trimmed ? trimmed : null
 }
 
-function providerIdentityCachePart(identity: TaskProviderIdentity | null | undefined): string {
-  if (!identity) {
-    return ''
-  }
-  switch (identity.provider) {
-    case 'github':
-      return githubRepoIdentityKey(identity)
-    case 'gitlab':
-      return identity.projectId ?? [identity.namespace, identity.project].filter(Boolean).join('/')
-    case 'linear':
-      return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
-    case 'jira':
-      return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
-  }
+function isNullableOptionalString(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === 'string'
 }
 
 function encodeCachePart(value: string): string {

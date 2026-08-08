@@ -1,343 +1,578 @@
 import { createElement, type RefObject } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import type { TextInput } from 'react-native'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, create } from 'react-test-renderer'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { noteImeCompositionChange } from '../ime/ime-submit-carry'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
-import { TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS } from './terminal-live-hangul-mirror'
 import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 
-type TerminalLiveInputCommitHarness = {
-  readonly captures: readonly string[]
-  readonly handlers: ReturnType<typeof useTerminalLiveInputCommit<string>>
-  readonly sent: readonly string[]
-  readonly setActiveSessionTabType: (next: string | undefined) => void
-  readonly unmount: () => void
+const frames: Array<() => void> = []
+
+function flushFrame(): void {
+  const pending = frames.splice(0)
+  for (const callback of pending) {
+    callback()
+  }
 }
 
-type TerminalLiveInputCommitHarnessOptions = {
-  readonly sendResult?: boolean
-}
-
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
+beforeEach(() => {
+  frames.length = 0
+  vi.stubGlobal('requestAnimationFrame', (callback: () => void) => {
+    frames.push(callback)
+    return frames.length
   })
-  return () => consoleErrorSpy.mockRestore()
+  // Why: the IME submit carry is module state, so a prior test's marked event would otherwise
+  // make this test's first unmarked event look like a confirmation. Android never arms it.
+  noteImeCompositionChange('android', true)
+  noteImeCompositionChange('android', false)
+})
+
+type Handlers = ReturnType<typeof useTerminalLiveInputCommit<string>>
+
+type RecordedChange = {
+  readonly text: string
+  readonly isComposing: boolean
+  readonly replacementText: string
+  readonly start: number
+  readonly end: number
 }
 
-function createTerminalLiveInputCommitHarness({
-  sendResult = true
-}: TerminalLiveInputCommitHarnessOptions = {}): TerminalLiveInputCommitHarness {
+const RECORDED_IOS_KANA_TRACE: readonly RecordedChange[] = [
+  { text: 'あ', isComposing: true, replacementText: 'あ', start: 0, end: 0 },
+  { text: 'あ', isComposing: true, replacementText: 'あ', start: 0, end: 1 },
+  { text: 'あ', isComposing: false, replacementText: 'あ', start: 0, end: 1 },
+  { text: 'あき', isComposing: true, replacementText: 'き', start: 1, end: 1 },
+  { text: 'あき', isComposing: true, replacementText: 'き', start: 1, end: 2 },
+  { text: 'あき', isComposing: false, replacementText: 'き', start: 1, end: 2 },
+  { text: 'あきか', isComposing: true, replacementText: 'か', start: 2, end: 2 },
+  { text: 'あきかな', isComposing: true, replacementText: 'な', start: 3, end: 3 },
+  { text: 'あきカナ', isComposing: true, replacementText: 'カナ', start: 2, end: 4 },
+  { text: 'あきカナ', isComposing: false, replacementText: 'カナ', start: 2, end: 4 },
+  { text: 'あきカナさ', isComposing: true, replacementText: 'さ', start: 4, end: 4 },
+  { text: 'あきカナ', isComposing: false, replacementText: '', start: 4, end: 5 }
+]
+
+const RECORDED_IOS_7427_TRACE: readonly RecordedChange[] = [
+  { text: 'つ', isComposing: true, replacementText: 'つ', start: 0, end: 0 },
+  { text: 'っ', isComposing: true, replacementText: '゛', start: 1, end: 1 },
+  { text: 'っ', isComposing: true, replacementText: 'っ', start: 0, end: 1 },
+  { text: 'っ', isComposing: false, replacementText: 'っ', start: 0, end: 1 },
+  { text: 'っか', isComposing: true, replacementText: 'か', start: 1, end: 1 },
+  { text: 'っが', isComposing: true, replacementText: '゛', start: 2, end: 2 },
+  { text: 'っが', isComposing: true, replacementText: 'が', start: 1, end: 2 },
+  { text: 'っが', isComposing: false, replacementText: 'が', start: 1, end: 2 },
+  { text: 'っがは', isComposing: true, replacementText: 'は', start: 2, end: 2 },
+  { text: 'っがば', isComposing: true, replacementText: '゛', start: 3, end: 3 },
+  { text: 'っがぱ', isComposing: true, replacementText: '゛', start: 3, end: 3 },
+  { text: 'っがぱ', isComposing: true, replacementText: 'ぱ', start: 2, end: 3 },
+  { text: 'っがぱ', isComposing: false, replacementText: 'ぱ', start: 2, end: 3 },
+  { text: 'っがぱs', isComposing: true, replacementText: 's', start: 3, end: 3 },
+  { text: 'っがぱさ', isComposing: true, replacementText: 'a', start: 4, end: 4 },
+  { text: 'っがぱさ', isComposing: true, replacementText: 'さ', start: 3, end: 4 },
+  { text: 'っがぱさ', isComposing: false, replacementText: 'さ', start: 3, end: 4 },
+  { text: 'っがぱさk', isComposing: true, replacementText: 'k', start: 4, end: 4 },
+  { text: 'っがぱさか', isComposing: true, replacementText: 'a', start: 5, end: 5 },
+  { text: 'っがぱさかn', isComposing: true, replacementText: 'n', start: 5, end: 5 },
+  { text: 'っがぱさかんj', isComposing: true, replacementText: 'j', start: 6, end: 6 },
+  { text: 'っがぱさかんじ', isComposing: true, replacementText: 'i', start: 7, end: 7 },
+  { text: 'っがぱさ漢字', isComposing: true, replacementText: '漢字', start: 4, end: 7 },
+  { text: 'っがぱさ漢字', isComposing: false, replacementText: '漢字', start: 4, end: 7 },
+  { text: 'っがぱさ漢字k', isComposing: true, replacementText: 'k', start: 6, end: 6 },
+  { text: 'っがぱさ漢字か', isComposing: true, replacementText: 'a', start: 7, end: 7 },
+  { text: 'っがぱさ漢字かn', isComposing: true, replacementText: 'n', start: 7, end: 7 },
+  { text: 'っがぱさ漢字かな', isComposing: true, replacementText: 'a', start: 8, end: 8 },
+  { text: 'っがぱさ漢字かな', isComposing: true, replacementText: 'かな', start: 6, end: 8 },
+  { text: 'っがぱさ漢字かな', isComposing: false, replacementText: 'かな', start: 6, end: 8 }
+]
+
+// Captured on a physical iPhone 13 Pro Max, iOS 26.5.2, system Japanese Kana keyboard
+// (lane-ios/metro.log, IME7427_NATIVE_EVENT eventCount 5-10). The same capture arm recorded
+// 13 PTY bytes: the 12 expected UTF-8 bytes for いうえお plus a trailing 0d.
+const RECORDED_IOS_DEVICE_FLICK_VOWELS_TRACE: readonly RecordedChange[] = [
+  { text: 'い', isComposing: true, replacementText: 'い', start: 0, end: 0 },
+  { text: 'いう', isComposing: true, replacementText: 'う', start: 1, end: 1 },
+  { text: 'いうえ', isComposing: true, replacementText: 'え', start: 2, end: 2 },
+  { text: 'いうえお', isComposing: true, replacementText: 'お', start: 3, end: 3 },
+  { text: 'いうえお', isComposing: true, replacementText: 'いうえお', start: 0, end: 4 },
+  { text: 'いうえお', isComposing: false, replacementText: 'いうえお', start: 0, end: 4 }
+]
+
+const RECORDED_ANDROID_FCITX_HANGUL_TRACE: readonly RecordedChange[] = [
+  { text: 'ㅎ', isComposing: true, replacementText: 'ㅎ', start: 0, end: 0 },
+  { text: '하', isComposing: true, replacementText: '하', start: 0, end: 1 },
+  { text: '한', isComposing: true, replacementText: '한', start: 0, end: 1 },
+  { text: '한', isComposing: false, replacementText: '한', start: 0, end: 1 },
+  { text: '한ㄱ', isComposing: true, replacementText: 'ㄱ', start: 1, end: 1 },
+  { text: '한그', isComposing: true, replacementText: '그', start: 1, end: 2 },
+  { text: '한글', isComposing: true, replacementText: '글', start: 1, end: 2 },
+  { text: '한글', isComposing: false, replacementText: '글', start: 1, end: 2 }
+]
+
+const RECORDED_ANDROID_FCITX_HANGUL_CANCELLATION_TRACE: readonly RecordedChange[] = [
+  { text: 'ㅎ', isComposing: true, replacementText: 'ㅎ', start: 0, end: 0 },
+  { text: '하', isComposing: true, replacementText: '하', start: 0, end: 1 },
+  { text: '한', isComposing: true, replacementText: '한', start: 0, end: 1 },
+  { text: '하', isComposing: true, replacementText: '하', start: 0, end: 1 },
+  { text: 'ㅎ', isComposing: true, replacementText: 'ㅎ', start: 0, end: 1 },
+  { text: '', isComposing: true, replacementText: '', start: 0, end: 1 },
+  { text: '', isComposing: false, replacementText: '', start: 0, end: 1 }
+]
+
+const RECORDED_ANDROID_FCITX_ANTHY_TRACE: readonly RecordedChange[] = [
+  { text: 's', isComposing: true, replacementText: 's', start: 0, end: 0 },
+  { text: 'さ', isComposing: true, replacementText: 'さ', start: 0, end: 1 },
+  { text: 'さ', isComposing: false, replacementText: 'さ', start: 0, end: 1 }
+]
+
+const RECORDED_ANDROID_FCITX_ANTHY_CANCELLATION_TRACE: readonly RecordedChange[] = [
+  { text: 's', isComposing: true, replacementText: 's', start: 0, end: 0 },
+  { text: 'さ', isComposing: true, replacementText: 'さ', start: 0, end: 1 },
+  { text: '', isComposing: true, replacementText: '', start: 0, end: 1 },
+  { text: '', isComposing: false, replacementText: '', start: 0, end: 1 }
+]
+
+const ORDINARY_ABC_TRACE: readonly RecordedChange[] = [
+  { text: 'a', isComposing: false, replacementText: 'a', start: 0, end: 0 },
+  { text: 'ab', isComposing: false, replacementText: 'b', start: 1, end: 1 },
+  { text: 'abc', isComposing: false, replacementText: 'c', start: 2, end: 2 }
+]
+
+const RECORDED_IOS_KOREAN_TRANSFORM_TRACE: readonly RecordedChange[] = [
+  { text: 'ㅇ', isComposing: false, replacementText: 'ㅇ', start: 0, end: 0 },
+  { text: '아', isComposing: false, replacementText: 'ㅏ', start: 1, end: 1 },
+  { text: '안', isComposing: false, replacementText: 'ㄴ', start: 1, end: 1 },
+  { text: '안ㄴ', isComposing: false, replacementText: 'ㄴ', start: 1, end: 1 },
+  { text: '안녀', isComposing: false, replacementText: 'ㅕ', start: 2, end: 2 },
+  { text: '안녕', isComposing: false, replacementText: 'ㅇ', start: 2, end: 2 },
+  { text: '안녕ㅎ', isComposing: false, replacementText: 'ㅎ', start: 2, end: 2 },
+  { text: '안녕하', isComposing: false, replacementText: 'ㅏ', start: 3, end: 3 },
+  { text: '안녕핫', isComposing: false, replacementText: 'ㅅ', start: 3, end: 3 },
+  { text: '안녕하세', isComposing: false, replacementText: 'ㅔ', start: 3, end: 3 },
+  { text: '안녕하셍', isComposing: false, replacementText: 'ㅇ', start: 4, end: 4 },
+  { text: '안녕하세요', isComposing: false, replacementText: 'ㅛ', start: 4, end: 4 }
+]
+
+const RECORDED_ANDROID_GBOARD_BACKSPACE_TRACE: readonly RecordedChange[] = [
+  { text: 'a', isComposing: false, replacementText: 'a', start: 0, end: 0 },
+  { text: '', isComposing: false, replacementText: '', start: 0, end: 1 }
+]
+
+const IOS_ROMAJI_RECORDED_PREFIX = 'あきカナたあbcabc'
+const RECORDED_IOS_ROMAJI_TRACE: readonly RecordedChange[] = [
+  {
+    text: `${IOS_ROMAJI_RECORDED_PREFIX}k`,
+    isComposing: true,
+    replacementText: 'k',
+    start: 11,
+    end: 11
+  },
+  {
+    text: `${IOS_ROMAJI_RECORDED_PREFIX}か`,
+    isComposing: true,
+    replacementText: 'a',
+    start: 12,
+    end: 12
+  },
+  {
+    text: `${IOS_ROMAJI_RECORDED_PREFIX}かn`,
+    isComposing: true,
+    replacementText: 'n',
+    start: 12,
+    end: 12
+  },
+  {
+    text: `${IOS_ROMAJI_RECORDED_PREFIX}かな`,
+    isComposing: true,
+    replacementText: 'a',
+    start: 13,
+    end: 13
+  },
+  {
+    text: `${IOS_ROMAJI_RECORDED_PREFIX}かな`,
+    isComposing: true,
+    replacementText: 'かな',
+    start: 11,
+    end: 13
+  },
+  {
+    text: `${IOS_ROMAJI_RECORDED_PREFIX}かな`,
+    isComposing: false,
+    replacementText: 'かな',
+    start: 11,
+    end: 13
+  }
+]
+
+function createHarness(
+  send?: TerminalLiveInputSender,
+  platform = 'ios'
+): {
+  readonly captures: string[]
+  readonly handlers: Handlers
+  readonly sent: string[]
+} {
   const activeHandle = 'terminal-a'
+  const captures: string[] = []
+  const sent: string[] = []
   const activeHandleRef: RefObject<string | null> = { current: activeHandle }
   const activeSessionTabTypeRef: RefObject<string | null> = { current: 'terminal' }
-  const captures: string[] = []
-  const setLiveInputCapture = (text: string): void => {
-    captures.push(text)
-  }
-  const liveInputRef: RefObject<TextInput | null> = { current: null }
   const liveInputTerminalHandles = new Set([activeHandle])
-  const liveInputTerminalHandlesRef: RefObject<Set<string>> = {
-    current: new Set([activeHandle])
-  }
-  const sent: string[] = []
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
-    current: async (_handle, bytes) => {
-      sent.push(bytes)
-      return sendResult
-    }
+    current:
+      send ??
+      (async (_handle, bytes) => {
+        sent.push(bytes)
+        return true
+      })
   }
-  // The hook keeps live-input state in refs, so a change handler alone never
-  // re-renders; only a prop change (this variable) re-runs the pending-clear effect.
-  let currentActiveSessionTabType: string | undefined = 'terminal'
-  let handlers: ReturnType<typeof useTerminalLiveInputCommit<string>> | null = null
-  let renderer: ReactTestRenderer | null = null
+  const liveInputRef = {
+    current: { setNativeProps: vi.fn() }
+  }
+  let handlers: Handlers | null = null
 
   function Harness(): null {
     handlers = useTerminalLiveInputCommit({
       activeHandle,
       activeHandleRef,
-      activeSessionTabType: currentActiveSessionTabType,
+      activeSessionTabType: 'terminal',
       activeSessionTabTypeRef,
+      connected: true,
       liveInputRef,
       liveInputTerminalHandles,
-      liveInputTerminalHandlesRef,
+      liveInputTerminalHandlesRef: { current: liveInputTerminalHandles },
+      platform,
       sendLiveTerminalInputRef,
-      setLiveInputCapture
+      setLiveInputCapture: (text) => captures.push(text)
     })
     return null
   }
 
-  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
+  const originalConsoleError = console.error
+  const consoleError = vi.spyOn(console, 'error').mockImplementation((...args) => {
+    if (typeof args[0] !== 'string' || !args[0].includes('react-test-renderer is deprecated')) {
+      originalConsoleError(...args)
+    }
+  })
   try {
     act(() => {
-      renderer = create(createElement(Harness))
+      create(createElement(Harness))
     })
   } finally {
-    restoreConsoleError()
+    consoleError.mockRestore()
   }
-  if (!handlers || !renderer) {
+  if (!handlers) {
     throw new Error('terminal live input hook did not render')
   }
+  return { captures, handlers, sent }
+}
 
-  return {
-    captures,
-    handlers,
-    sent,
-    setActiveSessionTabType: (next: string | undefined): void => {
-      currentActiveSessionTabType = next
-      // Ref and prop derive from the same activeSessionTab in the real route, so
-      // they go null together during tab-list lag — keep the harness coupled.
-      activeSessionTabTypeRef.current = next ?? null
-      act(() => {
-        renderer?.update(createElement(Harness))
-      })
-    },
-    unmount: () => {
-      act(() => renderer?.unmount())
+function change(handlers: Handlers, event: RecordedChange): void {
+  handlers.handleLiveInputChange({
+    nativeEvent: {
+      text: event.text,
+      isComposing: event.isComposing,
+      replacementText: event.replacementText,
+      replacementRange: { start: event.start, end: event.end }
     }
+  })
+}
+
+function replay(handlers: Handlers, trace: readonly RecordedChange[]): void {
+  for (const event of trace) {
+    change(handlers, event)
   }
 }
 
 describe('terminal live input commit hook', () => {
-  afterEach(() => {
-    vi.useRealTimers()
+  it('replays the recorded Android Fcitx Hangul commit and Enter trace', async () => {
+    const { handlers, sent } = createHarness(undefined, 'android')
+
+    replay(handlers, RECORDED_ANDROID_FCITX_HANGUL_TRACE.slice(0, 3))
+    expect(sent).toEqual([])
+
+    change(handlers, RECORDED_ANDROID_FCITX_HANGUL_TRACE[3])
+    await vi.waitFor(() => expect(sent).toEqual(['한']))
+
+    replay(handlers, RECORDED_ANDROID_FCITX_HANGUL_TRACE.slice(4, 7))
+    expect(sent).toEqual(['한'])
+
+    change(handlers, RECORDED_ANDROID_FCITX_HANGUL_TRACE[7])
+    handlers.handleLiveInputSubmit()
+    await vi.waitFor(() => expect(sent).toEqual(['한', '글', '\r']))
   })
 
-  it('Given Hangul composition When steps arrive Then streams the stable prefix and never leaks jamo', async () => {
-    // Given
-    vi.useFakeTimers()
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+  it('replays Fcitx Hangul cancellation without leaving terminal input gated', async () => {
+    const { handlers, sent } = createHarness(undefined, 'android')
 
-    // When: ㅎ→하→한→한ㄱ→한그→한글 (no settle pause between steps)
-    for (const fieldText of ['ㅎ', '하', '한', '한ㄱ', '한그', '한글']) {
-      handlers.handleLiveInputChange(fieldText)
-      await vi.advanceTimersByTimeAsync(50)
+    replay(handlers, RECORDED_ANDROID_FCITX_HANGUL_CANCELLATION_TRACE.slice(0, -2))
+    change(handlers, RECORDED_ANDROID_FCITX_HANGUL_CANCELLATION_TRACE.at(-2)!)
+    handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Backspace' } })
+    change(handlers, RECORDED_ANDROID_FCITX_HANGUL_CANCELLATION_TRACE.at(-1)!)
+    expect(sent).toEqual([])
+    await expect(handlers.handleLiveInputAccessoryBytes({ bytes: '\r' })).resolves.toEqual({
+      kind: 'allow-raw'
+    })
+
+    change(handlers, ORDINARY_ABC_TRACE[0])
+    handlers.handleLiveInputSubmit()
+    await vi.waitFor(() => expect(sent).toEqual(['a', '\r']))
+  })
+
+  it('replays the recorded Android Fcitx Anthy trace with an English control', async () => {
+    const { handlers, sent } = createHarness(undefined, 'android')
+
+    replay(handlers, RECORDED_ANDROID_FCITX_ANTHY_TRACE.slice(0, -1))
+    expect(sent).toEqual([])
+    change(handlers, RECORDED_ANDROID_FCITX_ANTHY_TRACE.at(-1)!)
+    await vi.waitFor(() => expect(sent).toEqual(['さ']))
+    await expect(handlers.handleLiveInputAccessoryBytes({ bytes: '\r' })).resolves.toEqual({
+      kind: 'allow-raw'
+    })
+
+    replay(handlers, RECORDED_ANDROID_FCITX_ANTHY_CANCELLATION_TRACE)
+    expect(sent).toEqual(['さ'])
+
+    change(handlers, ORDINARY_ABC_TRACE[0])
+    await vi.waitFor(() => expect(sent).toEqual(['さ', 'a']))
+  })
+
+  it('keeps the recorded Pinyin preedit native and sends only its candidate commit', async () => {
+    const { captures, handlers, sent } = createHarness()
+
+    const preedit = [
+      { text: 'z', replacementText: 'z', start: 0 },
+      { text: 'zh', replacementText: 'h', start: 1 },
+      { text: 'zho', replacementText: 'o', start: 2 },
+      { text: 'zhon', replacementText: 'n', start: 3 },
+      { text: 'zhong', replacementText: 'g', start: 4 }
+    ]
+    for (const event of preedit) {
+      change(handlers, {
+        ...event,
+        isComposing: true,
+        end: event.start
+      })
     }
+    expect(sent).toEqual([])
 
-    // Then: only the stable prefix went out; the trailing syllable is held
-    await vi.waitFor(() => expect(sent).toEqual(['한']))
+    change(handlers, {
+      text: '中',
+      isComposing: true,
+      replacementText: '中',
+      start: 0,
+      end: 5
+    })
+    expect(sent).toEqual([])
+
+    change(handlers, {
+      text: '中',
+      isComposing: false,
+      replacementText: '中',
+      start: 0,
+      end: 5
+    })
+
+    await vi.waitFor(() => expect(sent).toEqual(['中']))
+    expect(captures).toEqual(['z', 'zh', 'zho', 'zhon', 'zhong', '中', '中'])
   })
 
-  it('Given a held syllable When the settle timer elapses Then commits it to the terminal', async () => {
-    // Given
-    vi.useFakeTimers()
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+  it('replays the recorded Gboard Backspace replacement exactly once', async () => {
+    const { handlers, sent } = createHarness(undefined, 'android')
 
-    // When
-    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+    change(handlers, RECORDED_ANDROID_GBOARD_BACKSPACE_TRACE[0])
+    handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Backspace' } })
+    change(handlers, RECORDED_ANDROID_GBOARD_BACKSPACE_TRACE[1])
 
-    // Then
-    await vi.waitFor(() => expect(sent).toEqual(['한']))
+    await vi.waitFor(() => expect(sent).toEqual(['a', '\x7f']))
   })
 
-  it('Given a timer-committed syllable When composition continues Then corrects with DEL and recommits', async () => {
-    // Given
-    vi.useFakeTimers()
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('하')
-    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
-    await vi.waitFor(() => expect(sent).toEqual(['하']))
+  it('preserves rapid input order while transport sends are delayed', async () => {
+    const started: string[] = []
+    const delivered: string[] = []
+    const release: Array<() => void> = []
+    const { handlers } = createHarness(
+      async (_handle, bytes) =>
+        new Promise<boolean>((resolve) => {
+          started.push(bytes)
+          release.push(() => {
+            delivered.push(bytes)
+            resolve(true)
+          })
+        })
+    )
 
-    // When
-    handlers.handleLiveInputChange('한')
-    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+    replay(handlers, ORDINARY_ABC_TRACE)
 
-    // Then
-    await vi.waitFor(() => expect(sent).toEqual(['하', '\x7f', '한']))
+    await vi.waitFor(() => expect(started).toEqual(['a']))
+    release.shift()!()
+    await vi.waitFor(() => expect(started).toEqual(['a', 'b']))
+    release.shift()!()
+    await vi.waitFor(() => expect(started).toEqual(['a', 'b', 'c']))
+    release.shift()!()
+    await vi.waitFor(() => expect(delivered).toEqual(['a', 'b', 'c']))
   })
 
-  it('Given Hangul pending text When submit is requested Then sends composed text before carriage return', async () => {
-    // Given
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+  it('replays the recorded iOS Kana tap, flick, candidate, and cancellation trace', async () => {
+    const { handlers, sent } = createHarness()
 
-    // When
-    handlers.handleLiveInputSubmit()
+    change(handlers, RECORDED_IOS_KANA_TRACE[0])
+    await expect(handlers.handleLiveInputAccessoryBytes({ bytes: '\r' })).resolves.toEqual({
+      kind: 'suppress-raw'
+    })
+    replay(handlers, RECORDED_IOS_KANA_TRACE.slice(1))
 
-    // Then
-    await vi.waitFor(() => expect(sent).toEqual(['한', '\r']))
+    await vi.waitFor(() => expect(sent).toEqual(['あ', 'き', 'カナ']))
   })
 
-  it('Given no pending text When submit is requested Then sends only carriage return', async () => {
-    // Given
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+  it('replays the recorded iOS Japanese Romaji candidate trace', async () => {
+    const { handlers, sent } = createHarness()
+    change(handlers, {
+      text: IOS_ROMAJI_RECORDED_PREFIX,
+      isComposing: false,
+      replacementText: IOS_ROMAJI_RECORDED_PREFIX,
+      start: 0,
+      end: 0
+    })
+    await vi.waitFor(() => expect(sent).toEqual([IOS_ROMAJI_RECORDED_PREFIX]))
+    sent.length = 0
 
-    // When
-    handlers.handleLiveInputSubmit()
+    replay(handlers, RECORDED_IOS_ROMAJI_TRACE)
 
-    // Then
-    await vi.waitFor(() => expect(sent).toEqual(['\r']))
+    await vi.waitFor(() => expect(sent).toEqual(['かな']))
   })
 
-  it('Given a rejected held-text send When submit is requested Then suppresses the carriage return', async () => {
-    // Given
-    const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
-    handlers.handleLiveInputChange('한')
+  it('replays the recorded iOS #7427 transforms, confirmation, and English control', async () => {
+    const japanese = createHarness()
+    replay(japanese.handlers, RECORDED_IOS_7427_TRACE)
+    await vi.waitFor(() => expect(japanese.sent).toEqual(['っ', 'が', 'ぱ', 'さ', '漢字', 'かな']))
+    expect(japanese.sent).not.toContain('\r')
 
-    // When
-    handlers.handleLiveInputSubmit()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    // Then: the held commit went out but was not accepted, so no \r follows
-    await vi.waitFor(() => expect(sent).toEqual(['한']))
+    const english = createHarness()
+    replay(english.handlers, ORDINARY_ABC_TRACE)
+    await vi.waitFor(() => expect(english.sent).toEqual(['a', 'b', 'c']))
   })
 
-  it('Given ASCII typing When changes arrive Then mirrors immediately', async () => {
-    // Given
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+  it('replays iOS Korean post-change transforms without normalizing text', async () => {
+    const korean = createHarness()
+    replay(korean.handlers, RECORDED_IOS_KOREAN_TRANSFORM_TRACE)
+    korean.handlers.handleLiveInputSubmit()
 
-    // When
-    handlers.handleLiveInputChange('a')
-    handlers.handleLiveInputChange('ab')
+    await vi.waitFor(() => expect(korean.sent.at(-1)).toBe('\r'))
+    const terminalText = korean.sent
+      .join('')
+      .split('')
+      .reduce((text, character) =>
+        character === '\x7f' ? Array.from(text).slice(0, -1).join('') : text + character
+      )
+    expect(terminalText).toBe('안녕하세요\r')
 
-    // Then
-    await vi.waitFor(() => expect(sent).toEqual(['a', 'b']))
+    const english = createHarness()
+    replay(english.handlers, ORDINARY_ABC_TRACE)
+    await vi.waitFor(() => expect(english.sent).toEqual(['a', 'b', 'c']))
   })
 
-  it('Given iOS smart-dash text When the change arrives Then the capture echoes the raw field text and the PTY gets normalized bytes', async () => {
-    // Given
-    const { captures, handlers, sent } = createTerminalLiveInputCommitHarness()
-
-    // When: iOS smart punctuation rewrote "--" into an en dash inside the field
-    handlers.handleLiveInputChange('a–')
-
-    // Then: writing "a--" back into the controlled value would kill an active
-    // iOS dictation/IME session, so the capture must keep what iOS produced
-    expect(captures).toEqual(['a–'])
-    await vi.waitFor(() => expect(sent).toEqual(['a--']))
-  })
-
-  it('Given dictation-style hypothesis revisions When changes arrive Then the field is never rewritten and the PTY converges', async () => {
-    // Given
-    const { captures, handlers, sent } = createTerminalLiveInputCommitHarness()
-
-    // When: iOS dictation replaces its hypothesis as recognition refines
-    handlers.handleLiveInputChange('high')
-    handlers.handleLiveInputChange('hi there')
-
-    // Then: captures only echo the field; the mirror repairs the PTY with DELs
-    expect(captures).toEqual(['high', 'hi there'])
-    await vi.waitFor(() => expect(sent).toEqual(['high', '\x7f\x7f there']))
-  })
-
-  it('Given a trailing space after Hangul When the change arrives Then the space commits the held syllable', async () => {
-    // Given
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
-
-    // When
-    handlers.handleLiveInputChange('한 ')
-
-    // Then
-    await vi.waitFor(() => expect(sent).toEqual(['한 ']))
-  })
-
-  it('Given Hangul pending text When an external terminal send is requested Then flushes composed text first', async () => {
-    // Given
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
-
-    // When
-    const flushed = await handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
-
-    // Then
-    expect(flushed).toBe(true)
-    expect(sent).toEqual(['한'])
-  })
-
-  it('Given pending text cannot be sent When an external terminal send is requested Then reports failure', async () => {
-    // Given
-    const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
-    handlers.handleLiveInputChange('한')
-
-    // When
-    const flushed = await handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
-
-    // Then
-    expect(flushed).toBe(false)
-    expect(sent).toEqual(['한'])
-  })
-
-  it('Given non-Hangul IME text When changes arrive Then mirrors immediately without a settle window', async () => {
-    // Given
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
-
-    // When
-    handlers.handleLiveInputChange('你好')
-
-    // Then
-    await vi.waitFor(() => expect(sent).toEqual(['你好']))
-  })
-
-  it('Given a held syllable When the hook unmounts Then cancels the settle timer', async () => {
-    // Given
-    vi.useFakeTimers()
-    const { handlers, sent, unmount } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
-
-    // When
-    unmount()
-    await vi.advanceTimersByTimeAsync(1_000)
-
-    // Then
+  it('emits nothing for the recorded Pinyin cancellation trace', () => {
+    const { handlers, sent } = createHarness()
+    const changes = [
+      { text: 'z', isComposing: true, replacementText: 'z', start: 0, end: 0 },
+      { text: 'zh', isComposing: true, replacementText: 'h', start: 1, end: 1 },
+      { text: 'z', isComposing: true, replacementText: '', start: 1, end: 2 },
+      { text: '', isComposing: false, replacementText: '', start: 0, end: 1 }
+    ]
+    for (const event of changes) {
+      change(handlers, event)
+    }
     expect(sent).toEqual([])
   })
 
-  it('Given Backspace with field text When the key arrives Then edits locally without terminal bytes', async () => {
-    // Given
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+  it('suppresses submit and accessory controls until native composition ends', async () => {
+    const { handlers, sent } = createHarness()
+    change(handlers, {
+      text: 'zhong',
+      isComposing: true,
+      replacementText: 'zhong',
+      start: 0,
+      end: 0
+    })
 
-    // When
-    handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Backspace' } })
-
-    // Then
-    await vi.waitFor(() => expect(sent).toEqual([]))
+    handlers.handleLiveInputSubmit()
+    await expect(handlers.handleLiveInputAccessoryBytes({ bytes: '\t' })).resolves.toEqual({
+      kind: 'suppress-raw'
+    })
+    expect(sent).toEqual([])
   })
 
-  it('Given Tab with a held syllable When the key arrives Then commits the syllable before the tab bytes', async () => {
-    // Given
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
-
-    // When
-    handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Tab' } })
-
-    // Then
-    await vi.waitFor(() => expect(sent).toEqual(['한', '\t']))
+  it('blocks sends when native replacement evidence is absent', async () => {
+    const { handlers, sent } = createHarness()
+    handlers.handleLiveInputChange({
+      nativeEvent: {
+        text: 'mutable snapshot'
+      } as never
+    })
+    handlers.handleLiveInputSubmit()
+    expect(sent).toEqual([])
+    await expect(handlers.handleLiveInputAccessoryBytes({ bytes: '\r' })).resolves.toEqual({
+      kind: 'suppress-raw'
+    })
   })
 
-  it('Given Hangul pending When the tab type lags to undefined Then keeps the composition state', async () => {
-    // Given: '한' held while the active tab is still a terminal
-    const { handlers, sent, setActiveSessionTabType } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+  it('blocks an incomplete command until native evidence reconciles', async () => {
+    const { handlers, sent } = createHarness()
+    change(handlers, ORDINARY_ABC_TRACE[0])
+    change(handlers, {
+      text: 'ab',
+      isComposing: false,
+      replacementText: 'b',
+      start: -1,
+      end: 1
+    })
 
-    // When: the mobile tab list momentarily yields no active tab object
-    setActiveSessionTabType(undefined)
+    handlers.handleLiveInputSubmit()
+    await expect(handlers.handleLiveInputAccessoryBytes({ bytes: '\r' })).resolves.toEqual({
+      kind: 'suppress-raw'
+    })
+    expect(sent).toEqual(['a'])
+
+    change(handlers, ORDINARY_ABC_TRACE[1])
+    handlers.handleLiveInputSubmit()
+    await vi.waitFor(() => expect(sent).toEqual(['a', 'b', '\r']))
+  })
+
+  it('drops the iOS device confirmation submit and keeps the ASCII control armed', async () => {
+    const japanese = createHarness()
+    replay(japanese.handlers, RECORDED_IOS_DEVICE_FLICK_VOWELS_TRACE)
+    japanese.handlers.handleLiveInputSubmit()
+
+    // Why: assert the drained queue, not a transient one — a suppressed '\r' and a '\r' that has
+    // merely not landed yet are indistinguishable while sends are still in flight.
+    await japanese.handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
+    expect(japanese.sent).toEqual(['いうえお'])
+    expect(Buffer.from(japanese.sent.join(''), 'utf8').toString('hex')).toBe(
+      'e38184e38186e38188e3818a'
+    )
+
+    const english = createHarness()
+    replay(english.handlers, ORDINARY_ABC_TRACE)
+    english.handlers.handleLiveInputSubmit()
+    await english.handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
+    expect(english.sent).toEqual(['a', 'b', 'c', '\r'])
+    expect(Buffer.from(english.sent.join(''), 'utf8').toString('hex')).toBe('6162630d')
+  })
+
+  it('sends a deliberate Return taken one frame after the iOS device confirmation', async () => {
+    const { handlers, sent } = createHarness()
+    replay(handlers, RECORDED_IOS_DEVICE_FLICK_VOWELS_TRACE)
+    await vi.waitFor(() => expect(sent).toEqual(['いうえお']))
+
+    flushFrame()
+    handlers.handleLiveInputSubmit()
+    await vi.waitFor(() => expect(sent).toEqual(['いうえお', '\r']))
+  })
+
+  it('keeps the unmarking iOS Korean keyboard submitting on the confirming Return', async () => {
+    const { handlers, sent } = createHarness()
+    replay(handlers, RECORDED_IOS_KOREAN_TRANSFORM_TRACE)
     handlers.handleLiveInputSubmit()
 
-    // Then: an unknown tab type is not "left the terminal", so pending still flushes
-    await vi.waitFor(() => expect(sent).toEqual(['한', '\r']))
-  })
-
-  it('Given Hangul pending When the tab genuinely changes to non-terminal Then clears the composition state', async () => {
-    // Given: '한' held while the active tab is still a terminal
-    const { handlers, sent, setActiveSessionTabType } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
-
-    // When: the active tab actually becomes a non-terminal (chat) tab
-    setActiveSessionTabType('chat')
-    handlers.handleLiveInputSubmit()
-
-    // Then: pending was dropped, so submit sends only the carriage return
-    await vi.waitFor(() => expect(sent).toEqual(['\r']))
+    await vi.waitFor(() => expect(sent.at(-1)).toBe('\r'))
   })
 })

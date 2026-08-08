@@ -1,22 +1,24 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
+import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { TerminalTab } from '../../../../shared/types'
 
 // Why: cold-park hysteresis keeps a hidden pane mounted for 30s so quick tab
 // flips never pay a re-hydrate; hot-retain keeps a bounded recently-visible
-// working set warm for 15 minutes beyond that. The cap (not the clock) is the
-// primary evictor — 8 worktrees covers the ordinary working set at ~4-5MB
-// renderer floor each, so parking only engages for the many-worktree tail it
+// working set warm for 5 minutes beyond that. The cap (not the clock) is the
+// primary evictor — 4 worktrees covers the ordinary working set, so parking
+// only engages for the many-worktree tail it
 // was built for. Reveal cost is a flat ~170ms remount regardless of buffer
 // size, so cutting remount *frequency* beats shaving replay.
 export const TERMINAL_WORKTREE_COLD_PARK_DELAY_MS = 30_000
-export const TERMINAL_WORKTREE_HOT_RETAIN_MS = 15 * 60_000
-export const TERMINAL_WORKTREE_HOT_RETAIN_LIMIT = 8
+export const TERMINAL_WORKTREE_HOT_RETAIN_MS = 5 * 60_000
+export const TERMINAL_WORKTREE_HOT_RETAIN_LIMIT = 4
 export const TERMINAL_WORKTREE_PARK_DELAY_MS = TERMINAL_WORKTREE_COLD_PARK_DELAY_MS
 export const TERMINAL_TAB_COLD_PARK_DELAY_MS = 30_000
-export const TERMINAL_TAB_HOT_RETAIN_MS = 15 * 60_000
-export const TERMINAL_TAB_HOT_RETAIN_LIMIT = 12
+export const TERMINAL_TAB_HOT_RETAIN_MS = 5 * 60_000
+export const TERMINAL_TAB_HOT_RETAIN_LIMIT = 6
 
 // Why: tests override these per call (instead of process.env reads inside the
 // module) to shrink the 30s hysteresis to test-friendly durations.
@@ -24,6 +26,8 @@ export type TerminalColdParkPolicyOverrides = {
   coldParkDelayMs?: number
   hotRetainMs?: number
   hotRetainLimit?: number
+  retentionTtlMs?: number
+  retentionLimit?: number
 }
 
 export type ColdParkableTerminalTab = Pick<TerminalTab, 'id' | 'ptyId' | 'pendingActivationSpawn'>
@@ -35,6 +39,10 @@ export type TerminalWorktreeColdParkCandidate = {
   shouldMeasureHiddenWorktree: boolean
   hasActivityTerminalPortal: boolean
   hiddenSinceMs: number | null
+  /** Post-measure cool-down: hiddenSince survives a measure window (TTL/rank
+   *  clock stays honest), but re-park waits for this deadline — else every ~3s
+   *  measure lease on a past-deadline worktree thrashes remount → re-park. */
+  parkCooldownUntilMs?: number | null
 }
 
 export type TerminalTabColdParkCandidate = ColdParkableTerminalTab & {
@@ -50,9 +58,17 @@ function getPendingActivationSpawnCount(value: boolean | number | undefined): nu
   return typeof value === 'number' && value > 0 ? value : 0
 }
 
-// Why: parking relies on the daemon model snapshot to re-hydrate. Remote
-// runtime and SSH PTYs have no local snapshot in this phase, and a session id
-// minted for another worktree reattaches through a path parking cannot replay.
+function hasPendingActivationSpawn(tab: ColdParkableTerminalTab): boolean {
+  return (
+    getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0 &&
+    (!tab.ptyId || !isRemoteRuntimePtyId(tab.ptyId))
+  )
+}
+
+// Why: snapshot-backed = local daemon session owned by this worktree (foreign
+// ids reattach through a path parking cannot replay). SSH is restorable too,
+// via isParkRestorableTerminalPty + main's headless model; only remote-runtime
+// ptys, which never transit main, stay unrestorable.
 export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: string): boolean {
   if (!ptyId) {
     return false
@@ -67,6 +83,45 @@ export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: st
   return separatorIdx !== -1 && ptyId.slice(0, separatorIdx) === worktreeId
 }
 
+export type TerminalParkRestorePolicy = {
+  /** settings.terminalSshViewParking !== false — the C1 SSH-parking kill switch. */
+  sshParkingEnabled?: boolean
+  /** Exact paired environments whose host advertises bounded snapshot restore. */
+  pairedRuntimeParkingEnvironmentIds?: ReadonlySet<string>
+}
+
+export function selectPairedRuntimeParkingEnvironmentIds(
+  statuses: ReadonlyMap<string, { status: { capabilities?: readonly string[] } | null | undefined }>
+): Set<string> {
+  const capable = new Set<string>()
+  for (const [environmentId, entry] of statuses) {
+    if (entry.status?.capabilities?.includes(TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)) {
+      capable.add(environmentId)
+    }
+  }
+  return capable
+}
+
+// Why: SSH uses local main's model; paired PTYs are eligible only when their
+// exact host advertises authoritative bounded restore.
+export function isParkRestorableTerminalPty(
+  ptyId: string | null,
+  worktreeId: string,
+  policy?: TerminalParkRestorePolicy
+): boolean {
+  if (isSnapshotBackedTerminalPty(ptyId, worktreeId)) {
+    return true
+  }
+  if (ptyId && isRemoteRuntimePtyId(ptyId)) {
+    const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+    return (
+      environmentId !== null &&
+      policy?.pairedRuntimeParkingEnvironmentIds?.has(environmentId) === true
+    )
+  }
+  return policy?.sshParkingEnabled === true && ptyId !== null && parseAppSshPtyId(ptyId) !== null
+}
+
 export function canParkTerminalWorktreeRenderers(args: {
   worktreeId: string
   terminalTabs: readonly ColdParkableTerminalTab[]
@@ -78,15 +133,18 @@ export function canParkTerminalWorktreeRenderers(args: {
   shouldMeasureHiddenWorktree: boolean
   hasActivityTerminalPortal: boolean
   hiddenSinceMs: number | null
+  parkCooldownUntilMs?: number | null
   nowMs: number
   coldParkDelayMs?: number
+  restorePolicy?: TerminalParkRestorePolicy
 }): boolean {
   if (
     !args.parkingEnabled ||
     args.isVisible ||
     args.shouldMeasureHiddenWorktree ||
     args.hasActivityTerminalPortal ||
-    args.hiddenSinceMs === null
+    args.hiddenSinceMs === null ||
+    (args.parkCooldownUntilMs != null && args.nowMs < args.parkCooldownUntilMs)
   ) {
     return false
   }
@@ -100,10 +158,10 @@ export function canParkTerminalWorktreeRenderers(args: {
     if (args.pendingStartupByTabId[tab.id] !== undefined) {
       return false
     }
-    if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
+    if (hasPendingActivationSpawn(tab)) {
       return false
     }
-    return isSnapshotBackedTerminalPty(tab.ptyId, args.worktreeId)
+    return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)
   })
 }
 
@@ -114,13 +172,17 @@ export function canParkTerminalTabRenderer(args: {
   parkingEnabled: boolean
   nowMs: number
   coldParkDelayMs?: number
+  /** Worktree-scoped post-measure cool-down (measure windows are per-worktree). */
+  parkCooldownUntilMs?: number | null
+  restorePolicy?: TerminalParkRestorePolicy
 }): boolean {
   const tab = args.terminalTab
   if (
     !args.parkingEnabled ||
     tab.isVisible ||
     tab.hasActivityTerminalPortal ||
-    tab.hiddenSinceMs === null
+    tab.hiddenSinceMs === null ||
+    (args.parkCooldownUntilMs != null && args.nowMs < args.parkCooldownUntilMs)
   ) {
     return false
   }
@@ -130,13 +192,13 @@ export function canParkTerminalTabRenderer(args: {
   if (args.pendingStartupByTabId[tab.id] !== undefined) {
     return false
   }
-  if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
+  if (hasPendingActivationSpawn(tab)) {
     return false
   }
-  return isSnapshotBackedTerminalPty(tab.ptyId, args.worktreeId)
+  return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)
 }
 
-type ColdParkRetainCandidate = { id: string; hiddenSinceMs: number }
+export type ColdParkRetainCandidate = { id: string; hiddenSinceMs: number }
 
 // Why: the single most-recently-hidden candidate is the view the user just
 // switched away from; keeping it warm regardless of the TTL or cap means
@@ -161,7 +223,7 @@ function selectLastActiveRetainedId(candidates: ColdParkRetainCandidate[]): stri
 // ids hidden past hotRetainMs or beyond the limit cold-park. The last-active
 // id is exempt from both so returning to it never pays a remount. Ties sort by
 // id so the selection is deterministic.
-function selectIdsBeyondHotRetain(
+export function selectIdsBeyondHotRetain(
   candidates: ColdParkRetainCandidate[],
   args: { nowMs: number; hotRetainMs: number; hotRetainLimit: number }
 ): Set<string> {
@@ -197,6 +259,7 @@ export function selectColdParkedTerminalWorktrees(
     pendingStartupByTabId: Readonly<Record<string, unknown>>
     parkingEnabled: boolean
     nowMs: number
+    restorePolicy?: TerminalParkRestorePolicy
   } & TerminalColdParkPolicyOverrides
 ): Set<string> {
   if (!args.parkingEnabled) {
@@ -212,7 +275,8 @@ export function selectColdParkedTerminalWorktrees(
         pendingStartupByTabId: args.pendingStartupByTabId,
         parkingEnabled: args.parkingEnabled,
         nowMs: args.nowMs,
-        coldParkDelayMs
+        coldParkDelayMs,
+        ...(args.restorePolicy ? { restorePolicy: args.restorePolicy } : {})
       })
     ) {
       continue
@@ -233,6 +297,8 @@ export function selectColdParkedTerminalTabs(
     pendingStartupByTabId: Readonly<Record<string, unknown>>
     parkingEnabled: boolean
     nowMs: number
+    parkCooldownUntilMs?: number | null
+    restorePolicy?: TerminalParkRestorePolicy
   } & TerminalColdParkPolicyOverrides
 ): Set<string> {
   if (!args.parkingEnabled) {
@@ -249,7 +315,9 @@ export function selectColdParkedTerminalTabs(
         pendingStartupByTabId: args.pendingStartupByTabId,
         parkingEnabled: args.parkingEnabled,
         nowMs: args.nowMs,
-        coldParkDelayMs
+        coldParkDelayMs,
+        parkCooldownUntilMs: args.parkCooldownUntilMs,
+        ...(args.restorePolicy ? { restorePolicy: args.restorePolicy } : {})
       })
     ) {
       continue
@@ -260,57 +328,5 @@ export function selectColdParkedTerminalTabs(
     nowMs: args.nowMs,
     hotRetainMs: args.hotRetainMs ?? TERMINAL_TAB_HOT_RETAIN_MS,
     hotRetainLimit: args.hotRetainLimit ?? TERMINAL_TAB_HOT_RETAIN_LIMIT
-  })
-}
-
-// Why: parking decisions change only at the cold-park and hot-retain
-// deadlines, so callers schedule one recheck at the next deadline instead of
-// polling.
-function nextColdParkDeadlineDelayMs(args: {
-  parkingEnabled: boolean
-  hiddenSinceMs: number | null
-  nowMs: number
-  coldParkDelayMs: number
-  hotRetainMs: number
-}): number | null {
-  if (!args.parkingEnabled || args.hiddenSinceMs === null) {
-    return null
-  }
-  const pendingDeadlines = [
-    args.hiddenSinceMs + args.coldParkDelayMs,
-    args.hiddenSinceMs + args.hotRetainMs
-  ].filter((deadlineMs) => deadlineMs > args.nowMs)
-  return pendingDeadlines.length === 0 ? null : Math.min(...pendingDeadlines) - args.nowMs
-}
-
-export function getTerminalWorktreeColdParkRecheckDelayMs(args: {
-  parkingEnabled: boolean
-  hiddenSinceMs: number | null
-  nowMs: number
-  coldParkDelayMs?: number
-  hotRetainMs?: number
-}): number | null {
-  return nextColdParkDeadlineDelayMs({
-    parkingEnabled: args.parkingEnabled,
-    hiddenSinceMs: args.hiddenSinceMs,
-    nowMs: args.nowMs,
-    coldParkDelayMs: args.coldParkDelayMs ?? TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
-    hotRetainMs: args.hotRetainMs ?? TERMINAL_WORKTREE_HOT_RETAIN_MS
-  })
-}
-
-export function getTerminalTabColdParkRecheckDelayMs(args: {
-  parkingEnabled: boolean
-  hiddenSinceMs: number | null
-  nowMs: number
-  coldParkDelayMs?: number
-  hotRetainMs?: number
-}): number | null {
-  return nextColdParkDeadlineDelayMs({
-    parkingEnabled: args.parkingEnabled,
-    hiddenSinceMs: args.hiddenSinceMs,
-    nowMs: args.nowMs,
-    coldParkDelayMs: args.coldParkDelayMs ?? TERMINAL_TAB_COLD_PARK_DELAY_MS,
-    hotRetainMs: args.hotRetainMs ?? TERMINAL_TAB_HOT_RETAIN_MS
   })
 }

@@ -23,12 +23,14 @@ import { getAgentLabel } from '@/lib/agent-catalog'
 import { TabBarQuickCommandItem } from './TabBarQuickCommandItem'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import {
   getTerminalQuickCommandPickerValue,
   searchTerminalQuickCommands
 } from '@/lib/terminal-quick-command-search'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { useTabBarQuickCommandsShortcut } from './tab-bar-quick-commands-shortcut'
+import { useTabBarQuickCommandSearchInput } from './use-tab-bar-quick-command-search-input'
 type TabBarQuickCommandsMenuProps = {
   repoCommands: readonly TerminalQuickCommand[]
   globalCommands: readonly TerminalQuickCommand[]
@@ -56,6 +58,7 @@ export function TabBarQuickCommandsMenu({
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const commandListRef = useRef<HTMLDivElement | null>(null)
   const focusFrameRef = useRef<number | null>(null)
+  const menuImeEnter = useImeEnterGestureOwnership()
   // Why: closing restores focus to the chevron for accessibility, but that
   // focus restoration should not immediately reopen its tooltip.
   const suppressMoreCommandsTooltipRef = useRef(false)
@@ -156,49 +159,14 @@ export function TabBarQuickCommandsMenu({
     },
     [closeMenu, onRunCommand]
   )
-  const handleSearchKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === 'Enter' && selectedCommand) {
-        // Why: cmdk does not submit the highlighted item from CommandInput
-        // inside a DropdownMenu — mirror other searchable menus and run it here.
-        event.preventDefault()
-        event.stopPropagation()
-        runAndClose(selectedCommand)
-        return
-      }
-      if (
-        (event.key === 'ArrowDown' || event.key === 'ArrowUp') &&
-        filteredVisibleCommands.length > 0
-      ) {
-        event.preventDefault()
-        event.stopPropagation()
-        const currentIndex = filteredVisibleCommands.findIndex(
-          (command) => command.id === commandValue
-        )
-        const startIndex = Math.max(currentIndex, 0)
-        const direction = event.key === 'ArrowDown' ? 1 : -1
-        let nextIndex = startIndex + direction
-        if (nextIndex < 0) {
-          nextIndex = filteredVisibleCommands.length - 1
-        } else if (nextIndex >= filteredVisibleCommands.length) {
-          nextIndex = 0
-        }
-        setCommandValueOverride(filteredVisibleCommands[nextIndex].id)
-        requestAnimationFrame(() => {
-          commandListRef.current
-            ?.querySelector('[cmdk-item][data-selected="true"]')
-            ?.scrollIntoView({ block: 'nearest' })
-        })
-        return
-      }
-      if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
-        // Why: keep printable keys in the search field instead of Radix typeahead,
-        // while letting Escape/Tab and system shortcuts keep their menu semantics.
-        event.stopPropagation()
-      }
-    },
-    [commandValue, filteredVisibleCommands, runAndClose, selectedCommand]
-  )
+  const searchInput = useTabBarQuickCommandSearchInput({
+    commandListRef,
+    commandValue,
+    filteredCommands: filteredVisibleCommands,
+    onCommandValueChange: setCommandValueOverride,
+    onRun: runAndClose,
+    selectedCommand
+  })
   const moreCommandsLabel = translate(
     'auto.components.tab.bar.TabBarQuickCommandsButton.b82e237a4b',
     'More quick commands'
@@ -297,13 +265,32 @@ export function TabBarQuickCommandsMenu({
           side="bottom"
           sideOffset={6}
           className="w-72 p-0"
+          onCompositionStart={() => {
+            if (!showSearch) {
+              menuImeEnter.setComposing(true)
+            }
+          }}
+          onCompositionEnd={() => {
+            if (!showSearch) {
+              menuImeEnter.setComposing(false)
+            }
+          }}
           onKeyDown={(event) => {
+            if (!showSearch && menuImeEnter.ownsKeyDown(event)) {
+              return
+            }
             if (event.key !== 'Enter' || showSearch || filteredVisibleCommands.length !== 1) {
               return
             }
             event.preventDefault()
             runAndClose(filteredVisibleCommands[0])
           }}
+          onKeyUp={(event) => {
+            if (!showSearch) {
+              menuImeEnter.onKeyUp(event)
+            }
+          }}
+          onBlur={menuImeEnter.reset}
         >
           <Command
             shouldFilter={false}
@@ -327,7 +314,11 @@ export function TabBarQuickCommandsMenu({
                   setCommandValueOverride(null)
                   setQuery(nextQuery)
                 }}
-                onKeyDown={handleSearchKeyDown}
+                onCompositionStart={searchInput.onCompositionStart}
+                onCompositionEnd={searchInput.onCompositionEnd}
+                onKeyDown={searchInput.onKeyDown}
+                onKeyUp={searchInput.onKeyUp}
+                onBlur={searchInput.onBlur}
                 className="h-9 py-2 text-[12px]"
                 wrapperClassName="border-b border-border/50 px-2"
                 iconClassName="h-3.5 w-3.5"

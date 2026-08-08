@@ -2,6 +2,7 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 import type { TuiAgent } from '../../shared/types'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtySourceReceivingActivation } from '../../shared/pty-source-receiving-activation'
 
 export type PtySpawnResult = {
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
@@ -10,6 +11,8 @@ export type PtySpawnResult = {
   id: string
   /** Opaque provider-owned identity for this process behind a reusable PTY id. */
   incarnationId?: PtyIncarnationId
+  /** Relay source identity installed before adjacent source frames are decoded. */
+  sourceActivation?: PtySourceReceivingActivation
   /** The provider observed this exact spawn exit before its control reply settled. */
   exitedBeforeSpawnReply?: true
   /** OS-level pid of the shell process, when available at spawn time.
@@ -42,6 +45,10 @@ export type PtySpawnResult = {
   snapshotKittyKeyboardFlags?: number
   /** True when the spawn reattached to an existing daemon session. */
   isReattach?: boolean
+  /** Last OSC title tracked by the daemon session the snapshot came from.
+   *  Seeds main's terminal title records after a relaunch; never replayed
+   *  into a terminal. */
+  lastTitle?: string
   /** True when the reattached session uses the alternate screen buffer
    *  (e.g., Codex CLI, vim). Normal-screen TUIs like Claude Code are false. */
   isAlternateScreen?: boolean
@@ -62,5 +69,7 @@ export type PtySpawnResult = {
     cols?: number
     rows?: number
     oscLinks?: TerminalOscLinkRange[]
+    /** Last OSC title from the recovered checkpoint (see `lastTitle` above). */
+    lastTitle?: string
   }
 }

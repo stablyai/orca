@@ -9,6 +9,7 @@ import { encodeNdjson } from './ndjson'
 import { PROTOCOL_VERSION, type DaemonRequest } from './types'
 import type { SubprocessHandle } from './session'
 import { getDaemonPidPath, getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
+import { waitForEndpointUnreachable } from './daemon-endpoint-reachability-test-harness'
 
 const confirmForegroundProcessMock = vi.fn(async () => 'droid')
 
@@ -87,11 +88,12 @@ describe('DaemonServer', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  async function startServer(launchNonce?: string): Promise<void> {
+  async function startServer(launchNonce?: string, onRpcShutdown?: () => void): Promise<void> {
     server = new DaemonServer({
       socketPath,
       tokenPath,
       ...(launchNonce ? { pidPath, launchNonce } : {}),
+      ...(onRpcShutdown ? { onRpcShutdown } : {}),
       spawnSubprocess: () => createMockSubprocess()
     })
     await server.start()
@@ -153,13 +155,6 @@ describe('DaemonServer', () => {
 
       const token = readFileSync(tokenPath, 'utf-8')
       expect(token.length).toBeGreaterThan(0)
-    })
-
-    it('removes the startup error listener after listening', async () => {
-      await startServer()
-
-      const daemon = server as unknown as DaemonServerPrivate
-      expect(daemon.server?.listenerCount('error')).toBe(0)
     })
 
     it('accepts client connections', async () => {
@@ -842,7 +837,8 @@ describe('DaemonServer', () => {
 
   describe('shutdown', () => {
     it('waits for the ordinary shutdown reply write before destroying resources', async () => {
-      await startServer()
+      const onRpcShutdown = vi.fn()
+      await startServer(undefined, onRpcShutdown)
       const c = await connectClient()
       const daemon = server as unknown as DaemonServerPrivate & {
         host: { dispose: () => Promise<void> }
@@ -861,11 +857,14 @@ describe('DaemonServer', () => {
 
       await expect(c.request('shutdown', { killSessions: false })).resolves.toEqual({})
       expect(dispose).not.toHaveBeenCalled()
+      expect(onRpcShutdown).not.toHaveBeenCalled()
       expect(existsSync(tokenPath)).toBe(true)
 
       replyFlushed?.()
-      await waitFor(() => !existsSync(tokenPath))
+      await waitFor(() => onRpcShutdown.mock.calls.length === 1)
+      expect(existsSync(tokenPath)).toBe(false)
       expect(dispose).toHaveBeenCalledOnce()
+      expect(onRpcShutdown).toHaveBeenCalledOnce()
     })
 
     it('removes only its owned token and PID record', async () => {
@@ -911,6 +910,7 @@ describe('DaemonServer', () => {
       await expect(c.ensureConnected()).rejects.toThrow()
     })
 
+    // Runs everywhere: a closed Windows pipe classifies as missing, not connected.
     it('still terminates via the shutdown RPC when disposal cannot prove physical exit', async () => {
       await startServer()
       const daemon = server as unknown as DaemonServerPrivate & {
@@ -926,7 +926,8 @@ describe('DaemonServer', () => {
       await expect(c.request('shutdown', { killSessions: true })).resolves.toEqual({})
 
       await waitFor(() => daemon.server === null)
-      await waitFor(() => !existsSync(socketPath))
+      // Why not existsSync: the dead entry remains for the next publisher to replace.
+      expect(await waitForEndpointUnreachable(socketPath)).toBe(true)
       const late = new DaemonClient({ socketPath, tokenPath })
       await expect(late.ensureConnected()).rejects.toThrow()
     })

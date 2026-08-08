@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { Tab } from '../../../shared/types'
 import {
   decideInitialAgentTabViewMode,
   initialAgentTabViewModeProps
@@ -70,6 +71,18 @@ describe('decideInitialAgentTabViewMode', () => {
     ).toBe('chat')
   })
 
+  it('keeps Model-A SSH omp in the terminal view but opens it locally', () => {
+    const forConnection = (connectionId: string | null): Tab['viewMode'] =>
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'omp',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+      })
+    expect(forConnection('ssh-target-1')).toBeUndefined()
+    expect(forConnection(null)).toBe('chat')
+  })
+
   it('keeps Model-A SSH Grok in the terminal view', () => {
     expect(
       decideInitialAgentTabViewMode({
@@ -90,13 +103,45 @@ describe('decideInitialAgentTabViewMode', () => {
     ).toEqual({})
   })
 
-  it('returns undefined for draft delivery', () => {
+  it('opens a mirrorable draft launch in chat', () => {
     expect(
       decideInitialAgentTabViewMode({
         experimentalNativeChat: true,
         openAgentTabsInChatByDefault: true,
         agent: 'claude',
-        promptDelivery: 'draft'
+        promptDelivery: 'draft',
+        launchDraftText: 'https://github.com/o/r/issues/12'
+      })
+    ).toBe('chat')
+  })
+
+  it.each([
+    ['multi-line', 'Reproduce first\n\nhttps://github.com/o/r/issues/12'],
+    ['trailing-newline', 'https://github.com/o/r/issues/12\n']
+  ])('opens a %s draft in chat with its mirrored composer text', (_label, launchDraftText) => {
+    expect(
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'claude',
+        promptDelivery: 'draft',
+        launchDraftText
+      })
+    ).toBe('chat')
+  })
+
+  it.each([
+    ['Unicode-line-separator', 'one\u2028two'],
+    ['blank', '   '],
+    ['absent', undefined]
+  ])('keeps a %s draft in the terminal, where its text actually is', (_label, launchDraftText) => {
+    expect(
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'claude',
+        promptDelivery: 'draft',
+        ...(launchDraftText === undefined ? {} : { launchDraftText })
       })
     ).toBeUndefined()
   })

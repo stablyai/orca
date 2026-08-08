@@ -93,6 +93,31 @@ export const getTerminalMacYenSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getTerminalKoreanWonSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.d6756003bf',
+      'Korean Won (₩) to Backquote (`)'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.3595f8b54c',
+      'Controls whether pressing the Korean Won (₩) key sends a backquote (`) instead when a Korean input source is active.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.5ba707eec2', 'won'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.d243131b1a', 'backquote'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.2a22983b81', 'backtick'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.8f64dd7dc4', 'korean'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.84ae68de79', 'hangul'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.abaa24752d', 'keyboard'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.91cae143ad', 'korea'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.b26f68a00c', 'markdown'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.4cec42dbf7', 'intl')
+    ]
+  }
+])
+
 export const getTerminalGhosttyImportSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.a979df0083', 'Import from Ghostty'),

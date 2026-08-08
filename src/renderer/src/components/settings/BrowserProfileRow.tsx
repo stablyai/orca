@@ -105,7 +105,11 @@ export function BrowserProfileRow({
 
   const sourceLabel = profile.source
     ? `${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
-    : null
+    : translate('auto.components.settings.BrowserProfileRow.796d846483', 'No cookies imported')
+  const userAgentLabel =
+    profile.userAgentMode === 'native'
+      ? translate('auto.components.settings.BrowserProfileRow.b5c0479e21', 'Unmodified user agent')
+      : null
 
   // Why: uses div[role=button] instead of <button> to avoid nested <button>
   // elements — the dropdown trigger and trash actions inside also render as
@@ -136,16 +140,10 @@ export function BrowserProfileRow({
             </span>
           ) : null}
         </div>
-        {sourceLabel ? (
-          <p className="truncate text-[11px] text-muted-foreground">{sourceLabel}</p>
-        ) : (
-          <p className="text-[11px] text-muted-foreground">
-            {translate(
-              'auto.components.settings.BrowserProfileRow.796d846483',
-              'No cookies imported'
-            )}
-          </p>
-        )}
+        <p className="truncate text-[11px] text-muted-foreground">
+          {sourceLabel}
+          {userAgentLabel ? ` · ${userAgentLabel}` : ''}
+        </p>
       </div>
       <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <DropdownMenu

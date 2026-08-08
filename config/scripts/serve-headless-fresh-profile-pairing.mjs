@@ -55,7 +55,6 @@ Object.assign(childEnv, {
   ORCA_DEV_USER_DATA_PATH: profileDir,
   HOME: isolatedHome,
   USERPROFILE: isolatedHome,
-  ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
   ...(process.platform === 'linux'
     ? { ELECTRON_DISABLE_SANDBOX: process.env.ELECTRON_DISABLE_SANDBOX ?? '1' }
     : {})

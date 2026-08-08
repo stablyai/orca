@@ -9,6 +9,12 @@ import {
   requestHostedReviewJson
 } from '../source-control/hosted-review-api-request'
 import { readHostedPullRequestTemplate } from '../source-control/pull-request-template'
+import {
+  azureDevOpsApiVersionForOrigin,
+  isAzureDevOpsPreviewVersionRejection,
+  markAzureDevOpsPreviewApiVersionOrigin,
+  resolveAzureDevOpsGitApiBaseUrl
+} from './azure-devops-api-request'
 import { getAzureDevOpsPullRequestForBranch } from './client'
 import { mapAzureDevOpsPullRequest, type RawAzureDevOpsPullRequest } from './pull-request-mappers'
 import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref'
@@ -16,7 +22,6 @@ import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
 
 type AzureDevOpsCreateAuthConfig = {
-  apiBaseUrl: string | null
   pat: string | null
   accessToken: string | null
   username: string | null
@@ -27,16 +32,8 @@ function envValue(name: string): string | null {
   return value.length > 0 ? value : null
 }
 
-function normalizeApiBaseUrl(value: string): string {
-  return value
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\/_apis$/i, '')
-}
-
 function getAuthConfig(): AzureDevOpsCreateAuthConfig {
   return {
-    apiBaseUrl: envValue('ORCA_AZURE_DEVOPS_API_BASE_URL'),
     pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
     accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
     username: envValue('ORCA_AZURE_DEVOPS_USERNAME')
@@ -60,11 +57,41 @@ function authHeaders(config: AzureDevOpsCreateAuthConfig): Record<string, string
 }
 
 function apiUrl(repo: AzureDevOpsRepoRef, path: string): URL {
-  const config = getAuthConfig()
-  const baseUrl = config.apiBaseUrl ? normalizeApiBaseUrl(config.apiBaseUrl) : repo.apiBaseUrl
+  const baseUrl = resolveAzureDevOpsGitApiBaseUrl(repo)
   const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
-  url.searchParams.set('api-version', '7.1')
+  url.searchParams.set('api-version', azureDevOpsApiVersionForOrigin(url.origin))
   return url
+}
+
+// Why (STA-3494): Azure DevOps Server 400s versioned requests without -preview;
+// the rejection happens before the PR is created, so one retry is safe.
+async function requestCreatePullRequest(
+  repo: AzureDevOpsRepoRef,
+  path: string,
+  init: Omit<RequestInit, 'signal'>
+): Promise<RawAzureDevOpsPullRequest> {
+  const url = apiUrl(repo, path)
+  try {
+    return await requestHostedReviewJson<RawAzureDevOpsPullRequest>(
+      url,
+      init,
+      CREATE_REQUEST_TIMEOUT_MS
+    )
+  } catch (error) {
+    if (
+      url.searchParams.get('api-version')?.endsWith('-preview') ||
+      !(error instanceof HostedReviewApiRequestError) ||
+      !isAzureDevOpsPreviewVersionRejection(error.status, error.message)
+    ) {
+      throw error
+    }
+    markAzureDevOpsPreviewApiVersionOrigin(url.origin)
+    return requestHostedReviewJson<RawAzureDevOpsPullRequest>(
+      apiUrl(repo, path),
+      init,
+      CREATE_REQUEST_TIMEOUT_MS
+    )
+  }
 }
 
 function encodePathSegment(value: string): string {
@@ -192,8 +219,9 @@ export async function createAzureDevOpsPullRequest(
   }
 
   try {
-    const raw = await requestHostedReviewJson<RawAzureDevOpsPullRequest>(
-      apiUrl(repo, `/_apis/git/repositories/${encodePathSegment(repo.repository)}/pullRequests`),
+    const raw = await requestCreatePullRequest(
+      repo,
+      `/_apis/git/repositories/${encodePathSegment(repo.repository)}/pullRequests`,
       {
         method: 'POST',
         headers: {
@@ -202,8 +230,7 @@ export async function createAzureDevOpsPullRequest(
           ...authHeaders(getAuthConfig())
         },
         body: JSON.stringify(requestBody)
-      },
-      CREATE_REQUEST_TIMEOUT_MS
+      }
     )
     const created = mapAzureDevOpsPullRequest(raw, 'neutral', repo.webBaseUrl)
     if (created) {

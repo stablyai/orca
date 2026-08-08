@@ -136,20 +136,7 @@ vi.mock('zustand/react/shallow', () => ({
   useShallow: (selector: unknown) => selector
 }))
 
-vi.mock('lucide-react', () => ({
-  FilePlus: function FilePlus() {
-    return null
-  },
-  Globe: function Globe() {
-    return null
-  },
-  Plus: function Plus() {
-    return null
-  },
-  TerminalSquare: function TerminalSquare() {
-    return null
-  }
-}))
+vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
 
 vi.mock('@dnd-kit/sortable', () => ({
   SortableContext: function SortableContext(props: { children?: unknown }) {

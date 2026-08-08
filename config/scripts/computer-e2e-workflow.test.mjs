@@ -47,6 +47,8 @@ describe('computer-use e2e workflow', () => {
     expect(triggerPaths).toEqual(
       expect.arrayContaining([
         'config/scripts/computer-e2e-workflow.test.mjs',
+        'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs',
+        'config/scripts/computer-use-modifier-safety.test.mjs',
         'config/scripts/computer-use-skill-guidance.test.mjs',
         'config/scripts/computer-use-smoke.mjs',
         'config/scripts/computer-use-smoke.test.mjs',
@@ -69,9 +71,15 @@ describe('computer-use e2e workflow', () => {
     const nativeSmokeRuns = workflow.jobs['native-smoke'].steps
       .map((step) => step.run)
       .filter((run) => typeof run === 'string')
+    const checkout = workflow.jobs['native-smoke'].steps.find(
+      (step) => step.uses === 'actions/checkout@v6'
+    )
     const regressionRun = nativeSmokeRuns.find((run) => run.includes('pnpm vitest run'))
     const expectedRegressionFiles = [
       'config/scripts/computer-e2e-workflow.test.mjs',
+      'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs',
+      'config/scripts/macos-computer-helper-owner-loss-processes.test.mjs',
+      'config/scripts/computer-use-modifier-safety.test.mjs',
       'config/scripts/computer-use-skill-guidance.test.mjs',
       'config/scripts/computer-use-smoke.test.mjs',
       'src/main/computer/computer-provider-lifecycle.test.ts',
@@ -104,10 +112,66 @@ describe('computer-use e2e workflow', () => {
       'src/shared/remote-runtime-client.test.ts'
     ]
 
+    expect(checkout.with['persist-credentials']).toBe(false)
     expect(regressionRun).toBeTruthy()
     for (const file of expectedRegressionFiles) {
       expect(regressionRun).toContain(file)
     }
+  })
+
+  it('builds and tests the macOS helper on pull requests without TCC e2e', () => {
+    const workflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
+    )
+    const job = workflow.jobs['mac-native-owner-smoke']
+    const runs = job.steps.map((step) => step.run).filter((run) => typeof run === 'string')
+    const checkout = job.steps.find((step) => step.uses === 'actions/checkout@v6')
+
+    expect(job.if).toBe("github.event_name == 'pull_request'")
+    expect(job['runs-on']).toBe('macos-15')
+    expect(checkout.with['persist-credentials']).toBe(false)
+    expect(runs).toContain('pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1')
+    const cleanupRun = runs.find((run) =>
+      run.includes('config/scripts/macos-computer-helper-owner-loss-processes.test.mjs')
+    )
+    expect(cleanupRun).toContain(
+      'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
+    )
+    expect(runs).toContain('pnpm verify:computer-native')
+    expect(runs.join('\n')).not.toContain('test:e2e:computer')
+    expect(workflow.on.pull_request.paths).toEqual(
+      expect.arrayContaining([
+        'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs',
+        'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs',
+        'config/scripts/macos-computer-helper-owner-loss-metrics.mjs',
+        'config/scripts/macos-computer-helper-owner-loss-processes.mjs',
+        'config/scripts/macos-computer-helper-owner-loss-processes.test.mjs',
+        'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mjs'
+      ])
+    )
+  })
+
+  it('runs deterministic macOS owner-loss benchmark cleanup coverage', () => {
+    const benchmark = readFileSync(
+      join(projectDir, 'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs'),
+      'utf8'
+    )
+    const cleanup = readFileSync(
+      join(projectDir, 'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mjs'),
+      'utf8'
+    )
+
+    expect(benchmark).toContain('spawnBenchmarkProcess(executable, [launcherDir]')
+    expect(benchmark).toContain("stdio: ['ignore', stdoutDescriptor, stderrDescriptor]")
+    expect(benchmark).toContain('cleanupOwnerLossTrial({')
+    const parseIndex = benchmark.indexOf('parseBenchmarkTrialResult(serializedResult)')
+    const cleanupIndex = benchmark.indexOf('cleanupOwnerLossTrial({')
+    expect(parseIndex).toBeGreaterThanOrEqual(0)
+    expect(cleanupIndex).toBeGreaterThanOrEqual(0)
+    expect(parseIndex).toBeLessThan(cleanupIndex)
+    expect(benchmark).toContain('trialCleanupSha256: artifactSha256(trialCleanupPath)')
+    expect(cleanup).toContain('killRecordedAndMatchingProcesses(options.recordPath')
+    expect(cleanup).toContain("signalValidatedProcessGroup(options.pid, options.marker, 'SIGKILL'")
   })
 
   it('boots the built daemon under plain Node in the PR native-smoke job after the main build', () => {
@@ -155,26 +219,21 @@ describe('computer-use e2e workflow', () => {
         'config/scripts/daemon-boot-smoke.mjs',
         'config/scripts/windows-daemon-workspace-close-repro.mjs',
         'electron.vite.config.ts',
-        'build-plugins/**',
+        'config/build-plugins/**',
         'src/main/daemon/**'
       ])
     )
   })
 
-  it('runs Linux computer-use e2e in the PR native-smoke job under Xvfb', () => {
+  it('does not run computer-use e2e in PR smoke jobs', () => {
     const workflow = parse(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
     const nativeSmokeRuns = workflow.jobs['native-smoke'].steps
       .map((step) => step.run)
       .filter((run) => typeof run === 'string')
-    const installRun = nativeSmokeRuns.find((run) => run.includes('apt-get install'))
 
-    expect(installRun).toContain('gedit')
-    expect(installRun).toContain('xvfb')
-    expect(nativeSmokeRuns).toContain(
-      'xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-linux.e2e.ts'
-    )
+    expect(nativeSmokeRuns.join('\n')).not.toContain('test:e2e:computer')
   })
 
   it('builds Electron main output before every computer-use e2e run', () => {
@@ -203,7 +262,7 @@ describe('computer-use e2e workflow', () => {
     }
   })
 
-  it('runs core Windows computer-use e2e in the PR native-smoke job', () => {
+  it('keeps computer-use e2e in scheduled jobs only', () => {
     const workflow = parse(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
@@ -219,9 +278,8 @@ describe('computer-use e2e workflow', () => {
         .filter((run) => typeof run === 'string')
     ]
 
-    expect(nativeSmokeRuns).toContain(
-      'pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts'
-    )
+    expect(nativeSmokeRuns.join('\n')).not.toContain('test:e2e:computer')
+    expect(allRuns.join('\n')).toContain('test:e2e:computer')
     expect(allRuns.join('\n')).not.toContain('test:e2e:computer -- --reporter')
   })
 

@@ -1,9 +1,15 @@
-import type { EnrichedDetectedPort, SshConnectionState, SshConnectionStatus } from './ssh-types'
+import type {
+  DirectSshAuthority,
+  EnrichedDetectedPort,
+  SshConnectionState,
+  SshConnectionStatus,
+  SshProviderEpoch
+} from './ssh-types'
 import { clampUtf8TextPrefix, measureUtf8ByteLength } from './utf8-byte-limits'
 
 export const SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES = 1024
 export const SSH_CONNECTION_ERROR_MAX_UTF8_BYTES = 16 * 1024
-export const SSH_CREDENTIAL_DETAIL_MAX_UTF8_BYTES = 16 * 1024
+export const SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES = 128
 export const SSH_DETECTED_PORTS_MAX_ENTRIES = 50
 export const SSH_DETECTED_PORT_HOST_MAX_UTF8_BYTES = 1024
 export const SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES = 4 * 1024
@@ -30,6 +36,18 @@ export function isSshRetainedIdentifier(value: unknown): value is string {
   )
 }
 
+export function isAdmissibleDirectSshAuthority(value: unknown): value is DirectSshAuthority {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const authority = value as Record<string, unknown>
+  return (
+    isSshRetainedIdentifier(authority.targetId) &&
+    isSshProviderEpoch(authority.providerEpoch) &&
+    isNonNegativeSafeInteger(authority.connectionGeneration)
+  )
+}
+
 export function admitSshConnectionState(
   value: unknown,
   expectedTargetId: string
@@ -50,14 +68,23 @@ export function admitSshConnectionState(
   }
 
   const error = clampSshConnectionError(input.error)
+  const hasProviderEpoch = input.providerEpoch !== undefined && input.providerEpoch !== null
+  const hasConnectionGeneration = input.connectionGeneration !== undefined
+  if (
+    hasProviderEpoch !== hasConnectionGeneration ||
+    (hasProviderEpoch &&
+      (!isSshProviderEpoch(input.providerEpoch) ||
+        !isNonNegativeSafeInteger(input.connectionGeneration)))
+  ) {
+    return null
+  }
   return {
     targetId: expectedTargetId,
     status: input.status as SshConnectionStatus,
     error,
     reconnectAttempt: input.reconnectAttempt,
-    ...(isNonNegativeSafeInteger(input.connectionGeneration)
-      ? { connectionGeneration: input.connectionGeneration }
-      : {}),
+    providerEpoch: hasProviderEpoch ? (input.providerEpoch as SshProviderEpoch) : null,
+    ...(hasProviderEpoch ? { connectionGeneration: input.connectionGeneration as number } : {}),
     ...(typeof input.supportsFolderDownload === 'boolean'
       ? { supportsFolderDownload: input.supportsFolderDownload }
       : {}),
@@ -67,6 +94,43 @@ export function admitSshConnectionState(
       ? { remotePlatform: input.remotePlatform }
       : {})
   }
+}
+
+export function admitSshConnectionStateForAuthorityReconciliation(
+  value: unknown,
+  expectedTargetId: string
+): SshConnectionState | null {
+  const admitted = admitSshConnectionState(value, expectedTargetId)
+  if (admitted || !value || typeof value !== 'object') {
+    return admitted
+  }
+  const input = value as Record<string, unknown>
+  const hasProviderEpoch = input.providerEpoch !== undefined && input.providerEpoch !== null
+  const hasConnectionGeneration = input.connectionGeneration !== undefined
+  if (hasProviderEpoch === hasConnectionGeneration) {
+    return null
+  }
+  return admitSshConnectionState(
+    {
+      targetId: input.targetId,
+      status: input.status,
+      error: input.error,
+      reconnectAttempt: input.reconnectAttempt,
+      supportsFolderDownload: input.supportsFolderDownload,
+      remotePlatform: input.remotePlatform
+    },
+    expectedTargetId
+  )
+}
+
+function isSshProviderEpoch(value: unknown): value is SshProviderEpoch {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    !measureUtf8ByteLength(value, {
+      stopAfterBytes: SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES
+    }).exceededLimit
+  )
 }
 
 export function clampSshConnectionError(error: string | null): string | null {

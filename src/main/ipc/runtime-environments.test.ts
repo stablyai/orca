@@ -5,8 +5,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/pairing'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
+import {
+  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
+} from '../../shared/protocol-version'
 import * as environmentStore from '../../shared/runtime-environment-store'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RuntimeRpcCallQueueOverloadError } from '../../shared/runtime-rpc-call-queue'
+import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 
 const {
   handleMock,
@@ -79,6 +85,18 @@ function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
   })
 }
 
+function runtimeStatus(): Record<string, unknown> {
+  return {
+    runtimeId: 'runtime-a',
+    rendererGraphEpoch: 1,
+    graphStatus: 'ready',
+    authoritativeWindowId: 1,
+    liveTabCount: 0,
+    liveLeafCount: 0,
+    protocolVersion: 999_999
+  }
+}
+
 function handler<TArgs, TResult>(
   channel: string
 ): (_event: unknown, args: TArgs) => TResult | Promise<TResult> {
@@ -132,9 +150,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(handleMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:list',
       'runtimeEnvironments:addFromPairingCode',
+      'runtimeEnvironments:verifyAndAddFromPairingCode',
       'runtimeEnvironments:resolve',
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
+      'runtimeEnvironments:connect',
       'runtimeEnvironments:retryConnectionsNow',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
@@ -152,9 +172,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(removeHandlerMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:list',
       'runtimeEnvironments:addFromPairingCode',
+      'runtimeEnvironments:verifyAndAddFromPairingCode',
       'runtimeEnvironments:resolve',
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
+      'runtimeEnvironments:connect',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
@@ -209,6 +231,173 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(await list(null, undefined)).toEqual([])
   })
 
+  it('blocks loopback before verification unless an SSH tunnel is declared', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string; allowLoopback?: boolean },
+      { ok: boolean; kind?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    await expect(
+      verifyAndAdd(null, { name: 'desk', pairingCode: pairingCode() })
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'host-unreachable'
+    })
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+    expect(environmentStore.listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it('verifies identity, access, status, and compatibility before saving', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string; allowLoopback?: boolean },
+      { ok: boolean; environment?: { name: string; connectionDependency?: string } }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    const result = await verifyAndAdd(null, {
+      name: 'desk',
+      pairingCode: pairingCode(),
+      allowLoopback: true
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      environment: { name: 'desk', connectionDependency: 'ssh-tunnel' }
+    })
+    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'ws://127.0.0.1:6768' }),
+      'status.get',
+      undefined,
+      15_000
+    )
+    expect(environmentStore.listEnvironments(userDataPath)).toHaveLength(1)
+  })
+
+  it('does not mark non-loopback hosts as SSH-tunnel dependent', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string; allowLoopback?: boolean },
+      { ok: boolean; environment?: { connectionDependency?: string } }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    const result = await verifyAndAdd(null, {
+      name: 'desk',
+      pairingCode: pairingCode('ws://100.76.32.125:6768'),
+      allowLoopback: true
+    })
+
+    expect(result).toMatchObject({ ok: true })
+    expect(result.environment).not.toHaveProperty('connectionDependency')
+  })
+
+  it.each([
+    [{ protocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1 }, 'protocol-incompatible'],
+    [{ protocolVersion: 999_999, deviceScope: 'mobile' }, 'access-link-invalid'],
+    [null, 'connection-interrupted']
+  ])('does not save a host with rejected status %o', async (status, expectedKind) => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: status,
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string },
+      { ok: boolean; kind?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    await expect(
+      verifyAndAdd(null, {
+        name: 'desk',
+        pairingCode: pairingCode('ws://100.76.32.125:6768')
+      })
+    ).resolves.toMatchObject({ ok: false, kind: expectedKind })
+    expect(environmentStore.listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it.each([
+    [
+      new RemoteRuntimeClientError('remote_runtime_unavailable', 'closed', {
+        pairingStage: 'host-identity',
+        closeCode: 4001
+      }),
+      'host-identity-mismatch'
+    ],
+    [
+      new RemoteRuntimeClientError('unauthorized', 'rejected', {
+        pairingStage: 'access-grant'
+      }),
+      'access-link-invalid'
+    ],
+    [
+      new RemoteRuntimeClientError('remote_runtime_unavailable', 'offline', {
+        pairingStage: 'connect'
+      }),
+      'host-unreachable'
+    ],
+    [new Error('Invalid public key: expected 32 bytes, got 3'), 'access-link-invalid']
+  ] as const)('returns a structured pairing failure for %s', async (error, expectedKind) => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockRejectedValue(error)
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string },
+      { ok: boolean; kind?: string; message?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    const result = await verifyAndAdd(null, {
+      name: 'desk',
+      pairingCode: pairingCode('ws://100.76.32.125:6768')
+    })
+
+    expect(result).toMatchObject({ ok: false, kind: expectedKind })
+    expect(result.message).not.toContain('4001')
+    expect(environmentStore.listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it('returns a structured failure when a verified host cannot be persisted', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+      name: 'desk',
+      pairingCode: pairingCode('ws://100.76.32.125:6768')
+    })
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: runtimeStatus(),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const verifyAndAdd = handler<
+      { name: string; pairingCode: string },
+      { ok: boolean; kind?: string; message?: string }
+    >('runtimeEnvironments:verifyAndAddFromPairingCode')
+
+    await expect(
+      verifyAndAdd(null, {
+        name: 'desk',
+        pairingCode: pairingCode('ws://100.76.32.125:6768')
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'environment-save-failed',
+      message: 'A server named "desk" already exists.'
+    })
+    expect(environmentStore.listEnvironments(userDataPath)).toHaveLength(1)
+  })
+
   it('requires an explicit Advanced selection before removing the Active Server', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     const add = handler<
@@ -230,6 +419,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
   it('disconnects a saved runtime without removing it', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: { runtimeId: 'runtime-remote' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
 
     const add = handler<
       { name: string; pairingCode: string },
@@ -250,6 +445,39 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
     const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
     expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
+
+    const getStatus = handler<{ selector: string }, { ok: boolean; error?: { code: string } }>(
+      'runtimeEnvironments:getStatus'
+    )
+    await expect(getStatus(null, { selector: 'desk' })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'runtime_manually_disconnected' }
+    })
+    const call = handler<
+      { selector: string; method: string },
+      { ok: boolean; error?: { code: string } }
+    >('runtimeEnvironments:call')
+    await expect(call(null, { selector: 'desk', method: 'repo.list' })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'runtime_manually_disconnected' }
+    })
+    const subscribe = handler<{ selector: string; method: string }, { subscriptionId: string }>(
+      'runtimeEnvironments:subscribe'
+    )
+    await expect(
+      subscribe(null, { selector: 'desk', method: 'terminal.multiplex' })
+    ).rejects.toThrow('runtime_manually_disconnected')
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+    expect(subscribeRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+
+    const connect = handler<{ selector: string }, { ok: boolean; result?: { runtimeId: string } }>(
+      'runtimeEnvironments:connect'
+    )
+    await expect(connect(null, { selector: 'desk' })).resolves.toMatchObject({
+      ok: true,
+      result: { runtimeId: 'runtime-remote' }
+    })
+    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledOnce()
   })
 
   it('marks environments owned by ephemeral VM runtimes in the public list', async () => {
@@ -709,6 +937,67 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledTimes(1)
   })
 
+  it.each([
+    [
+      new RemoteRuntimeClientError(
+        'remote_runtime_unavailable',
+        'Transport vanished without legacy classifier wording.'
+      ),
+      'remote_runtime_unavailable',
+      'Transport vanished without legacy classifier wording.'
+    ],
+    [
+      Object.assign(new RuntimeRpcCallQueueOverloadError('selector'), {
+        message: 'Capacity rejected without legacy classifier wording.'
+      }),
+      'runtime_rpc_queue_overloaded',
+      'Capacity rejected without legacy classifier wording.'
+    ]
+  ])(
+    'returns coded transport failure %s so the renderer restores its identity',
+    async (transportError, expectedCode, expectedMessage) => {
+      registerRuntimeEnvironmentHandlers(store as never)
+      sendRemoteRuntimeRequestMock.mockRejectedValue(transportError)
+
+      const add = handler<
+        { name: string; pairingCode: string },
+        { environment: { id: string; name: string } }
+      >('runtimeEnvironments:addFromPairingCode')
+      await add(null, { name: 'desk', pairingCode: pairingCode() })
+      const call = handler<{ selector: string; method: string }, RuntimeRpcResponse<unknown>>(
+        'runtimeEnvironments:call'
+      )
+
+      const response = structuredClone(await call(null, { selector: 'desk', method: 'status.get' }))
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: expectedCode, message: expectedMessage }
+      })
+      expect(response.ok).toBe(false)
+      if (response.ok === false) {
+        expect(response.error).toEqual({ code: expectedCode, message: expectedMessage })
+      }
+    }
+  )
+
+  it('keeps uncoded call failures on the rejected IPC fallback path', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockRejectedValue(new Error('shared down'))
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const call = handler<{ selector: string; method: string }, RuntimeRpcResponse<unknown>>(
+      'runtimeEnvironments:call'
+    )
+
+    await expect(call(null, { selector: 'desk', method: 'status.get' })).rejects.toThrow(
+      'shared down'
+    )
+  })
+
   it('does not fall back after a shared-control request fails on a supported runtime', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
@@ -1155,9 +1444,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { disconnected: { id: string; name: string } }
     >('runtimeEnvironments:disconnect')
     await disconnect(null, { selector: 'desk' })
+    const connect = handler<{ selector: string }, { ok: boolean }>('runtimeEnvironments:connect')
+    await connect(null, { selector: 'desk' })
     await call(null, { selector: 'desk', method: 'repo.list' })
 
     expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual([
+      'status.get',
       'status.get',
       'status.get'
     ])
@@ -1458,6 +1750,363 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     ).toEqual({
       unsubscribed: false
     })
+  })
+
+  it('tells the renderer when retiring the transport closes its streaming subscription', async () => {
+    // Why: disconnect advances the transport generation before closing sockets.
+    // Gating the terminal 'close' on that generation stranded the renderer with a
+    // handle it believed was open, so every later subscribe wrote into a socket
+    // main no longer owned — blank, wedged remote terminals after a reconnect.
+    registerRuntimeEnvironmentHandlers(store as never)
+    let transportCallbacks: {
+      onResponse: (response: Record<string, unknown>) => void
+      onClose: () => void
+    } | null = null
+    const close = vi.fn(() => {
+      transportCallbacks?.onClose()
+    })
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      async (
+        _environment: unknown,
+        _method: string,
+        _params: unknown,
+        _timeoutMs: number,
+        callbacks: NonNullable<typeof transportCallbacks>
+      ) => {
+        transportCallbacks = callbacks
+        return { requestId: 'multiplex-1', close, sendBinary: vi.fn() }
+      }
+    )
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const senderSend = vi.fn()
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const subscribed = await subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: senderSend,
+          once: vi.fn(),
+          removeListener: vi.fn()
+        }
+      },
+      {
+        selector: added.environment.id,
+        method: 'terminal.multiplex',
+        params: {},
+        subscriptionId: 'multiplex-sub'
+      }
+    )
+
+    const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
+      'runtimeEnvironments:disconnect'
+    )
+    disconnect(null, { selector: added.environment.id })
+
+    const closeEvents = senderSend.mock.calls.filter(
+      (call) =>
+        call[0] === 'runtimeEnvironments:subscriptionEvent' &&
+        (call[1] as { type?: string }).type === 'close'
+    )
+    expect(closeEvents).toEqual([
+      [
+        'runtimeEnvironments:subscriptionEvent',
+        { subscriptionId: subscribed.subscriptionId, type: 'close' }
+      ]
+    ])
+  })
+
+  it("retires an environment's remaining subscriptions when one teardown throws", async () => {
+    // Why: the sweep exists to retire dead handles, so a single failing teardown
+    // must not strand the very sockets it was called to close.
+    registerRuntimeEnvironmentHandlers(store as never)
+    const closeCalls: string[] = []
+    let streamCount = 0
+    subscribeRemoteRuntimeRequestMock.mockImplementation(async () => {
+      streamCount += 1
+      const requestId = `stream-${streamCount}`
+      return {
+        requestId,
+        close: () => {
+          closeCalls.push(requestId)
+          if (requestId === 'stream-1') {
+            throw new Error('socket teardown exploded')
+          }
+        },
+        sendBinary: vi.fn()
+      }
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const senderSend = vi.fn()
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const sender = {
+      sender: {
+        id: 1,
+        isDestroyed: () => false,
+        send: senderSend,
+        once: vi.fn(),
+        removeListener: vi.fn()
+      }
+    }
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'terminal.multiplex',
+      params: {},
+      subscriptionId: 'doomed-sub'
+    })
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'browser.screencast',
+      params: {},
+      subscriptionId: 'sibling-sub'
+    })
+
+    const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
+      'runtimeEnvironments:disconnect'
+    )
+    expect(() => disconnect(null, { selector: added.environment.id })).not.toThrow()
+
+    expect(closeCalls).toEqual(['stream-1', 'stream-2'])
+    expect(
+      senderSend.mock.calls
+        .filter((call) => (call[1] as { type?: string }).type === 'close')
+        .map((call) => (call[1] as { subscriptionId: string }).subscriptionId)
+    ).toEqual(['doomed-sub', 'sibling-sub'])
+
+    // Both entries are gone, so a later unsubscribe finds nothing to release.
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    expect(await unsubscribe({ sender: { id: 1 } }, { subscriptionId: 'sibling-sub' })).toEqual({
+      unsubscribed: false
+    })
+  })
+
+  it('contains a throwing renderer send on a host-initiated close', async () => {
+    // Why: this is the notifyClosed call site with no surrounding guard. A host
+    // close arriving on a disposed render frame would otherwise throw out through
+    // the transport's onClose and into the WebSocket close handler.
+    registerRuntimeEnvironmentHandlers(store as never)
+    let transportCallbacks: {
+      onResponse: (response: Record<string, unknown>) => void
+      onClose: () => void
+    } | null = null
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      async (
+        _environment: unknown,
+        _method: string,
+        _params: unknown,
+        _timeoutMs: number,
+        callbacks: NonNullable<typeof transportCallbacks>
+      ) => {
+        transportCallbacks = callbacks
+        return { requestId: 'host-closed-stream', close: vi.fn(), sendBinary: vi.fn() }
+      }
+    )
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const senderSend = vi.fn((_channel: string, payload: { type: string }) => {
+      if (payload.type === 'close') {
+        throw new Error('Render frame was disposed')
+      }
+    })
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    await subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: senderSend,
+          once: vi.fn(),
+          removeListener: vi.fn()
+        }
+      },
+      {
+        selector: added.environment.id,
+        method: 'terminal.multiplex',
+        params: {},
+        subscriptionId: 'host-closed-sub'
+      }
+    )
+
+    // The host closes the stream on its own; nothing wraps this call site.
+    expect(() => transportCallbacks!.onClose()).not.toThrow()
+    expect(
+      senderSend.mock.calls.filter((call) => (call[1] as { type?: string }).type === 'close')
+    ).toHaveLength(1)
+
+    // The entry is still released, so a later unsubscribe finds nothing.
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    expect(await unsubscribe({ sender: { id: 1 } }, { subscriptionId: 'host-closed-sub' })).toEqual(
+      {
+        unsubscribed: false
+      }
+    )
+  })
+
+  it('retires remaining subscriptions when a liveness probe inside notifyClosed throws', async () => {
+    // Why: notifyClosed guards its own send, but the sweep must not depend on
+    // everything else inside it staying throw-free -- that is how the abandoned
+    // -siblings defect comes back the next time a line is added there.
+    registerRuntimeEnvironmentHandlers(store as never)
+    const closedStreams: string[] = []
+    let streamCount = 0
+    subscribeRemoteRuntimeRequestMock.mockImplementation(async () => {
+      streamCount += 1
+      const requestId = `stream-${streamCount}`
+      return {
+        requestId,
+        close: () => closedStreams.push(requestId),
+        sendBinary: vi.fn()
+      }
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const deliveredCloses: string[] = []
+    const senderSend = vi.fn(
+      (_channel: string, payload: { subscriptionId: string; type: string }) => {
+        if (payload.type === 'close') {
+          deliveredCloses.push(payload.subscriptionId)
+        }
+      }
+    )
+    let probeShouldThrow = false
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const sender = {
+      sender: {
+        id: 1,
+        isDestroyed: () => {
+          if (probeShouldThrow) {
+            throw new Error('WebContents liveness probe exploded')
+          }
+          return false
+        },
+        send: senderSend,
+        once: vi.fn(),
+        removeListener: vi.fn()
+      }
+    }
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'terminal.multiplex',
+      params: {},
+      subscriptionId: 'probe-throws-sub'
+    })
+    await subscribe(sender, {
+      selector: added.environment.id,
+      method: 'browser.screencast',
+      params: {},
+      subscriptionId: 'surviving-sub'
+    })
+    // Why: arm only after subscribe, whose own isDestroyed checks must succeed.
+    probeShouldThrow = true
+
+    const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
+      'runtimeEnvironments:disconnect'
+    )
+    expect(() => disconnect(null, { selector: added.environment.id })).not.toThrow()
+
+    // Both transports still closed even though every notifyClosed probe threw.
+    expect(closedStreams).toEqual(['stream-1', 'stream-2'])
+    expect(deliveredCloses).toEqual([])
+  })
+
+  it('suppresses stale payloads from a retired transport but never re-sends its close', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    let transportCallbacks: {
+      onResponse: (response: Record<string, unknown>) => void
+      onClose: () => void
+    } | null = null
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      async (
+        _environment: unknown,
+        _method: string,
+        _params: unknown,
+        _timeoutMs: number,
+        callbacks: NonNullable<typeof transportCallbacks>
+      ) => {
+        transportCallbacks = callbacks
+        return { requestId: 'multiplex-2', close: vi.fn(), sendBinary: vi.fn() }
+      }
+    )
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const senderSend = vi.fn()
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    await subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: senderSend,
+          once: vi.fn(),
+          removeListener: vi.fn()
+        }
+      },
+      {
+        selector: added.environment.id,
+        method: 'terminal.multiplex',
+        params: {},
+        subscriptionId: 'multiplex-stale'
+      }
+    )
+
+    invalidateRuntimeEnvironmentTransport(added.environment.id)
+    senderSend.mockClear()
+    // A late frame from the retired socket must not reach the renderer...
+    transportCallbacks!.onResponse({
+      id: 'r1',
+      ok: true,
+      result: {},
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    // ...and its late close must not re-fire after the retirement already sent one.
+    transportCallbacks!.onClose()
+    expect(senderSend).not.toHaveBeenCalled()
   })
 
   it('rejects cross-window streaming subscription control', async () => {

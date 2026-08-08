@@ -71,6 +71,25 @@ describe('orchestration migration behavior', () => {
     expect(db.getMessageById(message.id)?.read).toBe(0)
   })
 
+  it('rejects acknowledgment of legacy mail without effects', async () => {
+    const { db, runtime } = createRuntime()
+    const message = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coord',
+      subject: 'still working'
+    })
+    const check = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.check')!
+
+    await expect(
+      check.handler(check.params!.parse({ terminal: 'term_coord' }), { runtime })
+    ).rejects.toMatchObject({
+      code: 'legacy_read_only',
+      data: { effectsApplied: false }
+    })
+    expect(db.getMessageById(message.id)?.read).toBe(0)
+    expect(db.getInbox(100)).toHaveLength(1)
+  })
+
   it('rejects replies to legacy mail without marking or inserting rows', async () => {
     const { db, runtime } = createRuntime()
     const message = db.insertMessage({

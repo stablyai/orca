@@ -43,18 +43,27 @@ describe('useMobileNativeChatDrafts', () => {
   function Harness({
     tabId,
     sessionId = `session-${tabId}`,
-    messages = []
+    messages = [],
+    launchDraft = null,
+    chatActive = true,
+    transcriptLoading = false
   }: {
     tabId: string
     sessionId?: string | null
     messages?: NativeChatMessage[]
+    launchDraft?: string | null
+    chatActive?: boolean
+    transcriptLoading?: boolean
   }): null {
     state = useMobileNativeChatDrafts({
       hostId: 'host',
       worktreeId: 'worktree',
       tabId,
       sessionId,
-      messages
+      messages,
+      launchDraft,
+      chatActive,
+      transcriptLoading
     })
     return null
   }
@@ -260,6 +269,7 @@ describe('useMobileNativeChatDrafts', () => {
       )
     )
     expect(state?.pending).toEqual([])
+    expect(state?.imagePreviewsByMessageId).toEqual({ u1: ['file:///a.jpg'] })
   })
 
   it("keeps an image-only echo when an unrelated text send's echo lands", async () => {
@@ -336,6 +346,29 @@ describe('useMobileNativeChatDrafts', () => {
       )
     )
     expect(state?.pending).toEqual([])
+    expect(state?.imagePreviewsByMessageId).toEqual({ u2: ['file:///a.jpg'] })
+  })
+
+  it('hands a marker-only image preview to the authoritative user bubble', async () => {
+    await mount('a')
+    const origin = state?.captureSendOrigin('')
+    act(() => {
+      if (origin) {
+        state?.acceptSend(origin, '', ['file:///a.jpg'])
+      }
+    })
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [userTextMessage('u1', '[Image #1]')]
+        })
+      )
+    )
+
+    expect(state?.pending).toEqual([])
+    expect(state?.imagePreviewsByMessageId).toEqual({ u1: ['file:///a.jpg'] })
   })
 
   it('does not reconcile a repeated send against an older identical turn', async () => {
@@ -713,21 +746,59 @@ describe('useMobileNativeChatDrafts', () => {
     }
   })
 
-  it('accepts and clears the first send before a provider session id exists', async () => {
+  it('preserves first-send images through session assignment and transcript replacement', async () => {
     await mount('a')
     await act(async () => renderer?.update(createElement(Harness, { tabId: 'a', sessionId: null })))
-    act(() => state?.setComposerText('start the session'))
+    const images = ['file:///a.jpg', 'file:///b.jpg', 'file:///c.jpg']
+    act(() => state?.setComposerText('look'))
 
-    const origin = state?.captureSendOrigin('start the session')
+    const origin = state?.captureSendOrigin('look')
     expect(origin).toMatchObject({ pendingKey: null })
     act(() => {
       if (origin) {
-        state?.clearDraftForSend(origin, 'start the session')
-        state?.acceptSend(origin, 'start the session')
+        state?.clearDraftForSend(origin, 'look')
+        state?.acceptSend(origin, 'look', images)
       }
     })
 
     expect(state?.composerText).toBe('')
+    expect(state?.pending.map((pending) => pending.images)).toEqual([images])
+
+    await act(async () =>
+      renderer?.update(createElement(Harness, { tabId: 'a', sessionId: 'assigned' }))
+    )
+    expect(state?.pending.map((pending) => pending.images)).toEqual([images])
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          sessionId: 'assigned',
+          messages: [
+            userTextMessage('source-1', '[Image: source: /tmp/a.png]'),
+            userTextMessage('source-2', '[Image: source: /tmp/b.png]'),
+            userTextMessage('source-3', '[Image: source: /tmp/c.png]')
+          ]
+        })
+      )
+    )
+    expect(state?.pending.map((pending) => pending.images)).toEqual([images])
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          sessionId: 'assigned',
+          messages: [
+            userTextMessage('source-1', '[Image: source: /tmp/a.png]'),
+            userTextMessage('source-2', '[Image: source: /tmp/b.png]'),
+            userTextMessage('source-3', '[Image: source: /tmp/c.png]'),
+            userTextMessage('prompt', '[Image #1] [Image #2] [Image #3] look')
+          ]
+        })
+      )
+    )
     expect(state?.pending).toEqual([])
+    expect(state?.imagePreviewsByMessageId).toEqual({ prompt: images })
   })
 })

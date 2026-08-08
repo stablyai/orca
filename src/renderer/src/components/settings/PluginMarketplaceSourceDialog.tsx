@@ -14,12 +14,48 @@ import {
 } from '../ui/dialog'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 
 type PluginMarketplaceSourceDialogProps = {
   open: boolean
   sources: readonly PluginMarketplaceHostSourceState[]
   onOpenChange: (open: boolean) => void
   onChanged: () => Promise<void>
+}
+
+export function PluginMarketplaceRefInput({
+  value,
+  onChange,
+  onSubmit,
+  disabled
+}: {
+  value: string
+  onChange: (value: string) => void
+  onSubmit: () => void
+  disabled: boolean
+}): React.JSX.Element {
+  const imeEnter = useImeEnterGestureOwnership()
+  return (
+    <Input
+      id="plugin-marketplace-ref"
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+      onCompositionStart={() => imeEnter.setComposing(true)}
+      onCompositionEnd={() => imeEnter.setComposing(false)}
+      onKeyDown={(event) => {
+        if (imeEnter.ownsKeyDown(event)) {
+          return
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          onSubmit()
+        }
+      }}
+      onKeyUp={imeEnter.onKeyUp}
+      onBlur={imeEnter.reset}
+    />
+  )
 }
 
 function sourceError(cause: unknown, fallback: string): string {
@@ -182,16 +218,11 @@ export function PluginMarketplaceSourceDialog({
             </p>
           </div>
           <div className="flex gap-2">
-            <Input
-              id="plugin-marketplace-ref"
+            <PluginMarketplaceRefInput
               value={gitRef}
               disabled={Boolean(busyAction)}
-              onChange={(event) => setGitRef(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  void add()
-                }
-              }}
+              onChange={setGitRef}
+              onSubmit={() => void add()}
             />
             <Button
               className="w-28"

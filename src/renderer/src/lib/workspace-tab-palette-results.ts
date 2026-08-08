@@ -1,3 +1,4 @@
+import { resolveWorktreeDisplayName } from './worktree-default-display-name'
 import type { MatchRange } from './worktree-palette-search'
 import type {
   SearchableWorkspaceTab,
@@ -18,6 +19,7 @@ export type WorkspaceTabPaletteSearchResult = {
   secondaryRange: MatchRange | null
   repoRange: MatchRange | null
   worktreeRange: MatchRange | null
+  typeAliasMatch?: { text: string; range: MatchRange } | null
   isCurrentTab: boolean
   isCurrentWorktree: boolean
   score: number
@@ -114,6 +116,8 @@ export function searchWorkspaceTabs(
   const results: WorkspaceTabPaletteSearchResult[] = []
 
   for (const entry of entries) {
+    // Why: a cleared display name leaves this undefined at runtime; findRange would throw.
+    const worktreeName = resolveWorktreeDisplayName(entry.worktree)
     const baseResult = {
       tabId: entry.tab.id,
       entityId: entry.tab.entityId,
@@ -123,7 +127,7 @@ export function searchWorkspaceTabs(
       title: entry.title,
       secondaryText: entry.secondaryText,
       repoName: entry.repoName,
-      worktreeName: entry.worktree.displayName,
+      worktreeName,
       isCurrentTab: entry.isCurrentTab,
       isCurrentWorktree: entry.isCurrentWorktree
     }
@@ -182,6 +186,33 @@ export function searchWorkspaceTabs(
       continue
     }
 
+    // Why after display secondaries: path/file matches should beat bare type labels.
+    let typeAliasHit: { text: string; range: MatchRange } | null = null
+    for (const alias of entry.typeSearchAliases ?? []) {
+      const range = findRange(alias, trimmedQuery)
+      if (range) {
+        typeAliasHit = { text: alias, range }
+        break
+      }
+    }
+    if (typeAliasHit) {
+      results.push({
+        ...baseResult,
+        titleRange: null,
+        // Why null: aliases are search keys only — nothing to highlight in the row.
+        secondaryRange: null,
+        repoRange: null,
+        worktreeRange: null,
+        typeAliasMatch: typeAliasHit,
+        score: scoreWorkspaceTabMatch({
+          fieldWeight: 25,
+          matchIndex: typeAliasHit.range.start,
+          entry
+        })
+      })
+      continue
+    }
+
     const agentMatch = getBestAgentSnippet(entry, trimmedQuery)
     if (agentMatch) {
       results.push({
@@ -200,7 +231,7 @@ export function searchWorkspaceTabs(
       continue
     }
 
-    const worktreeRange = findRange(entry.worktree.displayName, trimmedQuery)
+    const worktreeRange = findRange(worktreeName, trimmedQuery)
     if (worktreeRange) {
       results.push({
         ...baseResult,

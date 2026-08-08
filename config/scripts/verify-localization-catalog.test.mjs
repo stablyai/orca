@@ -4,7 +4,10 @@ import path from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { main as verifyLocalizationCatalog } from './verify-localization-catalog.mjs'
+import {
+  collectGenericTermRegressions,
+  main as verifyLocalizationCatalog
+} from './verify-localization-catalog.mjs'
 
 function writeJson(filePath, value) {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
@@ -33,7 +36,7 @@ function makeProject({ sourceText, enCatalog = {}, esCatalog = {} }) {
 }
 
 describe('verify-localization-catalog', () => {
-  it('bootstraps missing catalog entries from string fallbacks', async () => {
+  it('bootstraps English entries without fabricating target translations', async () => {
     const { root, localesDir } = makeProject({
       sourceText:
         "import { translate } from '@/i18n/i18n'\nexport const label = translate('auto.example.greeting', 'Hello {{name}}', { name: 'Orca' })\n"
@@ -45,12 +48,10 @@ describe('verify-localization-catalog', () => {
     expect(readJson(path.join(localesDir, 'en.json'))).toEqual({
       auto: { example: { greeting: 'Hello {{name}}' } }
     })
-    expect(readJson(path.join(localesDir, 'es.json'))).toEqual({
-      auto: { example: { greeting: 'Hello {{name}}' } }
-    })
+    expect(readJson(path.join(localesDir, 'es.json'))).toEqual({})
   })
 
-  it('repairs stale locale keys and interpolation mismatches', async () => {
+  it('never overwrites mismatched translations or removes target-only entries', async () => {
     const { root, localesDir } = makeProject({
       sourceText:
         "import { translate } from '@/i18n/i18n'\nexport const label = translate('auto.example.greeting', 'Hello {{name}}', { name: 'Orca' })\n",
@@ -63,11 +64,27 @@ describe('verify-localization-catalog', () => {
       }
     })
 
-    await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(0)
+    await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(1)
 
     expect(readJson(path.join(localesDir, 'es.json'))).toEqual({
-      auto: { example: { greeting: 'Hello {{name}}' } }
+      auto: {
+        example: { greeting: 'Hola' },
+        stale: { removed: 'Viejo' }
+      }
     })
+  })
+
+  it('accepts sparse target catalogs when existing placeholders match', async () => {
+    const { root } = makeProject({
+      sourceText:
+        "import { translate } from '@/i18n/i18n'\nexport const label = translate('auto.example.greeting', 'Hello {{name}}', { name: 'Orca' })\n",
+      enCatalog: {
+        auto: { example: { greeting: 'Hello {{name}}', untranslated: 'English only' } }
+      },
+      esCatalog: { auto: { example: { greeting: 'Hola {{name}}' } } }
+    })
+
+    await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(0)
   })
 
   it('does not invent values for keys without string fallbacks', async () => {
@@ -108,5 +125,48 @@ describe('verify-localization-catalog', () => {
     } finally {
       report.mockRestore()
     }
+  })
+
+  // Why: #12113 — parity checks passed while the repair policy rewrote translated terms to English.
+  it('flags catalog values the repair policy would rewrite back to English', () => {
+    const enEntries = new Map([['auto.example.commitLabel', 'Commit message']])
+
+    expect(
+      collectGenericTermRegressions(
+        enEntries,
+        new Map([['auto.example.commitLabel', 'mensaje de confirmación']]),
+        'es'
+      )
+    ).toEqual([])
+
+    // A locale whose committed value is the English term is stable, not a regression.
+    expect(
+      collectGenericTermRegressions(
+        enEntries,
+        new Map([['auto.example.commitLabel', 'mensaje de Commit']]),
+        'es'
+      )
+    ).toEqual([])
+
+    // 'Comprometerse' is a real mistranslation, so reverting it to Latin is expected.
+    expect(
+      collectGenericTermRegressions(
+        enEntries,
+        new Map([['auto.example.commitLabel', 'mensaje de Comprometerse']]),
+        'es'
+      )
+    ).toEqual([])
+  })
+
+  it('ignores interpolation names when looking for English rewrites', () => {
+    expect(
+      collectGenericTermRegressions(
+        new Map([
+          ['components.agentSessionContinuation.originalAgent', 'Original agent: {{agent}}']
+        ]),
+        new Map([['components.agentSessionContinuation.originalAgent', '原智能体：{{agent}}']]),
+        'zh'
+      )
+    ).toEqual([])
   })
 })

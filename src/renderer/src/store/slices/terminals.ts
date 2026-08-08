@@ -16,6 +16,8 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
+import type { DirectSshAuthority } from '../../../../shared/ssh-types'
+import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   FLOATING_TERMINAL_WORKTREE_ID
@@ -29,12 +31,15 @@ import {
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import {
+  isTerminalLeafId,
   makePaneKey,
   parseLegacyNumericPaneKey,
   parsePaneKey
 } from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { buildByIdIndex, buildWorktreeByIdIndex } from './worktree-by-id-index'
+import { resolveActiveTabOwnerWorktreeId } from './active-tab-owner-worktree'
+import { isSameCodexRestartNoticeAccount } from './codex-restart-notice-account-identity'
 import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem
@@ -46,12 +51,18 @@ import type { SessionOptionValue } from '../../../../shared/native-chat-session-
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
+import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
+import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
-import { pushClosedTerminalTabSnapshot, pushRecentlyClosedTabKind } from './recently-closed-tabs'
+import {
+  getRecentlyClosedTabPosition,
+  pushClosedTerminalTabSnapshot,
+  pushRecentlyClosedTabKind
+} from './recently-closed-tabs'
 import { isClaudeAgent } from '@/lib/agent-status'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
@@ -84,6 +95,10 @@ import {
   normalizeTerminalLayoutSnapshot,
   resolvePtyBoundActiveLeafId
 } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import {
+  normalizeTerminalLayoutPtyOwnership,
+  resolveTerminalLayoutPtyOwnershipTransfers
+} from '@/components/terminal-pane/terminal-layout-pty-ownership'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
@@ -91,14 +106,35 @@ import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { requestRemoteWorktreeSleep } from '@/runtime/remote-worktree-sleep'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
+import {
+  clearDirectSshTerminalBindings,
+  invalidateStaleDirectSshTerminalBindings,
+  type DirectSshLivePtyBinding,
+  type DirectSshPaneRetryAttempt,
+  type DirectSshPaneRetryAttemptId,
+  type DirectSshPaneRetryHistory,
+  type DirectSshPaneRetryResult
+} from './direct-ssh-terminal-recovery'
+import {
+  retryDirectSshTerminalPanes,
+  retrySettledDirectSshTerminalPane
+} from './direct-ssh-pane-retry-ledger'
+import {
+  directSshAuthoritiesEqual,
+  settleDirectSshPaneRetryState,
+  transferDirectSshPaneDetachLedger
+} from './direct-ssh-terminal-authority-ledger'
+import { resolveDirectSshTerminalWorkspaceKeys } from './direct-ssh-terminal-workspace-scope'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
+import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
+import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
@@ -141,6 +177,32 @@ function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
 
 function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
   return typeof ptyId === 'string' && parseRemoteRuntimePtyId(ptyId) !== null
+}
+
+function isCurrentDirectSshAuthority(state: AppState, authority: DirectSshAuthority): boolean {
+  const current = state.sshConnectionStates.get(authority.targetId)
+  return Boolean(
+    current?.status === 'connected' &&
+    current.providerEpoch === authority.providerEpoch &&
+    current.connectionGeneration === authority.connectionGeneration
+  )
+}
+
+function resolveDirectSshTerminalKeys(state: AppState, targetId: string): Set<string> {
+  return resolveDirectSshTerminalWorkspaceKeys(
+    {
+      targetId,
+      catalogRevision: 0,
+      repos: state.repos,
+      worktreesByRepo: state.worktreesByRepo,
+      detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+      folderWorkspaces: state.folderWorkspaces,
+      projectGroups: state.projectGroups,
+      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
+    },
+    state.tabsByWorktree,
+    state.lastKnownRelayPtyIdByTabId
+  )
 }
 
 function getPendingActivationSpawnCount(value: boolean | number | undefined): number {
@@ -465,9 +527,16 @@ export type AutomaticAgentResumeClaim = {
 export type CodexRestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string
+  /** Ids behind the two labels, when the caller knows them (`null` is the system
+   *  default). Two accounts can share a label, so only these can decide whether
+   *  a re-mark actually points back at the account the pane launched under. */
+  previousAccountId?: string | null
+  nextAccountId?: string | null
+  /** The launch account still matches, but its baked CODEX_HOME route is retired. */
+  homeRouteChanged?: true
   /** Set once the user asks for the restart. The record outlives the prompt
-   *  because `previousAccountLabel` is the only memory of the account this pane
-   *  actually launched under, which drives the A -> B -> A collapse. */
+   *  because the previous-account fields are the only memory of the account this
+   *  pane actually launched under, which drives the A -> B -> A collapse. */
   restartRequested?: true
   /** Set when the user answers "Keep old account". Same reason the record has to
    *  survive: deleting it erased the launch account, so re-selecting it looked
@@ -495,6 +564,9 @@ export type TerminalSlice = {
   pendingPtyShutdownIds: Record<string, number>
   pendingCodexPaneRestartIds: Record<string, true>
   codexRestartNoticeByPtyId: Record<string, CodexRestartNotice>
+  directSshPaneRetryByTabId: Record<string, DirectSshPaneRetryAttempt>
+  directSshLivePtyBindingByTabId: Record<string, DirectSshLivePtyBinding>
+  directSshPaneRetryHistoryByTabId: Record<string, DirectSshPaneRetryHistory>
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
@@ -509,6 +581,15 @@ export type TerminalSlice = {
   seedNativeChatLaunchPrompt: (prompt: NativeChatLaunchPrompt) => void
   markNativeChatLaunchPromptFailed: (tabId: string) => void
   clearNativeChatLaunchPrompt: (tabId: string) => void
+  /** Launch context prefilled into the TUI input as an unsent draft; the chat composer adopts it. In-memory only. */
+  nativeChatLaunchDraftByTabId: Record<string, NativeChatLaunchDraft>
+  seedNativeChatLaunchDraft: (draft: NativeChatLaunchDraft) => void
+  markNativeChatLaunchDraftAdopted: (tabId: string) => void
+  resolveNativeChatLaunchDraft: (
+    tabId: string,
+    resolution: Pick<NativeChatLaunchDraft, 'createdAt' | 'text'>
+  ) => void
+  clearNativeChatLaunchDraft: (tabId: string) => void
   pendingStartupByTabId: Record<
     string,
     {
@@ -603,6 +684,7 @@ export type TerminalSlice = {
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
+  setAiVaultTabTitle: (tabId: string, aiVaultTitle: AiVaultSessionTitle | null) => void
   setGeneratedTabTitleFromAgentPrompt: (
     paneKey: string,
     prompt: string,
@@ -624,8 +706,17 @@ export type TerminalSlice = {
     opts?: { recordInteraction?: boolean }
   ) => void
   setTabColor: (tabId: string, color: string | null) => void
-  updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
+  updateTabPtyId: (
+    tabId: string,
+    ptyId: string,
+    replacedPtyId?: string,
+    directSshRetryAttemptId?: DirectSshPaneRetryAttemptId
+  ) => void
   clearTabPtyId: (tabId: string, ptyId?: string) => void
+  clearDirectSshTargetPtyBindings: (targetId: string) => number
+  invalidateStaleDirectSshTargetPtyBindings: (authority: DirectSshAuthority) => number
+  retryDirectSshTargetPanes: (authority: DirectSshAuthority, now?: number) => number
+  settleDirectSshPaneRetry: (result: DirectSshPaneRetryResult, now?: number) => void
   shutdownWorktreeTerminals: (
     worktreeId: string,
     opts?: {
@@ -633,6 +724,8 @@ export type TerminalSlice = {
       shutdownReason?: AgentStatusWorktreeShutdownReason
       sleepingPaneKeys?: string[]
       expectedRuntimePtyIds?: string[]
+      /** Opt-in for callers that already tore the workspace down backend-side; omitting it keeps the runtime stop. */
+      backendOwnsPtyTeardown?: boolean
     }
   ) => Promise<void>
   shutdownCompletedAgentPaneForHibernation: (
@@ -650,11 +743,23 @@ export type TerminalSlice = {
   isPtyShutdownPending: (ptyId: string) => boolean
   queueCodexPaneRestarts: (ptyIds: string[]) => void
   consumePendingCodexPaneRestart: (ptyId: string) => boolean
+  /** Returns the ptyIds left holding a notice, so callers can tell a raised
+   *  prompt from one the A -> B -> A collapse dropped. */
   markCodexRestartNotices: (
-    notices: { ptyId: string; previousAccountLabel: string; nextAccountLabel: string }[]
-  ) => void
+    notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
+      Partial<Pick<CodexRestartNotice, 'previousAccountId' | 'nextAccountId'>> & {
+        /** Explicit false replaces a restored route notice after main rechecks it. */
+        homeRouteChanged?: boolean
+        ptyId: string
+      })[]
+  ) => string[]
   clearCodexRestartNotice: (ptyId: string) => void
   dismissCodexRestartNotices: (ptyIds: string[]) => void
+  /** Puts an accepted-but-unexecuted restart back to the unanswered prompt, so a
+   *  failed execution never leaves a pane input-blocked with nothing visible. */
+  reopenCodexRestartPrompt: (ptyId: string) => void
+  /** Rebinds one layout leaf to a replacement PTY without a mounted pane. */
+  replaceTerminalLayoutPanePtyId: (tabId: string, leafId: string, ptyId: string) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
@@ -737,12 +842,231 @@ export type TerminalSlice = {
     session: WorkspaceSessionState,
     options?: HydrateWorkspaceSessionOptions
   ) => void
-  reconnectPersistedTerminals: (signal?: AbortSignal) => Promise<void>
+  reconnectPersistedTerminals: (
+    signal?: AbortSignal,
+    options?: ReconnectPersistedTerminalsOptions
+  ) => Promise<void>
 }
 
 export type HydrateWorkspaceSessionOptions = {
+  directSshAuthority?: DirectSshAuthority
   runtimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
 } & WorkspaceSessionHydrationOptions
+
+export type ReconnectPersistedTerminalsOptions = {
+  directSshAuthority: DirectSshAuthority
+  workspaceKeys: readonly string[]
+}
+
+type WorkspaceHydrationPatch = Pick<
+  AppState,
+  | 'activeRepoId'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceKey'
+  | 'activeWorkspaceExecutionHostId'
+  | 'activeTabId'
+  | 'activeTabIdByWorktree'
+  | 'restoredRuntimeHostIdByWorkspaceSessionKey'
+  | 'repos'
+  | 'tabsByWorktree'
+  | 'worktreesByRepo'
+  | 'lastVisitedAtByWorktreeId'
+  | 'defaultTerminalTabsAppliedByWorktreeId'
+  | 'automaticAgentResumeClaimsByTabId'
+  | 'sleepingAgentSessionsByPaneKey'
+  | 'pendingReconnectWorktreeIds'
+  | 'pendingReconnectTabByWorktree'
+  | 'pendingReconnectPtyIdByTabId'
+  | 'everActivatedWorktreeIds'
+  | 'worktreeNavHistory'
+  | 'worktreeNavHistoryIndex'
+  | 'ptyIdsByTabId'
+  | 'terminalLayoutsByTabId'
+>
+
+function replaceHydratedRecordKeys<T>(
+  current: Record<string, T>,
+  hydrated: Record<string, T>,
+  replaceKeys: ReadonlySet<string>
+): Record<string, T> {
+  return {
+    ...Object.fromEntries(Object.entries(current).filter(([key]) => !replaceKeys.has(key))),
+    ...Object.fromEntries(Object.entries(hydrated).filter(([key]) => replaceKeys.has(key)))
+  }
+}
+
+type TerminalLayoutPtyOwnershipTransfer = ReturnType<
+  typeof resolveTerminalLayoutPtyOwnershipTransfers
+>[number]
+
+function transferNormalizedTerminalLayoutPtyOwnership(
+  state: Pick<AppState, 'terminalLayoutsByTabId' | 'transferAgentPaneAuthority'>,
+  tabId: string,
+  transfers: readonly TerminalLayoutPtyOwnershipTransfer[]
+): void {
+  if (transfers.length === 0) {
+    return
+  }
+  const ptyIdsOwnedByOtherTabs = new Set<string>()
+  for (const [candidateTabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
+    if (candidateTabId === tabId) {
+      continue
+    }
+    for (const ptyId of Object.values(layout.ptyIdsByLeafId ?? {})) {
+      ptyIdsOwnedByOtherTabs.add(ptyId)
+    }
+  }
+  for (const { removedLeafId, retainedLeafId, ptyId } of transfers) {
+    if (
+      !isTerminalLeafId(removedLeafId) ||
+      !isTerminalLeafId(retainedLeafId) ||
+      ptyIdsOwnedByOtherTabs.has(ptyId)
+    ) {
+      continue
+    }
+    const fromPaneKey = makePaneKey(tabId, removedLeafId)
+    const currentOwner = parsePaneKey(resolveAgentPaneAuthorityKey(fromPaneKey))
+    if (currentOwner && currentOwner.tabId !== tabId) {
+      continue
+    }
+    state.transferAgentPaneAuthority({
+      fromPaneKey,
+      toPaneKey: makePaneKey(tabId, retainedLeafId),
+      ptyId
+    })
+  }
+}
+
+function targetScopedWorkspaceHydrationPatch(
+  state: AppState,
+  hydrated: WorkspaceHydrationPatch,
+  session: WorkspaceSessionState,
+  options: HydrateWorkspaceSessionOptions
+): Partial<AppState> {
+  const workspaceKeys = new Set(options.replaceWorkspaceKeys)
+  const targetTabIds = new Set(
+    [...workspaceKeys].flatMap((workspaceKey) => [
+      ...(state.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id),
+      ...(session.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id)
+    ])
+  )
+  const retainedTargetTabIds = new Set(
+    [...workspaceKeys].flatMap((workspaceKey) =>
+      (hydrated.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id)
+    )
+  )
+  const deletedTargetTabIds = new Set(
+    [...workspaceKeys]
+      .flatMap((workspaceKey) => (state.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id))
+      .filter((tabId) => !retainedTargetTabIds.has(tabId))
+  )
+  const pendingReconnectPtyIdByTabId = replaceHydratedRecordKeys(
+    state.pendingReconnectPtyIdByTabId,
+    {},
+    targetTabIds
+  )
+  const authority = options.directSshAuthority
+  if (authority) {
+    for (const workspaceKey of hydrated.pendingReconnectWorktreeIds) {
+      if (!workspaceKeys.has(workspaceKey)) {
+        continue
+      }
+      for (const tab of session.tabsByWorktree[workspaceKey] ?? []) {
+        const ptyId = session.remoteSessionIdsByTabId?.[tab.id] ?? tab.ptyId
+        if (ptyId && parseAppSshPtyId(ptyId)?.connectionId === authority.targetId) {
+          pendingReconnectPtyIdByTabId[tab.id] = ptyId
+        }
+      }
+    }
+  }
+  const activeOutsideScope =
+    state.activeWorktreeId != null && !workspaceKeys.has(state.activeWorktreeId)
+  const sleepingAgentSessionsByPaneKey = Object.fromEntries([
+    ...Object.entries(state.sleepingAgentSessionsByPaneKey).filter(
+      ([, record]) => !workspaceKeys.has(record.worktreeId)
+    ),
+    ...Object.entries(hydrated.sleepingAgentSessionsByPaneKey).filter(([, record]) =>
+      workspaceKeys.has(record.worktreeId)
+    )
+  ])
+  const everActivatedWorktreeIds = new Set(state.everActivatedWorktreeIds)
+  for (const workspaceKey of hydrated.everActivatedWorktreeIds) {
+    if (workspaceKeys.has(workspaceKey)) {
+      everActivatedWorktreeIds.add(workspaceKey)
+    }
+  }
+  return {
+    activeRepoId: activeOutsideScope ? state.activeRepoId : hydrated.activeRepoId,
+    activeWorktreeId: activeOutsideScope ? state.activeWorktreeId : hydrated.activeWorktreeId,
+    activeWorkspaceKey: activeOutsideScope ? state.activeWorkspaceKey : hydrated.activeWorkspaceKey,
+    activeWorkspaceExecutionHostId: activeOutsideScope
+      ? state.activeWorkspaceExecutionHostId
+      : hydrated.activeWorkspaceExecutionHostId,
+    activeTabId: activeOutsideScope ? state.activeTabId : hydrated.activeTabId,
+    activeTabIdByWorktree: replaceHydratedRecordKeys(
+      state.activeTabIdByWorktree,
+      hydrated.activeTabIdByWorktree,
+      workspaceKeys
+    ),
+    tabsByWorktree: replaceHydratedRecordKeys(
+      state.tabsByWorktree,
+      hydrated.tabsByWorktree,
+      workspaceKeys
+    ),
+    lastVisitedAtByWorktreeId: replaceHydratedRecordKeys(
+      state.lastVisitedAtByWorktreeId,
+      hydrated.lastVisitedAtByWorktreeId,
+      workspaceKeys
+    ),
+    defaultTerminalTabsAppliedByWorktreeId: replaceHydratedRecordKeys(
+      state.defaultTerminalTabsAppliedByWorktreeId,
+      hydrated.defaultTerminalTabsAppliedByWorktreeId,
+      workspaceKeys
+    ),
+    automaticAgentResumeClaimsByTabId: replaceHydratedRecordKeys(
+      state.automaticAgentResumeClaimsByTabId,
+      hydrated.automaticAgentResumeClaimsByTabId,
+      targetTabIds
+    ),
+    sleepingAgentSessionsByPaneKey,
+    pendingReconnectWorktreeIds: [
+      ...state.pendingReconnectWorktreeIds.filter((key) => !workspaceKeys.has(key)),
+      ...hydrated.pendingReconnectWorktreeIds.filter((key) => workspaceKeys.has(key))
+    ],
+    pendingReconnectTabByWorktree: replaceHydratedRecordKeys(
+      state.pendingReconnectTabByWorktree,
+      hydrated.pendingReconnectTabByWorktree,
+      workspaceKeys
+    ),
+    pendingReconnectPtyIdByTabId,
+    everActivatedWorktreeIds,
+    directSshPaneRetryByTabId: replaceHydratedRecordKeys(
+      state.directSshPaneRetryByTabId,
+      {},
+      deletedTargetTabIds
+    ),
+    directSshLivePtyBindingByTabId: replaceHydratedRecordKeys(
+      state.directSshLivePtyBindingByTabId,
+      {},
+      deletedTargetTabIds
+    ),
+    directSshPaneRetryHistoryByTabId: replaceHydratedRecordKeys(
+      state.directSshPaneRetryHistoryByTabId,
+      {},
+      deletedTargetTabIds
+    ),
+    ptyIdsByTabId: replaceHydratedRecordKeys(
+      state.ptyIdsByTabId,
+      hydrated.ptyIdsByTabId,
+      targetTabIds
+    ),
+    terminalLayoutsByTabId: replaceHydratedRecordKeys(
+      state.terminalLayoutsByTabId,
+      hydrated.terminalLayoutsByTabId,
+      targetTabIds
+    )
+  }
+}
 
 export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> = (set, get) => ({
   tabsByWorktree: {},
@@ -757,6 +1081,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   pendingPtyShutdownIds: {},
   pendingCodexPaneRestartIds: {},
   codexRestartNoticeByPtyId: {},
+  directSshPaneRetryByTabId: {},
+  directSshLivePtyBindingByTabId: {},
+  directSshPaneRetryHistoryByTabId: {},
   expandedPaneByTabId: {},
   canExpandPaneByTabId: {},
   terminalLayoutsByTabId: {},
@@ -766,6 +1093,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   pendingIssueCommandSplitByTabId: {},
   automaticAgentResumeClaimsByTabId: {},
   nativeChatLaunchPromptByTabId: {},
+  nativeChatLaunchDraftByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
   restoredRuntimeHostIdByWorkspaceSessionKey: {},
@@ -851,6 +1179,61 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
+  seedNativeChatLaunchDraft: (draft) => {
+    set((s) => ({
+      nativeChatLaunchDraftByTabId: {
+        ...s.nativeChatLaunchDraftByTabId,
+        [draft.tabId]: draft
+      }
+    }))
+  },
+
+  markNativeChatLaunchDraftAdopted: (tabId) => {
+    set((s) => {
+      const current = s.nativeChatLaunchDraftByTabId[tabId]
+      if (!current || current.adopted) {
+        return {}
+      }
+      return {
+        nativeChatLaunchDraftByTabId: {
+          ...s.nativeChatLaunchDraftByTabId,
+          [tabId]: { ...current, adopted: true }
+        }
+      }
+    })
+  },
+
+  resolveNativeChatLaunchDraft: (tabId, resolution) => {
+    set((s) => {
+      const current = s.nativeChatLaunchDraftByTabId[tabId]
+      if (
+        !current ||
+        current.resolved ||
+        current.createdAt !== resolution.createdAt ||
+        current.text !== resolution.text
+      ) {
+        return {}
+      }
+      return {
+        nativeChatLaunchDraftByTabId: {
+          ...s.nativeChatLaunchDraftByTabId,
+          [tabId]: { ...current, resolved: true }
+        }
+      }
+    })
+  },
+
+  clearNativeChatLaunchDraft: (tabId) => {
+    set((s) => {
+      if (!s.nativeChatLaunchDraftByTabId[tabId]) {
+        return {}
+      }
+      const next = { ...s.nativeChatLaunchDraftByTabId }
+      delete next[tabId]
+      return { nativeChatLaunchDraftByTabId: next }
+    })
+  },
+
   recordTerminalInput: (paneKey, timestamp = Date.now()) => {
     if (!paneKey || !Number.isFinite(timestamp)) {
       return
@@ -886,15 +1269,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   setCacheTimerStartedAt: (key, ts) => {
     set((s) => {
-      const next = { ...s.cacheTimerByKey, [key]: ts }
       // Why: a real pane write clears any ':seed' sentinel from seedCacheTimersForIdleTabs, avoiding phantom timers when the seed key doesn't match the real pane.
       const colonIdx = key.indexOf(':')
-      if (colonIdx !== -1) {
-        const tabId = key.slice(0, colonIdx)
-        const suffix = key.slice(colonIdx + 1)
-        if (suffix !== 'seed') {
-          delete next[`${tabId}:seed`]
-        }
+      const suffix = colonIdx === -1 ? null : key.slice(colonIdx + 1)
+      const seedKey = colonIdx !== -1 && suffix !== 'seed' ? `${key.slice(0, colonIdx)}:seed` : null
+      const hasStaleSeed = seedKey !== null && seedKey in s.cacheTimerByKey
+      // Why: parked-pane watchers replay null-over-null on every working/exit transition; each redundant write runs every subscriber's selector.
+      if (s.cacheTimerByKey[key] === ts && !hasStaleSeed) {
+        return s
+      }
+      const next = { ...s.cacheTimerByKey, [key]: ts }
+      if (seedKey !== null) {
+        delete next[seedKey]
       }
       return { cacheTimerByKey: next }
     })
@@ -1164,6 +1550,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       })
       return
     }
+    if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
+      return
+    }
     const terminal = get().createTab(worktreeId, groupId)
     get().setActiveTab(terminal.id)
     get().setActiveTabType('terminal')
@@ -1272,6 +1661,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
       // Why: only explicit user closes feed the Cmd+Shift+T reopen stack; cleanup/PTY-exit closes must not pollute undo history.
+      const closedPosition =
+        closedWorktreeId && closedTab
+          ? getRecentlyClosedTabPosition(s, closedWorktreeId, closedTab.id)
+          : undefined
       const capturedSnapshot =
         closeReason === 'user' &&
         opts?.captureRecentlyClosed !== false &&
@@ -1281,7 +1674,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               ...(closedTab.startupCwd ? { startupCwd: closedTab.startupCwd } : {}),
               ...(closedTab.shellOverride ? { shellOverride: closedTab.shellOverride } : {}),
               ...(closedTab.customTitle ? { customTitle: closedTab.customTitle } : {}),
-              ...(closedTab.color ? { color: closedTab.color } : {})
+              ...(closedTab.color ? { color: closedTab.color } : {}),
+              ...(closedPosition ? { position: closedPosition } : {})
             }
           : null
       const nextExpanded = { ...s.expandedPaneByTabId }
@@ -1300,6 +1694,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       delete nextPendingReconnectPtyIdByTabId[tabId]
       const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
       delete nextRuntimePaneTitlesByTabId[tabId]
+      const nextDirectSshPaneRetryByTabId = { ...s.directSshPaneRetryByTabId }
+      delete nextDirectSshPaneRetryByTabId[tabId]
+      const nextDirectSshLivePtyBindingByTabId = {
+        ...s.directSshLivePtyBindingByTabId
+      }
+      delete nextDirectSshLivePtyBindingByTabId[tabId]
+      const nextDirectSshPaneRetryHistoryByTabId = {
+        ...s.directSshPaneRetryHistoryByTabId
+      }
+      delete nextDirectSshPaneRetryHistoryByTabId[tabId]
       // Why: keep the same reference when the closing tab had no unread flag, so unrelated closes don't force full-state selector re-eval.
       let nextUnreadTerminalTabs = s.unreadTerminalTabs
       if (s.unreadTerminalTabs[tabId]) {
@@ -1339,6 +1743,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       delete nextAutomaticAgentResumeClaimsByTabId[tabId]
       const nextNativeChatLaunchPromptByTabId = { ...s.nativeChatLaunchPromptByTabId }
       delete nextNativeChatLaunchPromptByTabId[tabId]
+      const nextNativeChatLaunchDraftByTabId = { ...s.nativeChatLaunchDraftByTabId }
+      delete nextNativeChatLaunchDraftByTabId[tabId]
       const nextPendingInitialCwdByTabId = { ...s.pendingInitialCwdByTabId }
       delete nextPendingInitialCwdByTabId[tabId]
       const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
@@ -1400,6 +1806,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         deferredSshSessionIdsByTabId: nextDeferredSshSessionIdsByTabId,
         pendingReconnectPtyIdByTabId: nextPendingReconnectPtyIdByTabId,
         runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
+        directSshPaneRetryByTabId: nextDirectSshPaneRetryByTabId,
+        directSshLivePtyBindingByTabId: nextDirectSshLivePtyBindingByTabId,
+        directSshPaneRetryHistoryByTabId: nextDirectSshPaneRetryHistoryByTabId,
         ...(nextSleepingAgentSessionsByPaneKey !== s.sleepingAgentSessionsByPaneKey
           ? { sleepingAgentSessionsByPaneKey: nextSleepingAgentSessionsByPaneKey }
           : {}),
@@ -1420,6 +1829,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         pendingStartupByTabId: nextPendingStartupByTabId,
         automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
         nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
+        nativeChatLaunchDraftByTabId: nextNativeChatLaunchDraftByTabId,
         pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
@@ -1443,7 +1853,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           : {})
       }
     })
-    // Why: closing a tab sweeps live and retained agent-status for it; use dropAgentStatusByTabPrefix so retention suppressors block a same-frame live→gone re-snapshot.
+    // Why: sweep tab agent status through its suppressor-aware removal path.
     // Why: Pi can leave a completed row keyed under an already-missing tab id; pass the worktree to sweep that orphan while preserving active pre-render child rows.
     get().dropAgentStatusByTabPrefix(
       tabId,
@@ -1516,38 +1926,56 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   setActiveTab: (tabId) => {
+    let tabOwnerWorktreeId: string | null = null
     set((s) => {
-      // Why: focusing a terminal tab clears its bell, but only for the active worktree — clearing a not-yet-visible background tab (worktree activation / jump-to-agent) would swallow the signal.
-      let tabOwnerWorktreeId: string | null = null
-      for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
-        if (tabs.some((t) => t.id === tabId)) {
-          tabOwnerWorktreeId = wId
-          break
-        }
-      }
+      // Why: clear bells only for visible tabs; background bells must persist.
+      tabOwnerWorktreeId = resolveActiveTabOwnerWorktreeId(
+        s.tabsByWorktree,
+        s.activeWorktreeId,
+        tabId
+      )
+      const isActiveWorktreeTab =
+        tabOwnerWorktreeId !== null && tabOwnerWorktreeId === s.activeWorktreeId
       const nextUnreadTerminalTabs =
-        tabOwnerWorktreeId === s.activeWorktreeId && s.unreadTerminalTabs[tabId]
+        isActiveWorktreeTab && s.unreadTerminalTabs[tabId]
           ? (() => {
               const copy = { ...s.unreadTerminalTabs }
               delete copy[tabId]
               return copy
             })()
           : s.unreadTerminalTabs
-      // Why: only pin global activeTabId to active-worktree tabs — markTerminalTabUnread treats it as "the visible tab" and would swallow BELs on a background tab (e.g. jump-to-agent).
-      const isActiveWorktreeTab = tabOwnerWorktreeId === s.activeWorktreeId
+      // Why: activeTabId marks the visible tab, so background bells remain unread.
       return {
         activeTabId: isActiveWorktreeTab ? tabId : s.activeTabId,
-        activeTabIdByWorktree: tabOwnerWorktreeId
-          ? { ...s.activeTabIdByWorktree, [tabOwnerWorktreeId]: tabId }
-          : s.activeTabIdByWorktree,
+        // Why: a redundant activation must not reallocate this map — Terminal's
+        // active-terminal repair effect depends on it, so a re-activation that
+        // can't converge activeTabId (tab id reused by an earlier-scanned
+        // worktree) would otherwise re-trigger itself into React error #185.
+        activeTabIdByWorktree:
+          tabOwnerWorktreeId !== null && s.activeTabIdByWorktree[tabOwnerWorktreeId] !== tabId
+            ? { ...s.activeTabIdByWorktree, [tabOwnerWorktreeId]: tabId }
+            : s.activeTabIdByWorktree,
         unreadTerminalTabs: nextUnreadTerminalTabs
       }
     })
-    const item = Object.values(get().unifiedTabsByWorktree)
-      .flat()
-      .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
+    const state = get()
+    const ownerUnifiedTabs =
+      tabOwnerWorktreeId !== null && Object.hasOwn(state.unifiedTabsByWorktree, tabOwnerWorktreeId)
+        ? state.unifiedTabsByWorktree[tabOwnerWorktreeId]
+        : []
+    // Why: a duplicated entity id must activate the same owner chosen above.
+    const item =
+      ownerUnifiedTabs.find(
+        (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
+      ) ??
+      Object.values(state.unifiedTabsByWorktree)
+        .flat()
+        .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
     if (item) {
-      get().activateTab(item.id)
+      state.activateTab(
+        item.id,
+        tabOwnerWorktreeId !== null ? { worktreeId: tabOwnerWorktreeId } : undefined
+      )
     }
   },
 
@@ -1562,7 +1990,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   updateTabTitle: (tabId, title) => {
     set((s) => {
-      // Why: mutate only the owning worktree's tab array — rebuilding all of them would break shallow-equality selectors and spuriously re-render background worktrees on every OSC title frame.
+      // Why: update only the owner to preserve selector equality for background worktrees.
       const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
       if (!ownerWorktreeId) {
         return s
@@ -1620,7 +2048,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       )
       scheduleRuntimeGraphSync()
       const nextTabsByWorktree = { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs }
-      // Why: title changes affect agent-status sort scoring, so re-sort — but only background worktrees; active-worktree changes are click-driven PTY-remount side-effects (bug PR #209).
+      // Why: title changes affect sorting, except active-worktree remount side effects.
       const isActive = ownerWorktreeId === s.activeWorktreeId
       const nextState: Partial<AppState> = isActive
         ? { tabsByWorktree: nextTabsByWorktree }
@@ -1632,6 +2060,37 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
       return nextState
+    })
+  },
+
+  setAiVaultTabTitle: (tabId, aiVaultTitle) => {
+    set((s) => {
+      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+      if (!ownerWorktreeId) {
+        return s
+      }
+      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
+      const current = tabs.find((tab) => tab.id === tabId)
+      const sameTitle =
+        current?.aiVaultTitle?.agent === aiVaultTitle?.agent &&
+        current?.aiVaultTitle?.sessionId === aiVaultTitle?.sessionId &&
+        current?.aiVaultTitle?.title === aiVaultTitle?.title
+      if (!current || sameTitle) {
+        return s
+      }
+      const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, aiVaultTitle } : tab))
+      const unifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
+      const nextUnifiedTabs = unifiedTabs.map((tab) =>
+        tab.contentType === 'terminal' && tab.entityId === tabId ? { ...tab, aiVaultTitle } : tab
+      )
+      scheduleRuntimeGraphSync()
+      return {
+        tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs },
+        unifiedTabsByWorktree: {
+          ...s.unifiedTabsByWorktree,
+          [ownerWorktreeId]: nextUnifiedTabs
+        }
+      }
     })
   },
 
@@ -1742,10 +2201,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       if (prevTitle && isDecorativeAgentTitleFrameChange(prevTitle, title)) {
         return s
       }
-      // Why: smart sort's title-heuristic fallback (Edge case 9) reads this map; a hookless 'working' → 'permission' title change must re-sort, but only on classification change.
+      // Why: re-sort hookless title changes only when their activity classification changes.
       const classificationChanged =
         classifyTitleActivity(prevTitle ?? '') !== classifyTitleActivity(title)
-      // Why: suppress the sortEpoch bump when the pane lives in the active worktree — its title change is a click side-effect (PTY remount), the bug PR #209 fixed; skip if orphaned.
+      // Why: skip active-worktree remount side effects and orphaned panes.
       const ownerWorktreeId = classificationChanged
         ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
         : null
@@ -1801,7 +2260,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     if (!ownerTab) {
       return
     }
-    // Why: terminal attention persists until real interaction ("show until interact"); keystroke/pointerdown clears via clearTerminalTabUnread, tab/group activation clears directly.
+    // Why: terminal attention persists until real interaction.
     set((s) => {
       if (s.unreadTerminalTabs[tabId]) {
         return s
@@ -1906,7 +2365,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
   },
 
-  updateTabPtyId: (tabId, ptyId, replacedPtyId) => {
+  updateTabPtyId: (tabId, ptyId, replacedPtyId, directSshRetryAttemptId) => {
     // Why: final guard preventing a late caller from recreating retired tab maps (async spawn owners still do their own provider teardown).
     if (!isTerminalTabPresent(get(), tabId)) {
       return
@@ -1915,6 +2374,28 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     let wasActivationSpawn = false
     const isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
     set((s) => {
+      if (directSshRetryAttemptId) {
+        const pendingRetry = s.directSshPaneRetryByTabId[tabId]
+        const liveRetry = s.directSshLivePtyBindingByTabId[tabId]
+        const retryLease =
+          pendingRetry?.attemptId === directSshRetryAttemptId
+            ? pendingRetry
+            : liveRetry?.attemptId === directSshRetryAttemptId
+              ? liveRetry
+              : undefined
+        const boundTab = Object.values(s.tabsByWorktree)
+          .flat()
+          .find((candidate) => candidate.id === tabId)
+        if (
+          !retryLease ||
+          !boundTab ||
+          parseAppSshPtyId(ptyId)?.connectionId !== retryLease.authority.targetId ||
+          !isCurrentDirectSshAuthority(s, retryLease.authority) ||
+          (boundTab.generation ?? 0) !== retryLease.tabGeneration
+        ) {
+          return s
+        }
+      }
       const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
       const remote = parseRemoteRuntimePtyId(ptyId)
       const legacyRemotePtyId = remote?.environmentId ? toRemoteRuntimePtyId(remote.handle) : null
@@ -1942,7 +2423,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
           wasActivationSpawn = true
         }
-        // Why: consume one pendingActivationSpawn unit — a split remounts several panes per click, each activation callback suppressed without hiding later real activity.
+        // Why: consume one suppression per split-pane activation callback.
         const { pendingActivationSpawn: _unused, ...rest } = tab
         void _unused
         // Why: tab.ptyId is the single-pane fallback for legacy attach; later split-pane spawns must not steal it or remount/close reattaches the tab to the wrong PTY.
@@ -1962,7 +2443,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
         break
       }
-      // Why: a new active-worktree tab's first PTY flips the live-tab signal (+12), so bump sortEpoch — but suppress on activation spawns (click side-effect, not activity).
+      // Why: the first active PTY changes sorting, except activation-spawn side effects.
       const isFirstPty = existingPtyIds.length === 0
       const isActiveWorktree = worktreeId != null && s.activeWorktreeId === worktreeId
       const shouldBumpSortEpoch = isFirstPty && isActiveWorktree && !wasActivationSpawn
@@ -2017,6 +2498,67 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           delete nextMigrationUnsupportedByPtyId[replacementPtyId]
         }
       }
+      const pendingRetry = s.directSshPaneRetryByTabId[tabId]
+      const liveRetry = s.directSshLivePtyBindingByTabId[tabId]
+      const retryLease =
+        pendingRetry?.attemptId === directSshRetryAttemptId
+          ? pendingRetry
+          : liveRetry?.attemptId === directSshRetryAttemptId
+            ? liveRetry
+            : undefined
+      const boundTab = worktreeId
+        ? nextTabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+        : undefined
+      const parsedSshPty = parseAppSshPtyId(ptyId)
+      const acknowledgesDirectSshRetry = Boolean(
+        retryLease &&
+        boundTab &&
+        parsedSshPty?.connectionId === retryLease.authority.targetId &&
+        isCurrentDirectSshAuthority(s, retryLease.authority) &&
+        (boundTab.generation ?? 0) === retryLease.tabGeneration &&
+        nextPtyIds.includes(ptyId)
+      )
+      let nextDirectSshPaneRetryByTabId = s.directSshPaneRetryByTabId
+      let nextDirectSshLivePtyBindingByTabId = s.directSshLivePtyBindingByTabId
+      if (acknowledgesDirectSshRetry && retryLease && boundTab?.ptyId) {
+        if (pendingRetry?.attemptId === directSshRetryAttemptId) {
+          nextDirectSshPaneRetryByTabId = { ...s.directSshPaneRetryByTabId }
+          delete nextDirectSshPaneRetryByTabId[tabId]
+        }
+        if (!liveRetry || liveRetry.attemptId !== directSshRetryAttemptId) {
+          nextDirectSshLivePtyBindingByTabId = {
+            ...s.directSshLivePtyBindingByTabId,
+            [tabId]: {
+              attemptId: retryLease.attemptId,
+              authority: retryLease.authority,
+              tabGeneration: retryLease.tabGeneration,
+              ptyId: boundTab.ptyId
+            }
+          }
+        } else if (
+          (replacementPtyId === liveRetry.ptyId && boundTab.ptyId === ptyId) ||
+          !nextPtyIds.includes(liveRetry.ptyId)
+        ) {
+          nextDirectSshLivePtyBindingByTabId = {
+            ...s.directSshLivePtyBindingByTabId,
+            [tabId]: { ...liveRetry, ptyId: boundTab.ptyId }
+          }
+        }
+      } else {
+        const liveBinding = s.directSshLivePtyBindingByTabId[tabId]
+        if (liveBinding) {
+          if (
+            replacementPtyId === liveBinding.ptyId &&
+            boundTab?.ptyId === ptyId &&
+            isCurrentDirectSshAuthority(s, liveBinding.authority)
+          ) {
+            nextDirectSshLivePtyBindingByTabId = {
+              ...s.directSshLivePtyBindingByTabId,
+              [tabId]: { ...liveBinding, ptyId }
+            }
+          }
+        }
+      }
       return {
         ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
         ptyIdsByTabId: {
@@ -2031,6 +2573,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
         codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
         migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
+        directSshPaneRetryByTabId: nextDirectSshPaneRetryByTabId,
+        directSshLivePtyBindingByTabId: nextDirectSshLivePtyBindingByTabId,
         ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
       }
     })
@@ -2048,10 +2592,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
     let worktreeId: string | null = null
     let wasActivationSpawn = false
+    let preservesDirectSshContinuationGap = false
     let isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
     set((s) => {
       const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
       const remainingPtyIds = ptyId ? existingPtyIds.filter((id) => id !== ptyId) : []
+      const liveBinding = s.directSshLivePtyBindingByTabId[tabId]
       let nextTabsByWorktree = s.tabsByWorktree
       for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
         const index = tabs.findIndex((t) => t.id === tabId)
@@ -2071,8 +2617,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         const { pendingActivationSpawn: _unused, ...rest } = tab
         void _unused
         const nextTabPtyId = remainingPtyIds.at(-1) ?? null
+        preservesDirectSshContinuationGap = Boolean(
+          ptyId &&
+          remainingPtyIds.length === 0 &&
+          liveBinding?.ptyId === ptyId &&
+          getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0 &&
+          isCurrentDirectSshAuthority(s, liveBinding.authority)
+        )
         const shouldRetainActivationSpawn =
-          wasActivationSpawn && ptyId != null && !existingPtyIds.includes(ptyId)
+          preservesDirectSshContinuationGap ||
+          (wasActivationSpawn && ptyId != null && !existingPtyIds.includes(ptyId))
         const nextPendingActivationSpawn = shouldRetainActivationSpawn
           ? tab.pendingActivationSpawn
           : consumePendingActivationSpawn(tab.pendingActivationSpawn)
@@ -2107,7 +2661,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           delete nextCodexRestartNoticeByPtyId[currentPtyId]
         }
       }
-      // Why: a passed ptyId means the PTY actually exited — drop its lastKnown so restart won't reattach a dead relay; bulk clear (connection_lost) keeps it during relay grace.
+      // Why: an explicit exit drops the dead relay ID; bulk clears retain it for relay grace.
       const nextLastKnownRelay = { ...s.lastKnownRelayPtyIdByTabId }
       if (ptyId && nextLastKnownRelay[tabId] === ptyId) {
         // Why: the relay slot holds ONE id per tab (the last pane to bind). If
@@ -2122,13 +2676,45 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           delete nextLastKnownRelay[tabId]
         }
       }
+      let nextDirectSshPaneRetryByTabId = s.directSshPaneRetryByTabId
+      const pendingRetry = s.directSshPaneRetryByTabId[tabId]
+      if (
+        pendingRetry &&
+        (!ptyId ||
+          (existingPtyIds.includes(ptyId) &&
+            parseAppSshPtyId(ptyId)?.connectionId === pendingRetry.authority.targetId))
+      ) {
+        nextDirectSshPaneRetryByTabId = { ...s.directSshPaneRetryByTabId }
+        delete nextDirectSshPaneRetryByTabId[tabId]
+      }
+      let nextDirectSshLivePtyBindingByTabId = s.directSshLivePtyBindingByTabId
+      if (liveBinding && (!ptyId || liveBinding.ptyId === ptyId)) {
+        nextDirectSshLivePtyBindingByTabId = {
+          ...s.directSshLivePtyBindingByTabId
+        }
+        const promotedPtyId = ptyId ? remainingPtyIds.at(-1) : undefined
+        if (
+          promotedPtyId &&
+          parseAppSshPtyId(promotedPtyId)?.connectionId === liveBinding.authority.targetId &&
+          isCurrentDirectSshAuthority(s, liveBinding.authority)
+        ) {
+          nextDirectSshLivePtyBindingByTabId[tabId] = {
+            ...liveBinding,
+            ptyId: promotedPtyId
+          }
+        } else if (!preservesDirectSshContinuationGap) {
+          delete nextDirectSshLivePtyBindingByTabId[tabId]
+        }
+      }
 
       return {
         ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
         ptyIdsByTabId: nextPtyIdsByTabId,
         lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
-        codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
+        codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
+        directSshPaneRetryByTabId: nextDirectSshPaneRetryByTabId,
+        directSshLivePtyBindingByTabId: nextDirectSshLivePtyBindingByTabId
       }
     })
 
@@ -2198,7 +2784,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     }
 
-    // Why: pty:exit can reach the renderer before the kill promise resolves, so the sleeping record must be in the store before the kill (and rolled back on failure).
+    // Why: store sleeping records before kill, since pty:exit can arrive first.
     const sleepingRecordKeys = Object.keys(sleepingAgentSessionRecords)
     const replacedSleepingRecords: Record<string, (typeof sleepingAgentSessionRecords)[string]> = {}
     for (const key of sleepingRecordKeys) {
@@ -2376,6 +2962,84 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
+  clearDirectSshTargetPtyBindings: (targetId) => {
+    let clearedCount = 0
+    set((s) => {
+      const result = clearDirectSshTerminalBindings(s, resolveDirectSshTerminalKeys(s, targetId))
+      clearedCount = result.clearedCount
+      return result.patch ?? s
+    })
+    return clearedCount
+  },
+
+  invalidateStaleDirectSshTargetPtyBindings: (authority) => {
+    let clearedCount = 0
+    set((s) => {
+      if (!isCurrentDirectSshAuthority(s, authority)) {
+        return s
+      }
+      const result = invalidateStaleDirectSshTerminalBindings(
+        s,
+        resolveDirectSshTerminalKeys(s, authority.targetId),
+        authority
+      )
+      clearedCount = result.clearedCount
+      return result.patch ?? s
+    })
+    return clearedCount
+  },
+
+  retryDirectSshTargetPanes: (authority, now = Date.now()) => {
+    let retriedCount = 0
+    set((s) => {
+      if (!isCurrentDirectSshAuthority(s, authority)) {
+        return s
+      }
+      const result = retryDirectSshTerminalPanes(
+        s,
+        resolveDirectSshTerminalKeys(s, authority.targetId),
+        authority,
+        now
+      )
+      retriedCount = result.retriedCount
+      return result.patch ?? s
+    })
+    return retriedCount
+  },
+
+  settleDirectSshPaneRetry: (result, now = Date.now()) => {
+    set((s) => {
+      if (!isCurrentDirectSshAuthority(s, result.authority)) {
+        return s
+      }
+      const history = s.directSshPaneRetryHistoryByTabId[result.tabId]
+      const preservesExhaustedSplitAttempt =
+        (result.status === 'failed' || result.status === 'timed-out') &&
+        history != null &&
+        directSshAuthoritiesEqual(history.authority, result.authority) &&
+        history.attemptedAt.length >= 2
+      if (preservesExhaustedSplitAttempt) {
+        return s
+      }
+      const settlement = settleDirectSshPaneRetryState(s, result)
+      if (!settlement) {
+        return s
+      }
+      const settledState = { ...s, ...settlement }
+      if (result.status !== 'failed' && result.status !== 'timed-out') {
+        return settledState
+      }
+      const retry = retrySettledDirectSshTerminalPane(
+        settledState,
+        resolveDirectSshTerminalKeys(settledState, result.authority.targetId),
+        result.authority,
+        result.tabId,
+        now
+      )
+      return retry.patch ? { ...settledState, ...retry.patch } : settledState
+    })
+  },
+
   shutdownWorktreeTerminals: async (worktreeId, opts) => {
     const keepIdentifiers = opts?.keepIdentifiers ?? false
     const shutdownReason: AgentStatusWorktreeShutdownReason =
@@ -2515,8 +3179,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       clearCommittedPtyShutdownSettlements(exitGuardPtyIds)
     }
 
-    // Why (ordering invariant, DESIGN_DOC §3.3.c): capture serializer buffers before pty.kill (panes unmount on exit); SSH-critical since the relay drops remote history on kill.
-    // Why: capture() writes through the store via setTabLayout, so the set() below must spread s.terminalLayoutsByTabId in a functional updater, not a captured snapshot, or it clobbers the capture.
+    // Why: capture buffers before kill, which unmounts panes and drops SSH relay history.
+    // Why: capture() updates layouts, so the following updater must merge current state.
     if (keepIdentifiers) {
       for (const tab of tabs) {
         const capture = shutdownBufferCaptures.get(tab.id)
@@ -2534,7 +3198,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       markShutdownPending()
       handlerSnapshots = unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []
       try {
-        if (runtimeEnvironmentId) {
+        // Why an opt-in, not the reason: defaulting to the stop keeps callers without backend teardown from leaking remote PTYs.
+        if (runtimeEnvironmentId && opts?.backendOwnsPtyTeardown !== true) {
           await (shutdownReason === 'manual-sleep'
             ? requestRemoteWorktreeSleep({
                 environmentId: runtimeEnvironmentId,
@@ -2562,6 +3227,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     }
 
+    // Exact-stop callers own physical teardown and must not use the remove-worktree reason.
     if (expectedRuntimePtyIds.length > 0) {
       if (!runtimeEnvironmentId) {
         throw new Error('missing_runtime_for_exact_terminal_stop')
@@ -2768,7 +3434,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             ? removeSleepingRecordsReplacedByManualWorktreeSleep(
                 s.sleepingAgentSessionsByPaneKey,
                 worktreeId,
-                opts?.sleepingPaneKeys
+                opts?.sleepingPaneKeys,
+                sleepingAgentSessionRecords
               ).records
             : s.sleepingAgentSessionsByPaneKey
         return {
@@ -2862,25 +3529,45 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   markCodexRestartNotices: (notices) => {
     if (notices.length === 0) {
-      return
+      return []
     }
+    const noticedPtyIds: string[] = []
     set((s) => {
       const next = { ...s.codexRestartNoticeByPtyId }
       const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
       for (const notice of notices) {
         const existing = next[notice.ptyId]
-        const previousAccountLabel = existing?.previousAccountLabel ?? notice.previousAccountLabel
+        // Why one record rather than two lookups: the label and the id of the
+        // launch account have to come from the same source, or they can end up
+        // describing two different accounts.
+        const launch = existing ?? notice
+        const target = { id: notice.nextAccountId, label: notice.nextAccountLabel }
+        const homeRouteChanged =
+          notice.homeRouteChanged === undefined
+            ? existing?.homeRouteChanged === true
+            : notice.homeRouteChanged
 
         // Why: a live Codex pane keeps its original launch account until it actually restarts, so A -> B -> A must not leave a stale restart notice.
-        if (previousAccountLabel === notice.nextAccountLabel) {
+        if (
+          !homeRouteChanged &&
+          isSameCodexRestartNoticeAccount(
+            { id: launch.previousAccountId, label: launch.previousAccountLabel },
+            target
+          )
+        ) {
           delete next[notice.ptyId]
           delete nextPendingCodexPaneRestartIds[notice.ptyId]
           continue
         }
 
         next[notice.ptyId] = {
-          previousAccountLabel,
+          previousAccountLabel: launch.previousAccountLabel,
           nextAccountLabel: notice.nextAccountLabel,
+          ...(launch.previousAccountId === undefined
+            ? {}
+            : { previousAccountId: launch.previousAccountId }),
+          ...(notice.nextAccountId === undefined ? {} : { nextAccountId: notice.nextAccountId }),
+          ...(homeRouteChanged ? { homeRouteChanged: true as const } : {}),
           // Why: a queued restart relaunches under whatever account is selected
           // when it runs, so a later switch does not reopen an answered prompt.
           ...(existing?.restartRequested ? { restartRequested: true as const } : {}),
@@ -2889,16 +3576,22 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           // so a later C reopens the prompt while adding an account or
           // reauthenticating the active one (both re-mark live panes with the
           // selection unchanged) must not resurrect it and re-mute the pane.
-          ...(existing?.dismissed && existing.nextAccountLabel === notice.nextAccountLabel
+          ...(existing?.dismissed &&
+          isSameCodexRestartNoticeAccount(
+            { id: existing.nextAccountId, label: existing.nextAccountLabel },
+            target
+          )
             ? { dismissed: true as const }
             : {})
         }
+        noticedPtyIds.push(notice.ptyId)
       }
       return {
         codexRestartNoticeByPtyId: next,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
       }
     })
+    return noticedPtyIds
   },
 
   clearCodexRestartNotice: (ptyId) => {
@@ -2945,6 +3638,40 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
+  reopenCodexRestartPrompt: (ptyId) => {
+    set((s) => {
+      const notice = s.codexRestartNoticeByPtyId[ptyId]
+      if (!notice?.restartRequested) {
+        return {}
+      }
+      const { restartRequested: _restartRequested, ...kept } = notice
+      const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+      delete nextPendingCodexPaneRestartIds[ptyId]
+      return {
+        codexRestartNoticeByPtyId: { ...s.codexRestartNoticeByPtyId, [ptyId]: kept },
+        pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+      }
+    })
+  },
+
+  replaceTerminalLayoutPanePtyId: (tabId, leafId, ptyId) => {
+    set((s) => {
+      const layout = s.terminalLayoutsByTabId[tabId]
+      if (!layout || layout.ptyIdsByLeafId?.[leafId] === ptyId) {
+        return {}
+      }
+      return {
+        terminalLayoutsByTabId: {
+          ...s.terminalLayoutsByTabId,
+          [tabId]: {
+            ...layout,
+            ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
+          }
+        }
+      }
+    })
+  },
+
   setTabPaneExpanded: (tabId, expanded) => {
     set((s) => ({
       expandedPaneByTabId: { ...s.expandedPaneByTabId, [tabId]: expanded }
@@ -2958,15 +3685,31 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   setTabLayout: (tabId, layout) => {
+    let ownershipTransfers: ReturnType<typeof resolveTerminalLayoutPtyOwnershipTransfers> = []
     set((s) => {
-      const next = { ...s.terminalLayoutsByTabId }
-      if (layout) {
-        next[tabId] = layout
-      } else {
+      if (!layout) {
+        if (!(tabId in s.terminalLayoutsByTabId)) {
+          return s
+        }
+        const next = { ...s.terminalLayoutsByTabId }
         delete next[tabId]
+        return { terminalLayoutsByTabId: next }
       }
-      return { terminalLayoutsByTabId: next }
+      const normalized = normalizeTerminalLayoutPtyOwnership(layout)
+      // Resolved before the bailout: normalization can transfer pane ownership even when the stored snapshot is untouched.
+      if (normalized.changed) {
+        ownershipTransfers = resolveTerminalLayoutPtyOwnershipTransfers(layout, normalized.snapshot)
+      }
+      // Why: pane-title churn re-persists structurally identical snapshots; bailing keeps every pane selector asleep.
+      const existing = s.terminalLayoutsByTabId[tabId]
+      if (existing && terminalLayoutEqual(existing, normalized.snapshot)) {
+        return s
+      }
+      return {
+        terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot }
+      }
     })
+    transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)
   },
 
   syncPaneDetachPtyOwnership: ({
@@ -3015,10 +3758,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextTabsByWorktree = detachedPtyId
         ? withTerminalTabPtyId(sourceTabsByWorktree, targetTabId, detachedPtyId)
         : sourceTabsByWorktree
+      const directSshLedger = transferDirectSshPaneDetachLedger(s, {
+        detachedPtyId,
+        sourcePtyId: sourcePrimaryPtyId,
+        sourceTabId,
+        targetTabId,
+        isAuthorityCurrent: (authority) => isCurrentDirectSshAuthority(s, authority)
+      })
 
       return {
         ptyIdsByTabId: nextPtyIdsByTabId,
         lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
+        ...directSshLedger,
         ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {})
       }
     })
@@ -3158,6 +3909,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   hydrateWorkspaceSession: (session, options) => {
+    const ownershipTransferTabIds = options?.replaceWorkspaceKeys
+      ? new Set(
+          options.replaceWorkspaceKeys.flatMap((workspaceKey) =>
+            (session.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id)
+          )
+        )
+      : null
+    const ownershipTransfersByTabId = new Map<string, TerminalLayoutPtyOwnershipTransfer[]>()
     set((s) => {
       const runtimeSessionPlaceholders = buildRuntimeSessionPlaceholders({
         repos: s.repos,
@@ -3179,7 +3938,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
       addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
-      // Why pendingActivationSpawn: a restored worktree's first mount calls updateTabPtyId, which would bump lastActivityAt and bounce it to the top of Recent; the tag (consumed on the first pty update) suppresses that so only real activity bumps.
+      // Why: suppress restored mounts so only real activity updates Recent.
       const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
         Object.entries(session.tabsByWorktree)
           .filter(([worktreeId]) => validWorktreeIds.has(worktreeId))
@@ -3188,6 +3947,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               (session.unifiedTabs?.[worktreeId] ?? [])
                 .filter((tab) => tab.contentType === 'terminal' && tab.quickCommandLabel?.trim())
                 .map((tab) => [tab.entityId, tab.quickCommandLabel!.trim()])
+            )
+            const aiVaultTitleByTerminalId = new Map(
+              (session.unifiedTabs?.[worktreeId] ?? [])
+                .filter((tab) => tab.contentType === 'terminal' && tab.aiVaultTitle)
+                .map((tab) => [tab.entityId, tab.aiVaultTitle!])
             )
             return [
               worktreeId,
@@ -3200,9 +3964,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
                 .map((tab, index) => {
                   const quickCommandLabel =
                     tab.quickCommandLabel?.trim() || quickCommandLabelByTerminalId.get(tab.id)
+                  const aiVaultTitle = tab.aiVaultTitle ?? aiVaultTitleByTerminalId.get(tab.id)
                   return {
                     ...clearTransientTerminalState(tab, index),
                     ...(quickCommandLabel ? { quickCommandLabel } : {}),
+                    ...(aiVaultTitle ? { aiVaultTitle } : {}),
                     sortOrder: index,
                     pendingActivationSpawn: true
                   }
@@ -3245,6 +4011,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               ? (activeWorktreeId as WorkspaceKey)
               : worktreeWorkspaceKey(activeWorktreeId)
             : null
+      const activeWorkspaceExecutionHostId =
+        activeWorkspaceKey && session.activeWorkspaceExecutionHostId
+          ? session.activeWorkspaceExecutionHostId
+          : null
       const activeTabId =
         session.activeTabId && validTabIds.has(session.activeTabId) ? session.activeTabId : null
       const activeRepoId =
@@ -3253,7 +4023,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ? session.activeRepoId
           : null
 
-      // Why: workspaceSessionReady stays false here; reconnectPersistedTerminals sets it true after eager spawns so TerminalPane can't mount and spawn duplicate PTYs first.
+      // Why: reconnect enables the session after eager spawns to prevent duplicate PTYs.
       // Why: activeWorktreeIdsOnShutdown is authoritative when present; persisted tab/layout PTY IDs are only wake hints, not a full active-workspace list.
       const shutdownIds =
         session.activeWorktreeIdsOnShutdown ??
@@ -3262,7 +4032,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           .map(([wId]) => wId)
       const pendingReconnectWorktreeIds = shutdownIds.filter((id) => validWorktreeIds.has(id))
 
-      // Why: record which tabs had live PTYs from raw session data before clearTransientTerminalState nulls ptyIds, so reconnect binds the right tabs in multi-tab worktrees (not just tabs[0]).
+      // Why: capture live PTY tabs before transient state clears their IDs.
       // Also include tabs whose relay session id survived in remoteSessionIdsByTabId (ptyId was null but the relay PTY is alive).
       const remoteSessionIds = session.remoteSessionIdsByTabId ?? {}
       const pendingReconnectTabByWorktree: Record<string, string[]> = {}
@@ -3323,7 +4093,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
 
-      // Why: SSH worktrees aren't persisted in worktreesByRepo (discovered via relay); synthesize placeholders from session tabs so the sidebar shows them until SSH reconnect + fetchWorktrees replace them.
+      // Why: synthesize SSH worktrees from session tabs until relay discovery replaces them.
       // Why: only SSH gets placeholders; local metadata comes from the next successful fetch.
       const sshRepoIds = new Set(
         runtimeSessionPlaceholders.repos.filter((r) => r.connectionId).map((r) => r.id)
@@ -3366,7 +4136,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         worktreesByRepo[repoId] = [...(worktreesByRepo[repoId] ?? []), placeholder]
       }
 
-      // Why: the restored-active worktree bypasses setActiveWorktree, so record it in everActivatedWorktreeIds here to keep a later re-click from re-tagging (which would suppress real activity).
+      // Why: record restored active worktrees to avoid suppressing later real activity.
       const nextEverActivated = new Set(s.everActivatedWorktreeIds)
       if (activeWorktreeId) {
         nextEverActivated.add(activeWorktreeId)
@@ -3377,10 +4147,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const allTabs = Object.values(tabsByWorktree).flat()
       const tabById = buildByIdIndex(allTabs)
 
-      return {
+      const hydrated: WorkspaceHydrationPatch = {
         activeRepoId,
         activeWorktreeId,
         activeWorkspaceKey,
+        activeWorkspaceExecutionHostId,
         activeTabId,
         activeTabIdByWorktree,
         restoredRuntimeHostIdByWorkspaceSessionKey:
@@ -3398,17 +4169,27 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         pendingReconnectTabByWorktree,
         pendingReconnectPtyIdByTabId,
         everActivatedWorktreeIds: nextEverActivated,
-        // Why: seed nav history with the hydrated active worktree so the first activation has a Back target; hydration bypasses recordWorktreeVisit, so otherwise Back stays disabled until a second click.
+        // Why: seed hydrated active worktrees so the first activation has a Back target.
         worktreeNavHistory: activeWorktreeId ? [activeWorktreeId] : [],
         worktreeNavHistoryIndex: activeWorktreeId ? 0 : -1,
         ptyIdsByTabId: Object.fromEntries(allTabs.map((tab) => [tab.id, []] as const)),
-        // Why: daemon ptyIds survive app restart; preserve ptyIdsByLeafId so reconnect can reattach each split-pane leaf to its own session, not just the tab-level ptyId.
+        // Why: preserve daemon leaf PTY IDs to reattach every split-pane session.
         terminalLayoutsByTabId: Object.fromEntries(
           Object.entries(session.terminalLayoutsByTabId)
             .filter(([tabId]) => validTabIds.has(tabId))
             .map(([tabId, layout]) => {
               // Why: old sessions can contain renderer-local pane:1-style leaf ids; normalize before runtime/mobile surfaces read them.
-              const normalized = normalizeTerminalLayoutSnapshot(layout).snapshot
+              const normalization = normalizeTerminalLayoutSnapshot(layout)
+              const normalized = normalization.snapshot
+              if (
+                normalization.changed &&
+                (!ownershipTransferTabIds || ownershipTransferTabIds.has(tabId))
+              ) {
+                ownershipTransfersByTabId.set(
+                  tabId,
+                  resolveTerminalLayoutPtyOwnershipTransfers(layout, normalized)
+                )
+              }
               const tab = tabById.get(tabId)
               const sanitized = tab ? sanitizeTerminalLayoutPaneTitles(normalized, tab) : normalized
               const activeLeafId = sanitized.root
@@ -3422,10 +4203,22 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             })
         )
       }
+      return options?.replaceWorkspaceKeys
+        ? targetScopedWorkspaceHydrationPatch(s, hydrated, session, options)
+        : hydrated
     })
+    for (const [tabId, transfers] of ownershipTransfersByTabId) {
+      transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, transfers)
+    }
   },
 
-  reconnectPersistedTerminals: async (_signal) => {
+  reconnectPersistedTerminals: async (signal, options) => {
+    if (
+      signal?.aborted ||
+      (options && !isCurrentDirectSshAuthority(get(), options.directSshAuthority))
+    ) {
+      return
+    }
     const {
       pendingReconnectWorktreeIds,
       pendingReconnectTabByWorktree,
@@ -3434,9 +4227,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       tabsByWorktree,
       ptyIdsByTabId
     } = get()
-    const ids = pendingReconnectWorktreeIds ?? []
+    const scopedWorkspaceKeys = options ? new Set(options.workspaceKeys) : null
+    const ids = (pendingReconnectWorktreeIds ?? []).filter(
+      (id) => !scopedWorkspaceKeys || scopedWorkspaceKeys.has(id)
+    )
 
     if (ids.length === 0) {
+      if (options) {
+        return
+      }
       set({
         workspaceSessionReady: true,
         pendingReconnectWorktreeIds: [],
@@ -3446,7 +4245,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return
     }
 
-    // Why: defer daemon createOrAttach to connectPanePty (real fitAddon dims) instead of eager-spawning at 80×24 and garbling on flush; this loop only records the session IDs to reattach.
+    // Why: defer daemon attachment for real dimensions; eager 80×24 flushes garble output.
     let reconnectedTabsByWorktree: Record<string, TerminalTab[]> | null = null
     let reconnectedPtyIdsByTabId: Record<string, string[]> | null = null
     // Why indexed: the loop neither sets state nor awaits, so one index over the
@@ -3458,9 +4257,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const worktree = worktreeById.get(worktreeId)
       const repo = worktree ? (repoById.get(worktree.repoId) ?? null) : null
       // Why: only allow deferred reattach when the SSH connection is active; reattaching to a not-yet-connected relay (deferred/passphrase targets) would fail.
-      const sshState = repo?.connectionId ? get().sshConnectionStates.get(repo.connectionId) : null
-      const sshConnected = repo?.connectionId != null && sshState?.status === 'connected'
-      const supportsDeferredReattach = !repo?.connectionId || sshConnected
+      const sshTargetId = options?.directSshAuthority.targetId ?? repo?.connectionId ?? null
+      const sshState = sshTargetId ? get().sshConnectionStates.get(sshTargetId) : null
+      const sshConnected = sshTargetId != null && sshState?.status === 'connected'
+      const supportsDeferredReattach = options ? sshConnected : !repo?.connectionId || sshConnected
       console.debug(
         `[reconnect-terminals] worktree=${worktreeId} connectionId=${repo?.connectionId} sshStatus=${sshState?.status} supportsDeferredReattach=${supportsDeferredReattach}`
       )
@@ -3479,10 +4279,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         const tabId = tab.id
         const layout = terminalLayoutsByTabId[tabId]
         const leafPtyMap = layout?.ptyIdsByLeafId ?? {}
-        const tabLevelPtyId = pendingReconnectPtyIdByTabId[tabId]
+        const pendingPtyId = pendingReconnectPtyIdByTabId[tabId]
+        const tabLevelPtyId =
+          options &&
+          parseAppSshPtyId(pendingPtyId ?? '')?.connectionId !== options.directSshAuthority.targetId
+            ? undefined
+            : pendingPtyId
         const hasLeafMappings = Object.keys(leafPtyMap).length > 0
 
-        // Why: set the wake-hint (tab.ptyId) and live-pty map (ptyIdsByTabId) so the worktree dot goes green before the pane mounts; actual reattach happens later in pty-connection.ts.
+        // Why: publish live PTY hints before mount; pty-connection reattaches later.
         console.debug(
           `[reconnect-terminals] tab=${tabId} tabLevelPtyId=${tabLevelPtyId} supportsDeferredReattach=${supportsDeferredReattach} hasLeafMappings=${hasLeafMappings}`
         )
@@ -3507,14 +4312,26 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     }
 
-    // Why: deferred SSH targets haven't connected yet, so their ptyIds weren't restored above; stash session IDs in a map that survives cleanup for pty-connection.ts's deferred reconnect.
-    const deferredSshSessionIdsByTabId: Record<string, string> = {}
+    // Why: keep deferred SSH session IDs for post-cleanup reconnect.
+    const scopedTabIds = new Set(
+      [...(scopedWorkspaceKeys ?? ids)].flatMap((workspaceKey) =>
+        (tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id)
+      )
+    )
+    const deferredSshSessionIdsByTabId: Record<string, string> = options
+      ? Object.fromEntries(
+          Object.entries(get().deferredSshSessionIdsByTabId).filter(
+            ([tabId]) => !scopedTabIds.has(tabId)
+          )
+        )
+      : {}
     for (const worktreeId of ids) {
       const worktree = worktreeById.get(worktreeId)
       // Why: SSH worktrees aren't in worktreesByRepo at cold start; fall back to the repo id in the composite worktree id so sessions still reach the deferred map.
       const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
       const repo = repoId ? (repoById.get(repoId) ?? null) : null
-      if (!repo?.connectionId) {
+      const connectionId = options?.directSshAuthority.targetId ?? repo?.connectionId
+      if (!connectionId) {
         continue
       }
       // Why: a repo can outlive its SSH target when the target was removed out of
@@ -3523,29 +4340,50 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // a target it no longer lists — a stranded deferred id reads as liveness and
       // the orphan sweep could never remove the dead tab. Defer while the list is
       // still unknown so a normal cold-start reconnect isn't dropped (#9911).
-      if (get().sshTargetsHydrated && !get().sshTargetLabels.has(repo.connectionId)) {
+      if (get().sshTargetsHydrated && !get().sshTargetLabels.has(connectionId)) {
         continue
       }
-      const sshConnected = get().sshConnectionStates.get(repo.connectionId)?.status === 'connected'
+      const sshConnected = get().sshConnectionStates.get(connectionId)?.status === 'connected'
       if (sshConnected) {
         continue
       }
       const tabs = tabsByWorktree[worktreeId] ?? []
       for (const tab of tabs) {
         const sessionId = pendingReconnectPtyIdByTabId[tab.id]
-        if (sessionId) {
+        if (sessionId && (!options || parseAppSshPtyId(sessionId)?.connectionId === connectionId)) {
           deferredSshSessionIdsByTabId[tab.id] = sessionId
         }
       }
     }
 
+    if (
+      signal?.aborted ||
+      (options && !isCurrentDirectSshAuthority(get(), options.directSshAuthority))
+    ) {
+      return
+    }
+    const remainingReconnectWorktreeIds = options
+      ? pendingReconnectWorktreeIds.filter((id) => !scopedWorkspaceKeys?.has(id))
+      : []
+    const remainingReconnectTabByWorktree = options
+      ? Object.fromEntries(
+          Object.entries(pendingReconnectTabByWorktree).filter(
+            ([workspaceKey]) => !scopedWorkspaceKeys?.has(workspaceKey)
+          )
+        )
+      : {}
+    const remainingReconnectPtyIdByTabId = options
+      ? Object.fromEntries(
+          Object.entries(pendingReconnectPtyIdByTabId).filter(([tabId]) => !scopedTabIds.has(tabId))
+        )
+      : {}
     set({
       ...(reconnectedTabsByWorktree ? { tabsByWorktree: reconnectedTabsByWorktree } : {}),
       ...(reconnectedPtyIdsByTabId ? { ptyIdsByTabId: reconnectedPtyIdsByTabId } : {}),
-      workspaceSessionReady: true,
-      pendingReconnectWorktreeIds: [],
-      pendingReconnectTabByWorktree: {},
-      pendingReconnectPtyIdByTabId: {},
+      ...(options ? {} : { workspaceSessionReady: true }),
+      pendingReconnectWorktreeIds: remainingReconnectWorktreeIds,
+      pendingReconnectTabByWorktree: remainingReconnectTabByWorktree,
+      pendingReconnectPtyIdByTabId: remainingReconnectPtyIdByTabId,
       deferredSshSessionIdsByTabId
     })
   }

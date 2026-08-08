@@ -65,6 +65,8 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
       }
     })
 
+    const epochBeforeDetach = store.getState().agentStatusEpoch
+
     store.getState().syncPaneDetachPtyOwnership({
       detachedLeafId,
       detachedPtyId: 'pty-droid',
@@ -104,6 +106,9 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
       providerSession: { key: 'session_id', id: 'session-1' }
     })
     expect(state.retentionSuppressedPaneKeys[sourcePaneKey]).toBeUndefined()
+    expect(state.retentionSuppressedPaneKeys[targetPaneKey]).toBeUndefined()
+    // Why: the retention effect only reruns on an epoch bump; a moved live row must trigger it.
+    expect(state.agentStatusEpoch).toBeGreaterThan(epochBeforeDetach)
     expect(state.paneForegroundAgentByPaneKey[siblingPaneKey]).toEqual({
       agent: 'antigravity',
       shellForeground: false

@@ -14,6 +14,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { statusColor } from '@/components/settings/SshTargetCard'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 
 type SshDisconnectedDialogProps = {
   open: boolean
@@ -68,6 +69,7 @@ export function SshDisconnectedDialog({
   status
 }: SshDisconnectedDialogProps): React.JSX.Element {
   const [connecting, setConnecting] = useState(false)
+  const imeEnter = useImeEnterGestureOwnership()
   const mountedRef = useMountedRef()
 
   const handleReconnect = useCallback(async () => {
@@ -124,20 +126,41 @@ export function SshDisconnectedDialog({
     if (!open || !showReconnect || isConnecting) {
       return undefined
     }
+    const toImeEvent = (event: KeyboardEvent) => ({
+      key: event.key,
+      keyCode: event.keyCode,
+      shiftKey: event.shiftKey,
+      nativeEvent: event,
+      preventDefault: () => event.preventDefault()
+    })
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Enter' || event.defaultPrevented) {
+      if (imeEnter.ownsKeyDown(toImeEvent(event))) {
         return
       }
-      if (event.isComposing) {
+      if (event.key !== 'Enter' || event.defaultPrevented) {
         return
       }
       event.preventDefault()
       event.stopPropagation()
       void handleReconnect()
     }
+    const onKeyUp = (event: KeyboardEvent): void => imeEnter.onKeyUp(toImeEvent(event))
+    const onCompositionStart = (): void => imeEnter.setComposing(true)
+    const onCompositionEnd = (): void => imeEnter.setComposing(false)
     window.addEventListener('keydown', onKeyDown, true)
-    return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [open, showReconnect, isConnecting, handleReconnect])
+    window.addEventListener('keyup', onKeyUp, true)
+    window.addEventListener('compositionstart', onCompositionStart, true)
+    window.addEventListener('compositionend', onCompositionEnd, true)
+    window.addEventListener('blur', imeEnter.reset)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('keyup', onKeyUp, true)
+      window.removeEventListener('compositionstart', onCompositionStart, true)
+      window.removeEventListener('compositionend', onCompositionEnd, true)
+      window.removeEventListener('blur', imeEnter.reset)
+      imeEnter.reset()
+    }
+  }, [open, showReconnect, isConnecting, handleReconnect, imeEnter])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

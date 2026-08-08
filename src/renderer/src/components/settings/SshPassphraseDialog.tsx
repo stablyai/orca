@@ -12,6 +12,50 @@ import {
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+
+export function SshCredentialInput({
+  inputRef,
+  value,
+  onChange,
+  onSubmit,
+  placeholder,
+  disabled
+}: {
+  inputRef: React.Ref<HTMLInputElement>
+  value: string
+  onChange: (value: string) => void
+  onSubmit: () => void
+  placeholder: string
+  disabled: boolean
+}): React.JSX.Element {
+  const imeEnter = useImeEnterGestureOwnership()
+  return (
+    <Input
+      id="ssh-credential-input"
+      ref={inputRef}
+      type="password"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onCompositionStart={() => imeEnter.setComposing(true)}
+      onCompositionEnd={() => imeEnter.setComposing(false)}
+      onKeyDown={(event) => {
+        if (imeEnter.ownsKeyDown(event)) {
+          return
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          onSubmit()
+        }
+      }}
+      onKeyUp={imeEnter.onKeyUp}
+      onBlur={imeEnter.reset}
+      placeholder={placeholder}
+      className="h-8 text-sm"
+      disabled={disabled}
+    />
+  )
+}
 
 export function SshPassphraseDialog(): React.JSX.Element | null {
   const request = useAppStore((s) => s.sshCredentialQueue[0] ?? null)
@@ -164,18 +208,11 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
                   { value0: request.detail }
                 )}
           </label>
-          <Input
-            id="ssh-credential-input"
-            ref={setInputRef}
-            type="password"
+          <SshCredentialInput
+            inputRef={setInputRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void handleSubmit()
-              }
-            }}
+            onChange={setValue}
+            onSubmit={() => void handleSubmit()}
             placeholder={
               isPassword
                 ? translate(
@@ -187,7 +224,6 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
                     'Enter passphrase'
                   )
             }
-            className="h-8 text-sm"
             disabled={submitting}
           />
         </div>

@@ -1,18 +1,18 @@
 import { z } from 'zod'
 import {
-  AI_VAULT_AGENTS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   type AiVaultListArgs,
   type AiVaultListResult,
   type AiVaultSession
 } from '../../shared/ai-vault-types'
-import { normalizeExecutionHostId, toRuntimeExecutionHostId } from '../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
+import { parseAiVaultListResult } from './session-list-result-validation'
 
 export type RuntimeAiVaultHostInfo = {
   environmentId: string
@@ -23,89 +23,12 @@ export type RuntimeAiVaultScanOptions = {
   timeoutMs?: number
 }
 
-const nodePlatformSchema = z.enum([
-  'aix',
-  'android',
-  'darwin',
-  'freebsd',
-  'haiku',
-  'linux',
-  'openbsd',
-  'sunos',
-  'win32',
-  'cygwin',
-  'netbsd'
-] satisfies NodeJS.Platform[])
-
-const aiVaultSessionPreviewMessageSchema = z.object({
-  role: z.enum(['user', 'assistant', 'system', 'tool', 'unknown']),
-  text: z.string(),
-  timestamp: z.string().nullable()
+// Why: zod strips unknown keys, so the repin home must be declared or the
+// parent would silently drop it and resume under the wrong account's home.
+const aiVaultPrepareSessionResumeResultSchema = z.object({
+  useRealCodexHome: z.boolean(),
+  substituteCodexHome: z.string().optional()
 })
-
-const executionHostIdSchema = z.string().transform((value, ctx) => {
-  const normalized = normalizeExecutionHostId(value)
-  if (normalized) {
-    return normalized
-  }
-  ctx.addIssue({
-    code: 'custom',
-    message: 'Invalid execution host id'
-  })
-  return z.NEVER
-})
-
-const aiVaultListResultSchema = z.object({
-  sessions: z.array(
-    z.object({
-      id: z.string(),
-      executionHostId: executionHostIdSchema,
-      executionHostPlatform: nodePlatformSchema.nullable().optional(),
-      agent: z.enum(AI_VAULT_AGENTS),
-      sessionId: z.string(),
-      title: z.string(),
-      cwd: z.string().nullable(),
-      branch: z.string().nullable(),
-      model: z.string().nullable(),
-      filePath: z.string(),
-      codexHome: z.string().nullable(),
-      createdAt: z.string().nullable(),
-      updatedAt: z.string().nullable(),
-      modifiedAt: z.string(),
-      messageCount: z.number(),
-      totalTokens: z.number(),
-      previewMessages: z.array(aiVaultSessionPreviewMessageSchema),
-      // Optional keeps paired hosts on older builds compatible.
-      lastUserPrompt: z.string().nullable().optional(),
-      // Default keeps remote hosts running an older build (no recoverable-signal
-      // fields) parseable; they simply report no recoverable-empty sessions.
-      queuedMessageCount: z.number().default(0),
-      subagentTranscriptCount: z.number().default(0),
-      resumeCommand: z.string(),
-      // The default keeps remote hosts running an older build (no subagent
-      // field) parseable; scanned top-level sessions carry null anyway.
-      subagent: z
-        .object({
-          parentSessionId: z.string(),
-          agentType: z.string().nullable(),
-          status: z.enum(['running', 'completed', 'failed', 'stopped']).nullable()
-        })
-        .nullable()
-        .default(null)
-    })
-  ),
-  issues: z.array(
-    z.object({
-      executionHostId: executionHostIdSchema.optional(),
-      agent: z.enum(AI_VAULT_AGENTS),
-      path: z.string(),
-      message: z.string()
-    })
-  ),
-  scannedAt: z.string()
-})
-
-const aiVaultPrepareSessionResumeResultSchema = z.object({ useRealCodexHome: z.boolean() })
 
 export function getSavedRuntimeAiVaultHostInfos(
   userDataPath: string
@@ -129,6 +52,7 @@ export async function scanRuntimeAiVaultSessions(
     'aiVault.listSessions',
     {
       limit: args.limit,
+      unlimited: args.unlimited,
       force: args.force,
       // Why: cap here so the set of scanned paths is explicit on this side —
       // the RPC schema CLAMPS to the same bound anyway (older hosts had no
@@ -140,17 +64,36 @@ export async function scanRuntimeAiVaultSessions(
     options.timeoutMs
   )
   if (response.ok === true) {
-    const parsed = aiVaultListResultSchema.safeParse(response.result)
-    if (parsed.success) {
-      return withRuntimeExecutionHost(parsed.data, executionHostId)
+    try {
+      const result = withRuntimeExecutionHost(
+        parseAiVaultListResult(response.result),
+        executionHostId
+      )
+      if (!args.scopePaths || args.scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
+        return result
+      }
+      return {
+        ...result,
+        issues: [
+          ...result.issues,
+          {
+            executionHostId,
+            agent: 'codex',
+            kind: 'scope',
+            path: environmentId,
+            message: `Only the first ${AI_VAULT_SCOPE_PATHS_MAX_COUNT} project paths were scanned.`
+          }
+        ]
+      }
+    } catch (error) {
+      return runtimeScanIssueResult({
+        executionHostId,
+        environmentId,
+        message: `Invalid aiVault.listSessions response: ${
+          error instanceof Error ? error.message : 'unexpected result shape'
+        }`
+      })
     }
-    return runtimeScanIssueResult({
-      executionHostId,
-      environmentId,
-      message: `Invalid aiVault.listSessions response: ${
-        parsed.error.issues[0]?.message ?? 'unexpected result shape'
-      }`
-    })
   }
   return runtimeScanIssueResult({
     executionHostId,
@@ -217,6 +160,7 @@ function runtimeScanIssueResult(args: {
       {
         executionHostId: args.executionHostId,
         agent: 'codex',
+        kind: 'host',
         path: args.environmentId,
         message: args.message
       }

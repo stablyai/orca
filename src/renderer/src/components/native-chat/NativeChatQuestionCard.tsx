@@ -1,6 +1,7 @@
 import { useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-prompt'
 
@@ -31,6 +32,7 @@ export function NativeChatQuestionCard({
   onCancel,
   answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
+  const imeEnter = useImeEnterGestureOwnership()
   const [index, setIndex] = useState(0)
   // Keep option identity by index: labels are display text and are not guaranteed
   // unique, while Claude's selector commits the numbered row (STA-1860).
@@ -193,11 +195,18 @@ export function NativeChatQuestionCard({
                 value={otherText[index]}
                 onChange={(e) => setOther(index, e.target.value)}
                 onKeyDown={(e) => {
+                  if (imeEnter.ownsKeyDown(e)) {
+                    return
+                  }
                   if (e.key === 'Enter') {
                     e.preventDefault()
                     confirm(true)
                   }
                 }}
+                onKeyUp={imeEnter.onKeyUp}
+                onBlur={imeEnter.reset}
+                onCompositionStart={() => imeEnter.setComposing(true)}
+                onCompositionEnd={() => imeEnter.setComposing(false)}
                 placeholder={translate(
                   'components.native-chat.question.otherPlaceholder',
                   'Type your answer'
@@ -209,7 +218,7 @@ export function NativeChatQuestionCard({
                 disabled={isSubmitting}
                 onClick={() => confirm()}
                 className={cn(
-                  'w-24 shrink-0 rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50',
+                  'shrink-0 whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50',
                   currentAnswered
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
@@ -219,7 +228,7 @@ export function NativeChatQuestionCard({
                   ? translate('components.native-chat.question.sending', 'Sending…')
                   : currentAnswered
                     ? isLast
-                      ? translate('components.native-chat.question.send', 'Send answer')
+                      ? translate('components.native-chat.question.send', 'Submit')
                       : translate('components.native-chat.question.next', 'Next')
                     : translate('components.native-chat.question.skip', 'Skip')}
               </button>

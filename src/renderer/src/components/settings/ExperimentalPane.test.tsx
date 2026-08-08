@@ -15,9 +15,7 @@ vi.mock('../../store', () => ({
 }))
 
 vi.mock('./EphemeralVmsPane', () => ({
-  EphemeralVmsPane: () => (
-    <div data-testid="ephemeral-vms-pane">Per-Workspace Environments pane</div>
-  )
+  EphemeralVmsPane: () => <div data-testid="ephemeral-vms-pane">Cloud VM pane</div>
 }))
 
 vi.mock('../ui/select', async () => {
@@ -140,9 +138,9 @@ describe('ExperimentalPane', () => {
       <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
     )
 
-    expect(settings.experimentalAgentDashboardPopout).toBe(false)
+    expect(settings.experimentalAgentDashboardPopout).toBeUndefined()
     expect(markup).toContain('Agent Dashboard')
-    expect(markup).toContain('monitor attention, working, and idle agents')
+    expect(markup).toContain('Monitor agents that need you, are working, or are done')
     expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
       'Agent Dashboard'
     )
@@ -166,23 +164,34 @@ describe('ExperimentalPane', () => {
     root.unmount()
   })
 
-  it('renders per-workspace environments as an off-by-default experimental subsection', () => {
+  it('keeps idle-agent visibility out of global settings', () => {
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane
+        settings={{ ...getDefaultSettings('/tmp'), experimentalAgentDashboardPopout: true }}
+        updateSettings={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('Show idle agents')
+  })
+
+  it('renders Cloud VM as an off-by-default experimental subsection', () => {
     const settings = getDefaultSettings('/tmp')
     const markup = renderToStaticMarkup(
       <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
     )
     const entry = getExperimentalPaneSearchEntries().find(
-      (searchEntry) => searchEntry.title === 'Per-Workspace Environments'
+      (searchEntry) => searchEntry.title === 'Cloud VM'
     )
 
     expect(settings.experimentalEphemeralVms).toBe(false)
-    expect(markup).toContain('Per-Workspace Environments')
+    expect(markup).toContain('Cloud VM')
     expect(markup).toContain('aria-checked="false"')
-    expect(markup).not.toContain('Per-Workspace Environments pane')
+    expect(markup).not.toContain('Cloud VM pane')
     expect(entry?.targetSectionId).toBe('ephemeral-vms')
   })
 
-  it('enables per-workspace environments through the experimental switch', async () => {
+  it('enables Cloud VM through the experimental switch', async () => {
     const updateSettings = vi.fn()
     const { root, container } = await renderExperimentalPane({ updateSettings })
 
@@ -190,7 +199,7 @@ describe('ExperimentalPane', () => {
       '#ephemeral-vms button[role="switch"]'
     )
     if (!switchButton) {
-      throw new Error('Per-workspace environments switch was not rendered')
+      throw new Error('Cloud VM switch was not rendered')
     }
 
     await act(async () => {
@@ -201,7 +210,7 @@ describe('ExperimentalPane', () => {
     root.unmount()
   })
 
-  it('shows per-workspace environment setup controls when enabled', () => {
+  it('shows Cloud VM setup controls when enabled', () => {
     const markup = renderToStaticMarkup(
       <ExperimentalPane
         settings={{ ...getDefaultSettings('/tmp'), experimentalEphemeralVms: true }}
@@ -209,7 +218,7 @@ describe('ExperimentalPane', () => {
       />
     )
 
-    expect(markup).toContain('Per-Workspace Environments pane')
+    expect(markup).toContain('Cloud VM pane')
     expect(markup).toContain('aria-checked="true"')
   })
 

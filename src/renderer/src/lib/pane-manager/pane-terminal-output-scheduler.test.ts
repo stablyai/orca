@@ -1038,6 +1038,50 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).toHaveBeenCalledWith('\x1b[?2026h\x1b[?25lpartial', expect.any(Function))
   })
 
+  // Why: issue #8754 — ConPTY splits Codex spinner frames into an open chunk and a
+  // close chunk; hold and coalesce each cancelled the other's fallback timer, so a
+  // visible pane never repainted until the tab was blurred.
+  it('keeps repainting when synchronized frames alternate hold and coalesce chunks', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    const writeFrameOpen = (frame: number): void => {
+      writeTerminalOutput(terminal, `\x1b[?2026h\x1b[?25l\x1b[10;5HWorking ${frame}`, {
+        foreground: true,
+        forceForegroundRefresh: true,
+        stripTransientCursorShows: true,
+        holdForeground: true
+      })
+    }
+    // Codex shows the cursor before the end marker, so this never hits the immediate-drain escape.
+    const writeFrameClose = (): void => {
+      writeTerminalOutput(terminal, '\x1b[10;8H\x1b[?25h\x1b[?2026l', {
+        foreground: true,
+        forceForegroundRefresh: true,
+        stripTransientCursorShows: true,
+        coalesceForeground: true
+      })
+    }
+
+    writeFrameOpen(0)
+    vi.advanceTimersByTime(100)
+    writeFrameClose()
+    vi.advanceTimersByTime(100)
+    writeFrameOpen(1)
+    vi.advanceTimersByTime(60)
+    expect(terminal.write).toHaveBeenCalledTimes(1)
+
+    for (let frame = 2; frame < 8; frame += 1) {
+      writeFrameClose()
+      vi.advanceTimersByTime(100)
+      writeFrameOpen(frame)
+      vi.advanceTimersByTime(100)
+    }
+
+    expect(terminal.write.mock.calls.length).toBeGreaterThanOrEqual(4)
+  })
+
   it('safety-flushes latency-sensitive synchronized holds without a visible input delay', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()

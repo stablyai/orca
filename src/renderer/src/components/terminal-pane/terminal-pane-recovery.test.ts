@@ -35,7 +35,7 @@ beforeEach(() => {
   vi.stubGlobal('window', {
     api: { pty: { hasPty: mocks.hasPty } }
   })
-  vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 
 afterEach(() => {
@@ -441,6 +441,56 @@ describe('requestTerminalPaneRecovery', () => {
 
     expect(result).toBe(false)
     expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
+  })
+
+  // A `remote:` id has no entry in main's registry, so pty:hasPty routes it to
+  // the local provider. Every answer that path can produce blocked the remount
+  // this signal exists to trigger (STA-2830); none of them is evidence.
+  describe('host-rejected input', () => {
+    for (const [label, liveness] of [
+      ['a fabricated dead answer', async () => false],
+      ['an explicit unknown', async () => null],
+      [
+        'a failed probe',
+        async () => {
+          throw new Error('ipc down')
+        }
+      ]
+    ] as [string, () => Promise<boolean | null>][]) {
+      it(`recovers even though the local probe would give ${label}`, async () => {
+        mocks.hasPty.mockImplementation(liveness)
+
+        const result = await requestTerminalPaneRecovery({
+          tabId: 'tab-1',
+          ptyId: 'remote:env-1@@terminal-1',
+          reason: 'input-rejected-by-host',
+          requireAuthoritativeLiveness: true,
+          endpointReplaced: true
+        })
+
+        expect(result).toBe(true)
+        expect(mocks.hasPty).not.toHaveBeenCalled()
+        expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+      })
+    }
+
+    it('still coalesces under the shared cooldown', async () => {
+      expect(
+        await requestTerminalPaneRecovery({
+          tabId: 'tab-1',
+          ptyId: 'remote:env-1@@terminal-1',
+          reason: 'input-rejected-by-host'
+        })
+      ).toBe(true)
+      expect(
+        await requestTerminalPaneRecovery({
+          tabId: 'tab-1',
+          ptyId: 'remote:env-1@@terminal-1',
+          reason: 'input-rejected-by-host'
+        })
+      ).toBe(false)
+      expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('never throws when the store surface is partial (timer/callback contexts)', async () => {

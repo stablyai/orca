@@ -98,9 +98,9 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       e.stopPropagation()
       state.toggleTabViewMode(tab.id)
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
+    window.addEventListener('keydown', onKeyDown)
     return () => {
-      window.removeEventListener('keydown', onKeyDown, { capture: true })
+      window.removeEventListener('keydown', onKeyDown)
     }
   }, [worktreeId, isWorktreeActive])
 }

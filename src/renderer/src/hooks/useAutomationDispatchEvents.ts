@@ -220,43 +220,43 @@ export function useAutomationDispatchEvents(): void {
           const automationWorkspaceCreateRequestId = createBrowserUuid()
           const createResult =
             automation.workspaceMode === 'new_per_run'
-              ? await useAppStore
-                  .getState()
-                  .createWorktree(
-                    runRepoId,
-                    buildAutomationWorkspaceName(run.title, run.scheduledFor),
-                    automation.baseBranch ?? undefined,
-                    automation.setupDecision ?? 'skip',
-                    undefined,
-                    'unknown',
-                    run.title,
-                    undefined,
-                    undefined,
-                    undefined,
-                    automation.agentId,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    {
-                      automationProvenanceRequest: {
-                        automationId: automation.id,
-                        automationRunId: run.id,
-                        dispatchToken,
-                        createRequestId: automationWorkspaceCreateRequestId
-                      }
+              ? await useAppStore.getState().createWorktree(
+                  runRepoId,
+                  buildAutomationWorkspaceName(run.title, run.scheduledFor),
+                  automation.baseBranch ?? undefined,
+                  automation.setupDecision ?? 'skip',
+                  undefined,
+                  'unknown',
+                  run.title,
+                  undefined,
+                  undefined,
+                  undefined,
+                  // Why: the automation session below owns the prompt-bearing
+                  // agent tab; createdWithAgent would reopen an empty fallback.
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  {
+                    automationProvenanceRequest: {
+                      automationId: automation.id,
+                      automationRunId: run.id,
+                      dispatchToken,
+                      createRequestId: automationWorkspaceCreateRequestId
                     }
-                  )
+                  }
+                )
               : null
           const worktree = createResult
             ? createResult.worktree
@@ -416,6 +416,10 @@ export function useAutomationDispatchEvents(): void {
                 }
                 if (
                   entry.state === 'done' &&
+                  // Why: a session-boundary done is the agent CONNECTING (Claude SessionStart
+                  // fires at launch, before the argv prompt submits) — completing here would
+                  // close the tab and record an empty run result.
+                  entry.sessionBoundary !== true &&
                   (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
                 ) {
                   latestAssistantMessage =
@@ -528,7 +532,8 @@ export function useAutomationDispatchEvents(): void {
             onAgentStatus: (payload) => {
               latestAssistantMessage =
                 payload.lastAssistantMessage?.trim() || latestAssistantMessage
-              if (payload.state !== 'done') {
+              // Why: session-boundary done = launch connect, not run completion (see observeAgentStatus).
+              if (payload.state !== 'done' || payload.sessionBoundary === true) {
                 return
               }
               handleAgentDone()

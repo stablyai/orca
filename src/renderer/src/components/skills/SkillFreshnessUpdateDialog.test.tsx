@@ -32,6 +32,10 @@ vi.mock('@/hooks/useSkillFreshness', () => ({
   })
 }))
 
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => ({ canUseLocalSkillFreshness: true })
+}))
+
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   notifyInstalledAgentSkillsChanged: mocks.notifyChanged
 }))
@@ -400,7 +404,9 @@ describe('SkillFreshnessUpdateDialog', () => {
   it('shows why a skill was skipped without needing the disclosure', async () => {
     mocks.inventory = {
       schemaVersion: 1,
-      installations: [placement('computer-use', { topology: 'repo-scope' })],
+      // Why: a read-only copy rather than a project one — a project-owned copy raises no
+      // row at all now, so it cannot carry this assertion about how a row renders.
+      installations: [placement('computer-use', { topology: 'read-only' })],
       eligibleUpdateNames: [],
       scanIssues: [],
       scannedAt: 3
@@ -415,12 +421,124 @@ describe('SkillFreshnessUpdateDialog', () => {
     // outside the disclosure — visible with the row still collapsed, and not
     // dependent on a mount-time `defaultOpen` a later re-scan could never re-fire.
     expect(row?.getAttribute('data-collapsible-open')).toBe('false')
-    expect(container?.textContent).toContain('This is a project skill, not a global one')
+    expect(container?.textContent).toContain('This copy is in a read-only location')
     // Assert the placement, not just the presence: moving it back inside the
     // disclosure would hide it in production but still satisfy `textContent`.
     expect(row?.querySelector('[data-collapsible-content]')?.textContent).not.toContain(
-      'This is a project skill, not a global one'
+      'This copy is in a read-only location'
     )
+  })
+
+  it('raises no row for a skill whose only finding is a project-owned copy', async () => {
+    // The reported bug: a pristine global install plus a drifted copy inside a work
+    // directory. Orca only ever updates global skills, so a "Skipped" row here asserts
+    // it considered an update it could never perform.
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [
+        placement('computer-use', { status: 'current' }),
+        placement('computer-use', {
+          rootId: 'repo-work',
+          sourceKind: 'repo',
+          topology: 'repo-scope',
+          status: 'unrecognized',
+          unresolvedPath: '/home/projects/work/.agents/skills/computer-use',
+          resolvedPath: '/home/projects/work/.agents/skills/computer-use',
+          physicalIdentity: 'physical-repo-computer-use'
+        })
+      ],
+      eligibleUpdateNames: [],
+      scanIssues: [],
+      scannedAt: 4
+    }
+    await renderDialog()
+    await openViaRequest()
+
+    expect(container?.textContent).toContain('All installed Orca skills are up to date.')
+    expect(container?.querySelector('[data-skill-row="computer-use"]')).toBeNull()
+  })
+
+  it('still lists a project copy when another placement earns the group', async () => {
+    // The converse: ownership suppresses the group, never the visibility of a location
+    // that exists. An outdated global copy earns the row, and the project copy has to
+    // stay listed there so the user can see every place the skill lives.
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [
+        placement('computer-use', { topology: 'read-only' }),
+        placement('computer-use', {
+          rootId: 'repo-work',
+          sourceKind: 'repo',
+          topology: 'repo-scope',
+          status: 'unrecognized',
+          unresolvedPath: '/home/projects/work/.agents/skills/computer-use',
+          resolvedPath: '/home/projects/work/.agents/skills/computer-use',
+          physicalIdentity: 'physical-repo-computer-use'
+        })
+      ],
+      eligibleUpdateNames: [],
+      scanIssues: [],
+      scannedAt: 5
+    }
+    await renderDialog()
+    await openViaRequest()
+
+    const row = container?.querySelector('[data-skill-row="computer-use"]')
+    expect(row).not.toBeNull()
+    expect(row?.textContent).toContain('/home/projects/work/.agents/skills/computer-use')
+  })
+
+  it('names the skill in the stale-record remedy so the command is runnable as-is', async () => {
+    // Why: the reinstall advice only fires when the row hands its group name through
+    // to skippedReason — dropping that argument silently degrades every stale-record
+    // row to the generic sentence with no command to run.
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [placement('orchestration')],
+      eligibleUpdateNames: [],
+      scanIssues: [],
+      scannedAt: 3
+    }
+    await renderDialog()
+    await openViaRequest()
+
+    expect(container?.textContent).toContain(
+      'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
+    )
+  })
+
+  it('keeps the stale-record remedy when a project copy is listed beside it', async () => {
+    // The same stale-record row as above, plus the user's own project copy. That copy is
+    // listed but was never judged, so letting it explain the skip replaced the only
+    // runnable command with advice about a copy the user never asked Orca to update.
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [
+        placement('orchestration'),
+        placement('orchestration', {
+          rootId: 'repo-work',
+          sourceKind: 'repo',
+          topology: 'repo-scope',
+          status: 'unrecognized',
+          unresolvedPath: '/home/projects/work/.agents/skills/orchestration',
+          resolvedPath: '/home/projects/work/.agents/skills/orchestration',
+          physicalIdentity: 'physical-repo-orchestration'
+        })
+      ],
+      eligibleUpdateNames: [],
+      scanIssues: [],
+      scannedAt: 6
+    }
+    await renderDialog()
+    await openViaRequest()
+
+    const row = container?.querySelector('[data-skill-row="orchestration"]')
+    expect(row?.textContent).toContain(
+      'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
+    )
+    expect(row?.textContent).not.toContain('This is a project skill, not a global one')
+    // Still listed, though — ownership silences the explanation, never the location.
+    expect(row?.textContent).toContain('/home/projects/work/.agents/skills/orchestration')
   })
 
   it('stays coherent while an idle re-scan is in flight', async () => {

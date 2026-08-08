@@ -1,36 +1,22 @@
 /* eslint-disable max-lines -- Why: keeps the updater state machine and its presentation variants in one file. */
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useAppStore } from '../store'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
-import {
-  AlertCircle,
-  Check,
-  ChevronRight,
-  Loader2,
-  Minus,
-  Network,
-  RotateCw,
-  ShieldAlert,
-  X
-} from 'lucide-react'
+import { AlertCircle, Check, Loader2, Minus, X } from 'lucide-react'
 import type { ChangelogData } from '../../../shared/types'
+import { UpdateErrorCardContent, type UpdateErrorCardModel } from './UpdateErrorCardContent'
+import { LinuxPackageInstallRecoveryCard } from './LinuxPackageInstallRecoveryCard'
 import {
   isWindowsSignatureCheckUnavailableFailure,
   isWindowsSignatureMismatchFailure
 } from '../../../shared/updater-windows-signature-check'
+import { getReleaseNotesUrlForVersion } from '../../../shared/release-channel'
 import { translate } from '@/i18n/i18n'
 
 // ── Helpers ──────────────────────────────────────────────────────────
-
-function releaseUrlForVersion(version: string | null): string {
-  // Why: fall back to the plain releases listing (not /releases/latest) — /latest also breaks when GitHub's API is degraded.
-  return version
-    ? `https://github.com/stablyai/orca/releases/tag/v${version}`
-    : 'https://github.com/stablyai/orca/releases'
-}
 
 function isAnimatedGif(url: string | undefined): boolean {
   return typeof url === 'string' && url.toLowerCase().endsWith('.gif')
@@ -43,25 +29,6 @@ export function isHttp2ProtocolError(message: string): boolean {
     normalized.includes('http2_protocol_error') ||
     (normalized.includes('http/2') && normalized.includes('protocol'))
   )
-}
-
-type ErrorCardModel = {
-  variant?: 'default' | 'http1Compatibility' | 'security'
-  title: string
-  summary: string
-  /** Optional guidance box between the summary and the raw error output. */
-  explainer?: string
-  /** Raw error text, shown only when the user expands "Show details". */
-  detail?: string
-  releaseUrl?: string
-  /** Overrides the secondary button label (defaults to "Download Manually"). */
-  manualLabel?: string
-  primaryAction?: {
-    label: string
-    pendingLabel?: string
-    isPending?: boolean
-    onClick: () => void
-  }
 }
 
 // ── Compact card (transient check feedback) ─────────────────────────
@@ -304,6 +271,11 @@ export function UpdateCard() {
   }
 
   const handleEnableHttp1Compatibility = () => {
+    // Why: the shared error card marks a pending action aria-disabled rather than disabled, so the
+    // second click of a double-click now reaches this handler and would relaunch twice.
+    if (compatibilityRelaunching) {
+      return
+    }
     setCompatibilityRelaunching(true)
     setCompatibilitySetupError(null)
     void window.api.settings
@@ -323,7 +295,12 @@ export function UpdateCard() {
     status.state === 'error' && isWindowsSignatureMismatchFailure(status.message)
   const isSignatureCheckBlockedError =
     status.state === 'error' && isWindowsSignatureCheckUnavailableFailure(status.message)
-  const errorCard: ErrorCardModel | null =
+  // Carries the diagnostic alongside the recovery so the render branch needs no second state check.
+  const linuxPackageRecovery =
+    status.state === 'error' && status.recovery?.kind === 'linux-package-install'
+      ? { recovery: status.recovery, diagnostic: status.message }
+      : null
+  const errorCard: UpdateErrorCardModel | null =
     status.state === 'error'
       ? isLocalBuild
         ? {
@@ -357,7 +334,7 @@ export function UpdateCard() {
                 'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.'
               ),
               detail: compatibilitySetupError ?? status.message,
-              releaseUrl: releaseUrlForVersion(cachedVersion),
+              releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
               primaryAction: {
                 label: translate('auto.components.UpdateCard.933c6fdf5b', 'Enable & Restart'),
                 pendingLabel: 'Restarting...',
@@ -379,7 +356,7 @@ export function UpdateCard() {
                 ),
                 detail: status.message,
                 // Why: linking the rejected version would let users bypass the publisher check by re-running it.
-                releaseUrl: releaseUrlForVersion(null),
+                releaseUrl: getReleaseNotesUrlForVersion(null),
                 manualLabel: translate(
                   'auto.components.UpdateCard.c9ff9b9ec2',
                   'Check official releases'
@@ -396,7 +373,7 @@ export function UpdateCard() {
                     "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases."
                   ),
                   detail: status.message,
-                  releaseUrl: releaseUrlForVersion(cachedVersion),
+                  releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
                   primaryAction: {
                     label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
                     onClick: handleUpdate
@@ -409,7 +386,7 @@ export function UpdateCard() {
                     ? 'Could not complete the update.'
                     : 'Could not check for updates.',
                   detail: status.message,
-                  releaseUrl: releaseUrlForVersion(cachedVersion),
+                  releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
                   // Why: check-time failures are often transient, so offer a Re-check instead of forcing manual download.
                   primaryAction: cachedVersion
                     ? {
@@ -428,7 +405,7 @@ export function UpdateCard() {
             title: translate('auto.components.UpdateCard.4cf109845a', 'Update Error'),
             summary: 'Could not restart to install the update.',
             detail: installError,
-            releaseUrl: releaseUrlForVersion(cachedVersion),
+            releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
             primaryAction: {
               label: translate('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
               onClick: handleInstallRetry
@@ -532,20 +509,20 @@ export function UpdateCard() {
 
     // ── Error states ─────────────────────────────────────────────────
 
-    if (errorCard) {
+    // Why: the package-recovery card owns its own async validation state, so it branches before the generic models.
+    if (linuxPackageRecovery) {
       return (
-        <ErrorCardContent
-          title={errorCard.title}
-          summary={errorCard.summary}
-          explainer={errorCard.explainer}
-          detail={errorCard.detail}
-          releaseUrl={errorCard.releaseUrl}
-          manualLabel={errorCard.manualLabel}
-          variant={errorCard.variant}
-          primaryAction={errorCard.primaryAction}
+        <LinuxPackageInstallRecoveryCard
+          recovery={linuxPackageRecovery.recovery}
+          diagnostic={linuxPackageRecovery.diagnostic}
+          releaseUrl={isLocalBuild ? undefined : getReleaseNotesUrlForVersion(cachedVersion)}
           onClose={handleCollapseWithAnimation}
         />
       )
+    }
+
+    if (errorCard) {
+      return <UpdateErrorCardContent {...errorCard} onClose={handleCollapseWithAnimation} />
     }
 
     // ── Downloaded state ─────────────────────────────────────────────
@@ -598,7 +575,7 @@ export function UpdateCard() {
     const releaseUrl = isLocalBuild
       ? undefined
       : (('releaseUrl' in status ? status.releaseUrl : undefined) ??
-        releaseUrlForVersion(status.version))
+        getReleaseNotesUrlForVersion(status.version))
 
     if (isRichMode && changelog) {
       return (
@@ -914,7 +891,7 @@ function DownloadingContent({
           className="text-xs text-muted-foreground underline hover:text-foreground self-start"
           onClick={() =>
             void window.api.shell.openUrl(
-              release ? release.releaseNotesUrl : releaseUrlForVersion(version)
+              release ? release.releaseNotesUrl : getReleaseNotesUrlForVersion(version)
             )
           }
         >
@@ -929,139 +906,6 @@ function DownloadingContent({
         <p className="text-xs text-muted-foreground">
           {translate('auto.components.UpdateCard.6e45bfa2e0', 'Downloading...')} {percent}%
         </p>
-      </div>
-    </div>
-  )
-}
-
-// ── Error card content ───────────────────────────────────────────────
-
-function ErrorCardContent({
-  variant = 'default',
-  title,
-  summary,
-  explainer,
-  detail,
-  releaseUrl,
-  manualLabel,
-  primaryAction,
-  onClose
-}: {
-  variant?: 'default' | 'http1Compatibility' | 'security'
-  title: string
-  summary: string
-  explainer?: string
-  detail?: string
-  releaseUrl?: string
-  manualLabel?: string
-  primaryAction?: {
-    label: string
-    pendingLabel?: string
-    isPending?: boolean
-    onClick: () => void
-  }
-  onClose: () => void
-}) {
-  // Why: raw error starts collapsed so the card leads with the plain summary, not a stack dump.
-  const [showDetails, setShowDetails] = useState(false)
-  const detailId = useId()
-  const isCompatibility = variant === 'http1Compatibility'
-  const isSecurity = variant === 'security'
-  const Icon = isCompatibility ? Network : isSecurity ? ShieldAlert : AlertCircle
-  return (
-    <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-start gap-3">
-        <div
-          className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted/50 ${
-            isSecurity
-              ? 'border-destructive/30 text-destructive'
-              : 'border-border text-muted-foreground'
-          }`}
-        >
-          <Icon className="size-4" />
-        </div>
-        <div className="min-w-0 flex-1 space-y-1">
-          <h3 className="text-sm font-semibold">{title}</h3>
-          <p className="text-sm leading-relaxed text-muted-foreground">{summary}</p>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
-          onClick={onClose}
-          aria-label={translate('auto.components.UpdateCard.8acbdd3961', 'Minimize to status bar')}
-        >
-          <Minus className="size-3.5" />
-        </Button>
-      </div>
-
-      {explainer ? (
-        <div className="rounded-md border border-border/70 bg-muted/30 px-3 py-2">
-          <p className="text-xs leading-relaxed text-muted-foreground">{explainer}</p>
-        </div>
-      ) : null}
-
-      {/* Caret disclosure that reveals the raw error while the plain summary stays the lead. */}
-      {detail ? (
-        <div className="flex flex-col gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="-ml-2 self-start text-muted-foreground hover:text-foreground"
-            onClick={() => setShowDetails((prev) => !prev)}
-            aria-expanded={showDetails}
-            aria-controls={detailId}
-          >
-            <ChevronRight
-              className={`size-3.5 transition-transform motion-reduce:transition-none ${showDetails ? 'rotate-90' : ''}`}
-            />
-            {showDetails
-              ? translate('auto.components.UpdateCard.5194358929', 'Hide details')
-              : translate('auto.components.UpdateCard.8bc9e17d8f', 'Show details')}
-          </Button>
-          {showDetails ? (
-            <div id={detailId} className="rounded-md bg-muted/40 px-3 py-2">
-              <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
-                {translate('auto.components.UpdateCard.3553a8672f', 'Last error')}
-              </p>
-              <p className="scrollbar-sleek max-h-20 overflow-auto break-words font-mono text-xs leading-relaxed text-muted-foreground">
-                {detail}
-              </p>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="flex gap-2">
-        {primaryAction && (
-          <Button
-            variant="default"
-            size="sm"
-            onClick={primaryAction.onClick}
-            disabled={primaryAction.isPending}
-            className="flex-1 gap-1.5"
-          >
-            {primaryAction.isPending ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : isCompatibility ? (
-              <RotateCw className="size-3.5" />
-            ) : null}
-            {primaryAction.isPending && primaryAction.pendingLabel
-              ? primaryAction.pendingLabel
-              : primaryAction.label}
-          </Button>
-        )}
-        {releaseUrl && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void window.api.shell.openUrl(releaseUrl)}
-            className="flex-1"
-          >
-            {manualLabel ?? translate('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
-          </Button>
-        )}
       </div>
     </div>
   )

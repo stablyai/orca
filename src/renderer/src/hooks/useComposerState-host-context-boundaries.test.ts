@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 import {
   canResolveFolderSmartGitHubSubmit,
   getInitialAutoManagedWorkspaceName,
+  getInitialGitHubPrStartPointSelection,
+  getMatchingLinkedTaskSourceContext,
   isExplicitWorkspaceNameInput,
   resolveSmartGitHubCreateNames,
   resolveInitialWorkspaceRunSeed
@@ -24,6 +26,52 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 }
 
 describe('useComposerState host-context boundaries', () => {
+  it('seeds TaskPage pull requests as submit-time PR start points', () => {
+    const item = {
+      id: 'pr-42',
+      type: 'pr' as const,
+      number: 42,
+      title: 'Fix PR workspace creation',
+      state: 'open' as const,
+      url: 'https://github.com/stablyai/orca/pull/42',
+      labels: [],
+      updatedAt: '2026-08-04T00:00:00.000Z',
+      author: 'octocat',
+      branchName: 'fix-pr-workspace',
+      baseRefName: 'main',
+      isCrossRepository: true,
+      repoId: 'repo-1'
+    }
+
+    expect(
+      getInitialGitHubPrStartPointSelection({
+        item,
+        linkedWorkItem: {
+          provider: 'github',
+          type: 'pr',
+          number: 42,
+          title: item.title,
+          url: item.url,
+          repoId: item.repoId
+        },
+        repoId: 'repo-1'
+      })
+    ).toEqual({ repoId: 'repo-1', item })
+    expect(
+      getInitialGitHubPrStartPointSelection({
+        item,
+        linkedWorkItem: {
+          provider: 'github',
+          type: 'pr',
+          number: 43,
+          title: item.title,
+          url: 'https://github.com/stablyai/orca/pull/43'
+        },
+        repoId: 'repo-1'
+      })
+    ).toBeNull()
+  })
+
   it('treats typed workspace names as user-authored, not auto-managed', () => {
     expect(isExplicitWorkspaceNameInput({ name: 'keep-my-name', lastAutoName: '' })).toBe(true)
     expect(
@@ -375,13 +423,13 @@ describe('useComposerState host-context boundaries', () => {
       'const submit = useCallback',
       'const submitQuick = useCallback'
     )
-    const fullPolicySave = fullSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const fullPolicySave = fullSubmit.indexOf('persistSetupAgentStartupPolicy()')
     const fullCreate = fullSubmit.indexOf('const result = await createWorktree(')
     expect(fullPolicySave).toBeGreaterThanOrEqual(0)
     expect(fullCreate).toBeGreaterThan(fullPolicySave)
 
     const quickSubmit = sourceBetween(HOOK_SOURCE, 'const submitQuick = useCallback', 'return {')
-    const quickPolicySave = quickSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const quickPolicySave = quickSubmit.indexOf('persistSetupAgentStartupPolicy()')
     const quickCreate = quickSubmit.indexOf('const request: WorktreeCreationRequest = {')
     expect(quickPolicySave).toBeGreaterThanOrEqual(0)
     expect(quickCreate).toBeGreaterThan(quickPolicySave)
@@ -416,8 +464,9 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(section).toContain('canResolveFolderSmartGitHubSubmit')
     expect(section).toContain('hasFolderSourceRepos: folderSourceRepos.length > 0')
-    expect(section).toContain('? await resolvePendingSmartGitHubSubmit()')
-    expect(section).toContain(': null')
+    expect(section).toContain('? resolvePendingSmartGitHubSubmit()')
+    expect(section).toContain("Promise.resolve({ kind: 'none' } as const)")
+    expect(section).toContain("smartGitHubSettlement.status === 'cancelled'")
     expect(section).not.toContain('folderSourceRequiresConnection')
   })
 
@@ -481,6 +530,20 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('setBranchNameOverride(undefined)')
     expect(section).toContain('setBranchNameOverridePreservesNameEdits(false)')
     expect(section).toContain("branchAutoNameRef.current = ''")
+  })
+
+  it('keeps Jira-mode URL edits synchronously blocked before lookup settles', () => {
+    // Why: derived on every render from the same name the submit path uses, so an in-flight
+    // URL cannot slip through between the keystroke and the create.
+    expect(HOOK_SOURCE).toContain('isBlockingJiraUrlIntent(smartNameMode, name)')
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleNameValueChange = useCallback',
+      'const handleBranchNameOverrideChange = useCallback'
+    )
+
+    expect(section).not.toContain("smartNameMode === 'smart'")
+    expect(section).not.toContain('setSourceIntentBlocksCreate')
   })
 
   it('selects a project by its own host instead of pinning the current host', () => {
@@ -573,6 +636,22 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('setCreateError({')
   })
 
+  it('gates every submit path on the derived source intent', () => {
+    // Why: derived from name+mode, so the submitted name and the gate can never disagree.
+    expect(HOOK_SOURCE).toContain(
+      'const sourceIntentBlocksCreate = !linkedWorkItem && isBlockingJiraUrlIntent(smartNameMode, name)'
+    )
+    const submitSections = [
+      sourceBetween(HOOK_SOURCE, 'const folderCreateDisabled', 'const submit = useCallback'),
+      sourceBetween(HOOK_SOURCE, 'const submit = useCallback', 'const submitQuick = useCallback'),
+      sourceBetween(HOOK_SOURCE, 'const submitQuick = useCallback', 'const createGateInput')
+    ]
+
+    for (const section of submitSections) {
+      expect(section).toContain('sourceIntentBlocksCreate')
+    }
+  })
+
   it('passes folder child repos to smart lookup instead of building task source options', () => {
     const cardProps = sourceBetween(
       HOOK_SOURCE,
@@ -613,6 +692,40 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('!shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)')
   })
 
+  it('restores Jira draft context only when its site and issue identity agree', () => {
+    const item = {
+      provider: 'jira' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'ORCA-123 Link Jira',
+      url: 'https://company.atlassian.net/jira/browse/ORCA-123',
+      jiraIdentifier: 'ORCA-123'
+    }
+    const context = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'project-1',
+      hostId: 'local' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net/jira',
+        projectKey: 'ORCA'
+      }
+    }
+
+    expect(getMatchingLinkedTaskSourceContext(item, context)).toEqual(context)
+    expect(
+      getMatchingLinkedTaskSourceContext(item, {
+        ...context,
+        providerIdentity: { ...context.providerIdentity, siteUrl: 'https://other.atlassian.net' }
+      })
+    ).toBeNull()
+    expect(
+      getMatchingLinkedTaskSourceContext({ ...item, jiraIdentifier: 'ORCA-999' }, context)
+    ).toBeNull()
+  })
+
   it('resolves quick-create base refs through the worktree-create precedence helper', () => {
     const section = sourceBetween(
       HOOK_SOURCE,
@@ -648,6 +761,22 @@ describe('useComposerState host-context boundaries', () => {
     expect(quickSubmit).not.toContain('platform: CLIENT_PLATFORM')
   })
 
+  // Why: activation no longer rebuilds a startup from `createdWithAgent`, so this
+  // caller's own `startup` is the only thing that launches the agent it planned.
+  it('passes its own startup to activation when submit planned an agent', () => {
+    const activation = sourceBetween(
+      HOOK_SOURCE,
+      'const activation = activateAndRevealWorktree(worktree.id, {',
+      'if (startupPlan) {'
+    )
+
+    expect(activation).toContain('...(startupPlan && !backendSpawnedStartup')
+    expect(activation).toContain('command: startupPlan.launchCommand')
+    expect(activation).toContain('launchAgent: tuiAgent')
+    // The removed activation-time fallback must not come back through this caller.
+    expect(HOOK_SOURCE).not.toContain('buildCreatedAgentReopenStartup')
+  })
+
   it('prepares linked quick-create drafts for the selected default agent', () => {
     const quickSubmit = sourceBetween(
       HOOK_SOURCE,
@@ -664,12 +793,12 @@ describe('useComposerState host-context boundaries', () => {
     expect(HOOK_SOURCE).not.toContain('resolveQuickWorkspaceSubmitAgent')
   })
 
-  it('keeps Linear starts out of issue-command templates without special draft routing', () => {
+  it('keeps sentinel-based Jira and Linear starts out of issue-command templates', () => {
     expect(HOOK_SOURCE).not.toContain('isOrcaCliAvailableForLaunch')
     expect(HOOK_SOURCE).not.toContain('hasGeneratedLinearSourceContext')
     expect(HOOK_SOURCE).not.toContain('shouldDraftGeneratedLinearContext')
     expect(HOOK_SOURCE).toMatch(
-      /willApplyIssueCommandAsPrompt[\s\S]*linkedWorkItemProvider !== 'linear'/
+      /willApplyIssueCommandAsPrompt[\s\S]*canUseIssueCommandForLinkedItemProvider\(linkedWorkItemProvider\)/
     )
 
     const previewSection = sourceBetween(
@@ -677,16 +806,20 @@ describe('useComposerState host-context boundaries', () => {
       'const shouldApplyLinkedOnlyTemplate =',
       'const linkedOnlyTemplatePrompt'
     )
-    expect(previewSection).toContain("linkedWorkItemProvider !== 'linear'")
+    expect(previewSection).toContain(
+      'canUseIssueCommandForLinkedItemProvider(linkedWorkItemProvider)'
+    )
 
     const fullSubmit = sourceBetween(
       HOOK_SOURCE,
       'const submit = useCallback',
       'const submitQuick = useCallback'
     )
-    expect(fullSubmit).toContain("submitLinkedWorkItemProvider !== 'linear'")
+    expect(fullSubmit).toContain(
+      'canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider)'
+    )
     expect(fullSubmit).toMatch(
-      /submitShouldRunIssueAutomation[\s\S]*submitLinkedWorkItemProvider !== 'linear'/
+      /submitShouldRunIssueAutomation[\s\S]*canUseIssueCommandForLinkedItemProvider\(submitLinkedWorkItemProvider\)/
     )
     expect(fullSubmit).toContain('prompt: submitStartupPrompt')
     expect(fullSubmit).toContain('const shouldSeedInitialAgentStatus =')
@@ -699,6 +832,22 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(quickSubmit).toContain('agent === null || !quickDraftPrompt')
     expect(quickSubmit).toContain('startupPlan.draftPrompt = quickDraftPrompt')
+  })
+
+  it('selects the failed Jira source host before opening integration settings', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleOpenJiraSettings = useCallback',
+      'const applyWorktreeMeta = useCallback'
+    )
+
+    expect(section).toContain('getTaskSourceRuntimeSettings(')
+    expect(section).toContain('smartNameJiraSourceContext')
+    expect(section).toContain('setActiveRuntimeEnvironmentPreference(targetRuntimeEnvironmentId)')
+    expect(section.indexOf('setActiveRuntimeEnvironmentPreference')).toBeLessThan(
+      section.indexOf("openSettingsTarget({ pane: 'integrations'")
+    )
+    expect(section).toContain('if (!selected)')
   })
 
   it('gates per-workspace environment recipe discovery behind the experimental setting', () => {
