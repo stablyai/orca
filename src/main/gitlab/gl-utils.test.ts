@@ -524,13 +524,21 @@ describe('parseGlabJsonList', () => {
     ['an opaque body', `{"data":"${'x'.repeat(50_000)}"}`],
     ['an error envelope', `{"message":"${'x'.repeat(50_000)}"}`]
   ])('bounds the reported payload for %s', (_label, payload) => {
-    expect(() => parseGlabJsonList(payload)).toThrow(/: .{300}$/s)
+    expect(() => parseGlabJsonList(payload)).toThrow(
+      /^GitLab returned (?:a non-list response|an error): .{300}$/
+    )
   })
 
   it.each([
     ['message', '{"message":"403 Forbidden"}', '403 Forbidden'],
     ['error', '{"error":"insufficient_scope"}', 'insufficient_scope'],
-    ['error when message is blank', '{"message":"  ","error":"real_error"}', 'real_error']
+    ['error when message is blank', '{"message":"  ","error":"real_error"}', 'real_error'],
+    // Why: GitLab sends both on some endpoints; `message` is the human-facing one.
+    [
+      'message when both are set',
+      '{"message":"404 Project Not Found","error":"insufficient_scope"}',
+      '404 Project Not Found'
+    ]
   ])('reports a GitLab error envelope by its %s field', (_label, payload, reported) => {
     // Why: an envelope is GitLab's own diagnostic, so it stays classifiable — unlike a raw body.
     expect(() => parseGlabJsonList(payload)).toThrow(`GitLab returned an error: ${reported}`)
