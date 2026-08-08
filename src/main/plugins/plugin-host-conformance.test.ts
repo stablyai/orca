@@ -166,9 +166,12 @@ describe('plugin host main/relay conformance', () => {
   })
 
   it('serves panel storage reads through both transports with the storage capability', async () => {
-    const services = createServices()
-    const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['storage'], services))
-    for (const adapter of Object.values(createAdapters(resolvePolicy))) {
+    // Fresh service mocks per adapter so each transport's calls are asserted
+    // individually rather than in aggregate.
+    for (const adapterName of ['desktop-main', 'relay'] as const) {
+      const services = createServices()
+      const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['storage'], services))
+      const adapter = createAdapters(resolvePolicy)[adapterName]!
       await expect(
         adapter({ method: 'storage.get', params: { key: 'alpha' } }, true)
       ).resolves.toEqual({ ok: true, value: { value: 'stored' } })
@@ -176,9 +179,10 @@ describe('plugin host main/relay conformance', () => {
         ok: true,
         value: { keys: ['alpha'] }
       })
+      expect(services.storage.get, adapterName).toHaveBeenCalledExactlyOnceWith(PLUGIN_KEY, 'alpha')
+      expect(services.storage.keys, adapterName).toHaveBeenCalledExactlyOnceWith(PLUGIN_KEY)
+      expect(services.storage.set, adapterName).not.toHaveBeenCalled()
     }
-    expect(services.storage.get).toHaveBeenCalledWith(PLUGIN_KEY, 'alpha')
-    expect(services.storage.set).not.toHaveBeenCalled()
   })
 
   it('projects workspace context without host paths on main and relay', async () => {
