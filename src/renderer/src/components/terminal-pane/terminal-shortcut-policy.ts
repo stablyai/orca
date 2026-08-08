@@ -47,7 +47,9 @@ function physicalChordKey(event: TerminalShortcutEvent): string {
  */
 export function isImeExemptTerminalChord(event: TerminalShortcutEvent): boolean {
   return (
-    IME_EXEMPT_CHORD_CODES.has(event.code ?? '') && (event.metaKey || event.ctrlKey || event.altKey)
+    IME_EXEMPT_CHORD_CODES.has(event.code ?? '') &&
+    !event.shiftKey &&
+    (event.metaKey || event.ctrlKey || event.altKey)
   )
 }
 

@@ -507,6 +507,51 @@ describe('constructed shapes the macOS captures do not contain', () => {
     rig.unmount()
   })
 
+  // A KeyboardEvent's modifier flags describe the moment it fired, so letting Cmd up before
+  // the arrow leaves the arrow's keyup with metaKey: false. Reading the release's own flags
+  // drops the chord outright, which is the bug this whole change exists to fix.
+  it('sends the chord when the modifier is released before the key', async () => {
+    const rig = openRig()
+    const japanese = caseNamed(JAPANESE_CASE)
+    const beforeFirstChord = japanese.rows.slice(
+      0,
+      japanese.rows.findIndex((row) => row.t === 'keydown' && row.code === 'MetaLeft')
+    )
+    await replay(rig.textarea, [
+      ...beforeFirstChord,
+      { t: 'keydown', key: 'Meta', code: 'MetaLeft', keyCode: 91, isComposing: true, meta: true },
+      {
+        t: 'keydown',
+        key: 'ArrowLeft',
+        code: 'ArrowLeft',
+        keyCode: 229,
+        isComposing: true,
+        meta: true
+      },
+      { t: 'keyup', key: 'Meta', code: 'MetaLeft', keyCode: 91, isComposing: true },
+      { t: 'keyup', key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, isComposing: true }
+    ])
+
+    expect(rig.inputCalls).toEqual(['\x01'])
+    rig.unmount()
+  })
+
+  // The mirror hazard: the key went down with no composition in sight, so it already resolved
+  // from its own keydown. A composition starting while it is held must not make the release
+  // send it a second time — for Option+Left that is two words instead of one.
+  it('does not send twice when a composition starts while the key is held', async () => {
+    const rig = openRig()
+    await replay(rig.textarea, [
+      { t: 'keydown', key: 'Alt', code: 'AltLeft', keyCode: 18, alt: true },
+      { t: 'keydown', key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, alt: true },
+      { t: 'compositionstart', data: '' },
+      { t: 'keyup', key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, isComposing: true, alt: true }
+    ])
+
+    expect(rig.inputCalls).toEqual(['\x1bb'])
+    rig.unmount()
+  })
+
   // Windows reports an IME-consumed key as `key: 'Process'` (#12171), which normalizes to no
   // token at all, so the keybinding lookup has to run on the physical `code` instead. macOS
   // leaves `key` alone, so no capture reaches that substitution — without this the branch is
