@@ -19,8 +19,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').showGitIgnoredFiles).toBe(true)
   })
 
-  it('uses list view for Source Control changes by default', () => {
-    expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
+  it('uses list view for Source Control changes and commit files by default', () => {
+    const settings = getDefaultSettings('/tmp')
+    expect(settings.sourceControlViewMode).toBe('list')
+    expect(settings.sourceControlCommitViewMode).toBe('list')
   })
 
   it('keeps Source Control changes first by default', () => {

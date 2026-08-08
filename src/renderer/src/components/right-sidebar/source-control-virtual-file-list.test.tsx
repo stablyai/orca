@@ -135,11 +135,13 @@ function setTop(element: Element, top: number): void {
 function SharedScrollerHarness({
   aboveHeight,
   rows,
-  rowTestId = 'virtual-row'
+  rowTestId = 'virtual-row',
+  estimateRowHeight
 }: {
   aboveHeight: number
   rows: readonly string[]
   rowTestId?: string
+  estimateRowHeight?: (row: string) => number
 }): ReactElement {
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
 
@@ -181,6 +183,7 @@ function SharedScrollerHarness({
           rows={rows}
           scrollElement={scroller}
           getRowKey={(row) => row}
+          estimateRowHeight={estimateRowHeight}
           renderRow={(row) => (
             <div key={row} data-testid={rowTestId}>
               {row}
@@ -447,6 +450,27 @@ describe('SourceControlVirtualFileList scroll-margin lifecycle', () => {
     expect(host.querySelector('[data-testid="second-row"]')?.textContent).toBe('second-row-000')
     expect(host.querySelectorAll('[data-testid="second-row"]').length).toBeLessThan(
       secondRows.length
+    )
+  })
+
+  it('uses row-specific estimates for heterogeneous unmeasured rows', () => {
+    const rows = manyRows(100)
+
+    act(() => {
+      root.render(
+        <SharedScrollerHarness
+          aboveHeight={0}
+          rows={rows}
+          estimateRowHeight={(row) => (Number(row.slice(-3)) % 2 === 0 ? 28 : 24)}
+        />
+      )
+    })
+
+    const virtualList = host.querySelector<HTMLElement>(
+      '[data-testid="source-control-virtual-list"]'
+    )
+    expect(Number.parseFloat(virtualList?.style.height ?? '0')).toBeGreaterThan(
+      rows.length * SOURCE_CONTROL_FILE_ROW_HEIGHT_PX
     )
   })
 

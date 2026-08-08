@@ -71,6 +71,18 @@ A common point of drift. Use these conventions for any list-style row (worktrees
 - **Persistent "current" / "active" row** (e.g. the worktree the user is viewing): also `bg-accent`, _plus_ a `data-current="true"` attribute so CSS or future styling can distinguish it from the cmdk highlight.
 - **Don't:** hardcode `bg-[#ededed]` / `bg-[#333333]` or invent a "selected" color. The accent token already adapts to light/dark and matches the rest of the app.
 
+#### Dense tree rows
+
+Use a quieter hierarchy for nested file and source-control trees, where many adjacent rows must remain scannable:
+
+- **Idle:** transparent background.
+- **Hover:** `bg-accent/40`.
+- **Selected:** `bg-accent/60`.
+- **Current / open:** `bg-accent`.
+- **Expanded detail group:** a containing `bg-muted/20` surface may distinguish nested commit details. If virtualization removes the wrapper, apply the same surface to each virtual row; don't treat it as the interactive idle state.
+
+This scoped hierarchy does not replace the full-strength list-row states above.
+
 ### Color mixing
 
 When you need a tint (e.g. a 12% primary wash on hover), use `color-mix` against the existing token, not a new hex:
@@ -177,6 +189,8 @@ Tooltips exist to _name_ a control whose meaning isn't obvious from its appearan
   </TooltipContent>
 </Tooltip>
 ```
+
+When one button opens a Radix menu and also needs a tooltip, compose the triggers directly: `TooltipTrigger asChild` → `DropdownMenuTrigger asChild` → `Button`. Do not insert a wrapper `span`; the accessibility description must attach to the actual button. A wrapper is allowed only for a native-disabled control that cannot emit tooltip events, and that wrapper must not also host another Radix trigger.
 
 ### Icons
 

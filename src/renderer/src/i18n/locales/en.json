@@ -10623,7 +10623,11 @@
             "62e685d5ec": "idle",
             "111e1d0db4": "error",
             "e5e81e59a6": "Resize commits",
-            "6d1e0a7c3b": "Failed to load commit files"
+            "6d1e0a7c3b": "Failed to load commit files",
+            "5e4f2a9c81": "More commit history actions"
+          },
+          "GitHistoryRefreshError": {
+            "retry": "Retry"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "Close",

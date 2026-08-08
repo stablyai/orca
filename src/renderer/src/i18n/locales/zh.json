@@ -10272,7 +10272,11 @@
             "62e685d5ec": "空闲",
             "111e1d0db4": "错误",
             "e5e81e59a6": "调整提交记录高度",
-            "6d1e0a7c3b": "无法加载提交文件"
+            "6d1e0a7c3b": "无法加载提交文件",
+            "5e4f2a9c81": "更多提交历史操作"
+          },
+          "GitHistoryRefreshError": {
+            "retry": "重试"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "关闭",

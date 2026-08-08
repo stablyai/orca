@@ -2377,6 +2377,7 @@ describe('Store', () => {
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
     expect(store.getSettings().sourceControlViewMode).toBe('list')
+    expect(store.getSettings().sourceControlCommitViewMode).toBe('list')
     expect(store.getSettings().showGitIgnoredFiles).toBe(true)
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().showAutomationsButton).toBe(true)
@@ -5846,12 +5847,18 @@ describe('Store', () => {
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
   })
 
-  it('updateSettings persists sourceControlViewMode as a user setting', async () => {
+  it('updateSettings persists independent Source Control view modes as user settings', async () => {
     const store = await createStore()
     expect(store.getSettings().sourceControlViewMode).toBe('list')
+    expect(store.getSettings().sourceControlCommitViewMode).toBe('list')
 
     store.updateSettings({ sourceControlViewMode: 'tree' })
     expect(store.getSettings().sourceControlViewMode).toBe('tree')
+    expect(store.getSettings().sourceControlCommitViewMode).toBe('list')
+
+    store.updateSettings({ sourceControlCommitViewMode: 'tree' })
+    expect(store.getSettings().sourceControlViewMode).toBe('tree')
+    expect(store.getSettings().sourceControlCommitViewMode).toBe('tree')
   })
 
   it('updateSettings persists sourceControlGroupOrder as a user setting', async () => {
@@ -5875,7 +5882,7 @@ describe('Store', () => {
     expect(store.getSettings().terminalShortcutPolicy).toBe('orca-first')
   })
 
-  it('reloads sourceControlViewMode from global settings without touching workspace state', async () => {
+  it('reloads independent Source Control view modes without touching workspace state', async () => {
     const workspaceSession = {
       activeRepoId: 'r1',
       activeWorktreeId: 'repo1::/worktree-a',
@@ -5920,16 +5927,24 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().sourceControlViewMode).toBe('list')
+    expect(store.getSettings().sourceControlCommitViewMode).toBe('list')
     expect(store.getSettings().sourceControlGroupOrder).toBe('changes-first')
 
+    store.updateSettings({ sourceControlCommitViewMode: 'tree' })
+    expect(store.getSettings().sourceControlViewMode).toBe('list')
     store.updateSettings({ sourceControlViewMode: 'tree', sourceControlGroupOrder: 'staged-first' })
     store.flush()
 
     const persisted = readDataFile() as {
-      settings?: { sourceControlGroupOrder?: string; sourceControlViewMode?: string }
+      settings?: {
+        sourceControlCommitViewMode?: string
+        sourceControlGroupOrder?: string
+        sourceControlViewMode?: string
+      }
       workspaceSession?: typeof workspaceSession
       worktreeMeta?: Record<string, unknown>
     }
+    expect(persisted.settings?.sourceControlCommitViewMode).toBe('tree')
     expect(persisted.settings?.sourceControlViewMode).toBe('tree')
     expect(persisted.settings?.sourceControlGroupOrder).toBe('staged-first')
     expect(persisted.workspaceSession).toEqual({
@@ -5940,6 +5955,9 @@ describe('Store', () => {
       'repo1::/worktree-a': { status: 'active' },
       'repo1::/worktree-b': { status: 'active' }
     })
+    expect(collectPropertyPaths(persisted, 'sourceControlCommitViewMode')).toEqual([
+      'settings.sourceControlCommitViewMode'
+    ])
     expect(collectPropertyPaths(persisted, 'sourceControlViewMode')).toEqual([
       'settings.sourceControlViewMode'
     ])
@@ -5949,6 +5967,7 @@ describe('Store', () => {
 
     const reloaded = await createStore()
     expect(reloaded.getSettings().sourceControlViewMode).toBe('tree')
+    expect(reloaded.getSettings().sourceControlCommitViewMode).toBe('tree')
     expect(reloaded.getSettings().sourceControlGroupOrder).toBe('staged-first')
     expect(reloaded.getWorkspaceSession().activeWorktreeId).toBe('repo1::/worktree-a')
   })

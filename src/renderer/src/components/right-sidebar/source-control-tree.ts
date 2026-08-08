@@ -4,6 +4,12 @@ import { compareFileNames } from '../../../../shared/file-name-sort'
 import { splitPathSegments } from './path-tree'
 import { compareGitStatusEntries } from './source-control-status-sort'
 
+// Why: file rows indent past the directory row's chevron+glyph, so FILE_PADDING
+// exceeds DIRECTORY_PADDING. Shared by the changes and commit-files trees so both align.
+export const SOURCE_CONTROL_TREE_INDENT_PX = 12
+export const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
+export const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
+
 export type SourceControlTreeArea = Extract<GitStagingArea, 'unstaged' | 'staged' | 'untracked'>
 // Why: committed branch rows share the same path tree but do not carry
 // uncommitted status metadata, so the tree builder stays entry-shape generic.

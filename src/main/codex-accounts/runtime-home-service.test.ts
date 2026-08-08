@@ -105,6 +105,7 @@ function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
     openLinksInAppPreferencePrompted: false,
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
+    sourceControlCommitViewMode: 'list',
     sourceControlGroupOrder: 'changes-first',
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,

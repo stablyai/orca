@@ -82,11 +82,14 @@ export function observeSourceControlScrollMargin(
 export function SourceControlVirtualFileList<TRow>({
   rows,
   getRowKey,
+  estimateRowHeight,
   renderRow,
   scrollElement
 }: {
   rows: readonly TRow[]
   getRowKey: (row: TRow) => string
+  // Why: mixed commit/detail rows need accurate initial offsets; live measurement still wins.
+  estimateRowHeight?: (row: TRow) => number
   renderRow: (row: TRow) => React.ReactNode
   // Why: a state-held element, not a ref — ancestor host refs are not attached
   // yet when this component's mount effects run, so a ref would leave the
@@ -124,7 +127,12 @@ export function SourceControlVirtualFileList<TRow>({
     count: rows.length,
     enabled: virtualize && scrollElement !== null,
     getScrollElement: () => scrollElement,
-    estimateSize: () => SOURCE_CONTROL_FILE_ROW_HEIGHT_PX,
+    estimateSize: (index) => {
+      const row = rows[index]
+      return row === undefined
+        ? SOURCE_CONTROL_FILE_ROW_HEIGHT_PX
+        : (estimateRowHeight?.(row) ?? SOURCE_CONTROL_FILE_ROW_HEIGHT_PX)
+    },
     overscan: SOURCE_CONTROL_FILE_ROW_OVERSCAN,
     scrollMargin,
     // Why: stable row keys let the virtualizer carry item identity across

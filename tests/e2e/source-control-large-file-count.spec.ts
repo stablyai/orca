@@ -38,6 +38,7 @@ const MAX_HEAP_GROWTH_PER_CYCLE_MB = 75
 // bound means the panel is mounting rows proportional to the change set again.
 const MAX_MOUNTED_ROWS = 200
 const MAX_CAPPED_STATUS_PAYLOAD_BYTES = 200_000
+const MAX_MOUNTED_HISTORY_ROWS = 100
 
 type LoadMeasurement = {
   entryCount: number
@@ -530,6 +531,89 @@ test.describe('Source Control large file count (#8013)', () => {
 
       expect(measurement.entryCount).toBe(0)
       expect(measurement.maxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
+    } finally {
+      await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
+    }
+  })
+  test('a 5,000-file root commit stays bounded in the history scroller', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
+    test.setTimeout(600_000)
+    const trackedFiles = Number(process.env.ORCA_GIT_HISTORY_COMMIT_FILE_COUNT ?? '5000')
+    const fixture = createLargeFileCountRepo({ trackedFiles })
+    registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
+    try {
+      await waitForSessionReady(orcaPage)
+      await addAndActivateRepo(orcaPage, fixture.repoPath)
+
+      const historyMenu = orcaPage.getByRole('button', { name: 'More commit history actions' })
+      await expect(historyMenu).toBeVisible({ timeout: 30_000 })
+      await historyMenu.click()
+      const viewAsList = orcaPage.getByRole('menuitem', { name: 'View as list' })
+      await ((await viewAsList.count()) > 0
+        ? viewAsList.click()
+        : orcaPage.keyboard.press('Escape'))
+
+      const commitRows = orcaPage.locator('button[data-testid="git-history-row"]')
+      if ((await commitRows.count()) === 0) {
+        await orcaPage.getByRole('button', { name: /^Commits(?:\s+\d+\+?)?$/ }).click()
+      }
+      const rootCommit = commitRows.last()
+      await expect(rootCommit).toBeVisible({ timeout: 30_000 })
+      await rootCommit.click()
+
+      const mountedFiles = orcaPage.locator('button[data-testid="git-history-commit-file"]')
+      await expect(mountedFiles.first()).toBeVisible({ timeout: 60_000 })
+      const historyVirtualList = mountedFiles
+        .first()
+        .locator('xpath=ancestor::div[@data-testid="source-control-virtual-list"]')
+      await expect(historyVirtualList).toHaveCount(1)
+      expect(await mountedFiles.count()).toBeLessThan(MAX_MOUNTED_HISTORY_ROWS)
+
+      const firstPath = await mountedFiles.first().getAttribute('data-file-path')
+      if (!firstPath) {
+        throw new Error('First virtualized commit file is missing its relative path')
+      }
+      const deepIndex = trackedFiles - 1
+      const deepPath = `src/dir-${String(Math.floor(deepIndex / 100)).padStart(4, '0')}/file-${String(deepIndex).padStart(6, '0')}.ts`
+
+      const scrollShape = await historyVirtualList.evaluate((list) => {
+        const scroller = list.parentElement
+        if (!scroller) {
+          throw new Error('History virtual list is missing its shared scroller')
+        }
+        const nestedScrollers = Array.from(list.querySelectorAll<HTMLElement>('*')).filter(
+          (element) => {
+            const overflowY = getComputedStyle(element).overflowY
+            return (
+              (overflowY === 'auto' || overflowY === 'scroll') &&
+              element.scrollHeight > element.clientHeight
+            )
+          }
+        ).length
+        scroller.scrollTop = scroller.scrollHeight
+        scroller.dispatchEvent(new Event('scroll'))
+        return {
+          nestedScrollers,
+          virtualHeight: Number.parseFloat((list as HTMLElement).style.height)
+        }
+      })
+
+      expect(scrollShape.nestedScrollers).toBe(0)
+      expect(scrollShape.virtualHeight).toBeGreaterThan(trackedFiles * 10)
+      const deepFile = orcaPage.locator(
+        `button[data-testid="git-history-commit-file"][data-file-path="${deepPath}"]`
+      )
+      await expect(deepFile).toBeVisible({ timeout: 30_000 })
+      await expect(
+        orcaPage.locator(
+          `button[data-testid="git-history-commit-file"][data-file-path="${firstPath}"]`
+        )
+      ).toHaveCount(0)
+      expect(await mountedFiles.count()).toBeLessThan(MAX_MOUNTED_HISTORY_ROWS)
+
+      await deepFile.click()
     } finally {
       await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
     }
