@@ -18,9 +18,14 @@ const IOS_CHANNEL_COPY: Record<IosChannel, InstallCopy> = {
   }
 }
 
+// Why: pin the published mobile-android tag used by README / Settings so a
+// stale APK link does not strand downloads while releases advance (#11444).
+export const ORCA_ANDROID_APK_RELEASE_TAG = 'mobile-android-v0.0.42'
+export const ORCA_ANDROID_APK_URL = `https://github.com/stablyai/orca/releases/download/${ORCA_ANDROID_APK_RELEASE_TAG}/app-release.apk`
+
 const ANDROID_COPY: InstallCopy = {
   ctaLabel: 'Download APK',
-  url: 'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.37/app-release.apk'
+  url: ORCA_ANDROID_APK_URL
 }
 
 export function getInstallCopy(platform: Platform, iosChannel: IosChannel): InstallCopy {
