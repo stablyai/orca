@@ -14893,7 +14893,7 @@
           "title": "Artifacts",
           "refresh": "Refresh",
           "signInHeading": "Sign in to Orca",
-          "signInCopy": "Artifacts are private to your account until you create a public share link.",
+          "signInCopy": "Sign in to view and manage artifacts shared through your account.",
           "signingIn": "Signing in…",
           "signIn": "Sign in to Orca",
           "empty": "No shared artifacts",

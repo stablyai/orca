@@ -179,7 +179,7 @@ export default function ArtifactsPage(): React.JSX.Element {
                 <p className="max-w-sm text-xs leading-5 text-muted-foreground">
                   {translate(
                     'auto.components.artifacts.ArtifactsPage.signInCopy',
-                    'Artifacts are private to your account until you create a public share link.'
+                    'Sign in to view and manage artifacts shared through your account.'
                   )}
                 </p>
               </div>
