@@ -9,9 +9,7 @@ describe('locale-translation-policy ja relocalization', () => {
   it('heals generic terms the brand revert left in Latin mid-sentence', () => {
     expect(ja('Close terminal?', 'この terminal を閉じますか?')).toBe('このターミナルを閉じますか?')
     expect(ja('New Terminal', '新規 Terminal')).toBe('新規ターミナル')
-    expect(ja('Stop the agent?', 'この agent を停止しますか?')).toBe(
-      'このエージェントを停止しますか?'
-    )
+    expect(ja('Stop the agent?', 'この agent を停止しますか?')).toBe('この Agent を停止しますか?')
     expect(ja('Nothing to commit.', 'commit するものはありません。')).toBe(
       'コミットするものはありません。'
     )

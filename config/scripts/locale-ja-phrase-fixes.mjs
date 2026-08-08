@@ -14,9 +14,11 @@ const COMMAND_HEAD = '(?<!\\b(?:git|gh|glab|orca|npm|pnpm|npx|yarn|docker|kubect
 // their spelling; a following Latin word keeps a Latin-only label such as "Agent SDK" intact.
 const RELOCALIZED_GENERIC_TERMS = [
   ['[Tt]erminals?', 'ターミナル', 'terminal'],
-  ['[Aa]gents?', 'エージェント', 'agent'],
   ['[Cc]ommits?', 'コミット', 'commit'],
   ['[Rr]epos?', 'リポジトリ', 'repo'],
+  // Why: Agent is the one term ja keeps in Latin; this only normalizes the case so a sentence
+  // never mixes "agent" and "Agent". The spacing term list restores the 和欧間スペース.
+  ['[Aa]gents?', 'Agent', 'agent'],
   ['[Ww]orktrees?', 'ワークツリー', 'worktree']
 ].flatMap(([latin, katakana, whenEnIncludes]) => [
   {
@@ -41,6 +43,9 @@ const RELOCALIZED_GENERIC_TERMS = [
 
 export const JA_PHRASE_FIXES = [
   ...RELOCALIZED_GENERIC_TERMS,
+  // Why: ja house style keeps Agent in Latin — it names Orca's own concept, not the everyday word.
+  // Runs before 代理人→エージェント so both spellings converge on Agent.
+  { pattern: /エージェント/g, replacement: 'Agent', whenEnIncludes: 'agent' },
   { pattern: /解雇/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
   { pattern: /却下/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
   { pattern: /代理人/g, replacement: 'エージェント', whenEnIncludes: 'agent' },
