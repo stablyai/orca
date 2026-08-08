@@ -435,6 +435,19 @@ Fix dispatch fallback preview for normalized status prompts`
     ).toBeUndefined()
   })
 
+  it('preserves turnCompleteWhileBackground only on working', () => {
+    expect(
+      parseAgentStatusPayload('{"state":"working","turnCompleteWhileBackground":true}')!
+        .turnCompleteWhileBackground
+    ).toBe(true)
+    for (const state of ['done', 'blocked', 'waiting'] as const) {
+      const result = parseAgentStatusPayload(
+        `{"state":"${state}","turnCompleteWhileBackground":true}`
+      )
+      expect(result!.turnCompleteWhileBackground).toBeUndefined()
+    }
+  })
+
   it('requires strict boolean true for interrupted (rejects truthy non-boolean)', () => {
     // Why: parser uses `=== true`, so truthy string/number sentinels don't count.
     expect(

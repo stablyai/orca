@@ -2907,11 +2907,20 @@ function normalizeClaudeEvent(
     state: reportedStateName,
     interrupted
   })
+  // Why: lead Stop/StopFailure already finished the turn; background inventory only keeps the
+  // pane working for sidebar liveness. Notifiers need the turn-finished edge now (#13245).
+  const turnCompleteWhileBackground =
+    isTurnBoundary &&
+    eventAgentId === undefined &&
+    reportedStateName === 'done' &&
+    effectiveState === 'working' &&
+    interrupted !== true
 
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     stateName: effectiveState,
     updateToolSnapshot: true,
-    interrupted
+    interrupted,
+    ...(turnCompleteWhileBackground ? { turnCompleteWhileBackground: true } : {})
   })
 }
 
@@ -2926,6 +2935,7 @@ function buildClaudeStatusPayload(
     updateToolSnapshot: boolean
     interrupted?: boolean
     sessionBoundary?: boolean
+    turnCompleteWhileBackground?: boolean
   }
 ): ParsedAgentStatusPayload | null {
   // Why: child-driven refreshes are roster bookkeeping, not lead tool activity; read the cached snapshot without merging so they can't clear a live AskUserQuestion card or clobber the tool preview.
@@ -2950,6 +2960,7 @@ function buildClaudeStatusPayload(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     interrupted: options.interrupted,
     sessionBoundary: options.sessionBoundary,
+    turnCompleteWhileBackground: options.turnCompleteWhileBackground,
     subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey))
   })
 }

@@ -87,6 +87,9 @@ export function createAgentCompletionCoordinator(
   let lastAttentionToken: string | null = null
   let lastForegroundAgent: RecognizedAgentProcess | null = null
   let requiresFreshWorking = false
+  // Why: lead Stop can notify while pane stays working for bg inventory; later real `done`
+  // for that same turn must not re-fire (#13245).
+  let turnCompleteWhileBackgroundNotified = false
   let pollTimer: ReturnType<typeof setTimeout> | null = null
   let pendingTitleTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTimer: ReturnType<typeof setTimeout> | null = null
@@ -792,11 +795,48 @@ export function createAgentCompletionCoordinator(
       establishAgentEvidence()
     }
     if (payload.state === 'working') {
+      if (payload.turnCompleteWhileBackground === true) {
+        // Why: Claude lead Stop already finished the turn; bg inventory only keeps the pane
+        // working for the sidebar. Mint the completion edge now so banners are not deferred
+        // for the full subagent/shell lifetime (#13245).
+        if (workingStatusObserved && !requiresFreshWorking) {
+          clearPendingCodexAttention()
+          const completionPayload: AgentCompletionStatusSnapshot = {
+            ...payload,
+            state: 'done'
+          }
+          const hookIdentity = hookCompletionIdentity(completionPayload)
+          lastCompletionIdentity = hookIdentity
+            ? {
+                source: 'hook',
+                identity: hookIdentity,
+                agentIdentity: hookCompletionAgentIdentity(completionPayload)
+              }
+            : {
+                source: 'hook',
+                identity: `turn-bg:${payload.agentType ?? ''}:${currentTurn}`,
+                agentIdentity: hookCompletionAgentIdentity(completionPayload)
+              }
+          turnCompleteWhileBackgroundNotified = true
+          dispatchCompletion('hook', payload.agentType ?? options.paneKey, {
+            agentStatus: completionPayload,
+            completionIdentity: lastCompletionIdentity
+          })
+        }
+        clearPendingHookDone()
+        options.dispatchHookLifecycle?.(payload)
+        return
+      }
       clearPendingHookDone()
       // Why: resumed work cancels the debounced attention so a self-resolving pause never notifies.
       clearPendingCodexAttention()
       workingStatusObserved = true
       requiresFreshWorking = false
+      // Why: child lifecycle re-emits working while bg children run; keep the suppress flag so
+      // the later all-clear `done` does not double-notify (#13245).
+      if (!payload.subagents?.some((subagent) => subagent.state === 'working')) {
+        turnCompleteWhileBackgroundNotified = false
+      }
       lastCompletionIdentity = null
       lastAttentionToken = null
       currentTurn += 1
@@ -822,6 +862,21 @@ export function createAgentCompletionCoordinator(
       clearPendingCodexAttention()
       if (isRecognizedAgentType(payload.agentType)) {
         establishAgentEvidence()
+      }
+      if (turnCompleteWhileBackgroundNotified) {
+        // Already announced at lead Stop; drain the late all-clear without a second banner.
+        turnCompleteWhileBackgroundNotified = false
+        clearPendingHookDone()
+        const hookIdentity = hookCompletionIdentity(payload)
+        lastCompletionIdentity = hookIdentity
+          ? {
+              source: 'hook',
+              identity: hookIdentity,
+              agentIdentity: hookCompletionAgentIdentity(payload)
+            }
+          : lastCompletionIdentity
+        options.dispatchHookLifecycle?.(payload)
+        return
       }
       const hookIdentity = hookCompletionIdentity(payload)
       if (
@@ -902,6 +957,7 @@ export function createAgentCompletionCoordinator(
     lastAttentionToken = null
     lastForegroundAgent = null
     requiresFreshWorking = options.requireFreshWorking ?? false
+    turnCompleteWhileBackgroundNotified = false
     inspectionGeneration += 1
   }
 

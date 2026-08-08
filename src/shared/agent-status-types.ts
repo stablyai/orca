@@ -177,6 +177,12 @@ export type AgentStatusPayload = {
    *  completions (notifications, automation runs, unread badges, finished timestamps)
    *  must ignore it. Only meaningful on `done`. */
   sessionBoundary?: boolean
+  /**
+   * True when the lead turn ended but the pane stays `working` because Claude still has
+   * background subagents/shells/crons. Sidebar keeps working; completion notifiers should
+   * still treat this as a turn-finished edge (#13245). Only meaningful on `working`.
+   */
+  turnCompleteWhileBackground?: boolean
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
 }
@@ -210,6 +216,9 @@ export function pickParsedAgentStatusPayload(
       : {}),
     ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
+    ...(row.turnCompleteWhileBackground !== undefined
+      ? { turnCompleteWhileBackground: row.turnCompleteWhileBackground }
+      : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {})
   }
 }
@@ -410,6 +419,9 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
+    // Why: only meaningful on `working` (lead done gated up by background inventory).
+    turnCompleteWhileBackground:
+      obj.turnCompleteWhileBackground === true && state === 'working' ? true : undefined,
     subagents: normalizeSubagentsField(obj.subagents)
   }
 }

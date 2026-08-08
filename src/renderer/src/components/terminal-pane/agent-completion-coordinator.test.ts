@@ -2079,4 +2079,63 @@ describe('agent completion coordinator', () => {
       })
     )
   })
+
+  // Why: #13245 — lead Stop with bg inventory stays working; still notify once, and skip the late done.
+  it('notifies once for turnCompleteWhileBackground and suppresses the later done edge', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-claude:leaf-1',
+      getPtyId: () => 'pty-claude',
+      getSettings: () => null,
+      inspectProcess: async () => processResult('claude'),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'verify cells',
+      agentType: 'claude'
+    })
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'verify cells',
+      agentType: 'claude',
+      turnCompleteWhileBackground: true,
+      lastAssistantMessage: 'Which cells need hand-verification?',
+      stateStartedAt: 1_700_000_020_000,
+      subagents: [
+        {
+          id: 'a1',
+          state: 'working',
+          startedAt: 1_700_000_019_000,
+          agentType: 'general-purpose'
+        }
+      ]
+    })
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'verify cells',
+      agentType: 'claude',
+      subagents: [
+        {
+          id: 'a1',
+          state: 'working',
+          startedAt: 1_700_000_019_000,
+          agentType: 'general-purpose'
+        }
+      ]
+    })
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'verify cells',
+      agentType: 'claude',
+      lastAssistantMessage: 'Which cells need hand-verification?',
+      stateStartedAt: 1_700_000_050_000
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
 })

@@ -3285,6 +3285,8 @@ describe('shared agent-hook-listener', () => {
         ]
       })
       expect(stop?.payload.state).toBe('working')
+      // Why: #13245 — lead turn finished; notifiers need the turn-finished edge even while bg inventory holds working.
+      expect(stop?.payload.turnCompleteWhileBackground).toBe(true)
       expect(stop?.payload.subagents).toEqual([
         {
           id: 'a1',
@@ -3300,7 +3302,20 @@ describe('shared agent-hook-listener', () => {
       claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
       const finalStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
       expect(finalStop?.payload.state).toBe('done')
+      expect(finalStop?.payload.turnCompleteWhileBackground).toBeUndefined()
       expect(finalStop?.payload.subagents).toBeUndefined()
+    })
+
+    it('marks turnCompleteWhileBackground for background shells on lead Stop', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'run shell' })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }]
+      })
+      expect(stop?.payload).toMatchObject({
+        state: 'working',
+        turnCompleteWhileBackground: true
+      })
     })
 
     it('emits a status refresh with the lead state on subagent lifecycle events', () => {
