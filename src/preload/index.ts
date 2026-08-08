@@ -2163,6 +2163,20 @@ const api = {
       ipcRenderer.invoke('codexAccounts:forgetStalePanes', args)
   },
 
+  kimiAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('kimiAccounts:list'),
+    login: (args: { label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiAccounts:login', args),
+    import: (args: { label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiAccounts:import', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiAccounts:select', args),
+    rename: (args: { accountId: string; label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiAccounts:rename', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiAccounts:remove', args)
+  },
+
   claudeAccounts: {
     list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
     add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
@@ -4491,6 +4505,8 @@ const api = {
       ipcRenderer.invoke('rateLimits:fetchInactiveClaudeAccounts'),
     fetchInactiveCodexAccounts: (): Promise<void> =>
       ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
+    fetchInactiveKimiAccounts: (): Promise<void> =>
+      ipcRenderer.invoke('rateLimits:fetchInactiveKimiAccounts'),
     refreshMiniMax: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshMiniMax'),
     refreshGrok: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshGrok'),
     onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {

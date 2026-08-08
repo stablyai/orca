@@ -48,11 +48,13 @@ import {
   getAccountsGeminiSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsGrokSearchEntries,
+  getAccountsKimiSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { KimiAccountsSection } from './KimiAccountsSection'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { SearchableSetting } from './SearchableSetting'
@@ -1947,6 +1949,12 @@ export function AccountsPane({
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    !isRemoteAccountScope &&
+    !isWebClientLocation() &&
+    accountRuntime.runtime === 'host' &&
+    matchesSettingsSearch(searchQuery, getAccountsKimiSearchEntries()) ? (
+      <KimiAccountsSection key="kimi" />
     ) : null
   ].filter(Boolean)
 

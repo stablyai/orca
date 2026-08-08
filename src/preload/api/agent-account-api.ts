@@ -1,6 +1,7 @@
 import type {
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState
+  CodexRateLimitAccountsState,
+  KimiManagedAccountsState
 } from '../../shared/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
 import type { GrokAccountStatus } from '../../shared/rate-limit-types'
@@ -52,6 +53,15 @@ export type ClaudeAccountsApi = {
 
 export type GrokAccountsApi = {
   getStatus: () => Promise<GrokAccountStatus>
+}
+
+export type KimiAccountsApi = {
+  list: () => Promise<KimiManagedAccountsState>
+  login: (args: { label: string }) => Promise<KimiManagedAccountsState>
+  import: (args: { label: string }) => Promise<KimiManagedAccountsState>
+  select: (args: { accountId: string | null }) => Promise<KimiManagedAccountsState>
+  rename: (args: { accountId: string; label: string }) => Promise<KimiManagedAccountsState>
+  remove: (args: { accountId: string }) => Promise<KimiManagedAccountsState>
 }
 
 export type MinimaxCredentialsApi = {

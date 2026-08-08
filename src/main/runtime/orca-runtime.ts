@@ -3471,6 +3471,7 @@ export class OrcaRuntimeService {
       // runs under `orca serve`, so remote/SSH hosts would silently drop
       // managed-Codex sessions. The runtime ctor runs in BOTH window and serve.
       getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
+      getAdditionalAiVaultKimiHomePaths?: () => readonly string[]
       prepareAiVaultSessionResume?: (
         args: AiVaultPrepareSessionResumeArgs
       ) => Promise<AiVaultPrepareSessionResumeResult>
@@ -3506,9 +3507,10 @@ export class OrcaRuntimeService {
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable
     // seam so the aiVault.listSessions RPC includes managed-Codex + WSL sessions
     // even on headless `orca serve` hosts where registerCoreHandlers never runs.
-    if (deps?.getAdditionalAiVaultCodexHomePaths) {
+    if (deps?.getAdditionalAiVaultCodexHomePaths || deps?.getAdditionalAiVaultKimiHomePaths) {
       configureAiVaultSessionSources({
-        getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
+        getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths,
+        getAdditionalKimiHomePaths: deps.getAdditionalAiVaultKimiHomePaths
       })
     }
     // Why: the daemon adapter is installed via `setLocalPtyProvider()` during

@@ -203,6 +203,7 @@ import { validateTerminalViewAttributes } from '../../shared/terminal-view-attri
 import type { PtyModelRestoreReason } from '../../shared/pty-model-restore-marker'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import { isProviderAccountRef, type ProviderAccountRef } from '../../shared/provider-account-ref'
+import { applyKimiManagedHomeToLaunchEnv } from '../kimi-accounts/launch-environment'
 import {
   isCodexHomeAuthReadyForLaunch,
   waitForManagedCodexAuthReady
@@ -1252,6 +1253,7 @@ export type GetSelectedCodexHomePath = (
   launchEnv?: NodeJS.ProcessEnv,
   launchContext?: CodexHomeLaunchContext
 ) => string | null
+export type GetSelectedKimiHomePath = () => string | null
 export type PrepareCodexSessionResume = (args: {
   providerSession: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
@@ -2374,6 +2376,7 @@ export function registerPtyHandlers(
   store?: Store,
   options?: {
     prepareCodexSessionResume?: PrepareCodexSessionResume
+    getSelectedKimiHomePath?: GetSelectedKimiHomePath
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
@@ -4631,6 +4634,14 @@ export function registerPtyHandlers(
       let env: Record<string, string> | undefined = claudeAuth
         ? { ...sshScopedEnv, ...claudeAuth.envPatch }
         : sshScopedEnv
+      env = applyKimiManagedHomeToLaunchEnv({
+        env,
+        launchAgent: args.launchAgent,
+        connectionId: args.connectionId,
+        runtime: codexSelectionTarget.runtime === 'wsl' ? 'wsl' : 'host',
+        reattached: Boolean(preAdoptedStablePane),
+        getSelectedManagedHomePath: options?.getSelectedKimiHomePath
+      })
       const requestedAgentTeamsPath = env?.ORCA_AGENT_TEAMS_TEAM_ID
         ? env[resolvePathEnvKey(env, process.platform)]
         : undefined
@@ -6344,6 +6355,14 @@ export function registerPtyHandlers(
         // Why: declared after the strip so a local-provider spawn cannot capture the
         // pre-strip env — only the daemon branch below re-derives this from baseEnv.
         let env: Record<string, string> | undefined = baseEnv
+        env = applyKimiManagedHomeToLaunchEnv({
+          env,
+          launchAgent: args.launchAgent,
+          connectionId: args.connectionId,
+          runtime: codexSelectionTarget.runtime === 'wsl' ? 'wsl' : 'host',
+          reattached: Boolean(preAdoptedStablePane),
+          getSelectedManagedHomePath: options?.getSelectedKimiHomePath
+        })
         let selectedCodexHomePath =
           !preAdoptedStablePane && !args.connectionId
             ? getCompatibleSelectedCodexHomePath(
@@ -7871,6 +7890,7 @@ export function registerHeadlessPtyRuntime(
   store?: Store,
   prepareCodexSessionResume?: PrepareCodexSessionResume,
   lifecycle?: {
+    getSelectedKimiHomePath?: GetSelectedKimiHomePath
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
     onPtyExit?: (id: string, exitSequence: number) => void
   }

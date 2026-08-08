@@ -93,3 +93,22 @@ export type ClaudeManagedAccountRuntimeSelection = {
   host: string | null
   wsl: Record<string, string | null>
 }
+
+export type KimiManagedAccount = {
+  id: string
+  label: string
+  managedHomePath: string
+  managedHomeRuntime?: 'host' | 'wsl'
+  wslDistro?: string | null
+  wslLinuxHomePath?: string | null
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type KimiManagedAccountSummary = Omit<KimiManagedAccount, 'managedHomePath'>
+
+export type KimiManagedAccountsState = {
+  accounts: KimiManagedAccountSummary[]
+  activeAccountId: string | null
+}

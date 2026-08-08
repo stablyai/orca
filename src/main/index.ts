@@ -199,6 +199,7 @@ import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
+import { KimiAccountService } from './kimi-accounts/service'
 import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-runtime-target-sync'
 import {
   attachMainWindowServices,
@@ -357,6 +358,7 @@ let claudeUsage: ClaudeUsageStore | null = null
 let codexUsage: CodexUsageStore | null = null
 let openCodeUsage: OpenCodeUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
+let kimiAccounts: KimiAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
 let codexSessionMigration: ReturnType<typeof createCodexSessionMigrationScheduler> | null = null
 let claudeAccounts: ClaudeAccountService | null = null
@@ -1346,6 +1348,9 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   if (!codexAccounts) {
     throw new Error('Codex account service must be initialized before opening the main window')
   }
+  if (!kimiAccounts) {
+    throw new Error('Kimi account service must be initialized before opening the main window')
+  }
   if (!codexRuntimeHome) {
     throw new Error('Codex runtime home service must be initialized before opening the main window')
   }
@@ -1477,6 +1482,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     codexUsage,
     openCodeUsage,
     codexAccounts,
+    kimiAccounts,
     claudeAccounts,
     rateLimits,
     rendererWebContentsId,
@@ -1493,6 +1499,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     {
       getAdditionalAiVaultCodexHomePaths: () =>
         codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
+      getAdditionalAiVaultKimiHomePaths: () =>
+        kimiAccounts?.getManagedHomePathsForSessionDiscovery() ?? [],
       prepareAiVaultSessionResume: (args) =>
         prepareLegacySharedCodexSessionResume(args, {
           isHostSystemDefaultRealHome: () =>
@@ -1524,6 +1532,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     {
       prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
+      getSelectedKimiHomePath: () => kimiAccounts!.getSelectedManagedHomePath(),
       awaitLocalPtyStartup: () => localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
@@ -2460,6 +2469,7 @@ void app.whenReady().then(async () => {
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome, {
     onHostSystemDefaultSelected: codexSessionMigration.requestRun
   })
+  kimiAccounts = new KimiAccountService(store, join(app.getPath('userData'), 'kimi-accounts'))
   // Why: migrate historical shared-home sessions after startup; compatibility
   // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
   codexSessionMigration.scheduleInitialRun()
@@ -2471,7 +2481,12 @@ void app.whenReady().then(async () => {
   rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
   // Why: Kimi's CLI refreshes its OAuth token in whichever runtime it runs in, so the
   // usage fetch must read the WSL-side credentials when that's the configured runtime (#12370).
-  rateLimits.setKimiHomeResolver(() => resolveKimiHome(getKimiRuntimeTarget(store!.getSettings())))
+  rateLimits.setKimiHomeResolver(() => {
+    const managedHomePath = kimiAccounts!.getSelectedManagedHomePath()
+    return managedHomePath
+      ? Promise.resolve({ runtime: 'host', wslDistro: null, path: managedHomePath })
+      : resolveKimiHome(getKimiRuntimeTarget(store!.getSettings()))
+  })
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,
@@ -2548,6 +2563,9 @@ void app.whenReady().then(async () => {
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
   })
+  rateLimits.setInactiveKimiAccountsResolver(
+    () => kimiAccounts?.getInactiveManagedAccountsForUsage() ?? []
+  )
   const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
     resolve: (selector) => {
       const environment = resolveEnvironment(app.getPath('userData'), selector)
@@ -2606,6 +2624,8 @@ void app.whenReady().then(async () => {
     // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
+    getAdditionalAiVaultKimiHomePaths: () =>
+      kimiAccounts?.getManagedHomePathsForSessionDiscovery() ?? [],
     prepareAiVaultSessionResume: (args) =>
       prepareLegacySharedCodexSessionResume(args, {
         isHostSystemDefaultRealHome: () => codexRuntimeHome?.isHostSystemDefaultRealHome() === true,
@@ -3101,6 +3121,7 @@ void app.whenReady().then(async () => {
       store,
       prepareCodexSessionResumeForLaunch,
       {
+        getSelectedKimiHomePath: () => kimiAccounts!.getSelectedManagedHomePath(),
         onCodexHomePtySpawned: handleCodexHomePtySpawned,
         onPtyExit: handlePtyExit
       }
