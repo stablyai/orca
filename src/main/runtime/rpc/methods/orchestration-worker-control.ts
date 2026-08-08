@@ -133,6 +133,14 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
       }
       const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
       const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
+      // Why: coordinators need permission/input waits without tailing each pane (#13209).
+      // Reuse terminal.agentStatus; only attach for the exact current process.
+      let agentStatus: Awaited<ReturnType<typeof runtime.getTerminalAgentStatus>> | null = null
+      if (observation.exact && observation.terminal && worker.agent_terminal_handle) {
+        agentStatus = await runtime
+          .getTerminalAgentStatus(worker.agent_terminal_handle)
+          .catch(() => null)
+      }
       return {
         dispatch,
         worker: exposeWorker(worker),
@@ -143,6 +151,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
           // Why: a bare `unverifiable` is not actionable without naming what we lost.
           ...(observation.reason ? { reason: observation.reason } : {})
         },
+        agentStatus,
         terminalResource: resource ? exposeWorkerTerminalResource(resource) : null
       }
     }

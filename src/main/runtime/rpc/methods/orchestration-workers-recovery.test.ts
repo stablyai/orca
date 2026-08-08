@@ -83,6 +83,27 @@ describe('orchestration worker recovery', () => {
     return { run, task, dispatch: started.dispatch }
   }
 
+  it('surfaces permission agentStatus on worker-show for the exact live process', async () => {
+    const { dispatch } = createWorker()
+    vi.spyOn(runtime, 'getTerminalAgentStatus').mockResolvedValue({
+      handle: 'term_worker',
+      isRunningAgent: true,
+      status: 'permission'
+    })
+
+    await expect(
+      call('orchestration.workerShow', { dispatch: dispatch.id })
+    ).resolves.toMatchObject({
+      observation: { status: 'running', exactWorker: true },
+      agentStatus: {
+        handle: 'term_worker',
+        isRunningAgent: true,
+        status: 'permission'
+      }
+    })
+    expect(runtime.getTerminalAgentStatus).toHaveBeenCalledWith('term_worker')
+  })
+
   it('shows and reads only the exact attached worker process', async () => {
     const { dispatch } = createWorker()
 

@@ -939,15 +939,24 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{
       dispatch: { id: string; task_id: string; status: string }
       worker: { state: string; stage: string; agent_terminal_handle: string | null }
+      agentStatus?: {
+        handle: string
+        isRunningAgent: boolean
+        status: 'working' | 'permission' | 'idle' | null
+      } | null
     }>('orchestration.workerShow', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
-    printResult(
-      result,
-      json,
-      (value) =>
-        `${value.dispatch.id} task=${value.dispatch.task_id} [${value.worker.state}] stage=${value.worker.stage}`
-    )
+    printResult(result, json, (value) => {
+      const base = `${value.dispatch.id} task=${value.dispatch.task_id} [${value.worker.state}] stage=${value.worker.stage}`
+      const agent = value.agentStatus
+      if (!agent) {
+        return base
+      }
+      const status = agent.status ?? 'unknown'
+      const running = agent.isRunningAgent ? 'running' : 'not-running'
+      return `${base}\nagentStatus=${status} agentProcess=${running}`
+    })
   },
 
   'orchestration worker-read': async ({ flags, client, json }) => {

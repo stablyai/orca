@@ -44,7 +44,9 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca orchestration worker-show --dispatch <dispatch_id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch'],
     notes: [
-      'A Dispatch created by orchestration dispatch is shown as unsupervised and reports the exact adopted terminal when its identity is still provable.'
+      'A Dispatch created by orchestration dispatch is shown as unsupervised and reports the exact adopted terminal when its identity is still provable.',
+      'JSON may include agentStatus { handle, isRunningAgent, status } for the exact live agent terminal.',
+      'status is working | permission | idle | null. permission means the agent is blocked on a harness prompt (e.g. tool approval) — check the terminal without guessing from worker state alone.'
     ]
   },
   {

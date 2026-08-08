@@ -263,7 +263,7 @@ orca orchestration reply --id <message_id> --body "<answer>" --json
 
 Recovery is conditional, never a fixed destructive sequence:
 
-- `worker-show --dispatch <id>` says `ready`: keep waiting or read bounded output.
+- `worker-show --dispatch <id>` says `ready`: keep waiting or read bounded output. JSON `agentStatus.status` of `permission` means the exact agent terminal is blocked on a harness prompt (tool/permission approval) even while the Dispatch still looks ready — open that terminal before assuming the worker is idle.
 - It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus an explicit `--on`/`--worktree` and `--agent`/`--terminal` choice. Retry does not silently inherit placement.
 - It remains `outcome_unknown`: either `worker-stop --dispatch <id>` and inspect again, or explicitly `worker-abandon --dispatch <id>` while accepting that resources may still be live. Abandon performs no remote, process, or filesystem action.
 - `worker-stop` closes only the exact supervised agent terminal. It never deletes the worktree, setup terminal, configured tabs, or unrelated processes.
