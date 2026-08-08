@@ -272,6 +272,8 @@ export function createAgentCompletionCoordinator(
       terminalIdleConfirmed?: boolean
       agentStatus?: AgentCompletionStatusSnapshot
       completionIdentity?: LastCompletionIdentity | null
+      /** Banner only — do not lifecycle-dispatch synthetic done while pane stays working. */
+      notifyWithoutLifecycle?: boolean
     } = {}
   ): void {
     if (source !== 'hook' && pendingHookDoneTimer !== null) {
@@ -301,11 +303,20 @@ export function createAgentCompletionCoordinator(
     if (optionsOverride.completionIdentity) {
       lastCompletionIdentityByPaneKey.set(options.paneKey, optionsOverride.completionIdentity)
     }
-    if (source === 'hook' && optionsOverride.agentStatus) {
+    if (
+      source === 'hook' &&
+      optionsOverride.agentStatus &&
+      optionsOverride.notifyWithoutLifecycle !== true
+    ) {
       options.dispatchHookLifecycle?.(optionsOverride.agentStatus)
     }
-    if (optionsOverride.quietedHookDone === true || source === 'process-exit') {
-      // Why: confirmed process death is independent completion evidence; keep its provenance so stale hook rows can't veto it later.
+    if (
+      optionsOverride.quietedHookDone === true ||
+      source === 'process-exit' ||
+      optionsOverride.agentStatus
+    ) {
+      // Why: process death / quieted done keep provenance; agentStatus also rides for
+      // turn-complete-while-background so notification gates see a done snapshot (#13245).
       options.dispatchCompletion(title, {
         source,
         quietedHookDone: optionsOverride.quietedHookDone === true,
@@ -801,9 +812,14 @@ export function createAgentCompletionCoordinator(
         // for the full subagent/shell lifetime (#13245).
         if (workingStatusObserved && !requiresFreshWorking) {
           clearPendingCodexAttention()
+          // Why: store stays working; mint a strictly later stateStartedAt so the done
+          // snapshot is not treated as superseded by same-timestamp working≠done.
+          const baseStartedAt =
+            typeof payload.stateStartedAt === 'number' ? payload.stateStartedAt : Date.now()
           const completionPayload: AgentCompletionStatusSnapshot = {
             ...payload,
-            state: 'done'
+            state: 'done',
+            stateStartedAt: baseStartedAt + 1
           }
           const hookIdentity = hookCompletionIdentity(completionPayload)
           lastCompletionIdentity = hookIdentity
@@ -820,7 +836,8 @@ export function createAgentCompletionCoordinator(
           turnCompleteWhileBackgroundNotified = true
           dispatchCompletion('hook', payload.agentType ?? options.paneKey, {
             agentStatus: completionPayload,
-            completionIdentity: lastCompletionIdentity
+            completionIdentity: lastCompletionIdentity,
+            notifyWithoutLifecycle: true
           })
         }
         clearPendingHookDone()
@@ -832,11 +849,8 @@ export function createAgentCompletionCoordinator(
       clearPendingCodexAttention()
       workingStatusObserved = true
       requiresFreshWorking = false
-      // Why: child lifecycle re-emits working while bg children run; keep the suppress flag so
-      // the later all-clear `done` does not double-notify (#13245).
-      if (!payload.subagents?.some((subagent) => subagent.state === 'working')) {
-        turnCompleteWhileBackgroundNotified = false
-      }
+      // Why: keep suppress sticky while bg inventory can re-emit working without subagent rows
+      // (shell/cron). Only the late all-clear done path (or reset) clears it (#13245).
       lastCompletionIdentity = null
       lastAttentionToken = null
       currentTurn += 1

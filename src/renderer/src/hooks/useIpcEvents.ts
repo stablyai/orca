@@ -3113,7 +3113,9 @@ export function useIpcEvents(): void {
         interrupted: data.interrupted,
         sessionBoundary: data.sessionBoundary,
         // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so subagent child rows vanish if omitted.
-        subagents: data.subagents
+        subagents: data.subagents,
+        // Why: #13245 lead-Stop-while-bg flag must survive this rebuild or the coordinator never sees it on IPC.
+        turnCompleteWhileBackground: data.turnCompleteWhileBackground
       })
       if (!payload) {
         return 'dropped'

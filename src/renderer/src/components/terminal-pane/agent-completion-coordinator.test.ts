@@ -704,7 +704,13 @@ describe('agent completion coordinator', () => {
     coordinator.observeTitle('codex done')
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-    expect(dispatchCompletion).toHaveBeenCalledWith('codex')
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({ state: 'done' })
+      })
+    )
   })
 
   it('suppresses delayed title completion after process inspection changes sessions', async () => {
@@ -729,7 +735,13 @@ describe('agent completion coordinator', () => {
     coordinator.observeClassifiedTitleCompletion('codex done')
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-    expect(dispatchCompletion).toHaveBeenCalledWith('codex')
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({ state: 'done' })
+      })
+    )
   })
 
   it('suppresses late process-exit backstop after process inspection follows hook completion', async () => {
@@ -757,7 +769,13 @@ describe('agent completion coordinator', () => {
     await flushAsyncTicks()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-    expect(dispatchCompletion).toHaveBeenCalledWith('codex')
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({ state: 'done' })
+      })
+    )
   })
 
   it('suppresses process-exit in another coordinator after a hook completion notified', async () => {
@@ -1279,7 +1297,13 @@ describe('agent completion coordinator', () => {
       agentType
     })
 
-    expect(dispatchCompletion).toHaveBeenCalledWith(agentType)
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      agentType,
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({ state: 'done', agentType })
+      })
+    )
   })
 
   it.each(['pi', 'omp'])(
@@ -2083,12 +2107,14 @@ describe('agent completion coordinator', () => {
   // Why: #13245 — lead Stop with bg inventory stays working; still notify once, and skip the late done.
   it('notifies once for turnCompleteWhileBackground and suppresses the later done edge', () => {
     const dispatchCompletion = vi.fn()
+    const dispatchHookLifecycle = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-claude:leaf-1',
       getPtyId: () => 'pty-claude',
       getSettings: () => null,
       inspectProcess: async () => processResult('claude'),
       dispatchCompletion,
+      dispatchHookLifecycle,
       isLive: () => true
     })
 
@@ -2114,7 +2140,36 @@ describe('agent completion coordinator', () => {
       ]
     })
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      'claude',
+      expect.objectContaining({
+        source: 'hook',
+        quietedHookDone: false,
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          agentType: 'claude',
+          // Synthetic edge is strictly later so notification supersession stays clear.
+          stateStartedAt: 1_700_000_020_001
+        })
+      })
+    )
+    // Banner only — store/lifecycle keep the real working payload (not synthetic done).
+    expect(dispatchHookLifecycle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        state: 'working',
+        turnCompleteWhileBackground: true
+      })
+    )
+    expect(dispatchHookLifecycle).not.toHaveBeenCalledWith(
+      expect.objectContaining({ state: 'done' })
+    )
 
+    // Shell/cron-style intermediate working has no subagent rows; suppress must stick.
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'verify cells',
+      agentType: 'claude'
+    })
     coordinator.observeHookStatus({
       state: 'working',
       prompt: 'verify cells',
