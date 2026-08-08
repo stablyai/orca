@@ -61,6 +61,7 @@ const STANDARD_EFFORT_CHOICES = [
 ]
 
 const EXTENDED_EFFORT_CHOICES = [
+  { value: 'auto', label: 'Auto' },
   ...STANDARD_EFFORT_CHOICES,
   { value: 'xhigh', label: 'Extra high' },
   { value: 'max', label: 'Max' }

@@ -53,6 +53,7 @@ type RawListedModel = {
   supportsEffort?: unknown
   supportedEffortLevels?: unknown
   supportsFastMode?: unknown
+  supportsAutoMode?: unknown
 }
 
 function toListedModel(value: unknown): ClaudeListedModel | null {
@@ -71,6 +72,11 @@ function toListedModel(value: unknown): ClaudeListedModel | null {
     raw.supportsEffort === true && Array.isArray(raw.supportedEffortLevels)
       ? raw.supportedEffortLevels.filter((level): level is string => typeof level === 'string')
       : []
+  // Why: Claude's /effort picker offers "auto" when supportsAutoMode is true, but
+  // the CLI does not always list "auto" inside supportedEffortLevels (#13208).
+  if (raw.supportsAutoMode === true && !effortLevels.includes('auto')) {
+    effortLevels.unshift('auto')
+  }
   return {
     id,
     label,

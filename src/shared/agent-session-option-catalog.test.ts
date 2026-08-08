@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentSessionOptionCatalog, mergeCatalogModels } from './agent-session-option-catalog'
+import { createClaudeCatalogOptions } from './agent-session-option-catalog-claude-codex'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import {
   resolveNativeChatSessionOptionDefaults,
@@ -17,6 +18,18 @@ describe('agent session option catalog', () => {
       catalog?.models.find((model) => model.id === 'opus')?.options.map(({ id }) => id)
     ).toEqual(['effort', 'fastMode'])
     expect(catalog?.models.find((model) => model.id === 'haiku')?.options).toEqual([])
+  })
+
+  it('offers Auto effort when the model catalog includes auto', () => {
+    const options = createClaudeCatalogOptions({
+      effortLevelIds: ['auto', 'low', 'medium', 'high', 'xhigh', 'max'],
+      supportsFastMode: true
+    })
+    const effort = options.find((option) => option.id === 'effort')
+    expect(effort?.kind).toMatchObject({
+      type: 'select',
+      choices: expect.arrayContaining([{ value: 'auto', label: 'Auto' }])
+    })
   })
 
   it('merges discovered labels while preserving cataloged option shapes', () => {

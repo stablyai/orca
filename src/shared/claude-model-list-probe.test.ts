@@ -111,4 +111,35 @@ describe('parseClaudeModelList', () => {
     )
     expect(parsed[0]?.effortLevels).toEqual([])
   })
+
+  it('prepends auto when supportsAutoMode is true', () => {
+    const parsed = parseClaudeModelList(
+      controlResponseLine([
+        {
+          value: 'opus[1m]',
+          displayName: 'Opus (1M context)',
+          supportsEffort: true,
+          supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          supportsAutoMode: true,
+          supportsFastMode: true
+        }
+      ])
+    )
+    expect(parsed[0]?.effortLevels).toEqual(['auto', 'low', 'medium', 'high', 'xhigh', 'max'])
+  })
+
+  it('does not duplicate auto when the CLI already lists it', () => {
+    const parsed = parseClaudeModelList(
+      controlResponseLine([
+        {
+          value: 'sonnet',
+          displayName: 'Sonnet',
+          supportsEffort: true,
+          supportedEffortLevels: ['auto', 'low', 'high'],
+          supportsAutoMode: true
+        }
+      ])
+    )
+    expect(parsed[0]?.effortLevels).toEqual(['auto', 'low', 'high'])
+  })
 })
