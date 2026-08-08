@@ -202,9 +202,22 @@ export function buildSearchableWorkspaceTabs({
 
       if (tab.contentType === 'terminal') {
         const terminalTab = terminalTabs.get(tab.entityId)
-        const title = terminalTab
+        // Match the tab strip: useTabGroupWorkspaceModel resolves the visible
+        // title from the unified tab, not tabsByWorktree. Those two can desync
+        // (live OSC on the label, stale "Terminal N" on the terminal record).
+        const terminalTitle = terminalTab
           ? resolveTerminalTabTitle(terminalTab, generatedTitlesEnabled, 'Terminal')
-          : resolveUnifiedTabLabel(tab, generatedTitlesEnabled, 'Terminal')
+          : 'Terminal'
+        const title = resolveUnifiedTabLabel(
+          {
+            ...tab,
+            customLabel: tab.customLabel ?? terminalTab?.customTitle ?? null,
+            quickCommandLabel: tab.quickCommandLabel ?? terminalTab?.quickCommandLabel,
+            generatedLabel: tab.generatedLabel ?? terminalTab?.generatedTitle
+          },
+          generatedTitlesEnabled,
+          terminalTitle
+        )
         entries.push({
           ...baseEntry,
           title,

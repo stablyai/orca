@@ -676,6 +676,13 @@ function TerminalPane(
     }
     toggleNativeChatForLeaf(activeLeafId)
   }, [toggleNativeChatForLeaf])
+  // Stable identity: this reaches the session-option surface's useMemo deps, so an
+  // inline arrow would rebuild the surface on every TerminalPane render.
+  const switchNativeChatToTerminal = useCallback(() => {
+    if (chatLeafId) {
+      toggleNativeChatForLeaf(chatLeafId)
+    }
+  }, [chatLeafId, toggleNativeChatForLeaf])
   const readNativeChatTerminalScreen = useCallback((): string | null => {
     if (!chatLeafId) {
       return null
@@ -2952,7 +2959,7 @@ function TerminalPane(
                 targetPtyId={chatPanePtyId}
                 launchAgent={chatPaneLaunchAgent}
                 resolvedAgent={chatPaneResolvedAgent}
-                onSwitchToTerminal={() => toggleNativeChatForLeaf(chatPane.leafId)}
+                onSwitchToTerminal={switchNativeChatToTerminal}
                 readTerminalScreen={readNativeChatTerminalScreen}
                 contextMenuActions={{
                   onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),

@@ -1012,6 +1012,56 @@ describe('createMainWindow', () => {
     expect(webContents.send).not.toHaveBeenCalledWith('ui:jumpToWorktreeIndex', expect.anything())
   })
 
+  // Held-key repeats are contained in main whether or not the floating panel has focus: every
+  // renderer index path skips e.repeat, so yielding one would leak a raw digit to xterm.
+  it('contains indexed-switch repeats without dispatching them', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    const isDarwin = process.platform === 'darwin'
+    const input = isDarwin
+      ? { type: 'keyDown', code: 'Digit3', key: '3', meta: true, control: false, alt: false }
+      : { type: 'keyDown', code: 'Digit3', key: '3', meta: false, control: true, alt: false }
+    const preventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault } as never,
+      { ...input, isAutoRepeat: true } as never
+    )
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:jumpToWorktreeIndex', expect.anything())
+  })
+
   it('lets main-window Ctrl+Tab flow to the renderer held switcher', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {

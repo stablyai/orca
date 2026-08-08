@@ -1982,8 +1982,6 @@
         "556e7232ca": "Actual",
         "684e8d7bc2": "Recopilando tus worktrees recientes y pestañas abiertas.",
         "ff908adfe9": "Cargando objetivos de salto",
-        "1ebe225fee": "Busca worktrees, ajustes, pestañas y acciones...",
-        "4e4ff044d5": "Buscar worktrees, ajustes, pestañas y acciones",
         "4ee378034d": "Saltar a...",
         "f7fda8d562": "Crea un worktree o abre una pestaña en Orca para comenzar.",
         "1628fd7dfa": "No hay worktrees activos, ajustes, acciones ni pestañas abiertas",
@@ -2011,7 +2009,10 @@
         "projectsGroupsHeader": "Proyectos y grupos",
         "projectBadge": "Proyecto",
         "repoGroupBadge": "Grupo de repositorios",
-        "pluginCommandFailed": "No se pudo ejecutar el comando del plugin."
+        "pluginCommandFailed": "No se pudo ejecutar el comando del plugin.",
+        "27f10cca63": "Busca chats, terminales, worktrees, ajustes y acciones...",
+        "2770f02910": "Busca chats, terminales, worktrees, ajustes y acciones",
+        "recentChatsTerminalsHeader": "Chats y terminales recientes"
       },
       "github": {
         "pr": {
@@ -2998,8 +2999,7 @@
             "d62d63b807": "Crear archivo",
             "25dc1cd653": "Abrir archivo",
             "7cdf8ee0c8": "Abrir URL",
-            "b27864279e": "Iniciar agente",
-            "39676a184c": "Abrir cualquier archivo, URL, agente, ..."
+            "b27864279e": "Iniciar agente"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "Comando",
@@ -3033,7 +3033,6 @@
                 "classifier": {
                   "42e6262ae9": "No hay acción disponible.",
                   "097a982ee0": "Cargando archivos...",
-                  "5a9c83c04b": "Abrir cualquier archivo, URL, agente, ...",
                   "90eb94dc48": "Introduce una URL http:// o https://.",
                   "5553b283ce": "Introduce una URL o ruta de archivo.",
                   "queryTooLarge": "El texto de búsqueda es demasiado grande.",

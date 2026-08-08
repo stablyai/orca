@@ -503,6 +503,33 @@ function isValidPaneKey(paneKey: unknown): paneKey is string {
   return parseValidPaneKey(paneKey) !== null
 }
 
+const AGENT_LAUNCH_TOKEN_MAX_LENGTH = 128
+
+function admitRendererAgentLaunchAuthority(args: {
+  launchToken: unknown
+  spawnEnv: Record<string, string> | undefined
+  launchAgent: unknown
+  launchConfig: SleepingAgentLaunchConfig | undefined
+  isReattach: boolean
+  hasStablePaneOwner: boolean
+  incarnationId: unknown
+}): { launchToken: string; launchAgent: TuiAgent } | null {
+  if (
+    args.isReattach ||
+    args.hasStablePaneOwner ||
+    !args.launchConfig ||
+    !isTuiAgent(args.launchAgent) ||
+    !isPtyIncarnationId(args.incarnationId) ||
+    typeof args.launchToken !== 'string' ||
+    args.launchToken.length === 0 ||
+    args.launchToken.length > AGENT_LAUNCH_TOKEN_MAX_LENGTH ||
+    args.spawnEnv?.ORCA_AGENT_LAUNCH_TOKEN !== args.launchToken
+  ) {
+    return null
+  }
+  return { launchToken: args.launchToken, launchAgent: args.launchAgent }
+}
+
 function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
@@ -5710,6 +5737,7 @@ export function registerPtyHandlers(
         commandDelivery?: 'renderer' | 'provider'
         launchConfig?: SleepingAgentLaunchConfig
         resumeProviderSession?: AgentProviderSessionMetadata
+        launchToken?: unknown
         launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
         connectionId?: string | null
@@ -6602,6 +6630,15 @@ export function registerPtyHandlers(
           args.worktreeId.length > 0 &&
           args.worktreeId.length <= 512
         ) {
+          const agentLaunchAuthority = admitRendererAgentLaunchAuthority({
+            launchToken: args.launchToken,
+            spawnEnv,
+            launchAgent: args.launchAgent,
+            launchConfig: effectiveLaunchConfig,
+            isReattach: result.isReattach === true,
+            hasStablePaneOwner: stablePaneOwner !== null,
+            incarnationId: result.incarnationId
+          })
           runtime?.registerPty(
             result.id,
             args.worktreeId,
@@ -6614,7 +6651,8 @@ export function registerPtyHandlers(
               ? {
                   tabId: args.tabId,
                   leafId: metadataLeafId,
-                  ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
+                  ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
+                  ...(agentLaunchAuthority ? { agentLaunchAuthority } : {})
                 }
               : undefined,
             !args.connectionId
