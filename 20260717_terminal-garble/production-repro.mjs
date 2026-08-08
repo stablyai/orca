@@ -12,6 +12,7 @@ import {
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   createTerminalTab as createPackagedTerminalTab,
   dismissOverlays,
@@ -29,7 +30,9 @@ const MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control'
 const replayRoot = path.join(os.tmpdir(), 'garble-rig')
 const REPLAY_A = path.join(replayRoot, 'frames-A.jsonl')
 const REPLAY_B = path.join(replayRoot, 'frames-B.jsonl')
-const REPLAY_SCRIPT = path.resolve('tools/terminal-garble-session-replay.mjs')
+// Sibling of this file. It used to live at tools/terminal-garble-session-replay.mjs and was
+// resolved from the caller's cwd; both changed when the investigation moved into this folder.
+const REPLAY_SCRIPT = fileURLToPath(new URL('./session-replay.mjs', import.meta.url))
 const PANE_COUNT = Number(argValue('--panes', '2'))
 const TAB_COUNT = Number(argValue('--tabs', '1'))
 const CLICK_COUNT = Number(argValue('--clicks', '3'))
