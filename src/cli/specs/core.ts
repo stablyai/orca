@@ -202,7 +202,17 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'Omit --terminal to target the active terminal in the current worktree.',
       'Use --cursor with the nextCursor value from a previous read to get only new output since that read.',
       'Use --limit to request more retained lines for long agent responses; output reports oldestCursor when older lines were dropped.',
-      'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.'
+      'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.',
+      'With --json, the RPC result is `{ terminal: { handle, status, tail, truncated, limited?, ' +
+        'oldestCursor?, nextCursor, latestCursor?, returnedLineCount? } }`.',
+      'status is running | exited | unknown. tail is the retained line array for this page.',
+      'truncated means older retained history was dropped; limited means this response hit --limit ' +
+        'and more output may exist.',
+      'Pass nextCursor to a later --cursor to page forward. latestCursor is the tip of retained ' +
+        'output (do not pass it as --cursor unless you want only output after the tip). ' +
+        'oldestCursor is the first retained line when a tail preview dropped earlier history; ' +
+        'use it with --limit to page retained output from the start of the buffer.',
+      'returnedLineCount is the number of lines in tail when the runtime reports it.'
     ],
     examples: [
       'orca terminal read --json',
