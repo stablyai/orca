@@ -9,6 +9,8 @@ import {
   redactKagiSessionToken,
   toSecureCertificateEndpoint
 } from '../../shared/browser-url'
+import { classifyExternalAppUrl } from '../../shared/external-app-url'
+import { openExternalAppUrlWithUserApproval } from '../external-app-url-open'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,
@@ -775,11 +777,17 @@ export class BrowserManager {
           action: 'opened-external'
         })
       } else {
-        // Why: popup URLs can carry auth redirects/one-time tokens; surface only sanitized origin metadata.
-        this.forwardOrQueuePopupEvent(guest.id, {
-          origin: safeOrigin(url),
-          action: 'blocked'
-        })
+        const customApp = classifyExternalAppUrl(url)
+        if (customApp.ok && customApp.kind === 'custom') {
+          // Why: Okta Verify and similar app schemes must leave the guest; prompt then openExternal (#12719).
+          void this.promptOpenExternalAppScheme(guest, url)
+        } else {
+          // Why: popup URLs can carry auth redirects/one-time tokens; surface only sanitized origin metadata.
+          this.forwardOrQueuePopupEvent(guest.id, {
+            origin: safeOrigin(url),
+            action: 'blocked'
+          })
+        }
       }
       return { action: 'deny' }
     })
@@ -792,6 +800,13 @@ export class BrowserManager {
       // Why: initial file:// attach is allowed for user-opened previews, but block later file:// redirects so remote pages can't probe the FS.
       if (url.startsWith('file:')) {
         event.preventDefault()
+        return false
+      }
+      const customApp = classifyExternalAppUrl(url)
+      if (customApp.ok && customApp.kind === 'custom') {
+        // Why: will-navigate is sync; deny in-guest load then prompt for OS handoff (#12719).
+        event.preventDefault()
+        void this.promptOpenExternalAppScheme(guest, url)
         return false
       }
       if (!normalizeBrowserNavigationUrl(url)) {
@@ -1961,6 +1976,27 @@ export class BrowserManager {
       browserPageId: browserTabId,
       ...event
     } satisfies BrowserPermissionDeniedEvent)
+  }
+
+  /** User-approved OS handoff for custom app schemes (Okta Verify, etc.) (#12719). */
+  private async promptOpenExternalAppScheme(
+    guest: Electron.WebContents,
+    url: string
+  ): Promise<void> {
+    let requestingOrigin: string | undefined
+    try {
+      if (!guest.isDestroyed()) {
+        const origin = safeOrigin(guest.getURL())
+        requestingOrigin = origin === 'unknown' ? undefined : origin
+      }
+    } catch {
+      requestingOrigin = undefined
+    }
+    const result = await openExternalAppUrlWithUserApproval(url, { requestingOrigin })
+    this.forwardOrQueuePopupEvent(guest.id, {
+      origin: safeOrigin(url),
+      action: result === 'opened' ? 'opened-external' : 'blocked'
+    })
   }
 
   private forwardOrQueuePopupEvent(guestWebContentsId: number, event: PendingPopupEvent): void {
