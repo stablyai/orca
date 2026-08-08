@@ -519,9 +519,18 @@ describe('parseGlabJsonList', () => {
     expect(() => parseGlabJsonList(payload)).toThrow(payload)
   })
 
+  // Why: glab allows a 10MB body, and the renderer's error banner has no length guard of its own.
+  it.each([
+    ['an opaque body', `{"data":"${'x'.repeat(50_000)}"}`],
+    ['an error envelope', `{"message":"${'x'.repeat(50_000)}"}`]
+  ])('bounds the reported payload for %s', (_label, payload) => {
+    expect(() => parseGlabJsonList(payload)).toThrow(/: .{300}$/s)
+  })
+
   it.each([
     ['message', '{"message":"403 Forbidden"}', '403 Forbidden'],
-    ['error', '{"error":"insufficient_scope"}', 'insufficient_scope']
+    ['error', '{"error":"insufficient_scope"}', 'insufficient_scope'],
+    ['error when message is blank', '{"message":"  ","error":"real_error"}', 'real_error']
   ])('reports a GitLab error envelope by its %s field', (_label, payload, reported) => {
     // Why: an envelope is GitLab's own diagnostic, so it stays classifiable — unlike a raw body.
     expect(() => parseGlabJsonList(payload)).toThrow(`GitLab returned an error: ${reported}`)

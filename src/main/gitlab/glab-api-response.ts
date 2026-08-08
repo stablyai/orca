@@ -28,6 +28,9 @@ export function parseGlabApiResponse(stdout: string): GlabApiResponse {
 /** A non-list body carrying no GitLab error text — opaque data, so there is nothing to classify. */
 export class GlabNonListResponseError extends Error {}
 
+// Why: glab allows a 10MB body; this is what keeps a proxy's whole response out of the error banner.
+const REPORTED_PAYLOAD_LIMIT = 300
+
 /**
  * Parse a glab list response, failing readably when GitLab answers with a JSON object.
  *
@@ -44,9 +47,9 @@ export function parseGlabJsonList<T>(payload: string): T[] {
     throw new Error(`GitLab returned an error: ${reported}`)
   }
   // Why: slice the raw payload rather than re-serializing `parsed` — same text, without
-  // stringifying a multi-megabyte body just to keep 300 characters.
+  // stringifying a multi-megabyte body just to keep the preview.
   throw new GlabNonListResponseError(
-    `GitLab returned a non-list response: ${payload.trim().slice(0, 300)}`
+    `GitLab returned a non-list response: ${payload.trim().slice(0, REPORTED_PAYLOAD_LIMIT)}`
   )
 }
 
@@ -56,8 +59,12 @@ function gitlabErrorText(parsed: unknown): string | null {
     return null
   }
   const { message, error } = parsed as { message?: unknown; error?: unknown }
-  const text = typeof message === 'string' ? message : error
-  return typeof text === 'string' && text.trim() ? text.trim().slice(0, 300) : null
+  for (const value of [message, error]) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim().slice(0, REPORTED_PAYLOAD_LIMIT)
+    }
+  }
+  return null
 }
 
 function findHeaderBodySeparator(stdout: string): { index: number; bodyStart: number } | null {
