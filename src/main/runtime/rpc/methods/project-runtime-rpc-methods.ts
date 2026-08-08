@@ -1,8 +1,23 @@
 import { z } from 'zod'
-import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+import { coerceProjectExecutionHostId } from '../../../../shared/execution-host'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
 import { projectRepoResultVisibilityForClient } from '../repo-visibility-projection'
+
+const INVALID_HOST_ID_MESSAGE =
+  'Invalid host ID. Use local, ssh:<targetId>, or runtime:<environmentId> ' +
+  '(bare ids from `orca environment list` are accepted as runtime:<id>).'
+
+function requiredProjectHostId() {
+  return requiredString('Missing host ID').transform((value, ctx) => {
+    const hostId = coerceProjectExecutionHostId(value)
+    if (!hostId) {
+      ctx.addIssue({ code: 'custom', message: INVALID_HOST_ID_MESSAGE })
+      return z.NEVER
+    }
+    return hostId
+  })
+}
 
 const ProjectProviderIdentity = z.object({
   provider: z.literal('github'),
@@ -14,14 +29,7 @@ const ProjectProviderIdentity = z.object({
 const ProjectHostSetupExistingFolder = z.object({
   projectId: requiredString('Missing project ID'),
   projectProviderIdentity: ProjectProviderIdentity.optional(),
-  hostId: requiredString('Missing host ID').transform((value, ctx) => {
-    const hostId = normalizeExecutionHostId(value)
-    if (!hostId) {
-      ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
-      return z.NEVER
-    }
-    return hostId
-  }),
+  hostId: requiredProjectHostId(),
   path: requiredString('Missing project path'),
   kind: z.enum(['git', 'folder']).optional(),
   displayName: OptionalString,
@@ -31,14 +39,7 @@ const ProjectHostSetupExistingFolder = z.object({
 const ProjectHostSetupClone = z.object({
   projectId: requiredString('Missing project ID'),
   projectProviderIdentity: ProjectProviderIdentity.optional(),
-  hostId: requiredString('Missing host ID').transform((value, ctx) => {
-    const hostId = normalizeExecutionHostId(value)
-    if (!hostId) {
-      ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
-      return z.NEVER
-    }
-    return hostId
-  }),
+  hostId: requiredProjectHostId(),
   url: requiredString('Missing clone URL'),
   destination: requiredString('Missing clone destination'),
   displayName: OptionalString
@@ -59,14 +60,7 @@ const ProjectUpdate = z.object({
 
 const ProjectHostSetupCreate = z.object({
   projectId: requiredString('Missing project ID'),
-  hostId: requiredString('Missing host ID').transform((value, ctx) => {
-    const hostId = normalizeExecutionHostId(value)
-    if (!hostId) {
-      ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
-      return z.NEVER
-    }
-    return hostId
-  }),
+  hostId: requiredProjectHostId(),
   setupId: OptionalString,
   path: OptionalString,
   kind: z.enum(['git', 'folder']).optional(),

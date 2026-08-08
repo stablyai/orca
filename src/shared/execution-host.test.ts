@@ -6,6 +6,7 @@ import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
   getWorktreeExecutionHostId,
+  coerceProjectExecutionHostId,
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
@@ -34,6 +35,16 @@ describe('execution host identity', () => {
       id: 'runtime:prod%2Fserver',
       environmentId: 'prod/server'
     })
+  })
+
+  it('coerces bare environment ids for project --host (#7810)', () => {
+    expect(coerceProjectExecutionHostId('gpu-box')).toBe('runtime:gpu-box')
+    expect(coerceProjectExecutionHostId('prod/server')).toBe('runtime:prod%2Fserver')
+    expect(coerceProjectExecutionHostId('runtime:gpu-box')).toBe('runtime:gpu-box')
+    expect(coerceProjectExecutionHostId('ssh:win%20vm')).toBe('ssh:win%20vm')
+    expect(coerceProjectExecutionHostId('local')).toBe('local')
+    expect(coerceProjectExecutionHostId('bogus:scheme')).toBeNull()
+    expect(coerceProjectExecutionHostId('')).toBeNull()
   })
 
   it('labels the local host by platform and by navigator detection', () => {

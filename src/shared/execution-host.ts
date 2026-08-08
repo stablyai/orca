@@ -107,6 +107,25 @@ export function normalizeExecutionHostId(value: string | null | undefined): Exec
   return parseExecutionHostId(value)?.id ?? null
 }
 
+/**
+ * Project/setup --host values. Accepts local | ssh: | runtime: and bare
+ * environment list ids (auto-prefixed as runtime:). Display names stay invalid.
+ */
+export function coerceProjectExecutionHostId(
+  value: string | null | undefined
+): ExecutionHostId | null {
+  const direct = normalizeExecutionHostId(value)
+  if (direct) {
+    return direct
+  }
+  const trimmed = normalizeHostPart(value)
+  // Why: environment list prints bare ids; operators paste them as --host (#7810).
+  if (!trimmed || trimmed.includes(':')) {
+    return null
+  }
+  return toRuntimeExecutionHostId(trimmed)
+}
+
 export function normalizeExecutionHostScope(value: string | null | undefined): ExecutionHostScope {
   const normalized = normalizeHostPart(value)
   if (!normalized || normalized === ALL_EXECUTION_HOSTS_SCOPE) {
