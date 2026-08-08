@@ -20,8 +20,8 @@ function containsWholeLineRun(accumulated: string, message: string): boolean {
 /**
  * Bound the surface without breaking SSH ownership filters that match
  * prefixes on whole lines (#12685). Multi-message surfaces keep the newest
- * complete lines; a single oversized line keeps its head (classification
- * prefix) rather than a mid-string suffix.
+ * complete lines; an oversized final line keeps its head (classification
+ * prefix) rather than a mid-line tail from the char window.
  */
 export function capTerminalErrorSurfaceNewest(
   text: string,
@@ -35,14 +35,17 @@ export function capTerminalErrorSurfaceNewest(
     // One line longer than the cap: keep the identifying prefix.
     return text.slice(0, maxChars)
   }
-  let start = text.length - maxChars
+  const start = text.length - maxChars
   const newline = text.indexOf('\n', start)
   if (newline !== -1 && newline < text.length - 1) {
-    start = newline + 1
+    const suffix = text.slice(newline + 1)
+    // Why: dropping older complete lines can still leave a multi-line suffix
+    // over the cap; re-enter so an oversized final line keeps its head.
+    return suffix.length <= maxChars ? suffix : capTerminalErrorSurfaceNewest(suffix, maxChars)
   }
-  const suffix = text.slice(start)
-  // Newest segment alone can still exceed the cap (multi-line or long line).
-  return suffix.length <= maxChars ? suffix : suffix.slice(0, maxChars)
+  // Why: the char window starts mid-final-line (no later newline). Returning
+  // text.slice(start) would drop SSH ownership prefixes that strip filters need.
+  return text.slice(lastNewline + 1, lastNewline + 1 + maxChars)
 }
 
 /** Appends an error to the aggregated surface, keeping the first occurrence of an already-present message. */

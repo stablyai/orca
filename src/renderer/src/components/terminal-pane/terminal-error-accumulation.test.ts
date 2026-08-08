@@ -94,4 +94,19 @@ describe('appendTerminalErrorMessage', () => {
     expect(capped.startsWith('SSH connection failed:')).toBe(true)
     expect(capped.length).toBe(80)
   })
+
+  // Why: production always appends via `${prev}\n${message}`; a solo-line cap
+  // test would miss mid-final-line tails that drop SSH ownership prefixes.
+  it('keeps the SSH prefix when an oversized final line is appended after prior content', () => {
+    const surface = appendTerminalErrorMessage(
+      'Paste failed.',
+      `SSH connection failed: ${'x'.repeat(3_000)}`
+    )
+    expect(surface.startsWith('SSH connection failed:')).toBe(true)
+    expect(surface.length).toBeLessThanOrEqual(MAX_TERMINAL_ERROR_SURFACE_CHARS)
+    // Why: strip filters match startsWith on each line; a mid-line tail fails that.
+    expect(surface.split('\n').every((line) => line.startsWith('SSH connection failed:'))).toBe(
+      true
+    )
+  })
 })
