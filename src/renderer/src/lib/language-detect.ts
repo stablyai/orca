@@ -36,7 +36,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.less': 'less',
   '.html': 'html',
   '.htm': 'html',
-  // Why: JSP is HTML plus <% %> scriptlets — 'html' colors the markup instead of plaintext.
+  // Why: stopgap until a real JSP grammar — 'html' colors the markup; <% %> and ${} stay plain.
   '.jsp': 'html',
   '.jspf': 'html',
   '.xml': 'xml',
