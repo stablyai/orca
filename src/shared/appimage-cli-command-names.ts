@@ -9,6 +9,7 @@ export const APPIMAGE_CLI_COMMAND_NAMES: readonly string[] = [
   'account',
   'agent',
   'agent-context',
+  'artifacts',
   'automations',
   'back',
   'capture',
