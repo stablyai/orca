@@ -113,7 +113,7 @@ export function openHttpLinkAtBufferPosition(
   return true
 }
 
-function findHttpLinkAtBufferPosition(
+export function findHttpLinkAtBufferPosition(
   buffer: { getLine(y: number): IBufferLine | undefined },
   position: { x: number; y: number },
   terminalColumns: number

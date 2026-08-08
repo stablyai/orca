@@ -116,6 +116,55 @@ describe('TerminalContextMenu', () => {
     expect(onForkAgentSession).not.toHaveBeenCalled()
   })
 
+  it('renders link-aware actions when right-click lands on a URL (#9279)', () => {
+    const onOpenLinkTarget = vi.fn()
+    const onCopyLinkTarget = vi.fn()
+    renderMenu({
+      linkTarget: { kind: 'http', url: 'https://example.com', sourceOwner: { kind: 'local' } },
+      onOpenLinkTarget,
+      onCopyLinkTarget,
+      onRevealLinkTarget: vi.fn()
+    })
+
+    const openItem = items.list.find((item) => childrenText(item.children) === 'Open Link')
+    const copyItem = items.list.find((item) => childrenText(item.children) === 'Copy Link')
+    expect(openItem).toBeDefined()
+    expect(copyItem).toBeDefined()
+    expect(
+      items.list.some((item) => childrenText(item.children) === 'Reveal in File Manager')
+    ).toBe(false)
+
+    openItem?.onSelect?.()
+    copyItem?.onSelect?.()
+    expect(onOpenLinkTarget).toHaveBeenCalledTimes(1)
+    expect(onCopyLinkTarget).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders path reveal for file link targets (#9279)', () => {
+    const onRevealLinkTarget = vi.fn()
+    renderMenu({
+      linkTarget: {
+        kind: 'file',
+        absolutePath: '/tmp/repo/src/main.ts',
+        line: 1,
+        column: null,
+        pathText: 'src/main.ts'
+      },
+      onOpenLinkTarget: vi.fn(),
+      onCopyLinkTarget: vi.fn(),
+      onRevealLinkTarget
+    })
+
+    const openItem = items.list.find((item) => childrenText(item.children) === 'Open Path')
+    const revealItem = items.list.find(
+      (item) => childrenText(item.children) === 'Reveal in File Manager'
+    )
+    expect(openItem).toBeDefined()
+    expect(revealItem).toBeDefined()
+    revealItem?.onSelect?.()
+    expect(onRevealLinkTarget).toHaveBeenCalledTimes(1)
+  })
+
   it('shows new-session continuation only for eligible agent panes', () => {
     const onContinueAgentSessionInNewSession = vi.fn()
     renderMenu({

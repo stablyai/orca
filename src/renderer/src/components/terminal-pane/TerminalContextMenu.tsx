@@ -34,47 +34,11 @@ import type { TerminalQuickCommand } from '../../../../shared/types'
 import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { AgentIcon } from '@/lib/agent-catalog'
-import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from '../native-chat/native-chat-shortcut'
 import { AgentSessionContinuationMenuItem } from './AgentSessionContinuationMenuItem'
-
-type TerminalContextMenuProps = {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  menuPoint: { x: number; y: number }
-  menuOpenedAtRef: React.RefObject<number>
-  canClosePane: boolean
-  canExpandPane: boolean
-  menuPaneIsExpanded: boolean
-  onCopy: () => void
-  onPaste: () => void
-  onSplitRight: () => void
-  onSplitDown: () => void
-  keybindings: KeybindingOverrides
-  canEqualizePaneSizes: boolean
-  onEqualizePaneSizes: () => void
-  onClosePane: () => void
-  onClearScreen: () => void
-  canContinueAgentSessionInNewSession: boolean
-  onContinueAgentSessionInNewSession: () => void
-  onForkAgentSession: () => void
-  canToggleNativeChat: boolean
-  isNativeChatView: boolean
-  onToggleNativeChat: () => void
-  onCopyAgentSessionContext: () => void
-  repoQuickCommands: TerminalQuickCommand[]
-  globalQuickCommands: TerminalQuickCommand[]
-  quickCommandRepoLabel: string | null
-  onQuickCommand: (command: TerminalQuickCommand) => void
-  onAddQuickCommand: () => void
-  onToggleExpand: () => void
-  onSetTitle: () => void
-  onClearPaneTitle: () => void
-  canClearPaneTitle: boolean
-  onCopyTerminalId: () => void
-  onCopyPaneId: () => void
-}
+import type { TerminalContextMenuProps } from './terminal-context-menu-props'
+import { TerminalContextMenuLinkActions } from './TerminalContextMenuLinkActions'
 
 export default function TerminalContextMenu({
   open,
@@ -84,6 +48,10 @@ export default function TerminalContextMenu({
   canClosePane,
   canExpandPane,
   menuPaneIsExpanded,
+  linkTarget = null,
+  onOpenLinkTarget,
+  onCopyLinkTarget,
+  onRevealLinkTarget,
   onCopy,
   onPaste,
   onSplitRight,
@@ -199,6 +167,14 @@ export default function TerminalContextMenu({
           }
         }}
       >
+        {linkTarget ? (
+          <TerminalContextMenuLinkActions
+            linkTarget={linkTarget}
+            onOpenLinkTarget={onOpenLinkTarget}
+            onCopyLinkTarget={onCopyLinkTarget}
+            onRevealLinkTarget={onRevealLinkTarget}
+          />
+        ) : null}
         <DropdownMenuItem onSelect={onCopy}>
           <Copy />
           {translate('auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13', 'Copy')}
