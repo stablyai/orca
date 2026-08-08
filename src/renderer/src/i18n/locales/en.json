@@ -8998,7 +8998,9 @@
             "keepForkUpToDate": "Keep Fork Up to Date",
             "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream.",
             "projectRuntime": "Project Runtime",
-            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
+            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
+            "browserProfileTitle": "Browser Profile",
+            "browserProfileDescription": "Profile new browser tabs in this project open with."
           }
         },
         "runtime": {
@@ -10451,6 +10453,12 @@
           "openAutomationsDescription": "Create schedules and inspect recent runs.",
           "title": "Automations",
           "description": "Schedule agent work and choose whether Automations appears in the sidebar."
+        },
+        "RepositoryBrowserProfileSection": {
+          "title": "Browser Profile",
+          "description": "Profile new browser tabs in this project open with.",
+          "longDescription": "New browser tabs opened in this project use this profile instead of the app-wide default. Per-tab switching still works from the ··· toolbar menu.",
+          "inherit": "Use app default"
         }
       },
       "right": {

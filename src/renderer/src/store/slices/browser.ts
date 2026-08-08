@@ -41,9 +41,11 @@ import type {
   BrowserProfileImportFromBrowserResult,
   BrowserProfileListResult
 } from '../../../../shared/runtime-types'
+import { resolveDefaultBrowserSessionProfileId } from './browser-default-session-profile'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 import {
+  getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -193,7 +195,8 @@ export type BrowserSlice = {
     summary: BrowserCookieImportSummary | null
     error: string | null
   } | null
-  fetchBrowserSessionProfiles: () => Promise<void>
+  /** Defaults to the Settings-focused host; pass a host id to load another host's profiles. */
+  fetchBrowserSessionProfiles: (hostId?: ExecutionHostId) => Promise<void>
   createBrowserSessionProfile: (
     scope: 'isolated' | 'imported',
     label: string,
@@ -325,6 +328,23 @@ function getDefaultBrowserProfileForHost(state: AppState, hostId: ExecutionHostI
     state.defaultBrowserSessionProfileIdByHostId[hostId] ??
     (getBrowserSettingsHostId(state) === hostId ? state.defaultBrowserSessionProfileId : null)
   )
+}
+
+// Why: a project pointing at a deleted profile silently falls back to the default partition
+// while Settings still shows the dead profile; clear the override with the profile.
+function clearDeletedProjectBrowserProfile(
+  get: () => AppState,
+  hostId: ExecutionHostId,
+  profileId: string
+): void {
+  for (const repo of get().repos) {
+    if (
+      repo.defaultBrowserSessionProfileId === profileId &&
+      getRepoExecutionHostId(repo) === hostId
+    ) {
+      void get().updateRepo(repo.id, { defaultBrowserSessionProfileId: null }, { hostId })
+    }
+  }
 }
 
 function browserImportStateForHostUpdate(
@@ -568,13 +588,15 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       options?.title,
       options?.browserRuntimeEnvironmentId
     )
-    // Why: with no explicit profile, inherit the user's default so a Settings preference applies to new tabs.
+    // Why: with no explicit profile, inherit the project override or the user's default so a Settings preference applies to new tabs.
     const sessionProfileId =
       options?.sessionProfileId !== undefined
         ? options.sessionProfileId
-        : (get().defaultBrowserSessionProfileIdByHostId[
+        : resolveDefaultBrowserSessionProfileId(
+            get(),
+            worktreeId,
             getBrowserSessionProfileHostId(get(), worktreeId, options?.browserRuntimeEnvironmentId)
-          ] ?? get().defaultBrowserSessionProfileId)
+          )
     const browserTab = buildWorkspaceFromPage(
       workspaceId,
       worktreeId,
@@ -1818,9 +1840,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
   },
 
-  fetchBrowserSessionProfiles: async () => {
-    const hostId = getBrowserSettingsHostId(get())
-    const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+  fetchBrowserSessionProfiles: async (hostIdOverride) => {
+    const hostId = hostIdOverride ?? getBrowserSettingsHostId(get())
+    const parsedHost = parseExecutionHostId(hostId)
+    const runtimeEnvironmentId = parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
     if (runtimeEnvironmentId) {
       try {
         const result = await callRuntimeRpc<BrowserProfileListResult>(
@@ -1898,6 +1921,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           { timeoutMs: 15_000 }
         )
         if (result.deleted) {
+          clearDeletedProjectBrowserProfile(get, hostId, profileId)
           set((s) => ({
             ...profileListByHostUpdate(
               s,
@@ -1925,6 +1949,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     try {
       const ok = await window.api.browser.sessionDeleteProfile({ profileId })
       if (ok) {
+        clearDeletedProjectBrowserProfile(get, hostId, profileId)
         set((s) => ({
           ...profileListByHostUpdate(
             s,
