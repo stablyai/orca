@@ -33,6 +33,22 @@ function providerIcon(provider: TaskProvider) {
   )
 }
 
+export const PROVIDER_LABELS: Record<TaskProvider, string> = {
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  linear: 'Linear',
+  jira: 'Jira'
+}
+
+// Record, not a ternary chain: a new provider must be given a label rather than
+// silently inheriting another provider's empty state.
+export const PROVIDER_EMPTY_LABELS: Record<TaskProvider, string> = {
+  github: 'No GitHub tasks',
+  gitlab: 'No GitLab tasks',
+  linear: 'No Linear tasks',
+  jira: 'No Jira tasks'
+}
+
 export const PROVIDER_OPTIONS: PickerOption<TaskProvider>[] = [
   {
     value: 'github',

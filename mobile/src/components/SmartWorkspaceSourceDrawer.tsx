@@ -11,6 +11,7 @@ import {
 import type { RpcClient } from '../transport/rpc-client'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira-types'
+import { isBlockingJiraUrlIntent } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import {
   MR_STATE_FILTER_OPTIONS,
   resolveAvailableSmartModes,
@@ -107,10 +108,14 @@ export function SmartWorkspaceSourceDrawer({
   // Snap the chosen mode back into the available set if availability changes.
   const effectiveMode = availableModes.includes(mode) ? mode : (availableModes[0] ?? 'text')
 
+  // A pasted Jira URL resolves to one issue without touching the repo, so it must
+  // stay reachable from Smart mode even when the repo is not connected.
+  const jiraUrlIntent =
+    availability.jiraAvailable && isBlockingJiraUrlIntent(effectiveMode, composer.name)
   // Linear and Jira search without a repo; every other provider/branch search
   // needs a connected repo-backed target.
   const searchEnabled =
-    visible && (effectiveMode === 'linear' || effectiveMode === 'jira' || sshReady)
+    visible && (effectiveMode === 'linear' || effectiveMode === 'jira' || jiraUrlIntent || sshReady)
 
   const {
     rows,
@@ -239,7 +244,11 @@ export function SmartWorkspaceSourceDrawer({
             </View>
           ) : null}
 
-          {!sshReady && effectiveMode !== 'text' && effectiveMode !== 'linear' ? (
+          {!sshReady &&
+          effectiveMode !== 'text' &&
+          effectiveMode !== 'linear' &&
+          effectiveMode !== 'jira' &&
+          !jiraUrlIntent ? (
             <Text style={styles.notice}>Connect the repository to search sources.</Text>
           ) : needsGitHubRemote ? (
             <Text style={styles.notice}>

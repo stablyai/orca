@@ -52,6 +52,7 @@ import { MobileSyntaxSegments } from '../../../src/components/MobileSyntaxSegmen
 import { PickerModal, type PickerOption } from '../../../src/components/PickerModal'
 import { TaskProviderLogo } from '../../../src/components/TaskProviderLogo'
 import { JiraConnectPrompt } from '../../../src/components/JiraConnectPrompt'
+import { JiraDetailMeta } from '../../../src/components/JiraDetailMeta'
 import {
   buildGitHubPrFileDiffPreview,
   type GitHubPrFileDiffLine
@@ -176,6 +177,8 @@ import {
   LINEAR_GROUP_OPTIONS,
   LINEAR_ORDER_OPTIONS,
   LINEAR_VIEW_OPTIONS,
+  PROVIDER_EMPTY_LABELS,
+  PROVIDER_LABELS,
   PROVIDER_OPTIONS,
   PR_PRESETS,
   SORT_OPTIONS,
@@ -8196,14 +8199,7 @@ export default function MobileTasksScreen() {
     provider === 'github' || provider === 'gitlab'
       ? ((selectedCreateTarget as RepoSummary | null)?.displayName ?? 'Select target')
       : ((selectedCreateTarget as LinearTeam | null)?.name ?? 'Select target')
-  const providerLabel =
-    provider === 'github'
-      ? 'GitHub'
-      : provider === 'gitlab'
-        ? 'GitLab'
-        : provider === 'jira'
-          ? 'Jira'
-          : 'Linear'
+  const providerLabel = PROVIDER_LABELS[provider]
   const jiraFilterLabel = JIRA_FILTER_LABELS[jiraFilter]
   const jiraSelectedSite =
     jiraConnection.selection && jiraConnection.selection !== 'all'
@@ -8568,11 +8564,7 @@ export default function MobileTasksScreen() {
       ? 'Connect to a host to load tasks'
       : query
         ? 'No matching tasks'
-        : provider === 'github'
-          ? 'No GitHub tasks'
-          : provider === 'gitlab'
-            ? 'No GitLab tasks'
-            : 'No Linear tasks'
+        : PROVIDER_EMPTY_LABELS[provider]
   const isGithubProjectSearch = provider === 'github' && githubMode === 'project'
 
   return (
@@ -12727,6 +12719,13 @@ export default function MobileTasksScreen() {
                         <Text style={styles.detailMetaLabel}>Project</Text>
                         <Text style={styles.detailMetaValue}>{detailPayload.project.name}</Text>
                       </View>
+                    ) : null}
+                    {detailPayload.provider === 'jira' ? (
+                      <JiraDetailMeta
+                        assignee={detailPayload.assignee}
+                        priorityName={detailPayload.priorityName}
+                        projectName={detailPayload.projectName}
+                      />
                     ) : null}
                     {(detailPayload.provider === 'github' || detailPayload.provider === 'gitlab') &&
                     detailPayload.assignees.length > 0 ? (
