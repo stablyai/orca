@@ -5,6 +5,9 @@ import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
   buildAgentFeatureSkillUpdateArgs,
   buildAgentFeatureSkillUpdateCommand,
+  buildAgentFeatureSkillRemoveArgs,
+  buildAgentFeatureSkillRemoveCommand,
+  COMPUTER_USE_SKILL_REMOVE_COMMAND,
   COMPUTER_USE_SKILL_UPDATE_COMMAND,
   EPHEMERAL_VMS_SKILL_UPDATE_COMMAND,
   LINEAR_TICKETS_SKILL_UPDATE_COMMAND,
@@ -50,6 +53,18 @@ describe('agent feature skill commands', () => {
     expect(buildAgentFeatureSkillUpdateCommand('orca-cli')).not.toContain('-y')
     expect(ORCA_CLI_SKILL_INSTALL_COMMAND).not.toContain('-y')
     expect(ORCA_CLI_SKILL_UPDATE_COMMAND).not.toContain('-y')
+  })
+
+  it('builds a global remove command for installed skills (#13099)', () => {
+    expect(buildAgentFeatureSkillRemoveCommand('computer-use')).toBe(
+      'npx skills remove computer-use --global'
+    )
+    expect(buildAgentFeatureSkillRemoveArgs(['computer-use'], { global: false })).toEqual([
+      'skills',
+      'remove',
+      'computer-use'
+    ])
+    expect(COMPUTER_USE_SKILL_REMOVE_COMMAND).toBe('npx skills remove computer-use --global')
   })
 
   it('refuses to skip prompts without an install target', () => {
