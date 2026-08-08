@@ -13,6 +13,11 @@ type RenderedTaskSource = {
   active: boolean
 }
 
+type TaskSearchRequestProbe = {
+  countQueries: string[]
+  fetchQueries: string[]
+}
+
 const TASK_SOURCE_BY_LABEL: Record<string, string> = {
   GitHub: 'github',
   GitLab: 'gitlab',
@@ -47,6 +52,105 @@ async function getRenderedTaskSources(
         return [{ source, active }]
       })
     }, TASK_SOURCE_BY_LABEL)
+}
+
+async function openInstrumentedGitHubTasksPage(
+  page: Parameters<typeof getStoreState>[0]
+): Promise<void> {
+  await page.evaluate(() => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('window.__store is not available')
+    }
+    const state = store.getState()
+    const activeWorktree = Object.values(state.worktreesByRepo)
+      .flat()
+      .find((worktree) => worktree.id === state.activeWorktreeId)
+    const repo = state.repos.find((candidate) => candidate.id === activeWorktree?.repoId)
+    if (!repo || !state.settings) {
+      throw new Error('GitHub Tasks probe requires a ready repository and settings')
+    }
+    const probe: TaskSearchRequestProbe = { countQueries: [], fetchQueries: [] }
+    ;(
+      window as typeof window & { __taskSearchRequestProbe?: TaskSearchRequestProbe }
+    ).__taskSearchRequestProbe = probe
+    const existingIssue = {
+      id: 'issue:999',
+      type: 'issue' as const,
+      number: 999,
+      title: 'Existing GitHub issue',
+      state: 'open' as const,
+      url: 'https://github.com/orca/e2e/issues/999',
+      labels: [],
+      updatedAt: '2026-08-08T00:00:00Z',
+      author: 'orca-e2e',
+      repoId: repo.id,
+      assignees: [],
+      reviewRequests: []
+    }
+
+    store.setState({
+      repos: state.repos.map((candidate) =>
+        candidate.id === repo.id
+          ? { ...candidate, upstream: { owner: 'orca', repo: 'e2e' } }
+          : candidate
+      ),
+      settings: {
+        ...state.settings,
+        defaultTaskSource: 'github',
+        defaultTaskViewPreset: 'issues',
+        visibleTaskProviders: ['github']
+      },
+      taskResumeState: {
+        ...state.taskResumeState,
+        githubItemsPreset: 'issues',
+        githubItemsQuery: 'is:issue is:open',
+        githubMode: 'items'
+      },
+      prefetchWorkItems: () => undefined,
+      fetchWorkItemsAcrossRepos: async (_repos, _perRepoLimit, _displayLimit, query) => {
+        probe.fetchQueries.push(query)
+        return { items: [existingIssue], failedCount: 0, githubUnavailable: false }
+      },
+      countWorkItemsAcrossRepos: async (_repos, query) => {
+        probe.countQueries.push(query)
+        return { totalCount: 1, totalPages: 1 }
+      }
+    })
+    store
+      .getState()
+      .openTaskPage(
+        { taskSource: 'github', preselectedRepoId: repo.id },
+        { recordTasksInteraction: false }
+      )
+  })
+}
+
+async function readTaskSearchRequestProbe(
+  page: Parameters<typeof getStoreState>[0]
+): Promise<TaskSearchRequestProbe> {
+  return page.evaluate(() => {
+    const probe = (window as typeof window & { __taskSearchRequestProbe?: TaskSearchRequestProbe })
+      .__taskSearchRequestProbe
+    if (!probe) {
+      throw new Error('Task search request probe is not installed')
+    }
+    return { countQueries: [...probe.countQueries], fetchQueries: [...probe.fetchQueries] }
+  })
+}
+
+async function resetTaskSearchRequestProbe(
+  page: Parameters<typeof getStoreState>[0]
+): Promise<void> {
+  await page.evaluate(() => {
+    const probe = (window as typeof window & { __taskSearchRequestProbe?: TaskSearchRequestProbe })
+      .__taskSearchRequestProbe
+    if (!probe) {
+      throw new Error('Task search request probe is not installed')
+    }
+    probe.countQueries.length = 0
+    probe.fetchQueries.length = 0
+  })
 }
 
 test.describe('Tasks page', () => {
@@ -128,5 +232,47 @@ test.describe('Tasks page', () => {
     if (previousView === 'terminal') {
       await expect(orcaPage.locator('.xterm').first()).toBeVisible({ timeout: 5_000 })
     }
+  })
+
+  test('GitHub search waits for idle, keeps rows visible, and Enter does not double-fetch', async ({
+    orcaPage
+  }) => {
+    await openInstrumentedGitHubTasksPage(orcaPage)
+
+    const input = orcaPage.getByPlaceholder('Search GitHub issues...')
+    const existingIssue = orcaPage.getByText('Existing GitHub issue', { exact: true })
+    await expect(input).toBeVisible()
+    await expect(existingIssue).toBeVisible()
+
+    await input.fill('')
+    await orcaPage.waitForTimeout(800)
+    await resetTaskSearchRequestProbe(orcaPage)
+
+    await input.pressSequentially('rate', { delay: 400 })
+
+    expect(await readTaskSearchRequestProbe(orcaPage)).toEqual({
+      countQueries: [],
+      fetchQueries: []
+    })
+    await expect(existingIssue).toBeVisible()
+
+    await expect
+      .poll(async () => readTaskSearchRequestProbe(orcaPage), { timeout: 2_000 })
+      .toEqual({ countQueries: ['is:issue rate'], fetchQueries: ['is:issue rate'] })
+
+    await resetTaskSearchRequestProbe(orcaPage)
+    await input.pressSequentially('x')
+    await input.press('Enter')
+
+    await expect
+      .poll(async () => readTaskSearchRequestProbe(orcaPage), { timeout: 2_000 })
+      .toEqual({ countQueries: ['is:issue ratex'], fetchQueries: ['is:issue ratex'] })
+    await orcaPage.waitForTimeout(800)
+    expect(await readTaskSearchRequestProbe(orcaPage)).toEqual({
+      countQueries: ['is:issue ratex'],
+      fetchQueries: ['is:issue ratex']
+    })
+    await expect(input).toHaveValue('is:issue ratex')
+    await expect(existingIssue).toBeVisible()
   })
 })

@@ -35,6 +35,7 @@
     "../src/main/codex/codex-hook-trust-grant.ts",
     "../src/main/codex/codex-managed-trust-reconciliation.ts",
     "../src/main/codex/codex-process-exit-deadline.ts",
+    "../src/main/codex/codex-state-db.ts",
     "../src/main/codex/codex-trust-config-rollback.ts",
     "../src/main/codex/codex-trust-grant-telemetry.ts",
     "../src/main/codex/codex-trust-grant-host.ts",
@@ -73,7 +74,11 @@
     "../src/main/openclaude/hook-service.ts",
     "../src/main/rolling-file-backup.ts",
     "../src/main/startup/hydrate-shell-path.ts",
+    // Why: serve-electron-flag-parity.test.ts checks the Electron-side serve argv rewrite against this
+    // project's serve spec; the module has no imports, so listing it pulls in nothing else.
+    "../src/main/startup/serve-mode-argv.ts",
     "../src/main/runtime/runtime-metadata.ts",
+    "../src/main/sqlite/sync-database.ts",
     "../src/main/win32-utils.ts"
   ],
   "compilerOptions": {

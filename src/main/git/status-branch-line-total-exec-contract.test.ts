@@ -67,6 +67,8 @@ import {
 } from './status'
 
 const BOGUS_MERGE_BASE = 'deadbeef'.repeat(5)
+// No fixture path here looks like test or generated code, so it is all source.
+const NO_LINES = { added: 0, removed: 0 }
 const tempRoots: string[] = []
 
 function git(repo: string, args: string[]): string {
@@ -257,7 +259,13 @@ describe('branch line total exec budget', () => {
       getStatus(repo, { branchLineTotalMergeBase: mergeBase })
     ])
 
-    expect(first.branchLineTotal).toEqual({ added: 1, removed: 0, mergeBase })
+    expect(first.branchLineTotal).toEqual({
+      added: 1,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
     expect(second.branchLineTotal).toEqual(first.branchLineTotal)
     expect(rangedDiffCalls()).toHaveLength(1)
   })
@@ -280,7 +288,13 @@ describe('branch line total exec budget', () => {
       getStatus(repo, { branchLineTotalMergeBase: mergeBase, limit: 4096 })
     ])
 
-    expect(first.branchLineTotal).toEqual({ added: 1, removed: 0, mergeBase })
+    expect(first.branchLineTotal).toEqual({
+      added: 1,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
     expect(second.branchLineTotal).toEqual(first.branchLineTotal)
     // Proves the saving came from the branch-total coalescer: both passes really
     // ran their own `git status`, so the status lease merged nothing.
@@ -306,7 +320,13 @@ describe('branch line total exec budget', () => {
     })
 
     expect(second.branchLineTotal).toEqual(first.branchLineTotal)
-    expect(second.branchLineTotal).toEqual({ added: 1, removed: 0, mergeBase })
+    expect(second.branchLineTotal).toEqual({
+      added: 1,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
     expect(numstatCalls()).toEqual([])
   })
 
@@ -324,7 +344,13 @@ describe('branch line total exec budget', () => {
       reuseLineStats: true
     })
 
-    expect(result.branchLineTotal).toEqual({ added: 0, removed: 0, mergeBase: laterMergeBase })
+    expect(result.branchLineTotal).toEqual({
+      added: 0,
+      removed: 0,
+      mergeBase: laterMergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
     expect(rangedDiffCalls()).toHaveLength(1)
   })
 })

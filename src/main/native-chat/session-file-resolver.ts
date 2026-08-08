@@ -4,6 +4,8 @@ import { basename, extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
+import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
+import { normalizeAgentSessionsDir } from '../ai-vault/session-scanner-values'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
@@ -37,6 +39,15 @@ function grokSessionsDir(): string {
   return resolveGrokSessionsDir(process.env, homedir())
 }
 
+/** Mirrors the AI Vault scanner so an OMP_CODING_AGENT_DIR override resolves the
+ *  same root for both, rather than leaving native chat pointed at the default. */
+function ompSessionsDir(): string {
+  return normalizeAgentSessionsDir(
+    process.env.OMP_CODING_AGENT_DIR?.trim() || join(homedir(), '.omp', 'agent', 'sessions'),
+    '.omp'
+  )
+}
+
 export type ResolveSessionFileOptions = {
   /** Override the Claude projects root (used by tests / isolated scans). */
   claudeProjectsDir?: string
@@ -45,6 +56,8 @@ export type ResolveSessionFileOptions = {
   codexSessionsDirs?: string[]
   /** Override the Grok sessions root (`~/.grok/sessions`). */
   grokSessionsDir?: string
+  /** Override the omp sessions root (`~/.omp/agent/sessions`). */
+  ompSessionsDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -94,6 +107,9 @@ export async function resolveSessionFilePath(
   if (transcriptAgent === 'grok') {
     return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir())
   }
+  if (transcriptAgent === 'omp') {
+    return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir())
+  }
   return null
 }
 
@@ -142,4 +158,31 @@ async function resolveGrokSessionFile(
   // lookup instead of blocking, then repeating, a recursive full-tree scan.
   const history = await findGrokChatHistoryBySessionId(sessionsDir, sessionId)
   return history
+}
+
+// omp keeps one directory per working directory (`-Documents-dog-app`) with the
+// transcript inside it, named `<ISO timestamp>_<session id>.jsonl` — so match the
+// id as a base-name suffix, the way Codex rollout files are matched, and let the
+// walk cover the per-cwd subdirectories.
+async function resolveOmpSessionFile(
+  sessionId: string,
+  sessionsDir: string
+): Promise<string | null> {
+  const files = await walkSessionFiles(sessionsDir, 'omp', [], {
+    extensions: new Set(['.jsonl']),
+    // Why: a session's task-subagent transcripts live in its same-named
+    // `<stamp>_<uuid>/` artifact dir, and a label-named child can still end in
+    // `_<session id>` — so descending would let a subagent transcript win the
+    // suffix match over its own parent. Prune the subtree exactly as the AI
+    // Vault scanner does (session-scanner-source-discovery.ts): it keeps the
+    // walk at one readdir per workspace dir regardless of how much the session
+    // delegated. Depth 0 is the workspace dir, which is never an artifact dir.
+    directoryPredicate: (name, depth) =>
+      depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name),
+    filePredicate: (path) => {
+      const name = basename(path, extname(path))
+      return name === sessionId || name.endsWith(`_${sessionId}`)
+    }
+  })
+  return files[0] ?? null
 }

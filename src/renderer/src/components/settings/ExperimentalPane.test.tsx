@@ -164,29 +164,15 @@ describe('ExperimentalPane', () => {
     root.unmount()
   })
 
-  it('exposes idle-agent visibility for pop-out dashboards', async () => {
-    const updateSettings = vi.fn()
-    const settings = {
-      ...getDefaultSettings('/tmp'),
-      experimentalAgentDashboardPopout: true
-    }
-    const { root, container } = await renderExperimentalPane({
-      settings,
-      updateSettings
-    })
-    const idleSwitch = container.querySelector<HTMLButtonElement>(
-      '#experimental-agent-dashboard button[role="switch"][aria-label="Show idle agents"]'
+  it('keeps idle-agent visibility out of global settings', () => {
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane
+        settings={{ ...getDefaultSettings('/tmp'), experimentalAgentDashboardPopout: true }}
+        updateSettings={vi.fn()}
+      />
     )
-    if (!idleSwitch) {
-      throw new Error('Idle-agent visibility switch was not rendered')
-    }
 
-    await act(async () => {
-      idleSwitch.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(updateSettings).toHaveBeenCalledWith({ experimentalAgentDashboardShowIdle: true })
-    root.unmount()
+    expect(markup).not.toContain('Show idle agents')
   })
 
   it('renders Cloud VM as an off-by-default experimental subsection', () => {

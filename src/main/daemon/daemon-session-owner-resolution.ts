@@ -223,10 +223,10 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
       this.recordRoute(sessionId, provider, process?.incarnationId)
       return { kind: 'owner', provider }
     }
-    if (!inventory.complete || providers.size > 1 || this.providers.length !== 1) {
-      return { kind: 'unknown' }
+    if (inventory.complete && providers.size === 0 && this.providers.length > 0) {
+      return { kind: 'absent' }
     }
-    return { kind: 'absent' }
+    return { kind: 'unknown' }
   }
 
   private inventory(allowCached = true): Promise<OwnerInventory<T>> {

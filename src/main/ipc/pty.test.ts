@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: stateful registration helper + shared mocked IPC/node-pty harness keep spawn-env assertions in one focused file. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { userInfo } from 'node:os'
 import { delimiter, join, posix } from 'node:path'
 import { prepareCodexSessionResume } from '../codex/codex-session-resume-preparation'
@@ -65,7 +66,8 @@ const {
   clearMigrationUnsupportedPtysForPaneKeyMock,
   clearPaneKeyAliasesForPtyMock,
   recordCodexPaneAccountMock,
-  forgetCodexPaneAccountMock
+  forgetCodexPaneAccountMock,
+  ensureCodexBackfillRecoveryMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   onMock: vi.fn(),
@@ -99,7 +101,8 @@ const {
   clearMigrationUnsupportedPtysForPaneKeyMock: vi.fn(),
   clearPaneKeyAliasesForPtyMock: vi.fn(),
   recordCodexPaneAccountMock: vi.fn(),
-  forgetCodexPaneAccountMock: vi.fn()
+  forgetCodexPaneAccountMock: vi.fn(),
+  ensureCodexBackfillRecoveryMock: vi.fn(() => Promise.resolve())
 }))
 
 vi.mock('electron', () => ({
@@ -177,7 +180,7 @@ vi.mock('../pi/titlebar-extension-service', () => ({
 }))
 
 vi.mock('../pwsh', () => ({
-  isPwshAvailable: isPwshAvailableMock
+  isPwshAvailableAsync: isPwshAvailableMock
 }))
 
 vi.mock('../telemetry/client', () => ({
@@ -208,6 +211,10 @@ vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
 vi.mock('../codex/codex-pane-account-registry', () => ({
   recordCodexPaneAccount: recordCodexPaneAccountMock,
   forgetCodexPaneAccount: forgetCodexPaneAccountMock
+}))
+
+vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+  ensureCodexStateDbBackfillRecoveryStarted: ensureCodexBackfillRecoveryMock
 }))
 import {
   LocalPtyProvider,
@@ -383,6 +390,8 @@ describe('registerPtyHandlers', () => {
     clearPaneKeyAliasesForPtyMock.mockReset()
     recordCodexPaneAccountMock.mockReset()
     forgetCodexPaneAccountMock.mockReset()
+    ensureCodexBackfillRecoveryMock.mockReset()
+    ensureCodexBackfillRecoveryMock.mockResolvedValue(undefined)
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
     mainWindow.webContents.removeListener.mockReset()
@@ -637,6 +646,7 @@ describe('registerPtyHandlers', () => {
     const write = vi.fn()
     const pauseProducer = vi.fn()
     const resumeProducer = vi.fn()
+    const setPtyBackgrounded = vi.fn()
     const shutdown = vi.fn()
     let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
     let exitHandler: ((payload: { id: string; code: number }) => void) | null = null
@@ -650,6 +660,7 @@ describe('registerPtyHandlers', () => {
       resize: vi.fn(),
       pauseProducer,
       resumeProducer,
+      setPtyBackgrounded,
       kill: vi.fn(),
       shutdown,
       sendSignal: vi.fn(),
@@ -688,6 +699,7 @@ describe('registerPtyHandlers', () => {
       write,
       pauseProducer,
       resumeProducer,
+      setPtyBackgrounded,
       shutdown,
       getBufferSnapshot,
       emitData: (id: string, data: string) => dataHandler?.({ id, data }),
@@ -3057,6 +3069,54 @@ describe('registerPtyHandlers', () => {
       })
     })
 
+    it('arbitrates the exact backfill owner before spawning Codex', async () => {
+      let releaseRecovery!: () => void
+      ensureCodexBackfillRecoveryMock.mockReturnValue(
+        new Promise<void>((resolve) => (releaseRecovery = resolve))
+      )
+      readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
+      const onCodexHomePtySpawned = vi.fn()
+      handlers.clear()
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        () => TEST_CODEX_HOME,
+        (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never,
+        undefined,
+        undefined,
+        { onCodexHomePtySpawned }
+      )
+
+      const spawnPromise = handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        launchAgent: 'codex'
+      })
+      await vi.waitFor(() =>
+        expect(ensureCodexBackfillRecoveryMock).toHaveBeenCalledWith(TEST_CODEX_HOME)
+      )
+      expect(spawnMock).not.toHaveBeenCalled()
+      expect(onCodexHomePtySpawned).not.toHaveBeenCalled()
+
+      releaseRecovery()
+      const result = (await spawnPromise) as { id: string }
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(onCodexHomePtySpawned).toHaveBeenCalledWith({
+        id: result.id,
+        codexHomePath: TEST_CODEX_HOME,
+        startedAt: expect.any(Date),
+        startedSequence: expect.any(Number)
+      })
+    })
+
     it('does not gate a bare local shell on managed Codex auth', async () => {
       readFileSyncMock.mockImplementation((filePath: string) => {
         if (filePath.endsWith('auth.json')) {
@@ -3065,19 +3125,37 @@ describe('registerPtyHandlers', () => {
         return ''
       })
       handlers.clear()
-      registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
-        codexManagedAccounts: [
-          {
-            id: 'account-1',
-            managedHomePath: TEST_CODEX_HOME,
-            managedHomeRuntime: 'host'
-          }
-        ]
-      })) as never)
+      const onCodexHomePtySpawned = vi.fn()
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        () => TEST_CODEX_HOME,
+        (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never,
+        undefined,
+        undefined,
+        { onCodexHomePtySpawned }
+      )
 
-      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      const result = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24
+      })) as { id: string }
 
       expect(spawnMock).toHaveBeenCalledOnce()
+      expect(onCodexHomePtySpawned).toHaveBeenCalledWith({
+        id: result.id,
+        codexHomePath: TEST_CODEX_HOME,
+        startedAt: expect.any(Date),
+        startedSequence: expect.any(Number)
+      })
     })
 
     it('leaves an inherited CODEX_HOME untouched for system default when the flag is OFF', async () => {
@@ -7968,6 +8046,114 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it.each([
+    {
+      label: 'matching proof',
+      launchToken: 'renderer-launch-token',
+      envLaunchToken: 'renderer-launch-token',
+      hasLaunchConfig: true,
+      launchAgent: 'claude',
+      expectedToken: 'renderer-launch-token'
+    },
+    {
+      label: 'mismatched proof',
+      launchToken: 'renderer-launch-token',
+      envLaunchToken: 'different-process-token',
+      hasLaunchConfig: true,
+      launchAgent: 'claude',
+      expectedToken: null
+    },
+    {
+      label: 'missing top-level proof',
+      launchToken: undefined,
+      envLaunchToken: 'renderer-launch-token',
+      hasLaunchConfig: true,
+      launchAgent: 'claude',
+      expectedToken: null
+    },
+    {
+      label: 'oversized proof',
+      launchToken: 'x'.repeat(129),
+      envLaunchToken: 'x'.repeat(129),
+      hasLaunchConfig: true,
+      launchAgent: 'claude',
+      expectedToken: null
+    },
+    {
+      label: 'untracked launch',
+      launchToken: 'renderer-launch-token',
+      envLaunchToken: 'renderer-launch-token',
+      hasLaunchConfig: false,
+      launchAgent: 'claude',
+      expectedToken: null
+    },
+    {
+      label: 'invalid agent identity',
+      launchToken: 'renderer-launch-token',
+      envLaunchToken: 'renderer-launch-token',
+      hasLaunchConfig: true,
+      launchAgent: 'not-an-agent',
+      expectedToken: null
+    },
+    {
+      label: 'missing agent identity',
+      launchToken: 'renderer-launch-token',
+      envLaunchToken: 'renderer-launch-token',
+      hasLaunchConfig: true,
+      launchAgent: undefined,
+      expectedToken: null
+    }
+  ])('binds only $label from renderer pty:spawn to runtime authority', async (testCase) => {
+    const runtime = new OrcaRuntimeService()
+    registerPtyHandlers(mainWindow as never, runtime)
+    const worktreeId = 'repo-1::/tmp/renderer-authority'
+    const tabId = 'tab-renderer-authority'
+    const leafId = '99999999-9999-4999-8999-999999999999'
+    const paneKey = makePaneKey(tabId, leafId)
+
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp/renderer-authority',
+      command: 'claude',
+      worktreeId,
+      tabId,
+      leafId,
+      env: {
+        ORCA_PANE_KEY: paneKey,
+        ORCA_TAB_ID: tabId,
+        ORCA_WORKTREE_ID: worktreeId,
+        ORCA_AGENT_LAUNCH_TOKEN: testCase.envLaunchToken
+      },
+      ...(testCase.launchToken ? { launchToken: testCase.launchToken } : {}),
+      ...(testCase.hasLaunchConfig
+        ? { launchConfig: { agentCommand: 'claude', agentArgs: '', agentEnv: {} } }
+        : {}),
+      ...(testCase.launchAgent ? { launchAgent: testCase.launchAgent } : {})
+    })) as { id: string; incarnationId: string }
+
+    const handle = runtime.preAllocateHandleForPty(result.id)
+    const authority = runtime.getOrchestrationDispatchAuthority(handle)
+    expect(authority).toMatchObject({ ptyId: result.id, paneKey })
+    expect(authority?.launchTokenHash).toBe(
+      testCase.expectedToken
+        ? createHash('sha256').update(testCase.expectedToken).digest('hex')
+        : null
+    )
+
+    if (testCase.expectedToken) {
+      runtime.registerPty(result.id, worktreeId, null, {
+        tabId,
+        leafId,
+        incarnationId: result.incarnationId,
+        agentLaunchAuthority: { launchToken: 'stale-overwrite', launchAgent: 'claude' }
+      })
+      expect(runtime.getOrchestrationDispatchAuthority(handle)?.launchTokenHash).toBe(
+        createHash('sha256').update(testCase.expectedToken).digest('hex')
+      )
+    }
+  })
+
   it('omits the pane identity from registerPty when the leafId is not a terminal leaf (#7587)', async () => {
     const runtime = {
       setPtyController: vi.fn(),
@@ -8840,6 +9026,7 @@ describe('registerPtyHandlers', () => {
       const prepareClaudeAuth = vi.fn(() => {
         throw new Error('replacement auth preflight must not run')
       })
+      const onCodexHomePtySpawned = vi.fn()
       let controller: RuntimeSpawnController | null = null
       const runtime = {
         setPtyController: vi.fn((value) => {
@@ -8877,7 +9064,8 @@ describe('registerPtyHandlers', () => {
         undefined,
         undefined,
         prepareClaudeAuth,
-        store as never
+        store as never,
+        { onCodexHomePtySpawned }
       )
       const spawnController = controller as unknown as RuntimeSpawnController
       await spawnController.spawn({
@@ -8971,6 +9159,7 @@ describe('registerPtyHandlers', () => {
         rows: 40,
         cwd,
         command: 'codex resume should-not-run',
+        launchAgent: 'codex',
         worktreeId,
         preAllocatedHandle: 'term-live-owner',
         tabId,
@@ -8995,6 +9184,13 @@ describe('registerPtyHandlers', () => {
         id: 'pty-live-owner',
         incarnationId: 'inc-live-owner',
         isReattach: true
+      })
+      expect(onCodexHomePtySpawned).toHaveBeenCalledWith({
+        id: 'pty-live-owner',
+        codexHomePath: null,
+        reattached: true,
+        startedAt: expect.any(Date),
+        startedSequence: expect.any(Number)
       })
       expect(claimedResult).toMatchObject({
         id: 'pty-live-owner',
@@ -15608,6 +15804,50 @@ describe('registerPtyHandlers', () => {
   })
 
   describe('hidden renderer delivery gate', () => {
+    it('foregrounds a preserved daemon PTY after handler recreation loses sync memory', async () => {
+      const daemon = installObservableDaemonTestProvider()
+      const firstRuntime = {
+        setPtyController: vi.fn(),
+        hasRawTerminalViewSubscriber: vi.fn(() => false),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        noteTerminalSpawnCommand: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      registerPtyHandlers(mainWindow as never, firstRuntime as never)
+      const result = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        sessionId: 'daemon-session'
+      })) as { id: string }
+
+      getPtySetRendererPtyVisibleListener()(null, { id: result.id, visible: false })
+      expect(daemon.setPtyBackgrounded).toHaveBeenLastCalledWith(result.id, true)
+
+      daemon.setPtyBackgrounded.mockClear()
+      handlers.clear()
+      let rawSubscriberPresent = false
+      const nextRuntime = {
+        setPtyController: vi.fn(),
+        hasRawTerminalViewSubscriber: vi.fn(() => rawSubscriberPresent),
+        onRemoteTerminalViewPresenceChanged: null as ((id: string) => void) | null,
+        registerRawTerminalViewSubscriber(id: string): void {
+          rawSubscriberPresent = true
+          this.onRemoteTerminalViewPresenceChanged?.(id)
+        }
+      }
+      registerPtyHandlers(mainWindow as never, nextRuntime as never)
+
+      nextRuntime.registerRawTerminalViewSubscriber(result.id)
+      // Repeated presence signals must remain deduplicated.
+      nextRuntime.onRemoteTerminalViewPresenceChanged?.(result.id)
+
+      expect(daemon.setPtyBackgrounded).toHaveBeenCalledOnce()
+      expect(daemon.setPtyBackgrounded).toHaveBeenCalledWith(result.id, false)
+    })
+
     it('drops hidden PTY data after model ingestion and emits one out-of-band restore marker', async () => {
       vi.useFakeTimers()
       const runtime = {

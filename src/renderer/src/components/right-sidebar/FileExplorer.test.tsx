@@ -293,6 +293,14 @@ function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0
   })
 }
 
+function setDownloadPlatform(platform: NodeJS.Platform): void {
+  ;(
+    window as unknown as {
+      api: { platform: { get: () => { platform: NodeJS.Platform } } }
+    }
+  ).api.platform = { get: () => ({ platform }) }
+}
+
 beforeEach(() => {
   toastErrorMock.mockReset()
   toastSuccessMock.mockReset()
@@ -677,7 +685,10 @@ describe('FileExplorerRow collapse folder action', () => {
   it('calls the preload download API and shows success only when not canceled', async () => {
     const downloadFile = vi
       .fn()
-      .mockResolvedValueOnce({ canceled: false, destinationPath: '/downloads/index.ts' })
+      .mockResolvedValueOnce({
+        canceled: false,
+        destinationPath: '/downloads/renamed\\entry.ts'
+      })
       .mockResolvedValueOnce({ canceled: true })
     const openPath = vi.fn().mockResolvedValue(undefined)
     ;(
@@ -690,6 +701,7 @@ describe('FileExplorerRow collapse folder action', () => {
         }
       }
     ).window = { api: { fs: { downloadFile }, shell: { openPath } } }
+    setDownloadPlatform('linux')
 
     await downloadRemoteFile(fileNode, 'ssh-1')
     await downloadRemoteFile(fileNode, 'ssh-1')
@@ -699,7 +711,7 @@ describe('FileExplorerRow collapse folder action', () => {
       connectionId: 'ssh-1'
     })
     expect(toastSuccessMock).toHaveBeenCalledTimes(1)
-    expect(toastSuccessMock).toHaveBeenCalledWith("Downloaded 'index.ts'", {
+    expect(toastSuccessMock).toHaveBeenCalledWith("Downloaded 'renamed\\entry.ts'", {
       action: {
         label: 'Open',
         onClick: expect.any(Function)
@@ -709,8 +721,28 @@ describe('FileExplorerRow collapse folder action', () => {
       | { onClick: () => void }
       | undefined
     action?.onClick()
-    expect(openPath).toHaveBeenCalledWith('/downloads/index.ts')
+    expect(openPath).toHaveBeenCalledWith('/downloads/renamed\\entry.ts')
     expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('reports the saved folder name from a Windows destination path', async () => {
+    const downloadFolder = vi.fn().mockResolvedValue({
+      canceled: false,
+      destinationPath: 'C:\\Users\\dev\\Downloads\\src-copy'
+    })
+    ;(
+      globalThis as unknown as {
+        window: { api: { fs: { downloadFolder: typeof downloadFolder } } }
+      }
+    ).window = { api: { fs: { downloadFolder } } }
+    setDownloadPlatform('win32')
+
+    await downloadRemoteFile(directoryNode, 'ssh-1')
+
+    expect(toastSuccessMock).toHaveBeenCalledWith(
+      "Downloaded folder 'src-copy'",
+      expect.objectContaining({ action: expect.anything() })
+    )
   })
 
   it('calls the preload folder download API for SSH directory rows', async () => {
@@ -729,6 +761,7 @@ describe('FileExplorerRow collapse folder action', () => {
         }
       }
     ).window = { api: { fs: { downloadFolder }, shell: { openPath } } }
+    setDownloadPlatform('linux')
 
     await downloadRemoteFile(directoryNode, 'ssh-1')
 
@@ -765,6 +798,7 @@ describe('FileExplorerRow collapse folder action', () => {
         }
       }
     ).window = { api: { shell: { openPath } } }
+    setDownloadPlatform('linux')
 
     await downloadRemoteFile(fileNode, runtimeContext)
 

@@ -11,7 +11,9 @@ import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-pa
 import { createCopilotSessionResumeState } from './session-scanner-copilot-parser'
 import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
+import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
+import { refreshCachedCodexTitle } from './session-scanner-codex-cached-title'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
@@ -93,6 +95,12 @@ const cache = new Map<string, SessionParseCacheEntry>()
 
 export function resetSessionParseCacheForTests(): void {
   cache.clear()
+}
+
+// Drops one entry after its file is deleted. Cleanliness, not correctness:
+// discovery walks disk first, so a trashed file is never rediscovered anyway.
+export function invalidateSessionParseCacheEntry(path: string): void {
+  cache.delete(path)
 }
 
 // Persisted subset of a cache entry: the non-serializable `resume` parser
@@ -179,14 +187,26 @@ export async function parseAgentSessionFileCached(
       stats.reused++
     }
     // A zero-turn transcript usually never changes again, but its sibling
-    // subagents/ dir can gain files after the parent's last write (a
-    // still-running subagent finishing). The mtime+size key can't see that,
-    // so refresh the cheap directory count on reuse.
-    if (entry.session && candidate.agent === 'claude' && entry.session.messageCount === 0) {
-      const subagentTranscriptCount = await countSubagentTranscripts(file.path)
-      if (subagentTranscriptCount !== entry.session.subagentTranscriptCount) {
+    // subagent dir (Claude `<session>/subagents/`, OMP's same-named artifact
+    // dir) can gain files after the parent's last write (a still-running
+    // subagent finishing). The mtime+size key can't see that, so refresh the
+    // cheap directory count on reuse.
+    if (entry.session && entry.session.messageCount === 0) {
+      const subagentTranscriptCount =
+        candidate.agent === 'claude'
+          ? await countSubagentTranscripts(file.path)
+          : candidate.agent === 'omp'
+            ? await countOmpSubagentTranscripts(file.path)
+            : null
+      if (
+        subagentTranscriptCount !== null &&
+        subagentTranscriptCount !== entry.session.subagentTranscriptCount
+      ) {
         entry.session = { ...entry.session, subagentTranscriptCount }
       }
+    }
+    if (entry.session && candidate.agent === 'codex') {
+      entry.session = await refreshCachedCodexTitle(candidate, entry.session)
     }
     storeEntry(file.path, entry)
     return entry.session

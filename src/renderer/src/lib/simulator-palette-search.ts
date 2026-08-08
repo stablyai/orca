@@ -24,6 +24,7 @@ export type SimulatorPaletteSearchResult = {
   secondaryRange: MatchRange | null
   repoRange: MatchRange | null
   worktreeRange: MatchRange | null
+  typeAliasMatch?: { text: string; range: MatchRange } | null
   isCurrentTab: boolean
   isCurrentWorktree: boolean
   score: number
@@ -32,6 +33,16 @@ export type SimulatorPaletteSearchResult = {
 type SimulatorPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
 
 export const SIMULATOR_PALETTE_QUERY_MAX_BYTES = 2 * 1024
+
+// Why search-only: the row icon already says "emulator"; a fixed secondary label
+// crowds Cmd+J the same way "Terminal tab" did. Keep these strings matchable so
+// typing "mobile" / "simulator" still finds emulator tabs.
+const SIMULATOR_TYPE_SEARCH_ALIASES = [
+  'mobile emulator tab',
+  'mobile emulator',
+  'ios simulator',
+  'emulator'
+] as const
 
 export function isSimulatorPaletteQueryTooLarge(
   query: string,
@@ -180,7 +191,9 @@ export function searchSimulatorTabs(
 
   for (const entry of entries) {
     const title = entry.tab.label || 'Mobile Emulator'
-    const secondaryText = 'Mobile Emulator tab'
+    // Why: type is already clear from the smartphone icon; a fixed label only
+    // crowds the row (and used to leave a bare "· ·" under width pressure).
+    const secondaryText = ''
     // Why: a cleared display name leaves this undefined at runtime; findRange would throw.
     const worktreeName = resolveWorktreeDisplayName(entry.worktree)
     const baseResult = {
@@ -226,32 +239,28 @@ export function searchSimulatorTabs(
       continue
     }
 
-    const secondaryRange = findRange(secondaryText, trimmedQuery)
-    if (secondaryRange) {
-      results.push({
-        ...baseResult,
-        titleRange: null,
-        secondaryRange,
-        repoRange: null,
-        worktreeRange: null,
-        score: scoreSimulatorTabMatch({
-          fieldWeight: 20,
-          matchIndex: secondaryRange.start,
-          entry
-        })
-      })
-      continue
+    let typeAliasHit: { text: string; range: MatchRange } | null = null
+    for (const alias of SIMULATOR_TYPE_SEARCH_ALIASES) {
+      const range = findRange(alias, trimmedQuery)
+      if (range) {
+        typeAliasHit = { text: alias, range }
+        break
+      }
     }
-
-    const aliasRange = findRange('ios simulator', trimmedQuery)
-    if (aliasRange) {
+    if (typeAliasHit) {
       results.push({
         ...baseResult,
         titleRange: null,
+        // Why null: aliases are search keys only — nothing to highlight in the row.
         secondaryRange: null,
         repoRange: null,
         worktreeRange: null,
-        score: scoreSimulatorTabMatch({ fieldWeight: 24, matchIndex: aliasRange.start, entry })
+        typeAliasMatch: typeAliasHit,
+        score: scoreSimulatorTabMatch({
+          fieldWeight: 20,
+          matchIndex: typeAliasHit.range.start,
+          entry
+        })
       })
       continue
     }

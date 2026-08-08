@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   getExecutionHostLabel,
   parseExecutionHostId,
+  toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
@@ -24,6 +25,10 @@ import {
   selectRuntimeAwareSshStatus,
   selectRuntimeAwareSshTargetLabel
 } from '@/store/slices/runtime-environment-ssh'
+import {
+  isConnectedRuntimeHostState,
+  runtimeHostConnectionState
+} from '@/runtime/runtime-host-connection-state'
 
 type RepositoryHostSetupsSectionProps = {
   repo: Repo
@@ -215,9 +220,27 @@ export function RepositoryHostSetupsSection({
           const runtimeOwnerEnvironmentId =
             setup.runtimeOwnerEnvironmentId?.trim() ||
             (transportHost?.kind === 'runtime' ? transportHost.environmentId : null)
+          // Why: share one host-health derivation with the status bar so a degraded
+          // owner can never read "Ready" here and "Connected"/"Disconnected" there.
+          const runtimeOwnerStatusEntry = runtimeOwnerEnvironmentId
+            ? runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)
+            : undefined
+          const runtimeOwnerState = runtimeOwnerEnvironmentId
+            ? runtimeHostConnectionState({
+                hasStatusEntry: Boolean(runtimeOwnerStatusEntry),
+                status: runtimeOwnerStatusEntry?.status
+              })
+            : null
           const runtimeOwnerReachable =
-            !runtimeOwnerEnvironmentId ||
-            Boolean(runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)?.status)
+            runtimeOwnerState === null || isConnectedRuntimeHostState(runtimeOwnerState)
+          const runtimeOwnerWorkspaceWindowClosed = runtimeOwnerState === 'workspace-window-closed'
+          const runtimeOwnerHostId = runtimeOwnerEnvironmentId
+            ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
+            : null
+          const runtimeOwnerHostLabel = runtimeOwnerHostId
+            ? (hostOptionById.get(runtimeOwnerHostId)?.label ??
+              getExecutionHostLabel(runtimeOwnerHostId))
+            : ''
           const nestedSshStatus =
             runtimeOwnerEnvironmentId && executionHost?.kind === 'ssh'
               ? selectRuntimeAwareSshStatus(
@@ -236,20 +259,26 @@ export function RepositoryHostSetupsSection({
           const setupReady =
             setup.setupState === 'ready' &&
             runtimeOwnerReachable &&
+            !runtimeOwnerWorkspaceWindowClosed &&
             (nestedSshStatus === undefined || nestedSshStatus === 'connected')
           const setupStateLabel = !runtimeOwnerReachable
             ? translate(
                 'auto.components.settings.RepositoryPane.hostStateDisconnected',
                 'Disconnected'
               )
-            : nestedSshStatus === null
-              ? translate('auto.components.settings.RepositoryPane.hostStateUnknown', 'Unknown')
-              : nestedSshStatus !== undefined && nestedSshStatus !== 'connected'
-                ? translate(
-                    'auto.components.settings.RepositoryPane.hostStateDisconnected',
-                    'Disconnected'
-                  )
-                : getSetupStateLabel(setup.setupState)
+            : runtimeOwnerWorkspaceWindowClosed
+              ? translate(
+                  'auto.components.settings.RepositoryPane.hostStateWorkspaceWindowClosed',
+                  'Workspace window closed'
+                )
+              : nestedSshStatus === null
+                ? translate('auto.components.settings.RepositoryPane.hostStateUnknown', 'Unknown')
+                : nestedSshStatus !== undefined && nestedSshStatus !== 'connected'
+                  ? translate(
+                      'auto.components.settings.RepositoryPane.hostStateDisconnected',
+                      'Disconnected'
+                    )
+                  : getSetupStateLabel(setup.setupState)
           const setupHostLabel =
             runtimeOwnerEnvironmentId && executionHost?.kind === 'ssh'
               ? translate(
@@ -299,6 +328,17 @@ export function RepositoryHostSetupsSection({
                       'Path pending'
                     )}
                 </p>
+                {runtimeOwnerWorkspaceWindowClosed ? (
+                  // Why: no runtime RPC can open a remote desktop window, so the only
+                  // honest affordance is telling the user what to do on that host.
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {translate(
+                      'auto.components.settings.RepositoryPane.hostWorkspaceWindowClosedHelp',
+                      'The server is reachable but its Orca window is closed. Open Orca on {{value0}} to use this setup.',
+                      { value0: runtimeOwnerHostLabel }
+                    )}
+                  </p>
+                ) : null}
               </div>
               {isCurrentSetup ? (
                 <SettingsBadge>

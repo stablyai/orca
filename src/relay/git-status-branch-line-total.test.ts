@@ -24,6 +24,8 @@ const OTHER_MERGE_BASE = 'fedcba9876543210fedcba9876543210fedcba98'
 // Untracked additions ride on top of the ranged diff, so the fixture needs a real file.
 const UNTRACKED_FILE = 'notes.md'
 const UNTRACKED_LINES = 4
+// No fixture path here looks like test or generated code, so it is all source.
+const NO_LINES = { added: 0, removed: 0 }
 const STATUS_OUTPUT = [
   '# branch.oid 1111111111111111111111111111111111111111',
   '# branch.head (detached)',
@@ -166,7 +168,9 @@ describe('getStatusOp branch line total', () => {
     expect(result.branchLineTotal).toEqual({
       added: 3 + UNTRACKED_LINES,
       removed: 2,
-      mergeBase
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
     })
     expect(rangedDiffCalls(git.mock.calls)).toEqual([
       ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', mergeBase, '--']
@@ -352,7 +356,9 @@ describe('getStatusOp branch line total', () => {
     expect(first.branchLineTotal).toEqual({
       added: 12 + UNTRACKED_LINES,
       removed: 5,
-      mergeBase: MERGE_BASE
+      mergeBase: MERGE_BASE,
+      test: NO_LINES,
+      generated: NO_LINES
     })
     expect(reused.branchLineTotal).toEqual(first.branchLineTotal)
     expect(rangedDiffCalls(git.mock.calls)).toHaveLength(1)
@@ -391,7 +397,9 @@ describe('getStatusOp branch line total', () => {
     expect(first.branchLineTotal).toEqual({
       added: 12 + UNTRACKED_LINES,
       removed: 5,
-      mergeBase: MERGE_BASE
+      mergeBase: MERGE_BASE,
+      test: NO_LINES,
+      generated: NO_LINES
     })
   })
 
@@ -411,7 +419,9 @@ describe('getStatusOp branch line total', () => {
     expect(moved.branchLineTotal).toEqual({
       added: 12 + UNTRACKED_LINES,
       removed: 5,
-      mergeBase: OTHER_MERGE_BASE
+      mergeBase: OTHER_MERGE_BASE,
+      test: NO_LINES,
+      generated: NO_LINES
     })
     expect(rangedDiffCalls(git.mock.calls)).toHaveLength(2)
   })
@@ -466,7 +476,9 @@ describe('getStatusOp branch line total', () => {
       expect(result.branchLineTotal).toEqual({
         added: UNTRACKED_LINES,
         removed: 0,
-        mergeBase: MERGE_BASE
+        mergeBase: MERGE_BASE,
+        test: NO_LINES,
+        generated: NO_LINES
       })
       expect(Number.isFinite(result.branchLineTotal?.added)).toBe(true)
       expect(Number.isFinite(result.branchLineTotal?.removed)).toBe(true)

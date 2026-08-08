@@ -239,8 +239,14 @@
           "34a03a6565": "保持 {{value0}} 为最新状态",
           "fa9299a66f": "您的新工作树是最新的，但本地 {{value0}} 落后于 {{value1}} {{value2}} 。 AI 差异可能会错过最近的 commits。",
           "14bc053a47": "本地 {{value0}} 未刷新",
+          "localBaseRefRefreshFailedForWorktree": "“{{value1}}”的本地 {{value0}} 未刷新",
           "4a18052018": "本地 {{value0}} 落后于 {{value1}}",
-          "903b51c2ed": "从 {{value0}} 创建工作区，但 Orca 无法快进本地 {{value1}}，因为 {{value2}}",
+          "903b51c2ed": "从 {{value0}} 创建工作区，但 Orca 无法快进本地 {{value1}}。{{value2}}",
+          "localBaseRefRefreshFailedDescriptionNamed": "工作区“{{value0}}”从 {{value1}} 创建，但 Orca 无法快进本地 {{value2}}。{{value3}}",
+          "localBaseRefRefreshFailedDetailDirtyNamed": "{{value0}} 处的工作树（本地 {{value1}} 的检出位置）有未提交的更改。请提交、暂存或丢弃这些更改，然后手动更新本地 {{value1}}。",
+          "localBaseRefRefreshFailedDetailDirty": "检出本地 {{value0}} 的工作树有未提交的更改。请提交、暂存或丢弃这些更改，然后手动更新本地 {{value0}}。",
+          "localBaseRefRefreshFailedDetailNotFastForward": "本地 {{value0}} 不存在，或无法从远程基线干净快进。手动更新前请检查是否有仅存在于本地的提交。",
+          "localBaseRefRefreshFailedDetailError": "更新本地 {{value0}} 时 Git 返回错误。请检查仓库是否有锁定的 refs 或异常工作树状态，然后手动更新本地 {{value0}}。",
           "0216895fb5": "删除分支失败",
           "19db0085fb": "本地分支已删除",
           "2b0afc7f14": "无法使本地 {{value0}} 保持最新",
@@ -349,7 +355,8 @@
               "8d6eedf97e": "无法在 PATH 中注册 Orca CLI。",
               "0f116999f1": "在安装之前重新启动 shell 或将 Orca CLI 目录添加到 PATH。",
               "15cbedc3e3": "在运行智能体技能设置之前安装 Orca CLI。",
-              "windowsPathUnknown": "Orca 无法检查您的 Windows 用户 PATH"
+              "windowsPathUnknown": "Orca 无法检查您的 Windows 用户 PATH",
+              "refreshCliRegistration": "请刷新 CLI 注册状态后重试。"
             }
           }
         }
@@ -560,6 +567,9 @@
             "0b01ff98d2": "端口",
             "7d732521ec": "评论"
           }
+        },
+        "activation": {
+          "cannotOpenFolderWorkspace": "无法打开文件夹工作区"
         }
       },
       "folderWorkspacePathStatus": {
@@ -1972,8 +1982,6 @@
         "556e7232ca": "当前",
         "684e8d7bc2": "收集您最近的工作树和打开的选项卡。",
         "ff908adfe9": "加载跳跃目标",
-        "1ebe225fee": "搜索工作树、设置、选项卡和操作...",
-        "4e4ff044d5": "搜索工作树、设置、选项卡和操作",
         "4ee378034d": "跳转到...",
         "f7fda8d562": "在 Orca 中创建工作树或打开选项卡即可开始。",
         "1628fd7dfa": "没有活动的工作树、设置、操作或打开的选项卡",
@@ -2001,7 +2009,10 @@
         "projectsGroupsHeader": "项目和分组",
         "projectBadge": "项目",
         "repoGroupBadge": "仓库组",
-        "pluginCommandFailed": "无法运行插件命令。"
+        "pluginCommandFailed": "无法运行插件命令。",
+        "27f10cca63": "搜索聊天、终端、工作树、设置和操作...",
+        "2770f02910": "搜索聊天、终端、工作树、设置和操作",
+        "recentChatsTerminalsHeader": "最近的聊天和终端"
       },
       "github": {
         "pr": {
@@ -2988,8 +2999,7 @@
             "d62d63b807": "创建文件",
             "25dc1cd653": "打开文件",
             "7cdf8ee0c8": "打开网址",
-            "b27864279e": "启动智能体",
-            "39676a184c": "打开任何文件、URL、智能体..."
+            "b27864279e": "启动智能体"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "命令",
@@ -3023,7 +3033,6 @@
                 "classifier": {
                   "42e6262ae9": "没有可用的操作。",
                   "097a982ee0": "正在加载文件...",
-                  "5a9c83c04b": "打开任何文件、URL、智能体...",
                   "90eb94dc48": "输入 http:// 或 https:// URL。",
                   "5553b283ce": "输入 URL 或文件路径。",
                   "queryTooLarge": "搜索文本过长。",
@@ -3186,7 +3195,12 @@
             "runtime_disconnect_failed": "断开连接失败",
             "runtime_reconnecting": "重新连接中",
             "runtime_last_close_reason": "已关闭：{{value0}}",
-            "runtime_reconnect_attempt": "第 {{value0}} 次尝试"
+            "runtime_reconnect_attempt": "第 {{value0}} 次尝试",
+            "connectedHostCount_one": "{{count}} 个主机",
+            "connectedHostCount_other": "{{count}} 个主机",
+            "connecting": "正在连接…",
+            "workspaceConflict": "工作区冲突",
+            "workspaceSyncError": "工作区同步错误"
           },
           "StatusBar": {
             "9659e38343": "端口",
@@ -3246,7 +3260,8 @@
             "antigravityUsage": "Antigravity 使用情况",
             "antigravityUsageDetails": "打开 Antigravity 使用详情",
             "grokUsageAria": "打开 Grok 使用详情",
-            "grokUsageMenu": "Grok 使用情况"
+            "grokUsageMenu": "Grok 使用情况",
+            "floatingTerminalNewActivity": "{{label}}，有新活动"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -3455,6 +3470,21 @@
               "metric": {
                 "workingSetDescription": "工作集 (WS) 的总和。共享页可能会出现在多个进程中。",
                 "rssDescription": "驻留集大小 (RSS) 的总和。共享页或别名映射页可能会出现在多个进程中。"
+              }
+            },
+            "manager": {
+              "terminal": {
+                "copy": {
+                  "terminalSessionCount_one": "{{count}} 个终端会话",
+                  "terminalSessionCount_other": "{{count}} 个终端会话",
+                  "memoryUnavailable": "内存信息不可用",
+                  "tooltipSummary": "资源管理器 - {{memory}} - {{sessions}}",
+                  "spaceScanReady": "空间扫描已就绪",
+                  "sessionsGroupedByWorkspace": "终端会话按工作区分组。",
+                  "noTerminalSessions": "暂无终端会话。",
+                  "ariaLabel": "资源管理器，{{sessions}}",
+                  "ariaLabelWithSpaceScan": "资源管理器，{{sessions}}，{{spaceScan}}"
+                }
               }
             }
           },
@@ -5621,7 +5651,8 @@
           "f00d6aa9b5": "WSL 在此计算机上不可用。",
           "7c776ff9d8": "wsl",
           "fc0fcf72fd": "在技​​能设置之前注册 WSL shell 命令。",
-          "windowsPathUnknown": "无法检查 WSL shell 命令 PATH"
+          "windowsPathUnknown": "无法检查 WSL shell 命令 PATH",
+          "refreshCliRegistration": "请刷新 CLI 注册状态后重试。"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "由未自定义源代码控制 AI 的存储库使用。",
@@ -5963,6 +5994,11 @@
           "3d172725cc": "没有任何",
           "1f32ba27a6": "自定义",
           "a182c5125e": "git用户名",
+          "sourceControlGroupOrderTitle": "源代码管理分组顺序",
+          "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
+          "changesFirst": "更改优先",
+          "stagedFirst": "已暂存优先",
+          "untrackedFirst": "未跟踪优先",
           "compareAgainstUpstreamTitle": "默认对比基准",
           "compareAgainstUpstreamDescription": "选择源代码管理在比较已提交变更时默认使用的基准。分支上游会自动跟随当前分支；如果没有上游，则回退到仓库默认分支。你仍然可以在对应 worktree 的 Git 面板中按 worktree 更改对比基准。Pull Request 和变基目标不会改变。",
           "compareBaseRepositoryDefault": "仓库默认",
@@ -8228,7 +8264,14 @@
             "f83c8937c4": "分支命名",
             "5ecd91c5ef": "创建工作树时添加到分支名称的前缀。",
             "68bd65fdb8": "分支前缀",
+            "sourceControlGroupOrderTitle": "源代码管理分组顺序",
+            "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
+            "groupOrder": "分组顺序",
+            "changesFirst": "更改优先",
+            "stagedFirst": "已暂存优先",
+            "untrackedFirst": "未跟踪优先",
             "sourceControl": "源代码管理",
+            "gitChanges": "git 更改",
             "compareAgainstUpstreamTitle": "默认对比基准",
             "compareAgainstUpstreamDescription": "选择源代码管理在比较已提交变更时默认使用的基准。分支上游会自动跟随当前分支；如果没有上游，则回退到仓库默认分支。你仍然可以在对应 worktree 的 Git 面板中按 worktree 更改对比基准。Pull Request 和变基目标不会改变。",
             "compareBase": "对比基准",
@@ -11146,7 +11189,9 @@
             "openSupportedWorkspace": "在恢复会话之前，请先打开一个工作区。",
             "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为打开一个本地工作区。",
             "sessionHostMismatchUnsupported": "此会话属于其他主机。请打开同一主机上的工作区以恢复它。",
-            "prepareSessionResumeFailed": "无法为恢复准备此会话。"
+            "prepareSessionResumeFailed": "无法为恢复准备此会话。",
+            "sessionDeleted": "会话已删除",
+            "sessionDeleteFailed": "无法删除会话"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "正在扫描会话",
@@ -11278,7 +11323,17 @@
             "jumpToWorktree": "跳转到工作树",
             "recoverableBadge": "未保存",
             "subagentCountSingular": "1 个子智能体",
-            "subagentCountPlural": "{{value0}} 个子智能体"
+            "subagentCountPlural": "{{value0}} 个子智能体",
+            "delete": "删除",
+            "deleteReasonNonLocalHost": "只能删除此设备上的会话。",
+            "deleteReasonSyntheticPath": "此会话无法在 Orca 中删除。",
+            "deleteReasonUnsupportedAgent": "{{value0}} 会话无法在 Orca 中删除。",
+            "deleteReasonSessionLive": "此会话仍在运行 — 请等待其完成后再删除。"
+          },
+          "AiVaultSessionDeleteDialog": {
+            "title": "要删除此会话吗？",
+            "description": "“{{value0}}”将被删除。删除后，也将无法通过 {{value1}} 自身的命令行恢复。",
+            "confirm": "删除"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "查找文件",

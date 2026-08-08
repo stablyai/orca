@@ -6,8 +6,7 @@
   position: relative;
 }
 
-/* Why: .pane-manager-root matches no live element, so a var declared there
-   never resolves and every calc() using it is dropped. Keep it on :root. */
+/* Shared tooltip geometry for every terminal link provider. */
 :root {
   --orca-terminal-link-tooltip-height: 25px;
 }
@@ -506,7 +505,7 @@
   box-sizing: border-box;
   position: relative;
   width: calc(100% - var(--pane-padding-x, 4px));
-  height: calc(100% - var(--pane-padding-y, 4px) - var(--orca-terminal-link-tooltip-height, 25px));
+  height: calc(100% - var(--pane-padding-y, 4px));
   margin-top: var(--pane-padding-y, 4px);
   margin-left: var(--pane-padding-x, 4px);
 }
@@ -517,9 +516,7 @@
    same amount to prevent overflow/clipping. */
 .pane[data-has-title] .xterm-container {
   margin-top: var(--orca-pane-title-height);
-  height: calc(
-    100% - var(--orca-pane-title-height) - var(--orca-terminal-link-tooltip-height, 25px)
-  ); /* match margin-top and the tooltip reserve */
+  height: calc(100% - var(--orca-pane-title-height)); /* match margin-top */
 }
 
 /* Ghostty-style URL hover: glued to the pane's true bottom-left corner. */

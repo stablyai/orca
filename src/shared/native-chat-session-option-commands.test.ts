@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
+import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
 import {
   buildNativeChatSessionOptionCommand,
   parseBuiltSessionOptionCommand,
@@ -227,5 +228,146 @@ describe('recordNativeChatSessionOptionCommand', () => {
         command: '/clear'
       })
     ).toEqual({ changed: false, opensAgentPicker: false })
+  })
+})
+
+describe('recordNativeChatSessionOptionCommand for grok', () => {
+  function grokRecord(model?: string): NativeChatSessionOptionRecord {
+    const record = createNativeChatSessionOptionRecord('grok')
+    if (model) {
+      record.model = { value: model, source: 'dispatched' }
+    }
+    return record
+  }
+
+  function recordGrok(record: NativeChatSessionOptionRecord, command: string) {
+    return recordNativeChatSessionOptionCommand({
+      catalog: GROK_SESSION_OPTION_CATALOG,
+      models: GROK_SESSION_OPTION_CATALOG.models,
+      record,
+      command
+    })
+  }
+
+  it('tracks a typed /model without signalling an agent picker', () => {
+    const record = grokRecord()
+    expect(recordGrok(record, '/model grok-4.5')).toEqual({
+      changed: true,
+      opensAgentPicker: false
+    })
+    expect(record.model).toEqual({ value: 'grok-4.5', source: 'dispatched' })
+  })
+
+  it('persists the typed model through the caller’s persist hook', () => {
+    const persist = vi.fn()
+    recordNativeChatSessionOptionCommand({
+      catalog: GROK_SESSION_OPTION_CATALOG,
+      models: GROK_SESSION_OPTION_CATALOG.models,
+      record: grokRecord(),
+      command: '/model grok-4.5',
+      persist
+    })
+    expect(persist).toHaveBeenCalledWith('grok-4.5', 'model', 'grok-4.5')
+  })
+
+  it('tracks effort under the current model', () => {
+    const record = grokRecord('grok-4.5')
+    expect(recordGrok(record, '/effort medium')).toEqual({
+      changed: true,
+      opensAgentPicker: false
+    })
+    expect(record.valuesByModel['grok-4.5']?.effort).toEqual({
+      value: 'medium',
+      source: 'dispatched'
+    })
+  })
+
+  it('tracks nothing for an effort tier outside the seeded choices', () => {
+    // grok accepts `xhigh`, but the picker only offers values the shared labels
+    // localize, so tracking it would render an untranslated pill.
+    const record = grokRecord('grok-4.5')
+    recordGrok(record, '/effort xhigh')
+    expect(record.valuesByModel['grok-4.5']?.effort).toBeUndefined()
+  })
+
+  it('rejects grok’s two-argument /model form and any other prose', () => {
+    // `/model Reasoning X high` is real grok syntax; whitespace means we cannot
+    // tell a model id from a prompt, so track nothing rather than guess.
+    const record = grokRecord('grok-4.5')
+    expect(recordGrok(record, '/model Reasoning X high')).toEqual({
+      changed: false,
+      opensAgentPicker: false
+    })
+    expect(record.model).toEqual({ value: 'grok-4.5', source: 'dispatched' })
+  })
+
+  it('does not open an agent picker for a bare /model', () => {
+    const record = grokRecord('grok-4.5')
+    expect(recordGrok(record, '/model')).toEqual({ changed: false, opensAgentPicker: false })
+    expect(record.model).toEqual({ value: 'grok-4.5', source: 'dispatched' })
+  })
+
+  it('tracks a typed effort under the CLI default when no model was picked', () => {
+    // Regression: the picker draws the effort row under grok's own default, so reading
+    // the tracked model alone dropped the very command that row's pill reports on —
+    // leaving it `unknown` right after the user set it.
+    const record = grokRecord()
+    const persist = vi.fn()
+    expect(
+      recordNativeChatSessionOptionCommand({
+        catalog: GROK_SESSION_OPTION_CATALOG,
+        models: GROK_SESSION_OPTION_CATALOG.models,
+        record,
+        command: '/effort low',
+        persist
+      })
+    ).toEqual({ changed: true, opensAgentPicker: false })
+    expect(record.valuesByModel['grok-4.5']?.effort).toEqual({
+      value: 'low',
+      source: 'dispatched'
+    })
+    expect(persist).toHaveBeenCalledWith('grok-4.5', 'effort', 'low')
+  })
+
+  it('does not reset tracked state when the typed model is the CLI default already shown', () => {
+    // Regression: an untracked record read as `null`, so re-typing the model the picker
+    // already displays looked like a switch and deleted that model's options.
+    const record = grokRecord()
+    recordGrok(record, '/effort low')
+    recordGrok(record, '/model grok-4.5')
+    expect(record.valuesByModel['grok-4.5']?.effort).toEqual({
+      value: 'low',
+      source: 'dispatched'
+    })
+  })
+
+  it('still resets tracked state when the typed model is a real switch', () => {
+    const record = grokRecord()
+    recordGrok(record, '/effort low')
+    recordNativeChatSessionOptionCommand({
+      catalog: GROK_SESSION_OPTION_CATALOG,
+      models: [
+        ...GROK_SESSION_OPTION_CATALOG.models,
+        { id: 'grok-build', label: 'Grok Build', options: [] }
+      ],
+      record,
+      command: '/model grok-build'
+    })
+    expect(record.model).toEqual({ value: 'grok-build', source: 'dispatched' })
+    expect(record.valuesByModel['grok-4.5']?.effort).toEqual({
+      value: 'low',
+      source: 'dispatched'
+    })
+  })
+
+  it('still tracks a model the discovered list dropped', () => {
+    const record = grokRecord()
+    recordNativeChatSessionOptionCommand({
+      catalog: GROK_SESSION_OPTION_CATALOG,
+      models: [{ id: 'grok-build', label: 'Grok Build', options: [] }],
+      record,
+      command: '/model grok-4.5'
+    })
+    expect(record.model).toEqual({ value: 'grok-4.5', source: 'dispatched' })
   })
 })

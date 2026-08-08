@@ -27,6 +27,8 @@ import {
 } from './agent-board-filtering'
 import { countAgentMapCards, type AgentMapState } from './agent-map-filter'
 import { AgentDashboardFilterChips } from './AgentDashboardFilterChips'
+import { AgentMapContentFilterItems } from './AgentMapContentFilterItems'
+import { FilterOptionCount } from './FilterOptionCount'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 
 type FilterOption = { id: string; label: string; count: number; color?: string }
@@ -46,6 +48,9 @@ type AgentDashboardToolbarProps = {
   showAgentlessWorkspaces?: boolean
   agentlessWorkspaceCount?: number
   onShowAgentlessWorkspacesChange?: (show: boolean) => void
+  /** Map-only: the dashed parent→child dispatch edges. */
+  showOrchestrationLinks?: boolean
+  onShowOrchestrationLinksChange?: (show: boolean) => void
   searchInputRef: React.RefObject<HTMLInputElement | null>
 }
 
@@ -157,10 +162,6 @@ function reviewStateLabel(state: DashboardReviewFilter): string {
   }
 }
 
-function OptionCount({ count }: { count: number }): React.JSX.Element {
-  return <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">{count}</span>
-}
-
 export function AgentDashboardToolbar({
   cards,
   filterOptions,
@@ -175,6 +176,8 @@ export function AgentDashboardToolbar({
   showAgentlessWorkspaces,
   agentlessWorkspaceCount = 0,
   onShowAgentlessWorkspacesChange,
+  showOrchestrationLinks,
+  onShowOrchestrationLinksChange,
   searchInputRef
 }: AgentDashboardToolbarProps): React.JSX.Element {
   const isMac = navigator.userAgent.includes('Mac')
@@ -190,7 +193,9 @@ export function AgentDashboardToolbar({
   const activeCount =
     activeDashboardFilterCount(filters) +
     mutedStateCount +
-    (showAgentlessWorkspaces === true ? 1 : 0)
+    (showAgentlessWorkspaces === true ? 1 : 0) +
+    // Links show by default, so only hiding them is a deviation worth badging.
+    (showOrchestrationLinks === false ? 1 : 0)
   const toggleProject = (id: string): void =>
     onFiltersChange({ ...filters, projects: toggleDashboardFilter(filters.projects, id) })
   const toggleStatus = (id: string): void =>
@@ -207,6 +212,7 @@ export function AgentDashboardToolbar({
     onFiltersChange({ projects: [], workspaceStatuses: [], reviewStates: [] })
     onAgentStatesReset?.()
     onShowAgentlessWorkspacesChange?.(false)
+    onShowOrchestrationLinksChange?.(true)
   }
   const reviewLabel = (id: DashboardReviewFilter): string =>
     translate('dashboardPopout.filters.reviewChip', 'Review: {{state}}', {
@@ -274,26 +280,16 @@ export function AgentDashboardToolbar({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64" sideOffset={6}>
-            {showAgentlessWorkspaces !== undefined && onShowAgentlessWorkspacesChange ? (
-              <>
-                <DropdownMenuLabel>
-                  {translate('dashboardPopout.map.filters.workspaceVisibility', 'Map content')}
-                </DropdownMenuLabel>
-                <DropdownMenuCheckboxItem
-                  checked={showAgentlessWorkspaces}
-                  onCheckedChange={(checked) => onShowAgentlessWorkspacesChange(checked === true)}
-                  onSelect={(event) => event.preventDefault()}
-                >
-                  <span className="truncate">
-                    {translate(
-                      'dashboardPopout.map.filters.agentlessWorkspaces',
-                      'Workspaces without agents'
-                    )}
-                  </span>
-                  <OptionCount count={agentlessWorkspaceCount} />
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuSeparator />
-              </>
+            {showAgentlessWorkspaces !== undefined &&
+            onShowAgentlessWorkspacesChange &&
+            onShowOrchestrationLinksChange ? (
+              <AgentMapContentFilterItems
+                showAgentlessWorkspaces={showAgentlessWorkspaces}
+                agentlessWorkspaceCount={agentlessWorkspaceCount}
+                onShowAgentlessWorkspacesChange={onShowAgentlessWorkspacesChange}
+                showOrchestrationLinks={showOrchestrationLinks !== false}
+                onShowOrchestrationLinksChange={onShowOrchestrationLinksChange}
+              />
             ) : null}
             {agentStates && agentStateCounts ? (
               <>
@@ -309,7 +305,7 @@ export function AgentDashboardToolbar({
                   >
                     <AgentStateDot state={dotState} size="md" />
                     <span className="truncate">{agentStateLabel(state)}</span>
-                    <OptionCount count={agentStateCounts[state]} />
+                    <FilterOptionCount count={agentStateCounts[state]} />
                   </DropdownMenuCheckboxItem>
                 ))}
                 <DropdownMenuSeparator />
@@ -326,7 +322,7 @@ export function AgentDashboardToolbar({
                 onSelect={(event) => event.preventDefault()}
               >
                 <span className="truncate">{option.label}</span>
-                <OptionCount count={option.count} />
+                <FilterOptionCount count={option.count} />
               </DropdownMenuCheckboxItem>
             ))}
             <DropdownMenuSeparator />
@@ -348,7 +344,7 @@ export function AgentDashboardToolbar({
                 >
                   <span className={cn('size-2 rounded-full', meta.swatch)} />
                   <span className="truncate">{option.label}</span>
-                  <OptionCount count={option.count} />
+                  <FilterOptionCount count={option.count} />
                 </DropdownMenuCheckboxItem>
               )
             })}
@@ -364,7 +360,7 @@ export function AgentDashboardToolbar({
                 onSelect={(event) => event.preventDefault()}
               >
                 <span>{reviewStateLabel(option)}</span>
-                <OptionCount count={reviewCounts.get(option) ?? 0} />
+                <FilterOptionCount count={reviewCounts.get(option) ?? 0} />
               </DropdownMenuCheckboxItem>
             ))}
             <DropdownMenuSeparator />

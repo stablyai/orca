@@ -223,7 +223,8 @@ export function registerCoreHandlers(
     scanRuntimeAiVaultSessions: async (environmentId, args, options) =>
       scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args, options),
     prepareRuntimeSessionResume: async (environmentId, args) =>
-      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
+      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args),
+    getSessionLiveness: (target) => runtime.getAiVaultSessionLiveness(target)
   })
   registerNativeChatHandlers()
   registerClipboardHandlers(store)

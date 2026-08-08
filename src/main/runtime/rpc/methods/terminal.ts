@@ -2623,7 +2623,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           const size = runtime.getTerminalSize(ptyId)
           const displayMode = runtime.getMobileDisplayMode(ptyId)
           const layoutSeq = runtime.getLayout(ptyId)?.seq
-          const snapshotFrameSeq = serialized?.seq ?? layoutSeq
+          // Why: layout versions and output offsets are different sequence domains.
           const snapshotOutputSeq = serialized?.seq
           emit({
             type: 'subscribed',
@@ -2664,7 +2664,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               cols: serialized?.cols ?? size?.cols ?? 80,
               rows: serialized?.rows ?? size?.rows ?? 24,
               displayMode,
-              seq: snapshotFrameSeq,
+              seq: snapshotOutputSeq,
               cwd: serialized?.cwd,
               truncated: initialOutputOverflowed,
               truncatedByByteBudget: serialized?.truncatedByByteBudget,
@@ -3424,8 +3424,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         const displayMode = runtime.getMobileDisplayMode(ptyId)
         // Why: layout seq is the mobile stale-event filter's high-water mark (undefined pre-transition is fail-open). See docs/mobile-terminal-layout-state-machine.md.
         const layoutSeq = runtime.getLayout(ptyId)?.seq
-        const snapshotFrameSeq = serialized?.seq ?? layoutSeq
-        // Why: track the seq that actually covered the buffered chunks (recovery snapshots advance it) or an absorbed query gets zero replies.
+        // Why: only an output offset can cover buffered chunks; layout versions are a separate sequence domain.
         let snapshotOutputSeq = serialized?.seq
         emit({
           type: 'subscribed',
@@ -3445,7 +3444,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           cols: serialized?.cols ?? size?.cols ?? params.viewport?.cols ?? 80,
           rows: serialized?.rows ?? size?.rows ?? params.viewport?.rows ?? 24,
           displayMode,
-          seq: snapshotFrameSeq,
+          seq: snapshotOutputSeq,
           cwd: serialized?.cwd,
           truncated: initialOutputOverflowed,
           truncatedByByteBudget: serialized?.truncatedByByteBudget,

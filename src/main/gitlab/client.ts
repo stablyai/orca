@@ -321,7 +321,11 @@ export async function getMergeRequestForBranch(
         [
           'api',
           ...glabHostnameArgs(projectRef, connectionId),
-          `projects/${encodedProject(projectRef.path)}/merge_requests?source_branch=${encodeURIComponent(branchName)}&order_by=updated_at&sort=desc&per_page=1`
+          // Why: GitLab does not proactively recompute merge status on list endpoints, so this row
+          // can sit at `unchecked` forever — and the sidebar merge button gates on MERGEABLE. Ask
+          // for the async recalculation (best-effort; ignored for non-Developers when
+          // `restrict_merge_status_recheck` is on) so polling converges instead of stalling.
+          `projects/${encodedProject(projectRef.path)}/merge_requests?source_branch=${encodeURIComponent(branchName)}&order_by=updated_at&sort=desc&per_page=1&with_merge_status_recheck=true`
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )

@@ -154,6 +154,8 @@ export type DashboardCardTerminalInput = {
   osRelease?: string
   /** Shift+Enter encoding resolved from this pane's agent evidence. */
   windowsShiftEnterEncoding: 'alt-enter' | 'csi-u'
+  /** Trusted query-only consumer accepts Ctrl+Enter CSI-u without active flags. */
+  ctrlEnterCsiU: boolean
   /** False withholds the kitty (CSI-u) advertisement, as ConPTY panes do. */
   kittyKeyboardAdvertised: boolean
 }

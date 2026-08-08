@@ -208,6 +208,66 @@ describe('Cmd+J palette middle-band ranking', () => {
     })
   })
 
+  it('drops candidates that cover a minority of the words typed', () => {
+    // Why: "linear triage" used to surface the Linear and Integrations panes on the
+    // "linear" token alone, with the unmatched word costing nothing. See screenshot report.
+    const integrationSections: SettingsNavSection[] = [
+      {
+        id: 'linear',
+        title: 'Linear',
+        description: 'How Linear works in Orca.',
+        icon: Settings,
+        searchEntries: [],
+        group: 'capabilities'
+      },
+      {
+        id: 'integrations',
+        title: 'Integrations',
+        description: 'Connect GitHub, GitLab, and Linear.',
+        icon: Settings,
+        searchEntries: [],
+        group: 'setup'
+      }
+    ]
+    const rank = (query: string): string[] =>
+      rankCmdJMiddleResults({
+        query,
+        settingsResults: buildCmdJSettingsResults(integrationSections),
+        actionResults: []
+      }).map((result) => result.id)
+
+    expect(rank('linear triage')).toEqual([])
+    expect(rank('linear')).toEqual(['settings:linear', 'settings:integrations'])
+    // Why: a majority still counts, so one stray word cannot blank an otherwise good match.
+    expect(rank('linear integrations triage')).toEqual(['settings:integrations'])
+  })
+
+  it('drops verb-prefixed settings queries whose middle words match nothing', () => {
+    // Why: the verb-plus-settings-keyword rule reads only the head and tail of the query, so
+    // "new terminal <junk> browser settings" used to win on those two ends alone.
+    expect(top('new terminal sparkles glitter browser settings')).toBeUndefined()
+    expect(top('new terminal settings')).toBe('settings:terminal')
+  })
+
+  it('keeps out-of-order partial-word matches when every query word lands somewhere', () => {
+    expect(top('font term')).toBe('settings:terminal')
+    expect(top('font sparkles')).toBeUndefined()
+  })
+
+  it('ignores navigation filler words when measuring coverage', () => {
+    // Why: "open"/"go to" carry no intent, so they must not read as unmatched words
+    // and blank the band mid-query.
+    expect(top('open terminal settings')).toBe('settings:terminal')
+    expect(top('go to ssh settings')).toBe('settings:ssh')
+    expect(top('change the terminal font')).toBe('settings:terminal')
+  })
+
+  it('counts non-latin query words instead of discarding them', () => {
+    // Why: tokenizing on ASCII only let a localized query skip the coverage rule entirely.
+    expect(top('ssh 主机 设置')).toBeUndefined()
+    expect(top('ssh 设置')).toBeUndefined()
+  })
+
   it('does not match settings on one-character or description-only queries', () => {
     expect(top('t')).toBeUndefined()
     expect(top('cookie import')).toBeUndefined()
@@ -316,6 +376,23 @@ function projectGroup(id: string, name: string, parentGroupId: string | null = n
 }
 
 describe('Cmd+J project and repo-group search', () => {
+  it('drops projects that only match the query through a generic alias word', () => {
+    // Why: every project carries the 'repo'/'project' aliases, so "repo triage" used to
+    // match all of them on that word alone — the same bug the middle band had.
+    const search = (query: string): string[] =>
+      searchCmdJProjectResults({
+        query,
+        projectGroups: [],
+        repos: [repo('repo-1', 'linear-sync'), repo('repo-2', 'billing')],
+        projects: [],
+        projectHostSetups: []
+      }).map((result) => result.title)
+
+    expect(search('repo triage')).toEqual([])
+    expect(search('linear triage')).toEqual([])
+    expect(search('linear repo')).toEqual(['linear-sync'])
+  })
+
   it('finds a Project Group by name', () => {
     const [result] = searchCmdJProjectResults({
       query: 'infra',

@@ -52,7 +52,15 @@ describe('tryDeleteWslUncPath', () => {
     expect(execFileMock).toHaveBeenCalledTimes(1)
     const [binary, spawnArgs] = execFileMock.mock.calls[0]
     expect(binary).toBe('wsl.exe')
-    expect(spawnArgs).toEqual(['-d', 'Ubuntu', '--', 'rm', '-f', '--', '/home/me/repo/file.txt'])
+    expect(spawnArgs).toEqual([
+      '-d',
+      'Ubuntu',
+      '--exec',
+      'rm',
+      '-f',
+      '--',
+      '/home/me/repo/file.txt'
+    ])
   })
 
   it('passes -rf for a recursive directory delete', async () => {
@@ -63,7 +71,56 @@ describe('tryDeleteWslUncPath', () => {
     })
 
     const [, spawnArgs] = execFileMock.mock.calls[0]
-    expect(spawnArgs).toEqual(['-d', 'Ubuntu', '--', 'rm', '-rf', '--', '/home/me/repo/dir'])
+    expect(spawnArgs).toEqual(['-d', 'Ubuntu', '--exec', 'rm', '-rf', '--', '/home/me/repo/dir'])
+  })
+
+  it('runs approved-root deletion through the contained command', async () => {
+    await withPlatform('win32', async () => {
+      await expect(
+        tryDeleteWslUncPath('\\\\wsl.localhost\\Ubuntu\\home\\me\\vault\\real\\session', {
+          recursive: true,
+          approvedRoots: ['\\\\wsl.localhost\\Ubuntu\\home\\me\\vault']
+        })
+      ).resolves.toBe(true)
+    })
+
+    const [, spawnArgs] = execFileMock.mock.calls[0]
+    expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--exec', 'sh', '-c'])
+    expect(spawnArgs.slice(-7)).toEqual([
+      'directory',
+      '3',
+      'home',
+      'me',
+      'vault',
+      'real',
+      'session'
+    ])
+  })
+
+  it('rejects an inspection failure instead of falling back to direct rm', async () => {
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+      cb(new Error('Command failed'), '', 'ORCA_WSL_DELETE_REJECT:inspection')
+    })
+
+    await withPlatform('win32', async () => {
+      await expect(
+        tryDeleteWslUncPath('\\\\wsl.localhost\\Ubuntu\\home\\me\\vault\\session.json', {
+          approvedRoots: ['\\\\wsl.localhost\\Ubuntu\\home\\me\\vault']
+        })
+      ).rejects.toMatchObject({ reason: 'path-outside-known-roots' })
+    })
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a target without a same-distro containing root before spawning', async () => {
+    await withPlatform('win32', async () => {
+      await expect(
+        tryDeleteWslUncPath('\\\\wsl.localhost\\Ubuntu\\home\\me\\vault\\session.json', {
+          approvedRoots: ['\\\\wsl.localhost\\Debian\\home\\me\\vault']
+        })
+      ).rejects.toMatchObject({ reason: 'path-outside-known-roots' })
+    })
+    expect(execFileMock).not.toHaveBeenCalled()
   })
 
   it('also handles the legacy \\\\wsl$ UNC prefix', async () => {
@@ -72,7 +129,7 @@ describe('tryDeleteWslUncPath', () => {
     })
 
     const [, spawnArgs] = execFileMock.mock.calls[0]
-    expect(spawnArgs).toEqual(['-d', 'Debian', '--', 'rm', '-f', '--', '/srv/app.log'])
+    expect(spawnArgs).toEqual(['-d', 'Debian', '--exec', 'rm', '-f', '--', '/srv/app.log'])
   })
 
   it('surfaces the distro stderr when rm fails', async () => {

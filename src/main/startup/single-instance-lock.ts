@@ -1,4 +1,5 @@
 import type { App } from 'electron'
+import { argvRequestsServeMode } from './serve-mode-argv'
 import { writeStartupDiagnosticLine, type StartupDiagnosticSink } from './startup-diagnostics'
 
 export const SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE =
@@ -10,13 +11,12 @@ export const SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE =
 // Why: stable "another process owns this profile" contract that systemd RestartPreventExitStatus= keys off; changing it silently un-fixes #11935.
 export const SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE = 3
 
-// Why: `serve` is a CLI subcommand, never Electron argv — an AppImage launched as `orca serve` exits
-// at the CLI redirect before requesting the lock, and the CLI re-spawns the Electron child with `--serve`.
-const SERVE_MODE_ARG = '--serve'
-
 // Why: a duplicate `orca serve` is a supervisor artifact, not a user asking for a window; fail open when argv is unavailable.
+// Why not `argv.includes('--serve')`: the documented systemd unit runs `<binary> serve --port …`, so a
+// duplicate start hands this handler CLI-form argv the CLI redirect never rewrote (#12677) — matching only
+// the flag form would promote the live headless server to a desktop window, un-fixing #11935.
 export function shouldActivateDesktopForSecondInstance(argv: readonly string[] = []): boolean {
-  return !argv.includes(SERVE_MODE_ARG)
+  return !argvRequestsServeMode(argv)
 }
 
 /**
