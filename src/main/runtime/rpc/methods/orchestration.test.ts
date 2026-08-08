@@ -1924,6 +1924,21 @@ describe('orchestration RPC methods', () => {
       const task = db.createTask({ spec: 'work' })
       await expect(call('orchestration.taskUpdate', { id: task.id })).rejects.toThrow(/status|deps/)
     })
+
+    it('rejects ready when deps remain incomplete after a combined deps update', async () => {
+      setup()
+      const blocker = db.createTask({ spec: 'blocker' })
+      const child = db.createTask({ spec: 'child' })
+      expect(child.status).toBe('ready')
+
+      await expect(
+        call('orchestration.taskUpdate', {
+          id: child.id,
+          deps: JSON.stringify([blocker.id]),
+          status: 'ready'
+        })
+      ).rejects.toThrow(/Cannot set status ready while dependency/)
+    })
   })
 
   describe('orchestration.dispatch', () => {

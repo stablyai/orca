@@ -1225,6 +1225,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         task = updated
       }
       if (params.status !== undefined) {
+        // Why: updateTaskStatus is a blind write; refuse ready while deps are still incomplete
+        // so `--deps incomplete --status ready` cannot create a dispatchable task (#13177 review).
+        if (params.status === 'ready') {
+          const deps: string[] = JSON.parse(task.deps)
+          const incomplete = deps.find((depId) => db.getTask(depId)?.status !== 'completed')
+          if (incomplete) {
+            throw new Error(`Cannot set status ready while dependency ${incomplete} is incomplete`)
+          }
+        }
         const updated = db.updateTaskStatus(params.id, params.status, params.result)
         if (!updated) {
           throw new Error(`Task not found: ${params.id}`)
