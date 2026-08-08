@@ -31,6 +31,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/store/selectors', () => ({
+  getAllWorktreesFromState: () => Array.from(mocks.state.worktreeMap.values()),
   getWorktreeMapFromState: () => mocks.state.worktreeMap
 }))
 
@@ -143,6 +144,25 @@ describe('runWorktreeDeletesInParallel', () => {
 
     expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(1, 'wt-1', true)
     expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'wt-2', true)
+  })
+
+  it('deletes a duplicated target identity only once', async () => {
+    const target = {
+      id: 'wt-1',
+      displayName: 'one',
+      repoId: 'repo-a',
+      path: '/workspaces/one'
+    }
+    mocks.state.removeWorktree
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: false, error: 'selector_not_found' })
+
+    await expect(runWorktreeDeletesInParallel([target, target])).resolves.toEqual(['wt-1'])
+
+    expect(mocks.state.markWorktreesDeleting).toHaveBeenCalledWith(['wt-1'])
+    expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(1)
+    expect(mocks.state.removeWorktree).toHaveBeenCalledWith('wt-1', false)
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('clears a pending ancestor when a nested descendant delete fails', async () => {

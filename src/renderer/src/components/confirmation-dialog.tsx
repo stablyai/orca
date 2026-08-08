@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -9,26 +9,19 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import {
+  ConfirmationDialogContext,
+  type ConfirmationDialogContextValue,
+  type ConfirmationDialogOptions
+} from '@/components/confirmation-dialog-context'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-
-type ConfirmationDialogOptions = {
-  title: string
-  description?: string
-  confirmLabel?: string
-  cancelLabel?: string
-  confirmVariant?: 'default' | 'destructive'
-}
 
 type ConfirmationDialogRequest = {
   id: number
   options: ConfirmationDialogOptions
   resolve: (confirmed: boolean) => void
 }
-
-type ConfirmationDialogContextValue = (options: ConfirmationDialogOptions) => Promise<boolean>
-
-const ConfirmationDialogContext = createContext<ConfirmationDialogContextValue | null>(null)
 
 export function ConfirmationDialogProvider({
   children
@@ -115,12 +108,4 @@ export function ConfirmationDialogProvider({
       </Dialog>
     </ConfirmationDialogContext.Provider>
   )
-}
-
-export function useConfirmationDialog(): ConfirmationDialogContextValue {
-  const confirm = useContext(ConfirmationDialogContext)
-  if (!confirm) {
-    throw new Error('useConfirmationDialog must be used inside ConfirmationDialogProvider')
-  }
-  return confirm
 }

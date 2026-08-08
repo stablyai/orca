@@ -24,6 +24,18 @@ export function buildLinearWorkspaceApiSettingsUrl(organizationUrlKey?: string |
     : 'https://linear.app/settings/api'
 }
 
+export function buildLinearIssueUrl(args: {
+  identifier?: string | null
+  organizationUrlKey?: string | null
+}): string | null {
+  const identifier = args.identifier?.trim()
+  const organizationUrlKey = args.organizationUrlKey?.trim()
+  if (!identifier || !organizationUrlKey) {
+    return null
+  }
+  return `https://linear.app/${encodeURIComponent(organizationUrlKey)}/issue/${encodeURIComponent(identifier)}`
+}
+
 export function getLinearOrganizationUrlKeyFromIssueUrl(issueUrl?: string | null): string | null {
   if (!issueUrl) {
     return null
@@ -44,6 +56,12 @@ export type ParsedLinearIssueInput = {
   organizationUrlKey?: string
 }
 
+export type LinearIssueLinkUpdates = {
+  linkedLinearIssue: string | null
+  linkedLinearIssueWorkspaceId: string | null
+  linkedLinearIssueOrganizationUrlKey: string | null
+}
+
 const LINEAR_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]*-\d+$/
 
 export function parseLinearIssueInput(input: string): ParsedLinearIssueInput | null {
@@ -58,6 +76,12 @@ export function parseLinearIssueInput(input: string): ParsedLinearIssueInput | n
 
   try {
     const parsed = new URL(trimmed)
+    // Why: hostname alone accepts file://linear.app/..., which then passes
+    // validation and persists as a link. The GitHub parser already gates on
+    // protocol; this keeps the two in step.
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return null
+    }
     if (parsed.hostname !== 'linear.app') {
       return null
     }
@@ -78,5 +102,33 @@ export function parseLinearIssueInput(input: string): ParsedLinearIssueInput | n
     }
   } catch {
     return null
+  }
+}
+
+export const LINEAR_ISSUE_LINK_CLEARED: LinearIssueLinkUpdates = {
+  linkedLinearIssue: null,
+  linkedLinearIssueWorkspaceId: null,
+  linkedLinearIssueOrganizationUrlKey: null
+}
+
+/** Shared by the CLI and the meta dialog so both persist identical state for
+ *  identical input. Returns null when the input is neither empty nor parseable. */
+export function buildLinearIssueLinkUpdates(input: string): LinearIssueLinkUpdates | null {
+  if (input.trim() === '') {
+    return { ...LINEAR_ISSUE_LINK_CLEARED }
+  }
+
+  const parsed = parseLinearIssueInput(input)
+  if (!parsed) {
+    return null
+  }
+
+  return {
+    linkedLinearIssue: parsed.identifier,
+    // Both scoping fields describe the issue being REPLACED. A stale org key
+    // pins resolveLegacyLinearLinkWorkspace to the wrong org — not-found, or a
+    // silently wrong issue on a prefix collision. Nulling only costs a re-read.
+    linkedLinearIssueWorkspaceId: null,
+    linkedLinearIssueOrganizationUrlKey: parsed.organizationUrlKey ?? null
   }
 }

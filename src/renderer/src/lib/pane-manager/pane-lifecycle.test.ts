@@ -69,7 +69,6 @@ function createPane(): ManagedPaneInternal {
     ligaturesAddon: null,
     webLinksAddon: {} as never,
     webglAddon: null,
-    compositionHandler: null,
     pendingSplitScrollState: null,
     debugLabel: null
   }
@@ -554,7 +553,6 @@ describe('openTerminal — addon and provider wiring', () => {
       ligaturesAddon: null,
       webLinksAddon,
       webglAddon: null,
-      compositionHandler: null,
       pendingSplitScrollState: null,
       debugLabel: null
     }

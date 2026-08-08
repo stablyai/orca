@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -137,6 +137,19 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     ).resolves.toBeDefined()
   })
 
+  it('deregisters a worktree whose directory was renamed away', async () => {
+    // Orca renames the checkout into a trash directory and then clears the registration, so every
+    // supported Git must accept `worktree remove --force` on the now-missing path.
+    await runGit(['worktree', 'add', '-b', 'compat-deferred', 'deferred-wt'])
+    await rename(join(repoPath, 'deferred-wt'), join(repoPath, 'deferred-trash'))
+
+    await expect(runGit(['worktree', 'remove', '--force', 'deferred-wt'])).resolves.toBeDefined()
+
+    const remaining = await runGit(['worktree', 'list', '--porcelain'])
+    expect(remaining.stdout).not.toContain('deferred-wt')
+    await rm(join(repoPath, 'deferred-trash'), { recursive: true, force: true })
+  })
+
   it('recognizes ref and merge-tree compatibility boundaries', async () => {
     await expectPreferredOrRecognizedFallback(
       ['for-each-ref', '--format=%(refname)', '--exclude=refs/remotes/**/HEAD', '--count=10'],
@@ -200,5 +213,17 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       // the scalar prompt guards still provide the baseline fail-fast behavior.
       expect(supports(2, 31)).toBe(false)
     }
+  })
+
+  // Why pin this: --verify swallows --end-of-options but --symbolic-full-name echoes
+  // it deliberately, on every version tested (2.25 through 2.49). git-history.ts skips
+  // that line; if a future git stopped emitting it, the skip stays correct, but if this
+  // assertion ever flips the reason for the skip is worth re-reading.
+  it('echoes the option marker from rev-parse --symbolic-full-name', async () => {
+    const result = await runGit(['rev-parse', '--symbolic-full-name', '--end-of-options', 'HEAD'])
+    const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean)
+
+    expect(lines[0]).toBe('--end-of-options')
+    expect(lines.find((line) => line !== '--end-of-options')).toMatch(/^refs\//)
   })
 })

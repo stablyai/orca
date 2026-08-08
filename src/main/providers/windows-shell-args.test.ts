@@ -102,6 +102,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const opencodeRestoreIndex = command.indexOf(
       '$env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR'
     )
+    const mimocodeRestoreIndex = command.indexOf('$env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME')
+    const duplicateStateGuardIndex = command.indexOf('Test-Path variable:global:__OrcaOsc133State')
+    const languageModeGuardIndex = command.indexOf('LanguageMode -eq "FullLanguage"')
     const ompWrapperIndex = command.indexOf('function Global:omp')
     const ompExtensionIndex = command.indexOf('--extension $env:ORCA_OMP_STATUS_EXTENSION')
     const codexRestoreIndex = command.indexOf('$env:CODEX_HOME = $env:ORCA_CODEX_HOME')
@@ -114,13 +117,16 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(command).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(command).not.toContain('$env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_SOURCE_AGENT_DIR')
-    expect(outputEncodingIndex).toBeGreaterThanOrEqual(0)
-    expect(opencodeRestoreIndex).toBeGreaterThan(outputEncodingIndex)
-    expect(ompWrapperIndex).toBeGreaterThan(opencodeRestoreIndex)
+    for (const restoreIndex of [opencodeRestoreIndex, mimocodeRestoreIndex, codexRestoreIndex]) {
+      expect(restoreIndex).toBeGreaterThanOrEqual(0)
+      expect(restoreIndex).toBeLessThan(duplicateStateGuardIndex)
+      expect(restoreIndex).toBeLessThan(languageModeGuardIndex)
+    }
+    expect(outputEncodingIndex).toBeGreaterThan(languageModeGuardIndex)
+    expect(outputEncodingIndex).toBeGreaterThan(duplicateStateGuardIndex)
+    expect(ompWrapperIndex).toBeGreaterThan(outputEncodingIndex)
     expect(ompExtensionIndex).toBeGreaterThan(ompWrapperIndex)
-    expect(codexRestoreIndex).toBeGreaterThan(outputEncodingIndex)
-    expect(codexRestoreIndex).toBeGreaterThan(ompWrapperIndex)
-    expect(promptIndex).toBeGreaterThan(codexRestoreIndex)
+    expect(promptIndex).toBeGreaterThan(ompWrapperIndex)
     expect(cwdRestoreIndex).toBeGreaterThan(promptIndex)
     expect(command).toContain('Esc = [char]27')
     expect(command).toContain('Bel = [char]7')

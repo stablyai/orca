@@ -204,6 +204,8 @@ function openMarkdownLinkInClientOs({
     return
   }
   if (classified.kind === 'external') {
+    // Why: deliberate divergence from the preview — this path hands the link to the
+    // client OS unconditionally, so it does not follow the invert setting.
     openHttpLink(classified.url, { forceSystemBrowser: true, sourceOwner })
     return
   }

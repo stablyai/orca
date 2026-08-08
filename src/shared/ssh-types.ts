@@ -92,6 +92,54 @@ export type SshConfigImportResult = {
   repoReadoptions: SshRepoReadoption[]
 }
 
+/** Concrete Host entry from ~/.ssh/config, for pickers that prefill the add-host form. */
+export type SshConfigHostSummary = {
+  alias: string
+  hostname: string
+  port: number
+  username: string
+  identityFile?: string
+  proxyCommand?: string
+  jumpHost?: string
+  /** True when an Orca SSH target already uses this config alias. */
+  alreadyInOrca: boolean
+  /**
+   * True when the user deleted this alias from Orca (tombstone). Still listed so they
+   * can re-pick it; passive import and "Add all" keep it out until re-adopt / save.
+   */
+  previouslyRemoved?: boolean
+}
+
+/** Max hosts one picker query returns; shared so the renderer's copy cannot drift. */
+export const SSH_CONFIG_HOST_RESULT_LIMIT = 100
+
+export type SshConfigHostListResult = {
+  hosts: SshConfigHostSummary[]
+  totalHostCount: number
+  newHostCount: number
+  matchCount: number
+  hasMore: boolean
+}
+
+/** `refresh` re-reads ~/.ssh/config; filter keystrokes reuse the cached parse. */
+export type SshConfigHostListArgs = { query?: string; refresh?: boolean }
+
+/** Effective OpenSSH values used to prefill one manually managed target. */
+export type SshConfigHostResolution = {
+  alias: string
+  hostname: string
+  port: number
+  username: string
+  identityFiles: string[]
+  identityAgent?: string
+  identitiesOnly: boolean
+  forwardAgent: boolean
+  gssapiAuthentication?: boolean
+  proxyCommand?: string
+  proxyUseFdpass: boolean
+  jumpHost?: string
+}
+
 export type SavedPortForward = {
   localPort: number
   remoteHost: string
@@ -111,12 +159,22 @@ export type SshConnectionStatus =
 
 export type SshRemotePlatform = 'linux' | 'darwin' | 'win32'
 
+export type SshProviderEpoch = string & { readonly __sshProviderEpoch: unique symbol }
+
+export type DirectSshAuthority = {
+  targetId: string
+  providerEpoch: SshProviderEpoch
+  connectionGeneration: number
+}
+
 export type SshConnectionState = {
   targetId: string
   status: SshConnectionStatus
   error: string | null
   /** Number of reconnection attempts since last disconnect. */
   reconnectAttempt: number
+  /** Opaque provider-incarnation token issued by main. */
+  providerEpoch?: SshProviderEpoch | null
   /** Non-secret owner token used to reject mutations captured for an obsolete SSH session. */
   connectionGeneration?: number
   /** Folder downloads require ssh2 SFTP and are unavailable on system SSH. */
@@ -145,6 +203,20 @@ export type SshRemotePtyLease = {
   updatedAt: number
   lastAttachedAt?: number
   lastDetachedAt?: number
+}
+
+/** Main-owned relay lease needed to reclaim PTY delivery after a desktop restart. */
+export type SshPtyConsumerRecovery = {
+  targetId: string
+  clientInstanceId: string
+  serverBuildId: string
+  clientGeneration: number
+  ownerGeneration: number
+  ownerLease: string
+  outputFlowControl?: {
+    version: 1
+    windowSu: number
+  }
 }
 
 // ─── Port Forwarding Types ─────────────────────────────────────────

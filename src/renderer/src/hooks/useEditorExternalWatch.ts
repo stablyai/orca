@@ -32,6 +32,8 @@ import {
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { markFileChangedOnDisk } from '@/components/editor/editor-changed-on-disk-mark'
 import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 
 // Why: atomic writes burst same-path events; one reload dispatch each fans out into N EditorPanel rebuilds that can wedge the renderer (issue #826), so debounce per (worktreeId+path).
 const EXTERNAL_RELOAD_DEBOUNCE_MS = 75
@@ -95,6 +97,8 @@ export type EditorExternalWatchTargetState = Pick<
   | 'rightSidebarExplorerView'
   | 'gitStatusHugeByWorktree'
   | 'sshConnectionStates'
+  | 'folderWorkspaces'
+  | 'projectGroups'
 >
 
 let cachedOpenFiles: AppState['openFiles'] | null = null
@@ -107,6 +111,8 @@ let cachedRightSidebarTab: AppState['rightSidebarTab'] | null = null
 let cachedRightSidebarExplorerView: AppState['rightSidebarExplorerView'] | null = null
 let cachedGitStatusHugeByWorktree: AppState['gitStatusHugeByWorktree'] | null = null
 let cachedSshConnectionStates: AppState['sshConnectionStates'] | null = null
+let cachedFolderWorkspaces: AppState['folderWorkspaces'] | null = null
+let cachedProjectGroups: AppState['projectGroups'] | null = null
 let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = { targets: [], targetsKey: '' }
 
 export function getWatchedTargetKey(target: WatchedTarget): string {
@@ -132,7 +138,9 @@ export function getEditorExternalWatchTargets(
     cachedRightSidebarTab === state.rightSidebarTab &&
     cachedRightSidebarExplorerView === state.rightSidebarExplorerView &&
     cachedGitStatusHugeByWorktree === state.gitStatusHugeByWorktree &&
-    cachedSshConnectionStates === state.sshConnectionStates
+    cachedSshConnectionStates === state.sshConnectionStates &&
+    cachedFolderWorkspaces === state.folderWorkspaces &&
+    cachedProjectGroups === state.projectGroups
   ) {
     return cachedWatchedTargetsSnapshot
   }
@@ -183,18 +191,31 @@ export function getEditorExternalWatchTargets(
   const sortedWorktreeIds = Array.from(targetOwnersByWorktreeId.keys()).sort()
   for (const id of sortedWorktreeIds) {
     const wt = findWorktreeById(state.worktreesByRepo, id)
-    if (!wt) {
+    const workspaceScope = parseWorkspaceKey(id)
+    const folderWorkspace =
+      workspaceScope?.type === 'folder'
+        ? state.folderWorkspaces.find(
+            (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+          )
+        : undefined
+    if (!wt && !folderWorkspace) {
       continue
     }
-    const repo = state.repos.find((r) => r.id === wt.repoId)
+    const repo = wt ? state.repos.find((r) => r.id === wt.repoId) : undefined
+    const connectionId = folderWorkspace
+      ? getFolderWorkspaceConnectionId(state, folderWorkspace.id)
+      : repo?.connectionId
+    if (connectionId === undefined && folderWorkspace) {
+      continue
+    }
     const owners = Array.from(targetOwnersByWorktreeId.get(id) ?? []).sort((a, b) =>
       (a ?? '').localeCompare(b ?? '')
     )
     for (const owner of owners) {
       const target = {
         worktreeId: id,
-        worktreePath: wt.path,
-        connectionId: repo?.connectionId ?? undefined,
+        worktreePath: wt?.path ?? folderWorkspace!.folderPath,
+        connectionId: connectionId ?? undefined,
         runtimeEnvironmentId: owner
       }
       nextTargets.push(target)
@@ -213,6 +234,8 @@ export function getEditorExternalWatchTargets(
   cachedRightSidebarExplorerView = state.rightSidebarExplorerView
   cachedGitStatusHugeByWorktree = state.gitStatusHugeByWorktree
   cachedSshConnectionStates = state.sshConnectionStates
+  cachedFolderWorkspaces = state.folderWorkspaces
+  cachedProjectGroups = state.projectGroups
 
   if (targetsKey === cachedWatchedTargetsSnapshot.targetsKey) {
     return cachedWatchedTargetsSnapshot

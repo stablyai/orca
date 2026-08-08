@@ -31,6 +31,12 @@
         results.appendChild(li)
         document.title = 'probes:' + results.children.length
       }
+      function markNavigationInvocation(name) {
+        var marker = document.createElement('meta')
+        marker.dataset.navigationProbeInvoked = name
+        marker.content = 'true'
+        document.head.appendChild(marker)
+      }
 
       // Probe 1: fetch() exfiltration — must be blocked by connect-src 'none'.
       var cookieValue = 'x'
@@ -73,6 +79,7 @@
       // Navigation probes are opt-in so a failed attempt cannot erase the
       // network and bridge evidence before the harness observes it.
       document.getElementById('navigate-top').addEventListener('click', function () {
+        markNavigationInvocation('top-navigation')
         try {
           window.top.location.href = 'https://example.com/'
           setTimeout(function () {
@@ -84,6 +91,7 @@
       })
 
       document.getElementById('navigate-self').addEventListener('click', function () {
+        markNavigationInvocation('self-navigation')
         try {
           window.location.href = 'https://example.com/self-navigation'
           setTimeout(function () {
@@ -95,6 +103,7 @@
       })
 
       document.getElementById('navigate-anchor-form').addEventListener('click', function () {
+        markNavigationInvocation('anchor-form-navigation')
         var anchor = document.createElement('a')
         anchor.href = 'https://example.com/anchor-navigation'
         anchor.textContent = 'Navigation probe'
@@ -111,6 +120,7 @@
       })
 
       document.getElementById('navigate-meta').addEventListener('click', function () {
+        markNavigationInvocation('meta-refresh-navigation')
         var refresh = document.createElement('meta')
         refresh.httpEquiv = 'refresh'
         refresh.content = '0;url=https://example.com/meta-refresh'

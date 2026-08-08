@@ -142,6 +142,23 @@ describe('sendNativeChatMessage', () => {
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(6)
   })
 
+  it('does not let a canceled queued send stall the sends behind it', async () => {
+    sendNativeChatMessage(SETTINGS, PTY, 'first')
+    const canceled = sendNativeChatMessage(SETTINGS, PTY, 'canceled')
+    sendNativeChatMessage(SETTINGS, PTY, 'third')
+    canceled.cancel()
+
+    await vi.advanceTimersByTimeAsync(NATIVE_CHAT_SUBMIT_DELAY_MS)
+
+    expectWriteOrder(sendRuntimePtyInput.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      buildNativeChatPasteBytes('first'),
+      NATIVE_CHAT_SUBMIT,
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      buildNativeChatPasteBytes('third')
+    ])
+  })
+
   it('does not serialize sends across different PTYs', () => {
     sendNativeChatMessage(SETTINGS, 'pty-a', 'one')
     sendNativeChatMessage(SETTINGS, 'pty-b', 'two')

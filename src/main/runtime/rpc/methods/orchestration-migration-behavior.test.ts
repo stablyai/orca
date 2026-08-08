@@ -49,6 +49,73 @@ describe('orchestration migration behavior', () => {
     expect(db.getTask(task.id)?.status).toBe('ready')
   })
 
+  it('formats legacy terminal inspection as read-only without consuming mail', async () => {
+    const { db, runtime } = createRuntime()
+    const message = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coord',
+      subject: 'still working',
+      body: 'Tests are running.'
+    })
+    const check = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.check')!
+
+    const inspected = (await check.handler(
+      check.params!.parse({ terminal: 'term_coord', peek: true, format: true }),
+      { runtime }
+    )) as { count: number; formatted: string }
+
+    expect(inspected.count).toBe(1)
+    expect(inspected.formatted).toContain('[LEGACY READ-ONLY]')
+    expect(inspected.formatted).toContain('Tests are running.')
+    expect(inspected.formatted).not.toContain('[Reply:')
+    expect(db.getMessageById(message.id)?.read).toBe(0)
+  })
+
+  it('rejects acknowledgment of legacy mail without effects', async () => {
+    const { db, runtime } = createRuntime()
+    const message = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coord',
+      subject: 'still working'
+    })
+    const check = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.check')!
+
+    await expect(
+      check.handler(check.params!.parse({ terminal: 'term_coord' }), { runtime })
+    ).rejects.toMatchObject({
+      code: 'legacy_read_only',
+      data: { effectsApplied: false }
+    })
+    expect(db.getMessageById(message.id)?.read).toBe(0)
+    expect(db.getInbox(100)).toHaveLength(1)
+  })
+
+  it('rejects replies to legacy mail without marking or inserting rows', async () => {
+    const { db, runtime } = createRuntime()
+    const message = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coord',
+      subject: 'legacy question'
+    })
+    const reply = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.reply')!
+
+    await expect(
+      reply.handler(
+        reply.params!.parse({
+          id: message.id,
+          body: 'replacement started',
+          from: 'term_coord'
+        }),
+        { runtime }
+      )
+    ).rejects.toMatchObject({
+      code: 'legacy_read_only',
+      data: { effectsApplied: false }
+    })
+    expect(db.getMessageById(message.id)?.read).toBe(0)
+    expect(db.getInbox(100)).toHaveLength(1)
+  })
+
   it('rejects a pre-contract worker_done before message or lifecycle mutation', async () => {
     const { db, runtime } = createRuntime()
     const run = db.createRun({

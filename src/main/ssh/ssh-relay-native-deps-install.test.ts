@@ -1,6 +1,7 @@
 // Why: regression coverage for the install-probe contract — the "node-pty is not available" bug shipped because every guard layer was silent.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
 vi.mock('electron', () => ({
   app: { getAppPath: () => '/mock/app' }
@@ -34,6 +35,11 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
 
 vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
+}))
+
+vi.mock('./ssh-relay-install-marker', async (importOriginal) => ({
+  ...(await importOriginal<typeof RelayInstallMarkerModule>()),
+  createRelayInstallMarkerFileName: () => '.sftp-namespace-00000000000000000000000000000000'
 }))
 
 vi.mock('./ssh-relay-versioned-install', () => ({
@@ -81,6 +87,7 @@ import {
   makeExecResponses,
   makeMockConnection,
   makeRepairToolchainSkipExecResponses,
+  makeStagedFirstInstallExecPrefix,
   type ExecResponse,
   type SftpWriteCapture
 } from './ssh-relay-native-deps-install-fixture'
@@ -96,7 +103,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // mockReset because clearAllMocks keeps queued mockResolvedValueOnce entries, so a leaked response would bleed into the next test.
-    vi.mocked(execCommand).mockReset()
+    vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     sftpCapture.paths.length = 0
     for (const k of Object.keys(sftpCapture.contents)) {
@@ -125,40 +132,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       }
     }
   }
-
-  it('writes a hardcoded package.json BEFORE running npm install', async () => {
-    const conn = makeMockConnection(sftpCapture)
-    feed(makeExecResponses({ npmInstall: 'ok', probe: 'ok' }))
-
-    await deployAndLaunchRelay(conn)
-
-    const pkgPath = sftpCapture.paths.find((p) => p.endsWith('/package.json'))
-    expect(pkgPath, 'package.json must be written via SFTP').toBeTruthy()
-
-    const written = sftpCapture.contents[pkgPath as string]
-    expect(written).toBeTruthy()
-    const parsed = JSON.parse(written) as Record<string, unknown>
-    expect(parsed.name).toBe('orca-relay')
-    expect(parsed.version).toBe('1.0.0')
-    expect(parsed.private).toBe(true)
-    // Why: pin commonjs so a future Node default flip can't break require('node-pty').
-    expect(parsed.type).toBe('commonjs')
-    expect(parsed.dependencies).toEqual({ '@parcel/watcher': '2.5.6', 'node-pty': '1.1.0' })
-    expect(parsed.allowScripts).toEqual({
-      '@parcel/watcher@2.5.6': true,
-      'node-pty@1.1.0': true
-    })
-
-    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
-    const npmInstallIdx = execCalls.findIndex(
-      (c) => c.includes('npm install') && c.includes('node-pty') && c.includes('@parcel/watcher')
-    )
-    expect(npmInstallIdx).toBeGreaterThanOrEqual(0)
-    expect(execCalls[npmInstallIdx]).toContain('--ignore-scripts=false')
-    // Pin write-before-install ordering to catch a Promise.all refactor where the final-state assertions above still pass.
-    const writeObservedAt = sftpCapture.execCallCountAtWrite[pkgPath as string]
-    expect(writeObservedAt).toBeLessThanOrEqual(npmInstallIdx)
-  })
 
   it('propagates a hard `npm install` failure so the deploy aborts before finalizeInstall', async () => {
     const conn = makeMockConnection(sftpCapture)
@@ -366,10 +339,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     // Why: rebuild degrades gracefully, but the post-rebuild probe must surface transport death, else a dead channel finalizes a half-repaired install.
     const conn = makeMockConnection(sftpCapture)
     feed([
-      '__ORCA_REMOTE_PLATFORM__ Linux x86_64', // uname
-      '/home/u', // $HOME
-      '', // mkdir remoteDir (uploadRelay)
-      '', // chmod +x node
+      ...makeStagedFirstInstallExecPrefix(),
       '', // npm install native deps
       '', // chmod prebuilds
       'MISSING\n', // first probe: require() fails
@@ -393,12 +363,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     vi.useFakeTimers()
     try {
       const conn = makeMockConnection(sftpCapture)
-      feed([
-        '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-        '/home/u',
-        '', // mkdir remoteDir
-        '' // chmod +x node
-      ])
+      feed(makeStagedFirstInstallExecPrefix())
       let installSignal: AbortSignal | undefined
       vi.mocked(execCommand).mockImplementationOnce((_conn, command, options) => {
         expect(command).toContain('npm install')
@@ -560,15 +525,19 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     feed([
       '__ORCA_REMOTE_PLATFORM__ Windows AMD64',
       'C:\\Users\\u',
-      '', // mkdir remoteDir
+      '', // bounded stale-stage recovery
+      '__ORCA_UPLOAD_STAGE_SLOT__.sftp-namespace-00000000000000000000000000000000:slot-0',
+      '__ORCA_UPLOAD_STAGE_PROMOTION__.sftp-namespace-00000000000000000000000000000000:PROMOTED',
       '', // npm install native deps
       'MISSING\n', // native process exit normalized by PowerShell command
       '', // npm rebuild native deps
       'MISSING\n', // rebuilt native process still cannot load
+      '', // clean stage root
       '', // no persisted active pipe marker
-      'WAITING',
+      'WAITING', // initial pipe probe
+      '', // publish the per-launch credential
       '', // WMI relay launch
-      'READY',
+      'READY', // readiness poll
       '' // persist active pipe marker
     ])
 
@@ -636,7 +605,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     for (const k of Object.keys(sftpCapture.execCallCountAtWrite)) {
       delete sftpCapture.execCallCountAtWrite[k]
     }
-    vi.mocked(execCommand).mockReset()
+    vi.mocked(execCommand).mockReset().mockResolvedValue('')
 
     const conn2 = makeMockConnection(sftpCapture)
     feed(makeExecResponses({ npmInstall: 'ok', probe: 'ok' }))
@@ -661,6 +630,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       'ORCA-NPTY-PROBE-OK\n',
       '', // rm probe stderr
       'DEAD',
+      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -712,6 +682,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '', // SFTP-namespace install-owner marker (repair)
       { reject: 'npm ERR! network ETIMEDOUT' }, // npm install fails (offline)
       'DEAD',
+      '', // remote credential generation after degraded repair
       'READY'
     ])
 
@@ -739,6 +710,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
         })
       )
       .mockResolvedValueOnce('DEAD')
+      .mockResolvedValueOnce('') // remote credential generation after degraded repair
       .mockResolvedValueOnce('READY')
 
     await deployAndLaunchRelay(conn)
@@ -752,12 +724,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     vi.useFakeTimers()
     try {
       const conn = makeMockConnection(sftpCapture)
-      feed([
-        '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-        '/home/u',
-        '', // mkdir remoteDir
-        '' // chmod +x node
-      ])
+      feed(makeStagedFirstInstallExecPrefix())
       let installSignal: AbortSignal | undefined
       vi.mocked(execCommand).mockImplementationOnce((_conn, command, options) => {
         expect(command).toContain('npm install')
@@ -785,11 +752,10 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       const deploy = deployAndLaunchRelay(conn).catch((err: Error) => err)
       await vi.waitFor(() => expect(installSignal).toBeDefined())
       await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TIMEOUT_MS)
+      await vi.advanceTimersByTimeAsync(5_000)
       const result = await deploy
       expect(result).toBeInstanceOf(Error)
       expect((result as Error).message).toContain('Relay deployment timed out')
-      await vi.advanceTimersByTimeAsync(5_000)
-
       expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
       expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
     } finally {
@@ -799,21 +765,19 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
   it('does not finalize or release a first-install lock after unconfirmed rebuild teardown', async () => {
     const conn = makeMockConnection(sftpCapture)
-    vi.mocked(execCommand)
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
-      .mockResolvedValueOnce('/home/u')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('MISSING')
-      .mockResolvedValueOnce('rebuild diagnostics')
-      .mockResolvedValueOnce('')
-      .mockRejectedValueOnce(
-        Object.assign(new Error('rebuild termination was not confirmed'), {
-          sshChannelCloseConfirmed: false
-        })
-      )
+    feed([
+      ...makeStagedFirstInstallExecPrefix(),
+      '', // npm install
+      '', // chmod prebuilds
+      'MISSING',
+      'rebuild diagnostics',
+      '' // remove probe diagnostics
+    ])
+    vi.mocked(execCommand).mockRejectedValueOnce(
+      Object.assign(new Error('rebuild termination was not confirmed'), {
+        sshChannelCloseConfirmed: false
+      })
+    )
 
     await expect(deployAndLaunchRelay(conn)).rejects.toThrow(
       'rebuild termination was not confirmed'
@@ -827,10 +791,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     try {
       const conn = makeMockConnection(sftpCapture)
       feed([
-        '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-        '/home/u',
-        '', // mkdir remoteDir
-        '', // chmod +x node
+        ...makeStagedFirstInstallExecPrefix(),
         '', // npm install
         '', // chmod prebuilds
         'MISSING',
@@ -863,11 +824,10 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       const deploy = deployAndLaunchRelay(conn).catch((err: Error) => err)
       await vi.waitFor(() => expect(rebuildSignal).toBeDefined())
       await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TIMEOUT_MS)
+      await vi.advanceTimersByTimeAsync(5_000)
       const result = await deploy
       expect(result).toBeInstanceOf(Error)
       expect((result as Error).message).toContain('Relay deployment timed out')
-      await vi.advanceTimersByTimeAsync(5_000)
-
       expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
       expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
     } finally {
@@ -880,7 +840,14 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)
     vi.mocked(tryAcquireRelayRepairLock).mockResolvedValueOnce(lockResult)
     const conn = makeMockConnection(sftpCapture)
-    feed(['__ORCA_REMOTE_PLATFORM__ Linux x86_64', '/home/u', 'MISSING', 'DEAD', 'READY'])
+    feed([
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+      '/home/u',
+      'MISSING',
+      'DEAD',
+      '', // remote credential generation without a namespace marker
+      'READY'
+    ])
 
     await deployAndLaunchRelay(conn)
 
@@ -899,7 +866,9 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
       '/home/u',
       'ORCA-NATIVE-DEPS-OK',
+      '', // launch namespace marker
       'DEAD',
+      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -922,7 +891,9 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
       '/home/u',
       'ORCA-NATIVE-DEPS-OK',
+      '', // launch namespace marker
       'DEAD',
+      '', // publish the per-launch credential
       'READY'
     ])
 

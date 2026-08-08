@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const {
   applyAppIconMock,
+  applyAgentStatusHooksEnabledMock,
   applyElectronProxySettingsMock,
   browserWindowGetAllWindowsMock,
   handleMock,
@@ -13,6 +14,7 @@ const {
   rebuildAppMenuMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
+  applyAgentStatusHooksEnabledMock: vi.fn(),
   applyElectronProxySettingsMock: vi.fn(),
   browserWindowGetAllWindowsMock: vi.fn(),
   handleMock: vi.fn(),
@@ -45,6 +47,10 @@ vi.mock('../network/proxy-settings', () => ({
 
 vi.mock('../app-icon', () => ({
   applyAppIcon: applyAppIconMock
+}))
+
+vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+  applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
 
 vi.mock('../worktree-root-preparation', () => ({
@@ -81,6 +87,7 @@ describe('registerSettingsHandlers', () => {
     handleMock.mockClear()
     onMock.mockClear()
     applyAppIconMock.mockClear()
+    applyAgentStatusHooksEnabledMock.mockReset().mockResolvedValue([])
     applyElectronProxySettingsMock.mockClear()
     applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
     previewGhosttyImportMock.mockClear()
@@ -119,6 +126,53 @@ describe('registerSettingsHandlers', () => {
     const event = { returnValue: undefined as unknown }
     listener(event)
     expect(event.returnValue).toEqual({ terminalMainSideEffectAuthority: false })
+  })
+
+  it('does not reconcile hooks when the disabled-agent set is unchanged', async () => {
+    const before = {
+      agentStatusHooksEnabled: true,
+      disabledTuiAgents: ['codex', 'claude']
+    }
+    store.getSettings.mockReturnValue(before)
+    store.updateSettings.mockReturnValue({
+      ...before,
+      disabledTuiAgents: ['claude', 'codex']
+    })
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { disabledTuiAgents: string[] }
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { disabledTuiAgents: ['claude', 'codex'] })
+
+    expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
+  })
+
+  it('reconciles hooks when the disabled-agent set changes', async () => {
+    const before = {
+      agentStatusHooksEnabled: true,
+      disabledTuiAgents: ['codex', 'claude']
+    }
+    const updated = {
+      ...before,
+      disabledTuiAgents: ['claude']
+    }
+    store.getSettings.mockReturnValue(before)
+    store.updateSettings.mockReturnValue(updated)
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { disabledTuiAgents: string[] }
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { disabledTuiAgents: ['claude'] })
+
+    expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(
+      true,
+      updated,
+      expect.objectContaining({ shouldContinue: expect.any(Function) })
+    )
   })
 
   it('rejects durable Active Server writes through generic settings:set', async () => {
@@ -440,6 +494,54 @@ describe('registerSettingsHandlers', () => {
 
     expect(store.updateSettings).toHaveBeenCalledWith(
       { terminalLineHeight: 1 },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('normalizes custom mobile pairing addresses before persistence', async () => {
+    store.getSettings.mockReturnValue({
+      mobilePairingCustomAddress: null,
+      mobilePairingCustomAddresses: []
+    })
+    store.updateSettings.mockReturnValue({
+      mobilePairingCustomAddress: '100.126.117.25:6768',
+      mobilePairingCustomAddresses: ['first.example:6768']
+    })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      mobilePairingCustomAddress: ' 100.126.117.25:6768 ',
+      mobilePairingCustomAddresses: [' first.example:6768 ', 'host:99999', 'first.example:6768']
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {
+        mobilePairingCustomAddress: '100.126.117.25:6768',
+        mobilePairingCustomAddresses: ['first.example:6768']
+      },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('clears malformed custom mobile pairing addresses before persistence', async () => {
+    store.getSettings.mockReturnValue({ mobilePairingCustomAddress: '100.126.117.25:6768' })
+    store.updateSettings.mockReturnValue({ mobilePairingCustomAddress: null })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { mobilePairingCustomAddress: 'host:99999' })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { mobilePairingCustomAddress: null },
       { notifyListeners: true, originWebContentsId: 1 }
     )
   })

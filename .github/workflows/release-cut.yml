@@ -72,6 +72,11 @@ jobs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
+      # Why: downstream SignPath Slack pings need the cut source (not only the
+      # new tag) so approvers know what they're signing and who cut it.
+      source_ref: ${{ steps.resolve.outputs.ref }}
+      source_sha: ${{ steps.resolve.outputs.sha }}
+      source_short_sha: ${{ steps.resolve.outputs.short_sha }}
     steps:
       # Why inlined (not m-s-abeer/update-gha-summary-with-workflow-inputs):
       # this job runs with contents:write and secret scope, so avoid executing
@@ -122,9 +127,12 @@ jobs:
           SERVER_URL: ${{ github.server_url }}
         run: |
           set -euo pipefail
+          input_ref="${INPUT_REF:-main}"
           sha="$(git rev-parse HEAD)"
           short_sha="$(git rev-parse --short=12 HEAD)"
+          echo "ref=$input_ref" >>"$GITHUB_OUTPUT"
           echo "sha=$sha" >>"$GITHUB_OUTPUT"
+          echo "short_sha=$short_sha" >>"$GITHUB_OUTPUT"
 
           # Why: only push the version-bump commit back to main when the
           # caller is releasing the exact tip of main. For any older or
@@ -142,7 +150,6 @@ jobs:
           # `ref` input alone is ambiguous (branch vs tag vs SHA); for SHA
           # inputs it also hides the human-readable names operators need
           # when auditing RC cuts.
-          input_ref="${INPUT_REF:-main}"
           repo_url="${SERVER_URL}/${REPO}"
 
           branches="$(
@@ -777,7 +784,7 @@ jobs:
             echo "## Release E2E Signal"
             echo ""
             echo "- Terminal rendering golden is release-blocking."
-            echo "- Full E2E is diagnostic/non-blocking release evidence."
+            echo "- Full E2E runs separately after publication and cannot change the release result."
             echo "- Terminal rendering release evidence is diagnostic/non-blocking."
             echo ""
             echo "Publishing behavior is controlled by the existing job dependencies; this summary does not change release gating."
@@ -806,15 +813,6 @@ jobs:
           fi
 
           node config/scripts/create-draft-release.mjs "$TAG"
-
-  # Why: tag-scoped E2E gives release visibility, but the suite is flaky enough
-  # that publish-release must not depend on it.
-  e2e:
-    needs: cut
-    if: needs.cut.outputs.should_release == 'true'
-    uses: ./.github/workflows/e2e.yml
-    with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
 
   terminal-rendering-golden:
     needs: cut
@@ -1017,6 +1015,27 @@ jobs:
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
+      # Why: `uses: ./…` resolves from the checked-out tag, not from the workflow
+      # ref, so cutting from an older/off-main ref whose tree predates a composite
+      # action would fail the step with "Can't find 'action.yml'". Restore the
+      # actions directory from the commit this workflow file itself came from.
+      - name: Restore composite actions from the workflow ref
+        if: matrix.platform == 'win'
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          action_path=".github/actions/install-signpath-module/action.yml"
+          if [ -f "$action_path" ]; then
+            echo "Composite actions already present at the cut ref."
+            exit 0
+          fi
+          echo "Cut ref predates $action_path; restoring it from $WORKFLOW_SHA."
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- .github/actions
+          test -f "$action_path"
+
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -1185,82 +1204,7 @@ jobs:
 
       - name: Install SignPath PowerShell module
         if: matrix.platform == 'win'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          # Why: force TLS 1.2 so gallery downloads work on older hosted images.
-          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-
-          # Why: on some hosted Windows images `Register-PSRepository -Default`
-          # fails inside the legacy nuget.exe provider with "Missing option value
-          # for: '-source'", so PSGallery is never registered and the install
-          # below dies with "No repository with the name 'PSGallery'". PSResourceGet
-          # (bundled with PowerShell 7.4+) has PSGallery registered by default and
-          # avoids that code path, so prefer it and fall back to PowerShellGet only
-          # when it is absent.
-          $useResourceGet = $null -ne (Get-Command -Name Install-PSResource -ErrorAction SilentlyContinue)
-
-          if ($useResourceGet) {
-            if ($null -eq (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-              Register-PSResourceRepository -PSGallery -Trusted
-            } else {
-              Set-PSResourceRepository -Name PSGallery -Trusted
-            }
-          } else {
-            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null
-            if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-              Register-PSRepository -Default -InstallationPolicy Trusted
-            }
-            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-          }
-
-          $trimChars = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-          $documentsRoot = [System.IO.Path]::GetFullPath([Environment]::GetFolderPath('MyDocuments')).TrimEnd($trimChars)
-          $currentUserModuleRoot = $env:PSModulePath -split [System.IO.Path]::PathSeparator |
-            Where-Object {
-              if ([string]::IsNullOrWhiteSpace($_)) {
-                $false
-              } else {
-                $candidate = [System.IO.Path]::GetFullPath($_).TrimEnd($trimChars)
-                $candidate.StartsWith($documentsRoot, [System.StringComparison]::OrdinalIgnoreCase)
-              }
-            } |
-            Select-Object -First 1
-
-          if ([string]::IsNullOrWhiteSpace($currentUserModuleRoot)) {
-            throw 'Unable to resolve the current-user PowerShell module root from PSModulePath.'
-          }
-
-          $signPathModulePath = Join-Path -Path $currentUserModuleRoot -ChildPath 'SignPath'
-
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            if ($attempt -eq 2) {
-              Start-Sleep -Seconds 15
-            } elseif ($attempt -eq 3) {
-              Start-Sleep -Seconds 30
-            }
-
-            try {
-              if ($useResourceGet) {
-                Install-PSResource -Name SignPath -Version '[4.0.0,5.0.0)' -Repository PSGallery -Scope CurrentUser -TrustRepository -Reinstall -ErrorAction Stop
-              } else {
-                Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
-              }
-              Import-Module SignPath -ErrorAction Stop
-              Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop
-              break
-            } catch {
-              if ($attempt -eq 3) {
-                throw
-              }
-
-              Write-Warning "SignPath PowerShell module preflight attempt $attempt failed: $_"
-              if (Test-Path -LiteralPath $signPathModulePath) {
-                Write-Warning "Removing current-user SignPath module directory before retry: $signPathModulePath"
-                Remove-Item -LiteralPath $signPathModulePath -Recurse -Force
-              }
-            }
-          }
+        uses: ./.github/actions/install-signpath-module
 
       # ── Windows inner-binary signing (issue #7785) ─────────────────────
       # Why: SignPath cannot deep-sign inside NSIS installers, so inner PE
@@ -1348,6 +1292,12 @@ jobs:
           SIGNPATH_REQUEST_ID: ${{ steps.submit-inner-signing.outputs.signing-request-id }}
           SIGNPATH_REQUEST_URL: ${{ steps.submit-inner-signing.outputs.signing-request-web-url }}
           TAG: ${{ needs.cut.outputs.tag }}
+          SOURCE_REF: ${{ needs.cut.outputs.source_ref }}
+          SOURCE_SHA: ${{ needs.cut.outputs.source_sha }}
+          SOURCE_SHORT_SHA: ${{ needs.cut.outputs.source_short_sha }}
+          # Prefer triggering_actor so re-runs name who re-ran; fall back to actor.
+          CUT_BY: ${{ github.triggering_actor || github.actor }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
@@ -1359,7 +1309,26 @@ jobs:
             $requestUrl = "https://app.signpath.io/Web/$env:SIGNPATH_ORGANIZATION_ID/SigningRequests/$env:SIGNPATH_REQUEST_ID"
           }
 
-          $message = "Orca Windows release $env:TAG inner-binaries signing request (1 of 2) is ready for SignPath approval.`n<$requestUrl|Open SignPath signing request>`n<$env:GITHUB_RUN_URL|Open GitHub Actions run>"
+          # Why: approvers need tag + source ref/commit + who cut, not only the tag.
+          $sourceRef = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_REF)) { $env:SOURCE_REF } else { 'unknown' }
+          $shortSha = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHORT_SHA)) {
+            $env:SOURCE_SHORT_SHA
+          } elseif (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            $env:SOURCE_SHA.Substring(0, [Math]::Min(12, $env:SOURCE_SHA.Length))
+          } else {
+            'unknown'
+          }
+          $commitLink = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            "<$($env:REPO_URL)/commit/$($env:SOURCE_SHA)|``$shortSha``>"
+          } else {
+            "``$shortSha``"
+          }
+          $cutBy = if (-not [string]::IsNullOrWhiteSpace($env:CUT_BY)) {
+            "<https://github.com/$($env:CUT_BY)|@$($env:CUT_BY)>"
+          } else {
+            'unknown'
+          }
+          $message = "Orca Windows release ``$($env:TAG)`` inner-binaries signing request (1 of 2) is ready for SignPath approval.`nSource: ``$sourceRef`` @ $commitLink · cut by $cutBy`n<$requestUrl|Open SignPath signing request>`n<$($env:GITHUB_RUN_URL)|Open GitHub Actions run>"
           $payload = @{
             text = $message
             blocks = @(
@@ -1499,7 +1468,6 @@ jobs:
             Write-Warning 'Restored pre-rebuild installer; this release ships with unsigned inner binaries.'
           }
       # ── End Windows inner-binary signing ───────────────────────────────
-
       - name: Upload unsigned Windows installer for SignPath
         if: matrix.platform == 'win'
         id: upload-unsigned-windows-installer
@@ -1533,6 +1501,12 @@ jobs:
           SIGNPATH_REQUEST_ID: ${{ steps.submit-signing-request.outputs.signing-request-id }}
           SIGNPATH_REQUEST_URL: ${{ steps.submit-signing-request.outputs.signing-request-web-url }}
           TAG: ${{ needs.cut.outputs.tag }}
+          SOURCE_REF: ${{ needs.cut.outputs.source_ref }}
+          SOURCE_SHA: ${{ needs.cut.outputs.source_sha }}
+          SOURCE_SHORT_SHA: ${{ needs.cut.outputs.source_short_sha }}
+          # Prefer triggering_actor so re-runs name who re-ran; fall back to actor.
+          CUT_BY: ${{ github.triggering_actor || github.actor }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           INNER_SIGNING_SUBMITTED: ${{ steps.submit-inner-signing.outcome == 'success' }}
         run: |
@@ -1547,7 +1521,26 @@ jobs:
 
           # Why: releases where inner signing fell through have only this one request.
           $stage = if ($env:INNER_SIGNING_SUBMITTED -eq 'true') { 'installer signing request (2 of 2)' } else { 'signing request' }
-          $message = "Orca Windows release $env:TAG $stage is ready for SignPath approval.`n<$requestUrl|Open SignPath signing request>`n<$env:GITHUB_RUN_URL|Open GitHub Actions run>"
+          # Why: approvers need tag + source ref/commit + who cut, not only the tag.
+          $sourceRef = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_REF)) { $env:SOURCE_REF } else { 'unknown' }
+          $shortSha = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHORT_SHA)) {
+            $env:SOURCE_SHORT_SHA
+          } elseif (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            $env:SOURCE_SHA.Substring(0, [Math]::Min(12, $env:SOURCE_SHA.Length))
+          } else {
+            'unknown'
+          }
+          $commitLink = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            "<$($env:REPO_URL)/commit/$($env:SOURCE_SHA)|``$shortSha``>"
+          } else {
+            "``$shortSha``"
+          }
+          $cutBy = if (-not [string]::IsNullOrWhiteSpace($env:CUT_BY)) {
+            "<https://github.com/$($env:CUT_BY)|@$($env:CUT_BY)>"
+          } else {
+            'unknown'
+          }
+          $message = "Orca Windows release ``$($env:TAG)`` $stage is ready for SignPath approval.`nSource: ``$sourceRef`` @ $commitLink · cut by $cutBy`n<$requestUrl|Open SignPath signing request>`n<$($env:GITHUB_RUN_URL)|Open GitHub Actions run>"
           $payload = @{
             text = $message
             blocks = @(
@@ -1644,8 +1637,41 @@ jobs:
           INNER_SIGNING_COMPLETED: ${{ steps.rebuild-nsis-signed.outcome == 'success' }}
         run: |
           $required = $env:ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED -eq 'true'
+
+          # Why: a fail-open gate that writes nothing is indistinguishable from a
+          # gate that passed. Always leave a verdict in the evidence artifact and
+          # the job summary so a silent degradation is visible (#6487).
+          # Why best-effort: while warn-only, a disk-full or permission error
+          # writing the verdict must not become the thing that fails the release.
+          function Add-GateEvidence([string]$line) {
+            try {
+              Add-Content -Path 'inner-signing-evidence.txt' -Value "`n$line" -ErrorAction Stop
+            } catch {
+              Write-Host "::warning::Could not append to the inner-signing evidence file: $_"
+            }
+          }
+
+          function Add-GateSummary([string]$verdict) {
+            if (-not $env:GITHUB_STEP_SUMMARY) { return }
+            try {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "**Windows inner-binary signing:** $verdict" -ErrorAction Stop
+            } catch {
+              Write-Host "::warning::Could not write inner-signing verdict to the job summary: $_"
+            }
+          }
+
+          function Write-GateVerdict([string]$verdict) {
+            try {
+              Set-Content -Path 'inner-signing-evidence.txt' -Value $verdict -ErrorAction Stop
+            } catch {
+              Write-Host "::warning::Could not persist inner-signing verdict: $_"
+            }
+            Add-GateSummary $verdict
+          }
+
           if ($env:INNER_SIGNING_COMPLETED -ne 'true') {
             $message = 'Windows inner-binary signing did not complete; this release ships unsigned inner binaries (fail-open, issue #7785).'
+            Write-GateVerdict "NOT VERIFIED — $message"
             if ($required) { throw $message }
             Write-Host "::warning::$message"
             exit 0
@@ -1654,13 +1680,28 @@ jobs:
           # Why try/catch: while the gate is warn-only, even an unexpected
           # script error (extraction hiccup, missing file) must not block
           # the release — only the flip to required makes failures fatal.
+          # Why tracked separately: a required-mode signature failure must not be
+          # rewritten as ERRORED by the catch below, which would replace the
+          # per-file report with an exception string and lose the diagnostics.
+          $policyFailure = $null
+
           try {
             $report = New-Object System.Collections.Generic.List[string]
             $failures = New-Object System.Collections.Generic.List[string]
 
             # Why: verify the files a user actually gets on disk, not the build
             # tree — 7z parses the NSIS exe directly as its embedded payload.
-            $7za = 'node_modules/7zip-bin/win/x64/7za.exe'
+            # Resolve 7za via app-builder-lib; electron-builder 26.9+ dropped the
+            # bundled 7zip-bin package the old hardcoded path relied on (#6487).
+            $7zaOutput = node config/scripts/resolve-7za-path.mjs
+            $7zaExitCode = $LASTEXITCODE
+            if ($7zaExitCode -ne 0) {
+              throw "The 7za resolver exited with code $7zaExitCode for the inner-binary evidence gate."
+            }
+            $7za = ($7zaOutput | Out-String).Trim()
+            if ([string]::IsNullOrWhiteSpace($7za) -or -not (Test-Path -LiteralPath $7za -PathType Leaf)) {
+              throw "The 7za resolver returned an invalid path for the inner-binary evidence gate: $7za"
+            }
             New-Item -ItemType Directory -Path inner-evidence-extract -Force | Out-Null
             & $7za x 'dist/orca-windows-setup.exe' '-oinner-evidence-extract' -y | Out-Null
 
@@ -1694,15 +1735,31 @@ jobs:
             if ($failures.Count -gt 0) {
               $failures | ForEach-Object { Write-Host "::warning::$_" }
               $message = "Windows inner-binary evidence gate found $($failures.Count) problems."
-              if ($required) { throw $message }
-              Write-Host "::warning::$message Fail-open until ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED is 'true'."
+              # Why assigned before any I/O: a write that throws here would reach
+              # the catch with $policyFailure still null, so a required-mode
+              # signature failure would be re-reported as ERRORED and the per-file
+              # report overwritten — the exact masking the hoist exists to prevent.
+              if ($required) {
+                $policyFailure = $message
+              } else {
+                Write-Host "::warning::$message Fail-open until ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED is 'true'."
+              }
+              Add-GateEvidence "VERDICT: FAILED — $message"
+              Add-GateSummary "FAILED — $message"
             } else {
-              Write-Host "All $($targets.Count) inner binaries in the shipped installer are signed by SignPath Foundation."
+              $ok = "All $($targets.Count) inner binaries in the shipped installer are signed by SignPath Foundation."
+              Add-GateEvidence "VERDICT: PASSED — $ok"
+              Add-GateSummary "PASSED — $ok"
+              Write-Host $ok
             }
           } catch {
+            Write-GateVerdict "ERRORED — $_"
             if ($required) { throw }
             Write-Host "::warning::Windows inner-binary evidence gate errored: $_ (fail-open, issue #7785)."
           }
+
+          # Outside the catch so the FAILED evidence report survives intact.
+          if ($policyFailure) { throw $policyFailure }
 
       - name: Upload Windows inner signing evidence
         if: always() && matrix.platform == 'win'
@@ -1866,6 +1923,32 @@ jobs:
             --draft=false \
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
+
+  post-release-e2e:
+    needs:
+      - cut
+      - publish-release
+    if: ${{ needs.cut.outputs.tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch tag-scoped E2E
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          for attempt in 1 2 3; do
+            if gh workflow run e2e.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref "$TAG" \
+              --raw-field "ref=refs/tags/$TAG"; then
+              echo "Dispatched post-release E2E for $TAG."
+              exit 0
+            fi
+            [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
+          done
+          echo "::warning::Failed to dispatch post-release E2E for $TAG after 3 attempts."
 
   homebrew-bump-published-rc-draft:
     needs:

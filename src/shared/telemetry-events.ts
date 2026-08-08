@@ -27,6 +27,14 @@ import {
   DAEMON_REPLACE_REASONS,
   DAEMON_RETIRE_REASONS
 } from './daemon-lifecycle-telemetry'
+import {
+  DAEMON_AUDIT_GENERATION_ROLE_VALUES,
+  DAEMON_AUDIT_PROCESS_REASON_VALUES,
+  DAEMON_AUDIT_REASON_VALUES,
+  DAEMON_AUDIT_STATE_VALUES,
+  DAEMON_AUDIT_TRIGGER_VALUES,
+  DAEMON_EVIDENCE_SOURCE_VALUES
+} from './daemon-audit-eligibility'
 import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
 import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
 import { appStarSourceSchema } from './gh-star-source'
@@ -94,6 +102,7 @@ export const AGENT_KIND_VALUES = [
   'grok',
   'devin',
   'ante',
+  'trae',
   'other'
 ] as const
 export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
@@ -116,7 +125,6 @@ export const addRepoSetupStepActionSchema = z.enum([
   'open_existing',
   'back'
 ])
-export type AddRepoSetupStepAction = z.infer<typeof addRepoSetupStepActionSchema>
 
 export const addRepoExistingWorkspaceSourceSchema = z.enum([
   'local_folder_picker',
@@ -156,7 +164,6 @@ export const addRepoDefaultCheckoutHandoffReasonSchema = z.enum([
 ])
 
 export const setupScriptImportProviderSchema = z.enum(SETUP_SCRIPT_IMPORT_PROVIDERS)
-export type SetupScriptImportProviderTelemetry = z.infer<typeof setupScriptImportProviderSchema>
 
 // Separate enum from `errorClassSchema` — different domain (git/filesystem worktree-create failures); merging would couple the two forever.
 export const workspaceCreateErrorClassSchema = z.enum([
@@ -207,7 +214,6 @@ export const featureWallTileIdSchema = z.enum([
   'tile-11',
   'tile-12'
 ])
-export type FeatureWallTileIdTelemetry = z.infer<typeof featureWallTileIdSchema>
 
 export const featureWallOpenSourceSchema = z.enum(['help_menu', 'popup', 'onboarding', 'unknown'])
 export type FeatureWallOpenSourceTelemetry = z.infer<typeof featureWallOpenSourceSchema>
@@ -219,13 +225,10 @@ export const featureWallWorkflowIdSchema = z.enum([
   'workbench',
   'review'
 ])
-export type FeatureWallWorkflowIdTelemetry = z.infer<typeof featureWallWorkflowIdSchema>
 
 export const featureWallTourDepthStepSchema = z.enum(FEATURE_WALL_TOUR_DEPTH_STEPS)
-export type FeatureWallTourDepthStepTelemetry = z.infer<typeof featureWallTourDepthStepSchema>
 
 export const featureWallExitActionSchema = z.enum(FEATURE_WALL_EXIT_ACTIONS)
-export type FeatureWallExitActionTelemetry = z.infer<typeof featureWallExitActionSchema>
 
 // `env_var` absent — env-var/CI paths override consent at runtime only, never firing an opt-in/out event.
 // `first_launch_notice` absent — the new-user cohort has no first-launch surface; those opt-outs come via `'settings'`.
@@ -241,6 +244,7 @@ type BooleanGlobalSettingsKey = {
 export const SETTINGS_CHANGED_WHITELIST = [
   'editorAutoSave',
   'openLinksInApp',
+  'openLinksInAppModifierInverts',
   'experimentalMobile',
   'experimentalPet',
   'experimentalNativeChat',
@@ -370,6 +374,32 @@ const agentErrorSchema = z
 // Why: daemon start-failure signal (fleet-wide outage like v1.4.129-rc.1); enum-only so raw stderr never reaches the wire.
 const daemonStartFailedSchema = z.object({ error_class: errorClassSchema }).strict()
 
+export const runtimeRpcStartErrorClassSchema = z.enum([
+  'permission_denied',
+  'address_in_use',
+  'storage_unavailable',
+  'invalid_path',
+  'unknown'
+])
+export type RuntimeRpcStartErrorClass = z.infer<typeof runtimeRpcStartErrorClassSchema>
+
+// Why: runtime discovery failures can contain user paths; keep telemetry to closed filesystem/socket categories.
+const runtimeRpcStartFailedSchema = z
+  .object({ error_class: runtimeRpcStartErrorClassSchema })
+  .strict()
+
+// Why: a deadlocked main thread never crashes, so it produces no crash report and no user report
+// beyond "it froze" — incidence has been unmeasurable. `self_recovered` splits stalls that cleared
+// from ones that never did, which is the number that decides whether auto-recovery is ever safe to
+// build: every self-recovered stall is a kill that design would have gotten wrong. `unresponsive_ms`
+// is the observed silence, kept raw so the 45s threshold can be calibrated against real tails.
+const mainThreadHangDetectedSchema = z
+  .object({
+    unresponsive_ms: z.number().int().nonnegative(),
+    self_recovered: z.boolean()
+  })
+  .strict()
+
 // Why: daemon replace/retire lifecycle signal — issue #7936 was undiagnosable without asking a user for daemon.log.
 // Enum-only + bucketed session count so no paths, raw versions, or exact counts reach the wire.
 // The union keeps each reason pinned to its transition, so a death can't be reported as a replace.
@@ -388,6 +418,39 @@ const daemonLifecycleSchema = z.discriminatedUnion('transition', [
       live_session_count_bucket: z.enum(DAEMON_LIFECYCLE_SESSION_BUCKETS)
     })
     .strict()
+])
+
+const daemonAuditEligibilityBaseSchema = z.object({
+  state: z.enum(DAEMON_AUDIT_STATE_VALUES),
+  reason: z.enum(DAEMON_AUDIT_REASON_VALUES),
+  trigger: z.enum(DAEMON_AUDIT_TRIGGER_VALUES),
+  evidence_sources: z.array(z.enum(DAEMON_EVIDENCE_SOURCE_VALUES)).min(1).max(12),
+  protocol_generation: z.number().int().positive().max(1_000),
+  generation_role: z.enum(DAEMON_AUDIT_GENERATION_ROLE_VALUES),
+  provider: z.literal('local-daemon'),
+  endpoint_kind: z.enum(['unix-socket', 'windows-named-pipe']),
+  profile_scope: z.enum(['configured', 'unspecified']),
+  reachability: z.enum(['authenticated', 'disconnected', 'unknown']),
+  inventory_authority: z.enum(['authoritative', 'unavailable']),
+  process_liveness: z.enum(['present', 'gone', 'unknown']),
+  process_reason: z.enum(DAEMON_AUDIT_PROCESS_REASON_VALUES).nullable(),
+  endpoint_state: z.enum(['missing', 'named-pipe', 'non-socket', 'socket', 'unknown'])
+})
+
+const daemonAuditEligibilitySchema = z.discriminatedUnion('exact_incarnation', [
+  daemonAuditEligibilityBaseSchema
+    .extend({
+      exact_incarnation: z.literal('endpoint-identity'),
+      exact_incarnation_correlation: z.string().regex(/^v1:[0-9a-f]{32}$/)
+    })
+    .strict(),
+  daemonAuditEligibilityBaseSchema
+    .extend({
+      exact_incarnation: z.literal('endpoint-identity-linux-ticks'),
+      exact_incarnation_correlation: z.string().regex(/^v1:[0-9a-f]{32}$/)
+    })
+    .strict(),
+  daemonAuditEligibilityBaseSchema.extend({ exact_incarnation: z.literal('unavailable') }).strict()
 ])
 
 // Rollout signal for granting Codex hook trust via codex app-server RPCs
@@ -1299,6 +1362,62 @@ const editorExternalChangeConflictActionSchema = z
   })
   .strict()
 
+const directSshReconnectCountSchema = z.number().int().min(0).max(1_000_000)
+const directSshReconnectDurationSchema = z.number().int().min(0).max(86_400_000)
+const directSshReconnectOperationSchema = z
+  .object({
+    mode: z.enum(['reconnect', 'prepare_only']),
+    reason: z.enum(['reconnect', 'initial_hydration', 'workspace_snapshot', 'wake_refresh']),
+    outcome: z.enum(['complete', 'degraded', 'canceled', 'stale', 'stopped', 'stabilizing']),
+    terminal_retried_count: directSshReconnectCountSchema,
+    terminal_stale_binding_cleared_count: directSshReconnectCountSchema,
+    terminal_correction_succeeded_count: directSshReconnectCountSchema,
+    catalog_complete_count: directSshReconnectCountSchema,
+    catalog_degraded_count: directSshReconnectCountSchema,
+    catalog_stale_count: directSshReconnectCountSchema,
+    repo_complete_count: directSshReconnectCountSchema,
+    repo_non_authoritative_count: directSshReconnectCountSchema,
+    repo_retrying_count: directSshReconnectCountSchema,
+    repo_timed_out_count: directSshReconnectCountSchema,
+    repo_cancel_budget_exhausted_count: directSshReconnectCountSchema,
+    repo_canceled_count: directSshReconnectCountSchema,
+    repo_stale_count: directSshReconnectCountSchema,
+    repo_rejected_count: directSshReconnectCountSchema,
+    lineage_complete_count: directSshReconnectCountSchema,
+    lineage_degraded_count: directSshReconnectCountSchema,
+    lineage_canceled_count: directSshReconnectCountSchema,
+    lineage_stale_count: directSshReconnectCountSchema,
+    lineage_not_started_count: directSshReconnectCountSchema,
+    git_worktree_count: directSshReconnectCountSchema,
+    folder_workspace_count: directSshReconnectCountSchema,
+    ambiguous_owner_count: directSshReconnectCountSchema,
+    contradictory_owner_count: directSshReconnectCountSchema,
+    total_duration_ms: directSshReconnectDurationSchema,
+    terminal_finalization_duration_ms: directSshReconnectDurationSchema,
+    catalog_duration_ms: directSshReconnectDurationSchema,
+    queue_wait_sample_count: directSshReconnectCountSchema,
+    queue_wait_duration_ms_p50: directSshReconnectDurationSchema,
+    queue_wait_duration_ms_p95: directSshReconnectDurationSchema,
+    queue_wait_duration_ms_p99: directSshReconnectDurationSchema,
+    queue_wait_duration_ms_max: directSshReconnectDurationSchema,
+    provider_execution_sample_count: directSshReconnectCountSchema,
+    provider_execution_duration_ms_p50: directSshReconnectDurationSchema,
+    provider_execution_duration_ms_p95: directSshReconnectDurationSchema,
+    provider_execution_duration_ms_p99: directSshReconnectDurationSchema,
+    provider_execution_duration_ms_max: directSshReconnectDurationSchema,
+    timeout_retry_count: directSshReconnectCountSchema,
+    locally_settled_waiter_count: directSshReconnectCountSchema,
+    cancel_debt_count: directSshReconnectCountSchema,
+    replacement_admission_delayed_count: directSshReconnectCountSchema,
+    overlapping_join_count: directSshReconnectCountSchema,
+    coordinator_owned_direct_ssh_detected_worktree_concurrency_peak:
+      directSshReconnectCountSchema.max(5),
+    estimated_late_work_allowance_count: directSshReconnectCountSchema.max(2),
+    authority_rotation_count: directSshReconnectCountSchema,
+    damped_preparation_count: directSshReconnectCountSchema
+  })
+  .strict()
+
 // ── Event registry: the one record the validator consumes ───────────────
 // Versioning: breaking changes (rename/re-mean/remove a key) need a new event name; in-place edits blend pre/post rows unmixably. Additive-optional fields are safe.
 export const eventSchemas = {
@@ -1326,7 +1445,10 @@ export const eventSchemas = {
   agent_hook_unattributed: agentHookUnattributedSchema,
 
   daemon_start_failed: daemonStartFailedSchema,
+  main_thread_hang_detected: mainThreadHangDetectedSchema,
   daemon_lifecycle: daemonLifecycleSchema,
+  daemon_audit_eligibility: daemonAuditEligibilitySchema,
+  runtime_rpc_start_failed: runtimeRpcStartFailedSchema,
 
   codex_trust_grant: codexTrustGrantSchema,
 
@@ -1387,6 +1509,8 @@ export const eventSchemas = {
   editor_external_change_conflict_shown: editorExternalChangeConflictShownSchema,
   editor_external_change_conflict_action: editorExternalChangeConflictActionSchema,
 
+  direct_ssh_reconnect_operation: directSshReconnectOperationSchema,
+
   smart_sort_class_distribution: smartSortClassDistributionSchema,
   smart_sort_class_1_promotion: smartSortClass1PromotionSchema,
   smart_to_recent_switch: smartToRecentSwitchSchema
@@ -1423,7 +1547,6 @@ function eventsWithShapeKey(key: string): ReadonlySet<EventName> {
 
 // Cohort injection is gated on this derived set because `.strict()` schemas drop events that don't declare `nth_repo_added`.
 const COHORT_EXTENDED_SET = eventsWithShapeKey('nth_repo_added')
-export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_SET)
 
 // Compile-time roster guarding the runtime injection set against silent schema drift.
 type _CohortExtendedRoster =

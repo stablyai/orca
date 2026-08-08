@@ -9,6 +9,7 @@ import { safeFind } from '../terminal-search-safe-find'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
+import { installTerminalNativeInputListeners } from './terminal-native-input-listeners'
 import {
   keybindingMatchesAction,
   type KeybindingOverrides,
@@ -22,6 +23,7 @@ import {
   getLayoutBaseCharacterForCode,
   prefetchLayoutBaseCharacters
 } from '@/lib/keyboard-layout/layout-base-character'
+import { prefetchKoreanInputSource } from '@/lib/keyboard-layout/korean-input-source'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
 import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
@@ -29,10 +31,13 @@ import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { copyTerminalSelection } from './terminal-selection-copy'
 import { isLocalWindowsConptyPaneForCtrlArrow } from './terminal-ctrl-arrow-conpty'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 import {
   markTerminalFollowOutput,
   markTerminalPinnedViewport,
@@ -50,8 +55,12 @@ export function resolveTerminalKeyboardShortcutAction(
   isKittyKeyboardActivePane: Parameters<typeof resolveTerminalShortcutAction>[7],
   layoutBaseCharacterForCode: Parameters<typeof resolveTerminalShortcutAction>[8],
   getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
-  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>
+  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
+  terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first'
 ): ReturnType<typeof resolveTerminalShortcutAction> {
+  if (isImeOwnedKeyboardEvent(event)) {
+    return null
+  }
   // Why: keep the host callback required at the production boundary so a
   // caller cannot silently fall back to client-OS byte routing.
   return resolveTerminalShortcutAction(
@@ -65,7 +74,8 @@ export function resolveTerminalKeyboardShortcutAction(
     isKittyKeyboardActivePane,
     layoutBaseCharacterForCode,
     getWindowsShiftEnterEncoding,
-    isWindowsTerminalHost
+    isWindowsTerminalHost,
+    terminalShortcutPolicy
   )
 }
 
@@ -127,7 +137,7 @@ export function matchSearchNavigate(
   if (!mod) {
     return null
   }
-  if (e.key.toLowerCase() !== 'g') {
+  if (!isLatinShortcutKey(e, 'g')) {
     return null
   }
   if (!searchOpen) {
@@ -187,6 +197,8 @@ type KeyboardHandlersDeps = {
   paneCwdRef: React.RefObject<PaneCwdMap>
   /** Worktree-root cwd used when OSC 7 and pty.getCwd both fail. */
   fallbackCwd: string
+  /** Gates the Korean input-source probe; its refresh spawns four processes. */
+  koreanWonToBackquoteEnabled?: boolean
   expandedPaneIdRef: React.RefObject<number | null>
   setExpandedPane: (paneId: number | null) => void
   restoreExpandedLayout: () => void
@@ -222,6 +234,7 @@ export function useTerminalKeyboardShortcuts({
   panePtyBindingsRef,
   paneCwdRef,
   fallbackCwd,
+  koreanWonToBackquoteEnabled,
   expandedPaneIdRef,
   setExpandedPane,
   restoreExpandedLayout,
@@ -254,6 +267,12 @@ export function useTerminalKeyboardShortcuts({
     // KeyboardLayoutMap; prefetch so the map is cached before the first chord.
     if (isMac) {
       prefetchLayoutBaseCharacters()
+      // Why: the Korean Won rewrite gate reads the active input source ID through the async IPC.
+      // Gated on the setting because each refresh shells out to `defaults export | plutil | plutil`
+      // and the default is off, so an ungated prefetch costs every macOS user four processes.
+      if (koreanWonToBackquoteEnabled) {
+        prefetchKoreanInputSource()
+      }
     }
 
     // Why: KeyboardEvent.location on a character key (e.g. Period) always
@@ -262,16 +281,16 @@ export function useTerminalKeyboardShortcuts({
     // location from its own keydown event and clear it on keyup.
     let optionKeyLocation = 0
     const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
-    const onModifierDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Alt') {
-        optionKeyLocation = e.location
-      }
-    }
-    const onModifierUp = (e: KeyboardEvent): void => {
-      if (e.key === 'Alt') {
-        optionKeyLocation = 0
-      }
-    }
+    const disposeNativeInputListeners = installTerminalNativeInputListeners(
+      window,
+      nativeOnlyShortcutTracker,
+      (location) => {
+        optionKeyLocation = location
+      },
+      // Why: the pane has never dropped the tracked side on blur — an Option held
+      // across a focus round-trip still resolves left vs right.
+      { forgetOptionKeyLocationOnBlur: false }
+    )
 
     // Why: this callback is installed once per active tab and invoked only for
     // Windows Shift+Enter, keeping store work and allocations off ordinary keys.
@@ -301,10 +320,60 @@ export function useTerminalKeyboardShortcuts({
       )
     }
 
+    // Why: the active pane's live PTY session decides whether Ctrl+Arrow should
+    // pass through as native \e[1;5C/\e[1;5D or be translated to \eb/\ef.
+    // Resolved lazily so session/runtime lookups stay off other keystrokes.
+    const isLocalWindowsConptyPane = (): boolean => {
+      const manager = managerRef.current
+      const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      if (!activePane) {
+        return false
+      }
+      const storeState = useAppStore.getState()
+      return isLocalWindowsConptyPaneForCtrlArrow({
+        isWindows,
+        userAgent: navigator.userAgent,
+        state: storeState,
+        worktreeId,
+        tabId,
+        paneId: activePane.id,
+        paneCwd: paneCwdRef.current,
+        fallbackCwd,
+        transport: paneTransportsRef.current.get(activePane.id) ?? null
+      })
+    }
+
+    // Why: the pane's TUI opted into kitty keyboard reporting via CSI > u;
+    // the tracker mirrors that from PTY output so the policy can encode
+    // Option chords the way the application negotiated.
+    const isKittyKeyboardActivePane = (): boolean => {
+      const manager = managerRef.current
+      const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      if (!activePane) {
+        return false
+      }
+      return (paneKittyKeyboardModesRef?.current.get(activePane.id)?.flags ?? 0) > 0
+    }
+
+    const resolveShortcutEvent = (
+      event: Parameters<typeof resolveTerminalKeyboardShortcutAction>[0]
+    ): ReturnType<typeof resolveTerminalKeyboardShortcutAction> =>
+      resolveTerminalKeyboardShortcutAction(
+        event,
+        isMac,
+        macOptionAsAltRef.current,
+        optionKeyLocation,
+        isWindows,
+        keybindings,
+        isLocalWindowsConptyPane,
+        isKittyKeyboardActivePane,
+        getLayoutBaseCharacterForCode,
+        getActivePaneWindowsShiftEnterEncoding,
+        isActivePaneWindowsTerminalHost,
+        terminalShortcutPolicy
+      )
+
     const onKeyDown = (e: KeyboardEvent): void => {
-      // Why: replace stale state only for this physical key so rollover cannot
-      // disarm a still-held native-only chord before its Kitty keyup arrives.
-      nativeOnlyShortcutTracker.prepareKeyDown(e)
       const manager = managerRef.current
       if (!manager) {
         return
@@ -313,6 +382,12 @@ export function useTerminalKeyboardShortcuts({
       if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
         return
       }
+      if (isImeOwnedKeyboardEvent(e)) {
+        return
+      }
+      // Why: replace stale state only for this physical key so rollover cannot
+      // disarm a still-held native-only chord before its Kitty keyup arrives.
+      nativeOnlyShortcutTracker.prepareKeyDown(e)
 
       if (matchFileSearchShortcut(e, shortcutPlatform, keybindings, terminalShortcutPolicy)) {
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
@@ -353,52 +428,7 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      // Why: the active pane's live PTY session decides whether Ctrl+Arrow should
-      // pass through as native \e[1;5C/\e[1;5D or be translated to \eb/\ef.
-      // Resolved lazily so session/runtime lookups stay off other keystrokes.
-      const isLocalWindowsConptyPane = (): boolean => {
-        const activePane = manager.getActivePane() ?? manager.getPanes()[0]
-        if (!activePane) {
-          return false
-        }
-        const storeState = useAppStore.getState()
-        return isLocalWindowsConptyPaneForCtrlArrow({
-          isWindows,
-          userAgent: navigator.userAgent,
-          state: storeState,
-          worktreeId,
-          tabId,
-          paneId: activePane.id,
-          paneCwd: paneCwdRef.current,
-          fallbackCwd,
-          transport: paneTransportsRef.current.get(activePane.id) ?? null
-        })
-      }
-
-      // Why: the pane's TUI opted into kitty keyboard reporting via CSI > u;
-      // the tracker mirrors that from PTY output so the policy can encode
-      // Option chords the way the application negotiated.
-      const isKittyKeyboardActivePane = (): boolean => {
-        const activePane = manager.getActivePane() ?? manager.getPanes()[0]
-        if (!activePane) {
-          return false
-        }
-        return (paneKittyKeyboardModesRef?.current.get(activePane.id)?.flags ?? 0) > 0
-      }
-
-      const action = resolveTerminalKeyboardShortcutAction(
-        e,
-        isMac,
-        macOptionAsAltRef.current,
-        optionKeyLocation,
-        isWindows,
-        keybindings,
-        isLocalWindowsConptyPane,
-        isKittyKeyboardActivePane,
-        getLayoutBaseCharacterForCode,
-        getActivePaneWindowsShiftEnterEncoding,
-        isActivePaneWindowsTerminalHost
-      )
+      const action = resolveShortcutEvent(e)
       if (!action) {
         return
       }
@@ -418,17 +448,13 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        const sent = paneTransportsRef.current.get(pane.id)?.sendInput(action.data) === true
-        if (sent) {
-          recordTerminalUserInputForLeaf(tabId, pane.leafId)
-          if (action.data === '\x1b[13;2u') {
-            // Why: this direct shortcut write does not pass through PTY onData,
-            // so no-OSC shells need an explicit post-write confirmation ladder.
-            const binding = panePtyBindingsRef.current.get(pane.id) as
-              | (IDisposable & { requestDroidReconfirmation?: () => void })
-              | undefined
-            binding?.requestDroidReconfirmation?.()
-          }
+        pane.terminal.input(action.data)
+        recordTerminalUserInputForLeaf(tabId, pane.leafId)
+        if (action.data === '\x1b[13;2u') {
+          const binding = panePtyBindingsRef.current.get(pane.id) as
+            | (IDisposable & { requestWindowsShiftEnterReconfirmation?: () => void })
+            | undefined
+          binding?.requestWindowsShiftEnterReconfirmation?.()
         }
         return
       }
@@ -444,13 +470,15 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        const selection = pane.terminal.getSelection()
-        if (!selection) {
+        if (!pane.terminal.getSelection()) {
           return
         }
         e.preventDefault()
         e.stopImmediatePropagation()
-        void window.api.ui.writeClipboardText(selection).catch(() => {
+        void copyTerminalSelection({
+          terminal: pane.terminal,
+          writeClipboardText: window.api.ui.writeTerminalClipboardText
+        }).catch(() => {
           /* ignore clipboard write failures */
         })
         return
@@ -620,54 +648,20 @@ export function useTerminalKeyboardShortcuts({
       }
     }
 
-    const onNativeOnlyShortcutCompanion = (e: KeyboardEvent): void => {
-      if (nativeOnlyShortcutTracker.consumeCompanion(e)) {
-        // Why: canceling only the companion keypress prevents Chromium's text
-        // insertion without canceling the keydown default used by the OS switch.
-        if (e.type === 'keypress') {
-          e.preventDefault()
-        }
-        e.stopImmediatePropagation()
-      }
-    }
-
-    // Why: modern Chromium can skip keypress and insert via beforeinput; block
-    // only this chord's text so an IME commit in the same window remains intact.
-    const onNativeOnlyBeforeInput = (e: Event): void => {
-      if (!(e instanceof InputEvent) || !nativeOnlyShortcutTracker.shouldSuppressBeforeInput(e)) {
-        return
-      }
-      e.preventDefault()
-      e.stopImmediatePropagation()
-    }
-
-    const onNativeOnlyBlur = (): void => {
-      nativeOnlyShortcutTracker.clear()
-    }
-
-    window.addEventListener('keydown', onModifierDown, { capture: true })
-    window.addEventListener('keyup', onModifierUp, { capture: true })
     window.addEventListener('keydown', onKeyDown, { capture: true })
-    window.addEventListener('keypress', onNativeOnlyShortcutCompanion, { capture: true })
-    window.addEventListener('keyup', onNativeOnlyShortcutCompanion, { capture: true })
-    window.addEventListener('beforeinput', onNativeOnlyBeforeInput, { capture: true })
-    window.addEventListener('blur', onNativeOnlyBlur)
     return () => {
-      window.removeEventListener('keydown', onModifierDown, { capture: true })
-      window.removeEventListener('keyup', onModifierUp, { capture: true })
+      disposeNativeInputListeners()
       window.removeEventListener('keydown', onKeyDown, { capture: true })
-      window.removeEventListener('keypress', onNativeOnlyShortcutCompanion, { capture: true })
-      window.removeEventListener('keyup', onNativeOnlyShortcutCompanion, { capture: true })
-      window.removeEventListener('beforeinput', onNativeOnlyBeforeInput, { capture: true })
-      window.removeEventListener('blur', onNativeOnlyBlur)
     }
   }, [
     isActive,
     keyboardScopeRef,
     managerRef,
     paneTransportsRef,
+    panePtyBindingsRef,
     paneCwdRef,
     fallbackCwd,
+    koreanWonToBackquoteEnabled,
     expandedPaneIdRef,
     setExpandedPane,
     restoreExpandedLayout,

@@ -77,6 +77,66 @@ describe('patchPackagedProcessPath', () => {
     expect(segments).toContain(join('/Users/tester', 'bin'))
   })
 
+  it('omits Linux-only snap/Linuxbrew dirs but keeps Nix on packaged darwin runs', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('darwin')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/Users/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    // Why: neither has a macOS installer, so both are phantom PATH entries.
+    expect(segments).not.toContain('/snap/bin')
+    expect(segments).not.toContain('/home/linuxbrew/.linuxbrew/bin')
+    // Why: Nix does ship a macOS default profile, so it stays seeded.
+    expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments).toContain('/opt/homebrew/bin')
+    expect(segments).toContain('/usr/local/bin')
+  })
+
+  it('keeps snap, Linuxbrew, and Nix dirs for packaged linux runs', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('linux')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    expect(segments).toContain('/snap/bin')
+    expect(segments).toContain('/home/linuxbrew/.linuxbrew/bin')
+    expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments.indexOf('/usr/local/sbin')).toBeLessThan(segments.indexOf('/snap/bin'))
+    expect(segments.indexOf('/home/linuxbrew/.linuxbrew/bin')).toBeLessThan(
+      segments.indexOf('/nix/var/nix/profiles/default/bin')
+    )
+  })
+
+  it('omits snap/Linuxbrew but keeps Nix on non-Linux POSIX platforms', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('freebsd')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    expect(segments).not.toContain('/snap/bin')
+    expect(segments).not.toContain('/home/linuxbrew/.linuxbrew/bin')
+    expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments).toContain('/usr/local/bin')
+  })
+
   it('leaves PATH untouched when the app is not packaged', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
@@ -443,6 +503,7 @@ describe('enableMainProcessGpuFeatures', () => {
     }
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-wayland-ime')
     expect(app.disableHardwareAcceleration).not.toHaveBeenCalled()
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
       'enable-features',
@@ -468,6 +529,7 @@ describe('enableMainProcessGpuFeatures', () => {
     enableMainProcessGpuFeatures()
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-wayland-ime')
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
       'enable-features',
       expect.stringContaining('EarlyEstablishGpuChannel')
@@ -505,6 +567,7 @@ describe('enableMainProcessGpuFeatures', () => {
     }
 
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-wayland-ime')
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
       'enable-features',
       'EarlyEstablishGpuChannel,EstablishGpuChannelAsync'
@@ -534,6 +597,7 @@ describe('enableMainProcessGpuFeatures', () => {
         enableMainProcessGpuFeatures()
 
         expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
+        expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-wayland-ime')
       }
     } finally {
       if (originalWaylandDisplay === undefined) {
@@ -575,6 +639,31 @@ describe('enableMainProcessGpuFeatures', () => {
       'max-active-webgl-contexts',
       expect.any(String)
     )
+  })
+
+  it('keeps native Wayland IME enabled for Linux E2E runs', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+
+    try {
+      setPlatform('linux')
+      process.env.ORCA_E2E_USER_DATA_DIR = '/tmp/orca-e2e'
+      process.env.WAYLAND_DISPLAY = 'wayland-1'
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+
+      enableMainProcessGpuFeatures()
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+    }
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-wayland-ime')
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu')
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
   })
 
   it('preserves existing enable-features switches', async () => {

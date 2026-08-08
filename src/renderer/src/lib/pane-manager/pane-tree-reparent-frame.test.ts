@@ -76,7 +76,6 @@ function createPane(id: number, container = createMockElement('pane')): ManagedP
     ligaturesAddon: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
-    compositionHandler: null,
     pendingSplitScrollState: null,
     debugLabel: null
   }

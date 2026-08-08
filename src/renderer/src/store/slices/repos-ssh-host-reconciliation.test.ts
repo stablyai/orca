@@ -1,4 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type {
+  HostQualifiedDetectedWorktreeResult,
+  ListDetectedWorktreesArgs
+} from '../../../../shared/detected-worktree-provider-contract'
+import type {
+  DirectSshAuthority,
+  SshConnectionState,
+  SshProviderEpoch
+} from '../../../../shared/ssh-types'
 import type { Project, ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
 import { createTestStore } from './store-test-helpers'
 
@@ -56,6 +65,52 @@ function directSshWorktree(targetId: string, displayName = 'main'): Worktree {
     isPinned: false,
     sortOrder: 1,
     lastActivityAt: 1
+  }
+}
+
+function directSshAuthority(targetId: string): DirectSshAuthority {
+  return {
+    targetId,
+    providerEpoch: `epoch-${targetId}` as SshProviderEpoch,
+    connectionGeneration: 1
+  }
+}
+
+function connectedSshState(authority: DirectSshAuthority): SshConnectionState {
+  return {
+    targetId: authority.targetId,
+    status: 'connected',
+    error: null,
+    reconnectAttempt: 0,
+    providerEpoch: authority.providerEpoch,
+    connectionGeneration: authority.connectionGeneration
+  }
+}
+
+function qualifiedWorktreeResult(
+  request: ListDetectedWorktreesArgs,
+  worktree: Worktree
+): HostQualifiedDetectedWorktreeResult {
+  if (!('expectedAuthority' in request)) {
+    throw new Error('Expected a direct SSH provider request')
+  }
+  return {
+    status: 'complete',
+    providerRequestId: request.providerRequestId,
+    repoId: request.repoId,
+    authority: {
+      kind: 'direct-ssh',
+      executionHostId: request.executionHostId,
+      ...request.expectedAuthority
+    },
+    result: {
+      repoId: request.repoId,
+      authoritative: true,
+      source: 'git',
+      worktrees: [
+        { ...worktree, ownership: 'orca-managed', selectedCheckout: false, visible: true }
+      ]
+    }
   }
 }
 
@@ -188,17 +243,23 @@ describe('SSH repo host reconciliation', () => {
 
   it('rejects an old-host worktree response that resolves after re-adoption', async () => {
     const staleWorktree = directSshWorktree('ssh-old', 'stale')
-    let resolveOldWorktrees!: (value: unknown) => void
-    const oldWorktrees = new Promise((resolve) => {
+    const oldAuthority = directSshAuthority('ssh-old')
+    let providerRequest!: ListDetectedWorktreesArgs
+    let resolveOldWorktrees!: (value: HostQualifiedDetectedWorktreeResult) => void
+    const oldWorktrees = new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
       resolveOldWorktrees = resolve
     })
-    worktreesListDetected.mockReturnValueOnce(oldWorktrees)
+    worktreesListDetected.mockImplementationOnce((request: ListDetectedWorktreesArgs) => {
+      providerRequest = request
+      return oldWorktrees
+    })
     reposList.mockResolvedValue([directSshRepo('ssh-new')])
     projectsList.mockResolvedValue([project])
     setupsList.mockResolvedValue([directSshSetup('ssh-new')])
     const store = createTestStore()
     store.setState({
       repos: [directSshRepo('ssh-old')],
+      sshConnectionStates: new Map([['ssh-old', connectedSshState(oldAuthority)]]),
       worktreesByRepo: { [repoId]: [staleWorktree] },
       detectedWorktreesByRepo: {
         [repoId]: {
@@ -214,17 +275,20 @@ describe('SSH repo host reconciliation', () => {
 
     const staleFetch = store.getState().fetchWorktrees(repoId)
     await vi.waitFor(() => expect(worktreesListDetected).toHaveBeenCalled())
+    expect(worktreesListDetected).toHaveBeenCalledOnce()
+    expect(providerRequest).toMatchObject({
+      repoId,
+      executionHostId: 'ssh:ssh-old',
+      expectedAuthority: oldAuthority
+    })
     store.getState().recordSshRepoReadoptions([readoption])
     await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
-    resolveOldWorktrees({
-      repoId,
-      authoritative: true,
-      source: 'git',
-      worktrees: [
-        { ...staleWorktree, ownership: 'orca-managed', selectedCheckout: false, visible: true }
-      ]
+    const newAuthority = directSshAuthority('ssh-new')
+    store.setState({
+      sshConnectionStates: new Map([['ssh-new', connectedSshState(newAuthority)]])
     })
-    await staleFetch
+    resolveOldWorktrees(qualifiedWorktreeResult(providerRequest, staleWorktree))
+    await expect(staleFetch).resolves.toBe(false)
 
     expect(store.getState().worktreesByRepo[repoId]).toEqual([
       directSshWorktree('ssh-new', 'stale')
@@ -241,26 +305,69 @@ describe('SSH repo host reconciliation', () => {
 
   it('rejects a worktree response after its final repo owner is removed', async () => {
     const staleWorktree = directSshWorktree('ssh-old', 'stale')
-    let resolveOldWorktrees!: (value: unknown) => void
-    const oldWorktrees = new Promise((resolve) => {
+    const oldAuthority = directSshAuthority('ssh-old')
+    let providerRequest!: ListDetectedWorktreesArgs
+    let resolveOldWorktrees!: (value: HostQualifiedDetectedWorktreeResult) => void
+    const oldWorktrees = new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
       resolveOldWorktrees = resolve
     })
-    worktreesListDetected.mockReturnValueOnce(oldWorktrees)
+    worktreesListDetected.mockImplementationOnce((request: ListDetectedWorktreesArgs) => {
+      providerRequest = request
+      return oldWorktrees
+    })
     const store = createTestStore()
-    store.setState({ repos: [directSshRepo('ssh-old')] })
+    store.setState({
+      repos: [directSshRepo('ssh-old')],
+      sshConnectionStates: new Map([['ssh-old', connectedSshState(oldAuthority)]])
+    })
 
     const staleFetch = store.getState().fetchWorktrees(repoId)
     await vi.waitFor(() => expect(worktreesListDetected).toHaveBeenCalled())
-    store.setState({ repos: [], worktreesByRepo: {}, detectedWorktreesByRepo: {} })
-    resolveOldWorktrees({
+    expect(worktreesListDetected).toHaveBeenCalledOnce()
+    expect(providerRequest).toMatchObject({
       repoId,
-      authoritative: true,
-      source: 'git',
-      worktrees: [
-        { ...staleWorktree, ownership: 'orca-managed', selectedCheckout: false, visible: true }
-      ]
+      executionHostId: 'ssh:ssh-old',
+      expectedAuthority: oldAuthority
     })
-    await staleFetch
+    store.setState({ repos: [], worktreesByRepo: {}, detectedWorktreesByRepo: {} })
+    resolveOldWorktrees(qualifiedWorktreeResult(providerRequest, staleWorktree))
+    await expect(staleFetch).resolves.toBe(false)
+
+    expect(store.getState().worktreesByRepo[repoId]).toBeUndefined()
+    expect(store.getState().detectedWorktreesByRepo[repoId]).toBeUndefined()
+  })
+
+  it.each([
+    ['contradictory', { ...directSshRepo('ssh-old'), connectionId: 'ssh-new' }],
+    [
+      'malformed',
+      { ...directSshRepo('ssh-old'), executionHostId: 'ssh:%' as Repo['executionHostId'] }
+    ],
+    ['empty explicit host', { ...directSshRepo('ssh-old'), executionHostId: '' }],
+    ['empty connection', { ...directSshRepo('ssh-old'), connectionId: ' ' }]
+  ])('rejects a late worktree response when repo owner provenance becomes %s', async (_, owner) => {
+    const staleWorktree = directSshWorktree('ssh-old', 'stale')
+    const oldAuthority = directSshAuthority('ssh-old')
+    let providerRequest!: ListDetectedWorktreesArgs
+    let resolveOldWorktrees!: (value: HostQualifiedDetectedWorktreeResult) => void
+    const oldWorktrees = new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
+      resolveOldWorktrees = resolve
+    })
+    worktreesListDetected.mockImplementationOnce((request: ListDetectedWorktreesArgs) => {
+      providerRequest = request
+      return oldWorktrees
+    })
+    const store = createTestStore()
+    store.setState({
+      repos: [directSshRepo('ssh-old')],
+      sshConnectionStates: new Map([['ssh-old', connectedSshState(oldAuthority)]])
+    })
+
+    const staleFetch = store.getState().fetchWorktrees(repoId)
+    await vi.waitFor(() => expect(worktreesListDetected).toHaveBeenCalledOnce())
+    store.setState({ repos: [owner as Repo] })
+    resolveOldWorktrees(qualifiedWorktreeResult(providerRequest, staleWorktree))
+    await expect(staleFetch).resolves.toBe(false)
 
     expect(store.getState().worktreesByRepo[repoId]).toBeUndefined()
     expect(store.getState().detectedWorktreesByRepo[repoId]).toBeUndefined()

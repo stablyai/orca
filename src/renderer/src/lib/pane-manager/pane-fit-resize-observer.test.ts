@@ -73,7 +73,6 @@ function createPane(
     webLinksAddon: {} as never,
     webglAddon: null,
     ligaturesAddon: null,
-    compositionHandler: null,
     debugLabel: null,
     pendingSplitScrollState: {
       bufferType: 'normal',

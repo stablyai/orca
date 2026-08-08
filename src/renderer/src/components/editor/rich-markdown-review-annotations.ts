@@ -119,17 +119,29 @@ export function getRichMarkdownAnnotationHighlightRanges(
   comments: readonly DiffComment[],
   markdownSourceLineOffset: number
 ): RichMarkdownAnnotationHighlightRange[] {
+  if (comments.length === 0) {
+    return []
+  }
+  // Why once: block resolution re-serializes the doc; per comment it was O(n*doc).
+  const blocks = buildRichMarkdownCommentBlocks(editor)
   return comments.flatMap((comment) =>
-    getRichMarkdownAnnotationHighlightRangesForComment(editor, comment, markdownSourceLineOffset)
+    getRichMarkdownAnnotationHighlightRangesForComment(
+      editor,
+      comment,
+      markdownSourceLineOffset,
+      blocks
+    )
   )
 }
 
 export function getRichMarkdownAnnotationHighlightRangesForComment(
   editor: Editor,
   comment: DiffComment,
-  markdownSourceLineOffset: number
+  markdownSourceLineOffset: number,
+  // Why optional: callers looping over comments pass one shared build.
+  prebuiltBlocks?: RichMarkdownCommentBlock[]
 ): RichMarkdownAnnotationHighlightRange[] {
-  const blocks = buildRichMarkdownCommentBlocks(editor)
+  const blocks = prebuiltBlocks ?? buildRichMarkdownCommentBlocks(editor)
   const selectedText = comment.selectedText?.trim()
   if (!selectedText) {
     return []
@@ -158,12 +170,17 @@ export function getRichMarkdownCommentAtPos(
   markdownSourceLineOffset: number,
   pos: number
 ): DiffComment | null {
+  if (comments.length === 0) {
+    return null
+  }
+  const blocks = buildRichMarkdownCommentBlocks(editor)
   return (
     comments.find((comment) =>
       getRichMarkdownAnnotationHighlightRangesForComment(
         editor,
         comment,
-        markdownSourceLineOffset
+        markdownSourceLineOffset,
+        blocks
       ).some((range) => range.from <= pos && pos <= range.to)
     ) ?? null
   )

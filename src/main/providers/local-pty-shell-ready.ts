@@ -63,12 +63,12 @@ function shellReadyWrappersExist(root = getShellReadyWrapperRoot()): boolean {
   return getRequiredShellReadyWrapperPaths(root).every((path) => existsSync(path))
 }
 
-// Why: an inherited ZDOTDIR pointing at an Orca wrapper dir (`.../shell-ready/zsh`) makes the wrapper source itself recursively (zsh recursion limit); treat it as unset so the caller falls back to HOME.
+// Why: an Orca wrapper ZDOTDIR recurses; treat it as unset and fall back to HOME.
 function normalizeOriginalZdotdirCandidate(value: string | undefined): string | null {
   if (!value) {
     return null
   }
-  // Why: strip trailing slashes so `ZDOTDIR="$dir/"` still matches the self-loop suffix check; `/` collapses to empty → HOME fallback.
+  // Why: strip trailing slashes so wrapper paths match; `/` falls back to HOME.
   const normalized = value.replace(/\/+$/, '')
   if (!normalized || normalized.endsWith('/shell-ready/zsh')) {
     return null

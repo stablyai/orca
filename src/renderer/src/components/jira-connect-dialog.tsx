@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useState } from 'react'
 import { LoaderCircle, Lock } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { ImeEnterGuardedForm } from '@/components/ime-enter-guarded-form'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -186,7 +187,7 @@ export function JiraConnectDialog({
                   )}
           </DialogDescription>
         </DialogHeader>
-        <form
+        <ImeEnterGuardedForm
           className="flex flex-col gap-4"
           noValidate
           onSubmit={(event) => {
@@ -416,7 +417,7 @@ export function JiraConnectDialog({
               )}
             </Button>
           </DialogFooter>
-        </form>
+        </ImeEnterGuardedForm>
       </DialogContent>
     </Dialog>
   )

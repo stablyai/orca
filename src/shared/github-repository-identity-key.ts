@@ -17,3 +17,12 @@ export function githubRepoIdentityKey(repo: {
   const host = repo.host?.trim().toLowerCase()
   return host && !isDefaultGitHubHost(host) ? `${host}/${slug}` : slug
 }
+
+// Why: callers that only kept the key (not the identity it came from) still need
+// its host segment to scope a second, host-less identity into the same namespace.
+// `owner` and `repo` never contain `/`, so a three-segment key is host-qualified.
+// `undefined` means github.com, so never pass a key that may be unresolved.
+export function githubHostFromIdentityKey(key: string | null | undefined): string | undefined {
+  const segments = key?.split('/') ?? []
+  return segments.length === 3 ? segments[0] : undefined
+}

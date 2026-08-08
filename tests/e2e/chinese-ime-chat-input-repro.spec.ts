@@ -12,6 +12,11 @@ import {
   waitForActiveTerminalManager,
   waitForTerminalOutput
 } from './helpers/terminal'
+import {
+  dispatchWindowsImeShiftToggle,
+  readPtyInputCount,
+  readPtyInputs
+} from './helpers/windows-ime-native-events'
 
 type ImeEventLogEntry = {
   type: string
@@ -81,12 +86,16 @@ const CODEX_TRUST_PROMPT_RE = /Do you trust|trust this folder|Trust this/i
 const CODEX_UPDATE_PROMPT_RE = /update available|install update|Skip for now/i
 const LINUX_IME_POLICY_USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/146 Safari/537.36'
+const WINDOWS_IME_POLICY_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150 Safari/537.36'
 
-function terminalImeHarnessScript(runId: string): string {
+function terminalImeHarnessScript(runId: string, inputLogPath?: string): string {
   return `
 const readline = require('node:readline')
+const { appendFileSync } = require('node:fs')
 
 const runId = ${JSON.stringify(runId)}
+const inputLogPath = ${JSON.stringify(inputLogPath ?? null)}
 let model = ''
 let cursor = 0
 const submitted = []
@@ -130,6 +139,7 @@ function removeBeforeCursor() {
 }
 
 function handleData(data) {
+  if (inputLogPath) appendFileSync(inputLogPath, JSON.stringify(data) + '\\n')
   let index = 0
   while (index < data.length) {
     if (data.startsWith('\\x1b[D', index)) {
@@ -242,6 +252,30 @@ async function readImeEventLog(page: Page): Promise<ImeEventLogEntry[]> {
     const targetWindow = window as unknown as { __orcaImeEventLog?: ImeEventLogEntry[] }
     return targetWindow.__orcaImeEventLog ?? []
   })
+}
+
+async function readActiveCompositionText(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const active = document.activeElement
+    if (!(active instanceof HTMLTextAreaElement)) {
+      throw new Error('xterm helper textarea is not focused')
+    }
+    const view = active.closest('.xterm')?.querySelector<HTMLElement>('.composition-view')
+    return view?.classList.contains('active')
+      ? (view.textContent?.replaceAll('\u200e', '') ?? '')
+      : ''
+  })
+}
+
+async function reloadWithWindowsImePolicy(page: Page): Promise<void> {
+  await page.addInitScript((userAgent) => {
+    Object.defineProperty(navigator, 'userAgent', {
+      get: () => userAgent,
+      configurable: true
+    })
+  }, WINDOWS_IME_POLICY_USER_AGENT)
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
 }
 
 async function reloadWithLinuxImePolicy(page: Page): Promise<void> {
@@ -558,6 +592,51 @@ test.describe('Chinese IME terminal chat input repro', () => {
       await session.detach().catch(() => undefined)
       await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       rmSync(scriptPath, { force: true })
+    }
+  })
+
+  test('commits the active Pinyin preedit when Shift toggles the Windows IME', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await reloadWithWindowsImePolicy(orcaPage)
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const runId = randomUUID()
+    const scriptPath = path.join(testRepoPath, `.orca-windows-shift-ime-${runId}.cjs`)
+    const inputLogPath = path.join(testRepoPath, `.orca-windows-shift-ime-${runId}.jsonl`)
+    writeFileSync(scriptPath, terminalImeHarnessScript(runId, inputLogPath))
+    writeFileSync(inputLogPath, '')
+    const session = await orcaPage.context().newCDPSession(orcaPage)
+
+    try {
+      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await waitForTerminalOutput(orcaPage, `IME_HARNESS_READY_${runId}`, 10_000, 20_000)
+      await focusActiveTerminalInput(orcaPage)
+      await installImeEventProbe(orcaPage)
+
+      await setImeComposition(session, 's')
+      const inputCountBeforeShift = readPtyInputCount(inputLogPath)
+      await dispatchWindowsImeShiftToggle(session)
+
+      await waitForLivePrompt(orcaPage, 's')
+      await expect.poll(() => readActiveCompositionText(orcaPage)).toBe('')
+      await expect.poll(async () => (await readPromptState(orcaPage))?.submitted).toEqual([])
+      await expect
+        .poll(() => readPtyInputs(inputLogPath).slice(inputCountBeforeShift))
+        .toEqual(['s'])
+    } finally {
+      await attachImeEvidence(orcaPage, testInfo, 'windows-shift-ime-evidence').catch(
+        () => undefined
+      )
+      await session.detach().catch(() => undefined)
+      await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+      rmSync(scriptPath, { force: true })
+      rmSync(inputLogPath, { force: true })
     }
   })
 

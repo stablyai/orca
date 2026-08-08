@@ -2,6 +2,7 @@ import type { Editor } from '@tiptap/react'
 import { getLinkBubblePosition } from './RichMarkdownLinkBubble'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
+import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 import {
   createEditableMarkdownLinkBubble,
   getRichMarkdownSelectionLinkBubble
@@ -27,7 +28,7 @@ export function handleRichMarkdownLinkShortcut({
   setLinkBubble: (bubble: LinkBubbleState | null) => void
 }): boolean {
   const modifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-  if (!modifier || event.key.toLowerCase() !== 'k') {
+  if (!modifier || !isLatinShortcutKey(event, 'k')) {
     return false
   }
   event.preventDefault()

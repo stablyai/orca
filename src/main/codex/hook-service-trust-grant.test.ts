@@ -8,12 +8,12 @@ import {
   rmSync,
   symlinkSync,
   statSync,
-  writeFileSync
+  writeFileSync,
+  existsSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
-import { existsSync } from 'node:fs'
 import { wrapPosixHookCommand } from '../agent-hooks/installer-utils'
 import {
   computeTrustKey,

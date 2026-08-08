@@ -29,6 +29,9 @@ vi.mock('react', async () => {
     useCallback<T extends (...args: never[]) => unknown>(callback: T) {
       return callback
     },
+    useMemo<T>(factory: () => T) {
+      return factory()
+    },
     useRef<T>(initial: T) {
       return { current: initial }
     },
@@ -358,23 +361,40 @@ function findSpanByText(node: unknown, label: string): ReactElementLike {
 
 function pressInputKey(
   input: ReactElementLike,
+  type: 'onKeyDown' | 'onKeyUp',
   key: string,
   options?: { isComposing?: boolean; keyCode?: number }
 ): {
   preventDefault: ReturnType<typeof vi.fn>
   stopPropagation: ReturnType<typeof vi.fn>
 } {
+  const keyCode = options?.keyCode ?? 13
   const event = {
     key,
+    keyCode,
+    shiftKey: false,
     nativeEvent: {
       isComposing: options?.isComposing ?? false,
-      keyCode: options?.keyCode ?? 13
+      keyCode
     },
     preventDefault: vi.fn(),
     stopPropagation: vi.fn()
   }
-  ;(input.props.onKeyDown as (nextEvent: typeof event) => void)(event)
+  ;(input.props[type] as (nextEvent: typeof event) => void)(event)
   return event
+}
+
+function confirmRecordedComposition(input: ReactElementLike): ReturnType<typeof pressInputKey> {
+  ;(input.props.onCompositionStart as () => void)()
+  pressInputKey(input, 'onKeyDown', 'Process', { isComposing: true, keyCode: 229 })
+  ;(input.props.onCompositionEnd as () => void)()
+  const redispatch = pressInputKey(input, 'onKeyDown', 'Enter', {
+    isComposing: false,
+    keyCode: 13
+  })
+  pressInputKey(input, 'onKeyUp', 'Process', { keyCode: 229 })
+  pressInputKey(input, 'onKeyUp', 'Enter', { keyCode: 13 })
+  return redispatch
 }
 
 describe('EditorFileTab rename menu', () => {
@@ -439,13 +459,32 @@ describe('EditorFileTab rename menu', () => {
       value: '日本語.md'
     } as unknown as HTMLInputElement)
 
-    const composingEvent = pressInputKey(input, 'Enter', { isComposing: true })
+    const redispatch = confirmRecordedComposition(input)
 
-    expect(composingEvent.preventDefault).not.toHaveBeenCalled()
+    expect(redispatch.preventDefault).toHaveBeenCalledOnce()
     expect(renameFileOnDiskMock).not.toHaveBeenCalled()
+  })
 
-    pressInputKey(input, 'Enter')
+  it('renames the editor file tab exactly once on an ordinary Enter', async () => {
+    const file = baseFile()
+    const firstRender = expandNode((await renderEditorFileTab(file)).element)
+    const renameItem = findMenuItemByText(firstRender, 'Rename')
 
+    ;(renameItem.props.onSelect as () => void)()
+
+    const secondRender = expandNode((await renderEditorFileTab(file)).element)
+    const input = findElementsByType(secondRender, 'input')[0]
+    const setInputRef = input.props.ref as (input: HTMLInputElement | null) => void
+    setInputRef({
+      focus: vi.fn(),
+      select: vi.fn(),
+      setSelectionRange: vi.fn(),
+      value: '日本語.md'
+    } as unknown as HTMLInputElement)
+
+    pressInputKey(input, 'onKeyDown', 'Enter')
+
+    expect(renameFileOnDiskMock).toHaveBeenCalledOnce()
     expect(renameFileOnDiskMock).toHaveBeenCalledWith({
       oldPath: '/repo/untitled-5.md',
       newName: '日本語.md',

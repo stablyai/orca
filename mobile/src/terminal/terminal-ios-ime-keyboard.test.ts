@@ -8,7 +8,7 @@ const sessionRouteSource = readFileSync(
 // Why: the terminal TextInput branches this guards live in this extracted
 // component, not the session route.
 const inputBarSource = readFileSync(
-  new URL('../../app/h/[hostId]/session/terminal-session-input-bar.tsx', import.meta.url),
+  new URL('../session/terminal-session-input-bar.tsx', import.meta.url),
   'utf8'
 )
 const combinedSource = sessionRouteSource + inputBarSource

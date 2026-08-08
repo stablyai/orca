@@ -4,6 +4,7 @@ import {
   unregisterLivePaneManager
 } from '@/lib/pane-manager/pane-manager-registry'
 import {
+  resetTerminalWebglAtlasRecoveryBudgetForTesting,
   scheduleImagePasteWebglAtlasRecovery,
   scheduleTabRevealWebglAtlasRecovery,
   scheduleTerminalWebglAtlasRecovery,
@@ -16,10 +17,12 @@ describe('terminal WebGL atlas recovery', () => {
   function registerManager(): {
     resetWebglTextureAtlases: Mock<() => void>
     refreshAllPanes: Mock<() => void>
+    scheduleRevealPresent: Mock<() => void>
   } {
     const manager = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
-      refreshAllPanes: vi.fn<() => void>()
+      refreshAllPanes: vi.fn<() => void>(),
+      scheduleRevealPresent: vi.fn<() => void>()
     }
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
@@ -30,9 +33,7 @@ describe('terminal WebGL atlas recovery', () => {
     for (const manager of registeredManagers.splice(0)) {
       unregisterLivePaneManager(manager)
     }
-    // Why: a test can leave the module-global debounce timer armed; clear the
-    // fake-timer queue before restoring real timers so no pending fire leaks
-    // into a later test.
+    resetTerminalWebglAtlasRecoveryBudgetForTesting()
     vi.clearAllTimers()
     vi.useRealTimers()
     vi.unstubAllGlobals()

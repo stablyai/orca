@@ -14,6 +14,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { applyHostRename, getHostDisplayLabelOverride } from './host-rename-remove'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 
 type HostRenameDialogProps = {
   open: boolean
@@ -78,6 +79,11 @@ export function HostRenameDialog({
             placeholder={derivedLabel}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
+              // Oracle tier only: the confirm's unmarked Enter redispatch still saves a
+              // complete-but-unintended name here — local and reversible, so not worth the carry token.
+              if (isImeOwnedKeyboardEvent(e)) {
+                return
+              }
               if (e.key === 'Enter') {
                 e.preventDefault()
                 submit()

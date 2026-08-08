@@ -22,7 +22,7 @@ const testFilePatterns = [
   'config/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
   'src/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
   'tests/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
-  'tools/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'
+  'tests/tools/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'
 ]
 const realZshUsage =
   /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath/
@@ -37,13 +37,19 @@ describe('PR workflow parallelism', () => {
     expect(workflow.permissions).toEqual({ contents: 'read' })
   })
 
-  it('shards the general test suite across sixteen runners', () => {
+  it('shards the general test suite across Node 24 and Node 26', () => {
+    expect(workflow.jobs.test.strategy.matrix.node).toEqual(['24', '26'])
     expect(workflow.jobs.test.strategy.matrix.shard).toEqual(
       Array.from({ length: 16 }, (_, index) => index + 1)
     )
+    expect(workflow.jobs.test.strategy.matrix.shard_total).toEqual([16])
     const testStep = workflow.jobs.test.steps.find((step) => step.name === 'Test shard')
+    const installStep = workflow.jobs.test.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
 
-    expect(testStep.run).toContain('--shard=${{ matrix.shard }}/${{ strategy.job-total }}')
+    expect(installStep.with['node-version']).toBe('${{ matrix.node }}')
+    expect(testStep.run).toContain('--shard=${{ matrix.shard }}/${{ matrix.shard_total }}')
     for (const testFile of nativeShellContractFiles) {
       expect(testStep.run).toContain(`--exclude=${testFile}`)
     }
@@ -91,13 +97,37 @@ describe('PR workflow parallelism', () => {
     expect(packageJson.scripts['build:release']).toContain('pnpm run build:web-from-renderer')
   })
 
+  it('smokes managed-hook companions under their supported Node 18 runtime', () => {
+    const steps = workflow.jobs.managed_hook_node18.steps
+    const installIndex = steps.findIndex(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    const buildIndex = steps.findIndex((step) => step.run === 'pnpm run build:relay')
+    const node18Index = steps.findIndex(
+      (step) => step.uses === 'actions/setup-node@v6' && step.with['node-version'] === '18'
+    )
+    const smokeIndex = steps.findIndex(
+      (step) => step.run === 'node config/scripts/smoke-managed-hook-runtime-node18.mjs'
+    )
+
+    expect(installIndex).toBeLessThan(buildIndex)
+    expect(buildIndex).toBeLessThan(node18Index)
+    expect(node18Index).toBeLessThan(smokeIndex)
+  })
+
   it('restores the pnpm store before dependency installation', () => {
     const steps = dependencyAction.runs.steps
     const pnpmIndex = steps.findIndex((step) => step.name === 'Setup pnpm')
     const nodeIndex = steps.findIndex((step) => step.name === 'Setup Node.js')
+    const requestedNodeIndex = steps.findIndex((step) => step.name === 'Setup requested Node.js')
 
     expect(pnpmIndex).toBeLessThan(nodeIndex)
+    expect(pnpmIndex).toBeLessThan(requestedNodeIndex)
     expect(steps[nodeIndex].with.cache).toBe('pnpm')
+    expect(steps[nodeIndex].if).toBe("inputs.node-version == ''")
+    expect(steps[requestedNodeIndex].if).toBe("inputs.node-version != ''")
+    expect(steps[requestedNodeIndex].with['node-version']).toBe('${{ inputs.node-version }}')
+    expect(steps[requestedNodeIndex].with.cache).toBe('pnpm')
   })
 
   it('restores Electron downloads before preparing the package runtime', () => {
@@ -118,7 +148,12 @@ describe('PR workflow parallelism', () => {
         (step) => step.uses === './.github/actions/install-node-dependencies'
       )
 
-    for (const jobName of ['static_analysis', 'typecheck', 'git_compatibility']) {
+    for (const jobName of [
+      'static_analysis',
+      'typecheck',
+      'git_compatibility',
+      'xterm_patch_sync'
+    ]) {
       expect(installFor(jobName).with, jobName).toBeUndefined()
     }
     expect(installFor('shell_contracts').with['native-runtime']).toBe('node')
@@ -161,11 +196,20 @@ describe('PR workflow parallelism', () => {
   it('keeps verify as the aggregate required check', () => {
     expect(workflow.jobs.verify.needs).toEqual([
       'static_analysis',
+      'root_directory_guard',
       'typecheck',
       'git_compatibility',
+      'xterm_patch_sync',
       'shell_contracts',
       'test',
-      'package'
+      'managed_hook_node18',
+      'package',
+      'package_windows'
     ])
+    const verifyStep = workflow.jobs.verify.steps.find(
+      (step) => step.name === 'Require successful checks'
+    )
+    expect(verifyStep.env.MANAGED_HOOK_NODE18).toBe('${{ needs.managed_hook_node18.result }}')
+    expect(verifyStep.run).toContain('"$MANAGED_HOOK_NODE18"')
   })
 })

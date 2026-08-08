@@ -47,6 +47,10 @@ export type NativeChatLiveSession = NativeChatSession & {
   loadingEarlier: boolean
   /** Grow the read window to page in older history (scrolled-to-top trigger). */
   loadEarlier: () => void
+  /** Raw initial-read phase. `status` is not a substitute: a live 'working' hook
+   *  outranks (and so hides) 'loading', which would let a consumer deciding from
+   *  an empty list treat an in-flight transcript as real history. */
+  readPhase: ReadState['phase']
 }
 
 // Stable empty-base reference so a non-ready read doesn't churn the base axis.
@@ -82,7 +86,7 @@ function notFoundRetryDelayMs(attempt: number): number {
   return NOTFOUND_RETRY_DELAYS_MS[attempt] ?? NOTFOUND_RETRY_FIXED_DELAY_MS
 }
 
-type ReadState =
+export type ReadState =
   | { phase: 'loading' }
   | { phase: 'ready'; messages: NativeChatMessage[] }
   | { phase: 'error'; error: string }
@@ -357,7 +361,7 @@ export function useNativeChatLiveSession(
       loading: read.phase === 'loading' && appended.length === 0,
       ...(read.phase === 'error' && appended.length === 0 ? { error: read.error } : {})
     })
-    return { ...session, hasMore, loadingEarlier, loadEarlier }
+    return { ...session, hasMore, loadingEarlier, loadEarlier, readPhase: read.phase }
   }, [
     surfacedMessages,
     read,

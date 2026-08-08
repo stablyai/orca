@@ -87,7 +87,7 @@ export async function getIssue(
     }
     // Fallback for non-GitHub remotes
     const { stdout } = await ghExecFileAsync(
-      ['issue', 'view', String(issueNumber), '--json', 'number,title,state,url,labels'],
+      ['issue', 'view', String(issueNumber), '--json', 'number,title,state,url,labels,body'],
       ghOptions
     )
     const data = JSON.parse(stdout)

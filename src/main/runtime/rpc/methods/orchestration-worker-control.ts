@@ -3,14 +3,8 @@ import {
   ORCHESTRATION_WORKER_READ_SOURCES,
   type OrchestrationWorkerReadResult
 } from '../../../../shared/orchestration-worker-output'
-import type { RuntimeTerminalRead } from '../../../../shared/runtime-types'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { syncFederatedDispatch } from '../../orchestration/federation-sync'
-import {
-  createWorkerOutputSourceIdentity,
-  decodeWorkerOutputCursor,
-  encodeWorkerOutputCursor
-} from '../../orchestration/worker-output-cursor'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, requiredString } from '../schemas'
 import {
@@ -19,7 +13,10 @@ import {
   inspectWorkerTerminal,
   resolvePinnedFederatedServer
 } from './orchestration-worker-observation'
+import { readArchivedWorkerOutput } from './orchestration-worker-archive-read'
+import { readLegacyFederatedTerminal } from './orchestration-worker-legacy-federated-read'
 import { readExactWorkerOutput } from './orchestration-worker-output'
+import { exposeWorkerTerminalResource } from './orchestration-worker-release-completion'
 
 const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
 const WorkerReadParams = WorkerDispatchParams.extend({
@@ -119,11 +116,13 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
         }
       }
       const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
+      const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
       return {
         dispatch,
         worker: exposeWorker(worker),
         terminal: observation.exact ? observation.terminal : null,
-        observation: { status: observation.status, exactWorker: observation.exact }
+        observation: { status: observation.status, exactWorker: observation.exact },
+        terminalResource: resource ? exposeWorkerTerminalResource(resource) : null
       }
     }
   }),
@@ -174,6 +173,18 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
           'dispatch_not_found',
           `Worker Dispatch ${params.dispatch} has no agent terminal.`
         )
+      }
+      const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
+      if (resource && ['releasing', 'released'].includes(resource.release_state)) {
+        return readArchivedWorkerOutput({
+          db,
+          dispatchId: params.dispatch,
+          workerState: worker.state,
+          resource,
+          source: params.source,
+          cursor: params.cursor,
+          limit: params.limit
+        })
       }
       const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
       if (!observation.exact) {
@@ -227,68 +238,3 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
     }
   })
 ]
-
-async function readLegacyFederatedTerminal(args: {
-  runtime: Parameters<typeof resolvePinnedFederatedServer>[0]
-  server: ReturnType<typeof resolvePinnedFederatedServer>
-  federated: Parameters<typeof resolvePinnedFederatedServer>[1]
-  workerState: string
-  dispatchId: string
-  source: (typeof ORCHESTRATION_WORKER_READ_SOURCES)[number] | undefined
-  cursor: string | number | undefined
-  limit: number | undefined
-}) {
-  const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
-  if (args.source === 'transcript' || cursor?.source === 'transcript') {
-    throw new OrchestrationError(
-      'transcript_required',
-      `Connected server ${args.server.name} does not support structured worker output.`,
-      { reason: 'remote_capability_unavailable' }
-    )
-  }
-  const remote = (await args.runtime.callOrchestrationWorkerServer(
-    args.server.environmentId,
-    'orchestration.federationRead',
-    {
-      dispatchId: args.dispatchId,
-      cursor: cursor?.source === 'terminal' ? cursor.position : undefined,
-      limit: args.limit
-    },
-    15_000
-  )) as { runtimeEpoch: string; terminal: RuntimeTerminalRead }
-  const sourceIdentity = createWorkerOutputSourceIdentity([
-    'legacy-remote-terminal',
-    args.federated.peer_fingerprint,
-    args.dispatchId,
-    remote.runtimeEpoch
-  ])
-  if (
-    cursor?.source === 'terminal' &&
-    cursor.sourceIdentity !== null &&
-    cursor.sourceIdentity !== sourceIdentity
-  ) {
-    throw new OrchestrationError(
-      'source_changed',
-      'The worker output source changed. Start a fresh worker-read without the old cursor.'
-    )
-  }
-  const nextPosition =
-    remote.terminal.nextCursor !== null && /^\d+$/.test(remote.terminal.nextCursor)
-      ? Number.parseInt(remote.terminal.nextCursor, 10)
-      : null
-  return {
-    dispatchId: args.dispatchId,
-    source: 'terminal' as const,
-    sourceIdentity,
-    terminal: remote.terminal,
-    cursor:
-      nextPosition === null
-        ? null
-        : encodeWorkerOutputCursor(args.dispatchId, 'terminal', sourceIdentity, nextPosition),
-    status: { worker: args.workerState, terminal: remote.terminal.status },
-    fallbackReason: 'remote_capability_unavailable' as const,
-    warnings: [],
-    server: { environmentId: args.server.environmentId, name: args.server.name },
-    remoteRuntimeEpoch: remote.runtimeEpoch
-  }
-}

@@ -45,6 +45,7 @@ import {
   DialogTitle,
   DialogDescription
 } from '@/components/ui/dialog'
+import { ImeEnterGuardedForm } from '@/components/ime-enter-guarded-form'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -1340,7 +1341,7 @@ function PortForwardDialog({
   )
 }
 
-function PortForwardForm({
+export function PortForwardForm({
   mode,
   editId,
   initialRemotePort,
@@ -1418,7 +1419,7 @@ function PortForwardForm({
   )
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <ImeEnterGuardedForm onSubmit={handleSubmit} className="space-y-3">
       <div className="space-y-2">
         <label className="block">
           <span className="text-[11px] text-muted-foreground">
@@ -1511,6 +1512,6 @@ function PortForwardForm({
               : translate('auto.components.right.sidebar.PortsPanel.c9d106547a', 'Forward')}
         </Button>
       </div>
-    </form>
+    </ImeEnterGuardedForm>
   )
 }

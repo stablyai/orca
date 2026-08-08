@@ -8,7 +8,10 @@ import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/wor
 
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null
+  /** Unconditional: always use the system browser regardless of settings. */
   forceSystemBrowser?: boolean
+  /** The Shift escape-hatch modifier was held; resolveModifierRouting decides what it means. */
+  modifierHeld?: boolean
   sourceOwner?: HttpLinkSourceOwner
 }
 
@@ -22,7 +25,10 @@ type StoreAccessor = () => {
   settings?: Partial<
     Pick<
       GlobalSettings,
-      'openLinksInApp' | 'activeRuntimeEnvironmentId' | 'localhostWorktreeLabelsEnabled'
+      | 'openLinksInApp'
+      | 'openLinksInAppModifierInverts'
+      | 'activeRuntimeEnvironmentId'
+      | 'localhostWorktreeLabelsEnabled'
     >
   > | null
   setActiveWorktree: (worktreeId: string) => void
@@ -61,21 +67,49 @@ export function registerHttpLinkStoreAccessor(fn: StoreAccessor): void {
 // Scope: http(s) URLs only. file: URIs and in-worktree markdown targets are
 // owned by resolveMarkdownLinkTarget and must stay on that path — this helper
 // is only invoked on target.kind === 'external' (and for the terminal's http
-// branch). Shift+Cmd/Ctrl is the escape hatch: callers pass forceSystemBrowser
-// to bypass the setting entirely.
+// branch). Shift+Cmd/Ctrl is the escape hatch: click handlers pass modifierHeld
+// so resolveModifierRouting applies it; forceSystemBrowser stays reserved for
+// callers that must bypass the setting unconditionally.
+/**
+ * Resolves what the Shift modifier means for one click. Historically it always
+ * forced the system browser, which is a no-op when that is already the default;
+ * openLinksInAppModifierInverts makes it flip whichever way Link Routing points
+ * so the other destination is always one click away.
+ */
+export function resolveModifierRouting(
+  modifierHeld: boolean,
+  openLinksInApp: boolean,
+  modifierInverts: boolean
+): { wantsOrca: boolean; wantsSystemBrowser: boolean } {
+  if (!modifierHeld) {
+    return { wantsOrca: false, wantsSystemBrowser: false }
+  }
+  if (!modifierInverts) {
+    return { wantsOrca: false, wantsSystemBrowser: true }
+  }
+  return { wantsOrca: !openLinksInApp, wantsSystemBrowser: openLinksInApp }
+}
+
 export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void {
-  const { worktreeId, forceSystemBrowser, sourceOwner } = opts
+  const { worktreeId, forceSystemBrowser, modifierHeld, sourceOwner } = opts
   if (sourceOwner?.kind === 'unknown') {
     return
   }
   const state = storeAccessor?.()
   const remoteRuntimeActive = Boolean(state?.settings?.activeRuntimeEnvironmentId?.trim())
   const sourceIsLocal = sourceOwner ? sourceOwner.kind === 'local' : !remoteRuntimeActive
+  const openLinksInApp = state?.settings?.openLinksInApp === true
+  const modifier = resolveModifierRouting(
+    Boolean(modifierHeld),
+    openLinksInApp,
+    state?.settings?.openLinksInAppModifierInverts === true
+  )
   const routeToOrca =
     sourceIsLocal &&
     !forceSystemBrowser &&
+    !modifier.wantsSystemBrowser &&
     Boolean(worktreeId) &&
-    state?.settings?.openLinksInApp === true
+    (openLinksInApp || modifier.wantsOrca)
 
   if (routeToOrca && worktreeId && state) {
     // Why: http clicks from inside a worktree should not push a worktree-switch
@@ -126,12 +160,17 @@ function localhostLabelRouteForHttpLink(
   return localhostLabelRouteForTerminalLink(url, state, sourceOwner?.kind === 'local', sourceScan)
 }
 
-export async function resolveLocalhostHttpLinkDisplayUrl(url: string): Promise<string | null> {
+export async function resolveLocalhostHttpLinkDisplayUrl(
+  url: string,
+  sourceOwner?: HttpLinkSourceOwner
+): Promise<string | null> {
   const state = storeAccessor?.()
   if (!state) {
     return null
   }
-  const localhostRoute = localhostLabelRouteForTerminalLink(url, state)
+  // Why: the hover label must resolve the same route the click will take, or a
+  // remote pane's loopback URL gets shown with a local worktree's label.
+  const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
   if (!localhostRoute) {
     return null
   }

@@ -11,9 +11,12 @@ import type { MobileDiffLine } from './mobile-diff-lines'
 describe('mobile file syntax highlighting', () => {
   it('detects common source languages from file paths', () => {
     expect(detectMobileFileLanguage('src/App.tsx')).toBe('typescript')
+    expect(detectMobileFileLanguage('config/vitest.config.mts')).toBe('typescript')
+    expect(detectMobileFileLanguage('C:\\repo\\scripts\\postinstall.CTS')).toBe('typescript')
     expect(detectMobileFileLanguage('scripts/deploy.sh')).toBe('shell')
     expect(detectMobileFileLanguage('Dockerfile')).toBe('dockerfile')
     expect(resolveMobileSyntaxLanguage('src/App.tsx')).toBe('typescript')
+    expect(resolveMobileSyntaxLanguage('worktrees/feature/build.cts')).toBe('typescript')
     expect(resolveMobileSyntaxLanguage('Dockerfile')).toBe('plaintext')
   })
 

@@ -108,6 +108,39 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('working')
   })
 
+  it('does not revive an unconfirmed restored row from its preserved title', () => {
+    const restored = entry(FIRST_LEAF_ID, 'working', { restoredUnconfirmed: true })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: { id: TAB_ID, title: 'Codex working' },
+        agentStatusByPaneKey: { [restored.paneKey]: restored },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('active')
+  })
+
+  it('keeps an independently live sibling title visible beside an unconfirmed row', () => {
+    const restored = entry(FIRST_LEAF_ID, 'working', { restoredUnconfirmed: true })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [restored.paneKey]: restored },
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'Codex working', 2: 'Claude working' } },
+        ptyIdsByTabId: LIVE_PTY,
+        terminalLayout: {
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: FIRST_LEAF_ID },
+            second: { type: 'leaf', leafId: SECOND_LEAF_ID }
+          },
+          activeLeafId: FIRST_LEAF_ID,
+          expandedLeafId: null
+        }
+      })
+    ).toBe('working')
+  })
+
   it('de-spins a stale working tab on an epoch bump without a new map reference', () => {
     // Why: the freshness scheduler bumps agentStatusEpoch (not the map ref) at
     // the 30m stale boundary. The flag cache must invalidate on that bump, or an

@@ -6,6 +6,7 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 
 export type WorkspaceSessionHydrationOptions = {
   additionalValidWorkspaceKeys?: readonly WorkspaceKey[]
+  replaceWorkspaceKeys?: readonly string[]
 }
 
 // Worktree-keyed fields carrying restorable chrome — a repo appears here only if it has live

@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import type { VoiceSettings } from '../../../../shared/speech-types'
-import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech-types'
+import type {
+  VoiceSettings,
+  SpeechModelManifest,
+  SpeechModelState
+} from '../../../../shared/speech-types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import {

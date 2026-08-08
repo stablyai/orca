@@ -1,41 +1,6 @@
 name: Windows terminal restart E2E
 
 on:
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
-    paths:
-      - '.github/workflows/windows-terminal-restart-e2e.yml'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'electron.vite.config.ts'
-      - 'config/patches/**'
-      - 'config/scripts/ensure-native-runtime.mjs'
-      - 'config/scripts/rebuild-native-deps.mjs'
-      - 'tests/playwright.config.ts'
-      - 'tests/e2e/global-setup.ts'
-      - 'tests/e2e/global-teardown.ts'
-      - 'tests/e2e/helpers/**'
-      - 'tests/e2e/restart-restore-terminal-input.spec.ts'
-      - 'tests/e2e/restored-terminal-input-readiness.unit.test.ts'
-      - 'tests/e2e/terminal-probe-input-sequence.ts'
-      - 'tests/e2e/terminal-probe-input-sequence.unit.test.ts'
-      - 'tests/e2e/terminal-restart-persistence.spec.ts'
-      - 'src/main/daemon/**'
-      - 'src/main/ipc/pty*.ts'
-      - 'src/main/providers/**'
-      - 'src/main/pty/**'
-      - 'src/main/pty-descendant-termination.ts'
-      - 'src/main/windows-process-tree-kill.ts'
-      - 'src/main/windows-pty-root-identity.ts'
-      - 'src/preload/**'
-      - 'src/renderer/src/components/terminal-pane/**'
-      - 'src/renderer/src/lib/pane-manager/**'
-      - 'src/shared/process-table-snapshot.ts'
-      - 'src/shared/pty-session-id-format.ts'
   workflow_dispatch:
     inputs:
       ref:

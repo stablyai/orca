@@ -29,6 +29,11 @@ describe('PowerShell OSC 133 bootstrap', () => {
     expect(script).not.toContain('$PROFILE')
     expect(script).not.toContain('ExecutionPolicy')
     expect(script).not.toContain('NoProfile')
+
+    const codexHomeRestore = script.indexOf('if ($env:ORCA_CODEX_HOME)')
+    expect(codexHomeRestore).toBeGreaterThan(-1)
+    expect(codexHomeRestore).toBeLessThan(script.indexOf('Test-Path variable:global:'))
+    expect(codexHomeRestore).toBeLessThan(script.indexOf('LanguageMode -eq "FullLanguage"'))
   })
 
   it('encodes commands as UTF-16LE base64 for PowerShell -EncodedCommand', () => {

@@ -72,9 +72,10 @@ describe('PluginOverlayManager', () => {
 
   it('installs Pi extension into the real agent extensions dir', () => {
     manager.setSources({ piExtensionSource: '// pi extension' })
-    const dir = manager.materializePi('tab-2:0')
-    expect(dir).not.toBeNull()
-    const file = join(dir!, 'extensions', 'orca-agent-status.ts')
+    const result = manager.materializePi('tab-2:0')
+    expect(result?.sourceAgentDir).toBeDefined()
+    const file = join(result!.sourceAgentDir!, 'extensions', 'orca-agent-status.ts')
+    expect(result?.statusExtensionPath).toBe(file)
     expect(existsSync(file)).toBe(true)
     expect(readFileSync(file, 'utf8')).toContain('@orca-managed-pi-extension')
   })
@@ -96,17 +97,17 @@ describe('PluginOverlayManager', () => {
       ompExtensionSource: '// omp extension'
     })
 
-    const piDir = manager.materializePi('tab-kind-pi:0', undefined, 'pi')
-    const ompDir = manager.materializePi('tab-kind-omp:0', undefined, 'omp')
+    const piResult = manager.materializePi('tab-kind-pi:0', undefined, 'pi')
+    const ompResult = manager.materializePi('tab-kind-omp:0', undefined, 'omp')
 
-    expect(piDir).not.toBeNull()
-    expect(ompDir).not.toBeNull()
-    expect(readFileSync(join(piDir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toContain(
-      '// pi extension'
-    )
-    expect(readFileSync(join(ompDir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toContain(
-      '// omp extension'
-    )
+    expect(piResult?.sourceAgentDir).toBeDefined()
+    expect(ompResult?.sourceAgentDir).toBeDefined()
+    expect(
+      readFileSync(join(piResult!.sourceAgentDir!, 'extensions', 'orca-agent-status.ts'), 'utf8')
+    ).toContain('// pi extension')
+    expect(
+      readFileSync(join(ompResult!.sourceAgentDir!, 'extensions', 'orca-agent-status.ts'), 'utf8')
+    ).toContain('// omp extension')
   })
 
   it('installs Orca status extension into the remote default Pi agent dir', () => {
@@ -129,9 +130,10 @@ describe('PluginOverlayManager', () => {
     )
 
     manager.setSources({ piExtensionSource: '// pi extension' })
-    const dir = manager.materializePi('tab-pi:0')
+    const result = manager.materializePi('tab-pi:0')
+    const dir = result?.sourceAgentDir
 
-    expect(dir).not.toBeNull()
+    expect(dir).toBeDefined()
     expect(readFileSync(join(dir!, 'auth.json'), 'utf8')).toBe('secret token')
     expect(readFileSync(join(dir!, 'skills', 'my-skill', 'SKILL.md'), 'utf8')).toBe(
       'critical user skill'
@@ -171,9 +173,10 @@ describe('PluginOverlayManager', () => {
     writeFileSync(join(customAgentDir, 'extensions', 'custom.ts'), 'custom extension')
 
     manager.setSources({ piExtensionSource: '// pi extension' })
-    const dir = manager.materializePi('tab-custom-pi:0', customAgentDir)
+    const result = manager.materializePi('tab-custom-pi:0', customAgentDir)
+    const dir = result?.sourceAgentDir
 
-    expect(dir).not.toBeNull()
+    expect(dir).toBeDefined()
     expect(readFileSync(join(dir!, 'auth.json'), 'utf8')).toBe('custom token')
     expect(readFileSync(join(dir!, 'extensions', 'custom.ts'), 'utf8')).toBe('custom extension')
     expect(readFileSync(join(dir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toContain(
@@ -184,10 +187,9 @@ describe('PluginOverlayManager', () => {
   it('leaves lazy OMP agent.db in the real remote home on the relay', () => {
     manager.setSources({ piExtensionSource: '// pi extension' })
     const sourceDir = join(homeDir, '.omp', 'agent')
-    const firstDir = manager.materializePi('tab-relay-omp-sqlite:0', undefined, 'omp')
+    const first = manager.materializePi('tab-relay-omp-sqlite:0', undefined, 'omp')
 
-    expect(firstDir).not.toBeNull()
-    expect(firstDir).toBe(sourceDir)
+    expect(first?.sourceAgentDir).toBe(sourceDir)
     const sourcePath = join(sourceDir, 'agent.db')
     const content = 'agent.db relay credentials'
 
@@ -198,10 +200,10 @@ describe('PluginOverlayManager', () => {
 
     expect(readFileSync(sourcePath, 'utf8')).toBe(content)
 
-    const secondDir = manager.materializePi('tab-relay-omp-sqlite:0', undefined, 'omp')
+    const second = manager.materializePi('tab-relay-omp-sqlite:0', undefined, 'omp')
 
-    expect(secondDir).toBe(firstDir)
-    expect(readFileSync(join(secondDir!, 'agent.db'), 'utf8')).toBe(content)
+    expect(second?.sourceAgentDir).toBe(first?.sourceAgentDir)
+    expect(readFileSync(join(second!.sourceAgentDir!, 'agent.db'), 'utf8')).toBe(content)
   })
 
   // Why: per-agent source dir. The renderer picks Pi or OMP per
@@ -222,9 +224,9 @@ describe('PluginOverlayManager', () => {
       seedAgentDir('.omp', 'omp')
 
       manager.setSources({ piExtensionSource: '// pi extension' })
-      const dir = manager.materializePi('tab-relay-pi-both:0', undefined, 'pi')
+      const result = manager.materializePi('tab-relay-pi-both:0', undefined, 'pi')
+      const dir = result?.sourceAgentDir
 
-      expect(dir).not.toBeNull()
       expect(dir).toBe(join(homeDir, '.pi', 'agent'))
       expect(readFileSync(join(dir!, 'auth.json'), 'utf8')).toBe('pi token')
       const extensions = readdirSync(join(dir!, 'extensions')).sort()
@@ -238,9 +240,9 @@ describe('PluginOverlayManager', () => {
       seedAgentDir('.omp', 'omp')
 
       manager.setSources({ piExtensionSource: '// pi extension' })
-      const dir = manager.materializePi('tab-relay-omp-both:0', undefined, 'omp')
+      const result = manager.materializePi('tab-relay-omp-both:0', undefined, 'omp')
+      const dir = result?.sourceAgentDir
 
-      expect(dir).not.toBeNull()
       expect(dir).toBe(join(homeDir, '.omp', 'agent'))
       // Even though ~/.pi/agent exists, the OMP launch MUST mirror OMP's
       // source dir. Cross-agent fallback would silently shadow the user's
@@ -259,14 +261,41 @@ describe('PluginOverlayManager', () => {
       expect(existsSync(join(homeDir, '.omp'))).toBe(false)
 
       manager.setSources({ piExtensionSource: '// pi extension' })
-      const dir = manager.materializePi('tab-relay-omp-empty:0', undefined, 'omp')
+      const result = manager.materializePi('tab-relay-omp-empty:0', undefined, 'omp')
+      const dir = result?.sourceAgentDir
 
-      expect(dir).not.toBeNull()
       expect(dir).toBe(join(homeDir, '.omp', 'agent'))
       // Pi-only home must NOT leak into the OMP home.
       expect(existsSync(join(dir!, 'auth.json'))).toBe(false)
       const extensions = readdirSync(join(dir!, 'extensions')).sort()
       expect(extensions).toEqual(['orca-agent-status.ts'])
+    })
+
+    it('bare-shell prep does not create missing remote agent homes (#10196)', () => {
+      expect(existsSync(join(homeDir, '.pi'))).toBe(false)
+      expect(existsSync(join(homeDir, '.omp'))).toBe(false)
+      manager.setSources({
+        piExtensionSource: '// pi extension',
+        ompExtensionSource: '// omp extension'
+      })
+
+      expect(
+        manager.materializePi('tab-bare-pi:0', undefined, 'pi', {
+          materializeDefaultHome: false
+        })
+      ).toBeNull()
+      const bareOmp = manager.materializePi('tab-bare-omp:0', undefined, 'omp', {
+        materializeDefaultHome: false
+      })
+      // Why: bare OMP keeps status via ~/.orca-relay/… without SOURCE_AGENT_DIR or ~/.omp.
+      expect(bareOmp?.sourceAgentDir).toBeUndefined()
+      expect(bareOmp?.statusExtensionPath).toEqual(
+        expect.stringContaining(join('.orca-relay', 'omp-managed-status-extension'))
+      )
+      expect(existsSync(bareOmp!.statusExtensionPath!)).toBe(true)
+      expect(readFileSync(bareOmp!.statusExtensionPath!, 'utf8')).toContain('// omp extension')
+      expect(existsSync(join(homeDir, '.pi'))).toBe(false)
+      expect(existsSync(join(homeDir, '.omp'))).toBe(false)
     })
   })
 
@@ -283,8 +312,8 @@ describe('PluginOverlayManager', () => {
       ompExtensionSource: 'omp'
     })
     const opencodeDir = manager.materializeOpenCode('tab-3:0')!
-    const piDir = manager.materializePi('tab-3:0', undefined, 'pi')!
-    const ompDir = manager.materializePi('tab-3:0', undefined, 'omp')!
+    const piDir = manager.materializePi('tab-3:0', undefined, 'pi')!.sourceAgentDir!
+    const ompDir = manager.materializePi('tab-3:0', undefined, 'omp')!.sourceAgentDir!
     expect(piDir).not.toBe(ompDir)
     expect(existsSync(opencodeDir)).toBe(true)
     expect(existsSync(piDir)).toBe(true)

@@ -57,7 +57,7 @@ function inventory(
   installations: SkillFreshnessInstallation[],
   eligibleUpdateNames: string[] = []
 ): SkillFreshnessInventory {
-  return { schemaVersion: 1, installations, eligibleUpdateNames, scannedAt: 1 }
+  return { schemaVersion: 1, installations, eligibleUpdateNames, scanIssues: [], scannedAt: 1 }
 }
 
 describe('getAgentSkillNavInstallStatus', () => {

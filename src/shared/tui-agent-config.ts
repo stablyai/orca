@@ -41,6 +41,8 @@ export type TuiAgentConfig = {
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
   windowsShiftEnterEncoding?: 'csi-u'
+  /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
+  ctrlEnterEncoding?: 'csi-u'
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
@@ -96,6 +98,18 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: `ante --prompt` is headless (runs once and exits), so launch the bare TUI and inject after startup.
     promptInjectionMode: 'stdin-after-start'
   },
+  trae: {
+    // Why: the unrelated open-source bytedance/trae-agent also installs a `trae-cli`
+    // binary, so detect TRAE CN's CLI on `traecli`, an alias only TRAE CN ships.
+    detectCmd: 'traecli',
+    launchCmd: 'traecli',
+    expectedProcess: 'traecli',
+    // Why: `traecli [prompt]` takes the task as a positional argv, same as Claude/Codex.
+    promptInjectionMode: 'argv',
+    // Why: separator so prompts starting with `help`/`config`/`-…` aren't parsed as a
+    // Trae subcommand or flag — `--` stops both in its Cobra parser.
+    argvPromptSeparator: '--'
+  },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',
@@ -118,7 +132,9 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'pi',
     promptInjectionMode: 'argv',
     // Why: pi has no `--prefill` and paste-after-ready races its long startup; the orca-prefill extension seeds this env var instead.
-    draftPromptEnvVar: 'ORCA_PI_PREFILL'
+    draftPromptEnvVar: 'ORCA_PI_PREFILL',
+    // Why: Pi decodes CSI-u; Esc+CR submits after tool subprocesses reset live KKP state (#9703).
+    windowsShiftEnterEncoding: 'csi-u'
   },
   omp: {
     detectCmd: 'omp',
@@ -225,7 +241,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'droid',
     promptInjectionMode: 'argv',
     // Why: Droid decodes CSI-u on Windows; the legacy Esc+CR fallback reads as Enter and submits instead of newline.
-    windowsShiftEnterEncoding: 'csi-u'
+    windowsShiftEnterEncoding: 'csi-u',
+    ctrlEnterEncoding: 'csi-u'
   },
   kimi: {
     detectCmd: 'kimi',
@@ -284,7 +301,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: argv (grok takes a positional prompt) so multi-line/special-char text isn't mangled as raw PTY keystrokes.
     promptInjectionMode: 'argv',
     // Why: separator so prompts like `help`/`--version` aren't parsed as Grok CLI syntax.
-    argvPromptSeparator: '--'
+    argvPromptSeparator: '--',
+    ctrlEnterEncoding: 'csi-u'
   },
   devin: {
     detectCmd: 'devin',

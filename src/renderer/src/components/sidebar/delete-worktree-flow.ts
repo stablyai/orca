@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { getWorktreeMapFromState } from '@/store/selectors'
+import { getAllWorktreesFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
@@ -46,16 +46,18 @@ export async function runWorktreeDeletesInParallel(
   targets: readonly Pick<Worktree, 'id' | 'displayName' | 'repoId' | 'path'>[],
   options: WorktreeDeleteWithToastOptions = {}
 ): Promise<string[]> {
+  // Why: refresh races can leave duplicate rows, but a destructive command must run once per identity.
+  const uniqueTargets = Array.from(new Map(targets.map((target) => [target.id, target])).values())
   // Why: capture the viewed workspace before any delete so we can focus one survivor after the batch settles, not per delete.
   const activeWorktreeIdBefore = useAppStore.getState().activeWorktreeId
   const commitBatchFocus = activeWorktreeIdBefore
     ? prepareActiveWorktreeFocusAfterDelete(activeWorktreeIdBefore)
     : null
   // Why: mark every target deleting up front for immediate in-flight feedback, even though deletes serialize per repo.
-  useAppStore.getState().markWorktreesDeleting(targets.map((target) => target.id))
+  useAppStore.getState().markWorktreesDeleting(uniqueTargets.map((target) => target.id))
   // Why: worktree remove/prune/branch -D race on shared ref locks; group by repoId to serialize per repo (cross-repo stays parallel).
-  const groups = new Map<string, (typeof targets)[number][]>()
-  for (const target of targets) {
+  const groups = new Map<string, (typeof uniqueTargets)[number][]>()
+  for (const target of uniqueTargets) {
     const group = groups.get(target.repoId)
     if (group) {
       group.push(target)
@@ -95,7 +97,7 @@ export async function runWorktreeDeletesInParallel(
   if (activeWorktreeIdBefore && deletedSet.has(activeWorktreeIdBefore)) {
     commitBatchFocus?.()
   }
-  return targets.filter((target) => deletedSet.has(target.id)).map((target) => target.id)
+  return uniqueTargets.filter((target) => deletedSet.has(target.id)).map((target) => target.id)
 }
 
 /**
@@ -136,7 +138,11 @@ export function runWorktreeDeleteWithToast(
         onForceDelete: () => {
           // Why: recapture at click time — the user may have navigated away while the toast was open, so focus only hands off if still viewed.
           const commitForceFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-          const forceRemoval = useAppStore.getState().removeWorktree(worktreeId, true)
+          // Why (#11960): the user clicked Force Delete on a failure toast, so this
+          // retry may waive the PTY-stop proof the first attempt could not satisfy.
+          const forceRemoval = useAppStore
+            .getState()
+            .removeWorktree(worktreeId, true, { allowUnverifiedPtyStop: true })
           forceRemoval
             .then((forceResult) => {
               if (!forceResult.ok) {
@@ -249,8 +255,8 @@ export function runWorktreeDelete(worktreeId: string): void {
   }
 
   const hasLineageChildren =
-    getWorkspaceDeleteLineage(target, state.allWorktrees(), state.worktreeLineageById).descendants
-      .length > 0
+    getWorkspaceDeleteLineage(target, getAllWorktreesFromState(state), state.worktreeLineageById)
+      .descendants.length > 0
   const skipConfirm = state.settings?.skipDeleteWorktreeConfirm ?? false
   if (skipConfirm && !hasLineageChildren) {
     void runWorktreeDeleteWithToast(worktreeId, target.displayName)
@@ -268,7 +274,7 @@ export function runWorktreeBatchDelete(
 ): boolean {
   const state = useAppStore.getState()
   const worktreeMap = getWorktreeMapFromState(state)
-  const targets = worktreeIds
+  const targets = Array.from(new Set(worktreeIds))
     .map((id) => worktreeMap.get(id) ?? null)
     .filter((worktree): worktree is Worktree => worktree != null && !worktree.isMainWorktree)
 
@@ -295,8 +301,11 @@ export function runWorktreeBatchDelete(
   // Why: bulk cleanup can destroy many directories at once, so batch/Space deletes keep an explicit confirmation step.
   const singleTargetHasLineageChildren =
     targets.length === 1 &&
-    getWorkspaceDeleteLineage(targets[0], state.allWorktrees(), state.worktreeLineageById)
-      .descendants.length > 0
+    getWorkspaceDeleteLineage(
+      targets[0],
+      getAllWorktreesFromState(state),
+      state.worktreeLineageById
+    ).descendants.length > 0
   const skipConfirm =
     !options.forceConfirm &&
     targets.length === 1 &&

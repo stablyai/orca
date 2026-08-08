@@ -154,7 +154,9 @@ describe('scanAiVaultSessions', () => {
 
     const result = await scanAiVaultSessions({
       ...roots,
-      platform: 'darwin'
+      platform: 'darwin',
+      limit: 1,
+      unlimited: true
     })
 
     expect(result.issues).toEqual([])
@@ -163,7 +165,6 @@ describe('scanAiVaultSessions', () => {
       'Indexed Codex resume picker title',
       'Vault polish pass'
     ])
-
     const claude = result.sessions.find((session) => session.agent === 'claude')
     expect(claude).toMatchObject({
       sessionId: 'claude-session',
@@ -174,6 +175,8 @@ describe('scanAiVaultSessions', () => {
       totalTokens: 155,
       resumeCommand: "cd '/repo/app' && claude --resume 'claude-session'"
     })
+    // Why: list scans omit firstUserPrompt so the vault payload stays bounded.
+    expect(claude?.firstUserPrompt).toBeUndefined()
 
     const codex = result.sessions.find((session) => session.agent === 'codex')
     expect(codex).toMatchObject({
@@ -185,6 +188,7 @@ describe('scanAiVaultSessions', () => {
       totalTokens: 625,
       resumeCommand: `cd '/repo/app/packages/web' && CODEX_HOME='${root}' codex resume '019f0000-1111-7222-8333-444444444444'`
     })
+    expect(codex?.firstUserPrompt).toBeUndefined()
   })
 
   it('indexes Codex sessions from Orca runtime homes with resumable commands', async () => {

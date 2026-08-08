@@ -9,10 +9,26 @@ export type CodexEchoLatencySample = {
   keyToRenderMs: number | null
 }
 
+export type CodexDataLatencySample = {
+  index: number
+  kind: 'text' | 'ime'
+  /** `event.code`: `event.key` is the literal string 'Process' for every Pinyin/Cangjie keydown. */
+  code: string
+  /** keydown -> xterm emitted that keystroke's bytes on `onData` (composer-vs-onData delta). */
+  keyToDataMs: number
+  data: string
+}
+
 export type CodexEchoProbeReport = {
   samples: CodexEchoLatencySample[]
+  /** Per-keystroke keydown->onData deltas, sampled DURING typing rather than after quiescence. */
+  dataSamples: CodexDataLatencySample[]
   keysObserved: number
+  imeKeysObserved: number
   parseEvents: number
+  dataEvents: number
+  /** `onData` emissions with no keydown to charge them to (paste, PTY-driven replies). */
+  unattributedDataEvents: number
   renderEvents: number
   cols: number
   rows: number
@@ -29,7 +45,11 @@ declare global {
 }
 
 /**
- * Installs an in-renderer echo-latency recorder on the active terminal pane.
+ * Installs an in-renderer latency recorder on the active terminal pane, over two
+ * independent arms:
+ *  - echo: keydown -> `onWriteParsed` -> `onRender`, i.e. what the screen shows.
+ *  - input: keydown -> `onData`, i.e. how fast the keystroke leaves the composer.
+ * They answer different questions and neither substitutes for the other.
  *
  * Why in-page: polling a serialized buffer over CDP adds serialize + IPC +
  * poll-granularity cost to every sample, which swamped the signal it measured.
@@ -44,6 +64,14 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
       expected: string
       startedAt: number
       parsedAt: number | null
+    }
+
+    type KeyStamp = {
+      index: number
+      kind: 'text' | 'ime'
+      code: string
+      startedAt: number
+      charged: boolean
     }
 
     const state = window.__store?.getState()
@@ -63,14 +91,25 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
     if (typeof terminal.onWriteParsed !== 'function') {
       throw new Error('Codex echo probe: xterm build has no onWriteParsed')
     }
+    if (typeof terminal.onData !== 'function') {
+      throw new Error('Codex echo probe: xterm build has no onData')
+    }
 
     const samples: CodexEchoLatencySample[] = []
-    const awaitingRender: { sample: CodexEchoLatencySample; startedAt: number }[] = []
+    const dataSamples: CodexDataLatencySample[] = []
+    const awaitingRender: {
+      sample: CodexEchoLatencySample
+      startedAt: number
+    }[] = []
     // Why a queue, not one slot: a slow echo can still be outstanding when the
     // next key is pressed, and a single slot silently discards that sample.
     const pending: PendingSample[] = []
+    let lastKey: KeyStamp | null = null
     let keysObserved = 0
+    let imeKeysObserved = 0
     let parseEvents = 0
+    let dataEvents = 0
+    let unattributedDataEvents = 0
     let renderEvents = 0
 
     // Why concatenated without a separator: a composer line that wraps splits the
@@ -109,6 +148,27 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
       }
     }
 
+    // Why charge to the LATEST keydown and not a FIFO head: composing jamo emit no
+    // `onData` at all, so a queue would credit a committing keystroke's bytes to the
+    // first keydown of the syllable and report the whole composition as its latency.
+    // `charged` keeps only the first emission per key, since a commit that also opens
+    // the next preedit fires twice for one press.
+    const observeData = (data: string): void => {
+      dataEvents += 1
+      if (!lastKey || lastKey.charged) {
+        unattributedDataEvents += 1
+        return
+      }
+      lastKey.charged = true
+      dataSamples.push({
+        index: lastKey.index,
+        kind: lastKey.kind,
+        code: lastKey.code,
+        keyToDataMs: performance.now() - lastKey.startedAt,
+        data
+      })
+    }
+
     const observeRender = (): void => {
       renderEvents += 1
       const paintedAt = performance.now()
@@ -117,33 +177,71 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
       }
     }
 
+    // Why not `key.length === 1`: an IME keydown carries no character. Pinyin and
+    // Cangjie report `key: 'Process'` (length 7) on every press, so a length filter
+    // drops 100% of those runs; the same shape the app itself branches on in
+    // `src/renderer/src/lib/ime-composition-keyboard-event.ts`.
+    const isImeKeyDown = (event: KeyboardEvent): boolean =>
+      event.key === 'Process' || event.keyCode === 229 || event.isComposing
+
     // Why window capture: a listener on an ancestor in the capture phase is
     // guaranteed to run before xterm's own keydown handler forwards to the PTY,
     // so t0 is stamped before any of the work being measured starts.
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key.length !== 1 || keysObserved >= target.length) {
+      const ime = isImeKeyDown(event)
+      if (!ime && event.key.length !== 1) {
+        return
+      }
+      const startedAt = performance.now()
+      // Why IME keys stay out of `pending`: the echo arm matches a prefix of `target`,
+      // and N jamo presses produce one syllable, so per-keystroke prefix matching
+      // would charge each syllable to the wrong keydown and never drain the queue.
+      if (ime) {
+        lastKey = {
+          index: imeKeysObserved,
+          kind: 'ime',
+          code: event.code,
+          startedAt,
+          charged: false
+        }
+        imeKeysObserved += 1
+        return
+      }
+      if (keysObserved >= target.length) {
         return
       }
       const index = keysObserved
       keysObserved += 1
+      lastKey = {
+        index,
+        kind: 'text',
+        code: event.code,
+        startedAt,
+        charged: false
+      }
       pending.push({
         index,
         char: target[index],
         expected: target.slice(0, index + 1),
-        startedAt: performance.now(),
+        startedAt,
         parsedAt: null
       })
     }
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     const parsedDisposable = terminal.onWriteParsed(observeParse)
+    const dataDisposable = terminal.onData(observeData)
     const renderDisposable = terminal.onRender(observeRender)
 
     window.__codexEchoProbe = {
       report: () => ({
         samples: [...samples],
+        dataSamples: [...dataSamples],
         keysObserved,
+        imeKeysObserved,
         parseEvents,
+        dataEvents,
+        unattributedDataEvents,
         renderEvents,
         cols: terminal.cols,
         rows: terminal.rows
@@ -151,6 +249,7 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
       dispose: () => {
         window.removeEventListener('keydown', onKeyDown, { capture: true })
         parsedDisposable.dispose()
+        dataDisposable.dispose()
         renderDisposable.dispose()
       }
     }
@@ -185,7 +284,20 @@ function percentile(sorted: number[], quantile: number): number {
   return sorted[Math.max(0, rank)]
 }
 
+/**
+ * Why this throws instead of returning zeros: an empty sample set used to summarise as
+ * `p50/p95/max = 0`, i.e. *perfect* latency, so every `toBeLessThan` threshold passed and a run
+ * that measured nothing looked like the best run ever recorded. The existing consumer is safe only
+ * because a separate line asserts the sample count. Refusing here makes that guard unnecessary
+ * rather than load-bearing.
+ */
 export function summarizeLatencies(values: number[]): LatencyDistribution {
+  if (values.length === 0) {
+    throw new Error(
+      'summarizeLatencies received 0 samples — a distribution over no data would report 0ms ' +
+        'and pass every latency threshold. Assert the sample count before summarising.'
+    )
+  }
   const sorted = [...values].sort((a, b) => a - b)
   return {
     count: sorted.length,

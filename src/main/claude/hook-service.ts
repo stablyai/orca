@@ -67,10 +67,10 @@ function getManagedScript(
             `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
           ]
         : []),
-      // Why: call the endpoint file to refresh port/token — a PTY that survived an Orca restart carries stale env; falls through to PTY env if missing.
+      // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
-      // Why: post via curl.exe, not PowerShell — Claude's launcher is already encoded PowerShell, so a PS post would double interpreter startups per hook.
+      // Why: use curl.exe to avoid an extra PowerShell startup per hook.
       buildWindowsAgentHookCurlPostCommand('claude'),
       'exit /b 0',
       ...buildWindowsHookStdinDrainEpilogue(),
@@ -89,16 +89,16 @@ function getManagedScript(
           'fi'
         ]
       : []),
-    // Why: source the endpoint file to refresh port/token — a PTY that survived an Orca restart carries stale env; falls back to PTY env if missing.
-    // Why: suppress stderr / || : so a stray parse error (TOCTOU or CRLF) can't leak into hook output or trip an outer set -e.
+    // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
+    // Why: suppress parse errors so they neither leak nor trip outer set -e.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
-    // Why: paths can hold quotes/newlines, so hand-building JSON in shell is unsafe; post the raw payload + metadata as form fields for the receiver to parse.
-    // Why: pipe payload to curl stdin (`payload@-`), not an inline arg, so large tool output stays off the command line (EDR false positives).
+    // Why: post form fields because path-bearing payloads are unsafe in hand-built JSON.
+    // Why: pipe payload to curl stdin to keep large output off the command line.
     'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/claude" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
@@ -136,7 +136,7 @@ export class ClaudeHookService {
       }
     }
 
-    // Why: report `partial` when only some events are registered so the sidebar shows a degraded install, not a false-positive `installed`.
+    // Why: report partial registration instead of a false installed state.
     const command = getManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
@@ -227,11 +227,11 @@ export class ClaudeHookService {
 
   // Why: install the Claude hook on the remote box (via SFTP); POSIX-only by design (Windows-remote deferred).
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
-    // Why: remote-Windows is out of scope; ship POSIX paths. process.platform here is the local box, not the remote, so it can't gate this.
+    // Why: remote Windows is unsupported; local process.platform cannot identify the remote OS.
     const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
     const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
-    // Why: SFTP I/O fails often (network/EACCES/disk); wrap install so transient failures surface as structured state:'error' rather than an unhandled rejection.
+    // Why: surface fallible SFTP installs as structured errors.
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
       if (!config) {
@@ -248,8 +248,8 @@ export class ClaudeHookService {
       const command = getRemoteManagedCommand(remoteScriptPath)
       const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
 
-      // Why: write script before settings — a mid-install failure then leaves a harmless orphan script, not settings.json pointing at a missing one.
-      // Why: SSH remotes use POSIX `.sh` paths even when Orca runs on Windows; never derive remote script syntax from the local OS.
+      // Why: write scripts before settings to avoid settings pointing to missing scripts.
+      // Why: SSH scripts always use POSIX .sh paths, regardless of the local OS.
       await writeManagedScriptRemote(
         sftp,
         remoteScriptPath,

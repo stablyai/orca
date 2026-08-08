@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   BrowserGrabPayload,
+  BrowserGrabRejectReason,
   BrowserGrabScreenshot
 } from '../../../../shared/browser-grab-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { translate } from '@/i18n/i18n'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 
 // ---------------------------------------------------------------------------
@@ -32,6 +34,31 @@ function nextOpId(): string {
   return `grab-${++opIdCounter}-${Date.now()}`
 }
 
+function getGrabEnableError(reason: BrowserGrabRejectReason): string {
+  switch (reason) {
+    case 'not-ready':
+      return translate(
+        'auto.components.browser-pane.grab.errorNotReady',
+        "This page isn't ready for element selection yet."
+      )
+    case 'not-authorized':
+      return translate(
+        'auto.components.browser-pane.grab.errorNotAuthorized',
+        'Browser access was denied.'
+      )
+    case 'already-active':
+      return translate(
+        'auto.components.browser-pane.grab.errorAlreadyActive',
+        'Element selection is already active.'
+      )
+    case 'injection-failed':
+      return translate(
+        'auto.components.browser-pane.grab.errorInjectionFailed',
+        'Could not start element selection on this page.'
+      )
+  }
+}
+
 /**
  * Hook that drives the browser grab lifecycle for a single browser page.
  *
@@ -45,6 +72,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   const [contextMenu, setContextMenu] = useState(false)
   const activeOpIdRef = useRef<string | null>(null)
   const grabTabIdRef = useRef<string | null>(null)
+  const armGenerationRef = useRef(0)
   const browserTabIdRef = useRef(browserPageId)
   // Why: toolbar/key handlers from the latest render can fire before passive
   // effects run after a page switch, so keep the target page current in render.
@@ -58,6 +86,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     return () => {
       const grabTabId = grabTabIdRef.current
       if (grabTabId) {
+        armGenerationRef.current += 1
         void window.api.browser.setGrabMode({ browserPageId: grabTabId, enabled: false })
         void window.api.browser.cancelGrab({ browserPageId: grabTabId })
         grabTabIdRef.current = null
@@ -68,7 +97,9 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
 
   const armAndAwait = useCallback(async () => {
     const tabId = browserTabIdRef.current
+    const armGeneration = (armGenerationRef.current += 1)
     grabTabIdRef.current = tabId
+    setState('armed')
 
     // Enable grab mode — injects the overlay
     const setResult = await window.api.browser.setGrabMode({
@@ -77,24 +108,27 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     })
     if (
       !mountedRef.current ||
+      armGenerationRef.current !== armGeneration ||
       browserTabIdRef.current !== tabId ||
       grabTabIdRef.current !== tabId
     ) {
-      void window.api.browser.setGrabMode({ browserPageId: tabId, enabled: false })
-      void window.api.browser.cancelGrab({ browserPageId: tabId })
-      if (grabTabIdRef.current === tabId) {
-        grabTabIdRef.current = null
+      const supersededBySameTab =
+        armGenerationRef.current !== armGeneration && grabTabIdRef.current === tabId
+      if (!supersededBySameTab) {
+        void window.api.browser.setGrabMode({ browserPageId: tabId, enabled: false })
+        void window.api.browser.cancelGrab({ browserPageId: tabId })
+        if (grabTabIdRef.current === tabId) {
+          grabTabIdRef.current = null
+        }
       }
       return
     }
     if (!setResult.ok) {
       grabTabIdRef.current = null
       setState('error')
-      setError(`Cannot enable grab mode: ${setResult.reason}`)
+      setError(getGrabEnableError(setResult.reason))
       return
     }
-
-    setState('armed')
 
     // Generate opId and await selection
     const opId = nextOpId()
@@ -127,7 +161,11 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       } catch {
         // Screenshot failure is non-fatal
       }
-      if (!mountedRef.current || grabTabIdRef.current !== tabId) {
+      if (
+        !mountedRef.current ||
+        armGenerationRef.current !== armGeneration ||
+        grabTabIdRef.current !== tabId
+      ) {
         return
       }
 
@@ -146,20 +184,22 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   }, [mountedRef])
 
   const toggle = useCallback(() => {
-    if (state === 'idle' || state === 'error') {
+    if ((state === 'idle' || state === 'error') && grabTabIdRef.current === null) {
       setError(null)
       setPayload(null)
       setContextMenu(false)
       void armAndAwait()
     } else {
       // Disable grab mode
+      const targetTabId = grabTabIdRef.current ?? browserTabIdRef.current
+      armGenerationRef.current += 1
       void window.api.browser.setGrabMode({
-        browserPageId: browserTabIdRef.current,
+        browserPageId: targetTabId,
         enabled: false
       })
       if (activeOpIdRef.current) {
         void window.api.browser.cancelGrab({
-          browserPageId: browserTabIdRef.current
+          browserPageId: targetTabId
         })
         activeOpIdRef.current = null
       }
@@ -172,13 +212,15 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   }, [state, armAndAwait])
 
   const cancel = useCallback(() => {
+    const targetTabId = grabTabIdRef.current ?? browserTabIdRef.current
+    armGenerationRef.current += 1
     void window.api.browser.setGrabMode({
-      browserPageId: browserTabIdRef.current,
+      browserPageId: targetTabId,
       enabled: false
     })
     if (activeOpIdRef.current) {
       void window.api.browser.cancelGrab({
-        browserPageId: browserTabIdRef.current
+        browserPageId: targetTabId
       })
       activeOpIdRef.current = null
     }
@@ -204,8 +246,10 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   }, [armAndAwait])
 
   const exit = useCallback(() => {
+    const targetTabId = grabTabIdRef.current ?? browserTabIdRef.current
+    armGenerationRef.current += 1
     void window.api.browser.setGrabMode({
-      browserPageId: browserTabIdRef.current,
+      browserPageId: targetTabId,
       enabled: false
     })
     // Why: clear the active opId so that any in-flight result from the

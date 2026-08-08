@@ -31,6 +31,7 @@ import {
   parseJsonObject,
   subtractCodexUsage
 } from './session-scanner-values'
+import { remoteSessionContentLines } from './remote-session-content-lines'
 
 export async function parseCodexSessionFile(
   file: FileWithMtime,
@@ -61,10 +62,11 @@ export async function parseCodexSessionContent(args: {
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
   readIndexedTitle?: (sessionId: string) => Promise<string | null>
+  signal?: AbortSignal
 }): Promise<AiVaultSession | null> {
   return parseCodexSessionLines({
     file: args.file,
-    lines: args.content.split(/\r?\n/),
+    lines: remoteSessionContentLines(args.content, args.signal),
     platform: args.platform ?? process.platform,
     codexHome: args.codexHome ?? null,
     executionHostId: args.executionHostId,

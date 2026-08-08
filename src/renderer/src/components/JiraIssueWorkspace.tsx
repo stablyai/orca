@@ -48,6 +48,8 @@ import type {
 } from '../../../shared/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
+import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 
 type JiraIssueWorkspaceProps = {
   issue: JiraIssue | null
@@ -56,22 +58,8 @@ type JiraIssueWorkspaceProps = {
   sourceContext?: TaskSourceContext | null
 }
 
-const relativeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-
 function formatRelativeTime(input: string): string {
-  const date = new Date(input)
-  if (Number.isNaN(date.getTime())) {
-    return 'recently'
-  }
-  const diffMinutes = Math.round((date.getTime() - Date.now()) / 60_000)
-  if (Math.abs(diffMinutes) < 60) {
-    return relativeFormatter.format(diffMinutes, 'minute')
-  }
-  const diffHours = Math.round(diffMinutes / 60)
-  if (Math.abs(diffHours) < 24) {
-    return relativeFormatter.format(diffHours, 'hour')
-  }
-  return relativeFormatter.format(Math.round(diffHours / 24), 'day')
+  return formatUiRelativeTimeFromDate(input)
 }
 
 function buildJiraBranchName(issue: JiraIssue): string {
@@ -112,6 +100,41 @@ async function copyTextToClipboard(text: string, label: string): Promise<void> {
       })
     )
   }
+}
+
+export function JiraIssueTitleInput({
+  value,
+  onChange,
+  onSubmit,
+  disabled
+}: {
+  value: string
+  onChange: (value: string) => void
+  onSubmit: (value: string) => void
+  disabled: boolean
+}): React.JSX.Element {
+  const imeEnter = useImeEnterGestureOwnership()
+  return (
+    <Input
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onBlur={imeEnter.reset}
+      onCompositionStart={() => imeEnter.setComposing(true)}
+      onCompositionEnd={() => imeEnter.setComposing(false)}
+      onKeyUp={imeEnter.onKeyUp}
+      onKeyDown={(event) => {
+        if (imeEnter.ownsKeyDown(event)) {
+          return
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          onSubmit(event.currentTarget.value)
+        }
+      }}
+      disabled={disabled}
+      className="h-8 text-xs"
+    />
+  )
 }
 
 export default function JiraIssueWorkspace({
@@ -605,16 +628,11 @@ export default function JiraIssueWorkspace({
                       {translate('auto.components.JiraIssueWorkspace.444865b4a8', 'Title')}
                     </label>
                     <div className="flex gap-2">
-                      <Input
+                      <JiraIssueTitleInput
                         value={titleDraft}
-                        onChange={(event) => setTitleDraft(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-                            event.preventDefault()
-                            handleSaveTitle()
-                          }
-                        }}
-                        className="h-8 text-xs"
+                        onChange={setTitleDraft}
+                        onSubmit={() => handleSaveTitle()}
+                        disabled={pendingField === 'title'}
                       />
                       <Button
                         size="sm"
@@ -755,8 +773,11 @@ export default function JiraIssueWorkspace({
                             </span>
                           </div>
                           <div className="px-3 py-2">
+                            {/* Why: Jira comment screenshots need the same preview
+                                affordance without changing compact comment typography. */}
                             <CommentMarkdown
                               content={comment.body}
+                              expandImages
                               className="text-[13px] leading-relaxed"
                             />
                           </div>

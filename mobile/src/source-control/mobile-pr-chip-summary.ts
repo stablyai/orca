@@ -1,8 +1,8 @@
 import type { PRComment } from '../../../src/shared/types'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
+import { summarizeProviderChecks } from '../../../src/shared/provider-check-summary'
 import {
   prStateBadge,
-  summarizePRChecks,
   type MobileStatusToken
 } from '../components/pr-sidebar/pr-checks-presentation'
 
@@ -90,7 +90,8 @@ function buildChipRollup(state: Extract<PrSidebarState, { kind: 'ready' }>): Mob
   if (state.data.pr.mergeable === 'CONFLICTING') {
     return { kind: 'conflict', text: 'Conflicts', token: 'statusAmber' }
   }
-  const checks = summarizePRChecks(state.data.checks)
+  // Shared classifier so the chip, the Checks list and the tasks grid never disagree about the same PR.
+  const checks = summarizeProviderChecks(state.data.checks)
   if (checks.failed > 0) {
     return { kind: 'failing', text: `${checks.failed} failing`, token: 'statusRed' }
   }
@@ -100,5 +101,10 @@ function buildChipRollup(state: Extract<PrSidebarState, { kind: 'ready' }>): Mob
   if (checks.passed > 0) {
     return { kind: 'passed', text: `${checks.passed}/${checks.total}`, token: 'statusGreen' }
   }
-  return { kind: 'none', text: 'No checks', token: 'textSecondary' }
+  // Checks that exist but resolved to nothing actionable are not "no checks".
+  return {
+    kind: 'none',
+    text: checks.total === 0 ? 'No checks' : 'Unresolved checks',
+    token: 'textSecondary'
+  }
 }

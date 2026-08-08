@@ -1,11 +1,8 @@
-import type {
-  ClipboardEventHandler,
-  CompositionEventHandler,
-  KeyboardEventHandler,
-  RefObject
-} from 'react'
+import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
+import { useLayoutEffect } from 'react'
 import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { basename } from '@/lib/path'
@@ -38,8 +35,8 @@ export type NativeChatComposerFieldProps = {
   onDraftChange: (value: string, element: HTMLTextAreaElement) => void
   onTextareaSelect: (element: HTMLTextAreaElement) => void
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
-  onCompositionStart: CompositionEventHandler<HTMLTextAreaElement>
-  onCompositionEnd: CompositionEventHandler<HTMLTextAreaElement>
+  onCompositionStart: (event: React.CompositionEvent<HTMLTextAreaElement>) => void
+  onCompositionEnd: (event: React.CompositionEvent<HTMLTextAreaElement>) => void
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>
   pickerListboxId: string
   onChoosePickerItem: (item: NativeChatPickerItem) => void
@@ -97,6 +94,16 @@ export function NativeChatComposerField({
   sessionOptionsSurface,
   sessionOptionsSnapshot
 }: NativeChatComposerFieldProps): React.JSX.Element {
+  const imeEnter = useImeEnterGestureOwnership()
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea || imeEnter.isComposing() || textarea.value === draft) {
+      return
+    }
+    textarea.value = draft
+  }, [draft, textareaRef, imeEnter])
+
   return (
     <div className="shrink-0 bg-background">
       {/* Extra bottom padding keeps the input box off the window rim. */}
@@ -164,13 +171,25 @@ export function NativeChatComposerField({
             ) : null}
             <textarea
               ref={textareaRef}
-              value={draft}
+              defaultValue={draft}
               disabled={disabled}
               rows={2}
               onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
-              onKeyDown={onKeyDown}
-              onCompositionStart={onCompositionStart}
-              onCompositionEnd={onCompositionEnd}
+              onKeyDown={(event) => {
+                if (!imeEnter.ownsKeyDown(event)) {
+                  onKeyDown(event)
+                }
+              }}
+              onKeyUp={imeEnter.onKeyUp}
+              onBlur={imeEnter.reset}
+              onCompositionStart={(event) => {
+                imeEnter.setComposing(true)
+                onCompositionStart(event)
+              }}
+              onCompositionEnd={(event) => {
+                imeEnter.setComposing(false)
+                onCompositionEnd(event)
+              }}
               onPaste={onPaste}
               onSelect={(e) => onTextareaSelect(e.currentTarget)}
               aria-expanded={autocomplete.mode === 'slash' || autocomplete.mode === 'skill'}
@@ -187,10 +206,13 @@ export function NativeChatComposerField({
               }
               placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
               // Why: coarse-pointer min-height follows the app's touch target convention.
-              // scrollbar-sleek keeps the overflow gutter from showing the heavy
-              // native scrollbar once the draft exceeds max-height.
+              // field-sizing:content grows the field with the draft; the 8lh cap (plus
+              // py-1) turns further growth into internal scrolling, and scrollbar-sleek
+              // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
+              // so re-wrap on window/pane resize is handled without a measure pass.
               className={cn(
-                'scrollbar-sleek min-h-12 max-h-28 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                'scrollbar-sleek min-h-12 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                '[field-sizing:content] max-h-[calc(8lh+0.5rem)]',
                 'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
               )}
             />

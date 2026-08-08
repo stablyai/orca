@@ -120,9 +120,7 @@ describe('EphemeralVmsPane', () => {
     const container = await renderPane()
 
     await vi.waitFor(() => expect(container.textContent).toContain('Cloud Sandbox'))
-    await vi.waitFor(() =>
-      expect(container.textContent).toContain('Per-Workspace Environments skill')
-    )
+    await vi.waitFor(() => expect(container.textContent).toContain('Cloud VM setup skill'))
     expect(container.textContent).toContain('What the skill does, with you')
     const useButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Use in workspace'

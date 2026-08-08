@@ -7,10 +7,16 @@ import {
   type AgentInterruptInferenceRequest,
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
+import { isAskUserQuestionTool } from '../../../../shared/agent-question-answered-intent'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 
 export type AgentInterruptInference = {
-  observeInputIntent(intent: AgentInterruptInputIntent): void
+  observeInputIntent(
+    intent: AgentInterruptInputIntent,
+    entry?: AgentStatusEntry | null,
+    baselineSequence?: number
+  ): void
   flushPending(): boolean | Promise<boolean>
   dispose(): void
 }
@@ -56,6 +62,16 @@ function shouldIgnoreInterruptIntent(
   return agentType === 'droid' && intent === 'ctrl-c'
 }
 
+function canInferInterrupt(entry: AgentStatusEntry, intent: AgentInterruptInputIntent): boolean {
+  return (
+    entry.state === 'working' ||
+    (intent === 'plain-escape' &&
+      entry.state === 'waiting' &&
+      entry.agentType === 'claude' &&
+      isAskUserQuestionTool(entry.toolName))
+  )
+}
+
 function isSameTurnBaseline(
   left: CapturedInterruptBaseline,
   right: CapturedInterruptBaseline
@@ -84,7 +100,7 @@ export function isCtrlCKeyEvent(
   event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'repeat'>
 ): boolean {
   return (
-    event.key.toLowerCase() === 'c' &&
+    isLatinShortcutKey(event, 'c') &&
     !event.repeat &&
     event.ctrlKey &&
     !event.metaKey &&
@@ -101,10 +117,12 @@ export function createAgentInterruptInference({
   setTimer = (callback, ms) => setTimeout(callback, ms),
   clearTimer = (timer) => clearTimeout(timer)
 }: AgentInterruptInferenceDeps): AgentInterruptInference {
+  let disposed = false
   let pendingTimer: ReturnType<typeof setTimeout> | null = null
   let pendingBaseline: CapturedInterruptBaseline | null = null
   let doubleEscapeBaseline: CapturedInterruptBaseline | null = null
   let doubleEscapeTimer: ReturnType<typeof setTimeout> | null = null
+  let latestBaselineSequence = 0
 
   const clearPendingTimer = (): void => {
     if (pendingTimer !== null) {
@@ -133,7 +151,7 @@ export function createAgentInterruptInference({
   ): CapturedInterruptBaseline | null => {
     const agentType = entry.agentType
     if (
-      entry.state !== 'working' ||
+      !canInferInterrupt(entry, intent) ||
       !isExplicitAgentStatusFresh(entry, now(), AGENT_STATUS_STALE_AFTER_MS)
     ) {
       return null
@@ -148,6 +166,9 @@ export function createAgentInterruptInference({
   }
 
   const flushPending = (): boolean | Promise<boolean> => {
+    if (disposed) {
+      return false
+    }
     const baseline = pendingBaseline
     pendingTimer = null
     pendingBaseline = null
@@ -158,7 +179,7 @@ export function createAgentInterruptInference({
     const entry = getStatusEntry()
     if (
       entry &&
-      (entry.state !== 'working' ||
+      (!canInferInterrupt(entry, baseline.intent) ||
         entry.agentType !== baseline.agentType ||
         entry.prompt !== baseline.prompt ||
         entry.updatedAt !== baseline.updatedAt ||
@@ -188,8 +209,22 @@ export function createAgentInterruptInference({
   }
 
   return {
-    observeInputIntent(intent) {
-      const entry = getStatusEntry()
+    observeInputIntent(intent, capturedEntry, baselineSequence) {
+      if (disposed) {
+        return
+      }
+      if (baselineSequence !== undefined) {
+        if (baselineSequence < latestBaselineSequence) {
+          return
+        }
+        latestBaselineSequence = baselineSequence
+      }
+      const currentEntry = getStatusEntry()
+      // Why: an older acknowledged write must not replace a newer turn's pending inference.
+      if (capturedEntry !== undefined && currentEntry && currentEntry !== capturedEntry) {
+        return
+      }
+      const entry = capturedEntry === undefined ? currentEntry : capturedEntry
       if (!entry) {
         clearPending()
         return
@@ -236,6 +271,7 @@ export function createAgentInterruptInference({
     },
     flushPending,
     dispose() {
+      disposed = true
       clearPending()
     }
   }

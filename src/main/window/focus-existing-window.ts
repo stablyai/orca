@@ -81,8 +81,8 @@ function activateWindow(
       // Older Electron versions or destroyed windows may reject this; focus retry remains.
     }
     pulseAlwaysOnTop(window, setTimer)
+    retryFocus(window, app, setTimer)
   }
-  retryFocus(window, app, setTimer)
 }
 
 // Why: a second-instance/activate reopen can race transient startup pressure

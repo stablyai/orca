@@ -107,7 +107,6 @@ function createPane(id: number, webglAddon: unknown): ManagedPaneInternal {
     serializeAddon: {} as never,
     unicode11Addon: {} as never,
     webLinksAddon: {} as never,
-    compositionHandler: null,
     pendingSplitScrollState: null,
     debugLabel: null
   }
@@ -146,7 +145,7 @@ describe('splitManagedPane', () => {
       panes,
       root: root as unknown as HTMLElement,
       styleOptions: {},
-      managerOptions: {},
+      managerOptions: { linkOpenHint: () => '' },
       createPaneInternal: () => {
         panes.set(newPane.id, newPane)
         return newPane

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
+import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
-import { useNativeChatLiveSession } from './use-native-chat-live-session'
+import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
+import { useNativeChatComposerCompositionHold } from './native-chat-composer-composition-hold'
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
@@ -37,11 +39,8 @@ import {
   deriveNativeChatStreamingText,
   nativeChatStreamingMessage
 } from '../../../../shared/native-chat-streaming'
-import {
-  shouldFocusNativeChatComposerFromEditingKey,
-  shouldFocusNativeChatPaneFromPointerTarget,
-  shouldRedirectNativeChatTyping
-} from './native-chat-typing-redirect'
+import { shouldFocusNativeChatPaneFromPointerTarget } from './native-chat-typing-redirect'
+import { useNativeChatTypingRedirectHandler } from './use-native-chat-typing-redirect-handler'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu
@@ -130,7 +129,7 @@ function NativeChatResolvedView({
   const runtimeEnvironmentId = useAppStore((s) =>
     selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
   )
-  const session = useNativeChatLiveSession({
+  const session = useNativeChatRetainedSession({
     paneKey,
     agent,
     sessionId,
@@ -140,6 +139,15 @@ function NativeChatResolvedView({
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
+  // Launch context prefilled into the TUI input as an unsent draft; the
+  // composer adopts it so the GUI view shows the same context as the TUI.
+  // Shape matches NativeChatComposer's two launch-draft props, so it spreads.
+  const launchDraftSignal = useNativeChatLaunchDraftSignal({
+    terminalTabId,
+    agent,
+    messages: session.messages,
+    transcriptLoading: session.readPhase === 'loading'
+  })
   // The live-session merge reconciles hooks with replayable transcript turn
   // boundaries; all working consumers must use that one lifecycle decision.
   const liveWorking = session.status === 'working'
@@ -159,8 +167,10 @@ function NativeChatResolvedView({
   const previousWorkingEpochRef = useRef<number | null>(null)
   // True while a question card owns the input region, so the composer is hidden.
   const [questionActive, setQuestionActive] = useState(false)
+  const composerHold = useNativeChatComposerCompositionHold(questionActive)
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
+  const redirectTypingToComposer = useNativeChatTypingRedirectHandler(composerRef)
   // The question card's free-text row; keeps Paste working while the card
   // replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
@@ -274,15 +284,13 @@ function NativeChatResolvedView({
       ? sessionWithLaunchPrompt
       : { ...sessionWithLaunchPrompt, messages }
   }, [sessionWithLaunchPrompt, commandMarkers])
-  const launchPromptVisible =
-    launchPromptMessage !== null &&
-    sessionAfterCommandBoundaries.messages.some((message) => message.id === launchPromptMessage.id)
   const failedLaunchPromptMessageIds = useMemo(() => {
-    if (!paneLaunchPrompt?.failed || !launchPromptVisible || !launchPromptMessage) {
+    const id = paneLaunchPrompt?.failed ? launchPromptMessage?.id : null
+    if (!id || !sessionAfterCommandBoundaries.messages.some((message) => message.id === id)) {
       return undefined
     }
-    return new Set([launchPromptMessage.id])
-  }, [paneLaunchPrompt?.failed, launchPromptMessage, launchPromptVisible])
+    return new Set([id])
+  }, [paneLaunchPrompt?.failed, launchPromptMessage?.id, sessionAfterCommandBoundaries.messages])
 
   // The streaming preview bubble (if any) sits after the transcript but before
   // the optimistic user echoes — same order mobile uses.
@@ -374,22 +382,7 @@ function NativeChatResolvedView({
           rootRef.current?.focus({ preventScroll: true })
         }
       }}
-      onKeyDownCapture={(event) => {
-        // Backspace/Delete outside an input focuses the composer (like typing)
-        // but inserts nothing — let the now-focused field handle the keystroke.
-        if (shouldFocusNativeChatComposerFromEditingKey(event)) {
-          composerRef.current?.focus()
-          return
-        }
-        if (!shouldRedirectNativeChatTyping(event)) {
-          return
-        }
-        if (!composerRef.current?.insertTypedText(event.key)) {
-          return
-        }
-        event.preventDefault()
-        event.stopPropagation()
-      }}
+      onKeyDownCapture={redirectTypingToComposer}
       onMouseUpCapture={contextMenu.onSelectionCapture}
       onKeyUpCapture={contextMenu.onSelectionCapture}
       onContextMenuCapture={contextMenu.onContextMenuCapture}
@@ -421,13 +414,17 @@ function NativeChatResolvedView({
         paneKey={paneKey}
         send={interactiveSend}
         canSend={canSend}
+        messages={sessionAfterCommandBoundaries.messages}
+        transcriptSettled={session.readPhase === 'ready'}
         onShowingQuestionChange={setQuestionActive}
         answerInputRef={questionAnswerInputRef}
       />
       {/* canSend reflects the mobile presence-lock: when a mobile client holds
           the pty, the composer shows its guarded state instead of racing the
-          mobile driver (R8). */}
-      {questionActive ? null : (
+          mobile driver (R8). The card normally replaces the composer outright,
+          but an in-flight IME composition defers that swap: unmounting the
+          field mid-composition aborts it in the OS and degrades the syllable. */}
+      {composerHold.renderComposer ? (
         <NativeChatComposer
           ref={composerRef}
           terminalTabId={terminalTabId}
@@ -442,8 +439,10 @@ function NativeChatResolvedView({
           onSlashCommand={onSlashCommand}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
+          onCompositionActiveChange={composerHold.onCompositionActiveChange}
+          {...launchDraftSignal}
         />
-      )}
+      ) : null}
       {contextMenu.menu}
     </div>
   )

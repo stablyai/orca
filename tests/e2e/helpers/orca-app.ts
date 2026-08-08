@@ -55,9 +55,6 @@ type OrcaTestFixtures = {
   // memory benchmarks). Prepended before the main entry so Electron forwards
   // them to Chromium without affecting other specs' launches.
   orcaAppExtraArgs: string[]
-  // Why: real-home E2E must still resolve inside the disposable fixture HOME.
-  // Generic env overlays cannot opt out of that data-safety boundary.
-  codexRealHomeEnabled: boolean
   // Why: a few IPC repro specs need to launch the Electron app with a scoped
   // PATH/token environment. Keep this fixture-owned so tests never mutate the
   // developer's shell or already-running Orca instance.
@@ -178,7 +175,6 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       launchEnv,
       orcaAppExtraEnv,
       orcaAppExtraArgs,
-      codexRealHomeEnabled,
       registerPostElectronShutdownCleanup
     },
     provideFixture,
@@ -212,8 +208,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       inheritedEnv: cleanEnv,
       launchEnv,
       extraEnv: orcaAppExtraEnv,
-      userDataDir,
-      codexRealHomeEnabled
+      userDataDir
     })
     // Why: ORCA_E2E_SLOWMO_MS adds a pause between every Playwright action so a
     // developer running with ORCA_E2E_FORCE_HEADFUL=1 can actually watch what
@@ -281,7 +276,6 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   launchEnv: [{}, { option: true }],
   orcaAppExtraEnv: [{}, { option: true }],
   orcaAppExtraArgs: [[], { option: true }],
-  codexRealHomeEnabled: [false, { option: true }],
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
   // until the session is fully ready with a worktree active.

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 
 type RichMarkdownSearchBarProps = {
   activeMatchIndex: number
@@ -61,6 +62,10 @@ export function RichMarkdownSearchBar({
   // is discoverable; reads the user's effective binding, formatted per platform.
   const replaceShortcut = useOptionalShortcutLabel('editor.replace')
   const readOnlyExplanationId = React.useId()
+  // Replace mutates the document and is not idempotent, so it needs full gesture
+  // ownership: the Korean confirm also redispatches an *unmarked* Enter that a
+  // plain isComposing/229 check lets through.
+  const replaceEnterGesture = useImeEnterGestureOwnership()
 
   if (!isOpen) {
     return null
@@ -246,7 +251,13 @@ export function RichMarkdownSearchBar({
               <Input
                 value={replaceQuery}
                 onChange={(event) => onReplaceQueryChange(event.target.value)}
+                onCompositionStart={() => replaceEnterGesture.setComposing(true)}
+                onCompositionEnd={() => replaceEnterGesture.setComposing(false)}
+                onKeyUp={(event) => replaceEnterGesture.onKeyUp(event)}
                 onKeyDown={(event) => {
+                  if (replaceEnterGesture.ownsKeyDown(event)) {
+                    return
+                  }
                   if (event.key === 'Enter') {
                     event.preventDefault()
                     onReplaceCurrent()

@@ -24,6 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
@@ -31,8 +32,20 @@ jobs:
       - name: Lint
         run: pnpm exec oxlint --format github
 
-      - name: Check styled scrollbars
-        run: pnpm check:styled-scrollbars
+      - name: Enforce focused code-quality plugins
+        run: pnpm run audit:code-quality:native
+
+      - name: Enforce type-aware code-quality baseline
+        run: pnpm run audit:code-quality:type-aware
+
+      - name: Enforce changed-code quality
+        run: pnpm run check:code-quality:changed -- "${{ github.event.pull_request.base.sha }}"
+
+      - name: Enforce React Doctor on changed lines
+        run: pnpm run check:react-doctor:changed -- "${{ github.event.pull_request.base.sha }}"
+
+      - name: Check Zustand selector fan-out budget
+        run: pnpm run check:zustand-selector-fanout
 
       - name: Check reliability gate manifest
         run: pnpm run check:reliability-gates
@@ -46,6 +59,22 @@ jobs:
       - name: Verify skill freshness manifest
         run: pnpm run verify:skill-bundle-manifest
 
+      - name: Verify localization catalog
+        run: pnpm run verify:localization-catalog
+
+      # Why: extraction writes sorted evidence to an isolated temporary path,
+      # so feature PRs need one normalized AST pass rather than a three-OS matrix.
+      - name: Verify localization extraction
+        run: pnpm run verify:localization-extraction
+
+      - name: Verify localization coverage
+        run: pnpm run verify:localization-coverage
+
+      # Why: project-owned type declarations must live in .ts so tsc
+      # actually checks them. TypeScript's skipLibCheck: true (inherited
+      # from @electron-toolkit/tsconfig) silently widens unresolved names
+      # in .d.ts to `any`, which is how #1186 shipped a broken IPC signature
+      # past typecheck. See docs/preload-typecheck-hole.md.
       - name: Guard against project-owned .d.ts in preload/shared
         run: |
           matches=$(find src/preload src/shared -name '*.d.ts' 2>/dev/null || true)
@@ -63,6 +92,23 @@ jobs:
 
       - name: Verify macOS entitlements
         run: pnpm verify:macos-entitlements
+
+  root_directory_guard:
+    name: root directory guard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reject new root-level files and folders
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash .github/scripts/check-root-directory-entries.sh "$BASE_SHA" "$HEAD_SHA"
 
   typecheck:
     runs-on: ubuntu-latest
@@ -127,6 +173,34 @@ jobs:
           done
           exit "$status"
 
+  xterm_patch_sync:
+    name: xterm patch sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      # Why: the check rebuilds xterm.js from a pinned upstream commit. Caching the
+      # npm metadata and the shallow clone turns a ~4 min cold run into well under a
+      # minute; the key is the manifest, so a commit or toolchain bump invalidates it.
+      - name: Restore upstream xterm build inputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ${{ runner.temp }}/xterm-patch-build/upstream/.git
+          key: xterm-upstream-${{ hashFiles('config/patches/xterm-upstream.json') }}
+
+      - name: Verify xterm patches match the pinned upstream build
+        env:
+          WORK_DIR: ${{ runner.temp }}/xterm-patch-build
+        run: node config/scripts/regenerate-xterm-patches.mjs --check --work-dir="$WORK_DIR"
+
   shell_contracts:
     name: shell contracts
     runs-on: ubuntu-latest
@@ -155,12 +229,14 @@ jobs:
             src/shared/posix-command-path-lookup.test.ts
 
   test:
-    name: tests ${{ matrix.shard }}/${{ strategy.job-total }}
+    name: tests node ${{ matrix.node }} ${{ matrix.shard }}/${{ matrix.shard_total }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        node: ['24', '26']
         shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        shard_total: [16]
 
     steps:
       - name: Checkout
@@ -171,6 +247,7 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
+          node-version: ${{ matrix.node }}
 
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
@@ -184,7 +261,54 @@ jobs:
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
-            --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+            --exclude=tests/e2e/cross-version-wire/** \
+            --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
+
+  cross-version-wire:
+    name: cross-version wire compatibility
+    runs-on: ubuntu-latest
+
+    steps:
+      # Why fetch-depth 0: the harness extracts the newest release tag to skew
+      # current code against it. The default shallow clone has no tags, which is
+      # why this cannot ride along in the sharded `test` job.
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      # A path filter that matches nothing exits 1 ("No test files found"), so this
+      # lane cannot report success while running zero tests.
+      - name: Old/new client and server terminal journey
+        run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
+
+  managed_hook_node18:
+    name: managed hooks on Node 18
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Build relay companions
+        run: pnpm run build:relay
+
+      - name: Setup Node 18 runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: '18'
+
+      - name: Smoke managed-hook companions
+        run: node config/scripts/smoke-managed-hook-runtime-node18.mjs
 
   package:
     name: package
@@ -241,34 +365,155 @@ jobs:
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
 
+      - name: Smoke packaged hang watchdog worker
+        run: xvfb-run --auto-servernum node config/scripts/smoke-packaged-hang-watchdog-worker.mjs --app-dir=dist/linux-unpacked
+
+  package_windows:
+    name: package (windows)
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-windows-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-windows-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build package inputs
+        run: pnpm run build:release
+
+      - name: Prepare Electron native runtime
+        run: node config/scripts/ensure-native-runtime.mjs --runtime=electron
+
+      - name: Package unpacked app
+        env:
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
+
+      - name: Smoke packaged CLI
+        run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
+
+  # Why: PR E2E is advisory and only validates changed specs; scheduled and
+  # release runs retain full-suite coverage.
+  e2e-paths:
+    name: detect changed e2e specs
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft != true
+    # Why: detector only needs to read the checkout; do not inherit repo defaults.
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+      test_files: ${{ steps.filter.outputs.test_files }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Filter changed E2E specs
+        id: filter
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
+          # Native specs require their dedicated platform harnesses.
+          TEST_FILES="$(printf '%s\n' "$CHANGED" | grep -E '^tests/e2e/.*\.spec\.ts$' | grep -Ev -- '-native\.spec\.ts$' || true)"
+          TEST_FILES_JSON="$(printf '%s\n' "$TEST_FILES" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
+          echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
+          if [ "$TEST_FILES_JSON" != '[]' ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Changed E2E specs: $TEST_FILES_JSON"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "No changed E2E specs"
+          fi
+
+  e2e:
+    name: e2e
+    needs: e2e-paths
+    if: needs.e2e-paths.outputs.should_run == 'true'
+    # Why: reusable e2e.yml only checkouts, builds, and uploads artifacts.
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e.yml
+    with:
+      test_files: ${{ needs.e2e-paths.outputs.test_files }}
+
   verify:
     if: always()
     needs:
       - static_analysis
+      - root_directory_guard
       - typecheck
       - git_compatibility
+      - xterm_patch_sync
       - shell_contracts
       - test
+      - managed_hook_node18
       - package
+      - package_windows
     runs-on: ubuntu-latest
 
     steps:
+      # Why: e2e is deliberately absent from needs. The suite is currently red on
+      # main (every scheduled run), so gating merges on it would block any PR that
+      # touches tests/e2e/** — including the ones fixing the suite. Until it is
+      # green the job runs and reports for E2E-path PRs without blocking. To flip
+      # it on: add `e2e` to needs, add E2E to the env below, and require
+      # `"$E2E" = success || skipped` after the loop — skipped is the normal
+      # result for a path-filtered job and must keep passing, so it has to be
+      # checked outside the loop or it would excuse the jobs above.
       - name: Require successful checks
         env:
           STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
+          ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
+          XTERM_PATCH_SYNC: ${{ needs.xterm_patch_sync.result }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
           TEST: ${{ needs.test.result }}
+          MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
           PACKAGE: ${{ needs.package.result }}
+          PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
         run: |
           for result in \
             "$STATIC_ANALYSIS" \
+            "$ROOT_DIRECTORY_GUARD" \
             "$TYPECHECK" \
             "$GIT_COMPATIBILITY" \
+            "$XTERM_PATCH_SYNC" \
             "$SHELL_CONTRACTS" \
             "$TEST" \
-            "$PACKAGE"; do
+            "$MANAGED_HOOK_NODE18" \
+            "$PACKAGE" \
+            "$PACKAGE_WINDOWS"; do
             if [ "$result" != "success" ]; then
               exit 1
             fi

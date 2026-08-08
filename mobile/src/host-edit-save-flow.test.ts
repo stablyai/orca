@@ -149,8 +149,13 @@ describe('edit host handleSave', () => {
   })
 
   it('rename-only save updates only the name and does not reconnect', async () => {
+    const storedEndpoint = 'wss://Desk.Example.com/%6Fruntime?route=%72ed'
+    dependencies.loadHosts.mockResolvedValueOnce([{ ...HOST_FIXTURE, endpoint: storedEndpoint }])
     const renderer = await renderEditHostRoute()
+    setFieldValue(renderer, 'Address', '  wss://%64esk.example.com:443  ')
     setFieldValue(renderer, 'Name', 'Home Desk')
+
+    expect(findText(renderer, `Connects to ${storedEndpoint}`)).toBe(true)
     await pressSave(renderer)
 
     expect(dependencies.updateHostNameAndEndpoint).toHaveBeenCalledWith('host-1', {

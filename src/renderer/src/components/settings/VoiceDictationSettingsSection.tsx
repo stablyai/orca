@@ -3,6 +3,7 @@ import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { VoiceMicrophoneSetting } from './VoiceMicrophoneSetting'
 
 type VoiceDictationSettingsSectionProps = {
   voiceSettings: VoiceSettings
@@ -92,6 +93,13 @@ export function VoiceDictationSettingsSection({
           ))}
         </div>
       </div>
+
+      <Separator />
+
+      <VoiceMicrophoneSetting
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={onUpdateVoiceSettings}
+      />
 
       <Separator />
     </>

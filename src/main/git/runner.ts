@@ -256,7 +256,7 @@ function resolveCommand(
 
 // ─── Git-specific runners ───────────────────────────────────────────
 
-// Why: execFile disables its cap when maxBuffer is undefined; unbounded output over V8's string max crashes main uncatchably — keep in sync with relay MAX_GIT_BUFFER.
+// Why: cap execFile output to prevent an uncatchable V8 string overflow; match relay MAX_GIT_BUFFER.
 export const DEFAULT_GIT_MAX_BUFFER = 10 * 1024 * 1024
 
 type GitExecOptions = {

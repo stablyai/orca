@@ -14,7 +14,11 @@ export {
   settingsForRuntimeOwner,
   type RuntimeClientTarget
 } from './runtime-client-target'
-export { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
+export {
+  hasRuntimeRpcErrorCode,
+  RuntimeRpcCallError,
+  unwrapRuntimeRpcResult
+} from './runtime-rpc-result'
 
 const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
 const RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS = 60_000

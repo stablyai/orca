@@ -6,6 +6,11 @@
   position: relative;
 }
 
+/* Shared tooltip geometry for every terminal link provider. */
+:root {
+  --orca-terminal-link-tooltip-height: 25px;
+}
+
 /* Ensure pane manager root fills its absolutely-positioned container */
 .pane-manager-root {
   width: 100% !important;
@@ -321,8 +326,14 @@
   left: 8px;
   z-index: 5;
   height: var(--orca-pane-title-height);
-  display: flex;
-  align-items: center;
+  /* Why: block + line-height (not flex) so the single line can ellipsize like
+     .pane-title-text — an overflowing banner would wrap onto the terminal grid. */
+  display: block;
+  line-height: var(--orca-pane-title-height);
+  max-width: calc(100% - 16px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--orca-pane-title-fg);
@@ -491,6 +502,7 @@
    so Ghostty-imported window-padding-x/y can be applied without inline styles.
    The fallback 4px preserves the legacy default. */
 .xterm-container {
+  box-sizing: border-box;
   position: relative;
   width: calc(100% - var(--pane-padding-x, 4px));
   height: calc(100% - var(--pane-padding-y, 4px));
@@ -510,6 +522,7 @@
 /* Ghostty-style URL hover: glued to the pane's true bottom-left corner. */
 .pane-link-tooltip {
   position: absolute;
+  box-sizing: border-box;
   bottom: 0;
   left: 0;
   z-index: 40;
@@ -520,6 +533,8 @@
   border-bottom: none;
   border-left: none;
   padding: 4px 8px;
+  height: var(--orca-terminal-link-tooltip-height);
+  line-height: 15px;
   max-width: 80%;
   overflow: hidden;
   text-overflow: ellipsis;

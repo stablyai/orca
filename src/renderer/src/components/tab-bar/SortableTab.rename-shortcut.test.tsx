@@ -10,6 +10,7 @@ const storeState = vi.hoisted(
     agentStatusByPaneKey: Record<string, unknown>
     clearTabLaunchAgent: ReturnType<typeof vi.fn>
     ptyIdsByTabId: Record<string, string[]>
+    retainedAgentsByPaneKey: Record<string, unknown>
     renamingTabId: string | null
     keybindings: Record<string, unknown>
     repos: unknown[]
@@ -21,6 +22,7 @@ const storeState = vi.hoisted(
     agentStatusByPaneKey: {},
     clearTabLaunchAgent: vi.fn(),
     ptyIdsByTabId: {} as Record<string, string[]>,
+    retainedAgentsByPaneKey: {},
     renamingTabId: null as string | null,
     keybindings: {},
     repos: [],

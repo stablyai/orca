@@ -1,4 +1,4 @@
-import type { Page } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -14,6 +14,7 @@ import {
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
 import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
+import { createRestartSession } from './helpers/orca-restart'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const TAB_COUNT = 6
@@ -52,6 +53,14 @@ async function readRemoteTerminalTabs(
       })),
     worktreeId
   )
+}
+
+function readRemoteProof(target: DockerSshRelayTarget, path: string): string | null {
+  try {
+    return execDockerSshRelayTargetCommand(target, `cat ${path}`)
+  } catch {
+    return null
+  }
 }
 
 test.describe('SSH cold activation restore', () => {
@@ -197,6 +206,105 @@ test.describe('SSH cold activation restore', () => {
       ).toContainText(marker, { timeout: 30_000 })
       expect(execDockerSshRelayTargetCommand(target, `cat ${proofFile}`)).toBe(marker)
     } finally {
+      cleanupDockerSshRelayTarget(target)
+    }
+  })
+
+  test('reclaims the authenticated PTY owner immediately after a full app restart', async (// oxlint-disable-next-line no-empty-pattern -- This restart test owns both Electron launches.
+  {}, testInfo) => {
+    test.setTimeout(300_000)
+    const restart = createRestartSession(testInfo)
+    let target: DockerSshRelayTarget | null = null
+    let firstApp: ElectronApplication | null = null
+    let secondApp: ElectronApplication | null = null
+    try {
+      target = startDockerSshRelayTarget(testInfo)
+      const firstLaunch = await restart.launch()
+      firstApp = firstLaunch.app
+      await waitForSessionReady(firstLaunch.page)
+      const remote = await connectDockerSshRelayTarget(firstLaunch.page, target)
+      await expect
+        .poll(() => waitForActiveWorktree(firstLaunch.page), { timeout: 30_000 })
+        .toBe(remote.worktreeId)
+      await waitForActiveTerminalManager(firstLaunch.page, 60_000)
+      const firstPtyId = await waitForActivePanePtyId(firstLaunch.page, 60_000)
+      const token = `SSH_PROCESS_RESTART_${Date.now()}`
+      const beforeProofPath = `/tmp/orca-ssh-restart-before-${Date.now()}`
+      const afterProofPath = `/tmp/orca-ssh-restart-after-${Date.now()}`
+
+      await focusActiveTerminalInput(firstLaunch.page)
+      await firstLaunch.page.keyboard.type(
+        `export ORCA_RESTART_TOKEN=${token}; cd /tmp; (while :; do sleep 60; done) & export ORCA_BG_PID=$!; printf '%s|%s|%s|%s\\n' "$$" "$ORCA_BG_PID" "$ORCA_RESTART_TOKEN" "$PWD" > ${beforeProofPath}`
+      )
+      await firstLaunch.page.keyboard.press('Enter')
+      await expect.poll(() => readRemoteProof(target!, beforeProofPath)).not.toBeNull()
+      const beforeProof = readRemoteProof(target, beforeProofPath)
+      expect(beforeProof).toMatch(/^\d+\|\d+\|SSH_PROCESS_RESTART_\d+\|\/tmp$/)
+
+      const beforeTabs = await readRemoteTerminalTabs(firstLaunch.page, remote.worktreeId)
+      const restoredTabId = beforeTabs.find((tab) => tab.ptyId === firstPtyId)?.id
+      if (!restoredTabId) {
+        throw new Error('Active SSH terminal was not persisted in its worktree')
+      }
+      await firstLaunch.page.evaluate(() => window.dispatchEvent(new Event('beforeunload')))
+      await expect
+        .poll(
+          () =>
+            firstLaunch.page.evaluate(
+              async ({ targetId, worktreeId, tabId }) => {
+                const persisted = await window.api.session.get()
+                return (
+                  persisted.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
+                  persisted.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) === true
+                )
+              },
+              { targetId: remote.targetId, worktreeId: remote.worktreeId, tabId: restoredTabId }
+            ),
+          { timeout: 10_000, message: 'SSH restart state was not persisted before quit' }
+        )
+        .toBe(true)
+
+      await restart.close(firstApp)
+      firstApp = null
+
+      const secondLaunch = await restart.launch()
+      secondApp = secondLaunch.app
+      await waitForSessionReady(secondLaunch.page, 60_000)
+      await expect
+        .poll(() => waitForActiveWorktree(secondLaunch.page), { timeout: 60_000 })
+        .toBe(remote.worktreeId)
+      await waitForActiveTerminalManager(secondLaunch.page, 60_000)
+      expect(await waitForActivePanePtyId(secondLaunch.page, 60_000)).toBe(firstPtyId)
+      await secondLaunch.page.evaluate((tabId) => {
+        const manager = window.__paneManagers?.get(tabId)
+        const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+        if (!pane) {
+          throw new Error('Restored SSH pane unavailable')
+        }
+        pane.terminal.options.screenReaderMode = true
+        pane.terminal.refresh(0, pane.terminal.rows - 1)
+      }, restoredTabId)
+
+      const restoredMarker = `SSH_OWNER_RESTORED_${Date.now()}`
+      await focusActiveTerminalInput(secondLaunch.page)
+      await secondLaunch.page.keyboard.type(
+        `printf '%s|%s|%s|%s\\n' "$$" "$ORCA_BG_PID" "$ORCA_RESTART_TOKEN" "$PWD" > ${afterProofPath}; printf '${restoredMarker}\\n'`
+      )
+      await secondLaunch.page.keyboard.press('Enter')
+      await expect(
+        secondLaunch.page.locator(
+          `[data-terminal-tab-id=${JSON.stringify(restoredTabId)}] .xterm-accessibility-tree`
+        )
+      ).toContainText(restoredMarker, { timeout: 30_000 })
+      await expect.poll(() => readRemoteProof(target!, afterProofPath)).toBe(beforeProof)
+    } finally {
+      if (secondApp) {
+        await restart.close(secondApp)
+      }
+      if (firstApp) {
+        await restart.close(firstApp)
+      }
+      await restart.dispose()
       cleanupDockerSshRelayTarget(target)
     }
   })

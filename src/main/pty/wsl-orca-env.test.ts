@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { addOrcaWslInteropEnv, addWorktreeSetupWslInteropEnv } from './wsl-orca-env'
+import {
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+} from '../../shared/setup-agent-sequencing'
+import {
+  addOrcaWslInteropEnv,
+  addWorktreeSetupWslInteropEnv,
+  stampWslOrchestrationCompatibilityHost
+} from './wsl-orca-env'
 
 describe('addOrcaWslInteropEnv', () => {
   it('marks the Orca terminal handle for Windows to WSL env import', () => {
@@ -8,6 +16,20 @@ describe('addOrcaWslInteropEnv', () => {
     addOrcaWslInteropEnv(env)
 
     expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u')
+  })
+
+  it('imports setup-gated startup env into WSL without path translation', () => {
+    const env: Record<string, string> = {
+      [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: 'codex',
+      [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: 'while :; do sleep 1; done'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV?.split(':')).toEqual([
+      `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
+      `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`
+    ])
   })
 
   it('preserves existing WSLENV entries and does not duplicate the handle entry', () => {
@@ -29,10 +51,14 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_PANE_KEY: 'tab-1:leaf-1',
       ORCA_TAB_ID: 'tab-1',
       ORCA_WORKTREE_ID: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+      ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
       ORCA_AGENT_HOOK_PORT: '4567',
       ORCA_AGENT_HOOK_TOKEN: 'token',
       ORCA_AGENT_HOOK_ENV: 'dev',
-      ORCA_AGENT_HOOK_VERSION: '1'
+      ORCA_AGENT_HOOK_VERSION: '1',
+      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
+      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'local',
+      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu'
     }
 
     addOrcaWslInteropEnv(env)
@@ -44,10 +70,44 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_PANE_KEY/u')
     expect(env.WSLENV).toContain('ORCA_TAB_ID/u')
     expect(env.WSLENV).toContain('ORCA_WORKTREE_ID/u')
+    expect(env.WSLENV).toContain('ORCA_AGENT_LAUNCH_TOKEN/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_PORT/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_TOKEN/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_ENV/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_VERSION/u')
+    expect(env.WSLENV).toContain('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u')
+    expect(env.WSLENV).toContain('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID/u')
+    expect(env.WSLENV).toContain('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u')
+  })
+
+  it('overwrites caller host evidence with native runtime WSL authority', () => {
+    const env = {
+      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'ssh',
+      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'caller-host',
+      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'caller-incarnation',
+      ORCA_ORCHESTRATION_COMPATIBILITY_ATTACHMENT: 'caller-attachment'
+    }
+
+    stampWslOrchestrationCompatibilityHost(env, 'local', 'Ubuntu')
+
+    expect(env).toEqual({
+      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
+      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'local',
+      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu'
+    })
+  })
+
+  it('clears inherited host evidence outside a runtime-owned WSL scope', () => {
+    const env = {
+      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'ssh',
+      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'caller-host',
+      ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'caller-incarnation',
+      ORCA_ORCHESTRATION_COMPATIBILITY_ATTACHMENT: 'caller-attachment'
+    }
+
+    stampWslOrchestrationCompatibilityHost(env, 'local', null)
+
+    expect(env).toEqual({})
   })
 
   it('path-translates a Windows hook endpoint but passes a guest-side one untouched', () => {

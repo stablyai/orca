@@ -11,7 +11,7 @@ import {
   isPaneDropData,
   isTabDragData,
   type TabDragItemData
-} from './useTabDragSplit'
+} from './tab-drag-data'
 
 export type TabGroupPanelGeometryEntry = {
   groupId: string

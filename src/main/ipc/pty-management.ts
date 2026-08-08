@@ -2,7 +2,12 @@ import { ipcMain } from 'electron'
 import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
 import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
-import { getDaemonProvider, restartDaemon } from '../daemon/daemon-init'
+import {
+  getCurrentDaemonMacTccAttributionHealth,
+  getDaemonProvider,
+  restartDaemon
+} from '../daemon/daemon-init'
+import type { MacDaemonTccAttributionHealth } from '../daemon/daemon-health'
 import type { DaemonSessionInfo } from '../daemon/types'
 
 // Why: poll past the daemon's 5s SIGTERM→SIGKILL ladder (KILL_TIMEOUT_MS in session.ts), else slow-exiting shells falsely look "refused".
@@ -26,7 +31,11 @@ function getDaemonAdapters(): DaemonPtyAdapter[] {
 
 // Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the UI can warn new terminals lack persistence.
 function isDaemonDegraded(): boolean {
-  return getDaemonProvider() instanceof DegradedDaemonPtyProvider
+  const provider = getDaemonProvider()
+  return (
+    provider instanceof DegradedDaemonPtyProvider &&
+    provider.routesFreshSpawnsToLocalProvider === true
+  )
 }
 
 async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSessionInfo[]> {
@@ -47,6 +56,19 @@ export function registerDaemonManagementHandlers(): void {
   ipcMain.removeHandler('pty:management:killAll')
   ipcMain.removeHandler('pty:management:killOne')
   ipcMain.removeHandler('pty:management:restart')
+  ipcMain.removeHandler('pty:management:macTccAttribution')
+
+  // Why: lets Settings warn that macOS privacy grants no longer reach daemon terminals (STA-3491).
+  ipcMain.handle(
+    'pty:management:macTccAttribution',
+    async (): Promise<{ health: MacDaemonTccAttributionHealth }> => {
+      try {
+        return { health: await getCurrentDaemonMacTccAttributionHealth() }
+      } catch {
+        return { health: 'unknown' }
+      }
+    }
+  )
 
   ipcMain.handle(
     'pty:management:listSessions',

@@ -7,13 +7,54 @@ import { Input } from '@/components/ui/input'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import type { GitHubWorkItemDetails } from '../../../../../shared/types'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import type { GitHubWorkItemDetails, GlobalSettings } from '../../../../../shared/types'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
-import type { GlobalSettings } from '../../../../../shared/types'
 import { LabelsEditor } from './LabelsEditor'
 import { AssigneesEditor } from './AssigneesEditor'
 import { CommentsList, NewCommentForm } from './Comments'
 import { translate } from '@/i18n/i18n'
+
+export function SlugDialogTitleInput({
+  value,
+  onChange,
+  onCommit,
+  onCancel
+}: {
+  value: string
+  onChange: (value: string) => void
+  onCommit: () => void
+  onCancel: () => void
+}): React.JSX.Element {
+  const imeEnter = useImeEnterGestureOwnership()
+  return (
+    <Input
+      autoFocus
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onCompositionStart={() => imeEnter.setComposing(true)}
+      onCompositionEnd={() => imeEnter.setComposing(false)}
+      onBlur={() => {
+        imeEnter.reset()
+        onCommit()
+      }}
+      onKeyDown={(event) => {
+        if (imeEnter.ownsKeyDown(event)) {
+          return
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          onCommit()
+        } else if (event.key === 'Escape') {
+          event.preventDefault()
+          onCancel()
+        }
+      }}
+      onKeyUp={imeEnter.onKeyUp}
+      className="mt-1 h-8"
+    />
+  )
+}
 
 export function SlugDialogBody({
   projectOrigin,
@@ -154,21 +195,11 @@ export function SlugDialogBody({
               </span>
             </div>
             {editingTitle ? (
-              <Input
-                autoFocus
+              <SlugDialogTitleInput
                 value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={() => void commitTitle()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    void commitTitle()
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault()
-                    setEditingTitle(false)
-                  }
-                }}
-                className="mt-1 h-8"
+                onChange={setTitleDraft}
+                onCommit={() => void commitTitle()}
+                onCancel={() => setEditingTitle(false)}
               />
             ) : (
               <button

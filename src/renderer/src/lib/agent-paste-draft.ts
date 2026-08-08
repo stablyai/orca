@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent, GlobalSettings } from '../../../shared/types'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { useAppStore } from '@/store'
 import {
@@ -10,10 +10,10 @@ import {
   BRACKETED_PASTE_START,
   sanitizeTerminalPasteText
 } from '@/components/terminal-pane/terminal-bracketed-paste'
+import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
 import { waitForAgentReady } from './agent-ready-wait'
 import { getSettingsForWorktreeRuntimeOwner } from './worktree-runtime-owner'
-import type { GlobalSettings } from '../../../shared/types'
-import { sendAgentDraftPasteContent } from './agent-draft-paste-content'
+import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
@@ -167,24 +167,6 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   })
 }
 
-export async function submitPromptToAgentTab(args: {
-  tabId: string
-  content: string
-  timeoutMs?: number
-}): Promise<boolean> {
-  const { tabId, content, timeoutMs } = args
-  const ptyId = await waitForPtyId(tabId, timeoutMs ?? READINESS_TIMEOUT_MS)
-  if (!ptyId) {
-    return false
-  }
-  return await sendBracketedPasteToAgent({
-    settings: getSettingsForAgentTabRuntimeOwner(tabId),
-    ptyId,
-    content,
-    submit: true
-  })
-}
-
 export async function submitPromptToAgentPty(args: {
   tabId: string
   ptyId: string
@@ -213,19 +195,20 @@ async function sendBracketedPasteToAgent(args: {
 }): Promise<boolean> {
   const { settings = useAppStore.getState().settings, ptyId, content, submit } = args
   try {
-    const pasted = await sendAgentDraftPasteContent(settings, ptyId, content)
-    if (!pasted) {
-      return false
-    }
-    if (!submit) {
-      return true
-    }
+    // Why: paste + Enter must be one transaction, or a concurrent paste on this PTY
+    // can slip between them and submit a half-written prompt.
+    return await runTerminalPtyInputTransaction(ptyId, async () => {
+      const pasted = await sendAgentDraftPasteContentNow(settings, ptyId, content)
+      if (!pasted || !submit) {
+        return pasted
+      }
 
-    // Why: Claude Code can leave a prompt as editable text when paste-end and
-    // Enter arrive in the same PTY write. Split the submit into the next turn so
-    // the TUI processes bracketed-paste termination before handling Enter.
-    await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
-    return await sendRuntimePtyInputVerified(settings, ptyId, '\r')
+      // Why: Claude Code can leave a prompt as editable text when paste-end and
+      // Enter arrive in the same PTY write. Split the submit into the next turn so
+      // the TUI processes bracketed-paste termination before handling Enter.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
+      return await sendRuntimePtyInputVerified(settings, ptyId, '\r')
+    })
   } catch {
     return false
   }

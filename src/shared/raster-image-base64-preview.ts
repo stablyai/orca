@@ -1,7 +1,7 @@
-import type { RasterImageDimensions } from './raster-image-dimensions'
+import { readRasterImageDimensions } from './raster-image-dimensions'
 import {
-  assertRasterImagePreviewWithinLimits,
   isKnownRasterImageMimeType,
+  isRasterImagePreviewDimensions,
   RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES
 } from './raster-image-preview-limits'
 
@@ -121,21 +121,24 @@ function decodeBase64Prefix(content: string, maxBytes: number): Uint8Array | nul
   return output.subarray(0, outputLength)
 }
 
-/** Returns undefined for non-raster MIME types and null for rejected raster bytes. */
-export function readRasterImagePreviewDimensionsFromBase64(
+/**
+ * Whether the encoded dimensions are known to exceed the preview limits.
+ *
+ * Distinct from a failed read: an unrecognized or truncated header means we could not measure the
+ * image, not that it is too large. Treating those the same blanks out valid images that no decoder
+ * has trouble with, so only a confident over-limit answer should suppress a preview.
+ */
+export function exceedsRasterImagePreviewLimits(
   content: string,
   mimeType: string | undefined
-): RasterImageDimensions | null | undefined {
+): boolean {
   if (!isKnownRasterImageMimeType(mimeType)) {
-    return undefined
+    return false
   }
   const prefix = decodeBase64Prefix(content, RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES)
   if (!prefix) {
-    return null
+    return false
   }
-  try {
-    return assertRasterImagePreviewWithinLimits(prefix, mimeType) ?? null
-  } catch {
-    return null
-  }
+  const dimensions = readRasterImageDimensions(prefix)
+  return dimensions !== null && !isRasterImagePreviewDimensions(dimensions)
 }

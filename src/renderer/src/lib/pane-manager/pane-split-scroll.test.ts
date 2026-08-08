@@ -74,7 +74,6 @@ function createPane(bufferType: 'normal' | 'alternate'): {
     } as never,
     unicode11Addon: {} as never,
     webLinksAddon: {} as never,
-    compositionHandler: null,
     pendingSplitScrollState: scrollState,
     pendingSplitScrollBufferDisposable: null,
     debugLabel: null

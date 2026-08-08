@@ -26,7 +26,7 @@ type AutoRenameFailedDialogProps = {
  * CLI output when main still holds it (in-memory, lost on restart), falling
  * back to the persisted excerpt — either can run many lines, so it gets a
  * dedicated scrollable surface rather than a tooltip — see the sibling
- * SshDisconnectedDialog pattern.
+ * AddRemoteHostDialog pattern.
  */
 export function AutoRenameFailedDialog({
   open,
@@ -150,7 +150,7 @@ export function AutoRenameFailedDialog({
         </div>
         <DialogFooter>
           {/* Why: Close backs the user out, so it stays quiet (outline, not a
-              solid CTA) — matching the sibling SshDisconnectedDialog. */}
+              solid CTA) — matching the other sidebar dialogs. */}
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             {translate('auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e', 'Close')}
           </Button>

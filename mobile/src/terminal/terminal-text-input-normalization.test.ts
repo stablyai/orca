@@ -11,4 +11,8 @@ describe('normalizeTerminalTextInput', () => {
   it('keeps ASCII hyphens unchanged', () => {
     expect(normalizeTerminalTextInput('git checkout -- file')).toBe('git checkout -- file')
   })
+
+  it.each(['the ', 'teh '])('passes through recorded Android buffered input %j', (text) => {
+    expect(normalizeTerminalTextInput(text)).toBe(text)
+  })
 })

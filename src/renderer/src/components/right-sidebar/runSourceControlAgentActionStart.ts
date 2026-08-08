@@ -37,6 +37,15 @@ type RunSourceControlAgentActionStartArgs = {
     actionId: SourceControlLaunchActionId,
     recipe: SourceControlActionRecipe
   ) => void | Promise<void>
+  /**
+   * Fires as soon as the agent tab/session is created, before deferred
+   * submit-after-ready prompt delivery finishes. Reversible bookkeeping only —
+   * irreversible side effects (posting host replies, resolving threads) belong in
+   * onLaunched, which only fires once the prompt actually reached the agent.
+   */
+  onLaunchAccepted?: () => void
+  /** Fires when a launch that already reported onLaunchAccepted failed to deliver its prompt. */
+  onLaunchAborted?: () => void
   onLaunched?: () => void
   onClose: () => void
 }
@@ -58,17 +67,30 @@ export async function runSourceControlAgentActionStart({
   launchSource,
   onStart,
   onSaveAgentDefault,
+  onLaunchAccepted,
+  onLaunchAborted,
   onLaunched,
   onClose
 }: RunSourceControlAgentActionStartArgs): Promise<boolean> {
   let launched = false
   let launchFailureNotified = false
+  let launchAcceptedNotified = false
+  const notifyLaunchAccepted = (): void => {
+    if (launchAcceptedNotified) {
+      return
+    }
+    launchAcceptedNotified = true
+    onLaunchAccepted?.()
+  }
   if (onStart) {
     launched = await onStart({
       agent: selectedAgent,
       commandInput: trimmedCommandInput,
       agentArgs
     })
+    if (launched) {
+      notifyLaunchAccepted()
+    }
   } else if (worktreeId) {
     const result = launchAgentInNewTab({
       agent: selectedAgent,
@@ -84,6 +106,11 @@ export async function runSourceControlAgentActionStart({
     if (result?.tabId) {
       focusTerminalTabSurface(result.tabId)
     }
+    // Why: lets callers park launch-scoped state before submit-after-ready finishes
+    // (can take tens of seconds); host mutations still wait for delivery below.
+    if (launched) {
+      notifyLaunchAccepted()
+    }
     if (result?.promptDeliveryResult) {
       try {
         const deliveryResult = await result.promptDeliveryResult
@@ -96,6 +123,9 @@ export async function runSourceControlAgentActionStart({
     }
   }
   if (!launched) {
+    if (launchAcceptedNotified) {
+      onLaunchAborted?.()
+    }
     if (!launchFailureNotified) {
       toast.error(
         translate(
@@ -124,7 +154,13 @@ export async function runSourceControlAgentActionStart({
     })
   )
   if (saveTarget && onSaveAgentDefault && !launchRecipeAlreadySaved) {
-    await onSaveAgentDefault(saveTarget, actionId, launchRecipe)
+    try {
+      await onSaveAgentDefault(saveTarget, actionId, launchRecipe)
+    } catch (error) {
+      // Why: the prompt already reached the agent; a failed recipe save must not strand the
+      // caller's accepted-launch bookkeeping (neither onLaunched nor onLaunchAborted would fire).
+      console.error('onSaveAgentDefault failed', error)
+    }
   }
   onLaunched?.()
   onClose()

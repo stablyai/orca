@@ -55,17 +55,18 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     expect(worktree.lastActivityAt).toBe(20_000)
   })
 
-  it('uses linked worktree gitdir metadata when the .git pointer is stale', async () => {
+  it('uses linked worktree commit metadata when the .git pointer is stale', async () => {
     const gitDirPath = path.join('/repo', '.git', 'worktrees', 'repo-feature')
     const gitDirHeadPath = path.join(gitDirPath, 'HEAD')
-    const gitDirLogsHeadPath = path.join(gitDirPath, 'logs', 'HEAD')
+    const commitEditMsgPath = path.join(gitDirPath, 'COMMIT_EDITMSG')
+    const origHeadPath = path.join(gitDirPath, 'ORIG_HEAD')
     const statPath = vi.fn(async (targetPath: string) => {
       const mtimes: Record<string, number> = {
         '/repo-feature': 10_000,
         [path.join('/repo-feature', '.git')]: 20_000,
-        [gitDirPath]: 50_000,
         [gitDirHeadPath]: 60_000,
-        [gitDirLogsHeadPath]: 70_000
+        [origHeadPath]: 65_000,
+        [commitEditMsgPath]: 70_000
       }
       return { mtimeMs: mtimes[targetPath] ?? 0 }
     })
@@ -79,17 +80,86 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     )
 
     expect(readTextFile).toHaveBeenCalledWith(path.join('/repo-feature', '.git'))
-    expect(statPath).toHaveBeenCalledWith(gitDirPath)
     expect(statPath).toHaveBeenCalledWith(gitDirHeadPath)
-    expect(statPath).toHaveBeenCalledWith(gitDirLogsHeadPath)
+    expect(statPath).toHaveBeenCalledWith(commitEditMsgPath)
+    expect(statPath).toHaveBeenCalledWith(origHeadPath)
     expect(worktree.lastActivityAt).toBe(70_000)
+  })
+
+  it('ignores gitdir metadata that git maintenance and git status restamp', async () => {
+    const gitDirPath = path.join('/repo', '.git', 'worktrees', 'repo-feature')
+    const statPath = vi.fn(async (targetPath: string) => {
+      const mtimes: Record<string, number> = {
+        '/repo-feature': 10_000,
+        [path.join('/repo-feature', '.git')]: 10_000,
+        [gitDirPath]: 90_000,
+        [path.join(gitDirPath, 'index')]: 90_000,
+        [path.join(gitDirPath, 'logs', 'HEAD')]: 90_000
+      }
+      return { mtimeMs: mtimes[targetPath] ?? 0 }
+    })
+    const readTextFile = vi.fn(async () => `gitdir: ${gitDirPath}\n`)
+
+    const worktree = await resolveWorkspaceCleanupActivityWorktree(
+      REPO,
+      makeWorktree(),
+      statPath,
+      readTextFile
+    )
+
+    expect(statPath).not.toHaveBeenCalledWith(gitDirPath)
+    expect(statPath).not.toHaveBeenCalledWith(path.join(gitDirPath, 'index'))
+    expect(statPath).not.toHaveBeenCalledWith(path.join(gitDirPath, 'logs', 'HEAD'))
+    expect(worktree.lastActivityAt).toBe(10_000)
+  })
+
+  it('reads the newest reflog entry timestamp instead of the reflog file mtime', async () => {
+    const gitDirPath = path.join('/repo', '.git', 'worktrees', 'repo-feature')
+    const reflogPath = path.join(gitDirPath, 'logs', 'HEAD')
+    const statPath = vi.fn(async () => ({ mtimeMs: 10_000 }))
+    const readTextFile = vi.fn(async (targetPath: string) =>
+      targetPath === reflogPath
+        ? [
+            '0000 1111 Dev <dev@example.com> 1700000000 -0700\tbranch: Created from HEAD',
+            '1111 2222 Dev <dev@example.com> 1700000900 -0700\tcommit: work',
+            ''
+          ].join('\n')
+        : `gitdir: ${gitDirPath}\n`
+    )
+
+    const worktree = await resolveWorkspaceCleanupActivityWorktree(
+      REPO,
+      makeWorktree(),
+      statPath,
+      readTextFile
+    )
+
+    expect(readTextFile).toHaveBeenCalledWith(reflogPath)
+    expect(worktree.lastActivityAt).toBe(1_700_000_900_000)
+  })
+
+  it('degrades to other probes when the reflog was expired to an empty file', async () => {
+    const gitDirPath = path.join('/repo', '.git', 'worktrees', 'repo-feature')
+    const statPath = vi.fn(async () => ({ mtimeMs: 10_000 }))
+    const readTextFile = vi.fn(async (targetPath: string) =>
+      targetPath === path.join(gitDirPath, 'logs', 'HEAD') ? '' : `gitdir: ${gitDirPath}\n`
+    )
+
+    const worktree = await resolveWorkspaceCleanupActivityWorktree(
+      REPO,
+      makeWorktree(),
+      statPath,
+      readTextFile
+    )
+
+    expect(worktree.lastActivityAt).toBe(10_000)
   })
 
   it('resolves relative linked worktree gitdir pointers from the worktree path', async () => {
     const gitDirPath = path.resolve('/repo-feature', '.repo/gitdir')
-    const gitDirLogsHeadPath = path.join(gitDirPath, 'logs', 'HEAD')
+    const commitEditMsgPath = path.join(gitDirPath, 'COMMIT_EDITMSG')
     const statPath = vi.fn(async (targetPath: string) => ({
-      mtimeMs: targetPath === gitDirLogsHeadPath ? 40_000 : 10_000
+      mtimeMs: targetPath === commitEditMsgPath ? 40_000 : 10_000
     }))
     const readTextFile = vi.fn(async () => 'gitdir: .repo/gitdir\n')
 
@@ -100,7 +170,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
       readTextFile
     )
 
-    expect(statPath).toHaveBeenCalledWith(gitDirLogsHeadPath)
+    expect(statPath).toHaveBeenCalledWith(commitEditMsgPath)
     expect(worktree.lastActivityAt).toBe(40_000)
   })
 
@@ -108,14 +178,13 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const worktreePath = String.raw`\\wsl.localhost\Ubuntu\home\me\repo-feature`
     const gitDirPath = String.raw`\\wsl.localhost\Ubuntu\home\me\repo\.git\worktrees\repo-feature`
     const gitDirHeadPath = path.join(gitDirPath, 'HEAD')
-    const gitDirLogsHeadPath = path.join(gitDirPath, 'logs', 'HEAD')
+    const commitEditMsgPath = path.join(gitDirPath, 'COMMIT_EDITMSG')
     const statPath = vi.fn(async (targetPath: string) => {
       const mtimes: Record<string, number> = {
         [worktreePath]: 10_000,
         [path.join(worktreePath, '.git')]: 20_000,
-        [gitDirPath]: 50_000,
         [gitDirHeadPath]: 60_000,
-        [gitDirLogsHeadPath]: 70_000
+        [commitEditMsgPath]: 70_000
       }
       return { mtimeMs: mtimes[targetPath] ?? 0 }
     })
@@ -129,10 +198,11 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     )
 
     expect(readTextFile).toHaveBeenCalledWith(path.join(worktreePath, '.git'))
-    expect(statPath).toHaveBeenCalledWith(gitDirPath)
     expect(statPath).toHaveBeenCalledWith(gitDirHeadPath)
-    expect(statPath).toHaveBeenCalledWith(gitDirLogsHeadPath)
-    expect(statPath).not.toHaveBeenCalledWith('/home/me/repo/.git/worktrees/repo-feature')
+    expect(statPath).toHaveBeenCalledWith(commitEditMsgPath)
+    expect(statPath).not.toHaveBeenCalledWith(
+      path.join('/home/me/repo/.git/worktrees/repo-feature', 'HEAD')
+    )
     expect(worktree.lastActivityAt).toBe(70_000)
   })
 

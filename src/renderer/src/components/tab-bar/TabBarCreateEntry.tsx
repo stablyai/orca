@@ -26,10 +26,22 @@ import {
   RESULT_LISTBOX_ID,
   resultOptionDomId
 } from './TabBarCreateEntryRow'
+import { dropFileEntriesCoveredByTabResults } from './open-tab-entry-dedupe'
+import { activateOpenTabSearchResult } from './open-tab-selection-routing'
+import { useOpenTabSearch } from './use-open-tab-search'
 import type { TuiAgent } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useAppStore } from '@/store'
+
+// Leads with tabs: the omnibox now jumps to open tabs before it creates anything.
+function omniboxPlaceholder(): string {
+  return translate(
+    'auto.components.tab.bar.TabBarCreateEntry.0e5b7a3f16',
+    'Search open tabs, files, URLs, agents…'
+  )
+}
 
 const EMPTY_AGENT_OPTIONS: readonly TabAgentLaunchOption[] = []
 const EMPTY_MENU_OPTIONS: readonly TabCreateMenuOption[] = []
@@ -44,6 +56,8 @@ type TabBarCreateEntryProps = {
   onOpenDefaultTerminal?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   onQueryChange?: (query: string) => void
+  /** Runs after the menu closes, so the tab jumped to actually takes focus. */
+  onQueueSwitchFocus?: (focus: () => void) => void
   onSelectMenuOption?: (option: TabCreateMenuOption) => void
   worktreeId: string
 }
@@ -58,17 +72,21 @@ export default function TabBarCreateEntry({
   onOpenDefaultTerminal,
   onOpenEntry,
   onQueryChange,
+  onQueueSwitchFocus,
   onSelectMenuOption,
   worktreeId
 }: TabBarCreateEntryProps): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const [selectedIndexQuery, setSelectedIndexQuery] = useState(query)
+  const [switchError, setSwitchError] = useState<string | null>(null)
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null)
+  const [selectedOptionQuery, setSelectedOptionQuery] = useState(query)
   const [lastMenuOpen, setLastMenuOpen] = useState(menuOpen)
   const inputRef = useRef<HTMLInputElement>(null)
+  const imeEnter = useImeEnterGestureOwnership()
   const fileList = useRuntimeFileListForWorktree({ enabled: menuOpen, worktreeId })
+  const tabResults = useOpenTabSearch({ enabled: menuOpen, query, worktreeId })
   const shouldResolveAbsolutePaths = menuOpen && isTabEntryAbsolutePathLike(query.trim())
   const allowAbsolutePathsSelector = useMemo(
     () =>
@@ -122,28 +140,23 @@ export default function TabBarCreateEntry({
     [menuOptions, query]
   )
   const options = useMemo(() => {
-    const entryOptions = getTabEntryOptions(query, fileList, 4, {
-      allowAbsolutePaths,
-      localPlatform
-    })
+    const entryOptions = dropFileEntriesCoveredByTabResults(
+      getTabEntryOptions(query, fileList, 4, {
+        allowAbsolutePaths,
+        localPlatform
+      }),
+      tabResults
+    )
     if (matchingMenuOptions.length === 0) {
       return entryOptions
     }
     // Why: a matched create-menu action should win over a generic new-file fallback.
     return entryOptions.filter((option) => option.classification.kind !== 'new-file')
-  }, [allowAbsolutePaths, fileList, localPlatform, matchingMenuOptions.length, query])
+  }, [allowAbsolutePaths, fileList, localPlatform, matchingMenuOptions.length, query, tabResults])
   const matchingAgentOptions = useMemo(
     () => findMatchingTabAgentLaunchOptions(query, agentOptions),
     [agentOptions, query]
   )
-
-  if (selectedIndexQuery !== query) {
-    setSelectedIndexQuery(query)
-    if (selectedIndex !== 0) {
-      // Why: the first filtered action should be highlighted on the same paint as the new query.
-      setSelectedIndex(0)
-    }
-  }
 
   if (lastMenuOpen !== menuOpen) {
     setLastMenuOpen(menuOpen)
@@ -151,13 +164,18 @@ export default function TabBarCreateEntry({
       setQuery('')
       setPending(false)
       setError(null)
-      setSelectedIndex(0)
+      setSwitchError(null)
+      setSelectedOptionId(null)
     }
   }
 
   const disabled = !onOpenEntry
   const hasQuery = query.trim().length > 0
   const activeOptions: ActiveOption[] = [
+    ...tabResults.map((option) => ({
+      kind: 'tab' as const,
+      option
+    })),
     ...matchingMenuOptions.map((option) => ({
       kind: 'menu' as const,
       option
@@ -171,7 +189,19 @@ export default function TabBarCreateEntry({
       option
     }))
   ]
-  const activeSelectedIndex = Math.min(selectedIndex, Math.max(activeOptions.length - 1, 0))
+  const topOptionId = activeOptions.length > 0 ? getActiveOptionId(activeOptions[0]) : null
+  if (selectedOptionQuery !== query) {
+    setSelectedOptionQuery(query)
+    setSelectedOptionId(topOptionId)
+  } else if (selectedOptionId === null && topOptionId !== null) {
+    // Why pin the top row by id: the tab search defers the query, so tab rows
+    // arrive a render later and would otherwise slide under an index-kept highlight.
+    setSelectedOptionId(topOptionId)
+  }
+  const selectedOptionIndex = selectedOptionId
+    ? activeOptions.findIndex((option) => getActiveOptionId(option) === selectedOptionId)
+    : -1
+  const activeSelectedIndex = Math.max(selectedOptionIndex, 0)
   const selectedActiveOption = activeOptions[activeSelectedIndex]
   const statusOption = options.find(
     (option) => option.classification.kind === 'empty' || option.classification.kind === 'blocked'
@@ -179,7 +209,7 @@ export default function TabBarCreateEntry({
   const statusMessage =
     statusOption?.classification.kind === 'empty' || statusOption?.classification.kind === 'blocked'
       ? statusOption.classification.message
-      : 'Open any file, URL, agent, ...'
+      : omniboxPlaceholder()
 
   const submitOption = (option?: ActiveOption) => {
     if (disabled || pending) {
@@ -193,6 +223,18 @@ export default function TabBarCreateEntry({
         return
       }
       setError(statusMessage)
+      return
+    }
+    if (selectedOption.kind === 'tab') {
+      const outcome = activateOpenTabSearchResult(selectedOption.option)
+      if (outcome.status === 'failed') {
+        setSwitchError(outcome.message)
+        return
+      }
+      if (outcome.focus) {
+        onQueueSwitchFocus?.(outcome.focus)
+      }
+      onDidOpenEntry?.()
       return
     }
     if (selectedOption.kind === 'menu') {
@@ -232,15 +274,22 @@ export default function TabBarCreateEntry({
         event.preventDefault()
         submitOption()
       }}
+      onCompositionStart={() => imeEnter.setComposing(true)}
+      onCompositionEnd={() => imeEnter.setComposing(false)}
       onKeyDown={(event) => {
+        if (imeEnter.ownsKeyDown(event)) {
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
           if (activeOptions.length > 0) {
             event.preventDefault()
             event.stopPropagation()
-            setSelectedIndex((current) => {
-              const delta = event.key === 'ArrowDown' ? 1 : -1
-              return (current + delta + activeOptions.length) % activeOptions.length
-            })
+            const delta = event.key === 'ArrowDown' ? 1 : -1
+            const nextIndex =
+              (activeSelectedIndex + delta + activeOptions.length) % activeOptions.length
+            setSelectedOptionId(getActiveOptionId(activeOptions[nextIndex]))
             return
           }
           // Why: with no result rows the static create/agent items render below;
@@ -258,6 +307,8 @@ export default function TabBarCreateEntry({
           event.stopPropagation()
         }
       }}
+      onKeyUp={imeEnter.onKeyUp}
+      onBlur={imeEnter.reset}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div className="-mx-1 flex items-center px-3">
@@ -271,6 +322,7 @@ export default function TabBarCreateEntry({
             setQuery(nextQuery)
             onQueryChange?.(nextQuery)
             setError(null)
+            setSwitchError(null)
           }}
           disabled={disabled}
           role="combobox"
@@ -280,18 +332,19 @@ export default function TabBarCreateEntry({
           aria-activedescendant={
             activeOptions.length > 0 && !error ? resultOptionDomId(activeSelectedIndex) : undefined
           }
-          aria-label={translate(
-            'auto.components.tab.bar.TabBarCreateEntry.39676a184c',
-            'Open any file, URL, agent, ...'
-          )}
+          aria-label={omniboxPlaceholder()}
           aria-invalid={error ? true : undefined}
-          placeholder={translate(
-            'auto.components.tab.bar.TabBarCreateEntry.39676a184c',
-            'Open any file, URL, agent, ...'
-          )}
+          placeholder={omniboxPlaceholder()}
           className="h-9 rounded-none border-0 bg-transparent px-0 text-xs font-normal text-foreground shadow-none placeholder:font-normal placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0 aria-invalid:border-0 aria-invalid:ring-0 md:text-xs dark:bg-transparent"
         />
       </div>
+      {/* Above the list, not instead of it: a stale switch target must not wipe
+          the rows the user can still act on. */}
+      {switchError ? (
+        <div className="mt-1 px-1">
+          <EntryStatusRow message={switchError} />
+        </div>
+      ) : null}
       {error || activeOptions.length > 0 || hasQuery ? (
         <div
           className="mt-1 space-y-0.5 px-1"

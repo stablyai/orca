@@ -1,7 +1,8 @@
 /* eslint-disable max-lines -- Why: this store owns OpenCode analytics persistence, scan policy, and renderer query semantics. Keeping range/scope queries next to scan persistence prevents UI totals from drifting from the SQLite projection. */
 import { app } from 'electron'
-import { dirname, join } from 'node:path'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageBreakdownRow,
@@ -16,11 +17,10 @@ import type {
 import type { Store } from '../persistence'
 import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsagePersistedState } from './types'
-import { createWorktreeRefs, scanOpenCodeUsageDatabases } from './scanner'
+import { createWorktreeRefs } from '../usage/usage-worktree-refs'
+import { OPENCODE_USAGE_SCHEMA_VERSION, openCodeUsageProvider } from './opencode-usage-provider'
 
-// Why: v2 adds per-database session ownership (stale sibling-copy dedupe).
-// Older caches were built without it and can carry doubled sessions (#8006).
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = OPENCODE_USAGE_SCHEMA_VERSION
 const STALE_MS = 5 * 60_000
 
 let _openCodeUsageFile: string | null = null
@@ -152,6 +152,9 @@ export class OpenCodeUsageStore {
   private state: OpenCodeUsagePersistedState
   private readonly store: Store
   private scanPromise: Promise<void> | null = null
+  // Why: the multi-MB usage JSON must not block the Electron main thread; the writer serializes
+  // writes and vetoes superseded renames.
+  private readonly writer = new UsageCacheSnapshotWriter('[opencode-usage]', getOpenCodeUsageFile)
 
   constructor(store: Store) {
     this.store = store
@@ -179,20 +182,19 @@ export class OpenCodeUsageStore {
     }
   }
 
-  private writeToDisk(): void {
-    const usageFile = getOpenCodeUsageFile()
-    const dir = dirname(usageFile)
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
-    }
-    const tmpFile = `${usageFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
-    renameSync(tmpFile, usageFile)
+  private writeToDisk(): Promise<void> {
+    // Pretty-print preserved: humans inspect this analytics cache on disk.
+    return this.writer.write(() => JSON.stringify(this.state, null, 2))
+  }
+
+  /** Await queued cache writes so quit does not drop the final snapshot. */
+  flush(): Promise<void> {
+    return this.writer.flush()
   }
 
   async setEnabled(enabled: boolean): Promise<OpenCodeUsageScanState> {
     this.state.scanState.enabled = enabled
-    this.writeToDisk()
+    await this.writeToDisk()
     return this.getScanState()
   }
 
@@ -242,14 +244,15 @@ export class OpenCodeUsageStore {
 
     this.state.scanState.lastScanStartedAt = Date.now()
     this.state.scanState.lastScanError = null
-    this.writeToDisk()
+    // Why no write here: persisting scan-start would rewrite the whole cache before a single result
+    // changed. The completion/failure write below persists the same fields.
 
     this.scanPromise = (async () => {
       try {
         const repos = this.store.getRepos()
         const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
         const worktreeFingerprint = getWorktreeFingerprint(worktreesByRepo)
-        const result = await scanOpenCodeUsageDatabases(
+        const result = await openCodeUsageProvider.scan(
           createWorktreeRefs(repos, worktreesByRepo),
           this.state.worktreeFingerprint === worktreeFingerprint
             ? this.state.processedDatabases
@@ -261,10 +264,12 @@ export class OpenCodeUsageStore {
         this.state.worktreeFingerprint = worktreeFingerprint
         this.state.scanState.lastScanCompletedAt = Date.now()
         this.state.scanState.lastScanError = null
-        this.writeToDisk()
+        // Why swallow: persistence is a cache concern. A disk failure must not turn a good scan into
+        // a scan error and reject refresh() for every query caller; writeToDisk already logs it.
+        await this.writeToDisk().catch(() => {})
       } catch (error) {
         this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        this.writeToDisk()
+        await this.writeToDisk().catch(() => {})
       } finally {
         this.scanPromise = null
       }

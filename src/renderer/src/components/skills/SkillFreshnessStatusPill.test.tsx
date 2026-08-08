@@ -8,14 +8,16 @@ import { SkillFreshnessStatusPill } from './SkillFreshnessStatusPill'
 import { consumeSkillFreshnessUpdateDialogRequest } from './skill-freshness-update-dialog'
 
 const mocks = vi.hoisted(() => ({
-  inventory: null as SkillFreshnessInventory | null
+  inventory: null as SkillFreshnessInventory | null,
+  loading: false,
+  error: null as string | null
 }))
 
 vi.mock('@/hooks/useSkillFreshness', () => ({
   useSkillFreshness: () => ({
     inventory: mocks.inventory,
-    loading: false,
-    error: null,
+    loading: mocks.loading,
+    error: mocks.error,
     refresh: vi.fn()
   })
 }))
@@ -55,6 +57,7 @@ function inventory(
       errorCategory: null
     })),
     eligibleUpdateNames,
+    scanIssues: [],
     scannedAt: 1
   }
 }
@@ -75,6 +78,8 @@ async function renderPill(skillName: string): Promise<HTMLDivElement> {
 describe('SkillFreshnessStatusPill', () => {
   beforeEach(() => {
     mocks.inventory = null
+    mocks.loading = false
+    mocks.error = null
     // Why: the dialog request is module-level state shared across tests.
     consumeSkillFreshnessUpdateDialogRequest()
   })
@@ -116,13 +121,29 @@ describe('SkillFreshnessStatusPill', () => {
 
     const rendered = await renderPill('orca-cli')
     // Why: a green pill over a copy the update cannot reach hides real drift.
-    expect(pillText(rendered)).toBe('Needs attention')
+    expect(pillText(rendered)).toBe('Review skill')
     expect(detailsButton(rendered)?.textContent).toBe('Details')
   })
 
   it('falls back to Installed before the inventory loads', async () => {
     const rendered = await renderPill('orca-cli')
     expect(pillText(rendered)).toBe('Installed')
+    expect(detailsButton(rendered)).toBeNull()
+  })
+
+  it('shows a neutral verdict while freshness is being checked', async () => {
+    mocks.loading = true
+
+    const rendered = await renderPill('orca-cli')
+    expect(pillText(rendered)).toBe('Checking...')
+    expect(detailsButton(rendered)).toBeNull()
+  })
+
+  it('does not report success after a freshness check fails', async () => {
+    mocks.error = 'Could not read skills.'
+
+    const rendered = await renderPill('orca-cli')
+    expect(pillText(rendered)).toBe('Check failed')
     expect(detailsButton(rendered)).toBeNull()
   })
 

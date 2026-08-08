@@ -13,6 +13,7 @@ import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/loc
 import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { getExternalEditorOpenCapability } from '@/lib/external-editor-open-capability'
+import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import type { ShellOpenExternalEditorResult } from '../../../../shared/shell-open-types'
 import type { GlobalSettings, OpenInApplication } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
@@ -34,7 +35,7 @@ export type OpenInMenuEntry = {
 }
 
 export function getWorktreeOpenInEntries(
-  openInApplications: OpenInApplication[],
+  openInApplications: readonly OpenInApplication[],
   fileManagerLabel: string
 ): OpenInMenuEntry[] {
   return [
@@ -302,7 +303,9 @@ export function WorktreeOpenInMenuItems({
   labelPrefix = ''
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
   const openInWorktreePath = useOpenInWorktreePath({ worktreePath, connectionId })
-  const openInApplications = useAppStore((s) => s.settings?.openInApplications ?? [])
+  const openInApplications = useAppStore(
+    (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
+  )
   const settings = useAppStore((s) => s.settings)
   const fileManagerLabel = getLocalFileManagerLabel()
   const entries = getWorktreeOpenInEntries(openInApplications, fileManagerLabel)

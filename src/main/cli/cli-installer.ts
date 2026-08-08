@@ -17,6 +17,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-install-types'
+import { expandWindowsEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
 import {
   invalidateWindowsUserPathRegistryCache,
@@ -654,7 +655,7 @@ export class CliInstaller {
   private isWindowsPackagedBundledCommand(
     commandPath: string | null,
     launcherPath: string | null
-  ): commandPath is string {
+  ): boolean {
     return (
       this.platform === 'win32' &&
       this.isPackaged &&
@@ -1085,13 +1086,6 @@ function normalizeWindowsPath(
     .replaceAll('/', '\\')
     .replace(/\\+$/, '')
     .toLowerCase()
-}
-
-function expandWindowsEnvironmentVariables(value: string, env: NodeJS.ProcessEnv): string {
-  return value.replace(/%([^%]+)%/g, (match, rawName: string) => {
-    const envKey = Object.keys(env).find((key) => key.toLowerCase() === rawName.toLowerCase())
-    return envKey && env[envKey] ? env[envKey] : match
-  })
 }
 
 function escapeWindowsBatchValue(value: string): string {

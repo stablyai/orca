@@ -8,7 +8,7 @@ const sessionRouteSource = readFileSync(
 // Why: the buffered command TextInput this guards lives in this extracted
 // component, not the session route.
 const inputBarSource = readFileSync(
-  new URL('../../app/h/[hostId]/session/terminal-session-input-bar.tsx', import.meta.url),
+  new URL('../session/terminal-session-input-bar.tsx', import.meta.url),
   'utf8'
 )
 const combinedSource = sessionRouteSource + inputBarSource
@@ -26,5 +26,13 @@ describe('terminal iOS dictation write-back', () => {
 
   it('still normalizes the buffered command text at send time', () => {
     expect(combinedSource).toContain('normalizeTerminalTextInput(input)')
+  })
+
+  it('leaves buffered autocorrection native and remounts Android when it changes', () => {
+    expect(combinedSource).toContain('onChangeText={setInput}')
+    expect(combinedSource).toContain('autoCorrect={autocompleteEnabled}')
+    expect(combinedSource).toContain('spellCheck={autocompleteEnabled}')
+    expect(combinedSource).toContain("? 'cmd-input-ac-on'")
+    expect(combinedSource).toContain(": 'cmd-input-ac-off'")
   })
 })

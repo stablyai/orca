@@ -1,4 +1,8 @@
-import { PANEL_MESSAGE_MAX_BYTES, PANEL_MESSAGE_RATE_LIMIT } from './plugin-panel-bridge'
+import {
+  PANEL_CONTROL_MESSAGE_MAX_BYTES,
+  PANEL_MESSAGE_MAX_BYTES,
+  PANEL_MESSAGE_RATE_LIMIT
+} from './plugin-panel-bridge'
 
 /**
  * Per-plugin bridge budgets: message size cap and a sliding-window rate
@@ -37,6 +41,20 @@ export function createPanelMessageBudget(
       }
       return null
     }
+  }
+}
+
+/**
+ * Reserved liveness lane, size-bounded only. A per-window count here would be
+ * spent by the panel's own pongs and would then drop the next genuine reply —
+ * the exact starvation this lane exists to prevent. Rate is still bounded
+ * because the caller also charges every pong to the data budget.
+ */
+export function createPanelControlMessageBudget(): PanelMessageBudget {
+  return {
+    maxBytes: PANEL_CONTROL_MESSAGE_MAX_BYTES,
+    admit: (_now, messageBytes) =>
+      messageBytes > PANEL_CONTROL_MESSAGE_MAX_BYTES ? 'oversized' : null
   }
 }
 

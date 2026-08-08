@@ -1,14 +1,6 @@
 export const HERMES_RUN_REF_MAX_ENTRIES = 10_000
 export const HERMES_RUN_REF_ID_MAX_BYTES = 4 * 1024
 
-export const HERMES_SESSION_RUN_REFS_SELECT_SQL = `SELECT
-  CASE WHEN length(CAST(id AS BLOB)) <= ${HERMES_RUN_REF_ID_MAX_BYTES} THEN id ELSE NULL END AS id,
-  CASE WHEN typeof(started_at) IN ('integer', 'real') THEN started_at ELSE NULL END AS started_at
-FROM sessions
-WHERE id LIKE ? ESCAPE '\\'
-ORDER BY started_at DESC
-LIMIT ${HERMES_RUN_REF_MAX_ENTRIES + 1}`
-
 export type HermesSortableRunRef = {
   id: string
   run_at: string | null

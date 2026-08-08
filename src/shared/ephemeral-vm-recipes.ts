@@ -1,21 +1,7 @@
 import { z } from 'zod'
 import { parsePairingCode } from './pairing'
-import {
-  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
-} from './ssh-types'
+import { MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from './ssh-types'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
-// Why: ephemeral-vm-recipe-doctor imports Node's fs/path, so it must NOT be
-// re-exported through this barrel — the renderer/web-client imports this module
-// and would otherwise pull Node built-ins into the browser bundle (build fails).
-// Node callers import doctorEphemeralVmRecipe directly from the doctor module.
-export {
-  getEphemeralVmRecipeResultWarnings,
-  redactEphemeralVmRecipeDiagnosticText,
-  redactEphemeralVmRecipeResultForDiagnostics
-} from './ephemeral-vm-recipe-diagnostics'
-export type { EphemeralVmRecipeResultWarning } from './ephemeral-vm-recipe-diagnostics'
 
 const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -77,8 +63,6 @@ export const EphemeralVmRecipeSshTargetSchema = z
   })
   .strict()
 
-export type EphemeralVmRecipeSshTarget = z.infer<typeof EphemeralVmRecipeSshTargetSchema>
-
 const EphemeralVmRecipeOrcaServerConnectionSchema = z
   .object({
     type: z.literal('orca-server'),
@@ -124,10 +108,6 @@ export const EphemeralVmRecipeResultSchema = z.union([
   EphemeralVmRecipeConnectionResultSchema
 ])
 
-export type EphemeralVmRecipeLegacyResult = z.infer<typeof EphemeralVmRecipeLegacyResultSchema>
-export type EphemeralVmRecipeConnectionResult = z.infer<
-  typeof EphemeralVmRecipeConnectionResultSchema
->
 export type EphemeralVmRecipeResult = z.infer<typeof EphemeralVmRecipeResultSchema>
 
 export type EphemeralVmRecipeResultParseResult =
@@ -198,16 +178,6 @@ export function getEphemeralVmRecipeResultPairingCode(
 ): string | null {
   const connection = getEphemeralVmRecipeResultConnection(result)
   return connection.type === 'orca-server' ? connection.pairingCode : null
-}
-
-export function getEphemeralVmRecipeResultUserData(
-  result: EphemeralVmRecipeResult
-): Record<string, JsonValue> | undefined {
-  return result.userData
-}
-
-export function getDefaultSshRelayGracePeriodSeconds(): number {
-  return DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
 }
 
 export function isAbsoluteRuntimePath(path: string): boolean {

@@ -1,38 +1,27 @@
 /* eslint-disable max-lines -- Why: keep the full composer card markup together so the inline and modal variants share one UI surface. */
 import React from 'react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
   Check,
   ChevronDown,
-  ChevronRight,
-  ChevronsUpDown,
-  Cloud,
   CornerDownLeft,
   FolderPlus,
   LoaderCircle,
-  Monitor,
   PlugZap,
-  Plus,
-  Settings2,
-  Server
+  Settings2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Command,
-  CommandEmpty,
-  CommandItem,
-  CommandList,
-  CommandSeparator
-} from '@/components/ui/command'
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
+import {
+  DEFAULT_DISABLED_TUI_AGENTS,
+  filterEnabledTuiAgents
+} from '../../../shared/tui-agent-selection'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
@@ -44,10 +33,10 @@ import {
 } from '@/lib/text-control-paste'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
-import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import type {
   GitHubWorkItem,
   GitLabWorkItem,
+  JiraIssue,
   LinearIssue,
   SetupAgentStartupPolicy,
   OrcaHooks,
@@ -60,6 +49,7 @@ import SmartWorkspaceNameField, {
 } from '@/components/new-workspace/SmartWorkspaceNameField'
 import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
+import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
 import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
@@ -68,16 +58,16 @@ import type { SetupConfig } from '@/lib/new-workspace'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type {
   NeedsSetupProjectHostOption,
-  ProjectHostSetupOption,
-  ReadyProjectHostSetupOption
+  ProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
+import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
+import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
 type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
@@ -125,6 +115,8 @@ type NewWorkspaceComposerCardProps = {
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartNameModeChange?: (mode: SmartNameMode) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
+  onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  onOpenJiraSettings?: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
   /** True when an existing local branch is selected and can be reused. */
@@ -136,6 +128,7 @@ type NewWorkspaceComposerCardProps = {
   createMultiple?: boolean
   onCreateMultipleChange?: (next: boolean) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
+  smartNameJiraSourceContext?: TaskSourceContext | null
   /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
@@ -217,576 +210,6 @@ const SSH_STATUS_LABELS: Partial<Record<SshConnectionStatus, string>> = {
 
 function getSshStatusLabel(status: SshConnectionStatus): string {
   return SSH_STATUS_LABELS[status] ?? status
-}
-
-// Why: bound how long the run-target picker waits on a host connect so a stalled backend
-// connect can't leave the row's disabled/spinner state stuck forever. The backend keeps going.
-const RUN_TARGET_CONNECT_UI_TIMEOUT_MS = 20_000
-
-async function withUiConnectTimeout<T>(promise: Promise<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      reject(
-        new Error(
-          translate(
-            'auto.components.NewWorkspaceComposerCard.connectTimedOut',
-            'Connection timed out. It may still be connecting in the background.'
-          )
-        )
-      )
-    }, RUN_TARGET_CONNECT_UI_TIMEOUT_MS)
-  })
-  try {
-    return await Promise.race([promise, timeout])
-  } finally {
-    if (timer) {
-      clearTimeout(timer)
-    }
-  }
-}
-
-function getRecipeCommandDisplay(command: string): string {
-  const trimmed = command.trim()
-  const quoted = trimmed.match(/^"([^"]+)"/) ?? trimmed.match(/^'([^']+)'/)
-  return quoted?.[1] ?? trimmed.split(/\s+/)[0] ?? trimmed
-}
-
-function getRecipeDestroyLabel(recipe: EphemeralVmRecipeOption): string {
-  if (recipe.destroyDisabled) {
-    return translate('auto.components.NewWorkspaceComposerCard.destroyDisabled', 'destroy disabled')
-  }
-  if (recipe.destroy) {
-    return translate(
-      'auto.components.NewWorkspaceComposerCard.destroyConfigured',
-      'destroy configured'
-    )
-  }
-  return translate('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
-}
-
-type WorkspaceRunTargetComboboxProps = {
-  hostOptions: readonly ProjectHostSetupOption[]
-  hostValue: string | null
-  onHostChange?: (setupId: string) => void
-  recipes: EphemeralVmRecipeOption[]
-  recipeValue: string | null
-  onRecipeChange?: (recipeId: string | null) => void
-  onAddRemoteServer?: () => void
-  onAddSshHost?: () => void
-  onConnectHost?: (option: NeedsSetupProjectHostOption) => Promise<void> | void
-}
-
-type HostPathTooltipPosition = {
-  left: number
-  top: number
-  maxWidth: number
-}
-
-const HOST_PATH_TOOLTIP_DELAY_MS = 400
-const HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX = 8
-const HOST_PATH_TOOLTIP_TRIGGER_GAP_PX = 4
-
-function HostPathTooltip({ path }: { path: string }): React.JSX.Element {
-  const tooltipId = React.useId()
-  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pointerInsideRef = React.useRef(false)
-  const [position, setPosition] = React.useState<HostPathTooltipPosition | null>(null)
-
-  const hideTooltip = React.useCallback((): void => {
-    pointerInsideRef.current = false
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current)
-      timerRef.current = null
-    }
-    setPosition(null)
-  }, [])
-
-  React.useEffect(() => hideTooltip, [hideTooltip])
-
-  const handlePointerEnter = React.useCallback((event: React.PointerEvent<HTMLElement>): void => {
-    pointerInsideRef.current = true
-    const trigger = event.currentTarget
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current)
-    }
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null
-      if (!pointerInsideRef.current || !trigger.isConnected) {
-        return
-      }
-      const rect = trigger.getBoundingClientRect()
-      // Why: anchor under the hovered path, capping width to the viewport edge so a long path wraps instead of flying off-screen.
-      const left = Math.max(HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX, rect.left)
-      setPosition({
-        left,
-        top: rect.bottom + HOST_PATH_TOOLTIP_TRIGGER_GAP_PX,
-        maxWidth: window.innerWidth - left - HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX
-      })
-    }, HOST_PATH_TOOLTIP_DELAY_MS)
-  }, [])
-
-  return (
-    <>
-      {/* Trigger is the truncated path line itself, so the tooltip only appears when hovering it. */}
-      <div
-        className="mt-0.5 truncate text-[11px] text-muted-foreground"
-        aria-describedby={position ? tooltipId : undefined}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={hideTooltip}
-        onPointerDown={hideTooltip}
-      >
-        {path}
-      </div>
-      {/* Why: a fixed, pointer-transparent portal cannot reflow cmdk or become the hover target. */}
-      {position
-        ? createPortal(
-            <div
-              id={tooltipId}
-              role="tooltip"
-              data-slot="host-path-tooltip"
-              className="pointer-events-none fixed z-[100] w-max break-all rounded-sm border border-border bg-popover px-1.5 py-1 font-mono text-[11px] leading-tight text-popover-foreground shadow-xs"
-              style={{ left: position.left, top: position.top, maxWidth: position.maxWidth }}
-            >
-              {path}
-            </div>,
-            document.body
-          )
-        : null}
-    </>
-  )
-}
-
-// Why: the local machine isn't a server — give it a monitor glyph so it reads as "this computer".
-function HostRowIcon({ hostId }: { hostId: ExecutionHostId }): React.JSX.Element {
-  const Icon = hostId === LOCAL_EXECUTION_HOST_ID ? Monitor : Server
-  return <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-}
-
-function WorkspaceRunTargetCombobox({
-  hostOptions,
-  hostValue,
-  onHostChange,
-  recipes,
-  recipeValue,
-  onRecipeChange,
-  onAddRemoteServer,
-  onAddSshHost,
-  onConnectHost
-}: WorkspaceRunTargetComboboxProps): React.JSX.Element {
-  const [open, setOpen] = React.useState(false)
-  const [vmRecipesOpen, setVmRecipesOpen] = React.useState(false)
-  const [hostActionsOpen, setHostActionsOpen] = React.useState(false)
-  // Why: track in-flight connects per host (a Set, not a single id) so connecting one host — or
-  // one connect stalling — never disables connecting to the others.
-  const [connectingHostIds, setConnectingHostIds] = React.useState<ReadonlySet<string>>(
-    () => new Set()
-  )
-  const readyHostOptions = React.useMemo(
-    () =>
-      hostOptions.filter(
-        (option): option is ReadyProjectHostSetupOption => option.kind === 'ready'
-      ),
-    [hostOptions]
-  )
-  const needsSetupHostOptions = React.useMemo(
-    () =>
-      hostOptions.filter(
-        (option): option is NeedsSetupProjectHostOption => option.kind === 'needs-setup'
-      ),
-    [hostOptions]
-  )
-  const selectedHost =
-    readyHostOptions.find((option) => option.id === hostValue) ?? readyHostOptions[0] ?? null
-  const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
-  const selectedValue = selectedRecipe
-    ? `recipe:${selectedRecipe.id}`
-    : selectedHost
-      ? `host:${selectedHost.id}`
-      : ''
-  const ephemeralVmLabel = translate(
-    'auto.components.NewWorkspaceComposerCard.ephemeralVm',
-    'Per-Workspace Environment'
-  )
-
-  const handleHostSelect = React.useCallback(
-    (setupId: string): void => {
-      if (!readyHostOptions.some((candidate) => candidate.id === setupId)) {
-        return
-      }
-      onHostChange?.(setupId)
-      onRecipeChange?.(null)
-      setOpen(false)
-    },
-    [onHostChange, onRecipeChange, readyHostOptions]
-  )
-
-  const handleRecipeSelect = React.useCallback(
-    (recipeId: string): void => {
-      if (!recipes.some((recipe) => recipe.id === recipeId)) {
-        return
-      }
-      onRecipeChange?.(recipeId)
-      setVmRecipesOpen(false)
-      setOpen(false)
-    },
-    [onRecipeChange, recipes]
-  )
-
-  const connectHost = React.useCallback(
-    async (option: NeedsSetupProjectHostOption): Promise<void> => {
-      if (!option.connectAction || !onConnectHost || connectingHostIds.has(option.hostId)) {
-        return
-      }
-      setConnectingHostIds((current) => new Set(current).add(option.hostId))
-      try {
-        await onConnectHost(option)
-      } finally {
-        // Why: always clear the in-flight id when the connect settles (success, failure, or
-        // timeout) so the row's spinner stops. No mounted-guard — a stale setState on an
-        // unmounted component is a harmless no-op in React 18, and the guard's ref was the
-        // source of a StrictMode bug that left the spinner stuck.
-        setConnectingHostIds((current) => {
-          if (!current.has(option.hostId)) {
-            return current
-          }
-          const next = new Set(current)
-          next.delete(option.hostId)
-          return next
-        })
-      }
-    },
-    [connectingHostIds, onConnectHost]
-  )
-
-  // Why: the submenu rows open their popover on hover/focus (not just click) to feel like a
-  // menu; opening one closes the other so the two right-side popovers never stack.
-  const openVmRecipesSubmenu = React.useCallback((): void => {
-    setHostActionsOpen(false)
-    setVmRecipesOpen(true)
-  }, [])
-
-  const openHostActionsSubmenu = React.useCallback((): void => {
-    setVmRecipesOpen(false)
-    setHostActionsOpen(true)
-  }, [])
-
-  // Why: hovering/highlighting a plain host row dismisses any submenu popover left open from
-  // passing over the recipe/add-host rows, so a stray submenu can't linger over the list.
-  const closeSubmenus = React.useCallback((): void => {
-    setVmRecipesOpen(false)
-    setHostActionsOpen(false)
-  }, [])
-
-  const handleAddSshHost = React.useCallback((): void => {
-    setHostActionsOpen(false)
-    setOpen(false)
-    onAddSshHost?.()
-  }, [onAddSshHost])
-
-  const handleAddRemoteServer = React.useCallback((): void => {
-    setHostActionsOpen(false)
-    setOpen(false)
-    onAddRemoteServer?.()
-  }, [onAddRemoteServer])
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="h-9 w-full justify-between border-input px-3 text-sm font-normal focus:border-ring focus:ring-[3px] focus:ring-ring/50"
-        >
-          {selectedRecipe ? (
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate">
-                {ephemeralVmLabel} / {selectedRecipe.name}
-              </span>
-            </span>
-          ) : selectedHost ? (
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <HostRowIcon hostId={selectedHost.hostId} />
-              <span className="truncate">{selectedHost.label}</span>
-            </span>
-          ) : (
-            <span className="text-muted-foreground">
-              {translate(
-                'auto.components.NewWorkspaceComposerCard.chooseRunTarget',
-                'Choose target'
-              )}
-            </span>
-          )}
-          <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] p-0"
-      >
-        <Command value={selectedValue}>
-          <CommandList>
-            <CommandEmpty>
-              {translate(
-                'auto.components.NewWorkspaceComposerCard.noRunTargets',
-                'No run targets are ready for this project.'
-              )}
-            </CommandEmpty>
-            {readyHostOptions.map((option) => (
-              <CommandItem
-                key={option.id}
-                value={`host:${option.id}`}
-                onSelect={() => handleHostSelect(option.id)}
-                onPointerEnter={closeSubmenus}
-                onFocus={closeSubmenus}
-                className="items-center gap-2 px-3 py-1.5"
-              >
-                <Check
-                  className={cn(
-                    'size-4 text-foreground',
-                    !selectedRecipe && option.id === selectedHost?.id ? 'opacity-100' : 'opacity-0'
-                  )}
-                />
-                <HostRowIcon hostId={option.hostId} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm">{option.label}</div>
-                  <HostPathTooltip path={option.path} />
-                </div>
-              </CommandItem>
-            ))}
-            {/* Why: not-connected hosts are dormant, not errors — a separator (no heading) sets
-                them off as a secondary group without labeling the recipe/add-host rows below. */}
-            {needsSetupHostOptions.length > 0 ? (
-              <>
-                <CommandSeparator />
-                {needsSetupHostOptions.map((option) => (
-                  // Why: setup-on-host is a follow-up; this row only explains why the host cannot
-                  // run the workspace yet. It stays highlightable (no `disabled`) so it matches the
-                  // hover of the other rows, but selecting it is a no-op since it isn't ready.
-                  <CommandItem
-                    key={option.id}
-                    value={option.id}
-                    onSelect={() => {}}
-                    onPointerEnter={closeSubmenus}
-                    onFocus={closeSubmenus}
-                    className="items-center gap-2 px-3 py-1.5"
-                  >
-                    <div className="flex min-w-0 flex-1 items-center gap-2 opacity-60">
-                      <Check className="size-4 opacity-0" />
-                      {/* Why: show a spinner while connecting; otherwise reserve the alarm glyph for
-                          a genuine connection error and give a dormant disconnected host the neutral
-                          server icon. */}
-                      {connectingHostIds.has(option.hostId) ? (
-                        <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-                      ) : option.attention ? (
-                        <AlertTriangle className="size-3.5 shrink-0 text-muted-foreground" />
-                      ) : (
-                        <HostRowIcon hostId={option.hostId} />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm">{option.label}</div>
-                        <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                          {option.detail}
-                        </div>
-                      </div>
-                    </div>
-                    {option.connectAction && onConnectHost ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        className="ml-1 shrink-0 gap-1 text-muted-foreground/50 hover:text-muted-foreground"
-                        // Why: only disable the row being connected — not every row — so one
-                        // stuck/slow connect can't lock out connecting to the other hosts.
-                        disabled={connectingHostIds.has(option.hostId)}
-                        onPointerDown={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                        }}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          // Why: keep the picker open so the connecting state stays visible; the
-                          // row updates in place from store SSH state once the connect resolves.
-                          void connectHost(option)
-                        }}
-                      >
-                        {connectingHostIds.has(option.hostId) ? (
-                          <>
-                            <LoaderCircle className="size-3 animate-spin" />
-                            {translate(
-                              'auto.components.NewWorkspaceComposerCard.connectingHost',
-                              'Connecting…'
-                            )}
-                          </>
-                        ) : (
-                          translate(
-                            'auto.components.NewWorkspaceComposerCard.connectHost',
-                            'Connect'
-                          )
-                        )}
-                      </Button>
-                    ) : null}
-                  </CommandItem>
-                ))}
-              </>
-            ) : null}
-            {/* Why: separate the host list from the per-workspace-env row; the "Add host" action
-                is pinned below the list with its own border, so it needs no separator here. */}
-            {recipes.length > 0 &&
-            (readyHostOptions.length > 0 || needsSetupHostOptions.length > 0) ? (
-              <CommandSeparator />
-            ) : null}
-            {recipes.length > 0 ? (
-              <Popover open={vmRecipesOpen} onOpenChange={setVmRecipesOpen}>
-                <PopoverTrigger asChild>
-                  {/* Why: a real CommandItem (not a raw button) so cmdk registers it — fixes missing rows, uneven height, and double-highlight. */}
-                  <CommandItem
-                    value="per-workspace-env"
-                    onSelect={openVmRecipesSubmenu}
-                    onPointerEnter={openVmRecipesSubmenu}
-                    onFocus={openVmRecipesSubmenu}
-                    className="items-center gap-2 px-3 py-1.5"
-                  >
-                    <Check
-                      className={cn(
-                        'size-4 text-foreground',
-                        selectedRecipe ? 'opacity-100' : 'opacity-0'
-                      )}
-                    />
-                    <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm">{ephemeralVmLabel}</div>
-                      {/* Why: a second line so this row matches the two-line host options above and hints what it opens. */}
-                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                        {translate(
-                          'auto.components.NewWorkspaceComposerCard.perWorkspaceEnvHint',
-                          'Provision an on-demand environment from a recipe'
-                        )}
-                      </div>
-                    </div>
-                    <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-                  </CommandItem>
-                </PopoverTrigger>
-                <PopoverContent side="right" align="start" sideOffset={6} className="w-72 p-0">
-                  <Command value={selectedRecipe ? `recipe:${selectedRecipe.id}` : ''}>
-                    <CommandList>
-                      {recipes.map((recipe) => (
-                        <CommandItem
-                          key={recipe.id}
-                          value={`recipe:${recipe.id}`}
-                          onSelect={() => handleRecipeSelect(recipe.id)}
-                          className="items-center gap-2 px-3 py-1.5"
-                        >
-                          <Check
-                            className={cn(
-                              'size-4 text-foreground',
-                              recipe.id === selectedRecipe?.id ? 'opacity-100' : 'opacity-0'
-                            )}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm">{recipe.name}</div>
-                            <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                              {getRecipeCommandDisplay(recipe.create)} ·{' '}
-                              {getRecipeDestroyLabel(recipe)}
-                            </div>
-                            {recipe.description ? (
-                              <div className="truncate text-[11px] text-muted-foreground">
-                                {recipe.description}
-                              </div>
-                            ) : null}
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            ) : null}
-          </CommandList>
-          {/* Why: pin "Add host" below the scrollable list — mirrors the Project combobox's
-              "Add a new project" footer so it keeps a compact single-row height and one clean
-              divider instead of a taller in-list row above the popover edge. */}
-          <div className="border-t border-border">
-            <Popover open={hostActionsOpen} onOpenChange={setHostActionsOpen}>
-              {/* Why: an Anchor (not a Trigger) so click/hover/focus all just open the submenu —
-                  a Trigger's own toggle would fight the hover-open and close it on the same click. */}
-              <PopoverAnchor asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  data-run-target-add-host="true"
-                  onClick={openHostActionsSubmenu}
-                  onPointerEnter={openHostActionsSubmenu}
-                  onFocus={openHostActionsSubmenu}
-                  className="h-8 w-full justify-start gap-2 rounded-none px-3 text-xs font-normal"
-                >
-                  <Plus className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span>
-                    {translate('auto.components.NewWorkspaceComposerCard.addHost', 'Add host')}
-                  </span>
-                  <ChevronRight className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
-                </Button>
-              </PopoverAnchor>
-              <PopoverContent side="right" align="start" sideOffset={6} className="w-72 p-0">
-                {/* Why: pin an empty value so cmdk doesn't auto-highlight the first row on open —
-                    matches the recipes submenu, which leaves nothing highlighted by default. */}
-                <Command value="">
-                  <CommandList>
-                    <CommandItem
-                      value="add-ssh-host"
-                      onSelect={handleAddSshHost}
-                      className="items-center gap-2 px-3 py-1.5"
-                    >
-                      <Server className="size-3.5 shrink-0 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm">
-                          {translate(
-                            'auto.components.NewWorkspaceComposerCard.addSshHost',
-                            'Add SSH host'
-                          )}
-                        </div>
-                        <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                          {translate(
-                            'auto.components.NewWorkspaceComposerCard.addSshHostHint',
-                            'Use an existing machine over SSH'
-                          )}
-                        </div>
-                      </div>
-                    </CommandItem>
-                    <CommandItem
-                      value="add-remote-orca-server"
-                      onSelect={handleAddRemoteServer}
-                      className="items-center gap-2 px-3 py-1.5"
-                    >
-                      <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm">
-                          {translate(
-                            'auto.components.NewWorkspaceComposerCard.addRemoteOrcaServer',
-                            'Add Remote Orca Server'
-                          )}
-                        </div>
-                        <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                          {translate(
-                            'auto.components.NewWorkspaceComposerCard.addRemoteOrcaServerHint',
-                            'Pair another Orca runtime'
-                          )}
-                        </div>
-                      </div>
-                    </CommandItem>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  )
 }
 
 function SetupCommandPreview({ setupConfig }: { setupConfig: SetupConfig }): React.JSX.Element {
@@ -906,6 +329,8 @@ export default function NewWorkspaceComposerCard({
   onSmartBranchSelect,
   onSmartNameModeChange,
   onSmartLinearIssueSelect,
+  onSmartJiraIssueSelect,
+  onOpenJiraSettings,
   smartNameSelection,
   onClearSmartNameSelection,
   canReuseSelectedBranch,
@@ -915,6 +340,7 @@ export default function NewWorkspaceComposerCard({
   createMultiple = false,
   onCreateMultipleChange,
   smartNameGitHubSourceContext,
+  smartNameJiraSourceContext,
   forkPushWarning,
   detectedAgentIds,
   onOpenAgentSettings,
@@ -955,7 +381,9 @@ export default function NewWorkspaceComposerCard({
   const openModal = useAppStore((s) => s.openModal)
   const activeModal = useAppStore((s) => s.activeModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
-  const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
+  const disabledTuiAgents = useAppStore(
+    (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
+  )
   const updateSettings = useAppStore((s) => s.updateSettings)
   const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const branchNameInputId = React.useId()
@@ -1081,10 +509,18 @@ export default function NewWorkspaceComposerCard({
       }
       try {
         if (action.kind === 'ssh') {
-          // Why: ssh.connect has no built-in timeout; a stalled connect would otherwise leave the
-          // row's spinner/disabled state stuck forever. Bound the UI wait — the backend keeps
-          // connecting and the picker updates from store SSH state if it later succeeds.
-          await withUiConnectTimeout(window.api.ssh.connect({ targetId: action.targetId }))
+          if (isSshConnectInFlight(action.targetId)) {
+            return
+          }
+          // Why: ssh.connect has no built-in timeout; a stalled connect would otherwise leave
+          // the row's spinner/disabled state stuck forever. Bound the UI wait — the backend
+          // keeps connecting and the picker updates from store SSH state if it later succeeds.
+          // The shared registry tracks that backend request (not this bounded wait), so the
+          // sidebar card control and terminal overlay for this host stay locked until it
+          // settles — a second dial on a passphrase-gated target means a second prompt.
+          await withUiConnectTimeout(
+            trackSshConnect(action.targetId, window.api.ssh.connect({ targetId: action.targetId }))
+          )
           return
         }
 
@@ -1253,11 +689,14 @@ export default function NewWorkspaceComposerCard({
             </p>
           ) : null}
           {shouldShowRunTargetPicker ? (
-            <div className="space-y-1">
+            // Why: Run on is nested in the Project block (so they share the
+            // error/empty states), which put it on the block's 4px rhythm. It's
+            // its own field, so give it the 16px other fields get.
+            <div className="space-y-1 pt-3">
               <label className="block min-w-0 truncate text-xs font-medium text-muted-foreground">
                 {translate('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
               </label>
-              <WorkspaceRunTargetCombobox
+              <RunTargetCombobox
                 hostOptions={projectHostSetupOptions}
                 hostValue={selectedProjectHostSetupId ?? null}
                 onHostChange={handleProjectHostSetupChange}
@@ -1339,9 +778,12 @@ export default function NewWorkspaceComposerCard({
             onGitLabItemSelect={onSmartGitLabItemSelect}
             onBranchSelect={onSmartBranchSelect}
             onLinearIssueSelect={onSmartLinearIssueSelect}
+            onJiraIssueSelect={onSmartJiraIssueSelect}
+            onOpenJiraSettings={onOpenJiraSettings}
             selectedSource={smartNameSelection}
             onClearSelectedSource={onClearSmartNameSelection}
             githubSourceContext={smartNameGitHubSourceContext}
+            jiraSourceContext={smartNameJiraSourceContext}
             disabled={selectedRepoRequiresConnection}
             disabledPlaceholder={translate(
               'auto.components.NewWorkspaceComposerCard.connectProjectFirst',
@@ -1421,7 +863,7 @@ export default function NewWorkspaceComposerCard({
           </div>
         </div>
 
-        <div className="space-y-1" data-contextual-tour-target="workspace-creation-agent">
+        <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
           <div className="flex items-center justify-between gap-2">
             <label className="text-xs font-medium text-muted-foreground">
               {translate('auto.components.NewWorkspaceComposerCard.01d1e8f601', 'Agent')}
@@ -1459,7 +901,9 @@ export default function NewWorkspaceComposerCard({
             onOpenManageAgents={onOpenAgentSettings}
             defaultAgent={defaultTuiAgent}
             onSetDefault={handleSetDefaultAgent}
-            triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
+            // Why: match Project/Run-on — full-width form row, no 260px min that can overflow the dialog column.
+            allowNarrowTrigger
+            triggerClassName="h-9 w-full min-w-0 border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
             onTriggerEnter={createDisabled ? undefined : onCreate}
           />
         </div>

@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import type { SshConnectionState, SshTargetSummary } from '../../../shared/ssh-types'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
+import { admitSshConnectionState } from '../../../shared/ssh-retained-payload-admission'
 
 /**
  * Mirrors a remote Orca server's own SSH targets into that environment's
@@ -71,10 +72,11 @@ async function fetchEnvironmentSshConnectionStates(
         { targetId: target.id },
         { timeoutMs: SSH_RPC_TIMEOUT_MS }
       )
-      if (state) {
+      const admittedState = state ? admitSshConnectionState(state, target.id) : null
+      if (admittedState) {
         useAppStore
           .getState()
-          .setEnvironmentSshConnectionState(environmentId, target.id, state, generation)
+          .setEnvironmentSshConnectionState(environmentId, target.id, admittedState, generation)
       }
     } catch {
       // Why: a timeout or unsupported RPC is not authoritative evidence that the HUB's SSH link disconnected.
@@ -157,10 +159,14 @@ export function applyRuntimeEnvironmentSshStateChanged(
   if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
     return
   }
+  const admittedState = admitSshConnectionState(state, targetId)
+  if (!admittedState) {
+    return
+  }
   const store = useAppStore.getState()
   const bucket = store.sshStateByEnvironment.get(environmentId)
   if (bucket?.targetsHydrated && bucket.targetLabels.has(targetId)) {
-    store.setEnvironmentSshConnectionState(environmentId, targetId, state, generation)
+    store.setEnvironmentSshConnectionState(environmentId, targetId, admittedState, generation)
     return
   }
   void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
@@ -180,12 +186,13 @@ export async function connectRuntimeEnvironmentSshTarget(
     { targetId },
     { timeoutMs: 60_000 }
   )
-  if (state) {
+  const admittedState = state ? admitSshConnectionState(state, targetId) : null
+  if (admittedState) {
     useAppStore
       .getState()
-      .setEnvironmentSshConnectionState(environmentId, targetId, state, generation)
+      .setEnvironmentSshConnectionState(environmentId, targetId, admittedState, generation)
   }
-  return state
+  return admittedState
 }
 
 /** Resyncs the environment's target metadata after a failed connect so a

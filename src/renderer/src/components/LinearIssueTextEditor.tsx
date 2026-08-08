@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -7,6 +7,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { linearUpdateIssue } from '@/runtime/runtime-linear-client'
 import type { LinearIssue } from '../../../shared/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
@@ -28,21 +29,6 @@ type LinearIssueTextEditorProps = {
   sourceContext?: TaskSourceContext | null
 }
 
-function useAutosizeTextArea(value: string): React.RefObject<HTMLTextAreaElement | null> {
-  const ref = useRef<HTMLTextAreaElement>(null)
-
-  useEffect(() => {
-    const textarea = ref.current
-    if (!textarea) {
-      return
-    }
-    textarea.style.height = 'auto'
-    textarea.style.height = `${textarea.scrollHeight}px`
-  }, [value])
-
-  return ref
-}
-
 export function LinearIssueTextEditor({
   issue,
   onIssueChange,
@@ -57,6 +43,7 @@ export function LinearIssueTextEditor({
   const [savingField, setSavingField] = useState<LinearIssueTextField | null>(null)
   const lastIssueIdRef = useRef(issue.id)
   const mountedRef = useMountedRef()
+  const titleImeEnter = useImeEnterGestureOwnership()
   const resolvedDraftState = resolveLinearIssueTextDraftState(draftState, issue)
   const issueChanged = draftState.issueId !== issue.id
   if (resolvedDraftState !== draftState) {
@@ -71,7 +58,6 @@ export function LinearIssueTextEditor({
   const titleDraft = resolvedDraftState.title
   const descriptionDraft = resolvedDraftState.description
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
-  const titleRef = useAutosizeTextArea(titleDraft)
   const updateTitleDraft = useCallback(
     (title: string): void => {
       setDraftState((current) => ({
@@ -188,6 +174,9 @@ export function LinearIssueTextEditor({
 
   const handleTitleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (titleImeEnter.ownsKeyDown(event)) {
+        return
+      }
       if (event.key === 'Enter') {
         event.preventDefault()
         event.currentTarget.blur()
@@ -195,7 +184,7 @@ export function LinearIssueTextEditor({
       }
       handleDescriptionKeyDown(event)
     },
-    [handleDescriptionKeyDown]
+    [handleDescriptionKeyDown, titleImeEnter]
   )
 
   const titleClass =
@@ -207,19 +196,27 @@ export function LinearIssueTextEditor({
       {fields !== 'description' ? (
         <div className="relative">
           <textarea
-            ref={titleRef}
             value={titleDraft}
             onChange={(event) => updateTitleDraft(event.target.value)}
-            onBlur={() => void saveField('title')}
+            onCompositionStart={() => titleImeEnter.setComposing(true)}
+            onCompositionEnd={() => titleImeEnter.setComposing(false)}
+            onBlur={() => {
+              titleImeEnter.reset()
+              void saveField('title')
+            }}
             onKeyDown={handleTitleKeyDown}
+            onKeyUp={titleImeEnter.onKeyUp}
             disabled={savingField === 'title'}
             rows={1}
             aria-label={translate(
               'auto.components.LinearIssueTextEditor.04d73b72dc',
               'Issue title'
             )}
+            // field-sizing:content grows the title with its text and re-wraps on
+            // container resize without a JS measure pass.
             className={cn(
               'peer scrollbar-sleek block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 py-0 text-foreground outline-none transition hover:border-border/50 hover:bg-accent/40 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-80',
+              '[field-sizing:content]',
               titleClass
             )}
           />

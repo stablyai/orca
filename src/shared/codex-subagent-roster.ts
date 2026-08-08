@@ -1,6 +1,7 @@
 import {
   AGENT_MODEL_MAX_LENGTH,
   AGENT_STATUS_MAX_SUBAGENTS,
+  AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
   type AgentSubagentSnapshot
 } from './agent-status-types'
@@ -12,6 +13,7 @@ export type CodexSubagentRoster = Map<string, TrackedCodexSubagent>
 
 type TrackedCodexSubagent = {
   agentType?: string
+  description?: string
   model?: string
   state: 'working' | 'waiting'
   startedAt: number
@@ -22,6 +24,7 @@ export function upsertCodexSubagent(
   id: string,
   fields: {
     agentType?: string
+    description?: string
     model?: string
     state: 'working' | 'waiting'
   },
@@ -32,10 +35,12 @@ export function upsertCodexSubagent(
     return
   }
   const agentType = normalizeOptionalField(fields.agentType, AGENT_TYPE_MAX_LENGTH)
+  const description = normalizeOptionalField(fields.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
   const model = normalizeOptionalField(fields.model, AGENT_MODEL_MAX_LENGTH)
   const existing = roster.get(normalizedId)
   if (existing) {
     existing.agentType = agentType ?? existing.agentType
+    existing.description = description ?? existing.description
     existing.model = model ?? existing.model
     existing.state = fields.state
     return
@@ -45,6 +50,7 @@ export function upsertCodexSubagent(
   }
   roster.set(normalizedId, {
     agentType,
+    description,
     model,
     state: fields.state,
     startedAt: now
@@ -66,7 +72,12 @@ export function seedCodexSubagentRoster(
     upsertCodexSubagent(
       roster,
       snapshot.id,
-      { agentType: snapshot.agentType, model: snapshot.model, state: snapshot.state },
+      {
+        agentType: snapshot.agentType,
+        description: snapshot.description,
+        model: snapshot.model,
+        state: snapshot.state
+      },
       snapshot.startedAt
     )
   }
@@ -81,6 +92,7 @@ export function codexRosterToSnapshots(
   const snapshots = Array.from(roster, ([id, tracked]) => ({
     id,
     agentType: tracked.agentType,
+    description: tracked.description,
     model: tracked.model,
     state: tracked.state,
     startedAt: tracked.startedAt

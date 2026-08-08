@@ -34,7 +34,11 @@ import { registerDashboardPopoutHandlers } from './dashboard-popout'
 import { registerTerminalPreviewHandlers } from './terminal-preview'
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
 import { registerComputerUsePermissionHandlers } from './computer-use-permissions'
-import { setTrustedBrowserRendererWebContentsId, setAgentBrowserBridgeRef } from './browser'
+import {
+  setTrustedBrowserRendererWebContentsId,
+  setAgentBrowserBridgeRef,
+  registerBrowserHandlers
+} from './browser'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
 import { registerDiagnosticsHandlers } from './diagnostics'
@@ -45,7 +49,6 @@ import { registerLocalhostWorktreeLabelHandlers } from './localhost-worktree-lab
 import { registerAutomationHandlers } from './automations'
 import { registerKeybindingHandlers } from './keybindings'
 import { registerTelemetryHandlers } from './telemetry'
-import { registerBrowserHandlers } from './browser'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
 import { registerPluginHandlers } from './plugins'
@@ -141,7 +144,7 @@ export function registerCoreHandlers(
   registerClaudeUsageHandlers(claudeUsage)
   registerCodexUsageHandlers(codexUsage)
   registerOpenCodeUsageHandlers(openCodeUsage)
-  registerCodexAccountHandlers(codexAccounts)
+  registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerAgentTrustHandlers()
@@ -220,7 +223,8 @@ export function registerCoreHandlers(
     scanRuntimeAiVaultSessions: async (environmentId, args, options) =>
       scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args, options),
     prepareRuntimeSessionResume: async (environmentId, args) =>
-      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
+      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args),
+    getSessionLiveness: (target) => runtime.getAiVaultSessionLiveness(target)
   })
   registerNativeChatHandlers()
   registerClipboardHandlers(store)

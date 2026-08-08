@@ -5,6 +5,7 @@ import type {
   GitUpstreamStatus,
   SourceControlViewMode
 } from '../../../../shared/types'
+import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PrimaryAction } from './source-control-primary-action'
 import { Button } from '@/components/ui/button'
@@ -41,6 +42,7 @@ type SourceControlHeaderToolbarProps = {
   headDisplay?: WorktreeGitIdentityDisplay | null
   upstreamStatus?: GitUpstreamStatus
   manualReviewUrl?: string | null
+  branchLineTotal?: GitBranchLineTotal | null
 }
 
 function HostedReviewToolbarLink({
@@ -146,7 +148,8 @@ export function SourceControlHeaderToolbar({
   compareBaseRef,
   headDisplay = null,
   upstreamStatus,
-  manualReviewUrl
+  manualReviewUrl,
+  branchLineTotal
 }: SourceControlHeaderToolbarProps): React.JSX.Element {
   const filterInputRef = useRef<HTMLInputElement>(null)
   const normalizedFilter = filterQuery.trim()
@@ -293,6 +296,7 @@ export function SourceControlHeaderToolbar({
             headDisplay={headDisplay}
             upstreamStatus={upstreamStatus}
             manualReviewUrl={manualReviewUrl}
+            branchLineTotal={branchLineTotal}
             onChangeBaseRef={onChangeBaseRef}
             onRetry={onRefreshBranchCompare}
           />

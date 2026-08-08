@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { OptionalWorkerLaunchPreference } from './orchestration-worker-start-schema'
 
 export const FederationAttachStartParams = z.object({
   dispatchId: requiredString('Missing Dispatch ID'),
@@ -16,6 +17,10 @@ export const FederationAttachStartParams = z.object({
   setupSource: z.enum(['explicit_request', 'orchestration_default']).optional(),
   terminal: OptionalString,
   agent: OptionalString,
+  model: OptionalWorkerLaunchPreference,
+  effort: OptionalWorkerLaunchPreference,
   timeoutMs: OptionalFiniteNumber,
   devMode: z.boolean().optional()
 })
+
+export type FederationAttachStartInput = z.infer<typeof FederationAttachStartParams>

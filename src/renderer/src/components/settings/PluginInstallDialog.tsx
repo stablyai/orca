@@ -16,6 +16,7 @@ import { Label } from '../ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 import { parsePluginInstallSource } from './plugin-install-source'
 import { pluginInstallErrorMessage } from './plugin-error-presentation'
+import { ImeEnterGuardedForm } from '../ime-enter-guarded-form'
 
 type PluginInstallDialogProps = {
   open: boolean
@@ -91,7 +92,7 @@ export function PluginInstallDialog({
             )}
           </DialogDescription>
         </DialogHeader>
-        <form
+        <ImeEnterGuardedForm
           className="contents"
           onSubmit={(event) => {
             event.preventDefault()
@@ -199,7 +200,7 @@ export function PluginInstallDialog({
                 : translate('auto.components.settings.PluginInstallDialog.install', 'Install')}
             </Button>
           </DialogFooter>
-        </form>
+        </ImeEnterGuardedForm>
       </DialogContent>
     </Dialog>
   )

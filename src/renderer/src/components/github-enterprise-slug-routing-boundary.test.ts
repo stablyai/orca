@@ -18,10 +18,12 @@ describe('GitHub Enterprise slug routing boundaries', () => {
   it('keeps work-item URL hosts on TaskPage metadata and issue mutations', () => {
     const source = componentSource('TaskPage.tsx')
     const statusSection = sourceBetween(source, 'function GHStatusCell', 'function formatPRDelta')
+    // Why: the end sentinel just bounds GHAssigneesCell's body — getChecksLabel moved out to
+    // task-page-checks-pill.ts, so the next declaration is the boundary now.
     const assigneeSection = sourceBetween(
       source,
       'function GHAssigneesCell',
-      'function getChecksLabel'
+      'function sameOptionalGitHubOwnerRepo'
     )
 
     expect(statusSection).toContain('host: githubProjectHost(parsedOwnerRepo.host)')

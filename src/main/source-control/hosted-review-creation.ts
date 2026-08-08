@@ -23,6 +23,8 @@ import { acquire, ghExecFileAsync, gitExecFileAsync, release } from '../github/g
 import { isNoUpstreamError, normalizeGitErrorMessage } from '../../shared/git-remote-error'
 import type { GitUpstreamStatus } from '../../shared/types'
 import { gitOptionalLocksDisabledEnv } from '../git/runner'
+import { parsePorcelainV1Records, type PorcelainV1Record } from '../git/porcelain-v1-records'
+import { findExistingWorktreeSymlinkPaths } from '../git/worktree-symlink-detection'
 import { resolveDefaultBaseRefViaExec } from '../git/repo'
 import { getUpstreamStatus } from '../git/upstream'
 import { getProjectSlug } from '../gitlab/client'
@@ -34,6 +36,7 @@ import {
 } from '../gitlab/gl-utils'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { detectHostedReviewProvider, getForgeProviderForRepository } from './forge-provider'
+import { invalidateHostedReviewBranchCache } from './hosted-review-branch-cache'
 import { getHostedReviewForBranch } from './hosted-review'
 import {
   getHostedReviewLocalGitOptions,
@@ -196,15 +199,43 @@ async function hasUncommittedChanges(
       )
     }
     // Why: the relay restricts generic git.exec, so use the structured status RPC for SSH dirty checks.
+    // No shared-link exclusion here: remote worktree creation skips the symlink
+    // and shared-directory passes entirely, so a remote worktree never has one.
     return (await provider.getStatus(repoPath)).entries.length > 0
   }
-  const { stdout } = await gitExecFileAsync(['status', '--porcelain'], {
+  // Why: `-z` keeps paths raw so the shared-link comparison below can't be
+  // defeated by Git quoting a path with spaces or non-ASCII bytes.
+  const { stdout } = await gitExecFileAsync(['status', '--porcelain', '-z'], {
     cwd: repoPath,
     ...getHostedReviewLocalGitOptions(options),
     // Why: don't take Git's optional index lock while the user may be running fetch/pull/rebase in a terminal.
     env: gitOptionalLocksDisabledEnv()
   })
-  return stdout.trim().length > 0
+  const records = parsePorcelainV1Records(stdout)
+  if (records.length === 0) {
+    return false
+  }
+  return await anyRecordIsUserDirt(repoPath, records, options.sharedLinkPaths ?? [])
+}
+
+/** True when any record is real user work rather than a shared symlink Orca put
+ *  in the worktree.
+ *
+ *  Fails closed on purpose: anything not positively identified as an Orca-owned
+ *  untracked symlink counts as dirty. A false "clean" would let a review be
+ *  created off a branch missing the user's work. */
+async function anyRecordIsUserDirt(
+  worktreePath: string,
+  records: readonly PorcelainV1Record[],
+  sharedLinkPaths: readonly string[]
+): Promise<boolean> {
+  if (sharedLinkPaths.length === 0 || !records.some((record) => record.xy === '??')) {
+    return true
+  }
+  // Why: only entries that are configured AND really symlinks are excluded, so a
+  // regular file the user created at a configured name still blocks creation.
+  const sharedLinks = new Set(await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths))
+  return records.some((record) => record.xy !== '??' || !sharedLinks.has(record.path))
 }
 
 async function getHostedReviewUpstreamStatus(
@@ -473,6 +504,10 @@ export async function getHostedReviewCreationEligibility(
       linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: args.linkedGiteaPR ?? null,
       connectionId: args.connectionId ?? null,
+      // Why: eligibility is only ever asked for the worktree the user is acting
+      // on, so it earns the fast tier. Without it a review opened outside Orca
+      // in the last no-review interval would leave Create enabled (#11532).
+      active: true,
       ...hostedReviewExecutionContext(args)
     })
   } catch (error) {
@@ -594,7 +629,14 @@ export async function createHostedReview(
     return blocked
   }
   const localGitOptions = getHostedReviewLocalGitOptions(options)
-  return Object.keys(localGitOptions).length > 0
-    ? provider.createReview(repoPath, input, connectionId, options)
-    : provider.createReview(repoPath, input, connectionId)
+  const result =
+    Object.keys(localGitOptions).length > 0
+      ? await provider.createReview(repoPath, input, connectionId, options)
+      : await provider.createReview(repoPath, input, connectionId)
+  if (result.ok) {
+    // Why (#11532): the branch cache holds a "no review" answer for far longer
+    // than a poll interval, so Orca's own creation must retire it at once.
+    invalidateHostedReviewBranchCache(repoPath, connectionId)
+  }
+  return result
 }

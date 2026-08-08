@@ -44,7 +44,10 @@ function isTerminalCheckpointFile(value: unknown): value is TerminalCheckpointFi
     isNonNegativeSafeInteger(checkpoint.scrollbackLines) &&
     (checkpoint.generation === undefined || isNonNegativeSafeInteger(checkpoint.generation)) &&
     typeof checkpoint.checkpointedAt === 'string' &&
-    (checkpoint.oscLinks === undefined || isTerminalOscLinkRanges(checkpoint.oscLinks))
+    (checkpoint.oscLinks === undefined || isTerminalOscLinkRanges(checkpoint.oscLinks)) &&
+    (checkpoint.pendingEscapeTailAnsi === undefined ||
+      typeof checkpoint.pendingEscapeTailAnsi === 'string') &&
+    (checkpoint.lastTitle === undefined || typeof checkpoint.lastTitle === 'string')
   )
 }
 

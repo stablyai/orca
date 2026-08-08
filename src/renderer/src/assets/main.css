@@ -450,10 +450,7 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
-    /* Why: dvh tracks the visible viewport so the web app shell isn't taller
-       than the screen when a mobile browser's URL bar is shown (100vh = the
-       large viewport, which forces a ~40-100px scroll). In Electron there is
-       no browser chrome, so dvh resolves identically to the window height. */
+    /* Why: mobile browser chrome changes the visible viewport while open. */
     height: 100dvh;
     font-family: var(
       --app-font-family,
@@ -691,6 +688,14 @@
   height: 100dvh;
   width: 100vw;
   overflow: hidden;
+}
+
+/* Why: native windows have a stable content box and need no wake-time viewport reflow. */
+html.native-shell,
+html.native-shell body,
+html.native-shell #root,
+html.native-shell .app-layout {
+  height: 100%;
 }
 
 /* Tab-group split resize handle — wide hit area, visible center line. */
@@ -1164,11 +1169,11 @@
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
-/* Why: mixing into the concrete sidebar surface keeps selected contrast stable,
-   including when a custom translucent sidebar theme is active. */
+/* Why: the brighter border carries the selected state; a translucent wash keeps
+   card text legible instead of lifting the surface toward the foreground color. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: color-mix(in srgb, var(--worktree-sidebar-border) 40%, transparent);
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, var(--worktree-sidebar));
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
@@ -1178,7 +1183,7 @@
     var(--worktree-sidebar-foreground) 18%,
     var(--worktree-sidebar-border)
   );
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 16%, var(--worktree-sidebar));
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 
@@ -1211,16 +1216,6 @@
 
 .dark .worktree-agent-row-hover[data-focused-agent-pane='true'] {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
-}
-
-/* Why: sidebar-accent sits too close to sidebar for this persistent prompt;
-   a foreground mix creates the requested light/dark separation without a new token. */
-.setup-script-prompt-card {
-  background: color-mix(in srgb, var(--sidebar-foreground) 5%, var(--sidebar));
-}
-
-.dark .setup-script-prompt-card {
-  background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar));
 }
 
 /* Why: one-shot sidebar education cards need stronger separation than
@@ -1460,6 +1455,26 @@
   grid-template-rows: 1fr;
 }
 
+/* Why: must stay a compositor-driven CSS animation — a JS clock writing
+   per-element transforms blocks the renderer input thread (STA-3328: 41
+   spinners ⇒ ~490 style writes/s, keystroke p90 363ms). The component anchors
+   each animation's startTime once; steps(12) preserves the retired cadence. */
+@keyframes agent-spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.agent-working-spinner {
+  animation: agent-spinner-rotate 1s steps(12, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-working-spinner {
+    animation: none;
+  }
+}
+
 /* Why: keyframes run when the content mounts already in its final state. */
 @keyframes compact-agent-expansion-reveal {
   from {
@@ -1631,6 +1646,30 @@
 
 .settings-view-shell {
   animation: settings-shell-enter 180ms ease-out;
+}
+
+.repo-icon-emoji-picker .EmojiPickerReact {
+  --epr-bg-color: var(--card);
+  --epr-category-label-bg-color: var(--card);
+  --epr-text-color: var(--card-foreground);
+  --epr-search-input-bg-color: var(--input);
+  --epr-search-input-bg-color-active: var(--input);
+  --epr-search-border-color: var(--border);
+  --epr-search-border-color-active: var(--ring);
+  --epr-hover-bg-color: var(--accent);
+  --epr-highlight-color: var(--ring);
+  --epr-picker-border-color: var(--border);
+  border: none;
+}
+
+/* The library sets `font-family: sans-serif` on every descendant, so inheriting from the root never lands. */
+.repo-icon-emoji-picker .EmojiPickerReact * {
+  font-family: var(--font-sans);
+}
+
+.repo-icon-emoji-picker .epr-body {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 34%, transparent) transparent;
 }
 
 .collapsible-height-content {
@@ -2190,6 +2229,17 @@
 
 .animate-update-card-enter {
   animation: update-card-enter 200ms ease-out both;
+}
+
+/* Why: `skills update` reports no parseable progress, so the skill-update bar is
+   deliberately indeterminate rather than a faked percentage. */
+@keyframes skill-update-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(365%);
+  }
 }
 
 .animate-update-card-exit {

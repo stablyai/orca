@@ -14,13 +14,15 @@ export function useNativeChatSendLifecycle(
   const pendingSendHandlesRef = useRef(
     new Map<
       NativeChatSendHandle,
-      { cleanupTimer: ReturnType<typeof setTimeout>; pendingId?: string }
+      { cleanupTimer: ReturnType<typeof setTimeout> | null; pendingId?: string }
     >()
   )
   const cancelPendingSends = useCallback(() => {
     for (const [handle, entry] of pendingSendHandlesRef.current) {
       const { cleanupTimer, pendingId } = entry
-      clearTimeout(cleanupTimer)
+      if (cleanupTimer !== null) {
+        clearTimeout(cleanupTimer)
+      }
       handle.cancel()
       if (pendingId) {
         onPendingSendCanceled?.(pendingId)
@@ -29,13 +31,22 @@ export function useNativeChatSendLifecycle(
     pendingSendHandlesRef.current.clear()
   }, [onPendingSendCanceled])
   const trackPendingSend = useCallback((handle: NativeChatSendHandle, pendingId?: string) => {
-    const cleanupTimer = setTimeout(() => {
+    const entry = {
+      cleanupTimer: null as ReturnType<typeof setTimeout> | null,
+      ...(pendingId ? { pendingId } : {})
+    }
+    pendingSendHandlesRef.current.set(handle, entry)
+    if (handle.settled) {
+      void handle.settled.then(() => {
+        if (pendingSendHandlesRef.current.get(handle) === entry) {
+          pendingSendHandlesRef.current.delete(handle)
+        }
+      })
+      return
+    }
+    entry.cleanupTimer = setTimeout(() => {
       pendingSendHandlesRef.current.delete(handle)
     }, handle.settleAfterMs)
-    pendingSendHandlesRef.current.set(handle, {
-      cleanupTimer,
-      ...(pendingId ? { pendingId } : {})
-    })
   }, [])
 
   // Why: delayed Enter/image writes belong to the exact PTY target. A pane

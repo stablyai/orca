@@ -3,7 +3,6 @@ import {
   Accessibility,
   Bluetooth,
   Camera,
-  ExternalLink,
   HardDrive,
   Mic,
   MonitorUp,
@@ -16,12 +15,23 @@ import {
 import { toast } from 'sonner'
 import type {
   DeveloperPermissionId,
-  DeveloperPermissionState,
-  DeveloperPermissionStatus
+  DeveloperPermissionState
 } from '../../../../shared/developer-permissions-types'
 import { Button } from '../ui/button'
 import { translate } from '@/i18n/i18n'
+import { DeveloperPermissionActions } from './DeveloperPermissionActions'
+import { LocalNetworkConnectionTest } from './LocalNetworkConnectionTest'
+import {
+  developerPermissionStatusClass,
+  developerPermissionStatusLabel
+} from './developer-permission-status'
+import { showDeveloperPermissionRequestNotice } from './developer-permission-request-notice'
+import { TerminalTccAttributionNotice } from './TerminalTccAttributionNotice'
 export { getDeveloperPermissionsPaneSearchEntries } from './developer-permissions-search'
+
+type DeveloperPermissionsPaneProps = {
+  highlightedSettingId?: string | null
+}
 
 type PermissionDefinition = {
   id: DeveloperPermissionId
@@ -43,7 +53,9 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Voice input, transcription, audio recording, sox, ffmpeg, and Whisper CLIs.'
       )
     },
-    actionLabel: 'Request',
+    get actionLabel() {
+      return translate('auto.components.settings.DeveloperPermissionsPane.actionRequest', 'Request')
+    },
     icon: <Mic className="size-4" />
   },
   {
@@ -57,7 +69,9 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Webcam capture and camera-driven local test apps.'
       )
     },
-    actionLabel: 'Request',
+    get actionLabel() {
+      return translate('auto.components.settings.DeveloperPermissionsPane.actionRequest', 'Request')
+    },
     icon: <Camera className="size-4" />
   },
   {
@@ -74,7 +88,12 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Screenshot, visual automation, and UI inspection tools.'
       )
     },
-    actionLabel: 'Open Settings',
+    get actionLabel() {
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
+        'Open Settings'
+      )
+    },
     icon: <MonitorUp className="size-4" />
   },
   {
@@ -91,7 +110,9 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Keystroke injection, window control, and UI automation tools.'
       )
     },
-    actionLabel: 'Request',
+    get actionLabel() {
+      return translate('auto.components.settings.DeveloperPermissionsPane.actionRequest', 'Request')
+    },
     icon: <Accessibility className="size-4" />
   },
   {
@@ -105,10 +126,15 @@ const PERMISSIONS: PermissionDefinition[] = [
     get description() {
       return translate(
         'auto.components.settings.DeveloperPermissionsPane.7ca17b62c8',
-        'Recommended when projects, worktrees, or symlinked files touch macOS-protected folders.'
+        "macOS names Orca when the agents it runs read other apps' data, because Orca is the responsible process for terminal commands. Grant this to Orca to reduce those prompts. Then quit and reopen Orca."
       )
     },
-    actionLabel: 'Open Settings',
+    get actionLabel() {
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
+        'Open Settings'
+      )
+    },
     icon: <HardDrive className="size-4" />
   },
   {
@@ -122,21 +148,34 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Apple Events for scripts that control other local apps.'
       )
     },
-    actionLabel: 'Trigger Prompt',
+    get actionLabel() {
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.actionTriggerPrompt',
+        'Trigger Prompt'
+      )
+    },
     icon: <Workflow className="size-4" />
   },
   {
     id: 'local-network',
     get label() {
-      return translate('auto.components.settings.DeveloperPermissionsPane.e7bb06007c', 'LAN')
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.e7bb06007c',
+        'Local Network'
+      )
     },
     get description() {
       return translate(
         'auto.components.settings.DeveloperPermissionsPane.f903bf20b5',
-        'Discovery and access for development servers on your network.'
+        "Allows terminals and development tools to connect to services on your local network. macOS does not report this permission's current status to Orca."
       )
     },
-    actionLabel: 'Trigger Prompt',
+    get actionLabel() {
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.actionRequestAccess',
+        'Request Access'
+      )
+    },
     icon: <Network className="size-4" />
   },
   {
@@ -153,7 +192,12 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Hardware debugging and device tools that talk to USB devices.'
       )
     },
-    actionLabel: 'Open Settings',
+    get actionLabel() {
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
+        'Open Settings'
+      )
+    },
     icon: <Usb className="size-4" />
   },
   {
@@ -167,42 +211,19 @@ const PERMISSIONS: PermissionDefinition[] = [
         'Bluetooth device tools and local hardware experiments.'
       )
     },
-    actionLabel: 'Open Settings',
+    get actionLabel() {
+      return translate(
+        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
+        'Open Settings'
+      )
+    },
     icon: <Bluetooth className="size-4" />
   }
 ]
 
-function statusLabel(status: DeveloperPermissionStatus | undefined): string {
-  switch (status) {
-    case 'granted':
-      return 'Granted'
-    case 'denied':
-      return 'Denied'
-    case 'not-determined':
-      return 'Not requested'
-    case 'restricted':
-      return 'Restricted'
-    case 'unsupported':
-      return 'macOS only'
-    case 'ready':
-      return 'Entitled'
-    case 'unknown':
-    case undefined:
-      return 'Check manually'
-  }
-}
-
-function statusClass(status: DeveloperPermissionStatus | undefined): string {
-  if (status === 'granted' || status === 'ready') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-  }
-  if (status === 'denied' || status === 'restricted') {
-    return 'border-destructive/30 bg-destructive/10 text-destructive'
-  }
-  return 'border-border bg-muted text-muted-foreground'
-}
-
-export function DeveloperPermissionsPane(): React.JSX.Element {
+export function DeveloperPermissionsPane({
+  highlightedSettingId = null
+}: DeveloperPermissionsPaneProps): React.JSX.Element {
   const [states, setStates] = useState<DeveloperPermissionState[]>([])
   const [loading, setLoading] = useState(true)
   const [pendingId, setPendingId] = useState<DeveloperPermissionId | null>(null)
@@ -274,28 +295,9 @@ export function DeveloperPermissionsPane(): React.JSX.Element {
       if (!mountedRef.current) {
         return
       }
-      if (result.status === 'granted') {
-        toast.success(
-          translate(
-            'auto.components.settings.DeveloperPermissionsPane.48d87edcd2',
-            'Permission granted'
-          )
-        )
-      } else if (result.openedSystemSettings) {
-        toast.message(
-          translate(
-            'auto.components.settings.DeveloperPermissionsPane.fa809e8ada',
-            'Opened macOS Privacy & Security'
-          )
-        )
-      } else {
-        toast.message(
-          translate(
-            'auto.components.settings.DeveloperPermissionsPane.66e94d6cf3',
-            'Permission request sent'
-          )
-        )
-      }
+      showDeveloperPermissionRequestNotice(result, () => {
+        void window.api.developerPermissions.openSettings({ id: 'local-network' })
+      })
     } catch {
       if (mountedRef.current) {
         toast.error(
@@ -314,6 +316,7 @@ export function DeveloperPermissionsPane(): React.JSX.Element {
 
   return (
     <div className="space-y-5">
+      <TerminalTccAttributionNotice />
       <div className="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/25 px-4 py-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-sm font-medium">
@@ -340,40 +343,40 @@ export function DeveloperPermissionsPane(): React.JSX.Element {
         {PERMISSIONS.map((permission) => {
           const status = stateById.get(permission.id)
           const pending = pendingId === permission.id
+          const settingId = `developer-permissions-${permission.id}`
 
           return (
-            <div key={permission.id} className="flex items-center justify-between gap-4 px-4 py-3">
-              <div className="flex min-w-0 items-start gap-3">
-                <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium">{permission.label}</span>
-                    <span
-                      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusClass(
-                        status
-                      )}`}
-                    >
-                      {statusLabel(status)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{permission.description}</p>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pending || status === 'unsupported'}
-                onClick={() => void request(permission.id)}
-                className="shrink-0 gap-1.5"
+            <div key={permission.id}>
+              <div
+                data-settings-section={settingId}
+                data-highlighted={highlightedSettingId === settingId ? 'true' : undefined}
+                className="flex items-center justify-between gap-4 px-4 py-3 transition-[background-color,box-shadow] duration-500 data-[highlighted=true]:bg-accent data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-inset data-[highlighted=true]:ring-ring/50 motion-reduce:transition-none"
               >
-                <ExternalLink className="size-3.5" />
-                {pending
-                  ? translate(
-                      'auto.components.settings.DeveloperPermissionsPane.dac08ec03e',
-                      'Working...'
-                    )
-                  : permission.actionLabel}
-              </Button>
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium">{permission.label}</span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${developerPermissionStatusClass(
+                          status
+                        )}`}
+                      >
+                        {developerPermissionStatusLabel(permission.id, status)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{permission.description}</p>
+                  </div>
+                </div>
+                <DeveloperPermissionActions
+                  id={permission.id}
+                  actionLabel={permission.actionLabel}
+                  pending={pending}
+                  status={status}
+                  onRequest={(id) => void request(id)}
+                />
+              </div>
+              {permission.id === 'local-network' && <LocalNetworkConnectionTest />}
             </div>
           )
         })}

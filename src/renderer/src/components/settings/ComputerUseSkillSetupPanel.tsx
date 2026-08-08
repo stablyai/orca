@@ -80,7 +80,7 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
       }}
       onRecheck={refreshComputerUseSkill}
       freshnessSkillName={
-        activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : COMPUTER_USE_SKILL_NAME
+        activeSkillRuntime.canUseLocalSkillFreshness ? COMPUTER_USE_SKILL_NAME : undefined
       }
     />
   )

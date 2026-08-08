@@ -11,6 +11,7 @@ import { TYPE_FIELD_DATA_TYPE } from './columns'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -696,6 +697,7 @@ function TextCell({
 }): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
+  const imeEnter = useImeEnterGestureOwnership()
   if (!editable) {
     return <span className="truncate text-xs">{value}</span>
   }
@@ -719,13 +721,19 @@ function TextCell({
       type={numeric ? 'number' : 'text'}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
+      onCompositionStart={() => imeEnter.setComposing(true)}
+      onCompositionEnd={() => imeEnter.setComposing(false)}
       onBlur={() => {
+        imeEnter.reset()
         setEditing(false)
         if (draft !== value) {
           onCommit(draft)
         }
       }}
       onKeyDown={(e) => {
+        if (imeEnter.ownsKeyDown(e)) {
+          return
+        }
         if (e.key === 'Enter') {
           e.preventDefault()
           setEditing(false)
@@ -738,6 +746,7 @@ function TextCell({
           setDraft(value)
         }
       }}
+      onKeyUp={imeEnter.onKeyUp}
       className="h-6 text-xs"
     />
   )
@@ -765,6 +774,7 @@ function DateCell({
   }
   const draft = draftState.sourceValue === sourceValue ? draftState.draft : sourceValue
   const setDraft = (nextDraft: string): void => setDraftState({ sourceValue, draft: nextDraft })
+  const imeEnter = useImeEnterGestureOwnership()
   if (!editable) {
     return <span className="text-xs">{value}</span>
   }
@@ -773,12 +783,18 @@ function DateCell({
       type="date"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
+      onCompositionStart={() => imeEnter.setComposing(true)}
+      onCompositionEnd={() => imeEnter.setComposing(false)}
       onBlur={() => {
+        imeEnter.reset()
         if (draft !== sourceValue) {
           onCommit(draft)
         }
       }}
       onKeyDown={(e) => {
+        if (imeEnter.ownsKeyDown(e)) {
+          return
+        }
         if (e.key === 'Enter') {
           e.preventDefault()
           ;(e.target as HTMLInputElement).blur()
@@ -788,6 +804,7 @@ function DateCell({
           ;(e.target as HTMLInputElement).blur()
         }
       }}
+      onKeyUp={imeEnter.onKeyUp}
       className="h-6 cursor-pointer rounded border border-border/50 bg-background px-1 text-xs"
     />
   )

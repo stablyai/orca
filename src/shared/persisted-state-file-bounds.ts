@@ -1,11 +1,7 @@
 import { randomUUID, type Hash } from 'node:crypto'
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileSyncWithinLimit,
-  type BoundedNodeFileRead
-} from './node-bounded-file-reader'
+import { readNodeFileSyncWithinLimit, type BoundedNodeFileRead } from './node-bounded-file-reader'
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
@@ -36,12 +32,6 @@ export class PersistedStateSecretCapacityError extends Error {
     super(`Persisted state secret exceeds ${maxBytes} bytes`)
     this.name = 'PersistedStateSecretCapacityError'
   }
-}
-
-export function isPersistedStateFileCapacityError(
-  error: unknown
-): error is NodeFileReadTooLargeError {
-  return error instanceof NodeFileReadTooLargeError
 }
 
 export function readPersistedStateJsonFileSync<T>(
@@ -84,14 +74,6 @@ export function stringifyPrettyPersistedStateWithinLimit(
   maxBytes = ORCA_PERSISTED_STATE_MAX_BYTES
 ): { byteLength: number; serialized: string } {
   return stringifyJsonWithinByteLimit(value, maxBytes, 2)
-}
-
-export function encodePersistedStateJsonStringContent(
-  value: string,
-  maxBytes = ORCA_PERSISTED_STATE_MAX_BYTES
-): string {
-  const { serialized } = stringifyJsonWithinByteLimit(value, maxBytes)
-  return serialized.slice(1, -1)
 }
 
 export function assertPersistedStateSecretWithinLimit(

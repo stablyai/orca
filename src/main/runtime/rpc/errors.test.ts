@@ -137,6 +137,25 @@ describe('mapRuntimeError', () => {
     })
   })
 
+  it('does not recommend a blind retry after a coordinate press may have landed', () => {
+    const message =
+      'coordinate click aborted because the recipient changed; 1 press(es) may already have been delivered'
+    const error = Object.assign(new Error(message), { code: 'window_not_focused' })
+
+    const response = mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)
+
+    expect(response.error).toMatchObject({
+      code: 'window_not_focused',
+      message,
+      data: {
+        nextSteps: [
+          expect.stringContaining('verify whether the intended action already occurred'),
+          expect.stringContaining('Do not retry the click if it already took effect')
+        ]
+      }
+    })
+  })
+
   it('preserves structured lineage error codes and data for CLI recovery hints', () => {
     const response = mapRuntimeError(
       'req_1',

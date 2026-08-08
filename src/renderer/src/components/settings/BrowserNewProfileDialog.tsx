@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { ImeEnterGuardedForm } from '../ime-enter-guarded-form'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
 import { useAppStore } from '../../store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { BrowserProfileUserAgentOption } from '../browser-profile-user-agent-option'
 
 type BrowserNewProfileDialogProps = {
   open: boolean
@@ -18,11 +20,13 @@ export function BrowserNewProfileDialog({
 }: BrowserNewProfileDialogProps): React.JSX.Element {
   const mountedRef = useMountedRef()
   const [newProfileName, setNewProfileName] = useState('')
+  const [useNativeUserAgent, setUseNativeUserAgent] = useState(false)
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
 
   const handleClose = (): void => {
     onOpenChange(false)
     setNewProfileName('')
+    setUseNativeUserAgent(false)
   }
 
   return (
@@ -40,7 +44,7 @@ export function BrowserNewProfileDialog({
             {translate('auto.components.settings.BrowserPane.8481ee0331', 'New Browser Profile')}
           </DialogTitle>
         </DialogHeader>
-        <form
+        <ImeEnterGuardedForm
           onSubmit={async (e) => {
             e.preventDefault()
             const trimmed = newProfileName.trim()
@@ -51,7 +55,11 @@ export function BrowserNewProfileDialog({
             try {
               const profile = await useAppStore
                 .getState()
-                .createBrowserSessionProfile('isolated', trimmed)
+                .createBrowserSessionProfile(
+                  'isolated',
+                  trimmed,
+                  useNativeUserAgent ? { userAgentMode: 'native' } : undefined
+                )
               if (!mountedRef.current) {
                 return
               }
@@ -88,8 +96,14 @@ export function BrowserNewProfileDialog({
             )}
             autoFocus
             maxLength={50}
-            className="mb-4"
+            className="mb-3"
           />
+          <div className="mb-4">
+            <BrowserProfileUserAgentOption
+              checked={useNativeUserAgent}
+              onCheckedChange={setUseNativeUserAgent}
+            />
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" size="sm" onClick={handleClose}>
               {translate('auto.components.settings.BrowserPane.81ff774667', 'Cancel')}
@@ -100,7 +114,7 @@ export function BrowserNewProfileDialog({
                 : translate('auto.components.settings.BrowserPane.64898ecdab', 'Create')}
             </Button>
           </DialogFooter>
-        </form>
+        </ImeEnterGuardedForm>
       </DialogContent>
     </Dialog>
   )

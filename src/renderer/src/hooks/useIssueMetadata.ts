@@ -217,11 +217,6 @@ export function clearLinearMetadataCache(): void {
   clearMetadataRequestStore(linearMemberStore)
 }
 
-export function clearGitHubMetadataCache(): void {
-  clearMetadataRequestStore(ghLabelStore)
-  clearMetadataRequestStore(ghAssigneeStore)
-}
-
 export function useTeamStates(
   teamId: string | null,
   settings?: RuntimeLinearSettings,

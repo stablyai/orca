@@ -1,0 +1,120 @@
+diff --git a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
+index d02e003a439e410ddab597b2c036256c80db0395..304b4aa81e6257d5854a41757bcf24915eb774d4 100644
+--- a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
++++ b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
+@@ -43,6 +43,9 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+   UIView<RCTBackedTextInputViewProtocol> *_backedTextInputView;
+   NSUInteger _mostRecentEventCount;
+   NSAttributedString *_lastStringStateWasUpdatedWith;
++  NSString *_pendingReplacementText;
++  NSRange _pendingReplacementRange;
++  BOOL _hasPendingReplacement;
+
+   /*
+    * UIKit uses either UITextField or UITextView as its UIKit element for <TextInput>. UITextField is for single line
+@@ -439,6 +442,10 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+
+ - (NSString *)textInputShouldChangeText:(NSString *)text inRange:(NSRange)range
+ {
++  _pendingReplacementText = text;
++  _pendingReplacementRange = range;
++  _hasPendingReplacement = YES;
++
+   const auto &props = static_cast<const TextInputProps &>(*_props);
+
+   if (!_backedTextInputView.textWasPasted) {
+@@ -495,6 +502,10 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+     const auto &textInputEventEmitter = static_cast<const TextInputEventEmitter &>(*_eventEmitter);
+     textInputEventEmitter.onChange([self _textInputMetrics]);
+   }
++  if (_backedTextInputView.markedTextRange == nil) {
++    _pendingReplacementText = nil;
++    _hasPendingReplacement = NO;
++  }
+ }
+
+ - (void)textInputDidChangeSelection
+@@ -516,6 +527,11 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+
+   if (_eventEmitter) {
+     static_cast<const TextInputEventEmitter &>(*_eventEmitter).onSelectionChange([self _textInputMetrics]);
++    if (_hasPendingReplacement && _backedTextInputView.markedTextRange == nil) {
++      static_cast<const TextInputEventEmitter &>(*_eventEmitter).onChange([self _textInputMetrics]);
++      _pendingReplacementText = nil;
++      _hasPendingReplacement = NO;
++    }
+   }
+ }
+
+@@ -710,6 +726,15 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+       .contentSize = RCTSizeFromCGSize(_backedTextInputView.contentSize),
+       .layoutMeasurement = RCTSizeFromCGSize(_backedTextInputView.bounds.size),
+       .zoomScale = _backedTextInputView.zoomScale,
++      .isComposing = _backedTextInputView.markedTextRange != nil,
++      .replacementText = _hasPendingReplacement
++          ? std::optional<std::string>(RCTStringFromNSString(_pendingReplacementText))
++          : std::nullopt,
++      .replacementRange = _hasPendingReplacement
++          ? std::optional<AttributedString::Range>(
++                {.location = static_cast<int>(_pendingReplacementRange.location),
++                 .length = static_cast<int>(_pendingReplacementRange.length)})
++          : std::nullopt,
+   };
+ }
+
+diff --git a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
+index a9bc219f8bf729111e907423ca61b991fd712b46..0f6ec4299134f13d5a06467ce540e8ac350be03a 100644
+--- a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
++++ b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
+@@ -24,6 +24,28 @@ static jsi::Value textInputMetricsPayload(
+
+   payload.setProperty(runtime, "eventCount", textInputMetrics.eventCount);
+
++  if (textInputMetrics.isComposing.has_value()) {
++    payload.setProperty(runtime, "isComposing", *textInputMetrics.isComposing);
++  }
++
++  if (textInputMetrics.replacementText.has_value() &&
++      textInputMetrics.replacementRange.has_value()) {
++    payload.setProperty(
++        runtime,
++        "replacementText",
++        jsi::String::createFromUtf8(
++            runtime, *textInputMetrics.replacementText));
++    auto replacementRange = jsi::Object(runtime);
++    replacementRange.setProperty(
++        runtime, "start", textInputMetrics.replacementRange->location);
++    replacementRange.setProperty(
++        runtime,
++        "end",
++        textInputMetrics.replacementRange->location +
++            textInputMetrics.replacementRange->length);
++    payload.setProperty(runtime, "replacementRange", replacementRange);
++  }
++
+   if (includeSelectionState) {
+     auto selection = jsi::Object(runtime);
+     selection.setProperty(
+diff --git a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
+index a3f2e01c130c1a53aee0b39e72927d21f2a6973d..f2ad25d9f5d6260c063c8790a682b5622c2e11fa 100644
+--- a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
++++ b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
+@@ -7,6 +7,8 @@
+
+ #pragma once
+
++#include <optional>
++
+ #include <react/renderer/attributedstring/AttributedString.h>
+ #include <react/renderer/components/view/ViewEventEmitter.h>
+
+@@ -28,6 +30,9 @@ class TextInputEventEmitter : public ViewEventEmitter {
+     Size layoutMeasurement;
+     Float zoomScale;
+     Tag target;
++    std::optional<bool> isComposing;
++    std::optional<std::string> replacementText;
++    std::optional<AttributedString::Range> replacementRange;
+   };
+
+   struct KeyPressMetrics {

@@ -5,9 +5,11 @@ import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-clien
 import {
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS,
   openMobileNativeChatSendBudget,
+  clearMobileNativeChatInput,
   sendMobileNativeChatMessage,
   sendMobileNativeChatMessageWithOutcome
 } from './mobile-native-chat-send'
+import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 
 function clientWithResponse(response: unknown): RpcClient {
   return {
@@ -29,6 +31,7 @@ describe('sendMobileNativeChatMessage', () => {
         client,
         terminal: 'term',
         text: 'hello',
+        resolvedLaunchDraft: { text: 'seed', createdAt: 7 },
         mobileClient: { id: 'device', type: 'mobile' }
       })
     ).resolves.toBe(true)
@@ -38,6 +41,7 @@ describe('sendMobileNativeChatMessage', () => {
         terminal: 'term',
         text: 'hello',
         enter: true,
+        resolvedLaunchDraft: { text: 'seed', createdAt: 7 },
         client: { id: 'device', type: 'mobile' }
       },
       { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }
@@ -169,6 +173,52 @@ describe('sendMobileNativeChatMessage', () => {
     ).resolves.toBe('rejected')
   })
 
+  it('prepends the input-line clear byte when clearInputFirst is set', async () => {
+    const client = clientWithResponse({
+      id: 'request',
+      ok: true,
+      result: { send: { accepted: true } },
+      _meta: { runtimeId: 'runtime' }
+    })
+
+    await sendMobileNativeChatMessage({
+      client,
+      terminal: 'term',
+      text: 'hello',
+      clearInputFirst: true
+    })
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      {
+        terminal: 'term',
+        text: '\x15hello',
+        enter: true
+      },
+      { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }
+    )
+  })
+
+  it('sends the text verbatim when clearInputFirst is not set', async () => {
+    // An image send pastes the image (behind its own leading Ctrl+U) before this
+    // text write; a clear byte here would kill the pasted image off the input line.
+    const client = clientWithResponse({
+      id: 'request',
+      ok: true,
+      result: { send: { accepted: true } },
+      _meta: { runtimeId: 'runtime' }
+    })
+
+    await sendMobileNativeChatMessage({
+      client,
+      terminal: 'term',
+      text: 'what is this',
+      clearInputFirst: false
+    })
+    const sent = vi.mocked(client.sendRequest).mock.calls[0]?.[1] as { text: string }
+    expect(sent.text).toBe('what is this')
+    expect(sent.text.startsWith('\x15')).toBe(false)
+  })
+
   it('sends a single non-submitting Escape for prompt cancellation', async () => {
     const client = clientWithResponse({
       id: 'request',
@@ -237,5 +287,85 @@ describe('sendMobileNativeChatMessage', () => {
     const budget = openMobileNativeChatSendBudget() - Date.now()
     expect(budget).toBeGreaterThan(MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS - 1_000)
     expect(budget).toBeLessThanOrEqual(MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS)
+  })
+})
+
+describe('clearMobileNativeChatInput', () => {
+  const accepted = {
+    id: 'request',
+    ok: true,
+    result: { send: { accepted: true } },
+    _meta: { runtimeId: 'runtime' }
+  }
+  const params = (client: RpcClient) =>
+    vi.mocked(client.sendRequest).mock.calls[0]![1] as { text: string; enter: boolean }
+
+  it('writes the burst as its OWN non-submitting write', async () => {
+    // Bundling the burst into the body write reached the agent as LITERAL Ctrl+U
+    // text and the parked draft concatenated (observed live).
+    const client = clientWithResponse(accepted)
+    const clearInput = buildAgentTuiClearInputForText('Linked Linear issue: ABC-123\nhttps://x')
+    await expect(
+      clearMobileNativeChatInput({ client, terminal: 'term', clearInput })
+    ).resolves.toBe(true)
+    expect(params(client)).toMatchObject({ text: clearInput, enter: false })
+  })
+
+  it('reports failure when the host rejects the clear', async () => {
+    const client = clientWithResponse({
+      id: 'request',
+      ok: true,
+      result: { send: { accepted: false } },
+      _meta: { runtimeId: 'runtime' }
+    })
+    await expect(
+      clearMobileNativeChatInput({ client, terminal: 'term', clearInput: '\x15' })
+    ).resolves.toBe(false)
+  })
+
+  it('refuses to start an underfunded clear rather than half-clearing', async () => {
+    const client = clientWithResponse(accepted)
+    await expect(
+      clearMobileNativeChatInput({
+        client,
+        terminal: 'term',
+        clearInput: '\x15',
+        deadline: Date.now() + 10
+      })
+    ).resolves.toBe(false)
+    expect(client.sendRequest).not.toHaveBeenCalled()
+  })
+})
+
+describe('the body write never carries a multi-line burst', () => {
+  const accepted = {
+    id: 'request',
+    ok: true,
+    result: { send: { accepted: true } },
+    _meta: { runtimeId: 'runtime' }
+  }
+  const sentText = (client: RpcClient): string =>
+    (vi.mocked(client.sendRequest).mock.calls[0]![1] as { text: string }).text
+
+  it('still prefixes only a single Ctrl+U when asked to clear first', async () => {
+    const client = clientWithResponse(accepted)
+    await sendMobileNativeChatMessage({
+      client,
+      terminal: 'term',
+      text: 'hello',
+      clearInputFirst: true
+    })
+    expect(sentText(client)).toBe('\x15hello')
+  })
+
+  it('never prefixes a clear when the caller already pasted (image sends)', async () => {
+    const client = clientWithResponse(accepted)
+    await sendMobileNativeChatMessage({
+      client,
+      terminal: 'term',
+      text: 'caption',
+      clearInputFirst: false
+    })
+    expect(sentText(client)).toBe('caption')
   })
 })

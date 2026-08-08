@@ -7,6 +7,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
+import { useAllWorktrees } from '@/store/selectors'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
@@ -36,7 +37,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const closeModal = useAppStore((s) => s.closeModal)
   const removeWorktree = useAppStore((s) => s.removeWorktree)
   const clearWorktreeDeleteState = useAppStore((s) => s.clearWorktreeDeleteState)
-  const allWorktrees = useAppStore((s) => s.allWorktrees)
+  const allWorktrees = useAllWorktrees()
   const repos = useAppStore((s) => s.repos)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -62,7 +63,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       ? (modalData.onDeleted as (worktreeIds: string[]) => void)
       : null
   const worktree = useMemo(
-    () => (worktreeId ? (allWorktrees().find((item) => item.id === worktreeId) ?? null) : null),
+    () => (worktreeId ? (allWorktrees.find((item) => item.id === worktreeId) ?? null) : null),
     [allWorktrees, worktreeId]
   )
   const worktrees = useMemo(() => {
@@ -70,7 +71,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       return []
     }
     const selected = new Set(worktreeIds)
-    return allWorktrees().filter((item) => selected.has(item.id))
+    return allWorktrees.filter((item) => selected.has(item.id))
   }, [allWorktrees, worktreeIds])
   const repoMap = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const isBatchDelete = worktreeIds.length > 1
@@ -90,7 +91,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const lineageDelete = useMemo(
     () =>
       !isBatchDelete && worktree
-        ? getWorkspaceDeleteLineage(worktree, allWorktrees(), worktreeLineageById)
+        ? getWorkspaceDeleteLineage(worktree, allWorktrees, worktreeLineageById)
         : { descendants: [], deleteAllTargets: [] },
     [allWorktrees, isBatchDelete, worktree, worktreeLineageById]
   )
@@ -266,7 +267,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         // the shared toast wrapper. Close immediately because workspace cards
         // already show the deleting state while the retry runs.
         const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-        const deletePromise = removeWorktree(worktreeId, true)
+        // Why (#11960): this IS the explicit Force Delete, so it may also waive
+        // the PTY-stop proof — unlike the confirmed delete in the branch below.
+        const deletePromise = removeWorktree(worktreeId, true, { allowUnverifiedPtyStop: true })
         closeModal()
         deletePromise
           .then((result) => {

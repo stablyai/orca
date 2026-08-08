@@ -14,7 +14,7 @@ const runtimeRpcMocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
 }))
 
-vi.mock('@/components/confirmation-dialog', () => ({
+vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirmationMocks.confirm
 }))
 

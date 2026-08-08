@@ -1,5 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createRuntimeProjectRefreshScheduler } from './runtime-project-refresh-scheduler'
+import {
+  createRuntimeProjectRefreshScheduler,
+  refreshRuntimeProjectWorktrees
+} from './runtime-project-refresh-scheduler'
+
+describe('refreshRuntimeProjectWorktrees', () => {
+  it('pins same-ID repo refreshes to the event runtime', async () => {
+    const fetchWorktrees = vi.fn().mockResolvedValue(true)
+
+    await refreshRuntimeProjectWorktrees(
+      'env-1',
+      [{ id: 'same-repo' }, { id: 'same-repo' }],
+      fetchWorktrees
+    )
+
+    expect(fetchWorktrees).toHaveBeenCalledTimes(2)
+    expect(fetchWorktrees).toHaveBeenNthCalledWith(1, 'same-repo', {
+      executionHostId: 'runtime:env-1'
+    })
+    expect(fetchWorktrees).toHaveBeenNthCalledWith(2, 'same-repo', {
+      executionHostId: 'runtime:env-1'
+    })
+  })
+})
 
 describe('createRuntimeProjectRefreshScheduler', () => {
   beforeEach(() => {

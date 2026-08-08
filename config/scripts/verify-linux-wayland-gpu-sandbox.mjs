@@ -219,7 +219,6 @@ async function runValidation(mode) {
             ORCA_DEV_USER_DATA_PATH: userDataPath,
             HOME: isolatedHome,
             USERPROFILE: isolatedHome,
-            ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
             ELECTRON_ENABLE_LOGGING: '1',
             ELECTRON_ENABLE_STACK_DUMPING: '1',
             ELECTRON_OZONE_PLATFORM_HINT: 'wayland',
@@ -252,6 +251,7 @@ async function runValidation(mode) {
         app.evaluate(({ app: electronApp }) => ({
           disableGpuSandbox: electronApp.commandLine.hasSwitch('disable-gpu-sandbox'),
           disableGpu: electronApp.commandLine.hasSwitch('disable-gpu'),
+          enableWaylandIme: electronApp.commandLine.hasSwitch('enable-wayland-ime'),
           ozonePlatform: electronApp.commandLine.getSwitchValue('ozone-platform'),
           enableFeatures: electronApp.commandLine.getSwitchValue('enable-features')
         })),
@@ -277,6 +277,9 @@ async function runValidation(mode) {
     }
     if (mode === 'verify-fix' && commandLineSwitches.disableGpu) {
       throw new Error('Expected hardware acceleration to remain enabled, but --disable-gpu is set.')
+    }
+    if (mode === 'verify-fix' && !commandLineSwitches.enableWaylandIme) {
+      throw new Error('Expected --enable-wayland-ime on Linux Wayland, but it was absent.')
     }
 
     logPhase('window.first')

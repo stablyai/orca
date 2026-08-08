@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
@@ -59,6 +60,7 @@ export function EditorPanelHeaderPath({
     commitRename,
     cancelRename
   } = useEditorHeaderFileRename(activeFile)
+  const imeEnter = useImeEnterGestureOwnership()
 
   useEffect(() => {
     const closeMenu = (): void => setPathMenuOpen(false)
@@ -95,7 +97,16 @@ export function EditorPanelHeaderPath({
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
+            onCompositionStart={() => imeEnter.setComposing(true)}
+            onCompositionEnd={() => imeEnter.setComposing(false)}
+            onKeyUp={imeEnter.onKeyUp}
             onKeyDown={(event) => {
+              // Why: this Enter renames a file on disk; a conversion-confirm
+              // Enter (and the unmarked Enter/13 redispatched after
+              // compositionend) must not reach commitRename.
+              if (imeEnter.ownsKeyDown(event)) {
+                return
+              }
               if (event.key === 'Enter') {
                 event.preventDefault()
                 event.stopPropagation()
@@ -106,7 +117,10 @@ export function EditorPanelHeaderPath({
                 cancelRename()
               }
             }}
-            onBlur={commitRename}
+            onBlur={() => {
+              imeEnter.reset()
+              commitRename()
+            }}
           />
         ) : (
           <button

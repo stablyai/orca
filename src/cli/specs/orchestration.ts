@@ -16,8 +16,12 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'run-use'],
     summary: 'Bind this coordinator terminal to an existing Run',
-    usage: 'orca orchestration run-use --id <run_id> [--from <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'from', 'retry-request']
+    usage:
+      'orca orchestration run-use --id <run_id> [--from <handle>] [--takeover-legacy] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'from', 'takeover-legacy', 'retry-request'],
+    notes: [
+      '--takeover-legacy must run in the live coordinator agent terminal it binds; it preserves existing worker assignments.'
+    ]
   },
   {
     path: ['orchestration', 'run-current'],
@@ -28,8 +32,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'run-list'],
     summary: 'List lightweight orchestration Runs',
-    usage: 'orca orchestration run-list [--json]',
-    allowedFlags: [...GLOBAL_FLAGS]
+    usage: 'orca orchestration run-list [--limit <n>] [--cursor <cursor>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'cursor']
   },
   {
     path: ['orchestration', 'run-show'],
@@ -232,20 +236,23 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'gate-create'],
     summary: 'Create a decision gate blocking a task',
     usage:
-      'orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'question', 'options', 'retry-request']
+      'orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'task', 'question', 'options', 'from', 'retry-request']
   },
   {
     path: ['orchestration', 'gate-resolve'],
     summary: 'Resolve a pending decision gate',
-    usage: 'orca orchestration gate-resolve --id <gate_id> --resolution <text> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'resolution', 'retry-request']
+    usage:
+      'orca orchestration gate-resolve --id <gate_id> --resolution <text> [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'resolution', 'from', 'retry-request']
   },
   {
     path: ['orchestration', 'gate-list'],
     summary: 'List decision gates',
-    usage: 'orca orchestration gate-list [--task <task_id>] [--status <status>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'status']
+    usage:
+      'orca orchestration gate-list [--task <task_id>] [--status <status>] [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'task', 'status', 'run', 'from'],
+    notes: ['--run inspects a named Run without binding; otherwise gates are scoped to the caller.']
   },
   {
     path: ['orchestration', 'reset'],

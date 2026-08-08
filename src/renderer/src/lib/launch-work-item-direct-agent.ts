@@ -16,7 +16,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
-import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import { resolveNativeChatLaunchSessionOptions } from '@/components/native-chat/native-chat-session-option-enrichment'
 import type { PersistedNativeChatSessionOptions } from '../../../shared/native-chat-session-options'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
@@ -51,7 +51,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
       ? resolveTuiAgentLaunchArgs(args.agent, args.settings?.agentDefaultArgs)
       : args.agentArgs
   const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings?.agentDefaultEnv)
-  const sessionOptions = resolveNativeChatSessionOptionDefaults(
+  const sessionOptions = resolveNativeChatLaunchSessionOptions(
     args.settings?.nativeChatSessionOptions,
     args.agent
   )
@@ -114,7 +114,10 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
 export function buildDirectWorkItemStartupOpts(
   agent: TuiAgent | null,
   plan: AgentStartupPlan | null,
-  launchSource: LaunchSource
+  launchSource: LaunchSource,
+  /** Unsent launch context, for the view-mode decision only. Set it for every
+   *  draft launch — a natively-prefilled plan carries no `draftPrompt`. */
+  launchDraftText?: string
 ): {
   startup?: {
     command: string
@@ -122,6 +125,7 @@ export function buildDirectWorkItemStartupOpts(
     launchConfig?: SleepingAgentLaunchConfig
     launchAgent?: TuiAgent
     draftPrompt?: string
+    launchDraftText?: string
     sessionOptions?: AgentStartupPlan['sessionOptions']
     startupCommandDelivery?: StartupCommandDelivery
     telemetry?: AgentStartedTelemetry
@@ -142,6 +146,7 @@ export function buildDirectWorkItemStartupOpts(
       ...(plan.sessionOptions ? { sessionOptions: plan.sessionOptions } : {}),
       ...(agent ? { launchAgent: agent } : {}),
       ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
+      ...(launchDraftText ? { launchDraftText } : {}),
       ...(plan.startupCommandDelivery
         ? { startupCommandDelivery: plan.startupCommandDelivery }
         : {}),

@@ -42,11 +42,13 @@ import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from './useFileExplorerTree'
+import { decideExpandedDirLoad } from './file-explorer-stale-dir-cache'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 import {
   buildAddProjectFromFolderModalData,
   canShowAddAsProjectAction
 } from './file-explorer-add-project-action'
+import { isRenameHotspotTarget, resolveDirToggleTiming } from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
@@ -147,6 +149,7 @@ function FileExplorerFiles(): React.JSX.Element {
     markPathAsDirectory,
     refreshTree,
     refreshDir,
+    isDirStale,
     resetAndLoad
   } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
   const hasNameFilterQuery = nameFilterQuery.trim().length > 0
@@ -346,11 +349,14 @@ function FileExplorerFiles(): React.JSX.Element {
       return
     }
     for (const dirPath of expanded) {
-      if (!dirCache[dirPath]?.children.length && !dirCache[dirPath]?.loading) {
-        const depth =
-          splitPathSegments(dirPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
-        void loadDir(dirPath, depth)
+      // Why: a full refresh (watcher overflow) re-reads only root and the dirs expanded at the time,
+      // so a listing cached while collapsed is unverified — re-read it here instead of trusting it.
+      const decision = decideExpandedDirLoad(dirCache[dirPath], isDirStale(dirPath))
+      if (decision === 'skip') {
+        continue
       }
+      const depth = splitPathSegments(dirPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
+      void loadDir(dirPath, depth, decision === 'reload' ? { force: true } : undefined)
     }
   }, [expanded, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -489,18 +495,19 @@ function FileExplorerFiles(): React.JSX.Element {
       getNameFilterCollapsedPathsAfterExpand(current, dirPath)
     )
   }, [])
-  const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
-    activeWorktreeId,
-    runtimeEnvironmentId: activeRuntimeEnvironmentId,
-    openFile,
-    makePreviewFilePermanent,
-    toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
-    loadDir,
-    statPath,
-    markPathAsDirectory,
-    setSelectedPath: setSingleSelectedPath,
-    scrollRef
-  })
+  const { handleClick, handleDoubleClick, handleWheelCapture, cancelPendingDirToggle } =
+    useFileExplorerHandlers({
+      activeWorktreeId,
+      runtimeEnvironmentId: activeRuntimeEnvironmentId,
+      openFile,
+      makePreviewFilePermanent,
+      toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
+      loadDir,
+      statPath,
+      markPathAsDirectory,
+      setSelectedPath: setSingleSelectedPath,
+      scrollRef
+    })
 
   // Why: pass a stable activator so arrow-key navigation can hand the same
   // activate-toggles-folder / open-file-preview behavior the click handler
@@ -510,6 +517,15 @@ function FileExplorerFiles(): React.JSX.Element {
       void handleClick(node)
     },
     [handleClick]
+  )
+  // Why: a rename can start while a name click is still holding back its
+  // directory toggle; drop it so the tree doesn't shift under the input.
+  const handleStartRename = useCallback(
+    (node: TreeNode) => {
+      cancelPendingDirToggle()
+      startRename(node)
+    },
+    [cancelPendingDirToggle, startRename]
   )
   const scrollToIndex = useCallback(
     (index: number) => {
@@ -529,7 +545,7 @@ function FileExplorerFiles(): React.JSX.Element {
     activateNode,
     moveSelection,
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
-    startRename,
+    startRename: handleStartRename,
     requestDelete,
     requestDeleteAll,
     scrollToIndex,
@@ -552,8 +568,13 @@ function FileExplorerFiles(): React.JSX.Element {
 
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
   const handleRowClick = useCallback(
-    (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) =>
-      selectRowWithModifiers(node, event, handleClick),
+    (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => {
+      const dirToggle = resolveDirToggleTiming({
+        fromRenameHotspot: isRenameHotspotTarget(event.target),
+        clickCount: event.detail
+      })
+      selectRowWithModifiers(node, event, (target) => handleClick(target, dirToggle))
+    },
     [handleClick, selectRowWithModifiers]
   )
   const handleCollapseFolderSubtree = useCallback(
@@ -762,7 +783,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 onContextMenuSelect={preserveSelectionForContextMenu}
                 onCopyPaths={copyPathsForNode}
                 onStartNew={startNew}
-                onStartRename={startRename}
+                onStartRename={handleStartRename}
                 onDuplicate={handleDuplicate}
                 onAddFolderAsProject={handleAddFolderAsProject}
                 canAddFolderAsProject={(node) => canShowAddAsProjectAction(node, activeRepo)}
