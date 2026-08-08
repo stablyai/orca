@@ -2056,6 +2056,168 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('passes --branch through worktree.create as branchNameOverride', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_repo_show', { repo: { id: 'repo-1', kind: 'git' } }),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/yoyo-prefix-test', 'yoyo/prefix-test', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'yoyo-prefix-test',
+        '--branch',
+        'yoyo/prefix-test',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'repo.show', { repo: 'id:repo-1' })
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.create',
+      expect.objectContaining({
+        name: 'yoyo-prefix-test',
+        branchNameOverride: 'yoyo/prefix-test',
+        noParent: true
+      })
+    )
+  })
+
+  it('rejects --branch for folder workspace repos', async () => {
+    const priorExitCode = process.exitCode
+    process.exitCode = undefined
+    queueFixtures(
+      callMock,
+      okFixture('req_repo_show', { repo: { id: 'folder-1', kind: 'folder' } })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:folder-1',
+        '--name',
+        'child',
+        '--branch',
+        'feature/x',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/folder'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('repo.show', { repo: 'id:folder-1' })
+    expect(callMock.mock.calls.some((call) => call[0] === 'worktree.create')).toBe(false)
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      '--branch is only supported for git repositories'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+  })
+
+  it('uses slash-containing --name as branchNameOverride when --branch is omitted', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/yoyo-prefix-test', 'yoyo/prefix-test', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'yoyo/prefix-test',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.create',
+      expect.objectContaining({
+        name: 'yoyo/prefix-test',
+        branchNameOverride: 'yoyo/prefix-test',
+        noParent: true
+      })
+    )
+  })
+
+  it('omits branchNameOverride for plain --name without --branch', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/plain-name', 'plain-name', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'plain-name',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    const createCall = callMock.mock.calls.find((call) => call[0] === 'worktree.create')
+    expect(createCall).toBeDefined()
+    expect(createCall?.[1]).not.toHaveProperty('branchNameOverride')
+  })
+
+  it('rejects --branch without a value on worktree.create', async () => {
+    const priorExitCode = process.exitCode
+    process.exitCode = undefined
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--branch', '--no-parent'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --branch'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+  })
+
   it('passes caller terminal handle through worktree.create with cwd fallback', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_parent'
     queueFixtures(
