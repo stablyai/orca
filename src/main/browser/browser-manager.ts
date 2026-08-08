@@ -753,6 +753,12 @@ export class BrowserManager {
             origin: safeOrigin(browserUrl),
             action: 'opened-in-orca'
           })
+        } else {
+          // Why: private frameName path only expects http(s); still hand off custom app schemes (#12719).
+          const customApp = classifyExternalAppUrl(url)
+          if (customApp.ok && customApp.kind === 'custom') {
+            void this.promptOpenExternalAppScheme(guest, url)
+          }
         }
         // Why: a recognized gesture must never fall through to a native popup if its renderer vanished mid-click.
         return { action: 'deny' }

@@ -643,6 +643,82 @@ describe('browserManager', () => {
     })
   })
 
+  it('prompts custom app schemes on the clicked-link window-open path', async () => {
+    const rendererSendMock = vi.fn()
+    openExternalAppUrlWithUserApprovalMock.mockReset()
+    openExternalAppUrlWithUserApprovalMock.mockResolvedValue('opened')
+    const executeJavaScriptInIsolatedWorldMock = vi.fn().mockResolvedValue(undefined)
+    const guest = {
+      id: 108,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      getURL: vi.fn(() => 'https://login.example.com/sso'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      executeJavaScriptInIsolatedWorld: executeJavaScriptInIsolatedWorldMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-clicked-app-scheme',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const domReadyHandler = guestOnMock.mock.calls.find(([event]) => event === 'dom-ready')?.[1] as
+      | (() => void)
+      | undefined
+    domReadyHandler?.()
+    await vi.waitFor(() => expect(executeJavaScriptInIsolatedWorldMock).toHaveBeenCalledTimes(1))
+
+    const managerState = browserManager as unknown as {
+      clickedLinkFrameNameByGuestId: Map<number, string>
+    }
+    const clickedLinkFrameName = managerState.clickedLinkFrameNameByGuestId.get(guest.id)
+    if (!clickedLinkFrameName) {
+      throw new Error('Expected a private clicked-link frame name')
+    }
+
+    const handler = guestSetWindowOpenHandlerMock.mock.calls.at(-1)?.[0] as (details: {
+      url: string
+      frameName: string
+    }) => { action: 'allow' | 'deny' }
+    expect(
+      handler({
+        url: 'oktaverify://bind?from=clicked-link',
+        frameName: clickedLinkFrameName
+      })
+    ).toEqual({ action: 'deny' })
+
+    await vi.waitFor(() => {
+      expect(openExternalAppUrlWithUserApprovalMock).toHaveBeenCalledWith(
+        'oktaverify://bind?from=clicked-link',
+        expect.objectContaining({ requestingOrigin: 'https://login.example.com' })
+      )
+    })
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
+      browserPageId: 'browser-clicked-app-scheme',
+      origin: 'null',
+      action: 'opened-external'
+    })
+    expect(rendererSendMock).not.toHaveBeenCalledWith(
+      'browser:open-link-in-orca-tab',
+      expect.anything()
+    )
+  })
+
   it('remembers the registered session profile for a browser page', () => {
     const guest = {
       id: 104,
