@@ -128,7 +128,7 @@ export async function lookupPRByBranchName(args: {
         continue
       }
       try {
-        const branchData = args.headRepo
+        let branchData = args.headRepo
           ? await getRestPRForBranch(
               candidate,
               args.headRepo.owner,
@@ -136,6 +136,10 @@ export async function lookupPRByBranchName(args: {
               args.ghOptions
             )
           : await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
+        if (!branchData && args.headRepo) {
+          // Why: an inferred fork owner can return no REST match even when the branch already has a PR.
+          branchData = await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
+        }
         // Cheap branch discovery needs exact hydration for review, queue and auto-merge metadata.
         const data = await hydrateBranchLookupWithExactPR(
           candidate,
