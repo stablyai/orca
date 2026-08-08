@@ -23,6 +23,7 @@ import {
   getLayoutBaseCharacterForCode,
   prefetchLayoutBaseCharacters
 } from '@/lib/keyboard-layout/layout-base-character'
+import { prefetchKoreanInputSource } from '@/lib/keyboard-layout/korean-input-source'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
 import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
@@ -196,6 +197,8 @@ type KeyboardHandlersDeps = {
   paneCwdRef: React.RefObject<PaneCwdMap>
   /** Worktree-root cwd used when OSC 7 and pty.getCwd both fail. */
   fallbackCwd: string
+  /** Gates the Korean input-source probe; its refresh spawns four processes. */
+  koreanWonToBackquoteEnabled?: boolean
   expandedPaneIdRef: React.RefObject<number | null>
   setExpandedPane: (paneId: number | null) => void
   restoreExpandedLayout: () => void
@@ -231,6 +234,7 @@ export function useTerminalKeyboardShortcuts({
   panePtyBindingsRef,
   paneCwdRef,
   fallbackCwd,
+  koreanWonToBackquoteEnabled,
   expandedPaneIdRef,
   setExpandedPane,
   restoreExpandedLayout,
@@ -263,6 +267,12 @@ export function useTerminalKeyboardShortcuts({
     // KeyboardLayoutMap; prefetch so the map is cached before the first chord.
     if (isMac) {
       prefetchLayoutBaseCharacters()
+      // Why: the Korean Won rewrite gate reads the active input source ID through the async IPC.
+      // Gated on the setting because each refresh shells out to `defaults export | plutil | plutil`
+      // and the default is off, so an ungated prefetch costs every macOS user four processes.
+      if (koreanWonToBackquoteEnabled) {
+        prefetchKoreanInputSource()
+      }
     }
 
     // Why: KeyboardEvent.location on a character key (e.g. Period) always
@@ -651,6 +661,7 @@ export function useTerminalKeyboardShortcuts({
     panePtyBindingsRef,
     paneCwdRef,
     fallbackCwd,
+    koreanWonToBackquoteEnabled,
     expandedPaneIdRef,
     setExpandedPane,
     restoreExpandedLayout,

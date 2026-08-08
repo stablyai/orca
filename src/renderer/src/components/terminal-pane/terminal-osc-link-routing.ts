@@ -29,7 +29,12 @@ export function handleOscLink(
   rawText: string,
   event: TerminalLinkEvent | undefined,
   deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'> &
-    Partial<Pick<LinkHandlerDeps, 'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath'>> & {
+    Partial<
+      Pick<
+        LinkHandlerDeps,
+        'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath' | 'wslDistro'
+      >
+    > & {
       sourceOwner?: HttpLinkSourceOwner
       requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
     }

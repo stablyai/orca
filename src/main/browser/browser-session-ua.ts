@@ -21,6 +21,26 @@ export function cleanElectronUserAgent(ua: string): string {
   )
 }
 
+// Why: Chromium forks (Arc, Brave, …) report a product version (1.x) in
+// CFBundleShortVersionString. Advertising that as Chrome/1.x makes version-gating
+// sites treat the session as ancient Chromium, so only engine-scale majors are safe.
+export function isAdvertisableChromiumEngineVersion(version: string): boolean {
+  const normalizedVersion = version.trim()
+  // Reject malformed tokens (e.g. 70.not-a-version) so they never become Chrome/… in the UA.
+  if (!/^\d+(?:\.\d+)*$/.test(normalizedVersion)) {
+    return false
+  }
+  // Chrome 70+ covers every Chromium engine we still support; product versions stay below.
+  return Number(normalizedVersion.split('.')[0]) >= 70
+}
+
+// Why: builds without the version gate persisted Chrome/1.x for fork imports, and a stored
+// UA is reapplied on every launch — so the profile stays blocked until the value is dropped.
+export function isUnadvertisableChromeUserAgent(ua: string): boolean {
+  const chromeVersion = /Chrome\/(\S+)/.exec(ua)?.[1]
+  return chromeVersion !== undefined && !isAdvertisableChromiumEngineVersion(chromeVersion)
+}
+
 // Why: Electron's actual Chromium version (e.g. 134) differs from the source
 // browser's version (e.g. Edge 147). The sec-ch-ua Client Hints headers
 // reveal the real version, creating a mismatch that Google's anti-fraud

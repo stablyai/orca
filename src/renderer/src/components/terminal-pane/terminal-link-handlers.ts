@@ -16,7 +16,8 @@ import {
   isHtmlFilePath,
   mapTerminalFilePath,
   openDetectedFilePath,
-  shouldOpenTerminalFileWithSystemDefault
+  shouldOpenTerminalFileWithSystemDefault,
+  terminalLinkWslDistro
 } from './terminal-file-open-routing'
 import {
   buildHardWrappedPathLogicalLineCandidates,
@@ -38,6 +39,7 @@ import {
 } from './terminal-link-open-hints'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import { isTerminalLinkActivation } from './terminal-link-activation'
+import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
 
 export { openDetectedFilePath } from './terminal-file-open-routing'
 export { mapTerminalFilePath } from './terminal-file-open-routing'
@@ -55,6 +57,7 @@ export type LinkHandlerDeps = {
   pathExistsCache: Map<string, boolean>
   runtimeEnvironmentId?: string | null
   terminalHomePath?: string | null
+  wslDistro?: string | null
   getRuntimeEnvironmentIdForPane?: (paneId: number) => string | null
 }
 
@@ -134,14 +137,18 @@ export function createFilePathLinkProvider(
               if (!resolved) {
                 return null
               }
-              const mappedPath = mapTerminalFilePath(resolved.absolutePath, worktreePath)
+              const runtimeEnvironmentId =
+                deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
+              const mappedPath = mapTerminalFilePath(
+                resolved.absolutePath,
+                worktreePath,
+                terminalLinkWslDistro(deps.wslDistro, runtimeEnvironmentId)
+              )
               const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
               if (!range) {
                 return null
               }
 
-              const runtimeEnvironmentId =
-                deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
               const fileContext = getTerminalFileContext(
                 worktreeId,
                 worktreePath,
@@ -186,6 +193,7 @@ export function createFilePathLinkProvider(
                       worktreeId,
                       worktreePath,
                       runtimeEnvironmentId,
+                      wslDistro: deps.wslDistro,
                       openWithSystemDefault: Boolean(event.shiftKey)
                     })
                   },
@@ -247,38 +255,6 @@ export function createFilePathLinkProvider(
   }
 }
 
-function getTerminalScreenElement(terminal: Terminal): HTMLElement | null {
-  return terminal.element?.querySelector('.xterm-screen') ?? null
-}
-
-function getBufferPositionForTerminalMouseEvent(
-  terminal: Terminal,
-  event: MouseEvent
-): { x: number; y: number } | null {
-  const screenElement = getTerminalScreenElement(terminal)
-  if (!screenElement || terminal.cols <= 0 || terminal.rows <= 0) {
-    return null
-  }
-
-  const rect = screenElement.getBoundingClientRect()
-  const relativeX = event.clientX - rect.left
-  const relativeY = event.clientY - rect.top
-  if (relativeX < 0 || relativeY < 0 || relativeX >= rect.width || relativeY >= rect.height) {
-    return null
-  }
-
-  const cellWidth = rect.width / terminal.cols
-  const cellHeight = rect.height / terminal.rows
-  if (cellWidth <= 0 || cellHeight <= 0) {
-    return null
-  }
-
-  return {
-    x: Math.floor(relativeX / cellWidth) + 1,
-    y: Math.floor(relativeY / cellHeight) + terminal.buffer.active.viewportY + 1
-  }
-}
-
 export function installFilePathLinkClickFallback(
   paneId: number,
   terminal: Terminal,
@@ -290,7 +266,7 @@ export function installFilePathLinkClickFallback(
       return
     }
 
-    const position = getBufferPositionForTerminalMouseEvent(terminal, event)
+    const position = getTerminalBufferPositionForMouseEvent(terminal, event)
     if (!position) {
       return
     }
@@ -309,6 +285,7 @@ export function installFilePathLinkClickFallback(
         worktreeId: deps.worktreeId,
         worktreePath: deps.worktreePath,
         runtimeEnvironmentId,
+        wslDistro: deps.wslDistro,
         pathExistsCache: deps.pathExistsCache,
         openWithSystemDefault: Boolean(event.shiftKey)
       }
