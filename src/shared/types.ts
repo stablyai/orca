@@ -302,7 +302,7 @@ export type Repo = {
   sourceControlAi?: RepoSourceControlAiOverrides
   /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */
   projectHostSetupMethod?: RepoProjectHostSetupMethod
-  /** Profile new browser tabs in this project open with. Absent = inherit the global default. */
+  /** Browser profile for new tabs opened in this project. Absent = inherit the global default. */
   defaultBrowserSessionProfileId?: string
 }
 

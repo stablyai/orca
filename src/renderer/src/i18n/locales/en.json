@@ -9000,7 +9000,7 @@
             "projectRuntime": "Project Runtime",
             "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
             "browserProfileTitle": "Browser Profile",
-            "browserProfileDescription": "Profile new browser tabs in this project open with."
+            "browserProfileDescription": "Choose the browser profile for new tabs opened in this project."
           }
         },
         "runtime": {
@@ -10456,7 +10456,7 @@
         },
         "RepositoryBrowserProfileSection": {
           "title": "Browser Profile",
-          "description": "Profile new browser tabs in this project open with.",
+          "description": "Choose the browser profile for new tabs opened in this project.",
           "longDescription": "New browser tabs opened in this project use this profile instead of the app-wide default. Per-tab switching still works from the ··· toolbar menu.",
           "inherit": "Use app default"
         }

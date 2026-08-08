@@ -127,7 +127,7 @@ export function getRepositoryPaneSearchEntries(
       ),
       description: translate(
         'auto.components.settings.repository.search.browserProfileDescription',
-        'Profile new browser tabs in this project open with.'
+        'Choose the browser profile for new tabs opened in this project.'
       ),
       keywords: [
         repo.displayName,

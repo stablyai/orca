@@ -93,4 +93,25 @@ describe('resolveDefaultBrowserSessionProfileId', () => {
       'runtime-profile'
     )
   })
+
+  it('ignores another host row when the requested host owns none', () => {
+    const state = createState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo-1',
+          displayName: 'Repo 1',
+          badgeColor: '#000000',
+          addedAt: 1,
+          executionHostId: 'local',
+          defaultBrowserSessionProfileId: 'local-only-profile'
+        }
+      ],
+      defaultBrowserSessionProfileId: 'global-profile'
+    })
+
+    expect(resolveDefaultBrowserSessionProfileId(state, 'wt-1', 'runtime:env-1')).toBe(
+      'global-profile'
+    )
+  })
 })

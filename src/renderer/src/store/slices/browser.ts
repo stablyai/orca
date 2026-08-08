@@ -332,19 +332,22 @@ function getDefaultBrowserProfileForHost(state: AppState, hostId: ExecutionHostI
 
 // Why: a project pointing at a deleted profile silently falls back to the default partition
 // while Settings still shows the dead profile; clear the override with the profile.
-function clearDeletedProjectBrowserProfile(
+async function clearDeletedProjectBrowserProfile(
   get: () => AppState,
   hostId: ExecutionHostId,
   profileId: string
-): void {
-  for (const repo of get().repos) {
-    if (
-      repo.defaultBrowserSessionProfileId === profileId &&
-      getRepoExecutionHostId(repo) === hostId
-    ) {
-      void get().updateRepo(repo.id, { defaultBrowserSessionProfileId: null }, { hostId })
-    }
-  }
+): Promise<void> {
+  await Promise.all(
+    get()
+      .repos.filter(
+        (repo) =>
+          repo.defaultBrowserSessionProfileId === profileId &&
+          getRepoExecutionHostId(repo) === hostId
+      )
+      .map((repo) =>
+        get().updateRepo(repo.id, { defaultBrowserSessionProfileId: null }, { hostId })
+      )
+  )
 }
 
 function browserImportStateForHostUpdate(
@@ -1921,7 +1924,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           { timeoutMs: 15_000 }
         )
         if (result.deleted) {
-          clearDeletedProjectBrowserProfile(get, hostId, profileId)
+          await clearDeletedProjectBrowserProfile(get, hostId, profileId)
           set((s) => ({
             ...profileListByHostUpdate(
               s,
@@ -1949,7 +1952,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     try {
       const ok = await window.api.browser.sessionDeleteProfile({ profileId })
       if (ok) {
-        clearDeletedProjectBrowserProfile(get, hostId, profileId)
+        await clearDeletedProjectBrowserProfile(get, hostId, profileId)
         set((s) => ({
           ...profileListByHostUpdate(
             s,

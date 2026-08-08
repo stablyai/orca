@@ -35,7 +35,9 @@ function getProjectBrowserSessionProfileId(
   if (!repoId) {
     return undefined
   }
-  const candidates = state.repos.filter((repo) => repo.id === repoId)
-  const owner = candidates.find((repo) => getRepoExecutionHostId(repo) === hostId) ?? candidates[0]
+  // Why: no fallback to another host's row — its profile ids do not exist on this host.
+  const owner = state.repos.find(
+    (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId
+  )
   return owner?.defaultBrowserSessionProfileId
 }

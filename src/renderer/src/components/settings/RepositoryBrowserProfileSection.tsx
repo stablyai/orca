@@ -51,7 +51,7 @@ export function RepositoryBrowserProfileSection({
   )
   const description = translate(
     'auto.components.settings.RepositoryBrowserProfileSection.description',
-    'Profile new browser tabs in this project open with.'
+    'Choose the browser profile for new tabs opened in this project.'
   )
 
   return (
@@ -69,6 +69,7 @@ export function RepositoryBrowserProfileSection({
         { key: 'auto.components.settings.repository.search.account', fallback: 'account' }
       ])}
       className="space-y-3"
+      id={`repo-browser-profile-${repo.id}`}
       forceVisible={forceVisible}
     >
       <div className="flex items-start justify-between gap-4">
