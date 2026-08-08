@@ -2899,12 +2899,10 @@ export class AgentHookServer {
       if (!this.immediateStatusCheckpointPending) {
         return
       }
-      this.flushStatusPersistSync()
-      // Why: deferring put this flush AFTER the caller armed the trailing
-      // debounce, and flushing clears that timer — so re-arm it or a transient
-      // write failure loses its only retry. A successful write no-ops on the
-      // unchanged-json check.
-      this.scheduleStatusPersist()
+      this.immediateStatusCheckpointPending = false
+      // Why: write without touching the caller's trailing debounce — cancelling
+      // it here would take away the retry a transient write failure needs.
+      this.runStatusPersist()
     })
   }
 
