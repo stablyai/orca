@@ -130,6 +130,8 @@ export async function callFederatedWorkerShow(
   }
   terminal: unknown
   observation: { status: string; exactWorker: boolean; reason?: string }
+  /** Optional: older worker hosts omit this field. */
+  agentStatus?: unknown
 }> {
   return (await runtime.callOrchestrationWorkerServer(
     federated.environment_id,

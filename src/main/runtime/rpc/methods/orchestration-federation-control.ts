@@ -32,6 +32,13 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS: RpcMethod[] = [
         authenticatedCallerFingerprint
       )
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
+      // Why: agent status is host-local; home workerShow can only forward what we attach here (#13209/#13215).
+      let agentStatus: Awaited<ReturnType<typeof runtime.getTerminalAgentStatus>> | null = null
+      if (observation.exact && observation.terminal) {
+        agentStatus = await runtime
+          .getTerminalAgentStatus(observation.terminal.handle)
+          .catch(() => null)
+      }
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),
@@ -41,7 +48,8 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS: RpcMethod[] = [
           status: observation.status,
           exactWorker: observation.exact,
           ...(observation.reason ? { reason: observation.reason } : {})
-        }
+        },
+        agentStatus
       }
     }
   }),

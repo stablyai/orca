@@ -104,6 +104,138 @@ describe('orchestration worker recovery', () => {
     expect(runtime.getTerminalAgentStatus).toHaveBeenCalledWith('term_worker')
   })
 
+  it('does not probe agentStatus when the worker process identity changed', async () => {
+    const { dispatch } = createWorker()
+    vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime:pty:2')
+    const agentStatus = vi.spyOn(runtime, 'getTerminalAgentStatus')
+
+    await expect(
+      call('orchestration.workerShow', { dispatch: dispatch.id })
+    ).resolves.toMatchObject({
+      observation: { status: 'identity_changed', exactWorker: false },
+      agentStatus: null
+    })
+    expect(agentStatus).not.toHaveBeenCalled()
+  })
+
+  it('maps agentStatus probe failures to null without failing worker-show', async () => {
+    const { dispatch } = createWorker()
+    vi.spyOn(runtime, 'getTerminalAgentStatus').mockRejectedValue(new Error('probe failed'))
+
+    await expect(
+      call('orchestration.workerShow', { dispatch: dispatch.id })
+    ).resolves.toMatchObject({
+      observation: { status: 'running', exactWorker: true },
+      agentStatus: null
+    })
+  })
+
+  it('forwards optional agentStatus from federationShow on federated worker-show', async () => {
+    const run = db.createRun({
+      objective: 'Remote permission wait',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    })
+    const task = db.createTask({ spec: 'remote worker', runId: run.id })
+    const started = db.createStartingWorkerDispatch({
+      taskId: task.id,
+      startOptions: {},
+      runtimeEpoch: runtime.getRuntimeId(),
+      federation: {
+        environmentId: 'environment_windows',
+        environmentName: 'windows',
+        peerFingerprint: 'windows_peer',
+        protocolVersion: 1
+      }
+    })
+    db.markWorkerDispatchReady(started.dispatch.id)
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+      environmentId: 'environment_windows',
+      name: 'windows',
+      peerFingerprint: 'windows_peer'
+    })
+    vi.spyOn(runtime, 'ensureOrchestrationFederationRelay').mockImplementation(() => undefined)
+    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockResolvedValue({
+      runtimeEpoch: 'windows_epoch',
+      attachment: {
+        state: 'ready',
+        stage: 'input_accepted',
+        last_error: null,
+        worktree_id: 'repo::windows-worktree',
+        terminal_handle: 'term_windows_worker',
+        setup_state: 'not_applicable',
+        effects: [],
+        residualResources: []
+      },
+      terminal: { handle: 'term_windows_worker', connected: true },
+      observation: { status: 'running', exactWorker: true },
+      agentStatus: {
+        handle: 'term_windows_worker',
+        isRunningAgent: true,
+        status: 'permission'
+      }
+    })
+
+    await expect(
+      call('orchestration.workerShow', { dispatch: started.dispatch.id })
+    ).resolves.toMatchObject({
+      observation: { status: 'running', exactWorker: true },
+      agentStatus: {
+        handle: 'term_windows_worker',
+        isRunningAgent: true,
+        status: 'permission'
+      }
+    })
+  })
+
+  it('treats omitted remote agentStatus as null for older federation hosts', async () => {
+    const run = db.createRun({
+      objective: 'Old remote host',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    })
+    const task = db.createTask({ spec: 'remote worker', runId: run.id })
+    const started = db.createStartingWorkerDispatch({
+      taskId: task.id,
+      startOptions: {},
+      runtimeEpoch: runtime.getRuntimeId(),
+      federation: {
+        environmentId: 'environment_windows',
+        environmentName: 'windows',
+        peerFingerprint: 'windows_peer',
+        protocolVersion: 1
+      }
+    })
+    db.markWorkerDispatchReady(started.dispatch.id)
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+      environmentId: 'environment_windows',
+      name: 'windows',
+      peerFingerprint: 'windows_peer'
+    })
+    vi.spyOn(runtime, 'ensureOrchestrationFederationRelay').mockImplementation(() => undefined)
+    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockResolvedValue({
+      runtimeEpoch: 'windows_epoch',
+      attachment: {
+        state: 'ready',
+        stage: 'input_accepted',
+        last_error: null,
+        worktree_id: 'repo::windows-worktree',
+        terminal_handle: 'term_windows_worker',
+        setup_state: 'not_applicable',
+        effects: [],
+        residualResources: []
+      },
+      terminal: { handle: 'term_windows_worker', connected: true },
+      observation: { status: 'running', exactWorker: true }
+    })
+
+    await expect(
+      call('orchestration.workerShow', { dispatch: started.dispatch.id })
+    ).resolves.toMatchObject({
+      agentStatus: null
+    })
+  })
+
   it('shows and reads only the exact attached worker process', async () => {
     const { dispatch } = createWorker()
 

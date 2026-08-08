@@ -111,7 +111,9 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
             ...remote.observation,
             // Legacy servers published `running`; normalize at the compatibility boundary.
             status: remote.observation.status === 'running' ? 'live' : remote.observation.status
-          }
+          },
+          // Why: host-local probe runs on federationShow; older remotes omit the field (#13215).
+          agentStatus: remote.agentStatus ?? null
         }
       }
       if (!worker) {
