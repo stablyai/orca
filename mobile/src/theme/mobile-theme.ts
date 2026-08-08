@@ -89,13 +89,8 @@ export const darkColors: ThemeColors = {
   terminalBg: '#1a1b26'
 }
 
-// Why: light counterpart with the same token keys. Surfaces ascend from a soft
-// off-white base to crisp white raised cards (mirroring the dark palette's
-// dark→lighter progression), with text inverted to near-black on white and
-// borders darkened for contrast. Accent/status hues are nudged a touch deeper
-// so they keep AA contrast on light fills; syntax + terminal tokens keep their
-// dark-optimized values because the terminal WebView and code surfaces stay
-// dark regardless of app chrome.
+// Why: syntax + terminal tokens keep their dark-optimized values below — the
+// terminal WebView and code surfaces stay dark regardless of app chrome.
 export const lightColors: ThemeColors = {
   bgBase: '#f7f7f8',
   bgPanel: '#ffffff',

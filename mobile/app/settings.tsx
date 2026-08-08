@@ -37,8 +37,6 @@ import {
 } from '../src/transport/host-credential-cleanup'
 import { retryPendingHostCredentialCleanup } from '../src/transport/host-store'
 
-// Why: the three appearance choices the picker offers, in display order.
-// 'system' leads because it's the default and the option most users keep.
 const APPEARANCE_OPTIONS: Array<{
   value: AppAppearance
   label: string
@@ -137,7 +135,7 @@ export default function SettingsScreen() {
                   style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                   onPress={() => setAppearance(option.value)}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected }}
+                  accessibilityState={{ checked: selected }}
                 >
                   <Icon size={16} color={colors.textSecondary} />
                   <Text style={styles.rowLabel}>{option.label}</Text>

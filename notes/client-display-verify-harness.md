@@ -7,9 +7,11 @@ The reader is an agent runner — human or automated — on a Mac that has the
 re-deriving how to capture before/after evidence for a theme or terminal-render
 change.
 
-The change set this serves is JS/TS/CSS only (no new native module), so every
-rung below runs without a physical device. The capability is machine-level: any
-runner on this Mac with Xcode CLI + a browser MCP can drive it.
+This harness covers only the JS/TS/CSS display changes of that effort — it does
+not verify the native `expo-hardware-keyboard` module shipped alongside it in
+the same PR. Every rung below runs without a physical device; the capability is
+machine-level: any runner on this Mac with Xcode CLI + a browser MCP can drive
+it.
 
 ## Artifact convention
 
