@@ -70,6 +70,37 @@ describe('native chat session option enrichment', () => {
     expect(readNativeChatEnrichedModels('cursor', 'local')).toBeNull()
   })
 
+  it('keeps Codex discovery caches separate for PTYs pinned to different accounts', async () => {
+    const discoverA = vi
+      .fn()
+      .mockResolvedValue([{ id: 'account-a-model', label: 'Account A', options: [] }])
+    const discoverB = vi
+      .fn()
+      .mockResolvedValue([{ id: 'account-b-model', label: 'Account B', options: [] }])
+
+    ensureNativeChatModelEnrichment({
+      agent: 'codex',
+      hostKey: 'local',
+      ptyId: 'pty-a',
+      discover: discoverA
+    })
+    ensureNativeChatModelEnrichment({
+      agent: 'codex',
+      hostKey: 'local',
+      ptyId: 'pty-b',
+      discover: discoverB
+    })
+    await vi.waitFor(() => expect(discoverB).toHaveBeenCalledOnce())
+
+    expect(readNativeChatEnrichedModels('codex', 'local', 'pty-a')?.map(({ id }) => id)).toEqual([
+      'account-a-model'
+    ])
+    expect(readNativeChatEnrichedModels('codex', 'local', 'pty-b')?.map(({ id }) => id)).toEqual([
+      'account-b-model'
+    ])
+    expect(readNativeChatEnrichedModels('codex', 'local')).toBeNull()
+  })
+
   it('does not probe agents whose catalogs have no discovery command', () => {
     const discover = vi.fn()
     ensureNativeChatModelEnrichment({ agent: 'gemini', hostKey: 'local', discover })
@@ -384,11 +415,20 @@ describe('native chat session option enrichment', () => {
     })
 
     await expect(
-      discoverNativeChatCatalogModels('codex', {
-        settings: {},
-        worktreeId: 'repo::/worktree',
-        worktreePath: '/worktree'
-      })
+      discoverNativeChatCatalogModels(
+        'codex',
+        {
+          settings: {},
+          worktreeId: 'repo::/worktree',
+          worktreePath: '/worktree'
+        },
+        'pty-account-a'
+      )
     ).resolves.toBeNull()
+    expect(mocks.discoverRuntimeCommitMessageModels).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: 'repo::/worktree' }),
+      'codex',
+      'pty-account-a'
+    )
   })
 })

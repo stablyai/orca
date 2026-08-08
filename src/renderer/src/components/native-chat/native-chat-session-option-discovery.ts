@@ -72,9 +72,10 @@ export function resolveNativeChatModelDiscoveryContext(
 
 export async function discoverNativeChatCatalogModels(
   agent: AgentType,
-  context: RuntimeGitContext
+  context: RuntimeGitContext,
+  ptyId?: string
 ): Promise<CatalogModel[] | null> {
-  const result = await discoverRuntimeCommitMessageModels(context, agent)
+  const result = await discoverRuntimeCommitMessageModels(context, agent, ptyId)
   const catalog = getAgentSessionOptionCatalog(agent)
   if (
     !result.success ||

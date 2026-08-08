@@ -1430,6 +1430,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     automations,
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
+      prepareForCodexPtyLaunch: (ptyId, target) =>
+        codexRuntimeHome!.resolveCodexHomeForPaneModelDiscovery(ptyId, target),
       prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
     },
     agentAwakeService ?? undefined,
@@ -2665,6 +2667,8 @@ void app.whenReady().then(async () => {
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
+    prepareForCodexPtyLaunch: (ptyId, target) =>
+      codexRuntimeHome!.resolveCodexHomeForPaneModelDiscovery(ptyId, target),
     prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
   })
   const pluginSystemStartupStartedAt = performance.now()

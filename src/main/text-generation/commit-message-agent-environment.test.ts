@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { prepareLocalCommitMessageAgentEnv } from './commit-message-agent-environment'
 
 const originalEnv = { ...process.env }
@@ -121,6 +121,42 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
       env: expect.objectContaining({
         CODEX_HOME: 'C:\\Users\\tester\\AppData\\Roaming\\Orca\\codex-accounts\\a\\home'
       })
+    })
+  })
+
+  it('prefers the account home pinned to the requested Codex PTY', async () => {
+    const prepareForCodexLaunch = vi.fn(() => '/managed/account-a/home')
+    const prepareForCodexPtyLaunch = vi.fn(() => '/managed/account-b/home')
+
+    const result = await prepareLocalCommitMessageAgentEnv(
+      'codex',
+      { prepareForCodexLaunch, prepareForCodexPtyLaunch },
+      { runtime: 'host' },
+      'pty-account-b'
+    )
+
+    expect(prepareForCodexPtyLaunch).toHaveBeenCalledWith('pty-account-b', { runtime: 'host' })
+    expect(prepareForCodexLaunch).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      ok: true,
+      env: expect.objectContaining({ CODEX_HOME: '/managed/account-b/home' })
+    })
+  })
+
+  it('uses legacy account discovery when the runtime cannot scope an unknown PTY', async () => {
+    const prepareForCodexLaunch = vi.fn(() => '/managed/current/home')
+
+    const result = await prepareLocalCommitMessageAgentEnv(
+      'codex',
+      { prepareForCodexLaunch, prepareForCodexPtyLaunch: () => undefined },
+      { runtime: 'host' },
+      'pty-unrecorded'
+    )
+
+    expect(prepareForCodexLaunch).toHaveBeenCalledWith({ runtime: 'host' })
+    expect(result).toEqual({
+      ok: true,
+      env: expect.objectContaining({ CODEX_HOME: '/managed/current/home' })
     })
   })
 

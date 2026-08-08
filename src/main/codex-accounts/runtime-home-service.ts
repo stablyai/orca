@@ -60,13 +60,20 @@ import {
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   getWslSelectionKey,
+  getCodexSelectionLaneKey,
+  getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget,
   normalizeCodexRuntimeSelection,
   setSelectedCodexAccountIdForTarget,
   type CodexAccountSelectionTarget
 } from './runtime-selection'
 import { getDefaultWslDistro, getWslHome } from '../wsl'
-import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
+import {
+  environmentCodexHomeOverrideContextsEqual,
+  getCustomCodexHomeOverrideForLaunch,
+  hasCustomCodexHomeOverrideForLaunch,
+  shellStartupCodexHomeOverrideMatches
+} from '../codex/codex-real-home-path'
 import {
   hasCompletedCodexSessionBackfillMarker,
   invalidateCodexSessionBackfillMarker
@@ -258,6 +265,83 @@ export class CodexRuntimeHomeService {
       resolveHostCodexSessionSourceHome(this.store.getSettings())
     )
     return this.getRuntimeHomePath()
+  }
+
+  /**
+   * Resolves the immutable CODEX_HOME captured for a live PTY without changing
+   * the user's active account. Undefined asks callers to use legacy discovery.
+   */
+  resolveCodexHomeForPaneModelDiscovery(
+    ptyId: string,
+    target?: CodexAccountSelectionTarget
+  ): string | null | undefined {
+    const record = getCodexPaneAccount(ptyId)
+    if (!record || !record.homeRoute) {
+      return undefined
+    }
+    const normalizedTarget = target ?? { runtime: 'host' as const }
+    if (record.selectionKey !== getCodexSelectionLaneKey(normalizedTarget)) {
+      throw new Error('Codex pane account lane no longer matches the discovery runtime.')
+    }
+    if (record.homeRoute === 'real-home') {
+      if (record.accountId !== null || normalizedTarget.runtime === 'wsl') {
+        throw new Error('Codex pane real-home provenance is invalid.')
+      }
+      // Why: an explicit path prevents a user CODEX_HOME exported after this
+      // PTY launched from silently retargeting its account-scoped probe.
+      return getSystemCodexHomePath()
+    }
+    if (record.homeRoute === 'shared-home') {
+      return this.getRuntimeHomePath()
+    }
+    if (record.homeRoute === 'custom-home') {
+      if (record.environmentHomeOverride) {
+        const current = getCustomCodexHomeOverrideForLaunch()
+        if (
+          current?.source === 'environment' &&
+          environmentCodexHomeOverrideContextsEqual(record.environmentHomeOverride, current.context)
+        ) {
+          return record.environmentHomeOverride.codexHome
+        }
+      }
+      if (
+        record.shellStartupHomeOverride &&
+        shellStartupCodexHomeOverrideMatches(record.shellStartupHomeOverride)
+      ) {
+        return record.shellStartupHomeOverride.codexHome
+      }
+      throw new Error('Codex pane custom home can no longer be verified.')
+    }
+    if (record.accountId === null) {
+      if (record.homeRoute !== 'wsl-home' || normalizedTarget.runtime !== 'wsl') {
+        throw new Error('Codex pane account provenance is incomplete.')
+      }
+      return this.getWslSystemCodexHomePath(normalizedTarget)
+    }
+    const account = this.store
+      .getSettings()
+      .codexManagedAccounts.find((candidate) => candidate.id === record.accountId)
+    if (
+      !account ||
+      getCodexSelectionLaneKey(getCodexSelectionTargetForAccount(account)) !== record.selectionKey
+    ) {
+      throw new Error('Codex pane account is no longer available.')
+    }
+    if (record.homeRoute === 'account-home') {
+      const trustedHome = this.getTrustedSelfContainedManagedHomePath(account)
+      if (!trustedHome) {
+        throw new Error('Codex pane account home is no longer trusted.')
+      }
+      return trustedHome
+    }
+    if (record.homeRoute === 'wsl-home' && normalizedTarget.runtime === 'wsl') {
+      const managedHome = this.getWslManagedHomePath(account)
+      if (!managedHome) {
+        throw new Error('Codex pane WSL account home is unavailable.')
+      }
+      return managedHome
+    }
+    throw new Error('Codex pane home route is incompatible with model discovery.')
   }
 
   beginHostSystemDefaultSessionMigrationLaunch(
