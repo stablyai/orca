@@ -226,13 +226,15 @@ function remoteOpenClawSources(
   hostPlatform: RemoteHostPlatform
 ): RemoteSessionSource[] {
   return ['.openclaw', '.clawdbot'].map((rootName) =>
-    jsonlSource(
+    source(
       'openclaw',
       remoteHome,
       hostPlatform,
       [rootName, 'agents'],
+      ['.jsonl'],
       openClawParser,
-      (path) => remotePathSegments(path).includes('sessions')
+      (path) => remotePathSegments(path).includes('sessions'),
+      (name, depth) => depth !== 1 || name === 'sessions'
     )
   )
 }
