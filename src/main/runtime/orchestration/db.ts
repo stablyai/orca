@@ -1712,8 +1712,7 @@ export class OrchestrationDb {
     if (this.isLegacyCoordinatorHandle(runId, terminalHandle)) {
       return true
     }
-    const run = this.getRunRaw(runId)
-    if (run?.coordinator_handle !== terminalHandle || !run.coordinator_pane_key) {
+    if (this.getRunRaw(runId)?.coordinator_handle !== terminalHandle) {
       return false
     }
     // Why: must match resolveLegacyWorkerCoordinatorDelivery's takeover test. A still-committed
