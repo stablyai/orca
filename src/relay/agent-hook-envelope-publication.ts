@@ -192,6 +192,11 @@ export function publishAgentHookEnvelope(
         return
       }
     }
+    if (candidate.toolActivity !== undefined) {
+      candidate = { ...candidate, toolActivity: undefined }
+      shedFields.push('toolActivity')
+      continue
+    }
     if (step >= SHED_ORDER.length) {
       // Nothing left to shed and it still does not fit: waiting cannot make it sendable, and this
       // snapshot supersedes any pending one, which is now stale.

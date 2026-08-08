@@ -1,9 +1,12 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 import {
   CLAUDE_STATUSLINE_PATHNAME,
-  parseClaudeStatusLineBody
+  parseClaudeStatusLineBody,
+  type ClaudeStatusLineRateLimits
 } from '../../../shared/claude-statusline-rate-limits'
 import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../../../shared/agent-hook-listener/request-body'
@@ -14,6 +17,19 @@ import { drainAgentHookSpool, type SpoolRecord } from '../../../shared/agent-hoo
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
+import { readHooksJson } from '../hooks-json-read'
+
+const CLAUDE_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'max'])
+
+function resolveClaudeStatusLineEffort(event: ClaudeStatusLineRateLimits): string {
+  if (event.effort) {
+    return event.effort
+  }
+  const configDir =
+    event.configDir ?? join(homedir(), event.agent === 'openclaude' ? '.openclaude' : '.claude')
+  const effort = readHooksJson(join(configDir, 'settings.json'))?.effortLevel
+  return typeof effort === 'string' && CLAUDE_EFFORT_LEVELS.has(effort) ? effort : 'high'
+}
 
 export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv {
   /** Start the loopback listener after hydration and spool replay have settled. */
@@ -75,7 +91,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
         if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
           const statusLineEvent = parseClaudeStatusLineBody(body)
           if (statusLineEvent) {
-            this.onClaudeStatusLine?.(statusLineEvent)
+            this.onClaudeStatusLine?.({
+              ...statusLineEvent,
+              effort: resolveClaudeStatusLineEffort(statusLineEvent)
+            })
           }
           res.writeHead(204)
           res.end()

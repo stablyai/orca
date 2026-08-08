@@ -205,7 +205,7 @@ describe('readNativeChatTranscript (codex)', () => {
         payload: {
           type: 'message',
           role: 'user',
-          content: [{ type: 'text', text: 'Run the build' }]
+          content: [{ type: 'input_text', text: 'Run the build' }]
         }
       },
       {
@@ -232,8 +232,29 @@ describe('readNativeChatTranscript (codex)', () => {
       },
       {
         type: 'response_item',
+        timestamp: '2026-06-01T10:00:04.100Z',
+        payload: {
+          type: 'custom_tool_call',
+          name: 'exec',
+          input: 'await tools.exec_command({cmd: "pwd"})'
+        }
+      },
+      {
+        type: 'response_item',
+        timestamp: '2026-06-01T10:00:04.200Z',
+        payload: {
+          type: 'custom_tool_call_output',
+          output: [{ type: 'input_text', text: '/repo' }]
+        }
+      },
+      {
+        type: 'response_item',
         timestamp: '2026-06-01T10:00:05.000Z',
-        payload: { type: 'message', role: 'assistant', content: [{ type: 'text', text: 'Done.' }] }
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'output_text', text: 'Done.' }]
+        }
       }
     ])
 
@@ -254,6 +275,10 @@ describe('readNativeChatTranscript (codex)', () => {
 
     const toolResult = result.messages.find((m) => m.blocks[0]?.type === 'tool-result')
     expect(toolResult?.blocks[0]).toEqual({ type: 'tool-result', output: 'build ok' })
+
+    expect(
+      result.messages.some((message) => JSON.stringify(message).includes('tools.exec_command'))
+    ).toBe(false)
 
     const reasoning = result.messages.find((m) => m.role === 'reasoning')
     expect(reasoning?.blocks[0]).toEqual({ type: 'text', text: 'I will run it' })

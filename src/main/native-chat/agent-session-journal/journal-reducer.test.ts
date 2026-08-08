@@ -142,6 +142,7 @@ describe('ordering', () => {
     expect(items.map((item) => item.observedAt)).toEqual([base(1).ts, base(2).ts])
     // The revision still lands — only its ordering keys are ignored.
     expect(items[0]?.revision).toBe(1)
+    expect(items[0]?.updatedAt).toBe(base(3).ts)
   })
 
   it('never collapses two items that carry identical text', () => {

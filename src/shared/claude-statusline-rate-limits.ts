@@ -18,10 +18,26 @@ export type ClaudeStatusLineWindow = {
 }
 
 export type ClaudeStatusLineRateLimits = {
+  agent?: 'claude' | 'openclaude'
   /** CLAUDE_CONFIG_DIR of the reporting session; null for system-default sessions. */
   configDir: string | null
+  /** Stable Orca pane identity supplied by the managed statusline command. */
+  paneKey?: string
+  /** Provider model id for this exact Claude session. */
+  model?: string
+  /** Provider effort for this exact Claude session, when reported. */
+  effort?: string
   fiveHour: ClaudeStatusLineWindow | null
   sevenDay: ClaudeStatusLineWindow | null
+  context?: ClaudeStatusLineContext
+}
+
+export type ClaudeStatusLineContext = {
+  usedTokens: number | null
+  maxTokens: number
+  remainingTokens: number | null
+  usedPercent: number
+  estimated?: boolean
 }
 
 function finiteNumber(value: unknown): number | undefined {
@@ -61,7 +77,7 @@ export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLi
   if (typeof body !== 'object' || body === null) {
     return null
   }
-  const fields = body as { payload?: unknown; configDir?: unknown }
+  const fields = body as { payload?: unknown; configDir?: unknown; agent?: unknown }
   if (typeof fields.payload !== 'string' || !fields.payload) {
     return null
   }
@@ -74,15 +90,86 @@ export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLi
   if (typeof payload !== 'object' || payload === null) {
     return null
   }
-  const rateLimits = (payload as { rate_limits?: unknown }).rate_limits
-  if (typeof rateLimits !== 'object' || rateLimits === null) {
-    return null
+  const payloadRecord = payload as {
+    rate_limits?: unknown
+    context_window?: unknown
+    model?: unknown
+    effort?: unknown
+    effort_level?: unknown
   }
-  const fiveHour = parseWindow((rateLimits as { five_hour?: unknown }).five_hour)
-  const sevenDay = parseWindow((rateLimits as { seven_day?: unknown }).seven_day)
-  if (!fiveHour && !sevenDay) {
+  const rateLimits =
+    typeof payloadRecord.rate_limits === 'object' && payloadRecord.rate_limits !== null
+      ? payloadRecord.rate_limits
+      : null
+  const fiveHour = parseWindow((rateLimits as { five_hour?: unknown } | null)?.five_hour)
+  const sevenDay = parseWindow((rateLimits as { seven_day?: unknown } | null)?.seven_day)
+  const context = parseContext(payloadRecord.context_window)
+  const modelRecord =
+    typeof payloadRecord.model === 'object' && payloadRecord.model !== null
+      ? (payloadRecord.model as Record<string, unknown>)
+      : null
+  const model = [modelRecord?.id, modelRecord?.display_name, payloadRecord.model]
+    .find((value) => typeof value === 'string' && value.trim())
+    ?.toString()
+    .trim()
+  const effort = [payloadRecord.effort, payloadRecord.effort_level]
+    .find((value) => typeof value === 'string' && value.trim())
+    ?.toString()
+    .trim()
+  if (!fiveHour && !sevenDay && !context && !model && !effort) {
     return null
   }
   const configDir = typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
-  return { configDir: configDir || null, fiveHour, sevenDay }
+  const paneKey =
+    typeof (fields as { paneKey?: unknown }).paneKey === 'string'
+      ? (fields as { paneKey: string }).paneKey.trim().slice(0, 512)
+      : ''
+  return {
+    ...(fields.agent === 'openclaude' ? { agent: 'openclaude' as const } : {}),
+    configDir: configDir || null,
+    fiveHour,
+    sevenDay,
+    ...(paneKey ? { paneKey } : {}),
+    ...(model ? { model } : {}),
+    ...(effort ? { effort } : {}),
+    ...(context ? { context } : {})
+  }
+}
+
+function parseContext(value: unknown): ClaudeStatusLineContext | null {
+  if (typeof value !== 'object' || value === null) {
+    return null
+  }
+  const raw = value as {
+    context_window_size?: unknown
+    used_percentage?: unknown
+    current_usage?: unknown
+  }
+  const maxTokens = finiteNumber(raw.context_window_size)
+  const current =
+    typeof raw.current_usage === 'object' && raw.current_usage !== null
+      ? (raw.current_usage as Record<string, unknown>)
+      : null
+  const input = finiteNumber(current?.input_tokens)
+  const cacheCreation = finiteNumber(current?.cache_creation_input_tokens)
+  const cacheRead = finiteNumber(current?.cache_read_input_tokens)
+  const usedTokens =
+    input === undefined && cacheCreation === undefined && cacheRead === undefined
+      ? null
+      : (input ?? 0) + (cacheCreation ?? 0) + (cacheRead ?? 0)
+  const reportedPercent = finiteNumber(raw.used_percentage)
+  if (!maxTokens || maxTokens <= 0 || (reportedPercent === undefined && usedTokens === null)) {
+    return null
+  }
+  const usedPercent = reportedPercent ?? (usedTokens! / maxTokens) * 100
+  if (usedPercent < 0) {
+    return null
+  }
+  return {
+    usedTokens,
+    maxTokens,
+    remainingTokens: usedTokens === null ? null : Math.max(0, maxTokens - usedTokens),
+    usedPercent: Math.min(100, usedPercent),
+    ...(current?.is_estimated === true ? { estimated: true } : {})
+  }
 }

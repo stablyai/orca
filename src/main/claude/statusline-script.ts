@@ -11,10 +11,18 @@ import {
 const STATUSLINE_CLEANUP_LABEL = 'orca_statusline_cleanup'
 const STATUSLINE_PROBE_LABEL = 'orca_statusline_probe'
 
+function quotePosix(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`
+}
+
 // Why: Claude Code pipes `rate_limits` to the statusLine command on every turn; forwarding
 // it gives Orca live usage without spending the OAuth usage endpoint's tight budget.
 // Emits no stdout so the in-terminal status line stays visually unchanged.
-export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'): string {
+export function getManagedStatusLineScript(
+  target: 'local' | 'posix' = 'local',
+  agent: 'claude' | 'openclaude' = 'claude',
+  userCommand?: string
+): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
@@ -49,7 +57,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
       // Why: rate_limits appears only for Claude.ai-subscriber sessions after the first API response; the
       // statusline ticks ~3x/sec during streaming, so skip the endpoint call and curl spawn otherwise.
       // Why: \" is the MSVC argv escape — findstr sees the quoted JSON key, so a cwd containing rate_limits can't false-match (POSIX guard parity).
-      '"%SystemRoot%\\System32\\findstr.exe" /c:\\"rate_limits\\" "%ORCA_STATUSLINE_PAYLOAD_FILE%" >nul 2>nul',
+      '"%SystemRoot%\\System32\\findstr.exe" /c:\\"rate_limits\\" /c:\\"context_window\\" "%ORCA_STATUSLINE_PAYLOAD_FILE%" >nul 2>nul',
       `if errorlevel 1 goto :${STATUSLINE_CLEANUP_LABEL}`,
       // Why: call the endpoint file to refresh port/token — a PTY that survived an Orca restart carries stale env; falls through to PTY env if missing.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
@@ -68,6 +76,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
         '-H "Content-Type: application/x-www-form-urlencoded"',
         '-H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%"',
         '--data-urlencode "paneKey=%ORCA_PANE_KEY%"',
+        `--data-urlencode "agent=${agent}"`,
         '--data-urlencode "%ORCA_STATUSLINE_CONFIG_DIR_FIELD%"',
         '--data-urlencode "env=%ORCA_AGENT_HOOK_ENV%"',
         '--data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%"',
@@ -90,6 +99,14 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     '  payload="${payload}${orca_statusline_line}\n"',
     'done',
     'payload=${payload%?}',
+    ...(userCommand
+      ? [
+          'orca_user_statusline() {',
+          `  printf '%s' "$payload" | /bin/sh -c ${quotePosix(userCommand)}`,
+          '}',
+          "trap 'orca_user_statusline' EXIT"
+        ]
+      : []),
     'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
@@ -101,7 +118,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     'fi',
     // Why: rate_limits appears only for Claude.ai-subscriber sessions after the first API response; skip the post (and its curl spawn) otherwise.
     'case "$payload" in',
-    '  *\'"rate_limits"\'*) ;;',
+    '  *\'"rate_limits"\'*|*\'"context_window"\'*) ;;',
     '  *) exit 0 ;;',
     'esac',
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
@@ -168,10 +185,11 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
+    `  --data-urlencode "agent=${agent}" \\`,
     '  --data-urlencode "configDir=${CLAUDE_CONFIG_DIR}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
+    `  --data-urlencode "payload@-" >/dev/null 2>&1 ${userCommand ? '&' : '|| true'}`,
     'exit 0',
     ''
   ].join('\n')

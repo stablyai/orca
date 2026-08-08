@@ -136,6 +136,7 @@ export const AgentJournalRenderItemSchema = z.object({
   body: AgentJournalItemBodySchema,
   sequence: z.number().int(),
   observedAt: z.number(),
+  updatedAt: z.number().optional(),
   recovered: z.literal(true).optional()
 })
 

@@ -185,12 +185,13 @@ function upsertItem(
     state.tombstones.delete(itemId)
     return
   }
-  // Creation sequence is the ordering key; a revision refreshes content only.
-  // `observedAt` is pinned with it: clients sort the timeline by that timestamp,
-  // so letting a revision advance it makes the row jump past everything that
-  // landed in between — the provider's own echo of a send revises the submission
-  // row, which relocated the user's bubble below later rows.
-  state.items.set(itemId, { ...next, sequence: existing.sequence, observedAt: existing.observedAt })
+  // Keep creation ordering stable while retaining the latest revision time.
+  state.items.set(itemId, {
+    ...next,
+    sequence: existing.sequence,
+    observedAt: existing.observedAt,
+    updatedAt: next.observedAt
+  })
   state.tombstones.delete(itemId)
 }
 

@@ -133,7 +133,13 @@ describe('native chat transcript watcher errors', () => {
     expect(subscription.watching).toBe(true)
 
     await vi.waitFor(() =>
-      expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0, 'Transcript unavailable')
+      expect(onInitialSnapshot).toHaveBeenCalledWith(
+        [],
+        false,
+        0,
+        'Transcript unavailable',
+        undefined
+      )
     )
     // Surfaced once, not spammed by the capped rotation retry loop.
     await new Promise((resolve) => setTimeout(resolve, 120))
@@ -159,7 +165,13 @@ describe('native chat transcript watcher errors', () => {
       debounceMs: 0
     })
     await vi.waitFor(() =>
-      expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0, 'Transcript unavailable')
+      expect(onInitialSnapshot).toHaveBeenCalledWith(
+        [],
+        false,
+        0,
+        'Transcript unavailable',
+        undefined
+      )
     )
 
     // initialDrain stays true after the error, so a recovered read delivers the
