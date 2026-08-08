@@ -1,5 +1,13 @@
 import React from 'react'
-import { FilePlus, FileText, Globe, Loader2, Smartphone, TerminalSquare } from 'lucide-react'
+import {
+  FilePlus,
+  FileText,
+  GitCompare,
+  Globe,
+  Loader2,
+  Smartphone,
+  TerminalSquare
+} from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { FilePathCursorTooltip, splitTrailingSegment } from '@/components/file-path-cursor-tooltip'
@@ -99,6 +107,24 @@ function FilenameFirstPath({ path }: { path: string }): React.JSX.Element {
   )
 }
 
+function getOpenTabIcon(
+  contentType: Extract<ActiveOption, { kind: 'tab' }>['option']['contentType']
+): React.ReactNode {
+  if (contentType === 'terminal') {
+    return <TerminalSquare className="size-3.5 shrink-0" aria-hidden="true" />
+  }
+  if (contentType === 'browser') {
+    return <Globe className="size-3.5 shrink-0" aria-hidden="true" />
+  }
+  if (contentType === 'simulator') {
+    return <Smartphone className="size-3.5 shrink-0" aria-hidden="true" />
+  }
+  if (contentType === 'editor') {
+    return <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+  }
+  return <GitCompare className="size-3.5 shrink-0" aria-hidden="true" />
+}
+
 function getActionPresentation(option: ActiveOption): {
   detail: string
   icon: React.ReactNode
@@ -124,6 +150,14 @@ function getActionPresentation(option: ActiveOption): {
       icon,
       label: option.option.label,
       showDetail: false
+    }
+  }
+  if (option.kind === 'tab') {
+    return {
+      detail: option.option.matchedText ?? option.option.title,
+      icon: getOpenTabIcon(option.option.contentType),
+      label: translate('auto.components.tab.bar.TabBarCreateEntry.8f0a1c4d92', 'Switch to tab'),
+      showDetail: true
     }
   }
   if (option.kind === 'agent') {

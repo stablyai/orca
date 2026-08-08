@@ -9325,7 +9325,12 @@ export class OrcaRuntimeService {
     ptyId: string,
     worktreeId: string,
     connectionId: string | null = null,
-    binding?: { tabId: string; leafId: string; incarnationId?: PtyIncarnationId },
+    binding?: {
+      tabId: string
+      leafId: string
+      incarnationId?: PtyIncarnationId
+      agentLaunchAuthority?: { launchToken: string; launchAgent: TuiAgent }
+    },
     isWsl?: boolean
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
@@ -9336,7 +9341,7 @@ export class OrcaRuntimeService {
       binding && isValidTerminalTabId(binding.tabId) && isTerminalLeafId(binding.leafId)
         ? makePaneKey(binding.tabId, binding.leafId)
         : null
-    this.recordPtyWorktree(ptyId, worktreeId, {
+    const pty = this.recordPtyWorktree(ptyId, worktreeId, {
       connected: true,
       connectionId,
       ...(binding && this.pendingMobileTerminalCreatesByKey.has(`${worktreeId}::${binding.tabId}`)
@@ -9346,6 +9351,21 @@ export class OrcaRuntimeService {
       ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {}),
       ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
     })
+    const agentLaunchAuthority = binding?.agentLaunchAuthority
+    if (
+      agentLaunchAuthority &&
+      paneKey &&
+      binding.incarnationId &&
+      pty.incarnationId === binding.incarnationId &&
+      pty.paneKey === paneKey &&
+      pty.launchToken === null &&
+      agentLaunchAuthority.launchToken.length > 0 &&
+      agentLaunchAuthority.launchToken.length <= 128 &&
+      isTuiAgent(agentLaunchAuthority.launchAgent)
+    ) {
+      pty.launchToken = agentLaunchAuthority.launchToken
+      pty.launchAgent = agentLaunchAuthority.launchAgent
+    }
     const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)
     if (
       pendingIncarnation === null ||
@@ -12047,7 +12067,8 @@ export class OrcaRuntimeService {
   }
 
   verifyOrchestrationCompatibilityCaller(
-    evidence: OrchestrationCompatibilityEvidence | null | undefined
+    evidence: OrchestrationCompatibilityEvidence | null | undefined,
+    options?: { currentRuntimeLaunchSufficient?: boolean }
   ): OrchestrationCompatibilityCallerAuthority | null {
     const terminalHandle =
       typeof evidence?.terminalHandle === 'string' ? evidence.terminalHandle.trim() : ''
@@ -12087,6 +12108,21 @@ export class OrcaRuntimeService {
       }
       terminalProvenance = 'restored'
     }
+    if (
+      options?.currentRuntimeLaunchSufficient &&
+      terminalProvenance === 'current_runtime' &&
+      claimedPaneKey === terminal.paneKey
+    ) {
+      // Why: the checks above bind a fresh launch to its live PTY, host, and
+      // launch secret. Only an exact live-pane match may skip hook attestation.
+      return this.freezeOrchestrationCompatibilityCallerAuthority(
+        terminal,
+        terminal.processIncarnation,
+        claimedPaneKey,
+        terminalHandle,
+        launchTokenHash
+      )
+    }
     const attestation = this.attestAgentHookCompatibilityAuthorityFn?.({
       paneKey: claimedPaneKey,
       launchTokenHash,
@@ -12096,11 +12132,27 @@ export class OrcaRuntimeService {
     if (!attestation || attestation.paneKey !== terminal.paneKey) {
       return null
     }
+    return this.freezeOrchestrationCompatibilityCallerAuthority(
+      terminal,
+      terminal.processIncarnation,
+      attestation.paneKey,
+      terminalHandle,
+      launchTokenHash
+    )
+  }
+
+  private freezeOrchestrationCompatibilityCallerAuthority(
+    terminal: OrchestrationCompatibilityTerminalAuthority,
+    processIncarnation: string,
+    paneKey: string,
+    terminalHandle: string,
+    launchTokenHash: string
+  ): OrchestrationCompatibilityCallerAuthority {
     return Object.freeze({
       hostScope: Object.freeze({ ...terminal.hostScope }),
-      paneKey: attestation.paneKey,
+      paneKey,
       terminalHandle,
-      processIncarnation: terminal.processIncarnation,
+      processIncarnation,
       launchTokenHash
     })
   }

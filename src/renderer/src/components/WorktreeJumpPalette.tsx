@@ -60,7 +60,6 @@ import {
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   getWorktreePaletteSearchScope,
   searchWorktrees,
@@ -80,11 +79,13 @@ import {
 } from '@/lib/worktree-palette-create-action'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import {
-  isBlankBrowserUrl,
   searchBrowserPages,
   type BrowserPaletteSearchResult,
   type SearchableBrowserPage
 } from '@/lib/browser-palette-search'
+import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
+import { activateBrowserPagePaletteResult } from '@/lib/browser-page-palette-activation'
+import { activateSimulatorTabPaletteResult } from '@/lib/simulator-tab-palette-activation'
 import {
   buildSearchableSimulatorTabs,
   searchSimulatorTabs,
@@ -173,7 +174,7 @@ import {
   isRuntimeOwnedSshTargetId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { BrowserPage, BrowserWorkspace, TerminalTab, Worktree } from '../../../shared/types'
+import type { TerminalTab, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
@@ -312,12 +313,6 @@ function appendPaletteListEntries(
   }
 }
 
-type BrowserSelection = {
-  worktree: Worktree
-  workspace: BrowserWorkspace
-  page: BrowserPage
-}
-
 function HighlightedText({
   text,
   matchRange
@@ -378,29 +373,6 @@ function PaletteHostBadgeChip({
       {badge.label}
     </span>
   )
-}
-
-function findBrowserSelection(
-  pageId: string,
-  workspaceId: string,
-  worktreeId: string
-): BrowserSelection | null {
-  const state = useAppStore.getState()
-  const page = (state.browserPagesByWorkspace[workspaceId] ?? []).find((p) => p.id === pageId)
-  if (!page) {
-    return null
-  }
-  const workspace = (state.browserTabsByWorktree[worktreeId] ?? []).find(
-    (w) => w.id === workspaceId
-  )
-  if (!workspace) {
-    return null
-  }
-  const worktree = findWorktreeById(state.worktreesByRepo, worktreeId)
-  if (!worktree) {
-    return null
-  }
-  return { page, workspace, worktree }
 }
 
 function getSettingsTargetFromSectionId(sectionId: string): {
@@ -508,6 +480,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [selectedItemId, setSelectedItemId] = useState('')
+  const latestQueryRef = useRef('')
   // Why: the id cmdk auto-selected for the last committed list, so a late recent-order snapshot can
   // tell "nobody has moved the highlight yet" from "the user arrowed somewhere deliberately".
   const autoSelectedItemIdRef = useRef<string | null>(null)
@@ -810,30 +783,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
 
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
-    const entries: SearchableBrowserPage[] = []
-    for (const worktree of browserSortedWorktrees) {
-      const repoName = repoMap.get(worktree.repoId)?.displayName ?? ''
-      const worktreeSortIndex = worktreeOrder.get(worktree.id) ?? Number.MAX_SAFE_INTEGER
-      const workspaces = browserTabsByWorktree[worktree.id] ?? []
-      for (const workspace of workspaces) {
-        const pages = browserPagesByWorkspace[workspace.id] ?? []
-        for (const page of pages) {
-          entries.push({
-            page,
-            workspace,
-            worktree,
-            repoName,
-            worktreeSortIndex,
-            isCurrentPage:
-              activeTabType === 'browser' &&
-              workspace.id === activeBrowserTabId &&
-              workspace.activePageId === page.id,
-            isCurrentWorktree: activeWorktreeId === worktree.id
-          })
-        }
-      }
-    }
-    return entries
+    return buildSearchableBrowserPages({
+      worktrees: browserSortedWorktrees,
+      repoMap,
+      worktreeOrder,
+      browserTabsByWorktree,
+      browserPagesByWorkspace,
+      activeBrowserTabId,
+      activeWorktreeId,
+      activeTabType
+    })
   }, [
     activeBrowserTabId,
     activeTabType,
@@ -1595,6 +1554,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           ? document.activeElement
           : null
       skipRestoreFocusRef.current = false
+      latestQueryRef.current = ''
       setQuery('')
       setSelectedItemId('')
       // Why: reset on open, not on close — closing races the fade-out, and a
@@ -1631,6 +1591,17 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     showCreateAction
   })
 
+  const handleCommandSelectionChange = useCallback(
+    (nextItemId: string) => {
+      // Why: cmdk can report the old list head before the deferred query commits its new ranking.
+      if (latestQueryRef.current !== deferredQuery) {
+        return
+      }
+      setSelectedItemId(nextItemId)
+    },
+    [deferredQuery]
+  )
+
   useEffect(() => {
     const isCreateWorkspaceHighlighted =
       commandSelectedItemId === CREATE_WORKTREE_ITEM_ID ||
@@ -1643,6 +1614,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   }, [commandSelectedItemId, prefetchCreateWorkspaceBaseForComposer, visible])
 
   const handleQueryChange = useCallback((nextQuery: string) => {
+    latestQueryRef.current = nextQuery
     setQuery(nextQuery)
     setSelectedItemId('')
     listRef.current?.scrollTo(0, 0)
@@ -1741,73 +1713,47 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const handleSelectBrowserPage = useCallback(
     (result: BrowserPaletteSearchResult) => {
-      const { pageId, workspaceId, worktreeId } = result
-      const selection = findBrowserSelection(pageId, workspaceId, worktreeId)
-      if (!selection) {
+      const activation = activateBrowserPagePaletteResult(result)
+      if (activation.status === 'failed') {
         toast.error(
-          translate(
-            'auto.components.WorktreeJumpPalette.d7d496a451',
-            'Browser page no longer exists'
-          )
+          activation.reason === 'missing-page'
+            ? translate(
+                'auto.components.WorktreeJumpPalette.d7d496a451',
+                'Browser page no longer exists'
+              )
+            : translate(
+                'auto.components.WorktreeJumpPalette.2c38630a01',
+                'Workspace no longer exists'
+              )
         )
         return
       }
-      // Why: capture page info before activateAndRevealWorktree mutates store state — a later findBrowserSelection would be unreliable.
-      const { worktree, workspace, page } = selection
-      const activated = activateAndRevealWorktree(
-        worktree.id,
-        worktree.hostId ? { executionHostId: worktree.hostId } : {}
-      )
-      if (!activated) {
-        toast.error(
-          translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
-        )
-        return
-      }
-
-      const state = useAppStore.getState()
-      state.setActiveBrowserTab(workspace.id)
-      state.setActiveBrowserPage(workspace.id, pageId)
       recordFeatureInteraction('cmd-j-browser-page-open')
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
-      requestBrowserFocus({
-        pageId,
-        target: isBlankBrowserUrl(page.url) ? 'address-bar' : 'webview'
-      })
+      requestBrowserFocus({ pageId: activation.pageId, target: activation.focusTarget })
     },
     [closeModal, recordFeatureInteraction, requestBrowserFocus]
   )
 
   const handleSelectSimulatorTab = useCallback(
     (result: SimulatorPaletteSearchResult) => {
-      const state = useAppStore.getState()
-      const tab = (state.unifiedTabsByWorktree[result.worktreeId] ?? []).find(
-        (candidate) => candidate.id === result.tabId && candidate.contentType === 'simulator'
-      )
-      if (!tab) {
+      const activation = activateSimulatorTabPaletteResult(result)
+      if (activation.status === 'failed') {
         toast.error(
-          translate(
-            'auto.components.WorktreeJumpPalette.7726ce9970',
-            'Mobile emulator tab no longer exists'
-          )
+          activation.reason === 'missing-tab'
+            ? translate(
+                'auto.components.WorktreeJumpPalette.7726ce9970',
+                'Mobile emulator tab no longer exists'
+              )
+            : translate(
+                'auto.components.WorktreeJumpPalette.2c38630a01',
+                'Workspace no longer exists'
+              )
         )
         return
       }
-      const activated = activateAndRevealWorktree(result.worktreeId)
-      if (!activated) {
-        toast.error(
-          translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
-        )
-        return
-      }
-
-      const nextState = useAppStore.getState()
-      nextState.focusGroup(result.worktreeId, tab.groupId)
-      nextState.activateTab(tab.id)
-      nextState.setActiveTab(tab.id)
-      nextState.setActiveTabType('simulator')
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
@@ -2222,7 +2168,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       commandProps={{
         loop: true,
         value: commandSelectedItemId,
-        onValueChange: setSelectedItemId,
+        onValueChange: handleCommandSelectionChange,
         className: 'bg-transparent'
       }}
     >

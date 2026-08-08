@@ -613,6 +613,25 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getCommandValue()).toBe('workspace-tab:tab-host')
   })
 
+  it('selects the new first result when cmdk reports the deferred list selection', async () => {
+    await renderPalette(makeTypedRelevanceState())
+
+    await act(async () => {
+      setCommandQuery?.('improve')
+    })
+    await flushEffects()
+    expect(getCommandValue()).toBe('worktree:wt-weak')
+
+    await act(async () => {
+      setCommandQuery?.('perf')
+      setCommandSelection?.('worktree:wt-weak')
+    })
+    await flushEffects()
+
+    expect(getRenderedRowIds().find((id) => id.length > 0)).toBe('workspace-tab:tab-host')
+    expect(getCommandValue()).toBe('workspace-tab:tab-host')
+  })
+
   it('keeps worktrees ahead of tabs when a worktree holds the stronger match', async () => {
     await renderPalette({
       ...makeTypedRelevanceState(),

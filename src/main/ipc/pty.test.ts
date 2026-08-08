@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: stateful registration helper + shared mocked IPC/node-pty harness keep spawn-env assertions in one focused file. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { userInfo } from 'node:os'
 import { delimiter, join, posix } from 'node:path'
 import { prepareCodexSessionResume } from '../codex/codex-session-resume-preparation'
@@ -8043,6 +8044,114 @@ describe('registerPtyHandlers', () => {
       { tabId: 'tab-1', leafId, incarnationId: expect.any(String) },
       false
     )
+  })
+
+  it.each([
+    {
+      label: 'matching proof',
+      launchToken: 'renderer-launch-token',
+      envLaunchToken: 'renderer-launch-token',
+      hasLaunchConfig: true,
+      launchAgent: 'claude',
+      expectedToken: 'renderer-launch-token'
+    },
+    {
+      label: 'mismatched proof',
+      launchToken: 'renderer-launch-token',
+      envLaunchToken: 'different-process-token',
+      hasLaunchConfig: true,
+      launchAgent: 'claude',
+      expectedToken: null
+    },
+    {
+      label: 'missing top-level proof',
+      launchToken: undefined,
+      envLaunchToken: 'renderer-launch-token',
+      hasLaunchConfig: true,
+      launchAgent: 'claude',
+      expectedToken: null
+    },
+    {
+      label: 'oversized proof',
+      launchToken: 'x'.repeat(129),
+      envLaunchToken: 'x'.repeat(129),
+      hasLaunchConfig: true,
+      launchAgent: 'claude',
+      expectedToken: null
+    },
+    {
+      label: 'untracked launch',
+      launchToken: 'renderer-launch-token',
+      envLaunchToken: 'renderer-launch-token',
+      hasLaunchConfig: false,
+      launchAgent: 'claude',
+      expectedToken: null
+    },
+    {
+      label: 'invalid agent identity',
+      launchToken: 'renderer-launch-token',
+      envLaunchToken: 'renderer-launch-token',
+      hasLaunchConfig: true,
+      launchAgent: 'not-an-agent',
+      expectedToken: null
+    },
+    {
+      label: 'missing agent identity',
+      launchToken: 'renderer-launch-token',
+      envLaunchToken: 'renderer-launch-token',
+      hasLaunchConfig: true,
+      launchAgent: undefined,
+      expectedToken: null
+    }
+  ])('binds only $label from renderer pty:spawn to runtime authority', async (testCase) => {
+    const runtime = new OrcaRuntimeService()
+    registerPtyHandlers(mainWindow as never, runtime)
+    const worktreeId = 'repo-1::/tmp/renderer-authority'
+    const tabId = 'tab-renderer-authority'
+    const leafId = '99999999-9999-4999-8999-999999999999'
+    const paneKey = makePaneKey(tabId, leafId)
+
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp/renderer-authority',
+      command: 'claude',
+      worktreeId,
+      tabId,
+      leafId,
+      env: {
+        ORCA_PANE_KEY: paneKey,
+        ORCA_TAB_ID: tabId,
+        ORCA_WORKTREE_ID: worktreeId,
+        ORCA_AGENT_LAUNCH_TOKEN: testCase.envLaunchToken
+      },
+      ...(testCase.launchToken ? { launchToken: testCase.launchToken } : {}),
+      ...(testCase.hasLaunchConfig
+        ? { launchConfig: { agentCommand: 'claude', agentArgs: '', agentEnv: {} } }
+        : {}),
+      ...(testCase.launchAgent ? { launchAgent: testCase.launchAgent } : {})
+    })) as { id: string; incarnationId: string }
+
+    const handle = runtime.preAllocateHandleForPty(result.id)
+    const authority = runtime.getOrchestrationDispatchAuthority(handle)
+    expect(authority).toMatchObject({ ptyId: result.id, paneKey })
+    expect(authority?.launchTokenHash).toBe(
+      testCase.expectedToken
+        ? createHash('sha256').update(testCase.expectedToken).digest('hex')
+        : null
+    )
+
+    if (testCase.expectedToken) {
+      runtime.registerPty(result.id, worktreeId, null, {
+        tabId,
+        leafId,
+        incarnationId: result.incarnationId,
+        agentLaunchAuthority: { launchToken: 'stale-overwrite', launchAgent: 'claude' }
+      })
+      expect(runtime.getOrchestrationDispatchAuthority(handle)?.launchTokenHash).toBe(
+        createHash('sha256').update(testCase.expectedToken).digest('hex')
+      )
+    }
   })
 
   it('omits the pane identity from registerPty when the leafId is not a terminal leaf (#7587)', async () => {
