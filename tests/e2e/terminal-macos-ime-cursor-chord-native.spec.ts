@@ -3,6 +3,7 @@ import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { pressChordWithSeparateModifier } from './macos-input-source-driver'
 import {
   focusActiveTerminalInput,
   getTerminalContent,
@@ -107,14 +108,19 @@ function typeKeyCodes(processId: number, keyCodes: readonly number[]): void {
   ])
 }
 
-/** The chord itself, pressed by the OS so the IME decides how to resolve it. */
+/**
+ * The chord itself, pressed by the OS so the IME decides how to resolve it. A modifier goes as
+ * its own key event rather than folded into the target key's flags, because macOS delivers no
+ * keyup for a key released while Command is held: the modifier's release is the only end that
+ * gesture has, and `using command down` never produces one.
+ */
 function pressChord(processId: number, keyCode: number, modifier?: 'command' | 'option'): void {
+  if (modifier) {
+    pressChordWithSeparateModifier(processId, keyCode, modifier)
+    return
+  }
   focusApp(processId)
-  const using = modifier ? ` using ${modifier} down` : ''
-  execFileSync('osascript', [
-    '-e',
-    `tell application "System Events" to key code ${keyCode}${using}`
-  ])
+  execFileSync('osascript', ['-e', `tell application "System Events" to key code ${keyCode}`])
 }
 
 function readActiveComposition(page: Page): Promise<string | null> {

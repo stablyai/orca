@@ -105,6 +105,20 @@ function imeChordSnapshot(event: KeyboardEvent): PendingImeChord {
 }
 
 /**
+ * Which release answers for a pending chord. Normally the chord's own key, but a key released
+ * while `Cmd` is held has no keyup at all: recorded in-app at Chromium's own input dispatch,
+ * `Cmd+←` delivers a keydown and nothing after it, while `Option+←` and a bare `←` both deliver
+ * their keyup there. Nothing in the app consumes it — it never arrives. The `Cmd` release does,
+ * still marked as composing, and it ends the same gesture.
+ *
+ * Korean cannot double-fire through this. It commits on the chord, so its own keyup arrives
+ * first and spends the carry, and both releases report the composition already over.
+ */
+function releasesPendingImeChord(chord: PendingImeChord, event: KeyboardEvent): boolean {
+  return chord.code === event.code || (chord.metaKey === true && event.key === 'Meta')
+}
+
+/**
  * Note the asymmetry with the pane's own keydown handler, which yields on *every* IME-owned
  * event. This resolver deliberately lets an exempt chord through, because the pane also calls
  * it for such a chord's release, where resolving is the whole point. A composing exempt chord
@@ -736,7 +750,7 @@ export function useTerminalKeyboardShortcuts({
 
     const onSwallowedImeChordRelease = (e: KeyboardEvent): void => {
       const chord = pendingImeChord
-      if (!chord || chord.code !== e.code) {
+      if (!chord || !releasesPendingImeChord(chord, e)) {
         return
       }
       // Spent before any gate below can refuse: the key is up, so the press it carried is over

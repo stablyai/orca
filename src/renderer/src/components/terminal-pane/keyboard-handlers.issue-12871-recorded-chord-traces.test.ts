@@ -27,12 +27,19 @@
 // bare page (provenance and per-case notes in keyboard-handlers.issue-12871-in-app-chord-traces
 // .ts). It is replayed through the same rig below. The two surfaces captured different subsets
 // of the same gestures, so each case there states which half of the contract it can speak for.
+//
+// COMMAND_RELEASE_TRACE_CASES is a third, and the one that covers the Cmd half. Both recordings
+// above were driven with the modifier folded into the target key's flags, which produces no
+// modifier press or release at all; these were driven with it as its own key event, the way a
+// hand types it. That is what exposed the asymmetry between the two modifiers — a key released
+// while Cmd is held has no keyup on macOS, so the Cmd release is the gesture's only end.
 import { Terminal } from '@xterm/xterm'
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
+import { COMMAND_RELEASE_TRACE_CASES } from './keyboard-handlers.issue-12871-command-release-traces'
 import { IN_APP_TRACE_CASES } from './keyboard-handlers.issue-12871-in-app-chord-traces'
 
 type RecordedRow = {
@@ -434,17 +441,18 @@ describe('recorded macOS chord traces during an IME composition', () => {
     document.body.replaceChildren()
   })
 
-  it.each([...CASES, ...IN_APP_TRACE_CASES].map((testCase) => [testCase.name, testCase] as const))(
-    '%s',
-    async (_name, testCase) => {
-      const rig = openRig()
-      await replay(rig.textarea, testCase.rows)
+  it.each(
+    [...CASES, ...IN_APP_TRACE_CASES, ...COMMAND_RELEASE_TRACE_CASES].map(
+      (testCase) => [testCase.name, testCase] as const
+    )
+  )('%s', async (_name, testCase) => {
+    const rig = openRig()
+    await replay(rig.textarea, testCase.rows)
 
-      expect(rig.inputCalls).toEqual(testCase.expectCalls)
-      expect(rig.emitted).toEqual(testCase.expectEmitted)
-      rig.unmount()
-    }
-  )
+    expect(rig.inputCalls).toEqual(testCase.expectCalls)
+    expect(rig.emitted).toEqual(testCase.expectEmitted)
+    rig.unmount()
+  })
 
   // A chord remapped onto one of these keys resolves to a pane command rather than bytes, so
   // the swallowed-chord release has to reach every action, not just the byte path. Recovering
