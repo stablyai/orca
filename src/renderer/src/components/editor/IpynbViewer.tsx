@@ -313,7 +313,7 @@ function NotebookHeaderButton({
 function MarkdownCell({ source }: { source: string }): React.JSX.Element {
   return (
     <div className="markdown-preview-body px-4 py-3 text-sm">
-      <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>
+      <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]} remarkRehypeOptions={{ allowDangerousHtml: true }}>
         {source || '\u00a0'}
       </Markdown>
     </div>

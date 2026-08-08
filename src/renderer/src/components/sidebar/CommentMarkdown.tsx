@@ -238,6 +238,7 @@ const CommentMarkdown = React.memo(
         <Markdown
           remarkPlugins={activeRemarkPlugins}
           rehypePlugins={rehypePlugins}
+          remarkRehypeOptions={{ allowDangerousHtml: true }}
           components={components}
           urlTransform={
             allowFileUriLinks ? commentMarkdownFileUriUrlTransform : commentMarkdownUrlTransform

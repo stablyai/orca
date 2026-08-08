@@ -371,6 +371,7 @@ const MarkdownBody = memo(function MarkdownBody({
       urlTransform={markdownPreviewUrlTransform}
       remarkPlugins={MARKDOWN_REMARK_PLUGINS}
       rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
+      remarkRehypeOptions={{ allowDangerousHtml: true }}
     >
       {content}
     </Markdown>
