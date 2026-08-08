@@ -7,8 +7,6 @@ import {
   refreshShellPathAndDetectAgents,
   runPreflightCheck
 } from '../../../ipc/preflight'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { markRuntimeAgentWorkspaceTrusted } from '../../runtime-agent-trust'
 
 const PreflightCheck = z.object({
   force: z.boolean().optional()
@@ -18,10 +16,6 @@ const PreflightDetectRemoteAgents = z.object({
 })
 const PreflightDetectRemoteWindowsTerminalCapabilities = z.object({
   connectionId: z.string().min(1)
-})
-const PreflightMarkAgentTrusted = z.object({
-  agent: z.string().refine(isTuiAgent),
-  workspacePath: z.string().min(1)
 })
 
 export const PREFLIGHT_METHODS: RpcMethod[] = [
@@ -49,10 +43,5 @@ export const PREFLIGHT_METHODS: RpcMethod[] = [
     name: 'preflight.refreshAgents',
     params: null,
     handler: async () => refreshShellPathAndDetectAgents()
-  }),
-  defineMethod({
-    name: 'preflight.markAgentTrusted',
-    params: PreflightMarkAgentTrusted,
-    handler: async (params) => markRuntimeAgentWorkspaceTrusted(params.agent, params.workspacePath)
   })
 ]

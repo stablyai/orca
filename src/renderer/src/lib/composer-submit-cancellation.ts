@@ -2,14 +2,6 @@ export type ComposerSubmitSettlement<T> =
   | { status: 'completed'; value: T }
   | { status: 'cancelled' }
 
-export function captureComposerSubmitCancellation(
-  generation: number,
-  getGeneration: () => number,
-  isCancelled: () => boolean
-): () => boolean {
-  return () => isCancelled() || getGeneration() !== generation
-}
-
 export async function settleComposerSubmit<T>(
   promise: Promise<T>,
   isCancelled: () => boolean

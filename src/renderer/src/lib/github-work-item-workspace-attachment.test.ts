@@ -62,33 +62,6 @@ describe('GitHub work-item workspace attachment', () => {
     expect(findGithubIssueWorkspaceAttachment([attachedElsewhere], 'repo-1', 42)).toBeNull()
   })
 
-  it('does not match a workspace attached on another execution host', () => {
-    const local = worktree({ id: 'local', linkedIssue: 42 })
-    const runtime = worktree({ id: 'runtime', linkedIssue: 42, hostId: 'runtime:env-1' })
-
-    expect(
-      findGithubWorkItemWorkspaceAttachment(
-        [local, runtime],
-        'repo-1',
-        'issue',
-        42,
-        'runtime:env-1'
-      )
-    ).toBe(runtime)
-    expect(
-      findGithubWorkItemWorkspaceAttachment([runtime, local], 'repo-1', 'issue', 42, 'local')
-    ).toBe(local)
-  })
-
-  it('keeps the issue attachment wrapper scoped to its execution host', () => {
-    const local = worktree({ id: 'local', linkedIssue: 42 })
-    const runtime = worktree({ id: 'runtime', linkedIssue: 42, hostId: 'runtime:env-1' })
-
-    expect(
-      findGithubIssueWorkspaceAttachment([local, runtime], 'repo-1', 42, 'runtime:env-1')
-    ).toBe(runtime)
-  })
-
   it('does not match archived workspaces', () => {
     const archived = worktree({ linkedIssue: 42, linkedPR: 42, isArchived: true })
 

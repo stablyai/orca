@@ -142,7 +142,6 @@ describe('parent PR checks refresh', () => {
       {
         force: false,
         repoId: 'repo-1',
-        executionHostId: 'ssh:ssh-1',
         linkedGitHubPR: 7,
         linkedGitLabMR: 9,
         linkedBitbucketPR: 10,
@@ -154,57 +153,8 @@ describe('parent PR checks refresh', () => {
     ])
     expect(fetchPRChecks).toHaveBeenCalledWith('/repo', 7, 'feature', 'abc123', null, {
       repoId: 'repo-1',
-      executionHostId: 'ssh:ssh-1',
       force: false
     })
-  })
-
-  it('routes duplicate repo ids through the worktree execution host', async () => {
-    const localRepo = makeRepo({
-      path: '/local/repo',
-      connectionId: null,
-      executionHostId: 'local'
-    })
-    const runtimeRepo = makeRepo({
-      path: '/runtime/repo',
-      connectionId: null,
-      executionHostId: 'runtime:env-1'
-    })
-    const worktree = makeWorktree({
-      id: 'repo-1::/runtime',
-      hostId: 'runtime:env-1'
-    })
-    const fetchHostedReviewForBranch = vi.fn(async () => makeReview())
-    const fetchPRChecks = vi.fn(async () => [])
-
-    await runLimitedParentPrChecksRefreshes({
-      candidates: getParentPrChecksRefreshCandidates({
-        worktrees: [worktree],
-        repos: [localRepo, runtimeRepo]
-      }),
-      fetchHostedReviewForBranch,
-      fetchPRChecks
-    })
-
-    expect(fetchHostedReviewForBranch).toHaveBeenCalledWith(
-      '/runtime/repo',
-      'feature',
-      expect.objectContaining({
-        repoId: 'repo-1',
-        executionHostId: 'runtime:env-1'
-      })
-    )
-    expect(fetchPRChecks).toHaveBeenCalledWith(
-      '/runtime/repo',
-      7,
-      'feature',
-      'abc123',
-      null,
-      expect.objectContaining({
-        repoId: 'repo-1',
-        executionHostId: 'runtime:env-1'
-      })
-    )
   })
 
   it('keeps ambiguous null neutral while preserving thrown refresh failures as errors', async () => {

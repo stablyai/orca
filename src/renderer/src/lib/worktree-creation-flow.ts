@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal,
@@ -25,7 +26,6 @@ import {
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/worktree-creation-agent-seeds'
 import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
-import { preflightCreatedWorktreeAgentTrust } from '@/lib/created-worktree-agent-trust'
 import {
   buildWorktreeCreationStartupOpt,
   getInitialWorktreeCreationPhase,
@@ -65,6 +65,33 @@ function revealPendingCreation(
   // router), so force it active so the panel is what fills the content area.
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
+}
+
+async function preflightAgentTrust(
+  request: WorktreeCreationRequest,
+  path: string,
+  connectionId?: string | null
+): Promise<void> {
+  // Why: trust-gated agents (cursor-agent, copilot) consume the bracketed paste
+  // as menu input on first launch. Pre-write the trust artifact before any
+  // terminal spawns. Best-effort — the worktree already exists, so a failure
+  // here must not strand it.
+  if (!request.agent || !window.api.agentTrust?.markTrusted) {
+    return
+  }
+  const preflight = TUI_AGENT_CONFIG[request.agent].preflightTrust
+  if (!preflight) {
+    return
+  }
+  try {
+    await window.api.agentTrust.markTrusted({
+      preset: preflight,
+      workspacePath: path,
+      ...(connectionId ? { connectionId } : {})
+    })
+  } catch {
+    // Best-effort: continue with launch.
+  }
 }
 
 async function executeWorktreeCreation(
@@ -108,7 +135,6 @@ async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
-          executionHostId: preparedRequest.workspaceRunContext?.hostId,
           ...(preparedRequest.linkedWorkItem !== undefined
             ? { linkedWorkItem: preparedRequest.linkedWorkItem }
             : {}),
@@ -141,7 +167,6 @@ async function executeWorktreeCreation(
   }
 
   const worktree = result.worktree
-  const worktreeExecutionHostId = worktree.hostId ?? preparedRequest.workspaceRunContext?.hostId
 
   // Why: if the user dismissed/cancelled while the create was in flight, the entry
   // is gone. Git already made the worktree on disk, but don't auto-provision (trust
@@ -161,11 +186,9 @@ async function executeWorktreeCreation(
   const startupOpt = buildWorktreeCreationStartupOpt(preparedRequest, backendSpawned)
 
   if (worktree.path) {
-    await preflightCreatedWorktreeAgentTrust(
-      useAppStore.getState(),
-      preparedRequest.agent,
-      worktree
-    )
+    const repoConnectionId =
+      useAppStore.getState().repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? null
+    await preflightAgentTrust(preparedRequest, worktree.path, repoConnectionId)
   }
 
   // `createWorktree` already inserted the real worktree row. Leaving for an app
@@ -184,7 +207,6 @@ async function executeWorktreeCreation(
   if (shouldActivateOnCompletion) {
     activation = activateAndRevealWorktree(worktree.id, {
       sidebarRevealBehavior: 'auto',
-      ...(worktreeExecutionHostId ? { executionHostId: worktreeExecutionHostId } : {}),
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
       ...(startupOpt ? { startup: startupOpt } : {}),

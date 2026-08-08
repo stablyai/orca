@@ -134,9 +134,7 @@ function openDialog(
     folderWorkspace?: Partial<FolderWorkspace>
     /** Extra owners of the same workspace ID, which the index reads as ambiguous. */
     otherRepos?: { repoId: string; worktree?: Partial<Worktree> }[]
-    sameRepoWorktrees?: Partial<Worktree>[]
     modalRepoId?: string
-    modalExecutionHostId?: string
     linearViewerOrganizationUrlKey?: string
   } = {}
 ): void {
@@ -145,10 +143,7 @@ function openDialog(
   useAppStore.setState({
     repos: [makeRepo(), ...otherRepos.map((other) => makeRepo(other.repoId, `/${other.repoId}`))],
     worktreesByRepo: {
-      [REPO_ID]: [
-        worktree,
-        ...(options.sameRepoWorktrees ?? []).map((other) => makeWorktree(other))
-      ],
+      [REPO_ID]: [worktree],
       ...Object.fromEntries(
         otherRepos.map((other) => [
           other.repoId,
@@ -176,7 +171,6 @@ function openDialog(
     modalData: {
       worktreeId: options.worktreeId ?? worktree.id,
       ...(options.modalRepoId ? { repoId: options.modalRepoId } : {}),
-      ...(options.modalExecutionHostId ? { executionHostId: options.modalExecutionHostId } : {}),
       currentDisplayName: worktree.displayName,
       currentComment: worktree.comment,
       focus: 'comment'
@@ -560,18 +554,6 @@ describe('WorktreeMetaDialog issue link row', () => {
       worktree: { linkedIssue: 42 },
       otherRepos: [{ repoId: 'repo-2', worktree: { linkedIssue: 77 } }],
       modalRepoId: 'repo-2'
-    })
-
-    expect(issueInput().value).toBe('77')
-    expect(providerChip().textContent).toContain('GitHub')
-  })
-
-  it('shows the clicked host when duplicate workspace IDs share a repo bucket', () => {
-    openDialog({
-      worktree: { linkedIssue: 42, hostId: 'local' },
-      sameRepoWorktrees: [{ linkedIssue: 77, hostId: 'ssh:ssh-1' }],
-      modalRepoId: REPO_ID,
-      modalExecutionHostId: 'ssh:ssh-1'
     })
 
     expect(issueInput().value).toBe('77')

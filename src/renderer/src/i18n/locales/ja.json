@@ -198,7 +198,6 @@
         },
         "github": {
           "f129c42773": "GitHub は新規コメントを返しませんでした。",
-          "repositoryExecutionHostNotFound": "リポジトリの実行ホストが見つかりません。",
           "683a21264b": "行には所有者/repo/番号がありません。",
           "83f9b126ad": "Issue タイプは Issue にのみ設定できます。",
           "f963485d37": "行が見つかりません",
@@ -14454,17 +14453,6 @@
         "loadFailed": "GitLab ジョブのログを読み込めませんでした。",
         "emptyTrace": "この GitLab ジョブのログはありません。",
         "timedOut": "GitLab ジョブのログの読み込みがタイムアウトしました。"
-      }
-    },
-    "source": {
-      "control": {
-        "agent": {
-          "action": {
-            "plan": {
-              "a7ac8717c7": "開始する前にエージェントを選択してください。"
-            }
-          }
-        }
       }
     },
     "ssh": {

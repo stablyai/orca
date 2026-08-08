@@ -198,7 +198,6 @@
         },
         "github": {
           "f129c42773": "GitHub no devolvió el comentario nuevo.",
-          "repositoryExecutionHostNotFound": "No se encontró el host de ejecución del repositorio.",
           "683a21264b": "La fila no tiene owner/repo/number.",
           "83f9b126ad": "El campo Issue Type solo se puede configurar en issues.",
           "f963485d37": "No se encontró la fila",
@@ -14454,17 +14453,6 @@
         "loadFailed": "No se pudo cargar el registro del job de GitLab.",
         "emptyTrace": "No hay ningún registro disponible para este job de GitLab.",
         "timedOut": "Se agotó el tiempo de espera al cargar el registro del job de GitLab."
-      }
-    },
-    "source": {
-      "control": {
-        "agent": {
-          "action": {
-            "plan": {
-              "a7ac8717c7": "Elige un agente antes de empezar."
-            }
-          }
-        }
       }
     },
     "ssh": {

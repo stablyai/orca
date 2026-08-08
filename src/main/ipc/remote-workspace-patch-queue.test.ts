@@ -69,12 +69,8 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
   const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
   const muxByTargetId = new Map<string, { request: ReturnType<typeof vi.fn> }>()
   const getRepoMock = vi.fn<Store['getRepo']>()
-  const getReposMock = vi.fn<Store['getRepos']>()
-  const getWorktreeMetaMock = vi.fn<Store['getWorktreeMeta']>()
   const store = {
-    getRepo: getRepoMock,
-    getRepos: getReposMock,
-    getWorktreeMeta: getWorktreeMetaMock
+    getRepo: getRepoMock
   } as unknown as Store
 
   const target: SshTarget = {
@@ -99,7 +95,6 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       listTargets: () => [target]
     })
     getRepoMock.mockReset()
-    getWorktreeMetaMock.mockReset()
     getRepoMock.mockImplementation((repoId: string) =>
       repoId === 'repo-target-1'
         ? ({
@@ -112,17 +107,6 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
           } as never)
         : undefined
     )
-    getReposMock.mockReset()
-    getReposMock.mockReturnValue([
-      {
-        id: 'repo-target-1',
-        path: '/remote/repo',
-        displayName: 'Repo',
-        badgeColor: 'blue',
-        addedAt: 1,
-        connectionId: 'target-1'
-      } as never
-    ])
     getActiveMultiplexerMock.mockReset()
     getActiveMultiplexerMock.mockImplementation((targetId: string) => muxByTargetId.get(targetId))
     registerRemoteWorkspaceNotificationHandlerMock.mockClear()
@@ -232,10 +216,6 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       }
       return undefined
     })
-    getReposMock.mockReturnValue([
-      getRepoMock('repo-target-1') as never,
-      getRepoMock('repo-target-2') as never
-    ])
 
     let releaseFirstPatch!: () => void
     const firstPatchCanFinish = new Promise<void>((resolve) => {
@@ -334,7 +314,6 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
           } as never)
         : undefined
     )
-    getReposMock.mockReturnValue([getRepoMock('repo-reset') as never])
 
     const patchBaseRevisions: number[] = []
     const request = vi
@@ -409,7 +388,6 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
           } as never)
         : undefined
     )
-    getReposMock.mockReturnValue([getRepoMock('repo-newer') as never])
 
     const patchBaseRevisions: number[] = []
     const request = vi

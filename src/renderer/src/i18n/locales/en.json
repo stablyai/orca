@@ -253,7 +253,6 @@
         },
         "github": {
           "f129c42773": "GitHub did not return the new comment.",
-          "repositoryExecutionHostNotFound": "Repository execution host not found.",
           "683a21264b": "Row has no owner/repo/number.",
           "83f9b126ad": "Issue Type can only be set on Issues.",
           "f963485d37": "Row not found",
@@ -1974,8 +1973,7 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces",
-        "githubWorkspaceRepositoryHostUnavailable": "This repository host is no longer available."
+        "linearWorktreesColumn": "Workspaces"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -14995,17 +14993,6 @@
         "loadFailed": "Failed to load the GitLab job log.",
         "emptyTrace": "No log is available for this GitLab job.",
         "timedOut": "Timed out loading the GitLab job log."
-      }
-    },
-    "source": {
-      "control": {
-        "agent": {
-          "action": {
-            "plan": {
-              "a7ac8717c7": "Choose an agent before starting."
-            }
-          }
-        }
       }
     },
     "ssh": {

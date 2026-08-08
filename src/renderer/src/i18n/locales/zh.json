@@ -198,7 +198,6 @@
         },
         "github": {
           "f129c42773": "GitHub 没有回复新评论。",
-          "repositoryExecutionHostNotFound": "找不到存储库执行主机。",
           "683a21264b": "行没有所有者/仓库/编号。",
           "83f9b126ad": "议题类型只能在议题上设置。",
           "f963485d37": "未找到行",
@@ -14474,17 +14473,6 @@
         "loadFailed": "加载 GitLab 作业日志失败。",
         "emptyTrace": "此 GitLab 作业没有可用的日志。",
         "timedOut": "加载 GitLab 作业日志超时。"
-      }
-    },
-    "source": {
-      "control": {
-        "agent": {
-          "action": {
-            "plan": {
-              "a7ac8717c7": "开始前请选择一个代理。"
-            }
-          }
-        }
       }
     },
     "ssh": {

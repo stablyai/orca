@@ -197,7 +197,7 @@ function QuickTabBody({
     if (unavailableExplicitAgent) {
       toast.error(
         translate(
-          'auto.source.control.agent.action.plan.a7ac8717c7',
+          'auto.lib.source.control.agent.action.plan.a7ac8717c7',
           'Choose an agent before starting.'
         )
       )

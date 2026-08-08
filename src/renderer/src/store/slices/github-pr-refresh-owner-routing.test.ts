@@ -160,43 +160,6 @@ describe('GitHub PR refresh owner-host routing', () => {
     })
   })
 
-  it('resolves an explicit runtime owner when the operation path is a linked worktree', async () => {
-    runtimeEnvironmentCall.mockResolvedValueOnce({
-      id: 'rpc-worktree-path',
-      ok: true,
-      result: makePR({ number: 26 }),
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-    const store = createTestStore()
-    const branch = 'feature/runtime-worktree-path'
-    seed(store, {
-      repos: [
-        makeRepo({ id: 'repo-local', path: '/runtime/repo' }),
-        makeRepo({
-          id: 'repo-runtime',
-          path: '/runtime/repo',
-          executionHostId: 'runtime:env-1'
-        })
-      ],
-      worktreesByRepo: {}
-    })
-
-    await expect(
-      store.getState().fetchPRForBranch('/runtime/worktrees/feature', branch, {
-        force: true,
-        repoId: 'repo-runtime',
-        executionHostId: 'runtime:env-1'
-      })
-    ).resolves.toMatchObject({ number: 26 })
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch, linkedPRNumber: null, currentHeadOid: null },
-      timeoutMs: 30_000
-    })
-  })
-
   it('keeps connected SSH PR refresh on the local coordinator even when a runtime is focused', () => {
     const store = createTestStore()
     const repoPath = '/ssh/repo'

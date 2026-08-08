@@ -14,8 +14,7 @@ import type {
   WorktreeLineage,
   WorkspaceLineage,
   ProjectHostSetup,
-  WorktreeMeta,
-  Repo
+  WorktreeMeta
 } from '../../../../shared/types'
 import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-types'
 import {
@@ -35,7 +34,7 @@ import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
 } from './recently-closed-tabs'
-import { findRepoForHost, findRepoForWorktreeOwner } from './repo-host-identity'
+import { findRepoForHost } from './repo-host-identity'
 import {
   dropWorktreeRowsForRemovedRuntimeEnvironments,
   isRemovedRuntimeHostId
@@ -83,9 +82,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
-  getWorktreeExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -500,33 +497,16 @@ function withRepoHostOwnership<
   } as T
 }
 
-function resolveRepoHostId(
-  state: Pick<AppState, 'repos' | 'settings'>,
-  repoId: string,
-  hostId?: ExecutionHostId | null
-): ExecutionHostId | null {
-  const repo = findRepoForHost(state.repos, repoId, { hostId, settings: state.settings })
-  if (repo) {
-    return getRepoExecutionHostId(repo)
-  }
-  if (hostId != null) {
-    // Why: bootstrap events can precede repo hydration, but a hydrated same-ID catalog must fail closed.
-    return !state.repos.some((candidate) => candidate.id === repoId) && parseExecutionHostId(hostId)
-      ? hostId
-      : null
-  }
-  return LOCAL_EXECUTION_HOST_ID
-}
-
 function repoHostId(
   state: Pick<AppState, 'repos' | 'settings'>,
   repoId: string,
   hostId?: ExecutionHostId | null
 ): ExecutionHostId {
-  return (
-    resolveRepoHostId(state, repoId, hostId) ??
-    (hostId && parseExecutionHostId(hostId) ? hostId : LOCAL_EXECUTION_HOST_ID)
-  )
+  const repo = findRepoForHost(state.repos, repoId, { hostId, settings: state.settings })
+  if (repo) {
+    return getRepoExecutionHostId(repo)
+  }
+  return hostId && parseExecutionHostId(hostId) ? hostId : LOCAL_EXECUTION_HOST_ID
 }
 
 function repoHasExactlyOneExecutionHostOwner(
@@ -1857,14 +1837,13 @@ async function purgeOrphanedRuntimeSshProjects(
 async function resolveGitHubReviewPushTarget(
   settings: AppState['settings'],
   repoId: string,
-  prNumber: number,
-  executionHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
+  prNumber: number
 ): Promise<GitPushTarget | undefined> {
   try {
     const target = getActiveRuntimeTarget(settings)
     const result =
       target.kind === 'local'
-        ? await window.api.worktrees.resolvePrBase({ repoId, prNumber, executionHostId })
+        ? await window.api.worktrees.resolvePrBase({ repoId, prNumber })
         : await callRuntimeRpc<GitHubPrStartPoint | { error: string }>(
             target,
             'worktree.resolvePrBase',
@@ -1888,14 +1867,13 @@ async function resolveGitHubReviewPushTarget(
 async function resolveGitLabReviewPushTarget(
   settings: AppState['settings'],
   repoId: string,
-  mrIid: number,
-  executionHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
+  mrIid: number
 ): Promise<GitPushTarget | undefined> {
   try {
     const target = getActiveRuntimeTarget(settings)
     const result =
       target.kind === 'local'
-        ? await window.api.worktrees.resolveMrBase({ repoId, mrIid, executionHostId })
+        ? await window.api.worktrees.resolveMrBase({ repoId, mrIid })
         : await callRuntimeRpc<
             | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
             | {
@@ -1916,52 +1894,23 @@ async function resolveGitLabReviewPushTarget(
   }
 }
 
-function getHostedReviewPushTargetLookup(
-  worktree: Worktree,
-  repos: readonly Repo[]
-): {
+function getHostedReviewPushTargetLookup(worktree: Worktree): {
   key: string
-  resolve: ((settings: AppState['settings']) => Promise<GitPushTarget | undefined>) | null
+  resolve: (settings: AppState['settings']) => Promise<GitPushTarget | undefined>
 } | null {
-  const matchingRepos = repos.filter((repo) => repo.id === worktree.repoId)
-  const explicitHostId = normalizeExecutionHostId(worktree.hostId)
-  let repo: Repo | undefined
-  let canResolve = true
-  if (explicitHostId) {
-    const explicitMatches = matchingRepos.filter(
-      (candidate) => getRepoExecutionHostId(candidate) === explicitHostId
-    )
-    if (explicitMatches.length > 1) {
-      canResolve = false
-    } else {
-      repo = explicitMatches[0]
-    }
-  } else {
-    repo = findRepoForWorktreeOwner(repos, worktree) ?? undefined
-    if (matchingRepos.length > 0 && !repo) {
-      canResolve = false
-    }
-  }
-  const executionHostId = getWorktreeExecutionHostId(worktree, repo)
-  const hostScope = executionHostId
+  const hostScope = worktree.hostId ?? ''
   if (isPositiveHostedReviewNumber(worktree.linkedPR)) {
     const prNumber = worktree.linkedPR
     return {
       key: `${worktree.id}:${hostScope}:github:${prNumber}`,
-      resolve: canResolve
-        ? (settings) =>
-            resolveGitHubReviewPushTarget(settings, worktree.repoId, prNumber, executionHostId)
-        : null
+      resolve: (settings) => resolveGitHubReviewPushTarget(settings, worktree.repoId, prNumber)
     }
   }
   if (isPositiveHostedReviewNumber(worktree.linkedGitLabMR)) {
     const mrIid = worktree.linkedGitLabMR
     return {
       key: `${worktree.id}:${hostScope}:gitlab:${mrIid}`,
-      resolve: canResolve
-        ? (settings) =>
-            resolveGitLabReviewPushTarget(settings, worktree.repoId, mrIid, executionHostId)
-        : null
+      resolve: (settings) => resolveGitLabReviewPushTarget(settings, worktree.repoId, mrIid)
     }
   }
   return null
@@ -3519,10 +3468,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         options?.forceLocalOwner === true && (hasLocalOwner || repoOwners.length === 0)
       const hostId = useLocalOwner
         ? LOCAL_EXECUTION_HOST_ID
-        : resolveRepoHostId(ownerState, repoId, options?.executionHostId)
-      if (!hostId) {
-        return false
-      }
+        : repoHostId(ownerState, repoId, options?.executionHostId)
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
       const repoOwner = findRepoForHost(ownerState.repos, repoId, {
         hostId,
@@ -3991,20 +3937,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }))
   },
 
-  prefetchWorktreeCreateBase: async (repoId, baseBranch, options) => {
+  prefetchWorktreeCreateBase: async (repoId, baseBranch) => {
     try {
-      const state = get()
-      const executionHostId = resolveRepoHostId(state, repoId, options?.executionHostId)
-      if (!executionHostId) {
-        return
-      }
-      const target = getActiveRuntimeTarget(
-        settingsForRepoOwner(state, repoId, options?.executionHostId)
-      )
+      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
       if (target.kind === 'local') {
         await window.api.worktrees.prefetchCreateBase({
           repoId,
-          executionHostId,
           ...(baseBranch ? { baseBranch } : {})
         })
         return
@@ -4049,7 +3987,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     options
   ) => {
     const automationProvenanceRequest = options?.automationProvenanceRequest
-    const requestedExecutionHostId = options?.executionHostId
     const linkedWorkItem = options?.linkedWorkItem
     const linkedTaskSourceContext = options?.linkedTaskSourceContext
     try {
@@ -4069,7 +4006,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               : undefined
           const createArgs = {
             repoId,
-            ...(requestedExecutionHostId ? { executionHostId: requestedExecutionHostId } : {}),
             name: candidateName,
             baseBranch,
             ...(compareBaseRef ? { compareBaseRef } : {}),
@@ -4106,9 +4042,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(creationId ? { creationId } : {}),
             ...(automationProvenanceRequest ? { automationProvenanceRequest } : {})
           }
-          const target = getActiveRuntimeTarget(
-            settingsForRepoOwner(get(), repoId, requestedExecutionHostId)
-          )
+          const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
           if (
             target.kind === 'environment' &&
             (linkedWorkItem?.provider === 'jira' || linkedTaskSourceContext?.provider === 'jira')
@@ -4178,24 +4112,21 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                   },
                   { timeoutMs: 10 * 60_000 }
                 )
-          const ownerState = get()
-          const hostId = repoHostId(ownerState, repoId, requestedExecutionHostId)
-          const createdWorktree = withRepoHostOwnership(
-            result.worktree,
-            hostId,
-            getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
-          )
           // Why: worktrees.onChanged can add this worktree before this callback runs; appending blindly would duplicate it (React key clash).
           set((s) => {
+            const hostId = repoHostId(s, repoId)
+            const createdWorktree = withRepoHostOwnership(
+              result.worktree,
+              hostId,
+              getProjectHostSetupForRepoHost(s, repoId, hostId)
+            )
             const current = s.worktreesByRepo[repoId] ?? []
-            const hostMatchOptions = worktreeHostMatchOptions(s, repoId, hostId)
-            const matchesCreatedOwner = (worktree: Worktree): boolean =>
-              worktree.id === createdWorktree.id &&
-              worktreeMatchesHost(worktree, hostId, hostMatchOptions)
-            const alreadyPresent = current.some(matchesCreatedOwner)
+            const alreadyPresent = current.some((w) => w.id === createdWorktree.id)
             const nextWorktrees = alreadyPresent
               ? current.map((worktree) =>
-                  matchesCreatedOwner(worktree) ? { ...worktree, ...createdWorktree } : worktree
+                  worktree.id === createdWorktree.id
+                    ? { ...worktree, ...createdWorktree }
+                    : worktree
                 )
               : [...current, createdWorktree]
             return {
@@ -4233,7 +4164,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             openSettingsPage: get().openSettingsPage,
             openSettingsTarget: get().openSettingsTarget
           })
-          return { ...result, worktree: createdWorktree }
+          return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           const shouldRetry = isRetryableWorktreeCreateConflict(message)
@@ -4906,17 +4837,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     }
-    const ownerState = get()
-    const worktreeOwnerSettings = settingsForWorktreeOwner(ownerState, worktreeId)
-    const worktreeOwnerRepo = existingWorktree
-      ? findRepoForHost(ownerState.repos, existingWorktree.repoId, {
-          hostId: existingWorktree.hostId,
-          settings: ownerState.settings
-        })
-      : null
-    const worktreeOwnerHostId = existingWorktree
-      ? getWorktreeExecutionHostId(existingWorktree, worktreeOwnerRepo ?? undefined)
-      : LOCAL_EXECUTION_HOST_ID
     const normalizedUpdates = existingWorktree
       ? clearOlderHostedReviewLinksForReplacement(updates, existingWorktree)
       : updates
@@ -4930,17 +4850,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       existingWorktree &&
       !existingWorktree.pushTarget
         ? await resolveGitHubReviewPushTarget(
-            worktreeOwnerSettings,
+            settingsForWorktreeOwner(get(), worktreeId),
             existingWorktree.repoId,
-            linkedPrForPushTarget,
-            worktreeOwnerHostId
+            linkedPrForPushTarget
           )
         : undefined
     const existingHostedReviewPushTargetLookup = existingWorktree
-      ? getHostedReviewPushTargetLookup(existingWorktree, get().repos)
+      ? getHostedReviewPushTargetLookup(existingWorktree)
       : null
     const nextHostedReviewPushTargetLookup = existingWorktree
-      ? getHostedReviewPushTargetLookup({ ...existingWorktree, ...normalizedUpdates }, get().repos)
+      ? getHostedReviewPushTargetLookup({ ...existingWorktree, ...normalizedUpdates })
       : null
     // Why: a pushTarget derived from a linked review must not keep steering pushes after it's unlinked or replaced.
     const shouldClearStaleHostedReviewPushTarget =
@@ -4963,14 +4882,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         (worktreeForUpdate?.linkedAzureDevOpsPR ?? null) !== null) ||
       (normalizedUpdates.linkedGiteaPR === null &&
         (worktreeForUpdate?.linkedGiteaPR ?? null) !== null)
-    const reviewState = get()
-    const reviewRepo =
-      shouldRefreshHostedReview && worktreeForUpdate
-        ? (findRepoForHost(reviewState.repos, worktreeForUpdate.repoId, {
-            hostId: getWorktreeExecutionHostId(worktreeForUpdate, worktreeOwnerRepo ?? undefined),
-            settings: reviewState.settings
-          }) ?? undefined)
-        : undefined
+    const reviewRepo = shouldRefreshHostedReview
+      ? get().repos.find((repo) => repo.id === worktreeForUpdate?.repoId)
+      : undefined
     const reviewBranch = worktreeForUpdate?.branch.replace(/^refs\/heads\//, '')
 
     // Why: bump lastActivityAt on comment edits so the time-decay sort doesn't drop a just-touched worktree.
@@ -5094,7 +5008,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         // Why: refetch against post-update links so a cache entry from the previous provider link can't keep showing the removed review.
         void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
           repoId: reviewRepo.id,
-          executionHostId: getRepoExecutionHostId(reviewRepo),
           linkedGitHubPR: getHostedReviewLinkForMetaRefresh(
             targetEnriched,
             worktreeForUpdate,
@@ -5148,8 +5061,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     if (!worktree || worktree.pushTarget) {
       return
     }
-    const lookup = getHostedReviewPushTargetLookup(worktree, get().repos)
-    if (!lookup?.resolve || hostedReviewPushTargetLookupsInFlight.has(lookup.key)) {
+    const lookup = getHostedReviewPushTargetLookup(worktree)
+    if (!lookup || hostedReviewPushTargetLookupsInFlight.has(lookup.key)) {
       return
     }
     hostedReviewPushTargetLookupsInFlight.add(lookup.key)
@@ -5162,7 +5075,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       if (!current || current.pushTarget) {
         return
       }
-      const currentLookup = getHostedReviewPushTargetLookup(current, get().repos)
+      const currentLookup = getHostedReviewPushTargetLookup(current)
       if (currentLookup?.key !== lookup.key) {
         return
       }
@@ -5338,7 +5251,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     if (!worktree || worktree.isBare || worktree.isArchived) {
       return
     }
-    const repo = findRepoForWorktreeOwner(state.repos, worktree)
+    const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
     if (!repo || (repo.kind && repo.kind !== 'git')) {
       return
     }
@@ -5354,7 +5267,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       void fetchPRForBranch(repo.path, branch, {
         force: true,
         repoId: repo.id,
-        executionHostId: getRepoExecutionHostId(repo),
         worktreeId,
         linkedPRNumber: alreadyLinked ? link.number : null,
         fallbackPRNumber: null,
@@ -5387,7 +5299,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       void refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
         repoId: repo.id,
-        executionHostId: getRepoExecutionHostId(repo),
         branch,
         linkedGitHubPR: alreadyLinked ? link.number : null,
         fallbackGitHubPR: null,

@@ -61,7 +61,6 @@ import {
 } from './project-visible-table-cache'
 import { translate } from '@/i18n/i18n'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 import {
   githubProjectHost,
@@ -458,11 +457,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
     setDialogRepoItem(resolvedDialogRepoItem)
   }
   const resolvedDialogRepo = resolvedDialogRepoItem
-    ? (repos.find(
-        (repo) =>
-          repo.id === resolvedDialogRepoItem.repoId &&
-          getRepoExecutionHostId(repo) === resolvedDialogRepoItem.workItem.repoExecutionHostId
-      ) ?? null)
+    ? (repos.find((repo) => repo.id === resolvedDialogRepoItem.repoId) ?? null)
     : null
   const resolvedDialogSourceContext = resolvedDialogRepo
     ? buildTaskSourceContextFromRepo({
@@ -558,10 +553,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
         const workItem = buildProjectWorkItem(row, resolution.repo.id, table.project.host)
         if (workItem) {
           setDialogRepoItem({
-            workItem: {
-              ...workItem,
-              repoExecutionHostId: getRepoExecutionHostId(resolution.repo)
-            },
+            workItem,
             repoPath: resolution.repo.path,
             repoId: resolution.repo.id,
             origin
@@ -671,7 +663,6 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       void launchWorkItemDirect({
         item: workItem,
         repoId: resolution.repo.id,
-        repoExecutionHostId: getRepoExecutionHostId(resolution.repo),
         launchSource: 'task_page',
         telemetrySource: 'sidebar',
         openModalFallback: () => {
@@ -950,7 +941,6 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
             void launchWorkItemDirect({
               item,
               repoId: current.workItem.repoId,
-              repoExecutionHostId: current.workItem.repoExecutionHostId,
               launchSource: 'task_page',
               telemetrySource: 'sidebar',
               openModalFallback: () => {

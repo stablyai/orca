@@ -133,7 +133,6 @@ import {
 } from '@/components/right-sidebar/pr-comments-ai-launch-ack'
 import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/pr-comment-fixing-reply-body'
 import { useAppStore } from '@/store'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
@@ -166,7 +165,6 @@ import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
 } from '../../../shared/github-pr-merge-methods'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
 import {
   findGithubPrWorkspaceAttachment,
@@ -175,7 +173,6 @@ import {
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { getRuntimeWorkItemLaunchContext } from '@/lib/work-item-runtime-host'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
@@ -293,11 +290,7 @@ type PullRequestPageProps = {
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
   onReviewRequestsChange?: (
-    itemKey: {
-      id: string
-      repoId: string
-      repoExecutionHostId?: GitHubWorkItem['repoExecutionHostId']
-    },
+    itemKey: { id: string; repoId: string },
     reviewRequests: GitHubAssignableUser[]
   ) => void
   onClose: () => void
@@ -3231,16 +3224,8 @@ function ChecksTab({
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const repo = useAppStore((s) =>
-    targetRepoId
-      ? findRepoForHost(s.repos, targetRepoId, {
-          hostId: item.repoExecutionHostId,
-          settings: s.settings
-        })
-      : null
+    targetRepoId ? (s.repos.find((candidate) => candidate.id === targetRepoId) ?? null) : null
   )
-  const checksRepoExecutionHostId = repo
-    ? getRepoExecutionHostId(repo)
-    : (item.repoExecutionHostId ?? LOCAL_EXECUTION_HOST_ID)
   const [refreshing, setRefreshing] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const [fixingChecks, setFixingChecks] = useState(false)
@@ -3265,8 +3250,6 @@ function ChecksTab({
   )
   const fixChecksLaunchPlatform = useMemo(
     () =>
-      getRuntimeWorkItemLaunchContext(useAppStore.getState(), checksRepoExecutionHostId)
-        ?.platform ??
       resolveSourceControlLaunchPlatform({
         connectionId: repo?.connectionId ?? null,
         worktreePath: repo?.path ?? null,
@@ -3278,7 +3261,7 @@ function ChecksTab({
               CLIENT_PLATFORM
             )
       }),
-    [checksRepoExecutionHostId, repo?.connectionId, repo?.id, repo?.path]
+    [repo?.connectionId, repo?.id, repo?.path]
   )
   const saveFixChecksActionDefault = useCallback(
     async (
@@ -3293,10 +3276,7 @@ function ChecksTab({
       }
       const latestRepo =
         target.type === 'repo'
-          ? findRepoForHost(state.repos, target.repoId, {
-              hostId: checksRepoExecutionHostId,
-              settings: latestSettings
-            })
+          ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
           : null
       const result = saveSourceControlActionRecipe({
         target,
@@ -3309,11 +3289,9 @@ function ChecksTab({
         await updateSettings({ sourceControlAi: result.sourceControlAi })
         return
       }
-      await updateRepo(result.target.repoId, result.update, {
-        hostId: checksRepoExecutionHostId
-      })
+      await updateRepo(result.target.repoId, result.update)
     },
-    [checksRepoExecutionHostId, updateRepo, updateSettings]
+    [updateRepo, updateSettings]
   )
   const handleStartFixChecksFromDialog = useCallback(
     async ({
@@ -3329,13 +3307,8 @@ function ChecksTab({
         return false
       }
       return await launchWorkItemDirect({
-        item: {
-          ...item,
-          repoId: targetRepoId,
-          pasteContent: commandInput
-        },
+        item: { ...item, repoId: targetRepoId, pasteContent: commandInput },
         repoId: targetRepoId,
-        repoExecutionHostId: checksRepoExecutionHostId,
         launchSource: 'task_page',
         telemetrySource: 'sidebar',
         promptDelivery: 'submit-after-ready',
@@ -3351,7 +3324,7 @@ function ChecksTab({
         }
       })
     },
-    [checksRepoExecutionHostId, item, targetRepoId]
+    [item, targetRepoId]
   )
   const prRepo = useMemo(() => resolvePullRequestRepo(item), [item])
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
@@ -3412,7 +3385,6 @@ function ChecksTab({
         : window.api.gh.prChecks({
             repoPath: repoPath ?? '',
             repoId: repoId ?? undefined,
-            executionHostId: checksRepoExecutionHostId,
             sourceContext,
             prNumber: item.number,
             headSha,
@@ -3434,7 +3406,6 @@ function ChecksTab({
     }
   }, [
     canUseChecksRepoContext,
-    checksRepoExecutionHostId,
     headSha,
     item.number,
     item.repoId,
@@ -3469,7 +3440,6 @@ function ChecksTab({
           : await window.api.gh.rerunPRChecks({
               repoPath: repoPath ?? '',
               repoId: repoId ?? undefined,
-              executionHostId: checksRepoExecutionHostId,
               sourceContext,
               prNumber: item.number,
               headSha,
@@ -3498,7 +3468,6 @@ function ChecksTab({
     },
     [
       canUseChecksRepoContext,
-      checksRepoExecutionHostId,
       handleRefresh,
       headSha,
       item.number,
@@ -3533,7 +3502,7 @@ function ChecksTab({
     setFixingChecks(true)
     try {
       const started = await startFixChecksAgent({
-        item: { ...item, repoExecutionHostId: checksRepoExecutionHostId },
+        item,
         repoId: targetRepoId,
         basePrompt,
         launchSource: 'task_page',
@@ -3563,7 +3532,7 @@ function ChecksTab({
     } finally {
       setFixingChecks(false)
     }
-  }, [checksRepoExecutionHostId, failedChecks.length, fixingChecks, item, list, targetRepoId])
+  }, [failedChecks.length, fixingChecks, item, list, targetRepoId])
 
   const handleToggleCheckDetails = useCallback(
     (check: PRCheckDetail): void => {
@@ -3600,7 +3569,6 @@ function ChecksTab({
         : window.api.gh.prCheckDetails({
             repoPath: repoPath ?? '',
             repoId: repoId ?? undefined,
-            executionHostId: checksRepoExecutionHostId,
             sourceContext,
             checkRunId: check.checkRunId,
             workflowRunId: check.workflowRunId,
@@ -3636,7 +3604,6 @@ function ChecksTab({
     },
     [
       canUseChecksRepoContext,
-      checksRepoExecutionHostId,
       detailsByCheckKey,
       item.repoId,
       mountedRef,
@@ -4037,7 +4004,6 @@ function ChecksTab({
       baseCommandInput={fixChecksComposerPrompt ?? ''}
       connectionId={repo?.connectionId ?? null}
       repoId={targetRepoId}
-      repo={repo}
       promptDelivery="submit-after-ready"
       launchPlatform={fixChecksLaunchPlatform}
       launchSource="task_page"
@@ -4980,12 +4946,7 @@ export default function PullRequestPage({
   const attachedWorkspace = useMemo(
     () =>
       workItem?.type === 'pr'
-        ? findGithubPrWorkspaceAttachment(
-            allWorktrees,
-            effectiveRepoId,
-            workItem.number,
-            workItem.repoExecutionHostId
-          )
+        ? findGithubPrWorkspaceAttachment(allWorktrees, effectiveRepoId, workItem.number)
         : null,
     [allWorktrees, effectiveRepoId, workItem]
   )
@@ -4998,14 +4959,8 @@ export default function PullRequestPage({
     if (!repoPath && !effectiveRepoId) {
       return undefined
     }
-    return (
-      effectiveRepoId
-        ? findRepoForHost(s.repos, effectiveRepoId, {
-            hostId: workItem?.repoExecutionHostId,
-            settings: s.settings
-          })
-        : s.repos.find((r) => r.path === repoPath)
-    )?.issueSourcePreference
+    return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
+      ?.issueSourcePreference
   })
   const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const detailsCacheKey = useMemo(() => {
@@ -5063,8 +5018,7 @@ export default function PullRequestPage({
     const currentAttached = findGithubPrWorkspaceAttachment(
       useAppStore.getState().allWorktrees(),
       targetRepoId,
-      workItem.number,
-      workItem.repoExecutionHostId
+      workItem.number
     )
     if (!currentAttached) {
       handleUseWorkItem()
@@ -5279,12 +5233,7 @@ export default function PullRequestPage({
     if (!details?.item) {
       return workItem
     }
-    return {
-      ...workItem,
-      ...details.item,
-      repoId: workItem.repoId,
-      repoExecutionHostId: workItem.repoExecutionHostId
-    }
+    return { ...workItem, ...details.item, repoId: workItem.repoId }
   }, [details?.item, workItem])
 
   useEffect(() => {
@@ -5293,11 +5242,7 @@ export default function PullRequestPage({
     }
     // Why: PR details can carry fresher reviewer metadata than the list row; push it back so the Tasks review chip isn't stale.
     onReviewRequestsChange?.(
-      {
-        id: workItem.id,
-        repoId: workItem.repoId,
-        repoExecutionHostId: workItem.repoExecutionHostId
-      },
+      { id: workItem.id, repoId: workItem.repoId },
       details.item.reviewRequests
     )
   }, [details?.item.reviewRequests, onReviewRequestsChange, workItem])
@@ -5771,11 +5716,7 @@ export default function PullRequestPage({
                       patchCachedPRReviewRequests(detailsCacheKey, nextReviewRequests)
                     }
                     onReviewRequestsChange?.(
-                      {
-                        id: workItem.id,
-                        repoId: workItem.repoId,
-                        repoExecutionHostId: workItem.repoExecutionHostId
-                      },
+                      { id: workItem.id, repoId: workItem.repoId },
                       nextReviewRequests
                     )
                   }}

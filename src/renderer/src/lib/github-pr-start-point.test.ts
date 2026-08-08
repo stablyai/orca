@@ -35,8 +35,7 @@ describe('resolveGitHubPrStartPointForRepo', () => {
       resolveGitHubPrStartPointForRepo({
         repoId: 'repo-1',
         prNumber: 42,
-        settings: { activeRuntimeEnvironmentId: 'remote-runtime' },
-        executionHostId: 'ssh:connection-1',
+        settings: { activeRuntimeEnvironmentId: null },
         headRefName: 'feature/fix',
         baseRefName: 'main',
         isCrossRepository: false
@@ -48,7 +47,6 @@ describe('resolveGitHubPrStartPointForRepo', () => {
 
     expect(window.api.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo-1',
-      executionHostId: 'ssh:connection-1',
       prNumber: 42,
       headRefName: 'feature/fix',
       baseRefName: 'main',
@@ -69,8 +67,7 @@ describe('resolveGitHubPrStartPointForRepo', () => {
       resolveGitHubPrStartPointForRepo({
         repoId: 'repo-runtime',
         prNumber: 7,
-        settings: { activeRuntimeEnvironmentId: null },
-        executionHostId: 'runtime:env-1',
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
         headRefName: 'feature/runtime',
         baseRefName: 'develop',
         isCrossRepository: true

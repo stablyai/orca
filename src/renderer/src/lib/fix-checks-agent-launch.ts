@@ -14,7 +14,6 @@ import {
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
@@ -28,13 +27,6 @@ import type {
 } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
-import {
-  getRepoExecutionHostId,
-  getWorktreeExecutionHostId,
-  parseExecutionHostId,
-  type ExecutionHostId
-} from '../../../shared/execution-host'
-import { getRuntimeWorkItemLaunchContext } from '@/lib/work-item-runtime-host'
 
 type StartFixChecksAgentArgs = {
   repoId: string
@@ -52,24 +44,13 @@ type SavedAgentOverrideResult =
   | { kind: 'launch-default' }
   | { kind: 'blocked' }
 
-type AgentDetectionTarget = {
-  connectionId?: string | null
-  executionHostId?: ExecutionHostId | null
-  worktreeId?: string | null
-}
-
-async function detectAgentsForTarget(target: AgentDetectionTarget): Promise<TuiAgent[]> {
+async function detectAgentsForConnection(
+  connectionId: string | null | undefined
+): Promise<TuiAgent[]> {
   const store = useAppStore.getState()
-  const host = parseExecutionHostId(target.executionHostId)
-  if (host?.kind === 'runtime') {
-    return await store.ensureRuntimeDetectedAgents(host.environmentId)
-  }
-  const connectionId = host?.kind === 'ssh' ? host.targetId : target.connectionId
   return typeof connectionId === 'string'
     ? await store.ensureRemoteDetectedAgents(connectionId)
-    : await store.ensureDetectedAgents(
-        target.worktreeId ? { worktreeId: target.worktreeId } : undefined
-      )
+    : await store.ensureDetectedAgents()
 }
 
 function isAgentAvailable(agent: TuiAgent, detectedAgents: TuiAgent[]): boolean {
@@ -81,12 +62,12 @@ function isAgentAvailable(agent: TuiAgent, detectedAgents: TuiAgent[]): boolean 
 
 async function resolveSavedAgentOverride(
   savedAgent: TuiAgent | null | undefined,
-  target: AgentDetectionTarget
+  connectionId: string | null | undefined
 ): Promise<SavedAgentOverrideResult> {
   if (!savedAgent) {
     return { kind: 'launch-default' }
   }
-  const detectedAgents = await detectAgentsForTarget(target)
+  const detectedAgents = await detectAgentsForConnection(connectionId)
   if (!isAgentAvailable(savedAgent, detectedAgents)) {
     toast.error(
       translate(
@@ -102,14 +83,10 @@ async function resolveSavedAgentOverride(
 async function pickExistingWorktreeAgent(
   worktreeId: string,
   savedAgent: TuiAgent | null | undefined,
-  connectionId: string | null,
-  executionHostId: ExecutionHostId
+  repoConnectionId: string | null | undefined
 ): Promise<TuiAgent | null> {
-  const detectedAgents = await detectAgentsForTarget({
-    connectionId,
-    executionHostId,
-    worktreeId
-  })
+  const connectionId = getConnectionId(worktreeId) ?? repoConnectionId ?? null
+  const detectedAgents = await detectAgentsForConnection(connectionId)
   if (savedAgent) {
     if (isAgentAvailable(savedAgent, detectedAgents)) {
       return savedAgent
@@ -141,10 +118,7 @@ async function pickExistingWorktreeAgent(
 
 export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {
   const store = useAppStore.getState()
-  const repo = findRepoForHost(store.repos, args.repoId, {
-    hostId: args.item?.repoExecutionHostId,
-    settings: store.settings
-  })
+  const repo = store.repos.find((candidate) => candidate.id === args.repoId) ?? null
   const recipe = resolveSourceControlActionRecipe({
     settings: store.settings,
     repo,
@@ -165,22 +139,14 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
     return false
   }
 
-  const allWorktrees = store.allWorktrees()
   const attachedWorkspace =
     args.worktreeId || !args.item
       ? null
-      : findGithubPrWorkspaceAttachment(
-          allWorktrees,
-          args.repoId,
-          args.item.number,
-          args.item.repoExecutionHostId
-        )
-  const requestedWorktreeId = args.worktreeId ?? attachedWorkspace?.id ?? null
-  if (requestedWorktreeId) {
-    const matchingWorktrees = allWorktrees.filter((worktree) => worktree.id === requestedWorktreeId)
-    // Why: activation, tabs, and terminal launch still use the legacy bare worktree id.
-    // Fail closed until those store surfaces accept a composite host identity.
-    if (matchingWorktrees.length !== 1) {
+      : findGithubPrWorkspaceAttachment(store.allWorktrees(), args.repoId, args.item.number)
+  const targetWorktreeId = args.worktreeId ?? attachedWorkspace?.id ?? null
+  if (targetWorktreeId) {
+    const targetWorktree = store.allWorktrees().find((worktree) => worktree.id === targetWorktreeId)
+    if (!targetWorktree) {
       toast.error(
         translate(
           'auto.lib.fix.checks.agent.launch.dfb4dd7c00',
@@ -189,37 +155,22 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       )
       return false
     }
-    const targetWorktree = attachedWorkspace ?? matchingWorktrees[0]
-    const targetWorktreeId = targetWorktree.id
-    const targetExecutionHostId = getWorktreeExecutionHostId(targetWorktree, repo ?? undefined)
-    const targetHost = parseExecutionHostId(targetExecutionHostId)
-    // Why: an explicit worktree host (even local) is authoritative, so stamped
-    // worktrees must not fall back to legacy connection-id derivation.
-    const targetConnectionId =
-      targetHost?.kind === 'ssh'
-        ? targetHost.targetId
-        : targetHost?.kind === 'runtime' || targetWorktree.hostId
-          ? null
-          : (getConnectionId(targetWorktreeId) ?? repo?.connectionId ?? null)
+    const targetConnectionId = getConnectionId(targetWorktreeId) ?? repo?.connectionId ?? null
     const agent = await pickExistingWorktreeAgent(
       targetWorktreeId,
       savedAgentId,
-      targetConnectionId,
-      targetExecutionHostId
+      repo?.connectionId
     )
     if (!agent) {
       return false
     }
-    const launchPlatform =
-      getRuntimeWorkItemLaunchContext(store, targetExecutionHostId)?.platform ??
-      resolveSourceControlLaunchPlatform({
-        connectionId: targetConnectionId,
-        worktreePath: targetWorktree.path,
-        projectRuntime:
-          targetConnectionId || targetHost?.kind === 'runtime'
-            ? undefined
-            : getLocalProjectExecutionRuntimeContext(store, targetWorktreeId, CLIENT_PLATFORM)
-      })
+    const launchPlatform = resolveSourceControlLaunchPlatform({
+      connectionId: targetConnectionId,
+      worktreePath: targetWorktree.path,
+      projectRuntime: targetConnectionId
+        ? undefined
+        : getLocalProjectExecutionRuntimeContext(store, targetWorktreeId, CLIENT_PLATFORM)
+    })
     if (!launchPlatform) {
       toast.error(
         translate(
@@ -281,11 +232,7 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
     return false
   }
 
-  const repoExecutionHostId = repo ? getRepoExecutionHostId(repo) : args.item.repoExecutionHostId
-  const agentOverride = await resolveSavedAgentOverride(savedAgentId, {
-    connectionId: repo?.connectionId,
-    executionHostId: repoExecutionHostId
-  })
+  const agentOverride = await resolveSavedAgentOverride(savedAgentId, repo?.connectionId)
   if (agentOverride.kind === 'blocked') {
     return false
   }
@@ -293,7 +240,6 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
   return await launchWorkItemDirect({
     item: { ...args.item, pasteContent: commandInput },
     repoId: args.repoId,
-    repoExecutionHostId,
     launchSource: args.launchSource,
     telemetrySource: args.telemetrySource,
     promptDelivery: 'submit-after-ready',

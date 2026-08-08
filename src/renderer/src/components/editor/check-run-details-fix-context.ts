@@ -8,7 +8,6 @@ import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-displ
 import { useAppStore } from '@/store'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
-import { findRepoForWorktreeOwner } from '@/store/slices/repo-host-identity'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PRCheckDetail, PRCheckRunDetails, Repo } from '../../../../shared/types'
@@ -43,7 +42,7 @@ export function resolveHostedReviewForCheckRunDetailsFix(
   if (!worktree) {
     return null
   }
-  const repo = findRepoForWorktreeOwner(store.repos, worktree)
+  const repo = store.repos.find((candidate) => candidate.id === worktree.repoId) ?? null
   if (!repo) {
     return null
   }
@@ -127,7 +126,7 @@ export function getCheckRunDetailsFixDisabledReason(worktreeId: string | null): 
       'Select a workspace before launching an AI action.'
     )
   }
-  const repo = findRepoForWorktreeOwner(store.repos, worktree)
+  const repo = store.repos.find((candidate) => candidate.id === worktree.repoId) ?? null
   if (!repo) {
     return translate(
       'auto.components.editor.check.run.details.fix.with.ai.4f2d9a8c17',
@@ -152,5 +151,5 @@ export function resolveCheckRunDetailsFixRepo(worktreeId: string | null): Repo |
   if (!worktree) {
     return null
   }
-  return findRepoForWorktreeOwner(store.repos, worktree)
+  return store.repos.find((candidate) => candidate.id === worktree.repoId) ?? null
 }

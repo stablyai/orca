@@ -8,10 +8,7 @@ export type TaskPageGitHubPatchWorkItem = (
   itemId: string,
   patch: Partial<GitHubWorkItem>,
   repoId?: string,
-  options?: {
-    sourceContext?: TaskSourceContext | null
-    repoExecutionHostId?: GitHubWorkItem['repoExecutionHostId']
-  }
+  options?: { sourceContext?: TaskSourceContext | null }
 ) => void
 
 export type BeginTaskPageGitHubWorkItemMutationArgs = {

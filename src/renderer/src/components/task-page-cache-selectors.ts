@@ -6,11 +6,6 @@ import {
 } from '@/store/slices/github'
 import type { GitHubWorkItem } from '../../../shared/types'
 import {
-  LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId,
-  type ExecutionHostId
-} from '../../../shared/execution-host'
-import {
   taskPageWorkItemKey,
   taskPageWorkItemStatusSignature,
   taskPageWorkItemKeyOrderSignature,
@@ -33,12 +28,10 @@ export type TaskPageRepoCacheInput = {
 export type TaskPageDialogWorkItemKey = {
   id: string
   repoId: string
-  repoExecutionHostId?: ExecutionHostId
 } | null
 
 export type TaskPageRepoSourceState = {
   repoId: string
-  executionHostId: ExecutionHostId
   repoPath: string
   sourceKey: string
   sources: WorkItemsCacheSources | null
@@ -85,7 +78,6 @@ export function buildTaskPageRepoSourceState(
     const entry = entries[index]
     return {
       repoId: repo.id,
-      executionHostId: normalizeExecutionHostId(repo.executionHostId) ?? LOCAL_EXECUTION_HOST_ID,
       repoPath: repo.path,
       sourceKey: `${repo.id}::${repo.sourceCacheScope ?? repo.executionHostId ?? 'local'}`,
       sources: entry?.sources ?? null,
@@ -110,17 +102,13 @@ export type TaskPageUnresolvedSourceRepo = {
  * function), a non-null side = resolved (genuine zero), `null` = not yet fetched.
  */
 export function selectTaskPageUnresolvedSourceRepos(
-  repos: readonly (TaskPageRepoCacheInput & { displayName?: string })[],
+  repos: readonly { id: string; displayName?: string; path: string }[],
   sourceState: readonly TaskPageRepoSourceState[]
 ): TaskPageUnresolvedSourceRepo[] {
-  const stateByRepoHost = new Map(
-    sourceState.map((state) => [`${state.repoId}\u0000${state.executionHostId}`, state])
-  )
+  const stateByRepoId = new Map(sourceState.map((state) => [state.repoId, state]))
   const unresolved: TaskPageUnresolvedSourceRepo[] = []
   for (const repo of repos) {
-    const state = stateByRepoHost.get(
-      `${repo.id}\u0000${normalizeExecutionHostId(repo.executionHostId) ?? LOCAL_EXECUTION_HOST_ID}`
-    )
+    const state = stateByRepoId.get(repo.id)
     if (state?.sources && !state.sources.issues && !state.sources.prs && !state.error) {
       unresolved.push({
         repoId: repo.id,
@@ -132,6 +120,10 @@ export function selectTaskPageUnresolvedSourceRepos(
   return unresolved
 }
 
+function taskPageWorkItemCacheKey(item: GitHubWorkItem): string {
+  return `${item.repoId}\u0000${item.id}`
+}
+
 export function reconcileTaskPagePagesWithWorkItemsCache(
   pages: TaskPageWorkItemPages,
   entries: readonly (CacheEntry<GitHubWorkItem[]> | undefined)[]
@@ -139,7 +131,7 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
   const cachedItems = new Map<string, GitHubWorkItem>()
   for (const entry of entries) {
     for (const item of entry?.data ?? []) {
-      cachedItems.set(taskPageWorkItemKey(item), item)
+      cachedItems.set(taskPageWorkItemCacheKey(item), item)
     }
   }
 
@@ -150,7 +142,7 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
     }
     let pageChanged = false
     const nextPage = page.map((item) => {
-      const cached = cachedItems.get(taskPageWorkItemKey(item))
+      const cached = cachedItems.get(taskPageWorkItemCacheKey(item))
       if (!cached || cached === item) {
         return item
       }
@@ -246,15 +238,9 @@ export function findTaskPageDialogWorkItem(
     return null
   }
 
-  const requestedHostId =
-    normalizeExecutionHostId(dialogWorkItemKey.repoExecutionHostId) ?? LOCAL_EXECUTION_HOST_ID
   for (const entry of Object.values(workItemsCache)) {
     const found = entry?.data?.find(
-      (wi) =>
-        wi.id === dialogWorkItemKey.id &&
-        wi.repoId === dialogWorkItemKey.repoId &&
-        (normalizeExecutionHostId(wi.repoExecutionHostId) ?? LOCAL_EXECUTION_HOST_ID) ===
-          requestedHostId
+      (wi) => wi.id === dialogWorkItemKey.id && wi.repoId === dialogWorkItemKey.repoId
     )
     if (found) {
       return found

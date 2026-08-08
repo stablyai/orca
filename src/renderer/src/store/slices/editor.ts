@@ -53,11 +53,7 @@ import {
   COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH
 } from '../../../../shared/combined-diff-file-tree-width'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import {
-  getRepoExecutionHostId,
-  parseExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
 import { invalidateAutomaticPushTargetUpstreamStatusCache } from '@/components/right-sidebar/push-target-upstream-refresh-cache'
 import {
@@ -86,7 +82,6 @@ import {
   getRepoIdFromWorktreeId,
   type ActiveWorktreeStateTransition
 } from './worktree-helpers'
-import { findRepoForWorktreeOwner } from './repo-host-identity'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
   getSettingsForWorktreeRuntimeOwner
@@ -3903,13 +3898,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
-    const fallbackRepoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
-    const fallbackRepos = state.repos.filter((candidate) => candidate.id === fallbackRepoId)
-    const repo = worktree
-      ? findRepoForWorktreeOwner(state.repos, worktree)
-      : fallbackRepos.length === 1
-        ? fallbackRepos[0]
-        : null
+    const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
+    const repo = state.repos.find((candidate) => candidate.id === repoId)
     if (!repo?.path) {
       return
     }
@@ -3939,7 +3929,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               url: check.url,
               prRepo: null
             },
-            { repoId: repo.id, executionHostId: getRepoExecutionHostId(repo) }
+            { repoId: repo.id }
           )
       patch({
         details,

@@ -119,21 +119,6 @@ describe('project-host workspace target resolution', () => {
     })
   })
 
-  it('fails closed when a setup host has no matching repository owner', () => {
-    const localRepo = makeRepo('orca', { path: '/local/orca' })
-    const project = makeProject('github:stablyai/orca', ['orca'])
-    const runtimeSetup = makeSetup('runtime-setup', project.id, 'runtime:gpu-1', 'orca')
-
-    expect(
-      resolveWorkspaceCreationTarget({
-        eligibleRepos: [localRepo],
-        projects: [project],
-        projectHostSetups: [runtimeSetup],
-        projectHostSetupId: runtimeSetup.id
-      })
-    ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
-  })
-
   it('keeps a focused duplicate repo id on its selected host', () => {
     const localRepo = makeRepo('orca', { path: '/local/orca' })
     const sshRepo = makeRepo('orca', { path: '/remote/orca', connectionId: 'builder' })
@@ -262,79 +247,6 @@ describe('project-host workspace target resolution', () => {
     ).toMatchObject({
       status: 'ready',
       target: { projectHostSetupId: 'orca-ssh', repoId: 'orca-ssh', hostId: 'ssh:builder' }
-    })
-  })
-
-  it('resolves duplicate repository ids to the repository on the setup host', () => {
-    const runtimeRepo = makeRepo('orca', {
-      path: '/runtime/orca',
-      executionHostId: 'runtime:gpu-1'
-    })
-    const localRepo = makeRepo('orca', { path: '/local/orca' })
-    const project = makeProject('github:stablyai/orca', ['orca'])
-    const runtimeSetup = makeSetup('orca-runtime', project.id, 'runtime:gpu-1', 'orca', {
-      path: runtimeRepo.path
-    })
-
-    const resolution = resolveWorkspaceCreationTarget({
-      eligibleRepos: [runtimeRepo, localRepo],
-      projects: [project],
-      projectHostSetups: [runtimeSetup],
-      projectHostSetupId: runtimeSetup.id
-    })
-
-    expect(resolution).toMatchObject({
-      status: 'ready',
-      target: { hostId: 'runtime:gpu-1', repo: { path: '/runtime/orca' } }
-    })
-  })
-
-  describe('legacy duplicate repository ids', () => {
-    const localRepo = makeRepo('orca', { path: '/local/orca' })
-    const runtimeRepo = makeRepo('orca', {
-      path: '/runtime/orca',
-      executionHostId: 'runtime:gpu-1'
-    })
-    const project = makeProject('github:stablyai/orca', ['orca'])
-    const projectHostSetups = [
-      makeSetup('runtime-orca', project.id, 'runtime:gpu-1', 'orca'),
-      makeSetup('local-orca', project.id, 'local', 'orca')
-    ]
-
-    it('keeps an explicit legacy repository selection on its first matching host', () => {
-      const resolution = resolveWorkspaceCreationTarget({
-        eligibleRepos: [localRepo, runtimeRepo],
-        projects: [project],
-        projectHostSetups,
-        initialRepoId: 'orca'
-      })
-
-      expect(resolution).toMatchObject({
-        status: 'ready',
-        target: {
-          projectHostSetupId: 'local-orca',
-          hostId: 'local',
-          repo: { path: '/local/orca' }
-        }
-      })
-    })
-
-    it('preserves the focused host selected for a legacy repository id', () => {
-      const resolution = resolveWorkspaceCreationTarget({
-        eligibleRepos: [localRepo, runtimeRepo],
-        projects: [project],
-        projectHostSetups,
-        focusedHostScope: 'runtime:gpu-1'
-      })
-
-      expect(resolution).toMatchObject({
-        status: 'ready',
-        target: {
-          projectHostSetupId: 'runtime-orca',
-          hostId: 'runtime:gpu-1',
-          repo: { path: '/runtime/orca' }
-        }
-      })
     })
   })
 
@@ -479,36 +391,6 @@ describe('project-host workspace target resolution', () => {
         actionableHostIds: new Set(['local'])
       })
     ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
-  })
-
-  it('routes a stale duplicate-id repo selection to the actionable host repo', () => {
-    const remoteRepo = makeRepo('orca', {
-      path: '/remote/orca',
-      connectionId: 'removed'
-    })
-    const localRepo = makeRepo('orca', { path: '/local/orca' })
-    const project = makeProject('repo:orca', ['orca'])
-    const projectHostSetups = [
-      makeSetup('remote-setup', project.id, 'ssh:removed', 'orca'),
-      makeSetup('local-setup', project.id, 'local', 'orca')
-    ]
-
-    expect(
-      resolveWorkspaceCreationTarget({
-        eligibleRepos: [remoteRepo, localRepo],
-        projects: [project],
-        projectHostSetups,
-        draftRepoId: 'orca',
-        actionableHostIds: new Set(['local'])
-      })
-    ).toMatchObject({
-      status: 'ready',
-      target: {
-        projectHostSetupId: 'local-setup',
-        hostId: 'local',
-        repo: { path: '/local/orca' }
-      }
-    })
   })
 
   // Regression: selecting a project in the new-workspace dropdown must not be

@@ -93,7 +93,7 @@ describe('launchAgentSessionContinuation', () => {
 
     await detectAgentSessionContinuationAgents('wt-1')
 
-    expect(store.ensureDetectedAgents).toHaveBeenCalledWith({ worktreeId: 'wt-1' })
+    expect(store.ensureDetectedAgents).toHaveBeenCalledWith('wt-1')
   })
 
   it('stops before launch when the selected Agent is unavailable', async () => {

@@ -1,6 +1,5 @@
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { GitHubPrStartPoint, GlobalSettings } from '../../../shared/types'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 
 type PrStartPointSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 
@@ -8,7 +7,6 @@ export type GitHubPrStartPointInput = {
   repoId: string
   prNumber: number
   settings: PrStartPointSettings
-  executionHostId?: ExecutionHostId
   headRefName?: string
   baseRefName?: string
   isCrossRepository?: boolean
@@ -18,17 +16,11 @@ export async function resolveGitHubPrStartPointForRepo({
   repoId,
   prNumber,
   settings,
-  executionHostId,
   headRefName,
   baseRefName,
   isCrossRepository
 }: GitHubPrStartPointInput): Promise<GitHubPrStartPoint> {
-  const parsedHost = parseExecutionHostId(executionHostId)
-  const target = parsedHost
-    ? parsedHost.kind === 'runtime'
-      ? { kind: 'environment' as const, environmentId: parsedHost.environmentId }
-      : { kind: 'local' as const }
-    : getActiveRuntimeTarget(settings)
+  const target = getActiveRuntimeTarget(settings)
   const prFields = {
     prNumber,
     ...(headRefName ? { headRefName } : {}),
@@ -37,7 +29,7 @@ export async function resolveGitHubPrStartPointForRepo({
   }
   const result =
     target.kind === 'local'
-      ? await window.api.worktrees.resolvePrBase({ repoId, executionHostId, ...prFields })
+      ? await window.api.worktrees.resolvePrBase({ repoId, ...prFields })
       : await callRuntimeRpc<GitHubPrStartPoint | { error: string }>(
           target,
           'worktree.resolvePrBase',

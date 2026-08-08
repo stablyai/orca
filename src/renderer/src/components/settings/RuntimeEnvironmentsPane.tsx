@@ -56,7 +56,6 @@ import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import {
   getRemoteServerManualUpdateHelp,
@@ -675,13 +674,7 @@ export function RuntimeEnvironmentsPane({
       // Why: Connect is not the Active Server selector anymore, but connected
       // hosts should still contribute their projects/workspaces to the sidebar.
       const repos = await store.fetchRuntimeEnvironmentRepos(environment.id)
-      await Promise.all(
-        repos.map((repo) =>
-          useAppStore
-            .getState()
-            .fetchWorktrees(repo.id, { executionHostId: getRepoExecutionHostId(repo) })
-        )
-      )
+      await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
       await useAppStore.getState().fetchWorktreeLineage()
       if (mountedRef.current) {
         toast.success(

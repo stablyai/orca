@@ -30,7 +30,7 @@ export async function detectAgentSessionContinuationAgents(
     ? state.ensureRemoteDetectedAgents(connectionId)
     : runtimeEnvironmentId
       ? state.ensureRuntimeDetectedAgents(runtimeEnvironmentId)
-      : state.ensureDetectedAgents({ worktreeId })
+      : state.ensureDetectedAgents(worktreeId)
 }
 
 async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promise<boolean> {

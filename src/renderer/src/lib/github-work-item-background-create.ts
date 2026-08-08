@@ -10,30 +10,26 @@ import {
   buildGitHubWorkItemStartupPlan,
   buildInitialGitHubWorkItemRequest,
   type GitHubWorkItemBackgroundStoreSnapshot,
-  resolvePreferredQuickAgentForGitHubWorkItem as resolveQuickAgent
+  resolvePreferredQuickAgentForGitHubWorkItem
 } from '@/lib/github-work-item-background-request'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import {
-  findPendingGitHubWorkItemCreate,
-  type GitHubWorkItemBackgroundFallbackReason
-} from '@/lib/github-work-item-background-match'
 import {
   resolveDirectPrStartPoint,
   resolveDirectSetupDecision
 } from '@/lib/launch-work-item-direct-preflight'
-import {
-  agentLaunchCommandErrorMessage,
-  unavailableAgentErrorMessage
-} from '@/lib/launch-work-item-direct-messages'
+import { agentLaunchCommandErrorMessage } from '@/lib/launch-work-item-direct-messages'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { renderIssueCommandTemplate } from '@/lib/new-workspace'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
-import { isGitHubWorkItemRepoHostUnavailable } from '@/lib/github-work-item-background-host'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { readRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 import { isGitRepoKind } from '../../../shared/repo-kind'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import type { GitHubWorkItem, SetupDecision, TuiAgent } from '../../../shared/types'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import { evaluateRuntimeCompat } from '../../../shared/protocol-compat'
+import {
+  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../shared/protocol-version'
+import type { GitHubWorkItem, SetupDecision, Repo } from '../../../shared/types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 
@@ -42,7 +38,7 @@ export type BackgroundGitHubWorkItemCreateResult =
   | { kind: 'error' }
   | {
       kind: 'fallback'
-      reason: GitHubWorkItemBackgroundFallbackReason
+      reason: 'repo-missing' | 'host-unavailable' | 'setup-ask' | 'pr-start-point' | 'agent-startup'
     }
 
 type AppActiveView = ReturnType<typeof useAppStore.getState>['activeView']
@@ -57,8 +53,7 @@ type BackgroundGitHubWorkItemCreateDeps = {
   confirmHooks: (
     store: GitHubWorkItemBackgroundStoreSnapshot,
     repoId: string,
-    scope: 'setup' | 'issueCommand',
-    hostId?: ExecutionHostId
+    scope: 'setup' | 'issueCommand'
   ) => ReturnType<typeof ensureHooksConfirmed>
   readIssueCommand: typeof readRuntimeIssueCommand
   beginBackgroundCreate: typeof beginBackgroundWorktreePreparation
@@ -72,8 +67,6 @@ type BackgroundGitHubWorkItemCreateDeps = {
 export type BackgroundGitHubWorkItemCreateArgs = {
   item: GitHubWorkItem
   repoId: string
-  repoExecutionHostId?: ExecutionHostId
-  agentOverride?: TuiAgent
   taskSourceContext?: TaskSourceContext | null
   workspaceRunContext?: WorkspaceRunContext | null
   telemetrySource?: WorktreeCreationRequest['telemetrySource']
@@ -89,8 +82,8 @@ const DEFAULT_DEPS: BackgroundGitHubWorkItemCreateDeps = {
     useAppStore.getState().activePendingCreationId === creationId,
   resolveSetupDecision: resolveDirectSetupDecision,
   resolvePrStartPoint: resolveDirectPrStartPoint,
-  confirmHooks: (store, repoId, scope: 'setup' | 'issueCommand', hostId) =>
-    ensureHooksConfirmed(store as ReturnType<typeof useAppStore.getState>, repoId, scope, hostId),
+  confirmHooks: (store, repoId, scope: 'setup' | 'issueCommand') =>
+    ensureHooksConfirmed(store as ReturnType<typeof useAppStore.getState>, repoId, scope),
   readIssueCommand: readRuntimeIssueCommand,
   beginBackgroundCreate: beginBackgroundWorktreePreparation,
   continueBackgroundCreate: continueBackgroundWorktreeCreation,
@@ -104,6 +97,49 @@ const DEFAULT_DEPS: BackgroundGitHubWorkItemCreateDeps = {
     useAppStore.getState().removePendingWorktreeCreation(creationId),
   setActiveView: (view) => useAppStore.getState().setActiveView(view),
   toastError: (message) => toast.error(message)
+}
+
+function findPendingGitHubWorkItemCreate(
+  store: GitHubWorkItemBackgroundStoreSnapshot,
+  request: WorktreeCreationRequest
+): string | null {
+  if (!request.linkedIssue && !request.linkedPR) {
+    return null
+  }
+  const match = Object.values(store.pendingWorktreeCreations).find((entry) => {
+    const pending = entry.request
+    return (
+      pending.repoId === request.repoId &&
+      pending.linkedIssue === request.linkedIssue &&
+      pending.linkedPR === request.linkedPR
+    )
+  })
+  return match?.creationId ?? null
+}
+
+function repoHostUnavailable(store: GitHubWorkItemBackgroundStoreSnapshot, repo: Repo): boolean {
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (host?.kind === 'ssh') {
+    return store.sshConnectionStates.get(host.targetId)?.status !== 'connected'
+  }
+  if (host?.kind !== 'runtime') {
+    return false
+  }
+  const status = store.runtimeStatusByEnvironmentId.get(host.environmentId)?.status
+  if (!status) {
+    return true
+  }
+  if (!status.hostPlatform) {
+    return true
+  }
+  const compatibility = evaluateRuntimeCompat({
+    clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+    minCompatibleServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+    serverProtocolVersion: status.runtimeProtocolVersion ?? status.protocolVersion,
+    serverMinCompatibleClientProtocolVersion:
+      status.minCompatibleRuntimeClientVersion ?? status.minCompatibleMobileVersion
+  })
+  return compatibility.kind === 'blocked'
 }
 
 function abandonStagedCreate(
@@ -125,31 +161,21 @@ export async function createGitHubWorkItemWorkspaceInBackground(
   deps: BackgroundGitHubWorkItemCreateDeps = DEFAULT_DEPS
 ): Promise<BackgroundGitHubWorkItemCreateResult> {
   const store = deps.getStore()
-  const repo = findRepoForHost(store.repos, args.repoId, {
-    hostId: args.repoExecutionHostId,
-    settings: store.settings
-  })
+  const repo = store.repos.find((candidate) => candidate.id === args.repoId)
   if (!repo) {
     args.openModalFallback()
     return { kind: 'fallback', reason: 'repo-missing' }
   }
-  const repoExecutionHostId = getRepoExecutionHostId(repo)
 
-  const initialRequest = {
-    ...buildInitialGitHubWorkItemRequest(args, repo),
-    ...(args.agentOverride ? { agent: args.agentOverride } : {})
-  }
-  const existingPendingCreateId = findPendingGitHubWorkItemCreate(
-    store.pendingWorktreeCreations,
-    initialRequest
-  )
+  const initialRequest = buildInitialGitHubWorkItemRequest(args, repo)
+  const existingPendingCreateId = findPendingGitHubWorkItemCreate(store, initialRequest)
   if (existingPendingCreateId) {
     deps.activatePendingCreate(existingPendingCreateId)
     return { kind: 'background-started' }
   }
   // Why: disconnected hosts make hook and agent probes fall back to skip/no-agent;
   // keep the old composer gate so Retry cannot reuse degraded preflight values.
-  if (isGitHubWorkItemRepoHostUnavailable(store, repo)) {
+  if (repoHostUnavailable(store, repo)) {
     args.openModalFallback()
     return { kind: 'fallback', reason: 'host-unavailable' }
   }
@@ -159,16 +185,8 @@ export async function createGitHubWorkItemWorkspaceInBackground(
   const itemIdentity = resolveGitHubWorkItemIdentity(args.item)
 
   try {
-    const repoOwnerSettings = getSettingsForRepoRuntimeOwner(
-      { repos: [repo], settings: store.settings },
-      args.repoId
-    )
-    const setupResolution = await deps.resolveSetupDecision(
-      args.repoId,
-      repo,
-      repoOwnerSettings,
-      repoExecutionHostId
-    )
+    const repoOwnerSettings = getSettingsForRepoRuntimeOwner(store, args.repoId)
+    const setupResolution = await deps.resolveSetupDecision(args.repoId, repo, repoOwnerSettings)
     // Why: once the staged row disappears, the user already cancelled or moved
     // on, so every later preflight await must exit without reopening UI.
     if (!deps.hasPendingCreate(creationId)) {
@@ -190,8 +208,7 @@ export async function createGitHubWorkItemWorkspaceInBackground(
           args.repoId,
           itemIdentity.number,
           repoOwnerSettings,
-          args.item,
-          repoExecutionHostId
+          args.item
         )
         baseBranch = result.baseBranch
         pushTarget = result.pushTarget
@@ -214,34 +231,22 @@ export async function createGitHubWorkItemWorkspaceInBackground(
     // Why: trust prompts are serialized app-wide, so read the store fresh at
     // each check — an "Always trust" stamped by an earlier prompt (including
     // this flow's own setup prompt) must short-circuit instead of re-prompting.
-    const trustDecision = await deps.confirmHooks(
-      deps.getStore(),
-      args.repoId,
-      'setup',
-      repoExecutionHostId
-    )
+    const trustDecision = await deps.confirmHooks(deps.getStore(), args.repoId, 'setup')
     if (!deps.hasPendingCreate(creationId)) {
       return { kind: 'background-started' }
     }
     const setupDecision: SetupDecision =
       trustDecision === 'skip' ? 'skip' : setupResolution.decision
-    const agent = await resolveQuickAgent(deps.getStore, repo, args.agentOverride)
+    const agent = await resolvePreferredQuickAgentForGitHubWorkItem(store, repo)
     if (!deps.hasPendingCreate(creationId)) {
       return { kind: 'background-started' }
     }
-    if (args.agentOverride && !agent) {
-      deps.toastError(unavailableAgentErrorMessage())
-      abandonStagedCreate(creationId, restoreView, deps)
-      args.openModalFallback()
-      return { kind: 'fallback', reason: 'agent-unavailable' }
-    }
-    const launchStore = deps.getStore()
     const { startupPlan, quickPrompt, launchDraftPrompt, quickTelemetry } =
       buildGitHubWorkItemStartupPlan({
         agent,
         item: args.item,
         repo,
-        store: launchStore
+        store
       })
     if (agent && !startupPlan) {
       deps.toastError(agentLaunchCommandErrorMessage())
@@ -266,11 +271,7 @@ export async function createGitHubWorkItemWorkspaceInBackground(
       // Why: read failures fail closed (no command), so create still proceeds.
       let effectiveContent = ''
       try {
-        const issueCommandRead = await deps.readIssueCommand(
-          repoOwnerSettings,
-          args.repoId,
-          repoExecutionHostId
-        )
+        const issueCommandRead = await deps.readIssueCommand(repoOwnerSettings, args.repoId)
         effectiveContent = (issueCommandRead.effectiveContent ?? '').trim()
       } catch {
         effectiveContent = ''
@@ -282,8 +283,7 @@ export async function createGitHubWorkItemWorkspaceInBackground(
         const issueCommandTrust = await deps.confirmHooks(
           deps.getStore(),
           args.repoId,
-          'issueCommand',
-          repoExecutionHostId
+          'issueCommand'
         )
         if (!deps.hasPendingCreate(creationId)) {
           return { kind: 'background-started' }

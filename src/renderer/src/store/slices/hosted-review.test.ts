@@ -103,7 +103,6 @@ describe('hosted review slice', () => {
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(1)
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith({
       repoPath: '/repo',
-      executionHostId: 'local',
       branch: 'feature/gitlab',
       currentHeadOid: null,
       linkedGitHubPR: null,
@@ -203,145 +202,6 @@ describe('hosted review slice', () => {
       data: review
     })
     expect(store.getState().hostedReviewCache['local::repo-1::feature/gitlab']).toBeUndefined()
-  })
-
-  it('uses the explicit local owner when a runtime repo with the same id appears first', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
-    const store = makeStore({
-      activeRuntimeEnvironmentId: 'env-1'
-    } as AppState['settings'])
-    store.setState({
-      repos: [
-        {
-          id: 'repo-1',
-          path: '/runtime/repo',
-          connectionId: null,
-          executionHostId: 'runtime:env-1'
-        } as unknown as AppState['repos'][number],
-        {
-          id: 'repo-1',
-          path: '/local/repo',
-          connectionId: null,
-          executionHostId: 'local'
-        } as unknown as AppState['repos'][number]
-      ]
-    } as Partial<AppState>)
-
-    await expect(
-      store.getState().fetchHostedReviewForBranch('/local/repo', 'feature/explicit-local', {
-        repoId: 'repo-1',
-        executionHostId: 'local'
-      })
-    ).resolves.toEqual(review)
-
-    expect(runtimeRpc.callRuntimeRpc).not.toHaveBeenCalled()
-    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: '/local/repo', repoId: 'repo-1' })
-    )
-    expect(
-      store.getState().hostedReviewCache['local::repo-1::feature/explicit-local']
-    ).toMatchObject({ data: review })
-  })
-
-  it('uses the explicit SSH owner when a local repo with the same id appears first', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
-    const store = makeStore()
-    store.setState({
-      repos: [
-        {
-          id: 'repo-1',
-          path: '/local/repo',
-          connectionId: null,
-          executionHostId: 'local'
-        } as unknown as AppState['repos'][number],
-        {
-          id: 'repo-1',
-          path: '/ssh/repo',
-          connectionId: 'ssh-1',
-          executionHostId: 'ssh:ssh-1'
-        } as unknown as AppState['repos'][number]
-      ]
-    } as Partial<AppState>)
-
-    await expect(
-      store.getState().fetchHostedReviewForBranch('/ssh/repo', 'feature/explicit-ssh', {
-        repoId: 'repo-1',
-        executionHostId: 'ssh:ssh-1'
-      })
-    ).resolves.toEqual(review)
-
-    expect(runtimeRpc.callRuntimeRpc).not.toHaveBeenCalled()
-    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repoPath: '/ssh/repo',
-        repoId: 'repo-1',
-        executionHostId: 'ssh:ssh-1'
-      })
-    )
-    expect(
-      store.getState().hostedReviewCache['ssh:ssh-1::repo-1::feature/explicit-ssh']
-    ).toMatchObject({ data: review })
-    expect(
-      store.getState().hostedReviewCache['local::repo-1::feature/explicit-ssh']
-    ).toBeUndefined()
-  })
-
-  it('uses the explicit runtime owner when a local repo with the same id appears first', async () => {
-    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(review)
-    const store = makeStore()
-    store.setState({
-      repos: [
-        {
-          id: 'repo-1',
-          path: '/local/repo',
-          connectionId: null,
-          executionHostId: 'local'
-        } as unknown as AppState['repos'][number],
-        {
-          id: 'repo-1',
-          path: '/runtime/repo',
-          connectionId: null,
-          executionHostId: 'runtime:env-1'
-        } as unknown as AppState['repos'][number]
-      ]
-    } as Partial<AppState>)
-
-    await expect(
-      store.getState().fetchHostedReviewForBranch('/runtime/repo', 'feature/explicit-runtime', {
-        repoId: 'repo-1',
-        executionHostId: 'runtime:env-1'
-      })
-    ).resolves.toEqual(review)
-
-    expect(mockApi.hostedReview.forBranch).not.toHaveBeenCalled()
-    expect(runtimeRpc.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-1' },
-      'hostedReview.forBranch',
-      expect.objectContaining({ repo: 'repo-1', repoPath: '/runtime/repo' }),
-      { timeoutMs: 30_000 }
-    )
-    expect(
-      store.getState().hostedReviewCache['runtime:env-1::repo-1::feature/explicit-runtime']
-    ).toMatchObject({ data: review })
-  })
-
-  it('fails closed when an explicit owner has no matching repository', async () => {
-    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(review)
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
-    const store = makeStore({
-      activeRuntimeEnvironmentId: 'env-focused'
-    } as AppState['settings'])
-
-    await expect(
-      store.getState().fetchHostedReviewForBranch('/missing/repo', 'feature/missing-owner', {
-        repoId: 'repo-1',
-        executionHostId: 'runtime:env-missing'
-      })
-    ).resolves.toBeNull()
-
-    expect(runtimeRpc.callRuntimeRpc).not.toHaveBeenCalled()
-    expect(mockApi.hostedReview.forBranch).not.toHaveBeenCalled()
-    expect(store.getState().hostedReviewCache).toEqual({})
   })
 
   it('uses local hosted-review IPC for a known local repo while a runtime is focused', async () => {
@@ -486,7 +346,6 @@ describe('hosted review slice', () => {
     expect(mockApi.hostedReview.create).toHaveBeenCalledWith({
       repoPath: '/repo',
       repoId: 'repo-1',
-      executionHostId: 'local',
       connectionId: null,
       provider: 'github',
       base: 'main',
@@ -520,7 +379,6 @@ describe('hosted review slice', () => {
     expect(mockApi.hostedReview.create).toHaveBeenCalledWith({
       repoPath: '/repo',
       repoId: 'repo-1',
-      executionHostId: 'ssh:ssh-1',
       connectionId: 'ssh-1',
       provider: 'github',
       base: 'main',
@@ -553,59 +411,11 @@ describe('hosted review slice', () => {
     expect(mockApi.hostedReview.getCreationEligibility).toHaveBeenCalledWith({
       repoPath: '/repo',
       repoId: 'repo-1',
-      executionHostId: 'ssh:ssh-1',
       connectionId: 'ssh-1',
       worktreePath: '/remote/worktree',
       branch: 'feature/create-pr',
       base: 'main'
     })
-  })
-
-  it('keeps explicit local eligibility on local IPC while a runtime is focused', async () => {
-    mockApi.hostedReview.getCreationEligibility.mockResolvedValueOnce({
-      provider: 'github',
-      review: null,
-      canCreate: true,
-      blockedReason: null,
-      nextAction: null
-    })
-    const store = makeStore({
-      activeRuntimeEnvironmentId: 'env-focused'
-    } as AppState['settings'])
-
-    await store.getState().getHostedReviewCreationEligibility({
-      repoPath: '/repo',
-      repoId: 'repo-1',
-      executionHostId: 'local',
-      branch: 'feature/create-pr',
-      base: 'main'
-    })
-
-    expect(runtimeRpc.callRuntimeRpc).not.toHaveBeenCalled()
-    expect(mockApi.hostedReview.getCreationEligibility).toHaveBeenCalledWith(
-      expect.objectContaining({ repoId: 'repo-1', executionHostId: 'local' })
-    )
-  })
-
-  it('keeps explicit local creation on local IPC while a runtime is focused', async () => {
-    mockApi.hostedReview.create.mockResolvedValueOnce({ ok: true, number: 12 })
-    const store = makeStore({
-      activeRuntimeEnvironmentId: 'env-focused'
-    } as AppState['settings'])
-
-    await store.getState().createHostedReview('/repo', {
-      repoId: 'repo-1',
-      executionHostId: 'local',
-      provider: 'github',
-      base: 'main',
-      head: 'feature/create-pr',
-      title: 'Create PR'
-    })
-
-    expect(runtimeRpc.callRuntimeRpc).not.toHaveBeenCalled()
-    expect(mockApi.hostedReview.create).toHaveBeenCalledWith(
-      expect.objectContaining({ repoId: 'repo-1', executionHostId: 'local' })
-    )
   })
 
   it('rejects a never-settling local eligibility probe after the timeout', async () => {
@@ -717,7 +527,6 @@ describe('hosted review slice', () => {
     await refreshHostedReviewCard(fetchHostedReviewForBranch, {
       repoPath: '/repo',
       repoId: 'repo-id',
-      executionHostId: 'ssh:ssh-1',
       branch: 'feature/test',
       linkedGitHubPR: null,
       linkedGitLabMR: 33
@@ -725,7 +534,6 @@ describe('hosted review slice', () => {
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo', 'feature/test', {
       force: true,
       repoId: 'repo-id',
-      executionHostId: 'ssh:ssh-1',
       linkedGitHubPR: null,
       linkedGitLabMR: 33,
       linkedBitbucketPR: null,

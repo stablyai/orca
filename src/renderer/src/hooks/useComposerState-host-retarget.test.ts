@@ -42,26 +42,13 @@ describe('useComposerState host retarget', () => {
     })
   })
 
-  it('records picker PR resolution so a host switch can invalidate it', () => {
-    const pickerSection = sourceBetween(
-      HOOK_SOURCE,
-      'const handleBaseBranchPrSelect',
-      'const handleBaseBranchMrSelect'
-    )
-
-    expect(pickerSection).toContain('smartGitHubPrStartPointSelectionRef.current = {')
-    expect(pickerSection).toContain('repoId: selectedRepo.id')
-    expect(pickerSection).toContain('resolved: {')
-    expect(pickerSection).toContain('baseBranch: nextBaseBranch')
-  })
-
   it('retains an explicit host setup when duplicate repos share an id', () => {
     const targetSection = sourceBetween(
       HOOK_SOURCE,
       'const selectedWorkspaceTarget = useMemo',
       'const selectedRepo ='
     )
-    expect(targetSection).toContain('selectedProjectHostSetupOverrideId ??')
+    expect(targetSection).toContain('projectHostSetupId: selectedProjectHostSetupOverrideId')
 
     const switchSection = sourceBetween(
       HOOK_SOURCE,
@@ -71,22 +58,5 @@ describe('useComposerState host retarget', () => {
     expect(switchSection).toContain('setSelectedProjectHostSetupOverrideId(option.id)')
     expect(switchSection).toContain('preserveStartFrom: true')
     expect(switchSection).toContain('forceResetStartFrom: true')
-  })
-
-  it('invalidates an in-flight submit when the workspace target changes', () => {
-    const repoChangeSection = sourceBetween(
-      HOOK_SOURCE,
-      'const handleRepoChange',
-      'const handleFolderSourceRepoChange'
-    )
-    expect(repoChangeSection).toContain('submitContextGenerationRef.current += 1')
-
-    const submitSection = sourceBetween(
-      HOOK_SOURCE,
-      'const submit = useCallback',
-      'const submitQuick'
-    )
-    expect(submitSection).toContain('captureComposerSubmitCancellation(')
-    expect(submitSection).toContain('const isSubmissionCancelled =')
   })
 })

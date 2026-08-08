@@ -532,22 +532,6 @@ describe('local preflight context', () => {
     })
   })
 
-  it('skips a remote duplicate when resolving a local repo WSL runtime', () => {
-    const localRepo = makeState({
-      repoPath: String.raw`\\wsl.localhost\Debian\home\alice\repo`
-    }).repos[0]!
-    const state = {
-      ...makeState({ repoPath: String.raw`C:\remote-placeholder` }),
-      repos: [{ ...localRepo, connectionId: 'builder', executionHostId: 'ssh:builder' }, localRepo]
-    } as AppState
-
-    expect(getLocalRepoProjectExecutionRuntimeContext(state, 'repo-1', 'win32')).toEqual(
-      expect.objectContaining({
-        runtime: expect.objectContaining({ kind: 'wsl', distro: 'Debian' })
-      })
-    )
-  })
-
   it('does not create a local project runtime for SSH repos', () => {
     const state = makeState({
       repoPath: 'C:\\Users\\alice\\repo',

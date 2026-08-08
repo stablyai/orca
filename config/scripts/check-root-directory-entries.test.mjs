@@ -13,18 +13,16 @@ function git(cwd, args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
 }
 
-function makeFixture({ includeBaseEntry = true } = {}) {
+function makeFixture() {
   const root = mkdtempSync(join(tmpdir(), 'orca-root-directory-guard-'))
   tempDirs.push(root)
   git(root, ['init', '--quiet'])
   git(root, ['config', 'user.email', 'root-directory-guard-test@example.com'])
   git(root, ['config', 'user.name', 'Root Directory Guard Test'])
-  if (includeBaseEntry) {
-    mkdirSync(join(root, 'config'), { recursive: true })
-    writeFileSync(join(root, 'config', 'base.txt'), 'base\n')
-  }
+  mkdirSync(join(root, 'config'), { recursive: true })
+  writeFileSync(join(root, 'config', 'base.txt'), 'base\n')
   git(root, ['add', '-A'])
-  git(root, ['commit', '--quiet', '--allow-empty', '-m', 'base'])
+  git(root, ['commit', '--quiet', '-m', 'base'])
   return { root, base: git(root, ['rev-parse', 'HEAD']) }
 }
 
@@ -84,17 +82,6 @@ describe('root directory guard', () => {
 
     expect(result.status).toBe(1)
     expect(output).toContain('new-folder')
-  })
-
-  it('rejects the first root entry added to an empty base tree', () => {
-    const fixture = makeFixture({ includeBaseEntry: false })
-    const head = commitFiles(fixture.root, [['unexpected.md', 'unexpected\n']])
-
-    const result = runGuard({ ...fixture, head })
-    const output = `${result.stdout}\n${result.stderr}`
-
-    expect(result.status).toBe(1)
-    expect(output).toContain('unexpected.md')
   })
 
   it('is wired into the PR verify gate', () => {

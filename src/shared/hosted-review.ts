@@ -1,4 +1,3 @@
-import type { ExecutionHostId } from './execution-host'
 import type { CheckStatus, PRConflictSummary, PRMergeableState, PRReviewDecision } from './types'
 
 export type HostedReviewProvider =
@@ -42,7 +41,6 @@ export type HostedReviewInfo = {
 export type HostedReviewForBranchArgs = {
   repoPath: string
   repoId?: string
-  executionHostId?: ExecutionHostId
   branch: string
   linkedGitHubPR?: number | null
   fallbackGitHubPR?: number | null
@@ -79,7 +77,6 @@ export type CreateHostedReviewInput = {
 export type CreateHostedReviewArgs = CreateHostedReviewInput & {
   repoPath: string
   repoId?: string
-  executionHostId?: ExecutionHostId
   connectionId?: string | null
 }
 
@@ -152,7 +149,6 @@ export type HostedReviewCreationEligibility = {
 export type HostedReviewCreationEligibilityArgs = {
   repoPath: string
   repoId?: string
-  executionHostId?: ExecutionHostId
   worktreePath?: string
   connectionId?: string | null
   branch: string

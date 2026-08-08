@@ -1,4 +1,8 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  toSshExecutionHostId
+} from '../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type {
   WorktreeOperationOwnerRecord,
@@ -6,12 +10,6 @@ import type {
   WorktreeOperationRouteResolution,
   WorktreeOperationRouteState
 } from './worktree-operation-route'
-import { resolveRepoRouteForExactSshOwner } from './worktree-exact-ssh-operation-route'
-
-const repoOperationRouteIndexCache = new WeakMap<
-  NonNullable<WorktreeOperationRouteState['repos']>,
-  ReadonlyMap<string, WorktreeOperationRouteResolution>
->()
 
 export function routeForOwner(owner: {
   hostId?: ExecutionHostId
@@ -40,39 +38,29 @@ export function addRoute(
   routes.set(JSON.stringify(route), route)
 }
 
-export function resolveIndexedRepoOperationRoute(
+function resolveRepoRouteForSshOwner(
   repos: WorktreeOperationRouteState['repos'],
-  repoId: string
+  owner: WorktreeOperationOwnerRecord
 ): WorktreeOperationRouteResolution {
-  if (!repos) {
+  if (!repos || !owner.hostId) {
     return { kind: 'missing' }
   }
-  let index = repoOperationRouteIndexCache.get(repos)
-  if (!index) {
-    const next = new Map<string, WorktreeOperationRouteResolution>()
-    for (const repo of repos) {
-      const repoId = repo.id
-      if (!repo.executionHostId?.trim() && !repo.connectionId?.trim()) {
-        continue
-      }
-      const route = routeForOwner({ hostId: getRepoExecutionHostId(repo) })
-      if (!route) {
-        continue
-      }
-      const current = next.get(repoId)
-      if (!current) {
-        next.set(repoId, { kind: 'resolved', route })
-      } else if (
-        current.kind === 'resolved' &&
-        JSON.stringify(current.route) !== JSON.stringify(route)
-      ) {
-        next.set(repoId, { kind: 'ambiguous' })
-      }
+  const routes = new Map<string, WorktreeOperationRoute>()
+  for (const repo of repos) {
+    if (repo.id !== owner.repoId) {
+      continue
     }
-    index = next
-    repoOperationRouteIndexCache.set(repos, index)
+    const connectionHostId = repo.connectionId ? toSshExecutionHostId(repo.connectionId) : null
+    if (getRepoExecutionHostId(repo) !== owner.hostId && connectionHostId !== owner.hostId) {
+      continue
+    }
+    addRoute(routes, routeForOwner({ hostId: getRepoExecutionHostId(repo) }))
   }
-  return index.get(repoId) ?? { kind: 'missing' }
+  const route = routes.values().next().value
+  if (routes.size === 1 && route) {
+    return { kind: 'resolved', route }
+  }
+  return routes.size > 1 ? { kind: 'ambiguous' } : { kind: 'missing' }
 }
 
 export function resolveExactWorktreeRoute(
@@ -86,12 +74,8 @@ export function resolveExactWorktreeRoute(
   if (route.runtimeEnvironmentId || parseExecutionHostId(route.executionHostId)?.kind !== 'ssh') {
     return { kind: 'resolved', route }
   }
-  // Why: exact SSH ownership disambiguates duplicate IDs while retaining one paired HUB transport.
-  const exactSshRepoRoute = resolveRepoRouteForExactSshOwner(state.repos, owner)
-  const repoRoute =
-    exactSshRepoRoute.kind === 'missing'
-      ? resolveIndexedRepoOperationRoute(state.repos, owner.repoId)
-      : exactSshRepoRoute
+  // Recover an optional HUB transport only from the repo setup matching the worktree's SSH host.
+  const repoRoute = resolveRepoRouteForSshOwner(state.repos, owner)
   if (repoRoute.kind === 'ambiguous') {
     return repoRoute
   }

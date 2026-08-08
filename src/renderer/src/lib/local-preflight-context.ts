@@ -113,11 +113,7 @@ export function getLocalRepoProjectExecutionRuntimeContext(
     return undefined
   }
 
-  // Why: repository ids are host-scoped. This helper models local execution,
-  // so skip SSH/runtime duplicates rather than accepting the first bare-id row.
-  const repo = (state.repos ?? []).find(
-    (entry) => entry.id === repoId && getRepoExecutionHostId(entry) === LOCAL_EXECUTION_HOST_ID
-  )
+  const repo = (state.repos ?? []).find((entry) => entry.id === repoId)
   if (!isLocalRuntimeRepo(repo)) {
     return undefined
   }
@@ -138,21 +134,6 @@ export function getLocalRepoProjectExecutionRuntimeContext(
     wslAvailable: wslContext.wslAvailable,
     availableWslDistros: wslContext.availableWslDistros
   })
-}
-
-export function getLocalRepoAgentPreflightContext(
-  state: LocalProjectRuntimeState,
-  repoId: string,
-  appPlatform: NodeJS.Platform = getRendererAppPlatform(),
-  wslContext: LocalProjectRuntimeWslContext = getCachedLocalProjectRuntimeWslContext()
-): LocalPreflightContext {
-  const projectRuntime = getLocalRepoProjectExecutionRuntimeContext(
-    state,
-    repoId,
-    appPlatform,
-    wslContext
-  )
-  return projectRuntime ? getProjectRuntimePreflightContext(projectRuntime) : undefined
 }
 
 export function getLocalPreflightContext(

@@ -16,41 +16,22 @@ import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from './filesystem-auth'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 
-function assertRegisteredRepo(
-  repoPath: string,
-  store: Store,
-  repoId?: string,
-  executionHostId?: ExecutionHostId
-): Repo {
+function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): Repo {
   if (repoId) {
-    const matches = store
-      .getRepos()
-      .filter(
-        (candidate) =>
-          candidate.id === repoId &&
-          candidate.path === repoPath &&
-          (!executionHostId || getRepoExecutionHostId(candidate) === executionHostId)
-      )
-    if (matches.length !== 1) {
+    const repo = store.getRepo(repoId)
+    if (!repo || repo.path !== repoPath) {
       throw new Error('Access denied: unknown repository')
     }
-    return matches[0]
+    return repo
   }
   const resolvedRepoPath = resolve(repoPath)
-  const matches = store
-    .getRepos()
-    .filter(
-      (candidate) =>
-        resolve(candidate.path) === resolvedRepoPath &&
-        (!executionHostId || getRepoExecutionHostId(candidate) === executionHostId)
-    )
-  if (matches.length !== 1) {
+  const repo = store.getRepos().find((r) => resolve(r.path) === resolvedRepoPath)
+  if (!repo) {
     throw new Error('Access denied: unknown repository path')
   }
-  return matches[0]
+  return repo
 }
 
 async function resolveHostedReviewWorktreePath(
@@ -97,7 +78,7 @@ function normalizeRemoteHostedReviewPath(remotePath: string): string {
 
 export function registerHostedReviewHandlers(store: Store, stats: StatsCollector): void {
   ipcMain.handle('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
-    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId, args.executionHostId)
+    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
     const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
     const review = await getHostedReviewForBranch({
       repoPath: repo.path,
@@ -127,7 +108,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   ipcMain.handle(
     'hostedReview:getCreationEligibility',
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
-      const repo = assertRegisteredRepo(args.repoPath, store, args.repoId, args.executionHostId)
+      const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
       const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
       const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
       return getHostedReviewCreationEligibility({
@@ -140,7 +121,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   )
 
   ipcMain.handle('hostedReview:create', async (_event, args: CreateHostedReviewArgs) => {
-    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId, args.executionHostId)
+    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
     const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
     const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
     // Why: the dirty preflight must not count Orca's own shared symlinks as user work (issue #10451).

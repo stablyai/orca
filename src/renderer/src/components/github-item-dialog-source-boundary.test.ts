@@ -101,29 +101,6 @@ describe('GitHubItemDialog source host boundaries', () => {
     )
   })
 
-  it('matches attached issue workspaces on the issue execution host', () => {
-    const source = componentSource('GitHubItemDialog.tsx')
-    const section = sourceBetween(
-      source,
-      'const issueAttachedWorkspace = useMemo(',
-      '// Why: the cache key must include issue source preference'
-    )
-
-    // Why: attachment matching must use exactly the issue owner host, without
-    // falling back to another host-bearing value from the surrounding dialog.
-    expect(section.match(/workItem\.repoExecutionHostId/g)).toHaveLength(1)
-  })
-
-  it('keeps reviewer list callbacks scoped to the work item execution host', () => {
-    const source = componentSource('GitHubItemDialog.tsx')
-
-    // Why: reviewer updates patch a shared cache whose repo ids can overlap across hosts.
-    expect(source).not.toContain('{ id: workItem.id, repoId: workItem.repoId }')
-    expect(
-      source.match(/repoExecutionHostId: workItem\.repoExecutionHostId/g)?.length
-    ).toBeGreaterThanOrEqual(3)
-  })
-
   it('treats null details as unavailable while preserving empty detail payloads', () => {
     const source = componentSource('GitHubItemDialog.tsx')
     const loadedSection = sourceBetween(

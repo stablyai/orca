@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   createWorktree: vi.fn(),
   ensureDetectedAgents: vi.fn(),
   ensureRemoteDetectedAgents: vi.fn(),
-  ensureRuntimeDetectedAgents: vi.fn(),
   updateWorktreeMeta: vi.fn(),
   setSidebarOpen: vi.fn(),
   seedNativeChatLaunchPrompt: vi.fn(),
@@ -19,11 +18,9 @@ const mocks = vi.hoisted(() => ({
   openModalFallback: vi.fn(),
   resolvePrBase: vi.fn(),
   getConnectionId: vi.fn(),
-  callRuntimeRpc: vi.fn(),
   store: {} as Record<string, unknown> & {
     ensureDetectedAgents: ReturnType<typeof vi.fn>
     ensureRemoteDetectedAgents: ReturnType<typeof vi.fn>
-    ensureRuntimeDetectedAgents: ReturnType<typeof vi.fn>
     createWorktree: ReturnType<typeof vi.fn>
     updateWorktreeMeta: ReturnType<typeof vi.fn>
     setSidebarOpen: ReturnType<typeof vi.fn>
@@ -70,7 +67,7 @@ vi.mock('@/runtime/runtime-hooks-client', () => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   getActiveRuntimeTarget: vi.fn().mockReturnValue({ kind: 'local' }),
-  callRuntimeRpc: mocks.callRuntimeRpc
+  callRuntimeRpc: vi.fn()
 }))
 
 vi.mock('@/lib/new-workspace', () => ({
@@ -155,8 +152,6 @@ describe('launchWorkItemDirect', () => {
     })
     mocks.ensureDetectedAgents.mockResolvedValue(['codex'])
     mocks.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
-    mocks.ensureRuntimeDetectedAgents.mockResolvedValue(['codex'])
-    mocks.callRuntimeRpc.mockResolvedValue(undefined)
     mocks.getConnectionId.mockReturnValue(null)
     mocks.createWorktree.mockResolvedValue({
       worktree: { id: 'repo-1::/repo/worktree', path: '/repo/worktree' },
@@ -187,7 +182,6 @@ describe('launchWorkItemDirect', () => {
         }
       ],
       worktreesByRepo: {},
-      runtimeStatusByEnvironmentId: new Map(),
       settings: {
         defaultTuiAgent: 'codex',
         disabledTuiAgents: [],
@@ -195,7 +189,6 @@ describe('launchWorkItemDirect', () => {
       },
       ensureDetectedAgents: mocks.ensureDetectedAgents,
       ensureRemoteDetectedAgents: mocks.ensureRemoteDetectedAgents,
-      ensureRuntimeDetectedAgents: mocks.ensureRuntimeDetectedAgents,
       createWorktree: mocks.createWorktree,
       updateWorktreeMeta: mocks.updateWorktreeMeta,
       setSidebarOpen: mocks.setSidebarOpen,
@@ -206,47 +199,6 @@ describe('launchWorkItemDirect', () => {
     // @ts-expect-error -- test shim
     globalThis.window = { api: mockApi }
     mockApi.agentTrust.markTrusted.mockResolvedValue(undefined)
-  })
-
-  it('detects and plans agent startup on the selected runtime host', async () => {
-    mocks.store.repos = [
-      {
-        id: 'repo-1',
-        path: '/runtime/repo',
-        displayName: 'Runtime repo',
-        addedAt: 1,
-        executionHostId: 'runtime:env-1'
-      }
-    ]
-    mocks.store.runtimeStatusByEnvironmentId = new Map([
-      ['env-1', { status: { hostPlatform: 'linux' } }]
-    ])
-
-    await launchWorkItemDirect({
-      repoId: 'repo-1',
-      repoExecutionHostId: 'runtime:env-1',
-      launchSource: 'task_page',
-      openModalFallback: mocks.openModalFallback,
-      agentOverride: 'codex',
-      item: {
-        type: 'issue',
-        number: 42,
-        title: 'Fix runtime launch',
-        url: 'https://github.com/acme/repo/issues/42'
-      }
-    })
-
-    expect(mocks.ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1')
-    expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-1' },
-      'preflight.markAgentTrusted',
-      { agent: 'codex', workspacePath: '/repo/worktree' }
-    )
-    expect(mockApi.agentTrust.markTrusted).not.toHaveBeenCalled()
-    expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith(
-      expect.objectContaining({ isRemote: true, platform: 'linux' })
-    )
   })
 
   it('rejects invalid per-launch CLI arguments before creating a workspace', async () => {
@@ -298,7 +250,6 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo-1',
       prNumber: 6934,
-      executionHostId: 'local',
       headRefName: 'feature/fix',
       baseRefName: 'main',
       isCrossRepository: true
@@ -328,8 +279,7 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
-      'refs/remotes/origin/main',
-      { executionHostId: 'local' }
+      'refs/remotes/origin/main'
     )
   })
 
@@ -410,8 +360,7 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
-      { executionHostId: 'local' }
+      undefined
     )
   })
 

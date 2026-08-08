@@ -82,7 +82,9 @@ function createTarget(
   reposById: ReadonlyMap<string, readonly Repo[]>
 ): WorkspaceCreationTarget | null {
   const candidates = reposById.get(setup.repoId) ?? []
-  const repo = candidates.find((candidate) => getRepoExecutionHostId(candidate) === setup.hostId)
+  const repo =
+    candidates.find((candidate) => getRepoExecutionHostId(candidate) === setup.hostId) ??
+    (candidates.length === 1 ? candidates[0] : null)
   if (!repo) {
     return null
   }
@@ -221,7 +223,8 @@ export function resolveWorkspaceCreationTarget(
     focusedHostScope && focusedHostScope !== ALL_EXECUTION_HOSTS_SCOPE
       ? legacyCandidates.find((candidate) => getRepoExecutionHostId(candidate) === focusedHostScope)
       : null
-  const legacyRepo = focusedLegacyRepo ?? legacyCandidates[0] ?? null
+  const legacyRepo =
+    focusedLegacyRepo ?? (legacyCandidates.length === 1 ? legacyCandidates[0] : null)
   let legacyTarget: WorkspaceCreationTarget | null = null
   if (legacyRepo) {
     const projectedLegacySetup = projectHostSetupProjectionFromRepos([legacyRepo]).setups[0]
@@ -236,8 +239,8 @@ export function resolveWorkspaceCreationTarget(
         : null)
     legacyTarget = legacySetup ? createTarget(legacySetup, reposById) : null
   } else if (repoId) {
-    // Why: the resolved id has no eligible repo row (for example, a stale draft). Stay on that
-    // id's own setup instead of letting the composer re-pick an arbitrary repository.
+    // Why: duplicate repo ids across hosts leave no single legacy repo. Stay on the resolved id's
+    // own setup instead of failing closed and letting the composer re-pick an arbitrary repo.
     legacyTarget = findReadySetupTarget(setups, reposById, (setup) => setup.repoId === repoId)
   }
   if (legacyTarget) {

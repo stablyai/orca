@@ -1,9 +1,11 @@
-import type { Repo, Worktree } from '../../../../shared/types'
+import type {
+  GitHubRepositoryIdentity,
+  PRCheckDetail,
+  Repo,
+  Worktree
+} from '../../../../shared/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { findRepoForWorktreeOwner } from '@/store/slices/repo-host-identity'
-import type { AppState } from '@/store/types'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import {
@@ -17,7 +19,6 @@ type FetchHostedReview = (
   options: {
     force?: boolean
     repoId?: string
-    executionHostId?: ExecutionHostId
     staleWhileRevalidate?: boolean
     linkedGitHubPR?: number | null
     linkedGitLabMR?: number | null
@@ -28,7 +29,14 @@ type FetchHostedReview = (
   }
 ) => Promise<HostedReviewInfo | null>
 
-type FetchPRChecks = AppState['fetchPRChecks']
+type FetchPRChecks = (
+  repoPath: string,
+  prNumber: number,
+  branch?: string,
+  headSha?: string,
+  prRepo?: GitHubRepositoryIdentity | null,
+  options?: { repoId?: string; force?: boolean }
+) => Promise<PRCheckDetail[]>
 
 export type ParentPrChecksRefreshCandidate = {
   identity: string
@@ -57,9 +65,10 @@ export function getParentPrChecksRefreshCandidates({
   repos: readonly Repo[]
   knownReviewIdentities?: ReadonlySet<string>
 }): ParentPrChecksRefreshCandidate[] {
+  const repoById = new Map(repos.map((repo) => [repo.id, repo]))
   return worktrees
     .map((worktree) => {
-      const repo = findRepoForWorktreeOwner(repos, worktree)
+      const repo = repoById.get(worktree.repoId)
       const branch = getBranchName(worktree)
       if (!repo || isFolderRepo(repo) || worktree.isBare || !branch) {
         return null
@@ -122,7 +131,6 @@ async function refreshParentPrChecksCandidate(
     const review = await fetchHostedReviewForBranch(candidate.repo.path, candidate.branch, {
       force,
       repoId: candidate.repo.id,
-      executionHostId: getRepoExecutionHostId(candidate.repo),
       linkedGitHubPR: candidate.worktree.linkedPR ?? null,
       linkedGitLabMR: candidate.worktree.linkedGitLabMR ?? null,
       linkedBitbucketPR: candidate.worktree.linkedBitbucketPR ?? null,
@@ -144,11 +152,7 @@ async function refreshParentPrChecksCandidate(
         candidate.branch,
         review.headSha,
         null,
-        {
-          repoId: candidate.repo.id,
-          executionHostId: getRepoExecutionHostId(candidate.repo),
-          force
-        }
+        { repoId: candidate.repo.id, force }
       )
     }
     return { kind: 'found', review }

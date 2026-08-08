@@ -6,12 +6,12 @@ import {
 import { findRuntimeWorkspaceFileOwner } from '../../../shared/runtime-workspace-file-owner'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
+import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import {
   getExecutionHostIdForWorktree,
   getExplicitRuntimeEnvironmentIdForWorktree
 } from './worktree-runtime-owner'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-route'
-import { resolveExactWorktreeRoute } from './worktree-owner-route'
 
 export type RuntimeWorkspaceFileRoute = {
   worktreeId: string
@@ -39,65 +39,15 @@ function workspaceMatchesExecutionHost(
   )
 }
 
-function worktreeMatchesExecutionHost(
-  state: AppState,
-  worktree: AppState['worktreesByRepo'][string][number],
-  executionHostId: ExecutionHostId,
-  hasDuplicateId: boolean
-): boolean {
-  const route = resolveExactWorktreeRoute(state, worktree)
-  if (route.kind === 'resolved') {
-    const parsedHost = parseExecutionHostId(executionHostId)
-    return parsedHost?.kind === 'runtime'
-      ? route.route.runtimeEnvironmentId === parsedHost.environmentId
-      : route.route.executionHostId === executionHostId
-  }
-  // Why: hostless legacy rows are safe only when their worktree identity is unique.
-  return !hasDuplicateId && workspaceMatchesExecutionHost(state, worktree.id, executionHostId)
-}
-
-function workspaceFileOwnerIdentity(worktree: AppState['worktreesByRepo'][string][number]): string {
-  return JSON.stringify([
-    worktree.repoId,
-    worktree.hostId ?? null,
-    worktree.runtimeOwnerEnvironmentId?.trim() || null
-  ])
-}
-
 export function findWorkspaceFileRoute(
   state: AppState,
   executionHostId: ExecutionHostId,
   absolutePath: string
 ): RuntimeWorkspaceFileRoute | null {
-  const worktrees = Object.values(state.worktreesByRepo).flat()
-  const idCounts = new Map<string, number>()
-  for (const worktree of worktrees) {
-    idCounts.set(worktree.id, (idCounts.get(worktree.id) ?? 0) + 1)
-  }
-  const matchingWorktrees = new Map<string, (typeof worktrees)[number] | null>()
-  for (const worktree of worktrees) {
-    if (
-      !worktreeMatchesExecutionHost(
-        state,
-        worktree,
-        executionHostId,
-        (idCounts.get(worktree.id) ?? 0) > 1
-      )
-    ) {
-      continue
-    }
-    const current = matchingWorktrees.get(worktree.id)
-    if (current === undefined) {
-      matchingWorktrees.set(worktree.id, worktree)
-    } else if (
-      current &&
-      workspaceFileOwnerIdentity(current) !== workspaceFileOwnerIdentity(worktree)
-    ) {
-      matchingWorktrees.set(worktree.id, null)
-    }
-  }
-  const roots = Array.from(matchingWorktrees.values()).flatMap((worktree) =>
-    worktree ? [{ workspaceId: worktree.id, rootPath: worktree.path, executionHostId }] : []
+  const roots = getIndexedAllWorktrees(state.worktreesByRepo).flatMap((worktree) =>
+    workspaceMatchesExecutionHost(state, worktree.id, executionHostId)
+      ? [{ workspaceId: worktree.id, rootPath: worktree.path, executionHostId }]
+      : []
   )
   for (const workspace of state.folderWorkspaces) {
     const workspaceId = folderWorkspaceKey(workspace.id)

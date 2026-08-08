@@ -582,41 +582,6 @@ describe('registerWorktreeHandlers', () => {
     expect(handlers['worktrees:resolveMrBase']).toBeDefined()
   })
 
-  it('resolves a GitLab MR base through the requested SSH repository owner', async () => {
-    const localRepo = {
-      id: 'repo-1',
-      path: '/workspace/local-repo',
-      displayName: 'local',
-      badgeColor: '#000',
-      addedAt: 0,
-      executionHostId: 'local'
-    }
-    const sshRepo = {
-      ...localRepo,
-      path: '/workspace/ssh-repo',
-      displayName: 'ssh',
-      connectionId: 'connection-1',
-      executionHostId: 'ssh:connection-1'
-    }
-    store.getRepos.mockReturnValue([localRepo, sshRepo])
-    store.getRepo.mockReturnValue(localRepo)
-
-    await handlers['worktrees:resolveMrBase'](null, {
-      repoId: 'repo-1',
-      executionHostId: 'ssh:connection-1',
-      mrIid: 42
-    })
-
-    expect(runtimeStub.resolveManagedMrBase).toHaveBeenCalledWith({
-      repoSelector: 'path:/workspace/ssh-repo',
-      connectionId: 'connection-1',
-      mrIid: 42,
-      sourceBranch: undefined,
-      targetBranch: undefined,
-      isCrossRepository: undefined
-    })
-  })
-
   it('clears the branch rename failure-output handler before re-registering IPC handlers', () => {
     expect(removeHandlerMock).toHaveBeenCalledWith('worktrees:getBranchRenameFailureOutput')
     expect(handlers['worktrees:getBranchRenameFailureOutput']).toBeDefined()
@@ -687,35 +652,6 @@ describe('registerWorktreeHandlers', () => {
 
     expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin')
     expect(addWorktreeMock).not.toHaveBeenCalled()
-  })
-
-  it('prefetches the create base through the requested repo host', async () => {
-    const localRepo = {
-      id: 'repo-1',
-      path: '/workspace/local',
-      displayName: 'local',
-      badgeColor: '#000',
-      addedAt: 0
-    }
-    const sshRepo = {
-      id: 'repo-1',
-      path: '/workspace/ssh',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'ssh-1'
-    }
-    store.getRepos.mockReturnValue([localRepo, sshRepo])
-    store.getRepo.mockReturnValue(localRepo)
-
-    await handlers['worktrees:prefetchCreateBase'](null, {
-      repoId: 'repo-1',
-      executionHostId: 'ssh:ssh-1',
-      baseBranch: 'main'
-    })
-
-    expect(getSshGitProviderMock).toHaveBeenCalledWith('ssh-1')
-    expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalled()
   })
 
   it('prefetches origin for local branch bases containing slashes', async () => {
@@ -2172,17 +2108,15 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('threads explicit origin preference into dual-remote PR head resolution', async () => {
-    const repo = {
+    store.getRepo.mockReturnValue({
       id: 'repo-1',
       path: '/workspace/repo',
       displayName: 'repo',
       badgeColor: '#000',
       addedAt: 0,
-      issueSourcePreference: 'origin' as const,
+      issueSourcePreference: 'origin',
       worktreeBaseRef: null
-    }
-    store.getRepos.mockReturnValue([repo])
-    store.getRepo.mockReturnValue(repo)
+    })
     getPullRequestPushTargetMock.mockResolvedValue({
       pushTarget: {
         remoteName: 'pr-prateek-orca',
@@ -2277,142 +2211,6 @@ describe('registerWorktreeHandlers', () => {
       branchNameOverride: 'feature/add-feature',
       pushTarget: { remoteName: 'origin', branchName: 'feature/add-feature' }
     })
-  })
-
-  it('resolves a PR base against the requested SSH execution host when repo IDs overlap', async () => {
-    const localRepo = {
-      id: 'repo-1',
-      path: '/workspace/local-repo',
-      displayName: 'local',
-      badgeColor: '#000',
-      addedAt: 0
-    }
-    const sshRepo = {
-      ...localRepo,
-      path: '/workspace/ssh-repo',
-      displayName: 'ssh',
-      connectionId: 'connection-1'
-    }
-    store.getRepos.mockReturnValue([localRepo, sshRepo])
-    store.getRepo.mockReturnValue(localRepo)
-    const sshExec = vi.fn(async (args: string[]) =>
-      args[0] === 'rev-parse'
-        ? { stdout: 'ssh-head\n', stderr: '' }
-        : args[0] === 'remote' && args.length === 1
-          ? { stdout: 'origin\n', stderr: '' }
-          : { stdout: '', stderr: '' }
-    )
-    const fetchRemoteTrackingRef = vi.fn(async () => {})
-    getSshGitProviderMock.mockReturnValue({ exec: sshExec, fetchRemoteTrackingRef } as never)
-
-    const result = await handlers['worktrees:resolvePrBase'](null, {
-      repoId: 'repo-1',
-      executionHostId: 'ssh:connection-1',
-      prNumber: 42,
-      headRefName: 'feature/ssh',
-      isCrossRepository: false
-    })
-
-    expect(result).toMatchObject({ baseBranch: 'ssh-head' })
-    expect(sshExec).toHaveBeenCalled()
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('creates through the requested SSH execution host when repo IDs overlap', async () => {
-    const localRepo = {
-      id: 'repo-1',
-      path: '/workspace/local-repo',
-      displayName: 'local',
-      badgeColor: '#000',
-      addedAt: 0
-    }
-    const sshRepo = {
-      ...localRepo,
-      path: '/workspace/ssh-repo',
-      displayName: 'ssh',
-      connectionId: 'connection-1'
-    }
-    store.getRepos.mockReturnValue([localRepo, sshRepo])
-    store.getRepo.mockReturnValue(localRepo)
-    getSshGitProviderMock.mockReturnValue(undefined)
-
-    await expect(
-      handlers['worktrees:create'](null, {
-        repoId: 'repo-1',
-        executionHostId: 'ssh:connection-1',
-        name: 'issue-workspace'
-      })
-    ).rejects.toThrow(/Remote connection dropped/i)
-  })
-
-  it('fails closed when duplicate repo ids create without an execution host', async () => {
-    const localRepo = {
-      id: 'repo-shared',
-      path: '/workspace/local-repo',
-      displayName: 'local',
-      badgeColor: '#000',
-      addedAt: 0
-    }
-    const sshRepo = { ...localRepo, path: '/workspace/ssh-repo', connectionId: 'connection-1' }
-    store.getRepos.mockReturnValue([localRepo, sshRepo])
-    store.getRepo.mockReturnValue(localRepo)
-
-    await expect(
-      handlers['worktrees:create'](null, {
-        repoId: 'repo-shared',
-        name: 'issue-workspace'
-      })
-    ).rejects.toThrow('Repo not found: repo-shared')
-
-    expect(addWorktreeMock).not.toHaveBeenCalled()
-    expect(getSshGitProviderMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects contradictory repository host provenance for desktop creation', async () => {
-    const repo = {
-      id: 'repo-1',
-      path: '/workspace/ssh-repo',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'target-a',
-      executionHostId: toSshExecutionHostId('target-b')
-    }
-    store.getRepos.mockReturnValue([repo])
-    store.getRepo.mockReturnValue(repo)
-
-    await expect(
-      handlers['worktrees:create'](null, {
-        repoId: 'repo-1',
-        executionHostId: toSshExecutionHostId('target-b'),
-        name: 'issue-workspace'
-      })
-    ).rejects.toThrow('Repo not found: repo-1')
-
-    expect(getSshGitProviderMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects runtime repository owners before desktop creation', async () => {
-    const repo = {
-      id: 'repo-1',
-      path: '/runtime/repo',
-      displayName: 'runtime',
-      badgeColor: '#000',
-      addedAt: 0,
-      executionHostId: 'runtime:environment-1' as const
-    }
-    store.getRepos.mockReturnValue([repo])
-    store.getRepo.mockReturnValue(repo)
-
-    await expect(
-      handlers['worktrees:create'](null, {
-        repoId: 'repo-1',
-        executionHostId: 'runtime:environment-1',
-        name: 'issue-workspace'
-      })
-    ).rejects.toThrow('Repo not found: repo-1')
-
-    expect(addWorktreeMock).not.toHaveBeenCalled()
   })
 
   it('routes local worktree creation through the selected WSL project runtime', async () => {
@@ -4565,7 +4363,7 @@ describe('registerWorktreeHandlers', () => {
       return { stdout: '', stderr: '' }
     })
     getSshGitProviderMock.mockReturnValue({ exec, fetchRemoteTrackingRef })
-    const sshRepo = {
+    store.getRepo.mockReturnValue({
       id: 'repo-1',
       path: '/workspace/repo',
       displayName: 'repo',
@@ -4573,9 +4371,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'conn-1',
       worktreeBaseRef: null
-    }
-    store.getRepos.mockReturnValue([sshRepo])
-    store.getRepo.mockReturnValue(sshRepo)
+    })
 
     const result = await handlers['worktrees:resolvePrBase'](null, {
       repoId: 'repo-1',
@@ -4616,7 +4412,7 @@ describe('registerWorktreeHandlers', () => {
       fetchGitHubPullRequestHead,
       fetchRemoteTrackingRef: vi.fn()
     })
-    const sshRepo = {
+    store.getRepo.mockReturnValue({
       id: 'repo-1',
       path: '/workspace/repo',
       displayName: 'repo',
@@ -4624,9 +4420,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'conn-1',
       worktreeBaseRef: null
-    }
-    store.getRepos.mockReturnValue([sshRepo])
-    store.getRepo.mockReturnValue(sshRepo)
+    })
 
     const result = await handlers['worktrees:resolvePrBase'](null, {
       repoId: 'repo-1',
@@ -4668,7 +4462,7 @@ describe('registerWorktreeHandlers', () => {
       fetchGitHubPullRequestHead,
       fetchRemoteTrackingRef: vi.fn()
     })
-    const sshRepo = {
+    store.getRepo.mockReturnValue({
       id: 'repo-1',
       path: '/workspace/repo',
       displayName: 'repo',
@@ -4676,9 +4470,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'conn-1',
       worktreeBaseRef: null
-    }
-    store.getRepos.mockReturnValue([sshRepo])
-    store.getRepo.mockReturnValue(sshRepo)
+    })
 
     const result = await handlers['worktrees:resolvePrBase'](null, {
       repoId: 'repo-1',
@@ -4822,11 +4614,9 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(runtimeStub.resolveManagedMrBase).toHaveBeenCalledWith({
-      repoSelector: 'path:/workspace/repo',
-      connectionId: null,
+      repoSelector: 'id:repo-1',
       mrIid: 42,
       sourceBranch: 'feature/mr',
-      targetBranch: undefined,
       isCrossRepository: true
     })
     expect(result).toMatchObject({
@@ -8882,113 +8672,6 @@ describe('registerWorktreeHandlers', () => {
     expect(getSshPtyProviderMock).not.toHaveBeenCalled()
   })
 
-  it('selects the explicit runtime folder owner when repo ids collide', async () => {
-    const localRepo = {
-      id: 'repo-folder',
-      path: '/local/folder',
-      displayName: 'local',
-      badgeColor: '#000',
-      addedAt: 0,
-      kind: 'folder' as const
-    }
-    const runtimeRepo = {
-      ...localRepo,
-      path: '/runtime/folder',
-      displayName: 'runtime',
-      executionHostId: 'runtime:env-1' as const
-    }
-    const worktreeId = 'repo-folder::/runtime/folder::workspace:child-1'
-    store.getRepos.mockReturnValue([localRepo, runtimeRepo])
-    store.getRepo.mockReturnValue(localRepo)
-
-    await handlers['worktrees:remove'](null, {
-      worktreeId,
-      hostId: 'runtime:env-1'
-    })
-
-    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(
-      worktreeId,
-      expect.objectContaining({ resolvedRuntimeEnvironmentId: 'env-1' })
-    )
-    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'runtime:env-1')
-  })
-
-  it('rejects a sibling Git worktree id for a runtime folder owner', async () => {
-    const localRepo = {
-      id: 'repo-shared',
-      path: '/local/repo',
-      displayName: 'local',
-      badgeColor: '#000',
-      addedAt: 0
-    }
-    const runtimeRepo = {
-      ...localRepo,
-      path: '/runtime/folder',
-      displayName: 'runtime',
-      kind: 'folder' as const,
-      executionHostId: 'runtime:env-1' as const
-    }
-    const worktreeId = 'repo-shared::/local/feature-wt'
-    store.getRepos.mockReturnValue([localRepo, runtimeRepo])
-    store.getRepo.mockReturnValue(localRepo)
-
-    await expect(
-      handlers['worktrees:remove'](null, {
-        worktreeId,
-        hostId: 'runtime:env-1'
-      })
-    ).rejects.toThrow('Worktree does not belong to folder repository: repo-shared')
-
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
-    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
-  })
-
-  it('rejects a runtime folder owner without an explicit host', async () => {
-    const repo = {
-      id: 'repo-folder',
-      path: '/runtime/folder',
-      displayName: 'runtime',
-      badgeColor: '#000',
-      addedAt: 0,
-      kind: 'folder' as const,
-      executionHostId: 'runtime:env-1' as const
-    }
-    store.getRepos.mockReturnValue([repo])
-    store.getRepo.mockReturnValue(repo)
-
-    await expect(
-      handlers['worktrees:remove'](null, {
-        worktreeId: 'repo-folder::/runtime/folder::workspace:child-1'
-      })
-    ).rejects.toThrow('Repo not found: repo-folder')
-
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects contradictory runtime folder ownership', async () => {
-    const repo = {
-      id: 'repo-folder',
-      path: '/runtime/folder',
-      displayName: 'runtime',
-      badgeColor: '#000',
-      addedAt: 0,
-      kind: 'folder' as const,
-      connectionId: 'conn-1',
-      executionHostId: 'runtime:env-1' as const
-    }
-    store.getRepos.mockReturnValue([repo])
-    store.getRepo.mockReturnValue(repo)
-
-    await expect(
-      handlers['worktrees:remove'](null, {
-        worktreeId: 'repo-folder::/runtime/folder::workspace:child-1',
-        hostId: 'runtime:env-1'
-      })
-    ).rejects.toThrow('Repo not found: repo-folder')
-
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
-  })
-
   it('runs the archive hook on remove when skipArchive is not set', async () => {
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)
@@ -9679,44 +9362,6 @@ describe('registerWorktreeHandlers', () => {
     ).rejects.toThrow('Repo not found: repo-shared')
 
     expect(removeWorktreeMock).not.toHaveBeenCalled()
-    expect(getSshGitProviderMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects contradictory and runtime repository owners before desktop deletion', async () => {
-    const baseRepo = {
-      id: 'repo-shared',
-      path: '/remote/repo',
-      displayName: 'repo',
-      badgeColor: '#000',
-      addedAt: 0
-    }
-    const contradictoryRepo = {
-      ...baseRepo,
-      connectionId: 'target-a',
-      executionHostId: toSshExecutionHostId('target-b')
-    }
-    store.getRepos.mockReturnValue([contradictoryRepo])
-    store.getRepo.mockReturnValue(contradictoryRepo)
-
-    await expect(
-      handlers['worktrees:remove'](null, {
-        worktreeId: 'repo-shared::/remote/feature-wt',
-        hostId: toSshExecutionHostId('target-b')
-      })
-    ).rejects.toThrow('Repo not found: repo-shared')
-
-    const runtimeRepo = { ...baseRepo, executionHostId: 'runtime:environment-1' as const }
-    store.getRepos.mockReturnValue([runtimeRepo])
-    store.getRepo.mockReturnValue(runtimeRepo)
-
-    await expect(
-      handlers['worktrees:remove'](null, {
-        worktreeId: 'repo-shared::/remote/feature-wt',
-        hostId: 'runtime:environment-1'
-      })
-    ).rejects.toThrow('Repo not found: repo-shared')
-
-    expect(listWorktreesMock).not.toHaveBeenCalled()
     expect(getSshGitProviderMock).not.toHaveBeenCalled()
   })
 

@@ -198,7 +198,6 @@
         },
         "github": {
           "f129c42773": "GitHub가 새 댓글을 반환하지 않았습니다.",
-          "repositoryExecutionHostNotFound": "저장소 실행 호스트를 찾을 수 없습니다.",
           "683a21264b": "행에 소유자/repo/번호가 없습니다.",
           "83f9b126ad": "이슈 유형은 이슈에만 설정할 수 있습니다.",
           "f963485d37": "행을 찾을 수 없습니다.",
@@ -14465,17 +14464,6 @@
         "loadFailed": "GitLab 작업 로그를 불러오지 못했습니다.",
         "emptyTrace": "이 GitLab 작업의 로그를 사용할 수 없습니다.",
         "timedOut": "GitLab 작업 로그를 불러오는 중 시간이 초과되었습니다."
-      }
-    },
-    "source": {
-      "control": {
-        "agent": {
-          "action": {
-            "plan": {
-              "a7ac8717c7": "시작하기 전에 에이전트를 선택하세요."
-            }
-          }
-        }
       }
     },
     "ssh": {

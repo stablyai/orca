@@ -12,14 +12,6 @@ type NewWorkspaceDialogRepo = Pick<
   'id' | 'path' | 'kind' | 'connectionId' | 'executionHostId'
 >
 
-type NewWorkspaceDialogRepoSelectionInput<T extends NewWorkspaceDialogRepo> = {
-  eligibleRepos: readonly T[]
-  draftRepoId?: string | null
-  initialRepoId?: string | null
-  activeRepoId?: string | null
-  focusedHostScope?: ExecutionHostScope | null
-}
-
 export function getNewWorkspaceDialogEligibleRepos<T extends Pick<Repo, 'path' | 'connectionId'>>(
   repos: readonly T[]
 ): T[] {
@@ -30,13 +22,19 @@ export function getNewWorkspaceDialogEligibleRepos<T extends Pick<Repo, 'path' |
   return repos.filter((repo) => Boolean(repo.path) && !isRuntimeOwnedSshTargetId(repo.connectionId))
 }
 
-export function resolveNewWorkspaceDialogRepo<T extends NewWorkspaceDialogRepo>({
+export function resolveNewWorkspaceDialogRepoId({
   eligibleRepos,
   draftRepoId,
   initialRepoId,
   activeRepoId,
   focusedHostScope
-}: NewWorkspaceDialogRepoSelectionInput<T>): T | null {
+}: {
+  eligibleRepos: readonly NewWorkspaceDialogRepo[]
+  draftRepoId?: string | null
+  initialRepoId?: string | null
+  activeRepoId?: string | null
+  focusedHostScope?: ExecutionHostScope | null
+}): string {
   // Why: every new-workspace dialog should seed the repo the same way. Mobile
   // mirrors this locally because Metro cannot bundle root shared runtime modules.
   const focusedHostRepo =
@@ -51,13 +49,7 @@ export function resolveNewWorkspaceDialogRepo<T extends NewWorkspaceDialogRepo>(
     focusedHostRepo ||
     eligibleRepos[0]
 
-  return resolvedRepo ?? null
-}
-
-export function resolveNewWorkspaceDialogRepoId(
-  input: NewWorkspaceDialogRepoSelectionInput<NewWorkspaceDialogRepo>
-): string {
-  return resolveNewWorkspaceDialogRepo(input)?.id ?? ''
+  return resolvedRepo?.id ?? ''
 }
 
 export function resolveNewWorkspaceDialogGitRepoId(args: {
@@ -67,6 +59,7 @@ export function resolveNewWorkspaceDialogGitRepoId(args: {
   activeRepoId?: string | null
   focusedHostScope?: ExecutionHostScope | null
 }): string | null {
-  const repo = resolveNewWorkspaceDialogRepo(args)
+  const repoId = resolveNewWorkspaceDialogRepoId(args)
+  const repo = repoId ? args.eligibleRepos.find((entry) => entry.id === repoId) : null
   return repo && isGitRepoKind(repo) ? repo.id : null
 }

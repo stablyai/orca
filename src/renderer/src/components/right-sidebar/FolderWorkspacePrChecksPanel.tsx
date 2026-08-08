@@ -6,7 +6,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { FolderWorkspacePrChecksRow } from './FolderWorkspacePrChecksRow'
 import type { ParentPrChecksRefreshOutcome, ParentPrChecksRow } from './parent-pr-checks-rows'
@@ -184,7 +183,7 @@ export default function FolderWorkspacePrChecksPanel({
           url: check.url,
           prRepo: null
         },
-        { repoId: row.repo.id, executionHostId: getRepoExecutionHostId(row.repo) }
+        { repoId: row.repo.id }
       )
     },
     [fetchPRCheckDetails]

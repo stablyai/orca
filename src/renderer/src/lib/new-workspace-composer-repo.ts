@@ -1,17 +1,10 @@
-import {
-  getRepoExecutionHostId,
-  isRuntimeOwnedSshTargetId,
-  type ExecutionHostId,
-  type ExecutionHostScope
-} from '../../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId, type ExecutionHostScope } from '../../../shared/execution-host'
 import {
   getNewWorkspaceDialogEligibleRepos,
   resolveNewWorkspaceDialogGitRepoId,
-  resolveNewWorkspaceDialogRepo,
   resolveNewWorkspaceDialogRepoId
 } from '../../../shared/new-workspace-dialog-repo'
 import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
-import { isGitRepoKind } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/types'
 
 export function getComposerEligibleRepos(repos: readonly Repo[]): Repo[] {
@@ -63,16 +56,6 @@ export function resolveComposerRepoId({
   })
 }
 
-export function resolveComposerRepo(args: {
-  eligibleRepos: readonly Repo[]
-  draftRepoId?: string | null
-  initialRepoId?: string | null
-  activeRepoId?: string | null
-  focusedHostScope?: ExecutionHostScope | null
-}): Repo | null {
-  return resolveNewWorkspaceDialogRepo(args)
-}
-
 export function resolveComposerGitRepoId(args: {
   eligibleRepos: readonly Repo[]
   draftRepoId?: string | null
@@ -81,17 +64,4 @@ export function resolveComposerGitRepoId(args: {
   focusedHostScope?: ExecutionHostScope | null
 }): string | null {
   return resolveNewWorkspaceDialogGitRepoId(args)
-}
-
-export function getComposerWorktreePrefetchTarget(args: {
-  eligibleRepos: readonly Repo[]
-  draftRepoId?: string | null
-  initialRepoId?: string | null
-  activeRepoId?: string | null
-  focusedHostScope?: ExecutionHostScope | null
-}): { repoId: string; executionHostId: ExecutionHostId } | null {
-  const repo = resolveComposerRepo(args)
-  return repo && isGitRepoKind(repo)
-    ? { repoId: repo.id, executionHostId: getRepoExecutionHostId(repo) }
-    : null
 }

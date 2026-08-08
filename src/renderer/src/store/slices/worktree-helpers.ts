@@ -23,8 +23,8 @@ import type {
 } from '../../../../shared/types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   HostQualifiedDetectedWorktreeResult,
   SshExecutionHostId
@@ -195,9 +195,7 @@ export type WorktreeSlice = {
     linkedGiteaPR?: number | null,
     compareBaseRef?: string,
     options?: {
-      // Why: only automation dispatch may request host-minted provenance.
       automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
-      executionHostId?: ExecutionHostId
       linkedWorkItem?: WorkspaceLinkedItem | null
       linkedTaskSourceContext?: TaskSourceContext | null
     }
@@ -222,11 +220,7 @@ export type WorktreeSlice = {
   removePendingWorktreeCreation: (creationId: string, options?: { cleanupVm?: boolean }) => void
   /** Point the content panel at a pending creation (or clear it with null). */
   setActivePendingWorktreeCreation: (creationId: string | null) => void
-  prefetchWorktreeCreateBase: (
-    repoId: string,
-    baseBranch?: string,
-    options?: { executionHostId?: ExecutionHostId }
-  ) => Promise<void>
+  prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
   removeWorktree: (
     worktreeId: string,
     force?: boolean,

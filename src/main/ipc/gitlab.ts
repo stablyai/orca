@@ -60,7 +60,6 @@ import type { HostedReviewExecutionOptions } from '../source-control/hosted-revi
 type GitLabRepoSelectorArgs = {
   repoPath: string
   repoId?: string | null
-  executionHostId?: string | null
   sourceContext?: TaskSourceContext | null
 }
 
@@ -68,36 +67,14 @@ function findRegisteredGitLabRepo(args: GitLabRepoSelectorArgs, store: Store): R
   const sourceRepoId =
     args.sourceContext?.provider === 'gitlab' ? args.sourceContext.repoId?.trim() : null
   const repoId = args.repoId?.trim() || sourceRepoId || null
-  const sourceExecutionHostId =
-    args.sourceContext?.provider === 'gitlab' ? args.sourceContext.hostId : null
-  const executionHostId = args.executionHostId ?? sourceExecutionHostId
-  const repos = store.getRepos()
   if (repoId) {
-    const idMatches = repos.filter((repo) => repo.id === repoId)
-    if (executionHostId) {
-      const hostMatches = idMatches.filter(
-        (repo) => getRepoExecutionHostId(repo) === executionHostId
-      )
-      if (hostMatches.length === 1) {
-        return hostMatches[0]
-      }
-      const resolvedRepoPath = resolve(args.repoPath)
-      const exactMatches = hostMatches.filter((repo) => resolve(repo.path) === resolvedRepoPath)
-      return exactMatches.length === 1 ? exactMatches[0] : undefined
+    const repo = store.getRepo(repoId)
+    if (repo) {
+      return repo
     }
-    if (idMatches.length === 1) {
-      return idMatches[0]
-    }
-    const resolvedRepoPath = resolve(args.repoPath)
-    const exactMatches = idMatches.filter((repo) => resolve(repo.path) === resolvedRepoPath)
-    return exactMatches.length === 1 ? exactMatches[0] : undefined
   }
   const resolvedRepoPath = resolve(args.repoPath)
-  const pathMatches = repos.filter((repo) => resolve(repo.path) === resolvedRepoPath)
-  const hostMatches = executionHostId
-    ? pathMatches.filter((repo) => getRepoExecutionHostId(repo) === executionHostId)
-    : pathMatches
-  return hostMatches.length === 1 ? hostMatches[0] : undefined
+  return store.getRepos().find((r) => resolve(r.path) === resolvedRepoPath)
 }
 
 // Why: mirror github.ts assertRegisteredRepo — main-process handlers
@@ -107,29 +84,6 @@ function findRegisteredGitLabRepo(args: GitLabRepoSelectorArgs, store: Store): R
 function assertRegisteredRepo(args: GitLabRepoSelectorArgs, store: Store): Repo {
   const repo = findRegisteredGitLabRepo(args, store)
   if (!repo) {
-    const requestedRepoId =
-      args.repoId?.trim() ||
-      (args.sourceContext?.provider === 'gitlab' ? args.sourceContext.repoId?.trim() : null)
-    const resolvedRepoPath = resolve(args.repoPath)
-    const candidates = requestedRepoId
-      ? store.getRepos().filter((candidate) => candidate.id === requestedRepoId)
-      : store.getRepos().filter((candidate) => resolve(candidate.path) === resolvedRepoPath)
-    if (
-      args.sourceContext?.provider === 'gitlab' &&
-      candidates.length > 0 &&
-      candidates.every(
-        (candidate) => getRepoExecutionHostId(candidate) !== args.sourceContext?.hostId
-      )
-    ) {
-      throw new Error('Access denied: GitLab source host does not match repository host')
-    }
-    if (
-      args.executionHostId &&
-      candidates.length > 0 &&
-      candidates.every((candidate) => getRepoExecutionHostId(candidate) !== args.executionHostId)
-    ) {
-      throw new Error('Access denied: repository execution host does not match')
-    }
     throw new Error('Access denied: unknown repository path')
   }
   if (

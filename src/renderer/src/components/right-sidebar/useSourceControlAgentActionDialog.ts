@@ -32,7 +32,6 @@ export function useSourceControlAgentActionDialog({
   groupId,
   connectionId,
   repoId,
-  repo: scopedRepo,
   promptDelivery = 'submit-after-ready',
   launchPlatform,
   launchSource,
@@ -44,8 +43,7 @@ export function useSourceControlAgentActionDialog({
   onStart
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
   const settings = useAppStore((state) => state.settings)
-  const fallbackRepo = useRepoById(repoId ?? null)
-  const repo = scopedRepo !== undefined ? scopedRepo : fallbackRepo
+  const repo = useRepoById(repoId ?? null)
   const launchAgentScope = useMemo(
     () => resolveSourceControlLaunchAgentScope({ settings, repo, actionId }),
     [actionId, repo, settings]

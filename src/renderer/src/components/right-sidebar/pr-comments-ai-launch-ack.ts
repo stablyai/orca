@@ -1,5 +1,4 @@
 import type { PRComment, PRInfo } from '../../../../shared/types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { getPRCommentGroupRoot, type PRCommentGroup } from '@/lib/pr-comment-groups'
 import { isResolvablePRCommentGroup } from '../pr-comments-resolution-prompt'
@@ -300,7 +299,6 @@ async function postInThreadFixingReply(
 export type PendingPRCommentAiAckGithubTarget = {
   repoPath: string
   repoId: string
-  executionHostId: ExecutionHostId
   prNumber: number
   prRepo: NonNullable<PRInfo['prRepo']>
 }

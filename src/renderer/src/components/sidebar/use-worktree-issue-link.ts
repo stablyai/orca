@@ -2,16 +2,13 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { parseGitHubIssueOrPRNumber } from '@/lib/github-links'
 import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
-import { findRepoForWorktreeOwner } from '@/store/slices/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { findIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
 import { buildLinearIssueUrl, parseLinearIssueInput } from '../../../../shared/linear-links'
 import type { IssueLinkProvider } from '../../../../shared/issue-link-input'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { parseExplicitGitHubIssueUrl } from './worktree-meta-updates'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
-import { findWorktreeMetaOwner } from './worktree-meta-owner'
 
 // Why: both lookups cross an IPC or runtime-RPC boundary that can stop
 // answering — a hung SSH runtime leaves the await pending, and the button spins
@@ -49,7 +46,6 @@ export function useWorktreeIssueLink(args: {
   /** The repo bucket the opening row belongs to, for IDs the owner index reports
    *  as ambiguous across hosts. Falls back to the index when absent. */
   ownerRepoId?: string | null
-  ownerExecutionHostId?: ExecutionHostId | null
   issueInput: string
   issueProvider: IssueLinkProvider
   linearOrganizationUrlKey?: string | null
@@ -67,7 +63,6 @@ export function useWorktreeIssueLink(args: {
   const {
     worktreeId,
     ownerRepoId,
-    ownerExecutionHostId,
     issueInput,
     issueProvider,
     linearOrganizationUrlKey,
@@ -133,13 +128,8 @@ export function useWorktreeIssueLink(args: {
   }, [parsedLinearIssue, linkedLinearIssue, linearOrganizationUrlKey])
 
   const issueRepo = useAppStore((s) => {
-    const worktree = findWorktreeMetaOwner(
-      s.worktreesByRepo,
-      worktreeId,
-      ownerRepoId,
-      ownerExecutionHostId
-    )
-    return worktree ? findRepoForWorktreeOwner(s.repos, worktree) : undefined
+    const repoId = ownerRepoId ?? findIndexedWorktreeOwner(s.worktreesByRepo, worktreeId)?.repoId
+    return repoId ? s.repos.find((repo) => repo.id === repoId) : undefined
   })
   const cachedIssueUrl = useAppStore((s) => {
     if (!issueRepo || issueNumber === null) {
@@ -237,10 +227,7 @@ export function useWorktreeIssueLink(args: {
     setOpeningIssue(true)
     try {
       const url = await resolveIssueUrlWithinTimeout(
-        fetchIssue(issueRepo.path, issueNumber, {
-          repoId: issueRepo.id,
-          executionHostId: getRepoExecutionHostId(issueRepo)
-        })
+        fetchIssue(issueRepo.path, issueNumber, { repoId: issueRepo.id })
       )
       if (!isCurrentRequest()) {
         return

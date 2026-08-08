@@ -39,15 +39,14 @@ import {
 import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import {
   getSettingsFocusedExecutionHostId,
-  getRepoExecutionHostId,
-  parseExecutionHostId
+  parseExecutionHostId,
+  getRepoExecutionHostId
 } from '../../../shared/execution-host'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -576,12 +575,6 @@ function getTaskPageRepoSourceContext(
   })
 }
 
-function findTaskPageRepoForWorkItem(
-  repos: readonly Repo[],
-  item: GitHubWorkItem
-): Repo | undefined {
-  return findRepoForHost(repos, item.repoId, { hostId: item.repoExecutionHostId }) ?? undefined
-}
 function buildGitLabProviderIdentity(projectRef: GitLabProjectRef) {
   const pathParts = projectRef.path
     .split('/')
@@ -4017,11 +4010,7 @@ export default function TaskPage(): React.JSX.Element {
   const setGithubTaskDrawerWorkItem = useAppStore((s) => s.setGithubTaskDrawerWorkItem)
   const [dialogInitialTab, setDialogInitialTab] = useState<ItemDialogTab>('conversation')
   const dialogWorkItemKey = githubTaskDrawerWorkItem
-    ? {
-        id: githubTaskDrawerWorkItem.id,
-        repoId: githubTaskDrawerWorkItem.repoId,
-        repoExecutionHostId: githubTaskDrawerWorkItem.repoExecutionHostId
-      }
+    ? { id: githubTaskDrawerWorkItem.id, repoId: githubTaskDrawerWorkItem.repoId }
     : null
 
   const appliedWorkItemsCacheQuery = useMemo(
@@ -4039,15 +4028,14 @@ export default function TaskPage(): React.JSX.Element {
     )
   )
 
-  // Why: derive the dialog item from the cache for optimistic patches, falling back to the click-time snapshot for new stubs; key by repository and host so duplicate ids resolve to the clicked row.
+  // Why: derive the dialog item from the cache for optimistic patches, falling back to the click-time snapshot for new stubs; key by repoId so same-number issues across repos resolve to the clicked row.
   const cachedDialogWorkItem = useAppStore((s) =>
     findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey)
   )
   const dialogWorkItem = dialogWorkItemKey
     ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)
     : null
-  const dialogRepo = dialogWorkItem ? findTaskPageRepoForWorkItem(repos, dialogWorkItem) : undefined
-  const dialogRepoPath = dialogRepo?.path ?? null
+  const dialogRepoPath = dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
   const dialogSourceContext = useMemo(() => {
     if (!dialogWorkItem) {
       return null
@@ -4055,13 +4043,12 @@ export default function TaskPage(): React.JSX.Element {
     if (
       pageData.openGitHubSourceContext?.provider === 'github' &&
       pageData.openGitHubWorkItem?.id === dialogWorkItem.id &&
-      pageData.openGitHubWorkItem.repoId === dialogWorkItem.repoId &&
-      pageData.openGitHubWorkItem.repoExecutionHostId === dialogWorkItem.repoExecutionHostId
+      pageData.openGitHubWorkItem.repoId === dialogWorkItem.repoId
     ) {
       return pageData.openGitHubSourceContext
     }
-    return getTaskPageRepoSourceContext(dialogRepo, 'github')
-  }, [dialogRepo, dialogWorkItem, pageData.openGitHubSourceContext, pageData.openGitHubWorkItem])
+    return getTaskPageRepoSourceContext(repoMap.get(dialogWorkItem.repoId), 'github')
+  }, [dialogWorkItem, pageData.openGitHubSourceContext, pageData.openGitHubWorkItem, repoMap])
   const gitlabDialogRepo = useMemo(
     () =>
       gitlabDialogItem
@@ -4111,19 +4098,18 @@ export default function TaskPage(): React.JSX.Element {
 
   const openGitHubDetailPage = useCallback(
     (item: GitHubWorkItem, initialTab: ItemDialogTab = 'conversation') => {
-      const targetRepo = findTaskPageRepoForWorkItem(repos, item)
       openTaskPage(
         {
           taskSource: 'github',
           preselectedRepoId: item.repoId,
           openGitHubWorkItem: item,
-          openGitHubSourceContext: getTaskPageRepoSourceContext(targetRepo, 'github'),
+          openGitHubSourceContext: getTaskPageRepoSourceContext(repoMap.get(item.repoId), 'github'),
           openGitHubInitialTab: initialTab
         },
         { recordTasksInteraction: false }
       )
     },
-    [openTaskPage, repos]
+    [openTaskPage, repoMap]
   )
 
   const openGitLabDetailPage = useCallback(
@@ -4147,11 +4133,7 @@ export default function TaskPage(): React.JSX.Element {
 
   const patchTaskPageWorkItemRows = useCallback(
     (
-      itemKey: {
-        id: string
-        repoId: string
-        repoExecutionHostId?: GitHubWorkItem['repoExecutionHostId']
-      },
+      itemKey: { id: string; repoId: string },
       patch: Partial<GitHubWorkItem>,
       shouldPatch?: (item: GitHubWorkItem) => boolean
     ): void => {
@@ -4162,14 +4144,7 @@ export default function TaskPage(): React.JSX.Element {
     []
   )
   const handleDialogReviewRequestsChange = useCallback(
-    (
-      itemKey: {
-        id: string
-        repoId: string
-        repoExecutionHostId?: GitHubWorkItem['repoExecutionHostId']
-      },
-      reviewRequests: GitHubAssignableUser[]
-    ): void => {
+    (itemKey: { id: string; repoId: string }, reviewRequests: GitHubAssignableUser[]): void => {
       patchTaskPageWorkItemRows(itemKey, { reviewRequests })
     },
     [patchTaskPageWorkItemRows]
@@ -6076,14 +6051,7 @@ export default function TaskPage(): React.JSX.Element {
       const [id, patch, repoId, options] = args
       useAppStore.getState().patchWorkItem(id, patch, repoId, options)
       if (repoId) {
-        patchTaskPageWorkItemRows(
-          {
-            id,
-            repoId,
-            repoExecutionHostId: options?.repoExecutionHostId ?? options?.sourceContext?.hostId
-          },
-          patch
-        )
+        patchTaskPageWorkItemRows({ id, repoId }, patch)
       }
     },
     [patchTaskPageWorkItemRows]
@@ -6436,7 +6404,7 @@ export default function TaskPage(): React.JSX.Element {
       typeFilteredCurrentPageItems.filter(
         (workItem) =>
           !githubWorkItemMutation.softHiddenItemKeys.has(
-            taskPageGitHubItemKey(workItem.repoId, workItem.id, workItem.repoExecutionHostId)
+            taskPageGitHubItemKey(workItem.repoId, workItem.id)
           )
       ),
     [githubWorkItemMutation.softHiddenItemKeys, typeFilteredCurrentPageItems]
@@ -6489,7 +6457,7 @@ export default function TaskPage(): React.JSX.Element {
       if (item.type !== 'pr' || item.checksSummary) {
         return
       }
-      const repo = findTaskPageRepoForWorkItem(repos, item)
+      const repo = repoMap.get(item.repoId)
       if (!repo) {
         return
       }
@@ -6501,18 +6469,10 @@ export default function TaskPage(): React.JSX.Element {
         item.branchName,
         item.headSha,
         item.prRepo ?? null,
-        {
-          repoId: repo.id,
-          executionHostId: getRepoExecutionHostId(repo),
-          sourceContext: getTaskPageRepoSourceContext(repo, 'github')
-        }
+        { repoId: repo.id, sourceContext: getTaskPageRepoSourceContext(repo, 'github') }
       ).then((checks) => {
         patchTaskPageWorkItemRows(
-          {
-            id: item.id,
-            repoId: item.repoId,
-            repoExecutionHostId: item.repoExecutionHostId
-          },
+          { id: item.id, repoId: item.repoId },
           { checksSummary: deriveTaskPagePRCheckSummary(checks) },
           (currentItem) =>
             currentItem.type === 'pr' &&
@@ -6521,7 +6481,7 @@ export default function TaskPage(): React.JSX.Element {
         )
       })
     },
-    [fetchPRChecks, patchTaskPageWorkItemRows, repos]
+    [fetchPRChecks, patchTaskPageWorkItemRows, repoMap]
   )
 
   useEffect(() => {
@@ -6962,9 +6922,7 @@ export default function TaskPage(): React.JSX.Element {
     const quietState = getOrCreateQuietRevalidateState(githubWorkItemMutationQueryKey)
     const loadedItemKeys = new Set(
       pagesRef.current.flatMap((page) =>
-        (page ?? []).map((item) =>
-          taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
-        )
+        (page ?? []).map((item) => taskPageGitHubItemKey(item.repoId, item.id))
       )
     )
     clearTaskPageGitHubAuthorityAbsentFromLoadedItems(loadedItemKeys)
@@ -7000,18 +6958,12 @@ export default function TaskPage(): React.JSX.Element {
       githubWorkItemMutationQueryKey
     )
     const authorityPage = pages.findIndex((page) =>
-      page?.some((item) =>
-        authorityItemKeys.has(taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId))
-      )
+      page?.some((item) => authorityItemKeys.has(taskPageGitHubItemKey(item.repoId, item.id)))
     )
     const quietPage = authorityPage >= 0 ? authorityPage : currentPage
     const visiblePage = currentPage > quietPage ? currentPage : undefined
     const pageItemKeys = (page: number): Set<string> =>
-      new Set(
-        (pages[page] ?? []).map((item) =>
-          taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
-        )
-      )
+      new Set((pages[page] ?? []).map((item) => taskPageGitHubItemKey(item.repoId, item.id)))
     const authorityPageItemKeys = pageItemKeys(quietPage)
     const visiblePageItemKeys = visiblePage === undefined ? undefined : pageItemKeys(visiblePage)
     const revalidatedItemKeys = new Set([...authorityPageItemKeys, ...(visiblePageItemKeys ?? [])])
@@ -7069,7 +7021,7 @@ export default function TaskPage(): React.JSX.Element {
           fetchedVisiblePage = latestVisiblePage
           const latestVisiblePageItemKeys = new Set(
             (pagesRef.current[latestVisiblePage] ?? []).map((item) =>
-              taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
+              taskPageGitHubItemKey(item.repoId, item.id)
             )
           )
           fetchedVisiblePageItemKeys = latestVisiblePageItemKeys
@@ -7094,7 +7046,7 @@ export default function TaskPage(): React.JSX.Element {
             ? undefined
             : new Set(
                 (pagesRef.current[liveVisiblePage] ?? []).map((item) =>
-                  taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
+                  taskPageGitHubItemKey(item.repoId, item.id)
                 )
               )
         quietState.networkFailureAttempts = 0
@@ -7116,19 +7068,13 @@ export default function TaskPage(): React.JSX.Element {
           revalidatedItemKeys
         })
         const networkItemKeys = new Set(
-          authorityItems.map((item) =>
-            taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
-          )
+          authorityItems.map((item) => taskPageGitHubItemKey(item.repoId, item.id))
         )
         const visibleNetworkItemKeys = new Set(
-          (liveVisibleItems ?? []).map((item) =>
-            taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
-          )
+          (liveVisibleItems ?? []).map((item) => taskPageGitHubItemKey(item.repoId, item.id))
         )
         const fetchedVisibleNetworkItemKeys = new Set(
-          (fetchedVisibleItems ?? []).map((item) =>
-            taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId)
-          )
+          (fetchedVisibleItems ?? []).map((item) => taskPageGitHubItemKey(item.repoId, item.id))
         )
         const membershipChanged =
           networkItemKeys.size !== authorityPageItemKeys.size ||
@@ -7167,11 +7113,7 @@ export default function TaskPage(): React.JSX.Element {
             (itemKey) =>
               !revalidatedItemKeys.has(itemKey) &&
               pages.some((page) =>
-                page?.some(
-                  (item) =>
-                    taskPageGitHubItemKey(item.repoId, item.id, item.repoExecutionHostId) ===
-                    itemKey
-                )
+                page?.some((item) => taskPageGitHubItemKey(item.repoId, item.id) === itemKey)
               )
           )
         quietState.trailingQueued = false
@@ -7408,17 +7350,7 @@ export default function TaskPage(): React.JSX.Element {
   ])
 
   const openComposerForItem = useCallback(
-    (item: GitHubWorkItem, initialAgent?: TuiAgent, repoOverride?: Repo): void => {
-      const targetRepo = repoOverride ?? findTaskPageRepoForWorkItem(repos, item)
-      if (!targetRepo) {
-        toast.error(
-          translate(
-            'auto.components.TaskPage.githubWorkspaceRepositoryHostUnavailable',
-            'This repository host is no longer available.'
-          )
-        )
-        return
-      }
+    (item: GitHubWorkItem, initialAgent?: TuiAgent): void => {
       const linkedWorkItem: LinkedWorkItemSummary = {
         provider: 'github',
         type: item.type,
@@ -7430,7 +7362,7 @@ export default function TaskPage(): React.JSX.Element {
       openModal('new-workspace-composer', {
         linkedWorkItem,
         initialGitHubWorkItem: item,
-        taskSourceContext: getTaskPageRepoSourceContext(targetRepo, 'github'),
+        taskSourceContext: getTaskPageRepoSourceContext(repoMap.get(item.repoId), 'github'),
         prefilledName: getGitHubWorkItemWorkspaceSeed(item),
         initialRepoId: item.repoId,
         ...(initialAgent ? { initialAgent } : {}),
@@ -7438,39 +7370,31 @@ export default function TaskPage(): React.JSX.Element {
         telemetrySource: 'sidebar'
       })
     },
-    [openModal, repos]
+    [openModal, repoMap]
   )
 
   const handleUseWorkItem = useCallback(
-    (item: GitHubWorkItem, agentOverride?: TuiAgent, repoOverride?: Repo): void => {
-      const targetRepo = repoOverride ?? findTaskPageRepoForWorkItem(repos, item)
+    (item: GitHubWorkItem, agentOverride?: TuiAgent): void => {
       useAppStore.getState().recordFeatureInteraction('github-tasks')
-      openComposerForItem(item, agentOverride, targetRepo)
+      openComposerForItem(item, agentOverride)
     },
-    [openComposerForItem, repos]
+    [openComposerForItem]
   )
 
   const handleOpenOrUseGitHubWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
-      const targetRepo = findTaskPageRepoForWorkItem(repos, item)
-      const executionHostId =
-        item.repoExecutionHostId ?? (targetRepo ? getRepoExecutionHostId(targetRepo) : undefined)
       const currentAttached = findGithubWorkItemWorkspaceAttachment(
         useAppStore.getState().allWorktrees(),
         item.repoId,
         item.type,
-        item.number,
-        executionHostId
+        item.number
       )
       if (!currentAttached) {
-        handleUseWorkItem(item, undefined, targetRepo)
+        handleUseWorkItem(item)
         return
       }
 
-      const result = activateAndRevealWorktree(
-        currentAttached.id,
-        executionHostId ? { executionHostId } : undefined
-      )
+      const result = activateAndRevealWorktree(currentAttached.id)
       if (result === false) {
         toast.error(
           item.type === 'pr'
@@ -7487,7 +7411,7 @@ export default function TaskPage(): React.JSX.Element {
       }
       useAppStore.getState().recordFeatureInteraction('github-tasks')
     },
-    [handleUseWorkItem, repos]
+    [handleUseWorkItem]
   )
 
   const openComposerForGitLabItem = useCallback(
@@ -7607,7 +7531,6 @@ export default function TaskPage(): React.JSX.Element {
       const stub: GitHubWorkItem = {
         id: `issue:${String(result.number)}`,
         repoId: newIssueTargetRepo.id,
-        repoExecutionHostId: getRepoExecutionHostId(newIssueTargetRepo),
         type: 'issue',
         number: result.number,
         title,
@@ -7645,11 +7568,7 @@ export default function TaskPage(): React.JSX.Element {
         .then((full) => {
           if (full) {
             // Why: cast through unknown — spreading the discriminated union loses the discriminant, so { ...full, repoId } won't typecheck.
-            const withRepoId = {
-              ...full,
-              repoId: stubRepoId,
-              repoExecutionHostId: stub.repoExecutionHostId
-            } as unknown as GitHubWorkItem
+            const withRepoId = { ...full, repoId: stubRepoId } as unknown as GitHubWorkItem
             setDialogWorkItem(withRepoId)
           }
         })
@@ -9449,18 +9368,14 @@ export default function TaskPage(): React.JSX.Element {
                       return (
                         <div className="flex flex-wrap items-center gap-2">
                           {rows.map((s) => {
-                            const repo = findRepoForHost(selectedRepos, s.repoId, {
-                              hostId: s.executionHostId,
-                              settings
-                            })
-                            const rowKey = `${s.executionHostId ?? 'unknown'}::${s.repoId}`
+                            const repo = selectedRepos.find((r) => r.id === s.repoId)
                             const showRepoBadgeLabel = selectedRepos.length > 1 && repo
                             const selectorRenderable = hasUpstreamCandidateDivergence(s)
                             // Why: render the indicator standalone — it has its own chip styles, so nesting it in our chip would double-border it.
                             if (!selectorRenderable && hasDivergentSources(s)) {
                               return (
                                 <IssueSourceIndicator
-                                  key={rowKey}
+                                  key={s.repoId}
                                   issues={s.sources.issues}
                                   prs={s.sources.prs}
                                   localRepo={
@@ -9476,7 +9391,7 @@ export default function TaskPage(): React.JSX.Element {
                             }
                             // Why: <div> not <span> — the child selector renders a block <div> (div-in-span is invalid HTML); inline-flex class looks identical.
                             return (
-                              <div key={rowKey} className={issueSourceChipClass}>
+                              <div key={s.repoId} className={issueSourceChipClass}>
                                 {showRepoBadgeLabel ? (
                                   <RepoBadgeLabel
                                     name={repo.displayName}
@@ -9490,9 +9405,7 @@ export default function TaskPage(): React.JSX.Element {
                                   origin={s.sources.originCandidate}
                                   upstream={s.sources.upstreamCandidate}
                                   onChange={(next) => {
-                                    void setIssueSourcePreference(repo.id, repo.path, next, {
-                                      executionHostId: getRepoExecutionHostId(repo)
-                                    })
+                                    void setIssueSourcePreference(repo.id, repo.path, next)
                                   }}
                                 />
                               </div>
@@ -10352,14 +10265,12 @@ export default function TaskPage(): React.JSX.Element {
                 <div className="divide-y divide-border/40">
                   {!showGitHubTaskSkeletons &&
                     filteredWorkItems.map((item) => {
-                      const itemRepo = findTaskPageRepoForWorkItem(repos, item) ?? null
+                      const itemRepo = repoMap.get(item.repoId) ?? null
                       const attachedWorkspace = findGithubWorkItemWorkspaceAttachment(
                         allWorktrees,
                         item.repoId,
                         item.type,
-                        item.number,
-                        item.repoExecutionHostId ??
-                          (itemRepo ? getRepoExecutionHostId(itemRepo) : undefined)
+                        item.number
                       )
                       const attachedWorkspaceLabel = attachedWorkspace
                         ? getGithubWorkItemWorkspaceAttachmentLabel(attachedWorkspace)
@@ -10393,7 +10304,7 @@ export default function TaskPage(): React.JSX.Element {
                         // Why: clickable div not a <button> — it nests buttons, and button-in-button is invalid HTML that breaks hydration.
                         <div
                           // Why: key on repoId+item.id — repos sharing an upstream reuse item.id, so a bare key collides and React silently drops rows.
-                          key={`${item.repoExecutionHostId ?? 'legacy'}:${item.repoId}:${item.id}`}
+                          key={`${item.repoId}:${item.id}`}
                           role="button"
                           tabIndex={0}
                           onClick={() => openGitHubDetailPage(item)}
@@ -10652,7 +10563,7 @@ export default function TaskPage(): React.JSX.Element {
                               </Button>
                             ) : (
                               <GitHubIssueWorkspaceLaunchButton
-                                repo={itemRepo ?? null}
+                                repo={itemRepo}
                                 onStartDefault={() => handleOpenOrUseGitHubWorkItem(item)}
                                 onStartWithAgent={(agent) => handleUseWorkItem(item, agent)}
                               />
@@ -12206,8 +12117,7 @@ export default function TaskPage(): React.JSX.Element {
                       void setIssueSourcePreference(
                         newIssueTargetRepo.id,
                         newIssueTargetRepo.path,
-                        next,
-                        { executionHostId: getRepoExecutionHostId(newIssueTargetRepo) }
+                        next
                       )
                     }}
                   />

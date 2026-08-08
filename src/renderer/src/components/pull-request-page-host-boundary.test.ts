@@ -246,44 +246,9 @@ describe('PullRequestPage host boundaries', () => {
     expect(checksSection).toContain(
       'repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId)'
     )
-    expect(checksSection).toMatch(
-      /window\.api\.gh\.prChecks\(\{[\s\S]{0,300}executionHostId: checksRepoExecutionHostId/
-    )
-    expect(checksSection).toMatch(
-      /window\.api\.gh\.rerunPRChecks\(\{[\s\S]{0,300}executionHostId: checksRepoExecutionHostId/
-    )
-    expect(checksSection).toMatch(
-      /window\.api\.gh\.prCheckDetails\(\{[\s\S]{0,300}executionHostId: checksRepoExecutionHostId/
-    )
-  })
-
-  it('scopes checks configuration and reviewer callbacks to the PR execution host', () => {
-    const source = componentSource('PullRequestPage.tsx')
-    const checksSection = sourceBetween(source, 'function ChecksTab', 'function MentionTextarea')
-
-    // Why: fix-check defaults and reviewer metadata share repo ids across local,
-    // SSH, and runtime owners, so source inspection guards both identity handoffs.
-    expect(checksSection).toContain('findRepoForHost(s.repos, targetRepoId')
-    expect(checksSection).toContain('hostId: item.repoExecutionHostId')
-    expect(checksSection).not.toContain(
-      'const itemRepoExecutionHostId = item.repoExecutionHostId ?? LOCAL_EXECUTION_HOST_ID'
-    )
-    expect(checksSection).toMatch(
-      /const checksRepoExecutionHostId = repo\s*\? getRepoExecutionHostId\(repo\)\s*:\s*\(?item\.repoExecutionHostId \?\? LOCAL_EXECUTION_HOST_ID\)?/
-    )
-    expect(checksSection).toMatch(
-      /getRuntimeWorkItemLaunchContext\(\s*useAppStore\.getState\(\),\s*checksRepoExecutionHostId\s*\)\s*\?\.platform/
-    )
-    expect(checksSection).toContain('findRepoForHost(state.repos, target.repoId')
-    expect(checksSection).toContain('hostId: checksRepoExecutionHostId')
-    expect(checksSection).toMatch(
-      /updateRepo\(result\.target\.repoId, result\.update, \{\s*hostId: checksRepoExecutionHostId/
-    )
-    expect(checksSection).toContain('repoExecutionHostId: checksRepoExecutionHostId')
-    expect(checksSection).toContain(
-      'item: { ...item, repoExecutionHostId: checksRepoExecutionHostId }'
-    )
-    expect(source).not.toContain('{ id: workItem.id, repoId: workItem.repoId }')
+    expect(checksSection).toContain('window.api.gh.prChecks({')
+    expect(checksSection).toContain('window.api.gh.rerunPRChecks({')
+    expect(checksSection).toContain('prCheckDetails({')
   })
 
   it('routes edit metadata and mutations through the PR source context', () => {

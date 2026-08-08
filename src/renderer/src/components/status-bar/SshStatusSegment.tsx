@@ -24,7 +24,6 @@ import {
   workspaceSyncProblemLabel
 } from './ssh-status-segment-copy'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
-import { connectRuntimeHostForNavigation } from './runtime-host-navigation-connect'
 import { connectRuntimeEnvironmentAndRecordStatus } from './runtime-environment-explicit-connect'
 import {
   overallDotColor,
@@ -37,6 +36,22 @@ import {
   runtimeHostConnectionState,
   runtimeStatusForOverall
 } from '@/runtime/runtime-host-connection-state'
+
+export async function connectRuntimeHostForNavigation(args: {
+  environmentId: string
+  refreshStatus: (environmentId: string, timeoutMs: number) => Promise<boolean>
+  fetchRepos: (environmentId: string) => Promise<{ id: string }[]>
+  fetchWorktrees: (repoId: string) => Promise<unknown>
+  fetchLineage: () => Promise<unknown>
+}): Promise<boolean> {
+  if (!(await args.refreshStatus(args.environmentId, 5_000))) {
+    return false
+  }
+  const repos = await args.fetchRepos(args.environmentId)
+  await Promise.all(repos.map((repo) => args.fetchWorktrees(repo.id)))
+  await args.fetchLineage()
+  return true
+}
 
 export function SshStatusSegment({
   compact,

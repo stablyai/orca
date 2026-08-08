@@ -213,39 +213,6 @@ describe('SourceControlAgentActionDialog', () => {
     expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()
     expect(container.textContent).not.toContain('Launch agent')
   })
-  it('uses the host-scoped repo when duplicate repository ids exist', async () => {
-    const wrongHostRepo = {
-      id: 'repo-1',
-      executionHostId: 'local'
-    } as Repo
-    const activeHostRepo = {
-      ...repoWithSavedRecipe(),
-      executionHostId: 'runtime:env-1'
-    } as Repo
-    resetStore(
-      settingsWithGlobalRecipe({ agentId: 'claude', commandInputTemplate: '{basePrompt}' }),
-      [wrongHostRepo, activeHostRepo]
-    )
-
-    renderControlledDialog({ repoId: 'repo-1', repo: activeHostRepo })
-
-    await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
-    expect(mocks.onOpenChange).toHaveBeenCalledWith(false)
-    expect(container.textContent).not.toContain('Launch agent')
-  })
-  it('fails closed when a host-scoped caller supplies no matching repo', async () => {
-    resetStore(
-      settingsWithGlobalRecipe({ agentId: 'claude', commandInputTemplate: '{basePrompt}' }),
-      [repoWithSavedRecipe()]
-    )
-
-    renderControlledDialog({ repoId: 'repo-1', repo: null })
-
-    await vi.waitFor(() => expect(mocks.ensureDetectedAgents).toHaveBeenCalledTimes(1))
-    await flushEffects()
-    expect(mocks.onStart).not.toHaveBeenCalled()
-    expect(container.textContent).toContain('Launch agent')
-  })
   it('renders the form and does not auto-start when the saved launch recipe mismatches', async () => {
     resetStore(
       settingsWithGlobalRecipe({ agentId: 'claude', commandInputTemplate: '{basePrompt}' })

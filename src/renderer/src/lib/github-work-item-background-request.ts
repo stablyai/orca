@@ -13,7 +13,7 @@ import type {
 import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
-
+import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import { buildGitHubWorkspaceSource } from '../../../shared/new-workspace/workspace-source'
 import {
@@ -24,11 +24,7 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import type { GitHubWorkItem, GlobalSettings, Repo, TuiAgent } from '../../../shared/types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
-} from '../../../shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 
@@ -128,25 +124,21 @@ function getWorkspaceRunContextForRepo(
 }
 
 export async function resolvePreferredQuickAgentForGitHubWorkItem(
-  getStore: () => GitHubWorkItemBackgroundStoreSnapshot,
-  repo: Repo,
-  agentOverride?: TuiAgent
+  store: GitHubWorkItemBackgroundStoreSnapshot,
+  repo: Repo
 ): Promise<TuiAgent | null> {
-  const store = getStore()
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   const detectedAgents =
     host?.kind === 'ssh'
       ? await store.ensureRemoteDetectedAgents(host.targetId)
       : host?.kind === 'runtime'
         ? await store.ensureRuntimeDetectedAgents(host.environmentId)
-        : await store.ensureDetectedAgents({ repoId: repo.id })
-  const currentStore = getStore()
-  const selectedAgent = pickQuickWorkspaceAgent(
-    agentOverride ?? currentStore.settings?.defaultTuiAgent,
+        : await store.ensureDetectedAgents()
+  return pickQuickWorkspaceAgent(
+    store.settings?.defaultTuiAgent,
     detectedAgents,
-    currentStore.settings?.disabledTuiAgents
+    store.settings?.disabledTuiAgents
   )
-  return agentOverride && selectedAgent !== agentOverride ? null : selectedAgent
 }
 
 function resolveGitHubWorkItemLaunchPlatform(
@@ -161,8 +153,7 @@ function resolveGitHubWorkItemLaunchPlatform(
       store.runtimeStatusByEnvironmentId.get(host.environmentId)?.status?.hostPlatform ?? 'linux'
     )
   }
-  const connectionId = host?.kind === 'ssh' ? host.targetId : repo.connectionId
-  const projectRuntime = connectionId
+  const projectRuntime = repo.connectionId
     ? undefined
     : getLocalRepoProjectExecutionRuntimeContext(
         store as ReturnType<typeof useAppStore.getState>,
@@ -170,7 +161,7 @@ function resolveGitHubWorkItemLaunchPlatform(
         CLIENT_PLATFORM
       )
   return resolveSourceControlLaunchPlatform({
-    connectionId,
+    connectionId: repo.connectionId,
     worktreePath: repo.path,
     projectRuntime
   })
@@ -197,9 +188,9 @@ export function buildGitHubWorkItemStartupPlan(args: {
   // Why: runtime-owned repos launch on their owner host, not on the client
   // desktop, so startup shell quoting must use the runtime platform.
   const platform = resolveGitHubWorkItemLaunchPlatform(store, repo)
-  // Why: non-local hosts deploy the CLI shim as plain `orca`, so the Linux-only
+  // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
-  const isRemote = getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID
+  const isRemote = repoIsRemote(repo)
   const shell = resolveLocalWindowsAgentStartupShell({
     platform,
     isRemote,

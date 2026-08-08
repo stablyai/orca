@@ -213,36 +213,6 @@ describe('GitLab IPC handlers', () => {
     )
   })
 
-  it('resolves duplicate repo IDs by the explicit execution host', async () => {
-    const localRepo = repo({ id: 'repo-shared', path: '/shared/orca' })
-    const remoteRepo = repo({
-      id: 'repo-shared',
-      path: '/shared/orca',
-      connectionId: 'builder',
-      executionHostId: toSshExecutionHostId('builder')
-    })
-    listWorkItemsMock.mockResolvedValueOnce({ items: [] })
-    registerGitLabHandlers(storeWithRepos([localRepo, remoteRepo]) as Store)
-
-    await expect(
-      ipcHandlers.get('gitlab:listWorkItems')?.(null, {
-        repoPath: '/shared/orca',
-        repoId: 'repo-shared',
-        executionHostId: toSshExecutionHostId('builder')
-      })
-    ).resolves.toEqual({ items: [] })
-
-    expect(listWorkItemsMock).toHaveBeenCalledWith(
-      '/shared/orca',
-      'opened',
-      1,
-      20,
-      undefined,
-      undefined,
-      'builder'
-    )
-  })
-
   it('forwards the typed search query into listMRs and listWorkItems', async () => {
     listMergeRequestsMock.mockResolvedValueOnce({ items: [] })
     listWorkItemsMock.mockResolvedValueOnce({ items: [] })

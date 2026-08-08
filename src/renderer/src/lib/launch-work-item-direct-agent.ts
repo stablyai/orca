@@ -11,7 +11,6 @@ import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-re
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/types'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -19,7 +18,6 @@ import {
 import { translate } from '@/i18n/i18n'
 import { resolveNativeChatLaunchSessionOptions } from '@/components/native-chat/native-chat-session-option-enrichment'
 import type { PersistedNativeChatSessionOptions } from '../../../shared/native-chat-session-options'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
@@ -154,41 +152,6 @@ export function buildDirectWorkItemStartupOpts(
         : {}),
       ...(telemetry ? { telemetry } : {})
     }
-  }
-}
-
-export async function markDirectWorkItemAgentTrusted(args: {
-  agent: TuiAgent | null
-  workspacePath: string
-  connectionId?: string | null
-  runtimeEnvironmentId?: string | null
-}): Promise<void> {
-  if (!args.agent || !args.workspacePath) {
-    return
-  }
-  const preset = TUI_AGENT_CONFIG[args.agent].preflightTrust
-  if (!preset) {
-    return
-  }
-  try {
-    if (args.runtimeEnvironmentId) {
-      await callRuntimeRpc(
-        { kind: 'environment', environmentId: args.runtimeEnvironmentId },
-        'preflight.markAgentTrusted',
-        { agent: args.agent, workspacePath: args.workspacePath }
-      )
-      return
-    }
-    if (!window.api.agentTrust?.markTrusted) {
-      return
-    }
-    await window.api.agentTrust.markTrusted({
-      preset,
-      workspacePath: args.workspacePath,
-      ...(args.connectionId ? { connectionId: args.connectionId } : {})
-    })
-  } catch {
-    // Best-effort: the user can dismiss the trust menu manually.
   }
 }
 

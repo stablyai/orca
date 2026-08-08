@@ -1632,8 +1632,6 @@ export type GitHubWorkItem = {
    *  to know which repo an item came from. Stamped by the renderer fetcher
    *  (`fetchWorkItems`) and by optimistic stubs on the new-issue path. */
   repoId: string
-  /** Execution host that produced this row. Repo ids are unique only within a host. */
-  repoExecutionHostId?: ExecutionHostId
 }
 
 export type GitHubPRFile = {
@@ -2241,8 +2239,6 @@ export type SparsePreset = {
 
 export type CreateWorktreeArgs = {
   repoId: string
-  /** Exact repository execution host when repo IDs overlap across local, SSH, or runtimes. */
-  executionHostId?: ExecutionHostId
   name: string
   /** Optional user-facing label to persist separately from the git-safe
    *  branch/path seed. Used when a workspace is created from a GitHub or

@@ -236,25 +236,6 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
     expect(state.workItemsInvalidationNonce).toBe(5)
   })
 
-  it('evicts host-scoped cache entries for the repo', () => {
-    const store = createTestStore()
-    const hostScopedKey = workItemsCacheKey('repo-1', 20, '', 'ssh:ssh-1')
-    store.setState({
-      workItemsInvalidationNonce: 4,
-      workItemsCache: {
-        [hostScopedKey]: { data: [], fetchedAt: 1 },
-        [workItemsCacheKey('repo-2', 20, '', 'ssh:ssh-1')]: { data: [], fetchedAt: 1 }
-      }
-    })
-
-    store.getState().evictGitHubRepoCaches('repo-1', '/repo/one')
-
-    expect(Object.keys(store.getState().workItemsCache)).toEqual([
-      workItemsCacheKey('repo-2', 20, '', 'ssh:ssh-1')
-    ])
-    expect(store.getState().workItemsInvalidationNonce).toBe(5)
-  })
-
   it('does not bump the work-item invalidation nonce when no work-item entries are evicted', () => {
     const store = createTestStore()
     store.setState({
@@ -526,13 +507,7 @@ describe('createGitHubSlice cache bounds', () => {
     })
 
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(mockApi.gh.issue).toHaveBeenCalledWith({
-      repoPath,
-      repoId: 'repo-ssh',
-      executionHostId: 'ssh:ssh-1',
-      number: 321,
-      sourceContext: undefined
-    })
+    expect(mockApi.gh.issue).toHaveBeenCalledWith({ repoPath, repoId: 'repo-ssh', number: 321 })
     expect(
       store.getState().issueCache[
         issueCacheKey(repoPath, 'repo-ssh', 321, null, 'ssh-1', 'ssh:ssh-1')
@@ -765,7 +740,6 @@ describe('createGitHubSlice.fetchPRChecks', () => {
     expect(mockApi.gh.prChecks).toHaveBeenCalledWith({
       repoPath,
       repoId,
-      executionHostId: 'local',
       prNumber: 12,
       headSha: undefined,
       prRepo: null,
@@ -1263,7 +1237,6 @@ describe('createGitHubSlice.fetchPRComments', () => {
     expect(mockApi.gh.prComments).toHaveBeenCalledWith({
       repoPath,
       repoId,
-      executionHostId: 'local',
       prNumber: 12,
       prRepo: { owner: 'Acme', repo: 'Widgets' },
       noCache: true,
@@ -1494,7 +1467,6 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
     expect(mockApi.gh.prCheckDetails).toHaveBeenCalledWith({
       repoPath,
       repoId,
-      executionHostId: 'local',
       checkRunId: 123,
       workflowRunId: undefined,
       checkName: 'build',
@@ -1591,12 +1563,10 @@ describe('createGitHubSlice PR comment mutations', () => {
     expect(mockApi.gh.addIssueComment).toHaveBeenCalledWith({
       repoPath,
       repoId,
-      executionHostId: 'local',
       number: 12,
       body: 'done',
       type: 'pr',
-      prRepo: { owner: 'Acme', repo: 'Widgets' },
-      sourceContext: undefined
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
     })
     expect(
       store.getState().commentsCache[`${repoId}::pr-comments::acme/widgets::12`]?.data?.[0].body
@@ -1621,7 +1591,6 @@ describe('createGitHubSlice PR comment mutations', () => {
     expect(mockApi.gh.addIssueComment).toHaveBeenCalledWith({
       repoPath,
       repoId,
-      executionHostId: 'local',
       number: 12,
       body: 'done',
       type: 'pr',
@@ -1826,8 +1795,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         repoPath,
         branch,
         cacheKey: `ssh:ssh-1::repo-1::${branch}`,
-        connectionId: 'ssh-1',
-        executionHostId: 'ssh:ssh-1'
+        connectionId: 'ssh-1'
       })
     })
   })
@@ -5001,14 +4969,11 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
     await Promise.resolve()
 
-    expect(mockApi.gh.issue).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repoPath,
-        repoId: 'repo-1',
-        executionHostId: 'local',
-        number: 123
-      })
-    )
+    expect(mockApi.gh.issue).toHaveBeenCalledWith({
+      repoPath,
+      repoId: 'repo-1',
+      number: 123
+    })
   })
 
   it('enqueues active PR refresh IPC for connected SSH-backed repos', () => {
@@ -5019,13 +4984,6 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
 
     store.setState({
       repos: [
-        {
-          id: 'repo-1',
-          path: '/local/repo',
-          name: 'local',
-          kind: 'git',
-          executionHostId: 'local'
-        },
         {
           id: 'repo-1',
           path: repoPath,
@@ -5041,7 +4999,6 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
           {
             id: worktreeId,
             repoId: 'repo-1',
-            hostId: 'ssh:ssh-1',
             path: '/repo/worktrees/test',
             branch,
             displayName: 'test',
@@ -5060,7 +5017,6 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
         repoPath,
         branch,
         connectionId: 'ssh-1',
-        executionHostId: 'ssh:ssh-1',
         connectionState: 'connected'
       }),
       reason: 'active',
@@ -5404,7 +5360,6 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
   })
 
   it('refreshes runtime PR data directly instead of enqueueing local coordinator work', async () => {
-    resetRemoteRuntimeMocks()
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-1',
       ok: true,
@@ -5418,13 +5373,6 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [
-        {
-          id: 'repo-1',
-          path: '/local/repo',
-          name: 'local',
-          kind: 'git',
-          executionHostId: 'local'
-        },
         {
           id: 'repo-1',
           path: repoPath,
@@ -5443,7 +5391,6 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
           {
             id: 'wt-1',
             repoId: 'repo-1',
-            hostId: 'runtime:env-1',
             path: '/repo/worktrees/runtime',
             branch,
             displayName: 'runtime',
@@ -5533,14 +5480,11 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     store.getState().refreshAllGitHub()
     await Promise.resolve()
 
-    expect(mockApi.gh.issue).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repoPath,
-        repoId: 'repo-1',
-        executionHostId: 'local',
-        number: 123
-      })
-    )
+    expect(mockApi.gh.issue).toHaveBeenCalledWith({
+      repoPath,
+      repoId: 'repo-1',
+      number: 123
+    })
   })
 })
 
@@ -6225,9 +6169,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const result = await queued
     await Promise.all(blockers)
 
-    expect(result).toEqual([
-      { ...item, repoId: 'caller-repo-id', repoExecutionHostId: 'runtime:env-start' }
-    ])
+    expect(result).toEqual([{ ...item, repoId: 'caller-repo-id' }])
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-start',
       method: 'github.listWorkItems',
@@ -6328,9 +6270,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       _meta: { runtimeId: 'new-runtime' }
     })
-    await expect(newFetch).resolves.toEqual([
-      { ...newRuntimeItem, repoId: 'caller-repo-id', repoExecutionHostId: 'runtime:env-new' }
-    ])
+    await expect(newFetch).resolves.toEqual([{ ...newRuntimeItem, repoId: 'caller-repo-id' }])
 
     const oldRuntimeItem = {
       type: 'issue',
@@ -6348,16 +6288,12 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       _meta: { runtimeId: 'old-runtime' }
     })
-    await expect(oldFetch).resolves.toEqual([
-      { ...oldRuntimeItem, repoId: 'caller-repo-id', repoExecutionHostId: 'runtime:env-old' }
-    ])
+    await expect(oldFetch).resolves.toEqual([{ ...oldRuntimeItem, repoId: 'caller-repo-id' }])
     expect(
       store.getState().workItemsCache[
         workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:env-new')
       ]?.data
-    ).toEqual([
-      { ...newRuntimeItem, repoId: 'caller-repo-id', repoExecutionHostId: 'runtime:env-new' }
-    ])
+    ).toEqual([{ ...newRuntimeItem, repoId: 'caller-repo-id' }])
   })
 
   it('bounds work-item cache entries across many repos', async () => {
@@ -6818,7 +6754,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       timeoutMs: 30_000
     })
     expect(result).toEqual({
-      items: [{ ...item, repoId: 'caller-repo-id', repoExecutionHostId: 'runtime:env-1' }],
+      items: [{ ...item, repoId: 'caller-repo-id' }],
       failedCount: 0,
       errorTypes: []
     })

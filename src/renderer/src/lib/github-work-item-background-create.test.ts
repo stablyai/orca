@@ -397,34 +397,13 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     expect(buildAgentStartupPlan).toHaveBeenCalled()
   })
 
-  it('uses an explicitly selected agent instead of the default agent', async () => {
-    const deps = makeDeps(
-      makeStore({ ensureDetectedAgents: vi.fn().mockResolvedValue(['codex', 'claude']) })
-    )
-
-    await createGitHubWorkItemWorkspaceInBackground(
-      {
-        item: makeIssue(),
-        repoId: 'repo-1',
-        agentOverride: 'claude',
-        openModalFallback: vi.fn()
-      },
-      deps
-    )
-
-    expect(
-      (deps.continueBackgroundCreate.mock.calls[0] as unknown[] | undefined)?.[1]
-    ).toMatchObject({ agent: 'claude' })
-  })
-
   it('uses runtime-owned detection and indeterminate progress for runtime repos', async () => {
     const runtimeRepo: Repo = {
       ...repo,
       executionHostId: 'runtime:env-1'
     }
     const store = makeStore({
-      // Why: repo ids are host-scoped; keep the local duplicate first to prove the target host wins.
-      repos: [repo, runtimeRepo],
+      repos: [runtimeRepo],
       runtimeStatusByEnvironmentId: new Map([
         [
           'env-1',
@@ -444,7 +423,6 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
       {
         item: makeIssue(),
         repoId: 'repo-1',
-        repoExecutionHostId: 'runtime:env-1',
         openModalFallback: vi.fn()
       },
       deps
@@ -652,8 +630,7 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
         branchName: 'fix-issue-6933',
         baseRefName: 'main',
         isCrossRepository: true
-      }),
-      'local'
+      })
     )
     expect(deps.continueBackgroundCreate).toHaveBeenCalledWith(
       'creation-1',
@@ -693,7 +670,6 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     expect(continueCall).toBeDefined()
     const request = continueCall?.[1] as WorktreeCreationRequest
     expect(request.startupPlan?.launchCommand).toBe('codex --prompt-file')
-    expect(request.launchDraftPrompt).toBe('https://github.com/stablyai/orca/issues/42')
     expect(request.startup?.command).toBe('codex --prompt-file')
     expect(buildAgentStartupPlan).not.toHaveBeenCalled()
   })
@@ -717,6 +693,8 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
       deps
     )
 
+    expect(deps.confirmHooks).toHaveBeenCalledWith(expect.anything(), 'repo-1', 'setup')
+    expect(deps.confirmHooks).toHaveBeenCalledWith(expect.anything(), 'repo-1', 'issueCommand')
     const continueCall = deps.continueBackgroundCreate.mock.calls[0] as unknown[] | undefined
     expect(continueCall).toBeDefined()
     const request = continueCall?.[1] as WorktreeCreationRequest

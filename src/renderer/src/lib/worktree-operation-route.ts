@@ -1,12 +1,12 @@
 import type { AppState } from '@/store/types'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
-import {
-  addRoute,
-  resolveExactWorktreeRoute,
-  resolveIndexedRepoOperationRoute
-} from './worktree-owner-route'
+import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
   hasIndexedDetectedWorktree,
@@ -43,6 +43,11 @@ export type WorktreeOperationRouteState = FolderWorkspaceRuntimeOwnerState & {
   runtimeEnvironmentCatalogHydrated?: boolean
   removedRuntimeEnvironmentIds?: ReadonlySet<string>
 }
+
+const repoOperationRouteIndexCache = new WeakMap<
+  NonNullable<WorktreeOperationRouteState['repos']>,
+  ReadonlyMap<string, WorktreeOperationRouteResolution>
+>()
 
 function ownerRecordsOnHost(
   state: WorktreeOperationRouteState,
@@ -247,6 +252,41 @@ export function resolveExplicitWorktreeOperationRouteResult(
     return { kind: 'ambiguous' }
   }
   return { kind: 'missing' }
+}
+
+function resolveIndexedRepoOperationRoute(
+  repos: WorktreeOperationRouteState['repos'],
+  repoId: string
+): WorktreeOperationRouteResolution {
+  if (!repos) {
+    return { kind: 'missing' }
+  }
+  let index = repoOperationRouteIndexCache.get(repos)
+  if (!index) {
+    const next = new Map<string, WorktreeOperationRouteResolution>()
+    for (const repo of repos) {
+      const repoId = repo.id
+      if (!repo.executionHostId?.trim() && !repo.connectionId?.trim()) {
+        continue
+      }
+      const route = routeForOwner({ hostId: getRepoExecutionHostId(repo) })
+      if (!route) {
+        continue
+      }
+      const current = next.get(repoId)
+      if (!current) {
+        next.set(repoId, { kind: 'resolved', route })
+      } else if (
+        current.kind === 'resolved' &&
+        JSON.stringify(current.route) !== JSON.stringify(route)
+      ) {
+        next.set(repoId, { kind: 'ambiguous' })
+      }
+    }
+    index = next
+    repoOperationRouteIndexCache.set(repos, index)
+  }
+  return index.get(repoId) ?? { kind: 'missing' }
 }
 
 export function settingsForWorktreeOperationRoute(

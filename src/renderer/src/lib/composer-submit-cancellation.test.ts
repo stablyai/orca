@@ -1,23 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  captureComposerSubmitCancellation,
-  settleComposerSubmit
-} from './composer-submit-cancellation'
-
-describe('captureComposerSubmitCancellation', () => {
-  it('cancels an in-flight submit when its workspace target changes', () => {
-    let generation = 1
-    const isCancelled = captureComposerSubmitCancellation(
-      generation,
-      () => generation,
-      () => false
-    )
-
-    expect(isCancelled()).toBe(false)
-    generation += 1
-    expect(isCancelled()).toBe(true)
-  })
-})
+import { settleComposerSubmit } from './composer-submit-cancellation'
 
 describe('settleComposerSubmit', () => {
   it('drops a resolved preflight result after cancellation', async () => {

@@ -32,11 +32,7 @@ describe('TaskPage workspace creation source boundaries', () => {
     expect(section).toContain('title: item.title')
     expect(section).toContain('url: item.url')
     expect(section).toContain("openModal('new-workspace-composer', {")
-    expect(section).toContain("getTaskPageRepoSourceContext(targetRepo, 'github')")
-    expect(section).toContain('if (!targetRepo)')
-    expect(section.indexOf('if (!targetRepo)')).toBeLessThan(
-      section.indexOf("openModal('new-workspace-composer', {")
-    )
+    expect(section).toContain("getTaskPageRepoSourceContext(repoMap.get(item.repoId), 'github')")
     expect(section).toContain('prefilledName: getGitHubWorkItemWorkspaceSeed(item)')
     expect(section).toContain('initialRepoId: item.repoId')
     expect(section).toContain('initialGitHubWorkItem: item')
@@ -71,8 +67,7 @@ describe('TaskPage workspace creation source boundaries', () => {
     )
 
     expect(section).toContain("recordFeatureInteraction('github-tasks')")
-    expect(section).toContain('findTaskPageRepoForWorkItem(repos, item)')
-    expect(section).toContain('openComposerForItem(item, agentOverride, targetRepo)')
+    expect(section).toContain('openComposerForItem(item, agentOverride)')
     expect(section).not.toContain('createGitHubWorkItemWorkspaceInBackground')
     expect(TASK_PAGE_SOURCE).not.toContain('@/lib/github-work-item-background-create')
     expect(TASK_PAGE_SOURCE).toContain(
@@ -112,10 +107,8 @@ describe('TaskPage workspace creation source boundaries', () => {
 
     expect(section).toContain('findGithubWorkItemWorkspaceAttachment(')
     expect(section).toContain('if (!currentAttached)')
-    expect(section).toContain('handleUseWorkItem(item, undefined, targetRepo)')
-    expect(section).toContain('activateAndRevealWorktree(')
-    expect(section).toContain('currentAttached.id')
-    expect(section).toContain('executionHostId')
+    expect(section).toContain('handleUseWorkItem(item)')
+    expect(section).toContain('activateAndRevealWorktree(currentAttached.id)')
   })
 
   it('uses the shared composer handler from GitHub detail and start-new actions', () => {

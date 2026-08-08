@@ -1,9 +1,7 @@
 import type { GitHubWorkItem } from '../../../shared/types'
-import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../../shared/execution-host'
 
 export function taskPageWorkItemKey(item: GitHubWorkItem): string {
-  const hostId = normalizeExecutionHostId(item.repoExecutionHostId) ?? LOCAL_EXECUTION_HOST_ID
-  return `${item.repoId}\u0000${hostId}\u0000${item.id}`
+  return `${item.repoId}\u0000${item.id}`
 }
 
 export function sortedStrings(values: readonly string[] | undefined): string {

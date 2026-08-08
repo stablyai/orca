@@ -16,7 +16,6 @@ export type PendingListOp = {
 export type PendingOp = {
   generation: number
   key: TaskPageGitHubMutationKey
-  itemKey: string
   previous: Partial<GitHubWorkItem>
   next: Partial<GitHubWorkItem>
   listOp?: PendingListOp

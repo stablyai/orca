@@ -10,7 +10,7 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
-import type { Repo, TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { SourceControlAgentActionDialogForm } from './SourceControlAgentActionDialogForm'
@@ -29,7 +29,6 @@ export type SourceControlAgentActionDialogProps = {
   groupId?: string | null
   connectionId?: string | null
   repoId?: string | null
-  repo?: Repo | null
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
   launchSource: LaunchSource

@@ -132,7 +132,6 @@ function broadcastWorkItemMutated(
 type RepoScopedArgs = {
   repoPath: string
   repoId?: string | null
-  executionHostId?: string | null
   sourceContext?: TaskSourceContext | null
 }
 
@@ -147,52 +146,22 @@ function validateRegisteredRepo(
 ): RegisteredRepoValidationResult {
   const repoPath = typeof args === 'string' ? args : args.repoPath
   const repoId = typeof args === 'string' ? undefined : args.repoId
-  const explicitExecutionHostId = typeof args === 'string' ? undefined : args.executionHostId
-  const sourceExecutionHostId =
-    typeof args !== 'string' && args.sourceContext?.provider === 'github'
-      ? args.sourceContext.hostId
-      : undefined
-  const executionHostId = explicitExecutionHostId ?? sourceExecutionHostId
   const resolvedRepoPath = resolve(repoPath)
-  const idMatches = repoId ? repos.filter((repo) => repo.id === repoId) : repos
-  if (repoId && idMatches.length === 0) {
+  const repo = repos.find((r) => (repoId ? r.id === repoId : resolve(r.path) === resolvedRepoPath))
+  if (!repo) {
     return {
       kind: 'denied',
       reason: 'unknown-repo',
       message: 'Access denied: unknown repository path'
     }
   }
-  const pathMatches = idMatches.filter((repo) => resolve(repo.path) === resolvedRepoPath)
-  if (pathMatches.length === 0) {
+  if (repoId && resolve(repo.path) !== resolvedRepoPath) {
     return {
       kind: 'denied',
-      reason: repoId ? 'repo-path-mismatch' : 'unknown-repo',
-      message: repoId
-        ? 'Access denied: repository path does not match repo id'
-        : 'Access denied: unknown repository path'
+      reason: 'repo-path-mismatch',
+      message: 'Access denied: repository path does not match repo id'
     }
   }
-  // Repo identities are host-scoped, so ambiguous cross-host collisions must fail closed.
-  const hostMatches = executionHostId
-    ? pathMatches.filter((repo) => getRepoExecutionHostId(repo) === executionHostId)
-    : pathMatches
-  if (executionHostId && hostMatches.length === 0) {
-    return {
-      kind: 'denied',
-      reason: 'host-mismatch',
-      message: explicitExecutionHostId
-        ? 'Access denied: repository execution host does not match'
-        : 'Access denied: GitHub source host does not match repository host'
-    }
-  }
-  if (hostMatches.length !== 1) {
-    return {
-      kind: 'denied',
-      reason: 'unknown-repo',
-      message: 'Access denied: ambiguous repository identity'
-    }
-  }
-  const repo = hostMatches[0]
   if (
     typeof args !== 'string' &&
     args.sourceContext?.provider === 'github' &&
@@ -241,7 +210,7 @@ function applyRepoToPRRefreshCandidate(
     repoId: repo.id,
     ...(localGitOptions ? { localGitOptions } : {}),
     connectionId: repoConnectionId(repo),
-    executionHostId: getRepoExecutionHostId(repo),
+    executionHostId: repo.executionHostId ?? null,
     connectionState: repo.connectionId ? 'connected' : 'unknown'
   }
 }
@@ -460,7 +429,9 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:listWorkItems',
     (
       _event,
-      args: RepoScopedArgs & {
+      args: {
+        repoPath: string
+        repoId?: string
         limit?: number
         query?: string
         page?: number
@@ -481,7 +452,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     }
   )
 
-  ipcMain.handle('gh:countWorkItems', (_event, args: RepoScopedArgs & { query?: string }) => {
+  ipcMain.handle('gh:countWorkItems', (_event, args: { repoPath: string; query?: string }) => {
     const repo = assertRegisteredRepo(args, store)
     return countWorkItems(
       repo.path,
@@ -619,7 +590,6 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       args: {
         repoPath: string
         repoId?: string | null
-        executionHostId?: string | null
         sourceContext?: TaskSourceContext | null
         prNumber: number
         headSha?: string

@@ -21,13 +21,7 @@ import {
   prCommentsCacheSuffix
 } from '@/store/slices/github'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
-import { useActiveWorktree } from '@/store/selectors'
-import { findRepoForHost, findRepoForWorktreeOwner } from '@/store/slices/repo-host-identity'
-import {
-  getRepoExecutionHostId,
-  getWorktreeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-worktree'
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
@@ -438,7 +432,6 @@ function gitLabMRCommentsToPRComments(
 async function fetchGitLabMRDetailsForChecks(args: {
   repoPath: string
   repoId?: string
-  executionHostId?: ExecutionHostId
   settings: Parameters<typeof getActiveRuntimeTarget>[0]
   iid: number
 }): Promise<GitLabWorkItemDetails | null> {
@@ -458,7 +451,6 @@ async function fetchGitLabMRDetailsForChecks(args: {
   return (await window.api.gl.workItemDetails({
     repoPath: args.repoPath,
     repoId: args.repoId,
-    executionHostId: args.executionHostId,
     iid: args.iid,
     type: 'mr'
   })) as GitLabWorkItemDetails | null
@@ -467,7 +459,6 @@ async function fetchGitLabMRDetailsForChecks(args: {
 async function resolveGitLabMRDiscussionForChecks(args: {
   repoPath: string
   repoId?: string
-  executionHostId?: ExecutionHostId
   settings: Parameters<typeof getActiveRuntimeTarget>[0]
   iid: number
   discussionId: string
@@ -490,7 +481,6 @@ async function resolveGitLabMRDiscussionForChecks(args: {
   return window.api.gl.resolveMRDiscussion({
     repoPath: args.repoPath,
     repoId: args.repoId,
-    executionHostId: args.executionHostId,
     iid: args.iid,
     discussionId: args.discussionId,
     resolved: args.resolved
@@ -510,15 +500,7 @@ export default function ChecksPanel(): React.JSX.Element {
     isPanelVisible
   })
   const activeWorktreeId = activeWorktree?.id ?? null
-  const repo = useAppStore((s) => {
-    if (!activeWorktree) {
-      return null
-    }
-    return findRepoForWorktreeOwner(s.repos, activeWorktree)
-  })
-  const repoExecutionHostId = activeWorktree
-    ? getWorktreeExecutionHostId(activeWorktree, repo ?? undefined)
-    : undefined
+  const repo = useRepoById(activeWorktree?.repoId ?? null)
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? repo?.connectionId ?? null)
     : null
@@ -658,10 +640,7 @@ export default function ChecksPanel(): React.JSX.Element {
       }
       const latestRepo =
         target.type === 'repo'
-          ? findRepoForHost(state.repos, target.repoId, {
-              hostId: repo ? getRepoExecutionHostId(repo) : undefined,
-              settings: latestSettings
-            })
+          ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
           : null
       const result = saveSourceControlActionRecipe({
         target,
@@ -674,11 +653,9 @@ export default function ChecksPanel(): React.JSX.Element {
         await updateSettings({ sourceControlAi: result.sourceControlAi })
         return
       }
-      await updateRepo(result.target.repoId, result.update, {
-        hostId: repo ? getRepoExecutionHostId(repo) : undefined
-      })
+      await updateRepo(result.target.repoId, result.update)
     },
-    [repo, updateRepo, updateSettings]
+    [updateRepo, updateSettings]
   )
   const asyncResultKeyRef = useRef<string>('')
   const refreshRequestKeyRef = useRef<string | null>(null)
@@ -1518,7 +1495,6 @@ export default function ChecksPanel(): React.JSX.Element {
     if (isPanelVisible && repo && !isFolder && branch) {
       void fetchHostedReviewForBranch(repo.path, branch, {
         repoId: repo.id,
-        executionHostId: getRepoExecutionHostId(repo),
         linkedGitHubPR: linkedPR,
         fallbackGitHubPR: fallbackGitHubPRNumber,
         currentHeadOid: activeWorktree?.head ?? null,
@@ -1782,7 +1758,6 @@ export default function ChecksPanel(): React.JSX.Element {
     void getHostedReviewCreationEligibility({
       repoPath: repo.path,
       repoId: repo.id,
-      executionHostId: getRepoExecutionHostId(repo),
       ...(activeWorktreePath ? { worktreePath: activeWorktreePath } : {}),
       branch,
       base: repo.worktreeBaseRef ?? null,
@@ -1870,7 +1845,6 @@ export default function ChecksPanel(): React.JSX.Element {
     void fetchPRForBranch(repo.path, branch, {
       force: true,
       repoId: repo.id,
-      executionHostId: getRepoExecutionHostId(repo),
       worktreeId: activeWorktreeId ?? undefined,
       linkedPRNumber: linkedPR,
       fallbackPRNumber: fallbackGitHubPRNumber ?? pr.number
@@ -1919,8 +1893,7 @@ export default function ChecksPanel(): React.JSX.Element {
           pr?.prRepo,
           {
             force,
-            repoId: repo.id,
-            executionHostId: getRepoExecutionHostId(repo)
+            repoId: repo.id
           }
         )
         if (!isCurrentAsyncResult(requestKey)) {
@@ -1998,8 +1971,7 @@ export default function ChecksPanel(): React.JSX.Element {
         const details = await fetchGitLabMRDetailsForChecks({
           repoPath: repo.path,
           repoId: repo.id,
-          executionHostId: repoExecutionHostId,
-          settings: ownerSettings,
+          settings,
           iid: targetMRNumber
         })
         if (!isCurrentAsyncResult(requestKey)) {
@@ -2035,9 +2007,8 @@ export default function ChecksPanel(): React.JSX.Element {
       branch,
       hostedReviewCacheKey,
       isCurrentAsyncResult,
-      ownerSettings,
       repo,
-      repoExecutionHostId
+      settings
     ]
   )
 
@@ -2102,7 +2073,6 @@ export default function ChecksPanel(): React.JSX.Element {
         const result = await fetchPRComments(repo.path, targetPRNumber, {
           force,
           repoId: repo.id,
-          executionHostId: getRepoExecutionHostId(repo),
           prRepo: targetPRRepo
         })
         if (!isCurrentAsyncResult(requestKey)) {
@@ -2166,7 +2136,7 @@ export default function ChecksPanel(): React.JSX.Element {
           url: check.url,
           prRepo: pr?.prRepo ?? null
         },
-        { repoId: repo.id, executionHostId: getRepoExecutionHostId(repo) }
+        { repoId: repo.id }
       )
     },
     [fetchPRCheckDetails, pr?.prRepo, repo, settings]
@@ -2192,11 +2162,7 @@ export default function ChecksPanel(): React.JSX.Element {
       pr?.headSha
     )
     setCommentsLoading(true)
-    void fetchPRComments(repo.path, prNumber, {
-      repoId: repo.id,
-      executionHostId: getRepoExecutionHostId(repo),
-      prRepo: pr?.prRepo
-    }).then(
+    void fetchPRComments(repo.path, prNumber, { repoId: repo.id, prRepo: pr?.prRepo }).then(
       (result) => {
         if (!cancelled && isCurrentAsyncResult(requestKey)) {
           setComments(result)
@@ -2352,7 +2318,6 @@ export default function ChecksPanel(): React.JSX.Element {
         const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
           repoPath: repo.path,
           repoId: repo.id,
-          executionHostId: getRepoExecutionHostId(repo),
           branch,
           linkedGitHubPR: linkedPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
@@ -2392,7 +2357,6 @@ export default function ChecksPanel(): React.JSX.Element {
         refreshedPR = await fetchPRForBranch(repo.path, branch, {
           force: true,
           repoId: repo.id,
-          executionHostId: getRepoExecutionHostId(repo),
           worktreeId: activeWorktreeId ?? undefined,
           linkedPRNumber: linkedPR,
           fallbackPRNumber: fallbackGitHubPRNumber
@@ -2408,7 +2372,6 @@ export default function ChecksPanel(): React.JSX.Element {
       await refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
         repoId: repo.id,
-        executionHostId: getRepoExecutionHostId(repo),
         branch,
         linkedGitHubPR: linkedPR,
         fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
@@ -2441,11 +2404,7 @@ export default function ChecksPanel(): React.JSX.Element {
           branch,
           refreshedPR.headSha,
           refreshedPR.prRepo,
-          {
-            force: true,
-            repoId: repo.id,
-            executionHostId: getRepoExecutionHostId(repo)
-          }
+          { force: true, repoId: repo.id }
         ).then(
           (result) => {
             if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
@@ -2474,7 +2433,6 @@ export default function ChecksPanel(): React.JSX.Element {
         const refreshedComments = fetchPRComments(repo.path, refreshedPR.number, {
           force: true,
           repoId: repo.id,
-          executionHostId: getRepoExecutionHostId(repo),
           prRepo: refreshedPR.prRepo
         }).then(
           (result) => {
@@ -2578,7 +2536,6 @@ export default function ChecksPanel(): React.JSX.Element {
         void fetchHostedReviewForBranch(repo.path, branch, {
           force: true,
           repoId: repo.id,
-          executionHostId: getRepoExecutionHostId(repo),
           linkedGitHubPR: linkedPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
           currentHeadOid: activeWorktree?.head ?? null,
@@ -2670,7 +2627,6 @@ export default function ChecksPanel(): React.JSX.Element {
       const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
         repoId: repo.id,
-        executionHostId: getRepoExecutionHostId(repo),
         branch,
         linkedGitHubPR: linkedPR,
         fallbackGitHubPR: fallbackGitHubPRNumber,
@@ -2693,7 +2649,6 @@ export default function ChecksPanel(): React.JSX.Element {
     const refreshedPR = await fetchPRForBranch(repo.path, branch, {
       force: true,
       repoId: repo.id,
-      executionHostId: getRepoExecutionHostId(repo),
       worktreeId: activeWorktreeId ?? undefined,
       linkedPRNumber: linkedPR,
       fallbackPRNumber: fallbackGitHubPRNumber
@@ -2701,7 +2656,6 @@ export default function ChecksPanel(): React.JSX.Element {
     await refreshHostedReviewCard(fetchHostedReviewForBranch, {
       repoPath: repo.path,
       repoId: repo.id,
-      executionHostId: getRepoExecutionHostId(repo),
       branch,
       linkedGitHubPR: linkedPR,
       fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
@@ -2818,8 +2772,7 @@ export default function ChecksPanel(): React.JSX.Element {
         const result = await resolveGitLabMRDiscussionForChecks({
           repoPath: repo.path,
           repoId: repo.id,
-          executionHostId: repoExecutionHostId,
-          settings: ownerSettings,
+          settings,
           iid: activeGitLabReview.number,
           discussionId: threadId,
           resolved: resolve
@@ -2850,7 +2803,6 @@ export default function ChecksPanel(): React.JSX.Element {
       })
       const ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
         repoId: repo.id,
-        executionHostId: getRepoExecutionHostId(repo),
         prRepo: pr?.prRepo
       })
       if (!isCurrentAsyncResult(requestKey)) {
@@ -2877,10 +2829,9 @@ export default function ChecksPanel(): React.JSX.Element {
       pr?.prRepo,
       prCacheKey,
       prNumber,
-      ownerSettings,
       repo,
-      repoExecutionHostId,
-      resolveReviewThread
+      resolveReviewThread,
+      settings
     ]
   )
 
@@ -2941,7 +2892,6 @@ export default function ChecksPanel(): React.JSX.Element {
       )
       const result = await addPRConversationComment(repo.path, prNumber, body, {
         repoId: repo.id,
-        executionHostId: getRepoExecutionHostId(repo),
         prRepo: pr.prRepo
       })
       if (!isCurrentAsyncResult(requestKey)) {
@@ -3046,7 +2996,6 @@ export default function ChecksPanel(): React.JSX.Element {
       const result = canPostPRReviewThreadReply(comment)
         ? await addPRReviewCommentReply(repo.path, prNumber, comment.id, body, {
             repoId: repo.id,
-            executionHostId: getRepoExecutionHostId(repo),
             prRepo: pr.prRepo,
             threadId: parentThreadId,
             path: comment.path,
@@ -3058,7 +3007,6 @@ export default function ChecksPanel(): React.JSX.Element {
             buildPRCommentConversationReplyBody(comment.author, body),
             {
               repoId: repo.id,
-              executionHostId: getRepoExecutionHostId(repo),
               prRepo: pr.prRepo
             }
           )
@@ -3161,7 +3109,6 @@ export default function ChecksPanel(): React.JSX.Element {
           ? {
               repoPath: repo.path,
               repoId: repo.id,
-              executionHostId: getRepoExecutionHostId(repo),
               prNumber,
               prRepo: pr.prRepo
             }
@@ -3177,7 +3124,6 @@ export default function ChecksPanel(): React.JSX.Element {
         return {
           repoPath: repo.path,
           repoId: repo.id,
-          executionHostId: getRepoExecutionHostId(repo),
           prNumber: link.number,
           prRepo: {
             owner: link.slug.owner,
@@ -3313,7 +3259,6 @@ export default function ChecksPanel(): React.JSX.Element {
                 body,
                 {
                   repoId: githubTarget.repoId,
-                  executionHostId: githubTarget.executionHostId,
                   prRepo: githubTarget.prRepo,
                   threadId: parentThreadId,
                   path: comment.path,
@@ -3358,7 +3303,6 @@ export default function ChecksPanel(): React.JSX.Element {
                 body,
                 {
                   repoId: githubTarget.repoId,
-                  executionHostId: githubTarget.executionHostId,
                   prRepo: githubTarget.prRepo
                 }
               )
@@ -3557,7 +3501,7 @@ export default function ChecksPanel(): React.JSX.Element {
                     url: check.url,
                     prRepo: pr?.prRepo ?? null
                   },
-                  { repoId: repo.id, executionHostId: getRepoExecutionHostId(repo) }
+                  { repoId: repo.id }
                 )
             if (details) {
               checkRunDetailsByCheckKey[getCheckDetailsPromptKey(check, index)] = details
@@ -3630,7 +3574,6 @@ export default function ChecksPanel(): React.JSX.Element {
         const refreshedPR = await fetchPRForBranch(repo.path, branch, {
           force: true,
           repoId: repo.id,
-          executionHostId: getRepoExecutionHostId(repo),
           worktreeId: activeWorktreeId ?? undefined,
           linkedPRNumber
         })
@@ -3640,7 +3583,6 @@ export default function ChecksPanel(): React.JSX.Element {
         await refreshHostedReviewCard(fetchHostedReviewForBranch, {
           repoPath: repo.path,
           repoId: repo.id,
-          executionHostId: getRepoExecutionHostId(repo),
           branch,
           linkedGitHubPR: linkedPRNumber,
           linkedGitLabMR,
@@ -3675,8 +3617,7 @@ export default function ChecksPanel(): React.JSX.Element {
             refreshedPR.prRepo,
             {
               force: true,
-              repoId: repo.id,
-              executionHostId: getRepoExecutionHostId(repo)
+              repoId: repo.id
             }
           )
             .then(
@@ -3701,7 +3642,6 @@ export default function ChecksPanel(): React.JSX.Element {
           fetchPRComments(repo.path, refreshedPR.number, {
             force: true,
             repoId: repo.id,
-            executionHostId: getRepoExecutionHostId(repo),
             prRepo: refreshedPR.prRepo
           })
             .then(
@@ -3794,7 +3734,6 @@ export default function ChecksPanel(): React.JSX.Element {
       // Why: the same workspace ID can exist under two hosts. Naming the owner
       // keeps the dialog on this workspace instead of the ambiguous lookup.
       repoId: activeWorktree.repoId,
-      executionHostId: getWorktreeExecutionHostId(activeWorktree, repo ?? undefined),
       currentDisplayName: activeWorktree.displayName,
       currentIssue: activeWorktree.linkedIssue,
       currentPR: activeWorktree.linkedPR ?? activeReview.number,
@@ -3807,14 +3746,7 @@ export default function ChecksPanel(): React.JSX.Element {
         }
       }
     })
-  }, [
-    activeReview,
-    activeWorktree,
-    activeWorktreeId,
-    openModal,
-    refreshLinkedGitHubPullRequest,
-    repo
-  ])
+  }, [activeReview, activeWorktree, activeWorktreeId, openModal, refreshLinkedGitHubPullRequest])
 
   const pushBeforeCreatePullRequest = useCallback(async (): Promise<boolean> => {
     if (!activeWorktreeId || !activeWorktree?.path) {
@@ -3970,7 +3902,6 @@ export default function ChecksPanel(): React.JSX.Element {
           const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
             repoPath: repo.path,
             repoId: repo.id,
-            executionHostId: getRepoExecutionHostId(repo),
             branch,
             ...linkedReviewNumbers
           })
@@ -3987,7 +3918,6 @@ export default function ChecksPanel(): React.JSX.Element {
           await refreshHostedReviewCard(fetchHostedReviewForBranch, {
             repoPath: repo.path,
             repoId: repo.id,
-            executionHostId: getRepoExecutionHostId(repo),
             branch,
             ...linkedReviewNumbers
           })
@@ -4072,7 +4002,6 @@ export default function ChecksPanel(): React.JSX.Element {
       }
       const result = await createHostedReview(repo.path, {
         repoId: repo.id,
-        executionHostId: getRepoExecutionHostId(repo),
         provider: hostedReviewCreateProvider,
         base,
         head: normalizeHostedReviewHeadRef(branch),
@@ -4635,7 +4564,6 @@ export default function ChecksPanel(): React.JSX.Element {
         groupId={activeWorktreeId}
         connectionId={activeConnectionId}
         repoId={repo?.id ?? null}
-        repo={repo}
         promptDelivery="submit-after-ready"
         launchPlatform={activeSourceControlLaunchPlatform}
         launchSource={agentComposerState?.launchSource ?? 'task_page'}

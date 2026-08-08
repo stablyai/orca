@@ -167,15 +167,14 @@ import { buildPluginQuickActions } from '@/components/cmd-j/plugin-quick-actions
 import { usePluginCommands } from '@/store/plugin-panels'
 import {
   getComposerEligibleRepos,
-  getComposerWorktreePrefetchTarget
+  resolveComposerGitRepoId
 } from '@/lib/new-workspace-composer-repo'
 import { lookupGitHubWorkItemForSource } from '@/lib/github-work-item-source-lookup'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import {
   getSettingsFocusedExecutionHostId,
-  isRuntimeOwnedSshTargetId,
-  type ExecutionHostId
+  isRuntimeOwnedSshTargetId
 } from '../../../shared/execution-host'
 import type { TerminalTab, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -294,11 +293,11 @@ function PaletteRowShortcutBadge({
   )
 }
 
-function getComposerPrefetchTarget(
+function getComposerPrefetchRepoId(
   state: ReturnType<typeof useAppStore.getState>,
   initialRepoId?: string
-): { repoId: string; executionHostId: ExecutionHostId } | null {
-  return getComposerWorktreePrefetchTarget({
+): string | null {
+  return resolveComposerGitRepoId({
     eligibleRepos: getComposerEligibleRepos(state.repos),
     initialRepoId,
     activeRepoId: state.activeRepoId,
@@ -1283,13 +1282,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const prefetchCreateWorkspaceBaseForComposer = useCallback((initialRepoId?: string): void => {
     const state = useAppStore.getState()
-    const target = getComposerPrefetchTarget(state, initialRepoId)
-    if (!target) {
+    const repoIdForComposer = getComposerPrefetchRepoId(state, initialRepoId)
+    if (!repoIdForComposer) {
       return
     }
-    void state.prefetchWorktreeCreateBase(target.repoId, undefined, {
-      executionHostId: target.executionHostId
-    })
+    void state.prefetchWorktreeCreateBase(repoIdForComposer)
   }, [])
 
   const openCreateWorkspaceAction = useCallback(() => {

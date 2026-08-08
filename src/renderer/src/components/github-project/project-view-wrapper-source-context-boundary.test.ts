@@ -4,7 +4,6 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { GitHubProjectRow } from '../../../../shared/github-project-types'
-import { buildProjectWorkItem } from './ProjectViewWrapper'
 
 const COMPONENT_ROOT = __dirname
 
@@ -21,7 +20,8 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 }
 
 describe('ProjectViewWrapper GitHub source context boundary', () => {
-  it('builds project work items with a host-pinned repository identity', () => {
+  it('builds project work items with a host-pinned repository identity', async () => {
+    const { buildProjectWorkItem } = await import('./ProjectViewWrapper')
     const row: GitHubProjectRow = {
       id: 'PVTI_1',
       itemType: 'PULL_REQUEST',
@@ -65,18 +65,5 @@ describe('ProjectViewWrapper GitHub source context boundary', () => {
     expect(contextSection).toContain("provider: 'github'")
     expect(contextSection).toContain('repo: resolvedDialogRepo')
     expect(dialogSection).toContain('sourceContext={resolvedDialogSourceContext}')
-  })
-
-  it('passes the exact project repository host through both direct launch paths', () => {
-    const source = componentSource('ProjectViewWrapper.tsx')
-    const rowLaunch = sourceBetween(source, 'const handleStartWork', 'const handleEditAssignees')
-    const dialogLaunch = sourceBetween(
-      source,
-      'onUse={(item) => {',
-      'onClose={() => setDialogRepoItem(null)}'
-    )
-
-    expect(rowLaunch).toContain('repoExecutionHostId: getRepoExecutionHostId(resolution.repo)')
-    expect(dialogLaunch).toContain('repoExecutionHostId: current.workItem.repoExecutionHostId')
   })
 })

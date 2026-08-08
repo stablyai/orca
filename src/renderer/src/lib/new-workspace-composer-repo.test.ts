@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/types'
 import {
-  getComposerWorktreePrefetchTarget,
   getComposerEligibleRepos,
   resolveComposerActiveRepoId,
   resolveComposerGitRepoId,
@@ -49,20 +48,6 @@ describe('new-workspace-composer-repo', () => {
     const eligibleRepos = [makeRepo('folder', { kind: 'folder' }), makeRepo('git')]
 
     expect(resolveComposerGitRepoId({ eligibleRepos })).toBeNull()
-  })
-
-  it('preserves the focused repo host for create-base prefetch', () => {
-    const eligibleRepos = [
-      makeRepo('shared-repo'),
-      makeRepo('shared-repo', { connectionId: 'win-vm' })
-    ]
-
-    expect(
-      getComposerWorktreePrefetchTarget({
-        eligibleRepos,
-        focusedHostScope: 'ssh:win-vm'
-      })
-    ).toEqual({ repoId: 'shared-repo', executionHostId: 'ssh:win-vm' })
   })
 
   it('excludes repos without paths from composer defaults', () => {

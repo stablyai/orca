@@ -8,10 +8,9 @@ import type {
   RepoHookSettings,
   SetupDecision
 } from '../../../shared/types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
 
-// Why: preflight callers pass settings routed to the exact repository owner host
-// rather than inheriting the globally focused runtime.
+// Why: preflight routes by the repo's owner host, which `getSettingsForRepoRuntimeOwner`
+// hands back as a narrow runtime-scope pick rather than the full GlobalSettings.
 type PreflightSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 
 export async function resolveDirectPrStartPoint(
@@ -23,14 +22,12 @@ export async function resolveDirectPrStartPoint(
     headRefName?: string
     baseRefName?: string
     isCrossRepository?: boolean
-  } = {},
-  hostId?: ExecutionHostId
+  } = {}
 ): Promise<GitHubPrStartPoint> {
   return resolveGitHubPrStartPointForRepo({
     repoId,
     prNumber,
     settings,
-    executionHostId: hostId,
     headRefName: hints.headRefName ?? hints.branchName,
     baseRefName: hints.baseRefName,
     isCrossRepository: hints.isCrossRepository
@@ -40,14 +37,13 @@ export async function resolveDirectPrStartPoint(
 export async function resolveDirectSetupDecision(
   repoId: string,
   repo: { hookSettings?: RepoHookSettings },
-  settings: PreflightSettings,
-  hostId?: ExecutionHostId
+  settings: PreflightSettings
 ): Promise<{ kind: 'decided'; decision: SetupDecision } | { kind: 'needs-modal' }> {
   let yamlHooks: OrcaHooks | null = null
   try {
     // Why: route the hooks probe by the repo's owner host (passed in) so preflight
     // and the subsequent owner-routed createWorktree hit the same host.
-    const result = await checkRuntimeHooks(settings, repoId, hostId)
+    const result = await checkRuntimeHooks(settings, repoId)
     yamlHooks = (result.hooks as OrcaHooks | null) ?? null
   } catch {
     yamlHooks = null

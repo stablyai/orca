@@ -12,7 +12,7 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
-import type { Repo, TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { translate } from '@/i18n/i18n'
@@ -33,7 +33,6 @@ export type SourceControlFixSplitButtonProps = {
   groupId: string | null
   connectionId?: string | null
   repoId?: string | null
-  repo?: Repo | null
   launchPlatform?: NodeJS.Platform
   prompt: string | null
   isLaunching: boolean
@@ -71,7 +70,6 @@ export function SourceControlFixSplitButton({
   groupId,
   connectionId,
   repoId,
-  repo,
   launchPlatform,
   prompt,
   isLaunching,
@@ -157,7 +155,6 @@ export function SourceControlFixSplitButton({
           groupId={groupId}
           connectionId={connectionId}
           repoId={repoId}
-          repo={repo}
           promptDelivery="submit-after-ready"
           launchPlatform={launchPlatform}
           launchSource={launchSource}

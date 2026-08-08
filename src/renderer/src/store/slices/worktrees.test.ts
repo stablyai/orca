@@ -1064,19 +1064,6 @@ describe('fetchWorktrees', () => {
     await Promise.all([localStarted, sshStarted])
 
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(2)
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repoId: 'repo1',
-        executionHostId: 'local'
-      })
-    )
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repoId: 'repo1',
-        executionHostId: 'ssh:ssh-1',
-        expectedAuthority: TEST_SSH_AUTHORITY
-      })
-    )
 
     releaseLocal()
     releaseSsh()
@@ -2613,37 +2600,6 @@ describe('fetchWorktrees', () => {
         executionHostId: 'local'
       })
     )
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
-  })
-
-  it('does not fall back to local when the requested repo host is missing', async () => {
-    const store = createTestStore()
-    const localWorktree = makeWorktree({
-      id: 'same-repo::/local/wt',
-      repoId: 'same-repo',
-      path: '/local/wt'
-    })
-    store.setState({
-      repos: [
-        {
-          id: 'same-repo',
-          path: '/local/repo',
-          displayName: 'Local',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'local'
-        }
-      ],
-      worktreesByRepo: { 'same-repo': [localWorktree] }
-    } as Partial<AppState>)
-
-    const result = await store
-      .getState()
-      .fetchWorktrees('same-repo', { executionHostId: 'ssh:missing' })
-
-    expect(result).toBe(false)
-    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
   })
@@ -4544,58 +4500,14 @@ describe('createWorktree base status merge', () => {
 
   it('prefetches create base through desktop IPC on the local runtime target', async () => {
     const store = createTestStore()
-    store.setState({
-      repos: [
-        {
-          id: 'repo1',
-          path: '/local/repo1',
-          displayName: 'local',
-          badgeColor: '#000',
-          addedAt: 0
-        },
-        {
-          id: 'repo1',
-          path: '/remote/repo1',
-          displayName: 'ssh',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1'
-        }
-      ]
-    } as Partial<AppState>)
 
-    await store
-      .getState()
-      .prefetchWorktreeCreateBase('repo1', 'origin/main', { executionHostId: 'ssh:ssh-1' })
+    await store.getState().prefetchWorktreeCreateBase('repo1', 'origin/main')
 
     expect(mockApi.worktrees.prefetchCreateBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      baseBranch: 'origin/main',
-      executionHostId: 'ssh:ssh-1'
+      baseBranch: 'origin/main'
     })
     expect(runtimeEnvironmentTransportCall).not.toHaveBeenCalled()
-  })
-
-  it('does not prefetch locally when the requested repo host is missing', async () => {
-    const store = createTestStore()
-    store.setState({
-      repos: [
-        {
-          id: 'repo1',
-          path: '/local/repo1',
-          displayName: 'local',
-          badgeColor: '#000',
-          addedAt: 0
-        }
-      ]
-    } as Partial<AppState>)
-
-    await store
-      .getState()
-      .prefetchWorktreeCreateBase('repo1', 'origin/main', { executionHostId: 'ssh:missing' })
-
-    expect(mockApi.worktrees.prefetchCreateBase).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('prefetches create base through runtime RPC for remote runtime targets', async () => {
@@ -4706,7 +4618,7 @@ describe('createWorktree base status merge', () => {
       })
     )
 
-    const result = await store.getState().createWorktree('repo-remote', 'feature', 'origin/main')
+    await store.getState().createWorktree('repo-remote', 'feature', 'origin/main')
 
     expect(mockApi.worktrees.create).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-remote']?.[0]).toEqual({
@@ -4714,115 +4626,6 @@ describe('createWorktree base status merge', () => {
       hostId: 'runtime:env-1',
       runtimeOwnerEnvironmentId: 'env-1'
     })
-    expect(result.worktree).toEqual({
-      ...created,
-      hostId: 'runtime:env-1',
-      runtimeOwnerEnvironmentId: 'env-1'
-    })
-  })
-
-  it('stamps an explicitly requested runtime when duplicate repo IDs overlap', async () => {
-    const store = createTestStore()
-    const created = makeWorktree({
-      id: 'repo-duplicate::/remote/feature',
-      repoId: 'repo-duplicate',
-      path: '/remote/feature',
-      hostId: 'local'
-    })
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: null },
-      repos: [
-        {
-          id: 'repo-duplicate',
-          path: '/local/repo',
-          displayName: 'local',
-          badgeColor: '#000',
-          addedAt: 0
-        },
-        {
-          id: 'repo-duplicate',
-          path: '/remote/repo',
-          displayName: 'remote',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'runtime:env-1'
-        }
-      ]
-    } as Partial<AppState>)
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-remote-create',
-      ok: true,
-      result: { worktree: created },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-
-    const createWorktree = store.getState().createWorktree
-    const createArgs: Parameters<typeof createWorktree> = [
-      'repo-duplicate',
-      'feature',
-      'origin/main'
-    ]
-    createArgs[25] = { executionHostId: 'runtime:env-1' }
-    await createWorktree(...createArgs)
-
-    expect(store.getState().worktreesByRepo['repo-duplicate']?.[0]?.hostId).toBe('runtime:env-1')
-  })
-
-  it('keeps same-id worktrees from different execution hosts after creation', async () => {
-    const store = createTestStore()
-    const localWorktree = makeWorktree({
-      id: 'repo-duplicate::/shared/feature',
-      repoId: 'repo-duplicate',
-      path: '/shared/feature',
-      hostId: 'local'
-    })
-    const created = makeWorktree({
-      id: localWorktree.id,
-      repoId: 'repo-duplicate',
-      path: localWorktree.path,
-      hostId: 'local'
-    })
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: null } as never,
-      repos: [
-        {
-          id: 'repo-duplicate',
-          path: '/local/repo',
-          displayName: 'local',
-          badgeColor: '#000',
-          addedAt: 0
-        },
-        {
-          id: 'repo-duplicate',
-          path: '/remote/repo',
-          displayName: 'remote',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'runtime:env-1'
-        }
-      ],
-      worktreesByRepo: { 'repo-duplicate': [localWorktree] }
-    } as Partial<AppState>)
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-remote-create',
-      ok: true,
-      result: { worktree: created },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-
-    const createWorktree = store.getState().createWorktree
-    const createArgs: Parameters<typeof createWorktree> = [
-      'repo-duplicate',
-      'feature',
-      'origin/main'
-    ]
-    createArgs[25] = { executionHostId: 'runtime:env-1' }
-    await createWorktree(...createArgs)
-
-    expect(store.getState().worktreesByRepo['repo-duplicate']).toEqual([
-      localWorktree,
-      expect.objectContaining({ id: created.id, hostId: 'runtime:env-1' })
-    ])
   })
 
   it('passes the active folder workspace as parent for in-app worktree creates', async () => {
@@ -6722,8 +6525,7 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      prNumber: 2548,
-      executionHostId: 'local'
+      prNumber: 2548
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
@@ -6731,145 +6533,6 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
   })
-
-  it('routes a manually linked GitHub PR through the SSH worktree owner', async () => {
-    const store = createTestStore()
-    const pushTarget = { remoteName: 'fork', branchName: 'owner/ssh-pr' }
-    const wt = makeWorktree({
-      id: 'repo1::/remote/wt1',
-      repoId: 'repo1',
-      path: '/remote/wt1',
-      hostId: 'ssh:builder'
-    })
-    mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({
-      baseBranch: 'fork/owner/ssh-pr',
-      pushTarget
-    })
-    store.setState({
-      repos: [
-        {
-          id: 'repo1',
-          path: '/local/repo1',
-          displayName: 'Local Repo 1',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: LOCAL_EXECUTION_HOST_ID
-        },
-        {
-          id: 'repo1',
-          path: '/remote/repo1',
-          displayName: 'SSH Repo 1',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'ssh:builder'
-        }
-      ],
-      worktreesByRepo: { repo1: [wt] }
-    } as Partial<AppState>)
-
-    await store.getState().updateWorktreeMeta(wt.id, { linkedPR: 2548 })
-
-    expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
-      repoId: 'repo1',
-      prNumber: 2548,
-      executionHostId: 'ssh:builder'
-    })
-    expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
-  })
-
-  it.each([
-    ['GitHub PR', { linkedPR: 2548 }],
-    ['GitLab MR', { linkedGitLabMR: 42 }]
-  ] as const)(
-    'fails closed for an explicitly owned %s when duplicate repos share its host',
-    async (_provider, linkedReview) => {
-      const store = createTestStore()
-      const wt = makeWorktree({
-        id: 'repo1::/remote/wt1',
-        repoId: 'repo1',
-        path: '/remote/wt1',
-        hostId: 'ssh:builder',
-        ...linkedReview
-      })
-      store.setState({
-        repos: [
-          {
-            id: 'repo1',
-            path: '/remote/first',
-            displayName: 'SSH Repo 1',
-            badgeColor: '#000',
-            addedAt: 0,
-            executionHostId: 'ssh:builder'
-          },
-          {
-            id: 'repo1',
-            path: '/remote/second',
-            displayName: 'SSH Repo 1 duplicate',
-            badgeColor: '#000',
-            addedAt: 0,
-            executionHostId: 'ssh:builder'
-          }
-        ],
-        worktreesByRepo: { repo1: [wt] }
-      } as Partial<AppState>)
-
-      await store.getState().ensureHostedReviewPushTarget(wt.id)
-
-      expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
-      expect(mockApi.worktrees.resolveMrBase).not.toHaveBeenCalled()
-      expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
-    }
-  )
-
-  it.each([
-    ['GitHub PR', { linkedPR: 2548 }, { linkedPR: null }],
-    ['GitLab MR', { linkedGitLabMR: 42 }, { linkedGitLabMR: null }]
-  ] as const)(
-    'clears an explicitly owned %s push target when duplicate repos share its host',
-    async (_provider, linkedReview, unlinkUpdate) => {
-      const store = createTestStore()
-      const pushTarget = { remoteName: 'fork', branchName: 'owner/old-review' }
-      const wt = makeWorktree({
-        id: 'repo1::/remote/wt1',
-        repoId: 'repo1',
-        path: '/remote/wt1',
-        hostId: 'ssh:builder',
-        pushTarget,
-        ...linkedReview
-      })
-      store.setState({
-        repos: [
-          {
-            id: 'repo1',
-            path: '/remote/first',
-            displayName: 'SSH Repo 1',
-            badgeColor: '#000',
-            addedAt: 0,
-            executionHostId: 'ssh:builder'
-          },
-          {
-            id: 'repo1',
-            path: '/remote/second',
-            displayName: 'SSH Repo 1 duplicate',
-            badgeColor: '#000',
-            addedAt: 0,
-            executionHostId: 'ssh:builder'
-          }
-        ],
-        worktreesByRepo: { repo1: [wt] }
-      } as Partial<AppState>)
-
-      await store
-        .getState()
-        .updateWorktreeMeta(wt.id, unlinkUpdate, { suppressHostedReviewRefresh: true })
-
-      expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
-        worktreeId: wt.id,
-        updates: { ...unlinkUpdate, pushTarget: undefined }
-      })
-      expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
-    }
-  )
 
   it('clears a stale push target when unlinking the GitHub PR that supplied it', async () => {
     const store = createTestStore()
@@ -6895,55 +6558,6 @@ describe('worktree remote runtime mutations', () => {
       updates: { linkedPR: null, pushTarget: undefined }
     })
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
-  })
-
-  it('refreshes an unlinked review against the SSH owner when repo ids overlap', async () => {
-    const store = createTestStore()
-    const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
-    const wt = makeWorktree({
-      id: 'repo1::/remote/wt1',
-      repoId: 'repo1',
-      path: '/remote/wt1',
-      branch: 'refs/heads/review-branch',
-      hostId: 'ssh:builder',
-      linkedPR: 2548,
-      pushTarget: { remoteName: 'fork', branchName: 'owner/old-pr' }
-    })
-    store.setState({
-      repos: [
-        {
-          id: 'repo1',
-          path: '/local/repo1',
-          displayName: 'Local Repo 1',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: LOCAL_EXECUTION_HOST_ID
-        },
-        {
-          id: 'repo1',
-          path: '/remote/repo1',
-          displayName: 'SSH Repo 1',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'ssh:builder'
-        }
-      ],
-      worktreesByRepo: { repo1: [wt] },
-      fetchHostedReviewForBranch
-    } as Partial<AppState>)
-
-    await store.getState().updateWorktreeMeta(wt.id, { linkedPR: null })
-
-    expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/remote/repo1', 'review-branch', {
-      repoId: 'repo1',
-      executionHostId: 'ssh:builder',
-      linkedGitHubPR: null,
-      linkedGitLabMR: null,
-      linkedBitbucketPR: null,
-      linkedAzureDevOpsPR: null,
-      linkedGiteaPR: null,
-      force: true
-    })
   })
 
   it('skips duplicate hosted-review work when the unlinking caller owns the refresh', async () => {
@@ -7014,7 +6628,6 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'review-branch', {
       repoId: 'repo1',
-      executionHostId: 'local',
       linkedGitHubPR: null,
       linkedGitLabMR: 42,
       linkedBitbucketPR: null,
@@ -7033,8 +6646,7 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolveMrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      mrIid: 42,
-      executionHostId: 'local'
+      mrIid: 42
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
@@ -7209,8 +6821,7 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      prNumber: 2548,
-      executionHostId: 'local'
+      prNumber: 2548
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
@@ -7246,8 +6857,7 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      prNumber: 5571,
-      executionHostId: 'local'
+      prNumber: 5571
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
@@ -7399,8 +7009,7 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo-ssh',
-      prNumber: 5571,
-      executionHostId: 'ssh:ssh-1'
+      prNumber: 5571
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
@@ -7456,59 +7065,11 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolveMrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      mrIid: 42,
-      executionHostId: 'local'
+      mrIid: 42
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
       updates: { pushTarget }
-    })
-    expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
-  })
-
-  it('hydrates a linked GitLab MR through the exact SSH repository owner', async () => {
-    const store = createTestStore()
-    const pushTarget = { remoteName: 'upstream', branchName: 'feature/ssh-mr' }
-    const wt = makeWorktree({
-      id: 'repo1::/remote/wt1',
-      repoId: 'repo1',
-      path: '/remote/wt1',
-      hostId: 'ssh:builder',
-      linkedGitLabMR: 42
-    })
-    mockApi.worktrees.resolveMrBase.mockResolvedValueOnce({
-      baseBranch: 'upstream/feature/ssh-mr',
-      pushTarget
-    })
-    store.setState({
-      repos: [
-        {
-          id: 'repo1',
-          path: '/local/repo1',
-          displayName: 'Local Repo 1',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'local'
-        },
-        {
-          id: 'repo1',
-          path: '/remote/repo1',
-          displayName: 'SSH Repo 1',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'builder',
-          executionHostId: 'ssh:builder'
-        }
-      ],
-      worktreesByRepo: { repo1: [wt] }
-    } as Partial<AppState>)
-
-    await store.getState().ensureHostedReviewPushTarget(wt.id)
-
-    expect(mockApi.worktrees.resolveMrBase).toHaveBeenCalledWith({
-      repoId: 'repo1',
-      mrIid: 42,
-      executionHostId: 'ssh:builder'
     })
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
   })
@@ -7548,7 +7109,6 @@ describe('worktree remote runtime mutations', () => {
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
-      hostId: 'ssh:ssh-1',
       path: '/worktrees/orca',
       branch: 'refs/heads/feature/pr-link',
       pushTarget: {
@@ -7559,16 +7119,7 @@ describe('worktree remote runtime mutations', () => {
     })
     store.setState({
       repos: [
-        { id: 'repo1', path: '/repos/local', displayName: 'local', badgeColor: '#000', addedAt: 0 },
-        {
-          id: 'repo1',
-          path: '/repos/orca',
-          displayName: 'ssh',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1',
-          executionHostId: 'ssh:ssh-1'
-        }
+        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: { repo1: [wt] },
       fetchPRForBranch
@@ -7586,7 +7137,6 @@ describe('worktree remote runtime mutations', () => {
     expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
       force: true,
       repoId: 'repo1',
-      executionHostId: 'ssh:ssh-1',
       worktreeId: wt.id,
       linkedPRNumber: null,
       fallbackPRNumber: null,
@@ -7633,7 +7183,6 @@ describe('worktree remote runtime mutations', () => {
     expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
       force: true,
       repoId: 'repo1',
-      executionHostId: 'local',
       worktreeId: wt.id,
       linkedPRNumber: null,
       fallbackPRNumber: null,
@@ -7738,8 +7287,7 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
-      prNumber: 42,
-      executionHostId: 'local'
+      prNumber: 42
     })
 
     store.setState({
@@ -7825,7 +7373,6 @@ describe('worktree remote runtime mutations', () => {
     expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
       force: true,
       repoId: 'repo1',
-      executionHostId: 'local',
       worktreeId: wt.id,
       linkedPRNumber: null,
       fallbackPRNumber: null,
@@ -8225,7 +7772,6 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().prCache[legacyPathPRCacheKey]).toBeUndefined()
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'pr-branch', {
       repoId: 'repo1',
-      executionHostId: 'local',
       linkedGitHubPR: null,
       linkedGitLabMR: null,
       linkedBitbucketPR: null,
@@ -8258,7 +7804,6 @@ describe('worktree remote runtime mutations', () => {
 
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'review-branch', {
       repoId: 'repo1',
-      executionHostId: 'local',
       linkedGitHubPR: null,
       linkedGitLabMR: 789,
       linkedBitbucketPR: null,

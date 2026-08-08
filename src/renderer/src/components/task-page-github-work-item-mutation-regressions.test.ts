@@ -349,16 +349,6 @@ describe('TaskPage GitHub mutation regressions', () => {
     expect(pages[1]?.[0].state).toBe('closed')
   })
 
-  it('patches only the matching execution host when repository and item ids collide', () => {
-    const pages = patchTaskPageGitHubWorkItemPages(
-      [[item({ repoExecutionHostId: 'local' }), item({ repoExecutionHostId: 'ssh:ssh-1' })]],
-      { id: 'issue:1', repoId: 'repo-1', repoExecutionHostId: 'ssh:ssh-1' },
-      { state: 'closed' }
-    )
-
-    expect(pages[0]?.map((entry) => entry.state)).toEqual(['open', 'closed'])
-  })
-
   it('does not claim authority over untouched search fields', () => {
     const patches: Partial<GitHubWorkItem>[] = []
     const patchWorkItem = (_id: string, patch: Partial<GitHubWorkItem>): void => {

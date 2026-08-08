@@ -19,17 +19,16 @@ import {
   setLastConfirmedClientValue,
   markTaskPageGitHubFamiliesDirty,
   isTaskPageGitHubMutationQueryKeyCurrent,
+  taskPageGitHubItemKey,
   type TaskPageGitHubMutationKey
 } from './task-page-github-work-item-mutation-registry'
 import type { TaskPageGitHubPatchWorkItem } from './task-page-github-work-item-mutation-types'
 function applyServerEntityIfPresent(
   key: TaskPageGitHubMutationKey,
-  itemKey: string,
   opts: {
     serverEntity?: Partial<GitHubWorkItem>
     patchWorkItem?: TaskPageGitHubPatchWorkItem
     sourceContext?: TaskSourceContext | null
-    repoExecutionHostId?: GitHubWorkItem['repoExecutionHostId']
   }
 ): void {
   if (!opts.serverEntity || !opts.patchWorkItem) {
@@ -43,8 +42,7 @@ function applyServerEntityIfPresent(
       key.repoId,
       key.itemId,
       'state',
-      opts.serverEntity.state,
-      itemKey
+      opts.serverEntity.state
     )
   }
   if (opts.serverEntity.autoMergeEnabled !== undefined) {
@@ -54,31 +52,22 @@ function applyServerEntityIfPresent(
       key.repoId,
       key.itemId,
       'autoMerge',
-      opts.serverEntity.autoMergeEnabled,
-      itemKey
+      opts.serverEntity.autoMergeEnabled
     )
   }
   if (opts.serverEntity.assignees) {
     const users = freezeTaskPageGitHubUsers(opts.serverEntity.assignees)
-    setConfirmedListSnapshot(key.sourceScope, key.repoId, key.itemId, 'assignees', users, itemKey)
+    setConfirmedListSnapshot(key.sourceScope, key.repoId, key.itemId, 'assignees', users)
     entityPatch.assignees = users
   }
   if (opts.serverEntity.reviewRequests) {
     const users = freezeTaskPageGitHubUsers(opts.serverEntity.reviewRequests)
-    setConfirmedListSnapshot(
-      key.sourceScope,
-      key.repoId,
-      key.itemId,
-      'reviewRequests',
-      users,
-      itemKey
-    )
+    setConfirmedListSnapshot(key.sourceScope, key.repoId, key.itemId, 'reviewRequests', users)
     entityPatch.reviewRequests = users
   }
   if (Object.keys(entityPatch).length > 0) {
     opts.patchWorkItem(key.itemId, entityPatch, key.repoId, {
-      sourceContext: opts.sourceContext,
-      repoExecutionHostId: opts.repoExecutionHostId
+      sourceContext: opts.sourceContext
     })
   }
 }
@@ -113,24 +102,10 @@ export function confirmTaskPageGitHubWorkItemMutation(
     // K10: apply confirmed op into snapshot immediately. List authority lives in
     // confirmedSnapshots; lastConfirmedClientValue is scalar-only (state/autoMerge).
     const applied = applyTaskPageGitHubListOps(snapshot, [listOp])
-    setConfirmedListSnapshot(
-      key.sourceScope,
-      key.repoId,
-      key.itemId,
-      listOp.family,
-      applied,
-      pending.itemKey
-    )
+    setConfirmedListSnapshot(key.sourceScope, key.repoId, key.itemId, listOp.family, applied)
   } else {
     if (next.state !== undefined) {
-      setLastConfirmedClientValue(
-        key.sourceScope,
-        key.repoId,
-        key.itemId,
-        'state',
-        next.state,
-        pending.itemKey
-      )
+      setLastConfirmedClientValue(key.sourceScope, key.repoId, key.itemId, 'state', next.state)
     }
     if (next.autoMergeEnabled !== undefined) {
       setLastConfirmedClientValue(
@@ -138,32 +113,20 @@ export function confirmTaskPageGitHubWorkItemMutation(
         key.repoId,
         key.itemId,
         'autoMerge',
-        next.autoMergeEnabled,
-        pending.itemKey
+        next.autoMergeEnabled
       )
     }
   }
   deletePendingTaskPageGitHubOp(key)
-  applyServerEntityIfPresent(key, pending.itemKey, {
-    ...opts,
-    repoExecutionHostId: opts.item.repoExecutionHostId
-  })
-  const remaining = listPendingTaskPageGitHubOpsForItem(
-    key.repoId,
-    key.itemId,
-    key.sourceScope,
-    pending.itemKey
-  )
+  applyServerEntityIfPresent(key, opts)
+  const remaining = listPendingTaskPageGitHubOpsForItem(key.repoId, key.itemId, key.sourceScope)
   const merged = getRegistryMergedTaskPageGitHubWorkItem(opts.item, key.sourceScope)
   if (opts.patchWorkItem && remaining.some((op) => op.listOp)) {
     opts.patchWorkItem(
       key.itemId,
       { assignees: merged.assignees, reviewRequests: merged.reviewRequests },
       key.repoId,
-      {
-        sourceContext: opts.sourceContext,
-        repoExecutionHostId: opts.item.repoExecutionHostId
-      }
+      { sourceContext: opts.sourceContext }
     )
   }
   if (isTaskPageGitHubMutationQueryKeyCurrent(opts.queryKey)) {
@@ -177,9 +140,10 @@ export function confirmTaskPageGitHubWorkItemMutation(
       updateSticky: true
     })
   }
+  const itemKey = taskPageGitHubItemKey(key.repoId, key.itemId)
   markTaskPageGitHubFamiliesDirty(
     getTaskPageGitHubMutationQueryKey() ?? opts.queryKey,
-    pending.itemKey,
+    itemKey,
     familiesFromPendingOp(pending)
   )
   notifyTaskPageGitHubMutationRegistry()
@@ -209,10 +173,7 @@ export function rollbackTaskPageGitHubWorkItemMutation(args: {
         ? { assignees: merged.assignees }
         : { reviewRequests: merged.reviewRequests },
       args.key.repoId,
-      {
-        sourceContext: args.sourceContext,
-        repoExecutionHostId: args.item.repoExecutionHostId
-      }
+      { sourceContext: args.sourceContext }
     )
   } else {
     const recomposed = getRegistryMergedTaskPageGitHubWorkItem(
@@ -226,10 +187,7 @@ export function rollbackTaskPageGitHubWorkItemMutation(args: {
         autoMergeEnabled: recomposed.autoMergeEnabled
       },
       args.key.repoId,
-      {
-        sourceContext: args.sourceContext,
-        repoExecutionHostId: args.item.repoExecutionHostId
-      }
+      { sourceContext: args.sourceContext }
     )
   }
   const after = getRegistryMergedTaskPageGitHubWorkItem(args.item, args.key.sourceScope)

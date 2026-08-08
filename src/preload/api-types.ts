@@ -557,14 +557,12 @@ import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybi
 type GitLabRepoSelectorArgs = {
   repoPath: string
   repoId?: string | null
-  executionHostId?: ExecutionHostId
   sourceContext?: TaskSourceContext | null
 }
 
 type GitHubRepoSelectorArgs = {
   repoPath: string
   repoId?: string | null
-  executionHostId?: ExecutionHostId
   sourceContext?: TaskSourceContext | null
 }
 
@@ -1437,14 +1435,9 @@ export type PreloadApi = {
     onCreateProgress: (
       callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
     ) => () => void
-    prefetchCreateBase: (args: {
-      repoId: string
-      executionHostId?: ExecutionHostId
-      baseBranch?: string
-    }) => Promise<void>
+    prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
     resolvePrBase: (args: {
       repoId: string
-      executionHostId?: ExecutionHostId
       prNumber: number
       headRefName?: string
       baseRefName?: string
@@ -1455,7 +1448,6 @@ export type PreloadApi = {
      *  refs/merge-requests/<iid>/head and returns the SHA. */
     resolveMrBase: (args: {
       repoId: string
-      executionHostId?: ExecutionHostId
       mrIid: number
       sourceBranch?: string
       targetBranch?: string
@@ -1766,7 +1758,6 @@ export type PreloadApi = {
     prForBranch: (args: {
       repoPath: string
       repoId?: string
-      executionHostId?: ExecutionHostId
       branch: string
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
@@ -1787,7 +1778,6 @@ export type PreloadApi = {
     issue: (args: {
       repoPath: string
       repoId?: string
-      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       number: number
     }) => Promise<IssueInfo | null>
@@ -1844,15 +1834,15 @@ export type PreloadApi = {
       labels?: string[]
       assignees?: string[]
     }) => Promise<GitHubCreateIssueResult>
-    countWorkItems: (args: GitHubRepoSelectorArgs & { query?: string }) => Promise<number>
-    listWorkItems: (
-      args: GitHubRepoSelectorArgs & {
-        limit?: number
-        query?: string
-        page?: number
-        noCache?: boolean
-      }
-    ) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
+    countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }) => Promise<number>
+    listWorkItems: (args: {
+      repoPath: string
+      repoId?: string
+      limit?: number
+      query?: string
+      page?: number
+      noCache?: boolean
+    }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
     prChecks: (
       args: GitHubRepoSelectorArgs & {
         prNumber: number
@@ -1864,7 +1854,6 @@ export type PreloadApi = {
     prCheckDetails: (args: {
       repoPath: string
       repoId?: string
-      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       checkRunId?: number
       workflowRunId?: number
@@ -1883,7 +1872,6 @@ export type PreloadApi = {
     prComments: (args: {
       repoPath: string
       repoId?: string
-      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       prNumber: number
       prRepo?: GitHubOwnerRepo | null
@@ -1892,7 +1880,6 @@ export type PreloadApi = {
     resolveReviewThread: (args: {
       repoPath: string
       repoId?: string
-      executionHostId?: ExecutionHostId
       sourceContext?: TaskSourceContext | null
       threadId: string
       resolve: boolean

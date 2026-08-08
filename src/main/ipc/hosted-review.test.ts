@@ -307,142 +307,6 @@ describe('registerHostedReviewHandlers', () => {
     )
   })
 
-  it('authorizes duplicate repo ids with the requested execution host', async () => {
-    const localRepo = {
-      id: 'shared-repo',
-      path: '/local/repo',
-      displayName: 'local',
-      badgeColor: '#000',
-      addedAt: 0,
-      executionHostId: 'local' as const
-    }
-    const sshRepo = {
-      id: 'shared-repo',
-      path: '/ssh/repo',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'ssh-1',
-      executionHostId: 'ssh:ssh-1' as const
-    }
-    store.getRepos.mockReturnValue([localRepo, sshRepo])
-    getHostedReviewForBranchMock.mockResolvedValueOnce(null)
-
-    registerHostedReviewHandlers(store as never, stats as never)
-
-    await handlers['hostedReview:forBranch'](null, {
-      repoPath: sshRepo.path,
-      repoId: sshRepo.id,
-      executionHostId: sshRepo.executionHostId,
-      branch: 'feature/ssh'
-    })
-
-    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repoPath: sshRepo.path,
-        connectionId: sshRepo.connectionId,
-        branch: 'feature/ssh'
-      })
-    )
-  })
-
-  it('authorizes path-only requests with the requested execution host', async () => {
-    const localRepo = {
-      id: 'local-repo',
-      path: '/workspace/shared',
-      displayName: 'local',
-      badgeColor: '#000',
-      addedAt: 0,
-      executionHostId: 'local' as const
-    }
-    const sshRepo = {
-      id: 'ssh-repo',
-      path: '/workspace/shared',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'ssh-1',
-      executionHostId: 'ssh:ssh-1' as const
-    }
-    store.getRepos.mockReturnValue([localRepo, sshRepo])
-    getHostedReviewForBranchMock.mockResolvedValueOnce(null)
-    registerHostedReviewHandlers(store as never, stats as never)
-
-    await handlers['hostedReview:forBranch'](null, {
-      repoPath: sshRepo.path,
-      executionHostId: sshRepo.executionHostId,
-      branch: 'feature/path-only'
-    })
-
-    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: sshRepo.connectionId, branch: 'feature/path-only' })
-    )
-  })
-
-  it('authorizes duplicate repo ids for eligibility and creation with the requested host', async () => {
-    const localRepo = {
-      id: 'shared-repo',
-      path: '/local/repo',
-      displayName: 'local',
-      badgeColor: '#000',
-      addedAt: 0,
-      executionHostId: 'local' as const
-    }
-    const sshRepo = {
-      id: 'shared-repo',
-      path: '/ssh/repo',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'ssh-1',
-      executionHostId: 'ssh:ssh-1' as const
-    }
-    store.getRepos.mockReturnValue([localRepo, sshRepo])
-    listRepoWorktreesMock.mockResolvedValue([{ path: worktreePath }])
-    getHostedReviewCreationEligibilityMock.mockResolvedValueOnce({
-      provider: 'github',
-      review: null,
-      canCreate: true,
-      blockedReason: null,
-      nextAction: null
-    })
-    createHostedReviewMock.mockResolvedValueOnce({
-      ok: true,
-      number: 42,
-      url: 'https://github.com/acme/orca/pull/42'
-    })
-
-    registerHostedReviewHandlers(store as never, stats as never)
-
-    await handlers['hostedReview:getCreationEligibility'](null, {
-      repoPath: sshRepo.path,
-      repoId: sshRepo.id,
-      executionHostId: sshRepo.executionHostId,
-      worktreePath,
-      branch: 'feature/ssh',
-      base: 'main'
-    })
-    await handlers['hostedReview:create'](null, {
-      repoPath: sshRepo.path,
-      repoId: sshRepo.id,
-      executionHostId: sshRepo.executionHostId,
-      worktreePath,
-      provider: 'github',
-      base: 'main',
-      head: 'feature/ssh',
-      title: 'SSH PR'
-    })
-
-    expect(getHostedReviewCreationEligibilityMock).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: worktreePath, connectionId: sshRepo.connectionId })
-    )
-    expect(createHostedReviewMock).toHaveBeenCalledWith(
-      worktreePath,
-      expect.objectContaining({ head: 'feature/ssh', title: 'SSH PR' }),
-      sshRepo.connectionId
-    )
-  })
-
   it('passes SSH connectionId through create eligibility instead of blocking the worktree', async () => {
     getHostedReviewCreationEligibilityMock.mockResolvedValueOnce({
       provider: 'github',
@@ -521,7 +385,9 @@ describe('registerHostedReviewHandlers', () => {
   })
 
   it('rejects creation when repoId and repoPath point at different registered repos', async () => {
-    store.getRepos.mockReturnValue([{ ...repo, path: '/other/repo' }])
+    store.getRepo.mockImplementation((repoId: string) =>
+      repoId === repo.id ? { ...repo, path: '/other/repo' } : null
+    )
 
     registerHostedReviewHandlers(store as never, stats as never)
 

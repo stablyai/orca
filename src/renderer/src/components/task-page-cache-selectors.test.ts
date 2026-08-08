@@ -92,7 +92,6 @@ describe('task page cache selectors', () => {
     expect(buildTaskPageRepoSourceState([repo], secondSelection)).toEqual([
       {
         repoId: 'repo-1',
-        executionHostId: 'local',
         repoPath: '/repo/one',
         sourceKey: 'repo-1::local',
         sources: null,
@@ -206,51 +205,6 @@ describe('task page cache selectors', () => {
     expect(findTaskPageDialogWorkItem(cache, { id: 'issue-1', repoId: 'repo-2' })).toBeNull()
   })
 
-  it('selects the dialog work item from the requested execution host', () => {
-    const runtimeItem = {
-      ...workItem('issue-1', 'repo-1'),
-      repoExecutionHostId: 'runtime:env-1' as const
-    }
-    const localItem = {
-      ...workItem('issue-1', 'repo-1'),
-      repoExecutionHostId: 'local' as const
-    }
-    const cache = {
-      local: entry<GitHubWorkItem[]>([localItem]),
-      runtime: entry<GitHubWorkItem[]>([runtimeItem])
-    }
-
-    expect(
-      findTaskPageDialogWorkItem(cache, {
-        id: runtimeItem.id,
-        repoId: runtimeItem.repoId,
-        repoExecutionHostId: runtimeItem.repoExecutionHostId
-      })
-    ).toBe(runtimeItem)
-  })
-
-  it('normalizes a hostless dialog identity to the local work item', () => {
-    const runtimeItem = {
-      ...workItem('issue-1', 'repo-1'),
-      repoExecutionHostId: 'runtime:env-1' as const
-    }
-    const localItem = {
-      ...workItem('issue-1', 'repo-1'),
-      repoExecutionHostId: 'local' as const
-    }
-    const cache = {
-      runtime: entry<GitHubWorkItem[]>([runtimeItem]),
-      local: entry<GitHubWorkItem[]>([localItem])
-    }
-
-    expect(
-      findTaskPageDialogWorkItem(cache, {
-        id: localItem.id,
-        repoId: localItem.repoId
-      })
-    ).toBe(localItem)
-  })
-
   it('reconciles paged table rows with patched work-item cache entries', () => {
     const stale = {
       ...workItem('pr-1', 'repo-1'),
@@ -258,7 +212,6 @@ describe('task page cache selectors', () => {
     }
     const patched = {
       ...stale,
-      repoExecutionHostId: 'local' as const,
       reviewRequests: [{ login: 'AmethystLiang', name: null, avatarUrl: '' }]
     }
     const otherRepoSameId = workItem('pr-1', 'repo-2')
@@ -270,22 +223,6 @@ describe('task page cache selectors', () => {
 
     expect(nextPages[0]?.[0]).toBe(patched)
     expect(nextPages[0]?.[1]).toBe(otherRepoSameId)
-  })
-
-  it('does not reconcile a same-id row from another execution host', () => {
-    const local = { ...workItem('pr-1', 'repo-1'), repoExecutionHostId: 'local' as const }
-    const runtime = {
-      ...local,
-      repoExecutionHostId: 'runtime:env-1' as const,
-      title: 'runtime patch'
-    }
-
-    const nextPages = reconcileTaskPagePagesWithWorkItemsCache(
-      [[local]],
-      [entry<GitHubWorkItem[]>([runtime])]
-    )
-
-    expect(nextPages[0]?.[0]).toBe(local)
   })
 
   it('merges landing refresh status changes without reordering GitHub rows', () => {

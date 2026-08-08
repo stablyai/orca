@@ -35,9 +35,7 @@ import {
   isSyncPushStageError,
   resolveRemoteOperationErrorMessage
 } from '@/lib/source-control-remote-error'
-import { useActiveWorktree, useWorktreeMap } from '@/store/selectors'
-import { findRepoForWorktreeOwner } from '@/store/slices/repo-host-identity'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { detectLanguage } from '@/lib/language-detect'
@@ -211,7 +209,6 @@ import type {
   GitPushTarget,
   GitStatusEntry,
   GitUpstreamStatus,
-  Repo,
   SourceControlViewMode,
   TuiAgent
 } from '../../../../shared/types'
@@ -358,7 +355,6 @@ type SourceControlOperationTarget = RuntimeGitContext & {
 type HostedReviewCreatedContext = {
   repoPath: string
   repoId: string
-  executionHostId: ExecutionHostId
   branch: string
   worktreeId: string | null
   openChecks: boolean
@@ -814,16 +810,11 @@ function SourceControlInner(): React.JSX.Element {
   )
   const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const activeRepo = useAppStore((s) => {
-    if (!activeWorktree) {
-      return null
-    }
-    return findRepoForWorktreeOwner(s.repos, activeWorktree)
-  })
+  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const activeRepoId = activeRepo?.id ?? null
   const activeRepoPath = activeRepo?.path ?? null
   const activeRepoConnectionId = activeRepo?.connectionId ?? null
-  const activeRepoExecutionHostId = activeRepo ? getRepoExecutionHostId(activeRepo) : null
+  const activeRepoExecutionHostId = activeRepo?.executionHostId ?? null
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const entries = useAppStore((s) =>
@@ -1751,7 +1742,6 @@ function SourceControlInner(): React.JSX.Element {
     // Why: fetch review immediately on branch change; carry a known PR number because branch lookup is lossy for fork/deleted-head PRs.
     void fetchHostedReviewForBranch(activeRepo.path, branchName, {
       repoId: activeRepo.id,
-      executionHostId: getRepoExecutionHostId(activeRepo),
       linkedGitHubPR,
       fallbackGitHubPR: fallbackGitHubPRNumber,
       linkedGitLabMR,
@@ -2749,12 +2739,10 @@ function SourceControlInner(): React.JSX.Element {
     async (result: CreatedHostedReview, context?: HostedReviewCreatedContext): Promise<void> => {
       const repoPath = context?.repoPath ?? activeRepo?.path
       const repoId = context?.repoId ?? activeRepo?.id
-      const executionHostId =
-        context?.executionHostId ?? (activeRepo ? getRepoExecutionHostId(activeRepo) : undefined)
       const branch = context?.branch ?? branchName
       const worktreeId = context?.worktreeId ?? activeWorktreeId ?? null
       const openChecks = context?.openChecks ?? true
-      if (!repoPath || !repoId || !executionHostId || !branch) {
+      if (!repoPath || !repoId || !branch) {
         return
       }
       const copy = localizedHostedReviewCopy(
@@ -2790,7 +2778,6 @@ function SourceControlInner(): React.JSX.Element {
           await fetchHostedReviewForBranch(repoPath, branch, {
             force: true,
             repoId,
-            executionHostId,
             ...linkedReviewNumbers
           })
           return
@@ -2799,7 +2786,6 @@ function SourceControlInner(): React.JSX.Element {
           await fetchHostedReviewForBranch(repoPath, branch, {
             force: true,
             repoId,
-            executionHostId,
             ...linkedReviewNumbers
           })
           return
@@ -2808,13 +2794,11 @@ function SourceControlInner(): React.JSX.Element {
           fetchHostedReviewForBranch(repoPath, branch, {
             force: true,
             repoId,
-            executionHostId,
             ...linkedReviewNumbers
           }),
           fetchPRForBranch(repoPath, branch, {
             force: true,
             repoId,
-            executionHostId,
             worktreeId: worktreeId ?? undefined,
             linkedPRNumber: result.number
           })
@@ -3204,7 +3188,6 @@ function SourceControlInner(): React.JSX.Element {
     void getHostedReviewCreationEligibility({
       repoPath: activeRepoPath,
       repoId: activeRepoId,
-      executionHostId: activeRepoExecutionHostId ?? undefined,
       ...(worktreePath ? { worktreePath } : {}),
       branch: branchName,
       base: effectiveBaseRef ?? null,
@@ -3354,7 +3337,6 @@ function SourceControlInner(): React.JSX.Element {
     try {
       const result = await createHostedReview(activeRepo.path, {
         repoId: activeRepo.id,
-        executionHostId: getRepoExecutionHostId(activeRepo),
         provider: hostedReviewCreateProvider,
         base,
         head: normalizeHostedReviewHeadRef(branchName),
@@ -3588,7 +3570,6 @@ function SourceControlInner(): React.JSX.Element {
       try {
         const result = await createHostedReview(activeRepo.path, {
           repoId: activeRepo.id,
-          executionHostId: getRepoExecutionHostId(activeRepo),
           provider: eligibility.provider,
           base: fields.base,
           head: normalizeHostedReviewHeadRef(token.branch),
@@ -3610,7 +3591,6 @@ function SourceControlInner(): React.JSX.Element {
             {
               repoPath: activeRepo.path,
               repoId: activeRepo.id,
-              executionHostId: getRepoExecutionHostId(activeRepo),
               branch: token.branch,
               worktreeId: token.worktreeId,
               openChecks
@@ -3634,7 +3614,6 @@ function SourceControlInner(): React.JSX.Element {
             {
               repoPath: activeRepo.path,
               repoId: activeRepo.id,
-              executionHostId: getRepoExecutionHostId(activeRepo),
               branch: token.branch,
               worktreeId: token.worktreeId,
               openChecks
@@ -3728,7 +3707,6 @@ function SourceControlInner(): React.JSX.Element {
         result = await getHostedReviewCreationEligibility({
           repoPath: activeRepo.path,
           repoId: activeRepo.id,
-          executionHostId: getRepoExecutionHostId(activeRepo),
           worktreePath: token.worktreePath,
           branch: token.branch,
           base: token.baseRef ?? null,
@@ -5877,7 +5855,6 @@ function SourceControlInner(): React.JSX.Element {
                 worktreeId={activeWorktreeId}
                 connectionId={activeConnectionId}
                 repoId={activeRepo?.id ?? null}
-                repo={activeRepo}
                 launchPlatform={activeSourceControlLaunchPlatform}
                 commitMessage={commitMessage}
                 commitError={commitError}
@@ -6416,7 +6393,6 @@ function SourceControlInner(): React.JSX.Element {
         groupId={activeGroupId ?? activeWorktreeId}
         connectionId={activeConnectionId}
         repoId={activeRepo?.id ?? null}
-        repo={activeRepo}
         promptDelivery="submit-after-ready"
         launchPlatform={activeSourceControlLaunchPlatform}
         launchSource="conflict_resolution"
@@ -6508,7 +6484,6 @@ type CommitAreaProps = {
   groupId: string | null
   connectionId?: string | null
   repoId?: string | null
-  repo?: Repo | null
   launchPlatform?: NodeJS.Platform
   commitMessage: string
   commitError: string | null
@@ -6555,7 +6530,6 @@ export function CommitArea({
   groupId,
   connectionId,
   repoId,
-  repo,
   launchPlatform,
   commitMessage,
   commitError,
@@ -6899,7 +6873,6 @@ export function CommitArea({
           groupId={groupId}
           connectionId={connectionId}
           repoId={repoId}
-          repo={repo}
           launchPlatform={launchPlatform}
           sourceControlAiActionsVisible={sourceControlAiActionsVisible}
           isLaunching={isFixingCommitFailureWithAI}
@@ -6930,7 +6903,6 @@ export function CommitArea({
           groupId={groupId}
           connectionId={connectionId}
           repoId={repoId}
-          repo={repo}
           launchPlatform={launchPlatform}
           sourceControlAiActionsVisible={sourceControlAiActionsVisible}
           isLaunching={isFixingPushFailureWithAI}
