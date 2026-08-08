@@ -162,45 +162,63 @@ describe('orca skills CLI', () => {
 
   it('gives list --json a stable canonical schema', async () => {
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const previousAppVersion = process.env.ORCA_APP_VERSION
+    process.env.ORCA_APP_VERSION = '1.2.3-test'
 
-    await main(['skills', 'list', '--json'], '/tmp/repo')
+    try {
+      await main(['skills', 'list', '--json'], '/tmp/repo')
 
-    expect(stdoutText(stdoutSpy)).toBe(
-      `${JSON.stringify(
-        {
-          topics: [
-            { name: 'alpha', description: 'Use when alpha work is needed.' },
-            {
-              name: 'gamma',
-              description:
-                'Use when gamma work spans several sentences describing exactly how a ' +
-                'coding agent should decide whether gamma applies to the current task at hand.'
-            },
-            { name: 'zeta', description: 'Use when zeta work spans lines.' }
-          ]
-        },
-        null,
-        2
-      )}\n`
-    )
+      const payload = JSON.parse(stdoutText(stdoutSpy)) as {
+        cliVersion: string
+        topics: { name: string; description: string; contentSha256: string }[]
+      }
+      expect(payload.cliVersion).toBe('1.2.3-test')
+      expect(payload.topics.map((topic) => topic.name)).toEqual(['alpha', 'gamma', 'zeta'])
+      expect(payload.topics[0]).toEqual({
+        name: 'alpha',
+        description: 'Use when alpha work is needed.',
+        contentSha256: '7091aa3a419cfbb8e5e237bafe33bb067aafba3c747011b873b2150da308aaa3'
+      })
+      expect(payload.topics[1]?.description).toContain('gamma work spans several sentences')
+      expect(payload.topics[1]?.contentSha256).toMatch(/^[a-f0-9]{64}$/)
+      expect(payload.topics[2]?.name).toBe('zeta')
+    } finally {
+      if (previousAppVersion === undefined) {
+        delete process.env.ORCA_APP_VERSION
+      } else {
+        process.env.ORCA_APP_VERSION = previousAppVersion
+      }
+    }
   })
 
   it('gives alias get --json the canonical name, selection, and Markdown', async () => {
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const previousAppVersion = process.env.ORCA_APP_VERSION
+    process.env.ORCA_APP_VERSION = '1.2.3-test'
 
-    await main(['skills', 'get', 'legacy-alpha', '--full', '--json'], '/tmp/repo')
+    try {
+      await main(['skills', 'get', 'legacy-alpha', '--full', '--json'], '/tmp/repo')
 
-    expect(stdoutText(stdoutSpy)).toBe(
-      `${JSON.stringify(
-        {
-          name: 'alpha',
-          full: true,
-          markdown: '# Alpha\n\nShort.\n\n## References\n\nFull.\n'
-        },
-        null,
-        2
-      )}\n`
-    )
+      expect(stdoutText(stdoutSpy)).toBe(
+        `${JSON.stringify(
+          {
+            name: 'alpha',
+            full: true,
+            cliVersion: '1.2.3-test',
+            contentSha256: 'd10bf6caa49cacb4acf3c285312492060b40198dafaf236ea5dda2e9997a84b6',
+            markdown: '# Alpha\n\nShort.\n\n## References\n\nFull.\n'
+          },
+          null,
+          2
+        )}\n`
+      )
+    } finally {
+      if (previousAppVersion === undefined) {
+        delete process.env.ORCA_APP_VERSION
+      } else {
+        process.env.ORCA_APP_VERSION = previousAppVersion
+      }
+    }
   })
 
   it('shows leaf, group, and root help for skills', async () => {

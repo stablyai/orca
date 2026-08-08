@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
+import { skillGuideCliVersion, skillGuideContentSha256 } from '../skill-guide-fingerprint'
 import { delimiter, dirname } from 'node:path'
 import { getRepeatedStringFlag } from '../flags'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
@@ -329,11 +330,12 @@ export const SKILL_HANDLERS: Record<string, CommandHandler> = {
     // canonical sorting keeps agent-visible output reproducible across builds.
     const topics = guides.map((guide) => ({
       name: guide.name,
-      description: guide.description.replace(/\s+/g, ' ').trim()
+      description: guide.description.replace(/\s+/g, ' ').trim(),
+      contentSha256: skillGuideContentSha256(guide.markdown)
     }))
     writeStdout(
       json
-        ? JSON.stringify({ topics }, null, 2)
+        ? JSON.stringify({ cliVersion: skillGuideCliVersion(), topics }, null, 2)
         : topics.map((topic) => `${topic.name}: ${topic.description}`).join('\n')
     )
   },
@@ -344,7 +346,21 @@ export const SKILL_HANDLERS: Record<string, CommandHandler> = {
     const guide = requireTopic(flags, guides)
     const full = flags.has('full')
     const markdown = full ? guide.fullMarkdown : guide.markdown
-    writeStdout(json ? JSON.stringify({ name: guide.name, full, markdown }, null, 2) : markdown)
+    writeStdout(
+      json
+        ? JSON.stringify(
+            {
+              name: guide.name,
+              full,
+              cliVersion: skillGuideCliVersion(),
+              contentSha256: skillGuideContentSha256(markdown),
+              markdown
+            },
+            null,
+            2
+          )
+        : markdown
+    )
   },
   'skills install': createSkillMutationHandler('install'),
   'skills update': createSkillMutationHandler('update')

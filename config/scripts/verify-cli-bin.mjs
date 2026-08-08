@@ -5,15 +5,20 @@ import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'nod
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const OUT_COMMONJS_PACKAGE_JSON = `${JSON.stringify(
-  {
-    name: 'orca-compiled-output',
-    type: 'commonjs',
-    private: true
-  },
-  null,
-  2
-)}\n`
+function buildOutCommonjsPackageJson(version) {
+  return `${JSON.stringify(
+    {
+      name: 'orca-compiled-output',
+      type: 'commonjs',
+      private: true,
+      // Why: packaged CLI (ELECTRON_RUN_AS_NODE) has no ORCA_APP_VERSION; skill
+      // guide fingerprints read this version for cliVersion (#13210/#13216).
+      ...(typeof version === 'string' && version.trim() ? { version: version.trim() } : {})
+    },
+    null,
+    2
+  )}\n`
+}
 
 /**
  * Verifies the published CLI entrypoint and the module-type boundary for the
@@ -49,7 +54,7 @@ export function verifyPackageCliBin({
   const outPackageJsonPath = path.join(projectDir, 'out', 'package.json')
   if (fixPackageJson) {
     mkdirSync(path.dirname(outPackageJsonPath), { recursive: true })
-    writeFileSync(outPackageJsonPath, OUT_COMMONJS_PACKAGE_JSON, 'utf8')
+    writeFileSync(outPackageJsonPath, buildOutCommonjsPackageJson(packageJson.version), 'utf8')
   }
   let outPackageJson
   try {
