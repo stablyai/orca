@@ -54,6 +54,19 @@ function makeSocketPath(userDataDir) {
   return join(userDataDir, 'daemon.sock')
 }
 
+// 'connected' only when something actually answers; a dead entry left on the name is not it.
+function probeEndpoint(socketPath) {
+  return new Promise((resolveProbe) => {
+    const socket = connect(socketPath)
+    const settle = (result) => {
+      socket.destroy()
+      resolveProbe(result)
+    }
+    socket.on('connect', () => settle('connected'))
+    socket.on('error', () => settle('unreachable'))
+  })
+}
+
 function runDaemonRpc(socketPath, tokenPath, protocolVersion, request, timeoutMs) {
   return new Promise((resolveRpc, rejectRpc) => {
     let settled = false
@@ -267,11 +280,16 @@ async function main() {
     if (existsSync(pidPath)) {
       throw new Error('daemon left its PID ownership record behind after shutdown')
     }
-    if (process.platform !== 'win32' && existsSync(socketPath)) {
-      throw new Error('daemon left its endpoint socket behind after shutdown')
+    // Why not "the entry is gone": a departing daemon deliberately leaves its endpoint behind
+    // for the next publisher to replace in one rename. What must be true is that nothing
+    // answers there any more.
+    if (process.platform !== 'win32' && (await probeEndpoint(socketPath)) === 'connected') {
+      throw new Error('daemon still answers its endpoint after shutdown')
     }
-    // The private bind name is consumed by the publish; nothing may linger in the runtime dir.
-    const leaked = readdirSync(userDataDir).filter((entry) => entry.startsWith('.b'))
+    // The private bind name is consumed by the publish, and nothing sweeps the runtime dir any
+    // more, so a leak here is permanent. Match what the code actually generates rather than a
+    // literal prefix: this check silently matched nothing after the namespace moved from .b.
+    const leaked = readdirSync(userDataDir).filter((entry) => /^\.[a-z][0-9a-f]{10}$/.test(entry))
     if (leaked.length > 0) {
       throw new Error(`daemon leaked private bind names: ${leaked.join(', ')}`)
     }
