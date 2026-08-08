@@ -1704,6 +1704,110 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.layoutByWorktree).toBeUndefined()
   })
 
+  it('keeps the client tab-group split ratio when the host republishes the same groups', () => {
+    // Why: remote clients own window geometry; host snapshots must not snap the
+    // divider back to the host machine's ratio (#13218).
+    const leftId = 'local-left-tab'
+    const rightId = 'local-right-tab'
+    const clientLayout = {
+      type: 'split' as const,
+      direction: 'horizontal' as const,
+      ratio: 0.72,
+      first: { type: 'leaf' as const, groupId: 'group-left' },
+      second: { type: 'leaf' as const, groupId: 'group-right' }
+    }
+    const leftTab: Tab = {
+      id: leftId,
+      entityId: 'pty-left',
+      groupId: 'group-left',
+      worktreeId: WT,
+      contentType: 'terminal',
+      label: 'left shell',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      isPreview: false,
+      isPinned: false
+    }
+    const rightTab: Tab = {
+      ...leftTab,
+      id: rightId,
+      entityId: 'pty-right',
+      groupId: 'group-right',
+      label: 'right shell',
+      sortOrder: 1
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        unifiedTabsByWorktree: { [WT]: [leftTab, rightTab] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'group-left',
+              worktreeId: WT,
+              activeTabId: leftId,
+              tabOrder: [leftId],
+              recentTabIds: [leftId]
+            },
+            {
+              id: 'group-right',
+              worktreeId: WT,
+              activeTabId: rightId,
+              tabOrder: [rightId],
+              recentTabIds: [rightId]
+            }
+          ]
+        },
+        layoutByWorktree: { [WT]: clientLayout }
+      }),
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: `host-left::${LEAF_ID}`,
+            title: 'left shell',
+            parentTabId: 'host-left',
+            leafId: LEAF_ID,
+            isActive: false,
+            status: 'ready',
+            terminal: 'terminal-left'
+          },
+          {
+            type: 'terminal',
+            id: `host-right::${SECOND_LEAF_ID}`,
+            title: 'right shell',
+            parentTabId: 'host-right',
+            leafId: SECOND_LEAF_ID,
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-right'
+          }
+        ],
+        {
+          activeGroupId: 'group-right',
+          activeTabId: `host-right::${SECOND_LEAF_ID}`,
+          tabGroups: [
+            { id: 'group-left', activeTabId: 'host-left', tabOrder: ['host-left'] },
+            { id: 'group-right', activeTabId: 'host-right', tabOrder: ['host-right'] }
+          ],
+          tabGroupLayout: {
+            type: 'split',
+            direction: 'horizontal',
+            ratio: 0.35,
+            first: { type: 'leaf', groupId: 'group-left' },
+            second: { type: 'leaf', groupId: 'group-right' }
+          }
+        }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.layoutByWorktree).toBeUndefined()
+  })
+
   it('keeps retained local-only groups reachable when host omits layout', () => {
     const localTab: Tab = {
       id: 'local-editor-tab',
