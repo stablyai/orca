@@ -27,8 +27,8 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>
 }))
 
-vi.mock('./NativeChatSessionOptionPickers', () => ({
-  NativeChatSessionOptionPickers: () => <div data-testid="session-option-pickers" />
+vi.mock('../agent-session-controls/AgentSessionControls', () => ({
+  AgentSessionControls: () => <div data-testid="session-option-pickers" />
 }))
 
 import { NativeChatComposerActions } from './NativeChatComposerActions'

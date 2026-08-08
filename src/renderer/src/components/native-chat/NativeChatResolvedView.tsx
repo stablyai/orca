@@ -38,9 +38,8 @@ import {
   nativeChatStreamingMessage
 } from '../../../../shared/native-chat-streaming'
 import {
-  shouldFocusNativeChatComposerFromEditingKey,
   shouldFocusNativeChatPaneFromPointerTarget,
-  shouldRedirectNativeChatTyping
+  handleNativeChatTranscriptKeyDown
 } from './native-chat-typing-redirect'
 import {
   emptyNativeChatContextMenuActions,
@@ -52,8 +51,6 @@ import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { NativeChatOrchestrationPausedNotice } from './NativeChatOrchestrationPausedNotice'
-import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 
 /** Renders the bridge UI after NativeChatSessionGate resolves its agent session. */
@@ -67,6 +64,7 @@ export function NativeChatResolvedView({
   terminalTabId,
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
+  restartSession,
   readTerminalScreen,
   contextMenuActions,
   orchestrationDispatchStatus
@@ -104,6 +102,7 @@ export function NativeChatResolvedView({
   // The agent's in-progress reply preview (hook), shown as a live streaming
   // bubble while it works — before the completed turn flushes to the transcript.
   const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  const reportedModel = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.model ?? null)
   // Tool stdout/errors ride the same field for status-card previews; they are not the reply.
   const hookPreviewIsToolOutput = useAppStore(
     (s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessageIsToolOutput === true
@@ -344,35 +343,14 @@ export function NativeChatResolvedView({
           rootRef.current?.focus({ preventScroll: true })
         }
       }}
-      onKeyDownCapture={(event) => {
-        const splitDirection = event.repeat
-          ? null
-          : matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
-        if (splitDirection && contextMenuActions) {
-          event.preventDefault()
-          event.stopPropagation()
-          if (splitDirection === 'right') {
-            contextMenuActions.onSplitRight()
-          } else {
-            contextMenuActions.onSplitDown()
-          }
-          return
-        }
-        // Backspace/Delete outside an input focuses the composer (like typing)
-        // but inserts nothing — let the now-focused field handle the keystroke.
-        if (shouldFocusNativeChatComposerFromEditingKey(event)) {
-          composerRef.current?.focus()
-          return
-        }
-        if (!shouldRedirectNativeChatTyping(event)) {
-          return
-        }
-        if (!composerRef.current?.insertTypedText(event.key)) {
-          return
-        }
-        event.preventDefault()
-        event.stopPropagation()
-      }}
+      onKeyDownCapture={(event) =>
+        handleNativeChatTranscriptKeyDown(
+          event,
+          composerRef.current,
+          keybindings,
+          contextMenuActions
+        )
+      }
       onMouseUpCapture={contextMenu.onSelectionCapture}
       onKeyUpCapture={contextMenu.onSelectionCapture}
       onContextMenuCapture={contextMenu.onContextMenuCapture}
@@ -422,6 +400,11 @@ export function NativeChatResolvedView({
           paneKey={paneKey}
           targetPtyId={targetPtyId}
           agent={agent}
+          reportedModel={session.context.model ?? reportedModel}
+          reportedEffort={session.context.effort ?? null}
+          context={session.context}
+          onCompactionRequested={session.markCompactionRequested}
+          restartSession={restartSession}
           canSend={canSend}
           isWorking={isWorking}
           onStop={stopAgent}

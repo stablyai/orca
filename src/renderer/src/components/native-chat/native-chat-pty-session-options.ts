@@ -1,5 +1,7 @@
 import {
+  codexEffortFromChoices,
   getAgentSessionOptionCatalog,
+  normalizeClaudeSessionOptionValues,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
 import type { AgentType } from '../../../../shared/agent-status-types'
@@ -37,6 +39,7 @@ type PersistSelection = (args: {
 }) => Promise<void> | void
 
 export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
+  addCustomModel(modelId: string): void
   recordOutgoingCommand(command: string): void
   reportSessionOptions(values: Record<string, SessionOptionValue>): void
   replaceModels(models: CatalogModel[]): void
@@ -50,6 +53,7 @@ export type CreateNativeChatPtySessionOptionsArgs = {
   mode: NativeChatSessionOptionMode
   reportedValues?: Record<string, SessionOptionValue> | null
   dispatchCommand: NativeChatSessionOptionDispatchCommand
+  restartSession?: (values: Record<string, SessionOptionValue>) => Promise<void> | void
   onAgentPicker?: () => void
   persistSelection?: PersistSelection
   onDraftValuesChanged?: (values: Record<string, SessionOptionValue>) => void
@@ -66,6 +70,11 @@ export function createNativeChatPtySessionOptions(
   // The enrichment cache only ever holds probe output, so being handed a list at all
   // means `isDefault` below names the account's real default rather than the seed guess.
   let modelsAreDiscovered = args.initialModels !== undefined
+  const customModels = new Set<string>()
+  const normalizeReportedValues = (
+    values: Record<string, SessionOptionValue>
+  ): Record<string, SessionOptionValue> =>
+    args.agent === 'claude' ? normalizeClaudeSessionOptionValues(values) : values
   let record =
     readNativeChatSessionOptionCache(args.scopeKey, args.fallbackScopeKey) ??
     createNativeChatSessionOptionRecord(args.agent)
@@ -73,7 +82,10 @@ export function createNativeChatPtySessionOptions(
     record = createNativeChatSessionOptionRecord(args.agent)
   }
 
-  if (args.reportedValues && applyNativeChatReportedSessionOptions(record, args.reportedValues)) {
+  if (
+    args.reportedValues &&
+    applyNativeChatReportedSessionOptions(record, normalizeReportedValues(args.reportedValues))
+  ) {
     writeNativeChatSessionOptionCache(args.scopeKey, record)
   }
   /** Why: an authoritative probe proved this id gone; left tracked it would re-enter
@@ -166,6 +178,7 @@ export function createNativeChatPtySessionOptions(
     getModels: activeModels,
     getRecord: () => record,
     dispatchCommand: args.dispatchCommand,
+    restartSession: args.restartSession,
     onAgentPicker: args.onAgentPicker,
     persist,
     onDraftValuesChanged: args.onDraftValuesChanged,
@@ -175,6 +188,21 @@ export function createNativeChatPtySessionOptions(
   })
 
   return {
+    addCustomModel: (modelId) => {
+      if (!modelId || models.some((model) => model.id === modelId)) {
+        return
+      }
+      customModels.add(modelId)
+      models = [
+        ...models,
+        {
+          id: modelId,
+          label: modelId,
+          options: args.agent === 'codex' ? [codexEffortFromChoices()] : []
+        }
+      ]
+      publish()
+    },
     getSnapshot: () => snapshot,
     setOption: appliers.setOption,
     invokeAction: appliers.invokeAction,
@@ -198,12 +226,18 @@ export function createNativeChatPtySessionOptions(
       }
     },
     reportSessionOptions: (values) => {
-      if (applyNativeChatReportedSessionOptions(record, values)) {
+      if (applyNativeChatReportedSessionOptions(record, normalizeReportedValues(values))) {
         publish()
       }
     },
     replaceModels: (nextModels) => {
-      models = [...nextModels]
+      // User-added custom ids survive a probe refresh; retired cataloged ids do not.
+      models = [
+        ...nextModels,
+        ...models.filter(
+          (model) => customModels.has(model.id) && !nextModels.some((next) => next.id === model.id)
+        )
+      ]
       modelsAreDiscovered = true
       untrackRetiredModel()
       publish()

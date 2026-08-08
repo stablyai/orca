@@ -9,7 +9,10 @@ import {
 } from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
-import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
+import {
+  buildSleepingAgentLaunchConfig,
+  sleepingAgentCommand
+} from './sleeping-agent-launch-config'
 import { planHermesStartupQuery } from './hermes-startup-query'
 import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './tui-agent'
@@ -72,9 +75,7 @@ export function buildAgentStartupPlan(args: {
   }
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    // Why: picker flags are a one-time launch choice; a resumed provider
-    // session restores its own state and must retain only explicit user args.
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    agentCommand: sleepingAgentCommand(agent, baseCommand)
   })
 
   if (!trimmedPrompt) {
@@ -224,8 +225,7 @@ export function buildAgentDraftLaunchPlan(args: {
   }
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    // Why: see the new-session path above — resume must not replay picker flags.
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    agentCommand: sleepingAgentCommand(agent, baseCommand)
   })
   let plan: AgentDraftLaunchPlan | null = null
   if (config.draftPromptFlag) {

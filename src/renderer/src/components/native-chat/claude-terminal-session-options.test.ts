@@ -279,7 +279,7 @@ describe('Claude terminal session option detection', () => {
       '~/Documents/projects/orca'
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
-      model: 'opus',
+      model: 'claude-opus-4-8',
       effort: 'high'
     })
   })
@@ -293,6 +293,14 @@ describe('Claude terminal session option detection', () => {
       model: 'sonnet',
       effort: 'medium'
     })
+  })
+
+  it('reads the selected long-context variant from Claude header chrome', () => {
+    expect(
+      readClaudeSessionOptionsFromTerminalScreen(
+        'Claude Code v2.1.211\r\nOpus 5[1m] with extra high effort · API Usage Billing'
+      )
+    ).toEqual({ model: 'opus', effort: 'xhigh', contextWindow: '1m' })
   })
 
   it('does not mistake old conversation output for the current model', () => {

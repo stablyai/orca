@@ -90,6 +90,7 @@ describe('Claude model switch confirmation detection', () => {
     }
   })
 
+
   it('accepts the exact cached-history confirmation once and keeps observing', async () => {
     const dataObserver = { current: (_data: string): void => {} }
     const submitConfirmation = vi.fn()

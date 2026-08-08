@@ -8,6 +8,7 @@ import type {
   NativeChatLiveSession,
   UseNativeChatLiveSessionArgs
 } from './use-native-chat-live-session'
+import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
 
 const { liveSession } = vi.hoisted(() => ({ liveSession: vi.fn() }))
 
@@ -39,7 +40,9 @@ function session(
     hasMore: false,
     loadingEarlier: false,
     loadEarlier: vi.fn(),
-    readPhase
+    readPhase,
+    context: EMPTY_AGENT_SESSION_CONTEXT,
+    markCompactionRequested: vi.fn()
   }
 }
 

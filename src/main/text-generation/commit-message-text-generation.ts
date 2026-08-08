@@ -39,6 +39,8 @@ import type {
   TextGenerationOperation
 } from './source-control-text-generation-types'
 
+export { parseCodexAppServerModelDiscovery } from './commit-message-model-discovery'
+
 export type GenerateCommitMessageParams = ResolvedSourceControlAiGenerationParams
 export type {
   CommitMessageGenerationTarget,

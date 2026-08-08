@@ -38,8 +38,7 @@ export function getNativeChatAgentProfile(
 }
 
 /** The catalog that send classification, collision detection, and transcript
- *  envelope surfacing key off. Grok has no verified catalog yet, so its slash
- *  surface stays skills-only — this is the single place that policy lives. */
+ *  envelope surfacing key off. */
 export function getVerifiedNativeChatCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
-  return agent === 'grok' ? [] : getAgentSlashCommands(agent)
+  return getAgentSlashCommands(agent)
 }

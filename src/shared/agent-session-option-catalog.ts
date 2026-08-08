@@ -27,6 +27,12 @@ export type {
   CatalogOptionApply
 } from './agent-session-option-catalog-types'
 export { createClaudeCatalogOptions }
+export {
+  claudeModelSupportsContextWindow,
+  codexEffortFromChoices,
+  normalizeClaudeModelId,
+  normalizeClaudeSessionOptionValues
+} from './agent-session-option-catalog-claude-codex'
 
 const CATALOGS: AgentSessionOptionCatalogMap = {
   claude: CLAUDE_SESSION_OPTION_CATALOG,
@@ -54,7 +60,8 @@ export function findCatalogOption(
   return model?.options.find((option) => option.id === optionId)
 }
 
-/** Merge live rows over the static seed while retaining cataloged option mappings. */
+/** Merge provider rows over the fallback seed without dropping controls the
+ * provider does not enumerate (for example Claude fast mode). */
 export function mergeCatalogModels(
   seed: readonly CatalogModel[],
   discovered: readonly CatalogModel[]
@@ -66,7 +73,13 @@ export function mergeCatalogModels(
       return model
     }
     discoveredById.delete(model.id)
-    return { ...model, ...live, options: model.options }
+    const liveOptionsById = new Map(live.options.map((option) => [option.id, option]))
+    const options = model.options.map((option) => {
+      const liveOption = liveOptionsById.get(option.id)
+      liveOptionsById.delete(option.id)
+      return liveOption ?? option
+    })
+    return { ...model, ...live, options: [...options, ...liveOptionsById.values()] }
   })
   return [...merged, ...discoveredById.values()]
 }

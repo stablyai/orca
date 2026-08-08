@@ -6,8 +6,10 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
-import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import type { AgentSessionContextSnapshot } from '../../../../shared/agent-session-context'
+import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
+import { AgentSessionControls } from '../agent-session-controls/AgentSessionControls'
 
 export type NativeChatComposerActionsProps = {
   attachDisabled: boolean
@@ -25,6 +27,9 @@ export type NativeChatComposerActionsProps = {
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
+  context?: AgentSessionContextSnapshot
+  canCompact?: boolean
+  onCompact?: () => Promise<void>
 }
 
 export function NativeChatComposerActions({
@@ -42,7 +47,10 @@ export function NativeChatComposerActions({
   onStop,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
-  sessionOptionsPickerRequest
+  sessionOptionsPickerRequest,
+  context = EMPTY_AGENT_SESSION_CONTEXT,
+  canCompact = false,
+  onCompact
 }: NativeChatComposerActionsProps): React.JSX.Element {
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
     // A double-click commonly lands after the first send has started and the button has
@@ -84,11 +92,14 @@ export function NativeChatComposerActions({
       <div className="ml-auto flex items-center gap-1.5">
         {/* Why: keep session controls beside the actions they affect; the
         model trigger is ordered last so it sits directly next to dictation. */}
-        <NativeChatSessionOptionPickers
+        <AgentSessionControls
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
           isWorking={isWorking}
           pickerRequest={sessionOptionsPickerRequest}
+          context={context}
+          canCompact={canCompact}
+          onCompact={onCompact}
         />
         <Tooltip>
           <TooltipTrigger asChild>

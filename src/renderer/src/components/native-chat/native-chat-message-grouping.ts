@@ -9,6 +9,7 @@
 //      two disconnected rows.
 
 import {
+  isTextBlock,
   isToolCallBlock,
   isToolResultBlock,
   type NativeChatBlock,
@@ -16,6 +17,7 @@ import {
   type NativeChatToolCallBlock,
   type NativeChatToolResultBlock
 } from '../../../../shared/native-chat-types'
+import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
 import { compareMessages } from './native-chat-session-assembler'
 
 /** A tool-call block paired with the result that answered it, when one exists.
@@ -45,11 +47,122 @@ export type NativeChatRenderItem =
       step: NativeChatToolStep
     }
 
+export type NativeChatConversationItem =
+  | { kind: 'message'; id: string; message: NativeChatMessage }
+  | {
+      kind: 'assistant-turn'
+      id: string
+      activityMessages: NativeChatMessage[]
+      finalMessage: NativeChatMessage | null
+      startedAt: number | null
+      completedAt: number | null
+      working: boolean
+    }
+
 /** Order messages stably: null timestamps first (model rule), then ascending
  *  timestamp, ties broken by id. Shares the assembler's comparator so both
  *  paths order identically. */
 export function orderNativeChatMessages(messages: NativeChatMessage[]): NativeChatMessage[] {
   return [...messages].sort(compareMessages)
+}
+
+/** Group the transcript into user/system rows and assistant turns. Within a
+ * turn the last completed assistant prose is the final answer; preceding
+ * reasoning and tool records remain in their original activity chronology. */
+export function buildNativeChatConversationItems(
+  messages: NativeChatMessage[],
+  working: boolean,
+  workingStartedAt: number | null = null
+): NativeChatConversationItem[] {
+  const items: NativeChatConversationItem[] = []
+  let pending: NativeChatMessage[] = []
+  let anchorTimestamp: number | null = null
+  let anchorId: string | null = null
+
+  const flush = (): void => {
+    if (pending.length === 0) {
+      return
+    }
+    items.push(
+      buildAssistantTurn(
+        pending,
+        anchorTimestamp,
+        false,
+        `assistant-turn:${anchorId ?? pending[0]?.id ?? 'empty'}`
+      )
+    )
+    pending = []
+  }
+
+  for (const message of orderNativeChatMessages(messages)) {
+    if (message.role === 'user' || message.role === 'system') {
+      flush()
+      items.push({ kind: 'message', id: message.id, message })
+      anchorTimestamp = message.role === 'user' ? message.timestamp : null
+      anchorId = message.role === 'user' ? message.id : null
+    } else {
+      pending.push(message)
+    }
+  }
+  flush()
+
+  if (working) {
+    const current = items.at(-1)
+    if (current?.kind === 'assistant-turn') {
+      items[items.length - 1] = buildAssistantTurn(
+        [...current.activityMessages, ...(current.finalMessage ? [current.finalMessage] : [])],
+        workingStartedAt ?? current.startedAt,
+        true,
+        current.id
+      )
+    } else {
+      items.push(
+        buildAssistantTurn(
+          [],
+          workingStartedAt ?? current?.message.timestamp ?? null,
+          true,
+          `assistant-turn:${current?.id ?? 'live'}`
+        )
+      )
+    }
+  }
+  return items
+}
+
+function buildAssistantTurn(
+  messages: NativeChatMessage[],
+  anchorTimestamp: number | null,
+  working = false,
+  id = `assistant-turn:${messages[0]?.id ?? 'empty'}`
+): Extract<NativeChatConversationItem, { kind: 'assistant-turn' }> {
+  const finalIndex = messages.findLastIndex((message) => isFinalCandidate(message, working))
+  const finalMessage = finalIndex >= 0 ? messages[finalIndex]! : null
+  const activityMessages = messages.filter((_, index) => index !== finalIndex)
+  const timestamps = messages.flatMap((message) =>
+    message.timestamp == null ? [] : [message.timestamp]
+  )
+  return {
+    kind: 'assistant-turn',
+    id,
+    activityMessages,
+    finalMessage,
+    startedAt: anchorTimestamp ?? timestamps[0] ?? null,
+    completedAt: working ? null : (timestamps.at(-1) ?? anchorTimestamp),
+    working
+  }
+}
+
+function isFinalCandidate(message: NativeChatMessage, working: boolean): boolean {
+  if (message.role !== 'assistant') {
+    return false
+  }
+  if (working && message.id !== NATIVE_CHAT_STREAMING_ID) {
+    return false
+  }
+  return (
+    message.blocks.some((block) => isTextBlock(block) || block.type === 'image-ref') &&
+    !message.blocks.some(isToolCallBlock)
+  )
 }
 
 /** Collect every tool-result across the whole conversation in document order so

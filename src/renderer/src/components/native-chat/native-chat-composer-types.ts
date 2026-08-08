@@ -1,8 +1,10 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/structured-agent-session-composer'
+import type { AgentSessionContextSnapshot } from '../../../../shared/agent-session-context'
 import type {
   SessionOptionDescriptor,
-  SessionOptionsSurface
+  SessionOptionsSurface,
+  SessionOptionValue
 } from '../../../../shared/native-chat-session-options'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
@@ -31,6 +33,14 @@ export type NativeChatComposerProps = {
   /** Specific split-pane PTY this chat view owns. */
   targetPtyId: string | null
   agent: AgentType
+  /** Provider-reported active model for the session control. */
+  reportedModel?: string | null
+  /** Provider-reported reasoning effort for the session control. */
+  reportedEffort?: string | null
+  /** Authoritative context usage when the harness exposes it. */
+  context?: AgentSessionContextSnapshot
+  onCompactionRequested?: () => void
+  restartSession?: (values: Record<string, SessionOptionValue>) => Promise<void> | void
   /** Guard desktop sends while a mobile client owns the terminal input lease. */
   canSend?: boolean
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */

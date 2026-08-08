@@ -104,6 +104,7 @@ export type GitInspectionApi = {
     agentId: string
     worktreePath?: string
     connectionId?: string
+    includeSessionDefaults?: boolean
   }) => Promise<
     | {
         success: true

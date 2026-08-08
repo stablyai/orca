@@ -17,6 +17,7 @@ export type CatalogMidSessionApply =
     }
   | { kind: 'toggle-command'; command: string }
   | { kind: 'agent-picker'; command: string; delivery?: CatalogCommandDelivery }
+  | { kind: 'restart' }
   | { kind: 'unsupported' }
 
 export type CatalogOptionApply = {
@@ -58,6 +59,8 @@ export type AgentSessionOptionCatalog = {
   modelApply: CatalogOptionApply
   /** Opts this agent into structured per-worker launch overrides. */
   supportsWorkerLaunchPreferences?: true
+  /** Keeps process-local options in the command used for cold session restores. */
+  capturesOptionsInLaunchCommand?: true
   /** Launch-safe options for opaque model ids that are absent from the static catalog. */
   unknownModelOptions?: CatalogOption[]
   composeModelValue?: (modelId: string, values: Record<string, SessionOptionValue>) => string

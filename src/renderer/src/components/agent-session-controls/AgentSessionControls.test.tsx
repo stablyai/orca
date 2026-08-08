@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type * as ReactModule from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
@@ -32,17 +32,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 vi.mock('@/components/ui/dropdown-menu', () => {
   const React = require('react') as typeof ReactModule
   return {
-    DropdownMenu: ({
-      children,
-      defaultOpen
-    }: {
-      children: React.ReactNode
-      defaultOpen?: boolean
-    }) => (
-      <div data-testid="dropdown-root" data-open={defaultOpen ? 'true' : 'false'}>
-        {children}
-      </div>
-    ),
+    DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuTrigger: ({
       children,
       disabled
@@ -67,6 +57,11 @@ vi.mock('@/components/ui/dropdown-menu', () => {
         {children}
       </div>
     ),
+    DropdownMenuSub: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DropdownMenuSubTrigger: ({ children }: { children: React.ReactNode }) => (
+      <div data-testid="session-option-row">{children}</div>
+    ),
+    DropdownMenuSubContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuSeparator: () => <hr />,
     DropdownMenuItem: ({
@@ -142,7 +137,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
   }
 })
 
-import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
+import { AgentSessionControls } from './AgentSessionControls'
 
 const surface = {
   getSnapshot: vi.fn(() => []),
@@ -188,6 +183,23 @@ const effort: SessionOptionDescriptor = {
   settable: true
 }
 
+const contextWindow: SessionOptionDescriptor = {
+  id: 'contextWindow',
+  label: 'Context window',
+  category: 'model_config',
+  kind: {
+    type: 'select',
+    currentValue: '1m',
+    choices: [
+      { value: 'standard', label: 'Standard (200k)' },
+      { value: '1m', label: '1M' }
+    ]
+  },
+  valueSource: 'applied',
+  transport: 'catalog',
+  settable: true
+}
+
 const fast: SessionOptionDescriptor = {
   id: 'fastMode',
   label: 'Fast mode',
@@ -200,90 +212,68 @@ const fast: SessionOptionDescriptor = {
 
 afterEach(() => cleanup())
 
-describe('NativeChatSessionOptionPickers', () => {
-  it('opens the native picker requested by a structured slash command', async () => {
-    const { rerender } = render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), effort]}
-        isWorking={false}
-        pickerRequest={null}
-      />
-    )
-
-    rerender(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), effort]}
-        isWorking={false}
-        pickerRequest={{ id: 'model', sequence: 1 }}
-      />
-    )
-    await waitFor(() =>
-      expect(screen.getAllByTestId('dropdown-root')[1]?.getAttribute('data-open')).toBe('true')
-    )
-
-    rerender(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), effort]}
-        isWorking={false}
-        pickerRequest={{ id: 'effort', sequence: 2 }}
-      />
-    )
-    await waitFor(() =>
-      expect(screen.getAllByTestId('dropdown-root')[0]?.getAttribute('data-open')).toBe('true')
-    )
-  })
-
-  it('prefers collision-aware upward placement for model and option menus', () => {
+describe('AgentSessionControls', () => {
+  it('prefers collision-aware upward placement', () => {
     render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), effort]}
-        isWorking={false}
-      />
+      <AgentSessionControls surface={surface} snapshot={[model(), effort]} isWorking={false} />
     )
 
-    const menus = screen.getAllByTestId('session-option-menu')
-    expect(menus).toHaveLength(2)
-    for (const menu of menus) {
-      expect(menu.getAttribute('data-side')).toBe('top')
-      expect(menu.getAttribute('data-collision-padding')).toBe('8')
-    }
+    const menu = screen.getByTestId('session-option-menu')
+    expect(menu.getAttribute('data-side')).toBe('top')
+    expect(menu.getAttribute('data-collision-padding')).toBe('8')
   })
 
-  it('renders model and joined option labels, and hides an empty options pill', () => {
+  it('renders one session control with model and option labels', () => {
     const { rerender } = render(
-      <NativeChatSessionOptionPickers
+      <AgentSessionControls
         surface={surface}
         snapshot={[model(), effort, fast]}
         isWorking={false}
       />
     )
-    expect(screen.getByRole('button', { name: 'Model Opus 4.8' }).textContent).toContain('Opus 4.8')
-    expect(screen.getByRole('button', { name: 'Model Opus 4.8' }).textContent).not.toContain(
-      'Model:'
-    )
-    expect(screen.getByRole('button', { name: 'Effort High · Fast' }).textContent).toContain(
-      'High · Fast'
-    )
-    expect(
-      screen
-        .getByRole('button', { name: 'Effort High · Fast' })
-        .compareDocumentPosition(screen.getByRole('button', { name: 'Model Opus 4.8' })) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).not.toBe(0)
+    const trigger = screen.getByRole('button', {
+      name: 'Opus 4.8 High · Fast. Context unavailable'
+    })
+    expect(trigger.textContent).toContain('Opus 4.8')
+    expect(trigger.textContent).toContain('High · Fast')
 
-    rerender(
-      <NativeChatSessionOptionPickers surface={surface} snapshot={[model()]} isWorking={false} />
+    rerender(<AgentSessionControls surface={surface} snapshot={[model()]} isWorking={false} />)
+    expect(
+      screen.getByRole('button', { name: 'Opus 4.8. Context unavailable' }).textContent
+    ).not.toContain('Effort')
+  })
+
+  it('shows the selected context window immediately and keeps its label intact', () => {
+    render(
+      <AgentSessionControls
+        surface={surface}
+        snapshot={[model(), effort, contextWindow]}
+        isWorking={false}
+        context={{
+          model: 'opus',
+          usedTokens: 100_000,
+          maxTokens: 200_000,
+          remainingTokens: 100_000,
+          usedPercent: 50,
+          source: 'statusline',
+          observedAt: 1,
+          compaction: 'idle',
+          compactionUpdatedAt: null
+        }}
+      />
     )
-    expect(screen.queryByRole('button', { name: /Effort/ })).toBeNull()
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Opus 4.8 High · 1M. 10% used · 100.0k / 1.0M tokens · 900.0k free'
+      })
+    ).not.toBeNull()
+    expect(screen.getByText('Context window')).not.toBeNull()
   })
 
   it('names a lone unknown effort control explicitly', () => {
     render(
-      <NativeChatSessionOptionPickers
+      <AgentSessionControls
         surface={surface}
         snapshot={[
           model(),
@@ -293,28 +283,24 @@ describe('NativeChatSessionOptionPickers', () => {
       />
     )
 
-    expect(screen.getByRole('button', { name: 'Effort' }).textContent).toContain('Effort')
+    expect(
+      screen.getByRole('button', { name: 'Opus 4.8 Effort. Context unavailable' }).textContent
+    ).toContain('Effort')
   })
 
-  it('disables both picker triggers while the agent is working', () => {
-    render(
-      <NativeChatSessionOptionPickers surface={surface} snapshot={[model(), effort]} isWorking />
-    )
+  it('keeps session details inspectable while the agent is working', () => {
+    render(<AgentSessionControls surface={surface} snapshot={[model(), effort]} isWorking />)
     expect(
       screen
-        .getByRole('button', { name: 'Model Opus 4.8' })
-        .parentElement?.getAttribute('data-disabled')
-    ).toBe('true')
-    expect(
-      screen
-        .getByRole('button', { name: 'Effort High' })
-        .parentElement?.getAttribute('data-disabled')
-    ).toBe('true')
+        .getByRole('button', { name: 'Opus 4.8 High. Context unavailable' })
+        .hasAttribute('disabled')
+    ).toBe(false)
+    expect(screen.getByRole('radio', { name: 'Opus 4.8' }).hasAttribute('disabled')).toBe(true)
   })
 
   it('does not duplicate titles for unknown values or misname generic controls', () => {
     const { rerender } = render(
-      <NativeChatSessionOptionPickers
+      <AgentSessionControls
         surface={surface}
         snapshot={[
           model({
@@ -326,23 +312,18 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    expect(screen.getByRole('button', { name: 'Model' }).textContent).toContain('Model')
-    expect(screen.getByRole('button', { name: 'Model' }).textContent).not.toContain('Model: Model')
-    expect(screen.getByRole('button', { name: 'Effort' }).textContent).not.toContain(
-      'Effort: Effort'
-    )
+    const unknownTrigger = screen.getByRole('button', {
+      name: 'Model Effort. Context unavailable'
+    })
+    expect(unknownTrigger.textContent).not.toContain('Model: Model')
+    expect(unknownTrigger.textContent).not.toContain('Effort: Effort')
 
     rerender(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), fast]}
-        isWorking={false}
-      />
+      <AgentSessionControls surface={surface} snapshot={[model(), fast]} isWorking={false} />
     )
-    expect(screen.getByRole('button', { name: 'Session options Fast' }).textContent).toContain(
-      'Fast'
-    )
-    expect(screen.queryByRole('button', { name: /^Effort/ })).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Opus 4.8 Fast. Context unavailable' }).textContent
+    ).toContain('Fast')
   })
 
   // The terminal transport typed the value at the agent and has not read it back,
@@ -350,7 +331,7 @@ describe('NativeChatSessionOptionPickers', () => {
   // confirmation, which makes the same hedge transient noise there.
   it('hedges a dispatched value the terminal transport produced', () => {
     render(
-      <NativeChatSessionOptionPickers
+      <AgentSessionControls
         surface={surface}
         snapshot={[model({ valueSource: 'dispatched', transport: 'catalog' })]}
         isWorking={false}
@@ -362,7 +343,7 @@ describe('NativeChatSessionOptionPickers', () => {
 
   it('does not hedge a dispatched value the structured transport produced', () => {
     render(
-      <NativeChatSessionOptionPickers
+      <AgentSessionControls
         surface={surface}
         snapshot={[model({ valueSource: 'dispatched', transport: 'agent-session' })]}
         isWorking={false}
@@ -376,7 +357,7 @@ describe('NativeChatSessionOptionPickers', () => {
     'does not hedge a reported value on the %s transport',
     (transport) => {
       render(
-        <NativeChatSessionOptionPickers
+        <AgentSessionControls
           surface={surface}
           snapshot={[model({ valueSource: 'reported', transport })]}
           isWorking={false}
@@ -391,7 +372,7 @@ describe('NativeChatSessionOptionPickers', () => {
     const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
     const liveSurface = { ...surface, invokeAction }
     render(
-      <NativeChatSessionOptionPickers
+      <AgentSessionControls
         surface={liveSurface}
         snapshot={[
           model({
@@ -421,7 +402,7 @@ describe('NativeChatSessionOptionPickers', () => {
     const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
     const liveSurface = { ...surface, setOption, invokeAction }
     render(
-      <NativeChatSessionOptionPickers
+      <AgentSessionControls
         surface={liveSurface}
         snapshot={[
           model(),
@@ -447,7 +428,7 @@ describe('NativeChatSessionOptionPickers', () => {
     const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
     const liveSurface = { ...surface, setOption }
     const { rerender } = render(
-      <NativeChatSessionOptionPickers
+      <AgentSessionControls
         surface={liveSurface}
         snapshot={[
           model(),
@@ -473,7 +454,7 @@ describe('NativeChatSessionOptionPickers', () => {
 
     setOption.mockClear()
     rerender(
-      <NativeChatSessionOptionPickers
+      <AgentSessionControls
         surface={liveSurface}
         snapshot={[
           model(),
@@ -498,9 +479,28 @@ describe('NativeChatSessionOptionPickers', () => {
     await waitFor(() => expect(setOption).toHaveBeenCalledWith('thinking', false))
   })
 
-  it('tooltips a dispatched option pill with the category alone', () => {
+  it('does not show unconfirmed for applied flip-only booleans', () => {
     render(
-      <NativeChatSessionOptionPickers
+      <AgentSessionControls
+        surface={surface}
+        snapshot={[
+          model(),
+          {
+            ...fast,
+            kind: { type: 'boolean', currentValue: true },
+            // Why: flip-only tracks as applied — never a healable dispatched state.
+            valueSource: 'applied'
+          }
+        ]}
+        isWorking={false}
+      />
+    )
+    expect(screen.queryByText('Sent to the agent — not confirmed')).toBeNull()
+  })
+
+  it('shows unconfirmed for confirmable dispatched booleans', () => {
+    render(
+      <AgentSessionControls
         surface={surface}
         snapshot={[
           model(),
@@ -519,5 +519,31 @@ describe('NativeChatSessionOptionPickers', () => {
     )
     expect(screen.getAllByText('Thinking').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Sent to the agent — not confirmed').length).toBeGreaterThan(0)
+  })
+
+  it('adds a custom model only after the session confirms it', async () => {
+    const custom = model({
+      kind: {
+        type: 'select',
+        currentValue: 'gpt-5.6-sol',
+        choices: [{ value: 'gpt-5.6-sol', label: 'gpt-5.6-sol' }]
+      }
+    })
+    const setOption = vi.fn().mockResolvedValue({ snapshot: [custom] })
+    const addCustomModel = vi.fn()
+    render(
+      <AgentSessionControls
+        surface={{ ...surface, setOption, addCustomModel }}
+        snapshot={[model()]}
+        isWorking={false}
+      />
+    )
+
+    const input = screen.getByRole('textbox', { name: 'Custom model' })
+    fireEvent.change(input, { target: { value: 'gpt-5.6-sol' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    await waitFor(() => expect(setOption).toHaveBeenCalledWith('model', 'gpt-5.6-sol'))
+    expect(addCustomModel).toHaveBeenCalledWith('gpt-5.6-sol')
   })
 })

@@ -13,6 +13,7 @@ import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatTypingIndicatorRow } from './NativeChatTypingIndicatorRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { AgentSubagentTurnLink } from '../agent-subagents/AgentSubagentContext'
 
 export { ProviderFrameRow } from './NativeChatTranscriptChrome'
 
@@ -31,6 +32,7 @@ export function NativeChatMessageList({
   allowFileUriLinks = false,
   workingStartedAt,
   failedDeliveryMessageIds,
+  subagentSourceKey,
   showTurnStatus = true,
   runtimeContext
 }: {
@@ -44,6 +46,7 @@ export function NativeChatMessageList({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   failedDeliveryMessageIds?: ReadonlySet<string>
+  subagentSourceKey?: string
   /** Turn timing and disclosure are available on structured agent sessions. */
   showTurnStatus?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
@@ -247,17 +250,30 @@ export function NativeChatMessageList({
                 {showTurnStatus &&
                 status &&
                 (index !== latestUserIndex || showTypingIndicator || !isWorking) ? (
-                  <NativeChatWorkingStatus
-                    startedAt={status.startedAt}
-                    thinking={status.thinking}
-                    workedSeconds={status.workedSeconds}
-                    expanded={turnKey ? expandedTurnIds.has(turnKey) : false}
-                    onToggleExpanded={
-                      status.workedSeconds != null && turnKey
-                        ? () => toggleExpandedTurn(turnKey)
-                        : undefined
-                    }
-                  />
+                  <>
+                    <NativeChatWorkingStatus
+                      startedAt={status.startedAt}
+                      thinking={status.thinking}
+                      workedSeconds={status.workedSeconds}
+                      expanded={turnKey ? expandedTurnIds.has(turnKey) : false}
+                      onToggleExpanded={
+                        status.workedSeconds != null && turnKey
+                          ? () => toggleExpandedTurn(turnKey)
+                          : undefined
+                      }
+                    />
+                    {subagentSourceKey ? (
+                      <AgentSubagentTurnLink
+                        sourceKey={subagentSourceKey}
+                        startedAt={status.startedAt}
+                        completedAt={
+                          status.startedAt == null || status.workedSeconds == null
+                            ? null
+                            : status.startedAt + status.workedSeconds * 1_000
+                        }
+                      />
+                    ) : null}
+                  </>
                 ) : null}
               </Fragment>
             )

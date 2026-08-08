@@ -21,6 +21,7 @@ import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-co
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
+import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
 
 type StoppingBackgroundTasks = {
   sessionId: string
@@ -74,6 +75,8 @@ export function NativeChatStructuredSession(
                 : 'ready',
       sessionId: props.sessionId,
       agent: props.agent,
+      context: EMPTY_AGENT_SESSION_CONTEXT,
+      markCompactionRequested: () => {},
       ...(controller.error ? { error: controller.error } : {}),
       hasMore: controller.hasOlder,
       loadingEarlier: controller.loadingOlder,

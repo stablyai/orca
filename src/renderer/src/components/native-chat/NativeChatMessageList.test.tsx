@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
 
 afterEach(cleanup)
 
@@ -25,7 +26,9 @@ const session: NativeChatLiveSession = {
   hasMore: false,
   loadingEarlier: false,
   loadEarlier: vi.fn(),
-  readPhase: 'ready'
+  readPhase: 'ready',
+  context: EMPTY_AGENT_SESSION_CONTEXT,
+  markCompactionRequested: vi.fn()
 }
 
 describe('NativeChatMessageList assistant messages', () => {

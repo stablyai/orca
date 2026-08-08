@@ -2,7 +2,6 @@ import type { CommitMessageDraftContext } from '../../shared/commit-message-gene
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
-import type { TuiAgent } from '../../shared/tui-agent'
 import { getStagedCommitContext } from '../git/status'
 import { SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE } from '../providers/ssh-git-dispatch'
 import { loadPullRequestLinkedIssue } from '../source-control/pull-request-linked-issue'
@@ -11,12 +10,9 @@ import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-mes
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
-  discoverCommitMessageModelsLocal,
-  discoverCommitMessageModelsRemote,
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
-  type DiscoverCommitMessageModelsResult,
   type GenerateCommitMessageResult,
   type GeneratePullRequestFieldsResult
 } from '../text-generation/commit-message-text-generation'
@@ -35,6 +31,8 @@ import {
   pullRequestDraftGitExec,
   type RuntimeCommitMessageSettingsOverride
 } from './runtime-git-generation-context'
+import { discoverRuntimeCommitMessageModels } from './runtime-git-model-discovery'
+import type { DiscoverCommitMessageModelsResult } from '../text-generation/commit-message-text-generation'
 
 export class RuntimeGitGenerationCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
@@ -251,40 +249,15 @@ export class RuntimeGitGenerationCommands {
   async discoverRuntimeCommitMessageModels(
     worktreeSelector: string,
     agentId: string,
-    settingsOverride?: Pick<RuntimeCommitMessageSettingsOverride, 'agentCmdOverrides'>
+    settingsOverride?: Pick<RuntimeCommitMessageSettingsOverride, 'agentCmdOverrides'>,
+    includeSessionDefaults?: boolean
   ): Promise<DiscoverCommitMessageModelsResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const typedAgentId = agentId as TuiAgent
-    const agentCommandOverride =
-      settingsOverride?.agentCmdOverrides?.[typedAgentId] ??
-      this.host.getRuntimeSettings().agentCmdOverrides?.[typedAgentId]
-    const route = runtimeGitRouteForTarget(target)
-    if (route.kind === 'ssh') {
-      const provider = route.provider
-      if (!provider) {
-        return { success: false, error: `No git provider for connection "${route.connectionId}"` }
-      }
-      return discoverCommitMessageModelsRemote(
-        typedAgentId,
-        target.worktree.path,
-        (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
-        agentCommandOverride
-      )
-    }
-    const localEnv = await prepareLocalCommitMessageAgentEnv(
-      typedAgentId,
-      this.host.getCommitMessageAgentEnvironment?.(),
-      localAgentRuntimeTargetForTarget(target)
+    return discoverRuntimeCommitMessageModels(
+      this.host,
+      worktreeSelector,
+      agentId,
+      settingsOverride,
+      includeSessionDefaults
     )
-    if (!localEnv.ok) {
-      return { success: false, error: localEnv.error }
-    }
-    const localOptions = localGitOptionsForTarget(target)
-    return localOptions.wslDistro
-      ? discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride, {
-          cwd: target.worktree.path,
-          wslDistro: localOptions.wslDistro
-        })
-      : discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride)
   }
 }

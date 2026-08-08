@@ -134,6 +134,7 @@ export const gitApi = {
     agentId: string
     worktreePath?: string
     connectionId?: string
+    includeSessionDefaults?: boolean
   }) => ipcRenderer.invoke('git:discoverCommitMessageModels', args),
   cancelGenerateCommitMessage: (args: {
     worktreePath: string

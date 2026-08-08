@@ -50,14 +50,16 @@ export async function generateRuntimeCommitMessage(
 
 export async function discoverRuntimeCommitMessageModels(
   context: RuntimeGitContext,
-  agentId: string
+  agentId: string,
+  options?: { includeSessionDefaults?: boolean }
 ): Promise<RuntimeDiscoverCommitMessageModelsResult> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.discoverCommitMessageModels({
       agentId,
       worktreePath: resolveLocalWorktreePath(context),
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...(options?.includeSessionDefaults ? { includeSessionDefaults: true } : {})
     }) as Promise<RuntimeDiscoverCommitMessageModelsResult>
   }
   return callRuntimeRpc<RuntimeDiscoverCommitMessageModelsResult>(
@@ -66,6 +68,7 @@ export async function discoverRuntimeCommitMessageModels(
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       agentId,
+      ...(options?.includeSessionDefaults ? { includeSessionDefaults: true } : {}),
       ...(context.settings?.agentCmdOverrides
         ? { agentCmdOverrides: context.settings.agentCmdOverrides }
         : {})
