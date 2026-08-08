@@ -147,7 +147,7 @@ describe('useNativeChatSessionOptions retirement on mount', () => {
     ensureNativeChatModelEnrichment({
       agent: 'grok',
       hostKey: 'local',
-      discover: async () => models('grok-4.5')
+      discover: async () => ({ models: models('grok-4.5') })
     })
     await vi.waitFor(() => expect(readNativeChatEnrichedModels('grok', 'local')).not.toBeNull())
 

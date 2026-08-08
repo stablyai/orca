@@ -2,10 +2,13 @@
 
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
-import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
+import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import {
+  clearNativeChatModelEnrichmentForTests,
+  type NativeChatModelEnrichment
+} from './native-chat-session-option-enrichment'
 
-const discoverModels = vi.fn<() => Promise<readonly CatalogModel[] | null>>()
+const discoverModels = vi.fn<() => Promise<NativeChatModelEnrichment | null>>()
 
 vi.mock('./native-chat-session-option-discovery', () => ({
   resolveNativeChatModelDiscoveryContext: () => ({ hostKey: 'host', runtime: null }),
@@ -25,10 +28,12 @@ import { useNativeChatSessionOptions } from './use-native-chat-session-options'
 const CLAUDE_SCREEN =
   'Claude Code v2.1.220\r\nOpus 5 (1M context) with high effort · API Usage Billing\r\n~/repo'
 
-const DISCOVERED: CatalogModel[] = [
-  { id: 'opus[1m]', label: 'Opus (1M context)', options: [] },
-  { id: 'haiku', label: 'Haiku', options: [] }
-]
+const DISCOVERED: NativeChatModelEnrichment = {
+  models:
+    getAgentSessionOptionCatalog('claude')?.models.filter(
+      ({ id }) => id === 'opus' || id === 'haiku'
+    ) ?? []
+}
 
 function modelDescriptor(snapshot: { id: string; kind: unknown }[]): {
   currentValue?: string
@@ -50,9 +55,9 @@ describe('useNativeChatSessionOptions model reporting', () => {
     // the reported id were left at the family the picker would show a row it
     // had to invent — and by then the frame may have scrolled out of the buffer,
     // so re-reading the screen is not an option.
-    let resolveDiscovery: (models: CatalogModel[]) => void = () => {}
+    let resolveDiscovery: (value: NativeChatModelEnrichment) => void = () => {}
     discoverModels.mockReturnValue(
-      new Promise<readonly CatalogModel[]>((resolve) => {
+      new Promise<NativeChatModelEnrichment>((resolve) => {
         resolveDiscovery = resolve
       })
     )
@@ -80,19 +85,26 @@ describe('useNativeChatSessionOptions model reporting', () => {
     resolveDiscovery(DISCOVERED)
 
     await waitFor(() =>
-      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('opus[1m]')
+      expect(
+        modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value)
+      ).toEqual(['opus', 'haiku'])
     )
-    // The invented family row is gone: every choice is one the host listed.
-    expect(modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value)).toEqual([
-      'opus[1m]',
-      'haiku'
-    ])
+    expect(modelDescriptor(result.current.snapshot).currentValue).toBe('opus')
+    expect(
+      (
+        result.current.snapshot.find(({ id }) => id === 'contextWindow')?.kind as
+          | {
+              currentValue?: string
+            }
+          | undefined
+      )?.currentValue
+    ).toBe('1m')
   })
 
   it('does not re-resolve a late snapshot from the previous pty', async () => {
-    let resolveDiscovery: (models: CatalogModel[]) => void = () => {}
+    let resolveDiscovery: (value: NativeChatModelEnrichment) => void = () => {}
     discoverModels.mockReturnValue(
-      new Promise<readonly CatalogModel[]>((resolve) => {
+      new Promise<NativeChatModelEnrichment>((resolve) => {
         resolveDiscovery = resolve
       })
     )
@@ -130,15 +142,15 @@ describe('useNativeChatSessionOptions model reporting', () => {
     await waitFor(() =>
       expect(
         modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value)
-      ).toEqual(['opus[1m]', 'haiku'])
+      ).toEqual(['opus', 'haiku'])
     )
     expect(modelDescriptor(result.current.snapshot).currentValue).toBeUndefined()
   })
 
   it('clears a previously reported screen when the target pty changes', async () => {
-    let resolveDiscovery: (models: CatalogModel[]) => void = () => {}
+    let resolveDiscovery: (value: NativeChatModelEnrichment) => void = () => {}
     discoverModels.mockReturnValue(
-      new Promise<readonly CatalogModel[]>((resolve) => {
+      new Promise<NativeChatModelEnrichment>((resolve) => {
         resolveDiscovery = resolve
       })
     )
@@ -171,7 +183,7 @@ describe('useNativeChatSessionOptions model reporting', () => {
     await waitFor(() =>
       expect(
         modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value)
-      ).toEqual(['opus[1m]', 'haiku'])
+      ).toEqual(['opus', 'haiku'])
     )
     expect(modelDescriptor(result.current.snapshot).currentValue).toBeUndefined()
   })

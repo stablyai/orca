@@ -11,11 +11,16 @@ import type {
   SessionOptionValue
 } from '../../../../shared/native-chat-session-options'
 
+export type NativeChatModelEnrichment = {
+  models: CatalogModel[]
+  reportedValues?: Record<string, SessionOptionValue>
+}
+
 type CatalogEnrichmentEntry = {
   agent: AgentType
   state: 'idle' | 'pending' | 'settled'
-  models: CatalogModel[] | null
-  listeners: Set<(models: CatalogModel[]) => void>
+  value: NativeChatModelEnrichment | null
+  listeners: Set<(value: NativeChatModelEnrichment) => void>
 }
 
 const enrichmentByAgentHost = new Map<string, CatalogEnrichmentEntry>()
@@ -28,21 +33,29 @@ export function readNativeChatEnrichedModels(
   agent: AgentType,
   hostKey: string
 ): CatalogModel[] | null {
-  const models = enrichmentByAgentHost.get(enrichmentKey(agent, hostKey))?.models
+  const models = enrichmentByAgentHost.get(enrichmentKey(agent, hostKey))?.value?.models
   return models ? [...models] : null
+}
+
+export function readNativeChatEnrichedReportedValues(
+  agent: AgentType,
+  hostKey: string
+): Record<string, SessionOptionValue> | null {
+  const values = enrichmentByAgentHost.get(enrichmentKey(agent, hostKey))?.value?.reportedValues
+  return values ? { ...values } : null
 }
 
 export function subscribeNativeChatEnrichedModels(
   agent: AgentType,
   hostKey: string,
-  listener: (models: CatalogModel[]) => void
+  listener: (value: NativeChatModelEnrichment) => void
 ): () => void {
   const key = enrichmentKey(agent, hostKey)
   const entry = enrichmentByAgentHost.get(key) ?? {
     agent,
     state: 'idle' as const,
-    models: null,
-    listeners: new Set<(models: CatalogModel[]) => void>()
+    value: null,
+    listeners: new Set<(value: NativeChatModelEnrichment) => void>()
   }
   entry.listeners.add(listener)
   enrichmentByAgentHost.set(key, entry)
@@ -59,9 +72,9 @@ export function resolveNativeChatLaunchSessionOptions(
   }
   let probed = false
   for (const entry of enrichmentByAgentHost.values()) {
-    if (entry.agent === agent && entry.models) {
+    if (entry.agent === agent && entry.value) {
       probed = true
-      if (entry.models.some((model) => model.id === values.model)) {
+      if (entry.value.models.some((model) => model.id === values.model)) {
         return values
       }
     }
@@ -72,10 +85,10 @@ export function resolveNativeChatLaunchSessionOptions(
 export function ensureNativeChatModelEnrichment(args: {
   agent: AgentType
   hostKey: string
-  discover: () => Promise<readonly CatalogModel[] | null>
+  discover: () => Promise<NativeChatModelEnrichment | null>
 }): void {
   const catalog = getAgentSessionOptionCatalog(args.agent)
-  if (!catalog?.listModels) {
+  if (!catalog) {
     return
   }
   const key = enrichmentKey(args.agent, args.hostKey)
@@ -86,7 +99,7 @@ export function ensureNativeChatModelEnrichment(args: {
   const entry: CatalogEnrichmentEntry = existing ?? {
     agent: args.agent,
     state: 'idle',
-    models: null,
+    value: null,
     listeners: new Set()
   }
   entry.state = 'pending'
@@ -98,17 +111,27 @@ export function ensureNativeChatModelEnrichment(args: {
     .discover()
     .then((discovered) => {
       entry.state = 'settled'
-      if (!discovered || discovered.length === 0) {
+      if (!discovered || discovered.models.length === 0) {
         return
       }
-      entry.models =
-        args.agent === 'claude'
-          ? [...discovered]
-          : catalog.discoveredModelsAreAuthoritative
-            ? mergeDiscoveredAuthoritativeModels(catalog.models, discovered)
-            : mergeCatalogModels(catalog.models, discovered)
+      entry.value = {
+        // Why: the Claude probe replaces the family seed wholesale; other agents
+        // merge over the seed (authoritative lists still retire absent ids).
+        models:
+          args.agent === 'claude'
+            ? [...discovered.models]
+            : catalog.discoveredModelsAreAuthoritative
+              ? mergeDiscoveredAuthoritativeModels(catalog.models, discovered.models)
+              : mergeCatalogModels(catalog.models, discovered.models),
+        ...(discovered.reportedValues ? { reportedValues: discovered.reportedValues } : {})
+      }
       for (const listener of entry.listeners) {
-        listener([...entry.models])
+        listener({
+          models: [...entry.value.models],
+          ...(entry.value.reportedValues
+            ? { reportedValues: { ...entry.value.reportedValues } }
+            : {})
+        })
       }
     })
     .catch(() => {

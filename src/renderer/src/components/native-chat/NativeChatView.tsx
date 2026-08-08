@@ -23,6 +23,7 @@ function NativeChatBridgeView({
   resolvedAgent,
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
+  restartSession,
   readTerminalScreen,
   contextMenuActions,
   orchestrationDispatchStatus
@@ -50,6 +51,9 @@ function NativeChatBridgeView({
           terminalTabId={terminalTabId}
           ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
           onSwitchToTerminal={onSwitchToTerminal}
+          restartSession={
+            restartSession ? (values) => restartSession(values, resolution.sessionId) : undefined
+          }
           readTerminalScreen={readTerminalScreen}
           contextMenuActions={contextMenuActions}
           orchestrationDispatchStatus={orchestrationDispatchStatus}

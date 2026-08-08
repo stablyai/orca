@@ -81,5 +81,7 @@ export type SessionOptionsSurface = {
   setOption(id: string, value: SessionOptionValue): Promise<SessionOptionSetResult>
   /** Invoke the value-less action exposed by the current descriptor. */
   invokeAction(id: string): Promise<SessionOptionSetResult>
+  /** Keep a user-entered model in this session's picker after it is confirmed. */
+  addCustomModel?(modelId: string): void
   subscribe(listener: (snapshot: SessionOptionDescriptor[]) => void): () => void
 }

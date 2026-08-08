@@ -10,6 +10,10 @@ import {
   type NativeChatTranscriptSubscription,
   type SubscribeNativeChatTranscriptArgs
 } from '../../../native-chat/transcript-watch'
+import {
+  agentSessionContextUsageEqual,
+  readNativeChatSessionContext
+} from '../../../native-chat/session-context-reader'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 import { sanitizeNativeChatRpcImageBlock } from './native-chat-rpc-image-block'
 
@@ -52,6 +56,7 @@ const NativeChatSession = z.object({
   // that advertise this semantic may receive one; legacy clients treat it as a
   // settled empty read and can overwrite retention / unblock launch drafts.
   capabilities: z.object({ transcriptPending: z.literal(1).optional() }).optional(),
+  paneKey: z.string().min(1).optional(),
   beforeOffset: z.number().int().nonnegative().optional()
 })
 
@@ -210,22 +215,26 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
     params: NativeChatSession,
     handler: async (params, { clientKind, signal }) => {
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-      const result = await readNativeChatTranscriptTail(
-        {
-          agent: params.agent,
-          sessionId: params.sessionId,
-          transcriptPath: params.transcriptPath,
-          limit,
-          beforeOffset: params.beforeOffset
-        },
-        signal
-      )
+      const [result, context] = await Promise.all([
+        readNativeChatTranscriptTail(
+          {
+            agent: params.agent,
+            sessionId: params.sessionId,
+            transcriptPath: params.transcriptPath,
+            limit,
+            beforeOffset: params.beforeOffset
+          },
+          signal
+        ),
+        readNativeChatSessionContext(params)
+      ])
       return 'messages' in result
         ? {
             messages: windowForClient(result.messages, clientKind, limit),
             hasMore: result.hasMore,
             beforeOffset: result.beforeOffset,
-            ...(result.lifecycle ? { lifecycle: result.lifecycle } : {})
+            ...(result.lifecycle ? { lifecycle: result.lifecycle } : {}),
+            ...(context.source === 'unavailable' ? {} : { context })
           }
         : result
     }
@@ -272,6 +281,26 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       if (closed) {
         return
       }
+      let context = await readNativeChatSessionContext(params)
+      if (closed || setupController.signal.aborted) {
+        return
+      }
+      const refreshContext = async (): Promise<void> => {
+        const next = await readNativeChatSessionContext({ ...params, current: context })
+        if (closed || agentSessionContextUsageEqual(context, next)) {
+          return
+        }
+        context = next
+        emit({
+          type: 'appended',
+          messages: [],
+          ...(context.source === 'unavailable' ? {} : { context })
+        })
+      }
+      let contextRefresh = Promise.resolve()
+      const scheduleContextRefresh = (): void => {
+        contextRefresh = contextRefresh.then(refreshContext).catch(() => undefined)
+      }
       const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
         agent: params.agent,
         sessionId: params.sessionId,
@@ -289,7 +318,8 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
             hasMore,
             beforeOffset,
             ...(error ? { error } : {}),
-            ...(lifecycle ? { lifecycle } : {})
+            ...(lifecycle ? { lifecycle } : {}),
+            ...(context.source === 'unavailable' ? {} : { context })
           })
         },
         ...(params.capabilities?.transcriptPending === 1
@@ -310,7 +340,8 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
             messages: windowForClient(messages, clientKind, limit),
             hasMore,
             beforeOffset,
-            ...(lifecycle ? { lifecycle } : {})
+            ...(lifecycle ? { lifecycle } : {}),
+            ...(context.source === 'unavailable' ? {} : { context })
           })
         },
         onAppend: (messages, lifecycle) => {
@@ -320,9 +351,12 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
           emit({
             type: 'appended',
             messages: sanitizeAppendForClient(messages, clientKind),
-            ...(lifecycle ? { lifecycle } : {})
+            ...(lifecycle ? { lifecycle } : {}),
+            ...(context.source === 'unavailable' ? {} : { context })
           })
-        }
+          scheduleContextRefresh()
+        },
+        onOpaqueAppend: scheduleContextRefresh
       }
       let subscription: NativeChatTranscriptSubscription
       try {

@@ -6,6 +6,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
+import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 
 type NativeChatOrchestrationProps = {
   orchestrationDispatchStatus?: AgentStatusOrchestrationContext['dispatchStatus']
@@ -29,6 +30,10 @@ export type NativeChatBridgeViewProps = NativeChatOrchestrationProps & {
   ownsTabWideLaunchDraft: boolean
   /** Return this pane to the hosted terminal surface. */
   onSwitchToTerminal?: () => void
+  restartSession?: (
+    values: Record<string, SessionOptionValue>,
+    sessionId?: string | null
+  ) => Promise<void> | void
   /** Current xterm screen reader used to recover agent-reported session state. */
   readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
@@ -55,6 +60,7 @@ export type NativeChatResolvedViewProps = NativeChatOrchestrationProps & {
   terminalTabId: string
   ownsTabWideLaunchDraft: boolean
   onSwitchToTerminal?: () => void
+  restartSession?: NativeChatBridgeViewProps['restartSession']
   readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }

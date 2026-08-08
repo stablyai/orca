@@ -1,3 +1,8 @@
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
+import type { NativeChatComposerHandle } from './native-chat-composer-types'
+import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
 type KeyboardRedirectEvent = {
   key: string
   ctrlKey: boolean
@@ -86,4 +91,39 @@ function eventTargetElement(target: EventTarget | null): Element | null {
     return candidate as Element
   }
   return candidate.parentElement ?? null
+}
+
+export function handleNativeChatTranscriptKeyDown(
+  event: ReactKeyboardEvent<HTMLDivElement>,
+  composer: NativeChatComposerHandle | null,
+  keybindings: Parameters<typeof matchNativeChatSplitShortcut>[2],
+  contextMenuActions?: Pick<NativeChatContextMenuActions, 'onSplitRight' | 'onSplitDown'>
+): void {
+  const splitDirection = event.repeat
+    ? null
+    : matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
+  if (splitDirection && contextMenuActions) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (splitDirection === 'right') {
+      contextMenuActions.onSplitRight()
+    } else {
+      contextMenuActions.onSplitDown()
+    }
+    return
+  }
+  // Backspace/Delete outside an input focuses the composer (like typing)
+  // but inserts nothing — let the now-focused field handle the keystroke.
+  if (shouldFocusNativeChatComposerFromEditingKey(event)) {
+    composer?.focus()
+    return
+  }
+  if (!shouldRedirectNativeChatTyping(event)) {
+    return
+  }
+  if (!composer?.insertTypedText(event.key)) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
 }

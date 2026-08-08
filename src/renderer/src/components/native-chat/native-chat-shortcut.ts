@@ -31,3 +31,13 @@ export function matchesNativeChatToggleShortcut(
   }
   return e.key.toLowerCase() === 'j'
 }
+
+export const NATIVE_CHAT_TOGGLE_REQUEST_EVENT = 'orca-native-chat-toggle-request'
+
+export function requestNativeChatToggle(terminalTabId: string): void {
+  window.dispatchEvent(
+    new CustomEvent<{ terminalTabId: string }>(NATIVE_CHAT_TOGGLE_REQUEST_EVENT, {
+      detail: { terminalTabId }
+    })
+  )
+}

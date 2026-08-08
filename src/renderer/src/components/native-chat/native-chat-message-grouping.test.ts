@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { buildNativeChatRenderItems, orderNativeChatMessages } from './native-chat-message-grouping'
+import {
+  buildNativeChatConversationItems,
+  buildNativeChatRenderItems,
+  orderNativeChatMessages
+} from './native-chat-message-grouping'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
 
 function msg(
@@ -112,5 +116,97 @@ describe('buildNativeChatRenderItems', () => {
       throw new Error('expected message')
     }
     expect(message.blocks).toEqual([{ type: 'text', text: 'running it' }])
+  })
+})
+
+describe('buildNativeChatConversationItems', () => {
+  it('keeps reasoning and tools chronological before the final answer', () => {
+    const items = buildNativeChatConversationItems(
+      [
+        msg({ id: 'u', role: 'user', timestamp: 1, blocks: [{ type: 'text', text: 'do it' }] }),
+        msg({
+          id: 'r',
+          role: 'reasoning',
+          timestamp: 2,
+          blocks: [{ type: 'text', text: 'checking' }]
+        }),
+        msg({
+          id: 'call',
+          timestamp: 3,
+          blocks: [{ type: 'tool-call', name: 'Bash', input: { cmd: 'pwd' } }]
+        }),
+        msg({
+          id: 'result',
+          role: 'tool',
+          timestamp: 4,
+          blocks: [{ type: 'tool-result', output: '/repo' }]
+        }),
+        msg({ id: 'final', timestamp: 5, blocks: [{ type: 'text', text: 'Done.' }] })
+      ],
+      false
+    )
+
+    expect(items).toHaveLength(2)
+    const turn = items[1]
+    expect(turn?.kind).toBe('assistant-turn')
+    if (turn?.kind !== 'assistant-turn') {
+      throw new Error('expected assistant turn')
+    }
+    expect(turn.activityMessages.map((message) => message.id)).toEqual(['r', 'call', 'result'])
+    expect(turn.finalMessage?.id).toBe('final')
+    expect(turn.startedAt).toBe(1)
+    expect(turn.completedAt).toBe(5)
+  })
+
+  it('keeps a live streaming preview separate from current activity', () => {
+    const items = buildNativeChatConversationItems(
+      [
+        msg({ id: 'u', role: 'user', timestamp: 1, blocks: [{ type: 'text', text: 'go' }] }),
+        msg({
+          id: 'r',
+          role: 'reasoning',
+          timestamp: 2,
+          blocks: [{ type: 'text', text: 'working' }]
+        }),
+        msg({
+          id: NATIVE_CHAT_STREAMING_ID,
+          timestamp: null,
+          blocks: [{ type: 'text', text: 'partial answer' }]
+        })
+      ],
+      true,
+      10
+    )
+    const turn = items[1]
+    if (turn?.kind !== 'assistant-turn') {
+      throw new Error('expected assistant turn')
+    }
+    expect(turn.working).toBe(true)
+    expect(turn.startedAt).toBe(10)
+    expect(turn.activityMessages.map((message) => message.id)).toEqual(['r'])
+    expect(turn.finalMessage?.id).toBe(NATIVE_CHAT_STREAMING_ID)
+  })
+
+  it('creates a new live turn after a fresh user message instead of reopening the prior turn', () => {
+    const items = buildNativeChatConversationItems(
+      [
+        msg({ id: 'u1', role: 'user', timestamp: 1, blocks: [{ type: 'text', text: 'one' }] }),
+        msg({ id: 'a1', timestamp: 2, blocks: [{ type: 'text', text: 'done' }] }),
+        msg({ id: 'u2', role: 'user', timestamp: 3, blocks: [{ type: 'text', text: 'two' }] })
+      ],
+      true,
+      4
+    )
+
+    expect(items).toHaveLength(4)
+    expect(items[1]).toMatchObject({ kind: 'assistant-turn', working: false })
+    expect(items[3]).toMatchObject({
+      kind: 'assistant-turn',
+      id: 'assistant-turn:u2',
+      working: true,
+      startedAt: 4,
+      activityMessages: [],
+      finalMessage: null
+    })
   })
 })

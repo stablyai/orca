@@ -24,10 +24,14 @@ import type {
   SpawnedSourceControlAgentProcess,
   SpawnSourceControlAgent
 } from './source-control-text-generation-types'
+import { startCodexAppServerModelDiscovery } from './codex-app-server-model-discovery'
+
+export { parseCodexAppServerModelDiscovery } from './codex-app-server-model-discovery'
 
 export type CommitMessageModelDiscoveryLocalOptions = {
   cwd?: string
   wslDistro?: string
+  includeSessionDefaults?: boolean
 }
 
 export async function discoverModelsLocal(input: {
@@ -44,6 +48,19 @@ export async function discoverModelsLocal(input: {
   }
   if (spec.modelSource === 'static' || !spec.modelDiscovery) {
     return staticModelDiscoveryResult(spec)
+  }
+  if (
+    input.agentId === 'codex' &&
+    input.options.includeSessionDefaults &&
+    !input.options.wslDistro
+  ) {
+    return runCodexProcessWithHomeLock(resolveCodexHomeProcessLockKeyForSpawnEnv(input.env), () =>
+      startCodexAppServerModelDiscovery({
+        spec,
+        env: input.env,
+        agentCommandOverride: input.agentCommandOverride
+      })
+    )
   }
 
   const startDiscovery = (): LocalProcessExecution<DiscoverCommitMessageModelsResult> => {

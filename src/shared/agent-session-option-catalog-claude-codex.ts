@@ -94,12 +94,14 @@ function claudeEffortWithChoices(choices: typeof EXTENDED_EFFORT_CHOICES): Catal
 export function createClaudeCatalogOptions(args: {
   effortLevelIds: readonly string[]
   supportsFastMode?: boolean
+  supportsContextWindow?: boolean
 }): CatalogOption[] {
   const effortChoices = EXTENDED_EFFORT_CHOICES.filter((choice) =>
     args.effortLevelIds.includes(choice.value)
   )
   return [
     ...(effortChoices.length > 0 ? [claudeEffortWithChoices(effortChoices)] : []),
+    ...(args.supportsContextWindow ? [CLAUDE_CONTEXT_WINDOW] : []),
     ...(args.supportsFastMode ? [CLAUDE_FAST_MODE] : [])
   ]
 }
@@ -112,7 +114,8 @@ function parseClaudeCatalogModels(stdout: string): CatalogModel[] {
       ...(model.description ? { description: model.description } : {}),
       options: createClaudeCatalogOptions({
         effortLevelIds: model.effortLevels,
-        supportsFastMode: model.supportsFastMode
+        supportsFastMode: model.supportsFastMode,
+        supportsContextWindow: claudeModelSupportsContextWindow(model.id)
       })
     }
   })
@@ -124,6 +127,63 @@ const CLAUDE_FAST_MODE: CatalogOption = {
   category: 'mode',
   kind: { type: 'boolean', defaultValue: false },
   apply: { midSession: { kind: 'toggle-command', command: '/fast' } }
+}
+
+const CLAUDE_CONTEXT_WINDOW: CatalogOption = {
+  id: 'contextWindow',
+  label: 'Context window',
+  category: 'model_config',
+  kind: {
+    type: 'select',
+    choices: [
+      { value: 'standard', label: 'Standard (200k)' },
+      { value: '1m', label: '1M' }
+    ],
+    defaultValue: 'standard'
+  },
+  apply: { composedIntoModel: true }
+}
+
+const CLAUDE_LATEST_MODEL_ALIASES: Record<string, string> = {
+  'claude-fable-5': 'fable',
+  'fable 5': 'fable',
+  'claude-opus-5': 'opus',
+  'opus 5': 'opus',
+  'claude-sonnet-5': 'sonnet',
+  'sonnet 5': 'sonnet'
+}
+
+export function normalizeClaudeModelId(value: string): string {
+  const model = value.trim().replace(/\[1m\]$/i, '')
+  return CLAUDE_LATEST_MODEL_ALIASES[model.toLowerCase()] ?? model
+}
+
+// The 1M context window ships on the Fable/Opus/Sonnet families only.
+export function claudeModelSupportsContextWindow(modelId: string): boolean {
+  const model = normalizeClaudeModelId(modelId)
+  return (
+    model === 'fable' ||
+    model === 'opus' ||
+    model === 'sonnet' ||
+    /^claude-(?:fable|opus|sonnet)-/i.test(model)
+  )
+}
+
+export function normalizeClaudeSessionOptionValues(
+  values: Record<string, string | boolean>
+): Record<string, string | boolean> {
+  if (typeof values.model !== 'string') {
+    return values
+  }
+  const rawModel = values.model.trim()
+  const model = normalizeClaudeModelId(rawModel)
+  return {
+    ...values,
+    model,
+    ...(claudeModelSupportsContextWindow(model) && values.contextWindow === undefined
+      ? { contextWindow: /\[1m\]$/i.test(rawModel) ? '1m' : 'standard' }
+      : {})
+  }
 }
 
 export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
@@ -138,20 +198,20 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       id: 'fable',
       label: 'Fable',
       description: 'Most capable for the hardest, longest-running tasks',
-      options: [claudeEffort(true)]
+      options: [claudeEffort(true), CLAUDE_CONTEXT_WINDOW]
     },
     {
       id: 'opus',
       label: 'Opus',
       description: 'Best for everyday, complex tasks',
-      options: [claudeEffort(true), CLAUDE_FAST_MODE]
+      options: [claudeEffort(true), CLAUDE_CONTEXT_WINDOW, CLAUDE_FAST_MODE]
     },
     {
       id: 'sonnet',
       label: 'Sonnet',
       description: 'Efficient for routine tasks',
       isDefault: true,
-      options: [claudeEffort(true)]
+      options: [claudeEffort(true), CLAUDE_CONTEXT_WINDOW]
     },
     {
       id: 'haiku',
@@ -177,11 +237,12 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   listModels: {
     command: `echo '${CLAUDE_MODEL_LIST_STDIN.trim()}' | claude ${CLAUDE_MODEL_LIST_ARGS.join(' ')}`,
     parse: parseClaudeCatalogModels
-  }
+  },
+  composeModelValue: (modelId, values) =>
+    values.contextWindow === '1m' ? `${modelId}[1m]` : modelId
 }
 
 const CODEX_EFFORT_CHOICES = [
-  { value: 'minimal', label: 'Minimal' },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
@@ -190,17 +251,18 @@ const CODEX_EFFORT_CHOICES = [
   { value: 'ultra', label: 'Ultra' }
 ]
 
-// Why: Codex can clamp higher values, so expose only each model's advertised levels.
-function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
-  const ceilingIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
+export function codexEffortFromChoices(
+  choices = CODEX_EFFORT_CHOICES,
+  defaultValue = 'medium'
+): CatalogOption {
   return {
     id: 'effort',
     label: 'Reasoning effort',
     category: 'thought_level',
     kind: {
       type: 'select',
-      choices: CODEX_EFFORT_CHOICES.slice(0, ceilingIndex + 1),
-      defaultValue: 'medium'
+      choices,
+      defaultValue
     },
     apply: {
       launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
@@ -211,8 +273,15 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
   }
 }
 
+// Why: Codex can clamp higher values, so expose only each model's advertised levels.
+function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
+  const ceilingIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
+  return codexEffortFromChoices(CODEX_EFFORT_CHOICES.slice(0, ceilingIndex + 1))
+}
+
 export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
+  capturesOptionsInLaunchCommand: true,
   // Why: Codex model access depends on auth. Keep this seed short and allow
   // unknown persisted ids to pass through instead of claiming a complete list.
   models: [

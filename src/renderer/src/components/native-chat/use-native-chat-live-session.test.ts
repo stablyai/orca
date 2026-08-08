@@ -61,6 +61,41 @@ import {
   type NativeChatLiveSession,
   type UseNativeChatLiveSessionArgs
 } from './use-native-chat-live-session'
+import { mergeNativeChatSessionContext } from './use-native-chat-session-stream'
+
+describe('mergeNativeChatSessionContext', () => {
+  const base = {
+    usedTokens: 120_000,
+    maxTokens: 258_400,
+    remainingTokens: 138_400,
+    usedPercent: 46.44,
+    source: 'provider' as const,
+    observedAt: 1,
+    compaction: 'requested' as const,
+    compactionUpdatedAt: 1
+  }
+
+  it('keeps a local compaction request until telemetry observes completion', () => {
+    expect(
+      mergeNativeChatSessionContext(base, {
+        ...base,
+        compaction: 'idle',
+        compactionUpdatedAt: null
+      })
+    ).toMatchObject({ compaction: 'requested', compactionUpdatedAt: 1 })
+
+    expect(
+      mergeNativeChatSessionContext(base, {
+        ...base,
+        usedTokens: 20_000,
+        remainingTokens: 238_400,
+        usedPercent: 7.74,
+        compaction: 'idle',
+        compactionUpdatedAt: null
+      })
+    ).toMatchObject({ usedTokens: 20_000, compaction: 'completed' })
+  })
+})
 
 function assistant(id: string, text: string): NativeChatMessage {
   return {

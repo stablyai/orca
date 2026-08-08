@@ -70,6 +70,7 @@ describe('agent session resume metadata', () => {
 
   it.each([
     ['claude', { key: 'session_id', id: 's1' }, ['claude', '--resume', 's1']],
+    ['openclaude', { key: 'session_id', id: 's1' }, ['openclaude', '--resume', 's1']],
     ['codex', { key: 'session_id', id: 's1' }, ['codex', 'resume', 's1']],
     ['gemini', { key: 'session_id', id: 's1' }, ['gemini', '--resume', 's1']],
     ['antigravity', { key: 'conversation_id', id: 's1' }, ['agy', '--conversation', 's1']],

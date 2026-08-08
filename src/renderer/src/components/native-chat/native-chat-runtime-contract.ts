@@ -3,6 +3,7 @@ import type {
   NativeChatReadSessionResult
 } from '../../../../preload/api-types'
 import type { NativeChatTurnLifecycle } from '../../../../shared/native-chat-types'
+import type { AgentSessionContextSnapshot } from '../../../../shared/agent-session-context'
 
 export const RUNTIME_NATIVE_CHAT_READ_ERROR = "Couldn't read agent chat from the remote runtime."
 
@@ -36,6 +37,64 @@ export function parseRuntimeNativeChatTurnLifecycle(
   }
 }
 
+export function parseRuntimeAgentSessionContext(
+  value: unknown
+): AgentSessionContextSnapshot | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined
+  }
+  const record = value as Record<string, unknown>
+  const nullableNumber = (field: string): number | null | undefined => {
+    const candidate = record[field]
+    return candidate === null
+      ? null
+      : typeof candidate === 'number' && Number.isFinite(candidate) && candidate >= 0
+        ? candidate
+        : undefined
+  }
+  const usedTokens = nullableNumber('usedTokens')
+  const maxTokens = nullableNumber('maxTokens')
+  const remainingTokens = nullableNumber('remainingTokens')
+  const usedPercent = nullableNumber('usedPercent')
+  const observedAt = nullableNumber('observedAt')
+  const compactionUpdatedAt = nullableNumber('compactionUpdatedAt')
+  if (
+    usedTokens === undefined ||
+    maxTokens === undefined ||
+    remainingTokens === undefined ||
+    usedPercent === undefined ||
+    observedAt === undefined ||
+    compactionUpdatedAt === undefined ||
+    (record.source !== 'provider' &&
+      record.source !== 'hook' &&
+      record.source !== 'statusline' &&
+      record.source !== 'unavailable') ||
+    (record.compaction !== 'idle' &&
+      record.compaction !== 'requested' &&
+      record.compaction !== 'running' &&
+      record.compaction !== 'completed' &&
+      record.compaction !== 'failed')
+  ) {
+    return undefined
+  }
+  return {
+    ...(typeof record.model === 'string' || record.model === null ? { model: record.model } : {}),
+    ...(typeof record.effort === 'string' || record.effort === null
+      ? { effort: record.effort }
+      : {}),
+    usedTokens,
+    maxTokens,
+    remainingTokens,
+    usedPercent,
+    source: record.source,
+    observedAt,
+    compaction: record.compaction,
+    compactionUpdatedAt,
+    ...(record.estimated === true ? { estimated: true } : {}),
+    ...(typeof record.error === 'string' ? { error: record.error } : {})
+  }
+}
+
 export function parseRuntimeNativeChatReadSessionResult(
   value: unknown
 ): NativeChatReadSessionResult {
@@ -45,9 +104,11 @@ export function parseRuntimeNativeChatReadSessionResult(
   const record = value as Record<string, unknown>
   if (Array.isArray(record.messages)) {
     const lifecycle = parseRuntimeNativeChatTurnLifecycle(record.lifecycle)
+    const context = parseRuntimeAgentSessionContext(record.context)
     return {
       messages: record.messages as NativeChatAppendedMessages,
-      ...(lifecycle ? { lifecycle } : {})
+      ...(lifecycle ? { lifecycle } : {}),
+      ...(context ? { context } : {})
     }
   }
   if (typeof record.error === 'string') {

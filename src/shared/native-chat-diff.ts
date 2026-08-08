@@ -5,6 +5,13 @@ export type NativeChatDiffLine = {
   text: string
 }
 
+export type NativeChatFileDiff = {
+  path: string
+  lines: NativeChatDiffLine[]
+  additions: number
+  deletions: number
+}
+
 /** Tools whose call carries the edit itself, so its row is a file change. */
 export const EDIT_TOOL_NAMES = new Set(['Edit', 'MultiEdit', 'Write', 'str_replace', 'apply_patch'])
 const MAX_DIFF_CHARS = 32_000
@@ -186,4 +193,93 @@ export function diffFromText(
     return null
   }
   return bounded.truncated ? [...lines.slice(0, maxLines - 1), DIFF_TRUNCATED_LINE] : lines
+}
+
+export function fileDiffsFromToolCall(name: string, input: unknown): NativeChatFileDiff[] {
+  const value = inputRecord(input)
+  const path = readString(value, 'file_path') ?? readString(value, 'path')
+  const direct = diffFromToolCall(name, value ?? input)
+  if (direct && path) {
+    return [
+      fileDiff(
+        path,
+        direct.filter((line) => line.text !== path)
+      )
+    ]
+  }
+  const patch = patchText(input, value)
+  return patch ? patchFileDiffs(patch) : []
+}
+
+function patchFileDiffs(patch: string): NativeChatFileDiff[] {
+  const files: NativeChatFileDiff[] = []
+  let path: string | null = null
+  let lines: NativeChatDiffLine[] = []
+  const flush = (): void => {
+    if (path && lines.length > 0) {
+      files.push(fileDiff(path, lines.slice(0, DEFAULT_MAX_DIFF_LINES)))
+    }
+    path = null
+    lines = []
+  }
+  for (const line of patch.slice(0, MAX_DIFF_CHARS).split('\n')) {
+    const nextPath =
+      line.match(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/)?.[1] ??
+      line.match(/^diff --git a\/.+ b\/(.+)$/)?.[1]
+    if (nextPath) {
+      flush()
+      path = nextPath
+      continue
+    }
+    if (!path || line === '*** Begin Patch' || line === '*** End Patch') {
+      continue
+    }
+    if (line.startsWith('@@')) {
+      lines.push({ kind: 'meta', text: line })
+    } else if (line.startsWith('+') && !line.startsWith('+++')) {
+      lines.push({ kind: 'add', text: line.slice(1) })
+    } else if (line.startsWith('-') && !line.startsWith('---')) {
+      lines.push({ kind: 'del', text: line.slice(1) })
+    } else if (!line.startsWith('---') && !line.startsWith('+++')) {
+      lines.push({ kind: 'context', text: line })
+    }
+  }
+  flush()
+  return files
+}
+
+function fileDiff(path: string, lines: NativeChatDiffLine[]): NativeChatFileDiff {
+  return {
+    path,
+    lines,
+    additions: lines.filter((line) => line.kind === 'add').length,
+    deletions: lines.filter((line) => line.kind === 'del').length
+  }
+}
+
+function inputRecord(input: unknown): Record<string, unknown> | null {
+  if (input && typeof input === 'object') {
+    return input as Record<string, unknown>
+  }
+  if (typeof input !== 'string') {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(input)
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
+function patchText(input: unknown, value: Record<string, unknown> | null): string | null {
+  if (typeof input === 'string' && input.includes('*** Begin Patch')) {
+    return input
+  }
+  return readString(value, 'patch') ?? readString(value, 'diff')
+}
+
+function readString(value: Record<string, unknown> | null, key: string): string | null {
+  const candidate = value?.[key]
+  return typeof candidate === 'string' && candidate ? candidate : null
 }

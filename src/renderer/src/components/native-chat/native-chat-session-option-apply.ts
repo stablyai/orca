@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: all session-option transitions share one serialized state machine. */
 import {
   findCatalogModel,
   findCatalogOption,
@@ -33,6 +34,7 @@ type SessionOptionApplyContext = {
   getModels: () => CatalogModel[]
   getRecord: () => NativeChatSessionOptionRecord
   dispatchCommand: NativeChatSessionOptionDispatchCommand
+  restartSession?: (values: Record<string, SessionOptionValue>) => Promise<void> | void
   onAgentPicker?: () => void
   /** The one persist entry point, shared with typed commands: it owns both the
    *  null-model guard and whether the id may be adopted as the launch default. */
@@ -45,6 +47,27 @@ type SessionOptionApplyContext = {
     value: SessionOptionValue,
     source: 'applied' | 'dispatched'
   ) => string | null
+}
+
+function restartValues(
+  ctx: SessionOptionApplyContext,
+  optionId: string,
+  value: SessionOptionValue,
+  previousModelId: string | null
+): Record<string, SessionOptionValue> {
+  const modelId = optionId === 'model' && typeof value === 'string' ? value : previousModelId
+  if (!modelId) {
+    return { [optionId]: value }
+  }
+  const record = ctx.getRecord()
+  const model = findCatalogModel({ ...ctx.catalog, models: ctx.getModels() }, modelId)
+  const values: Record<string, SessionOptionValue> = { model: modelId }
+  for (const option of model?.options ?? []) {
+    const tracked = record.valuesByModel[modelId]?.[option.id]?.value
+    values[option.id] = tracked ?? option.kind.defaultValue
+  }
+  values[optionId] = value
+  return values
 }
 
 /** Why: ordered applies make a later absolute target observe the result of an
@@ -150,7 +173,9 @@ async function dispatchLiveCommand(
   const expectedChoiceLabel =
     args.optionId === 'model' && typeof args.value === 'string'
       ? (findCatalogModel({ ...ctx.catalog, models }, args.value)?.label ?? args.value)
-      : undefined
+      : args.apply.composedIntoModel && args.modelId
+        ? findCatalogModel({ ...ctx.catalog, models }, args.modelId)?.label
+        : undefined
   return detectAgentInteraction
     ? await ctx.dispatchCommand(command, {
         detectAgentInteraction,
@@ -167,9 +192,12 @@ function applyDispatchOutcome(
     throw new Error('Claude kept the current model.')
   }
   if (dispatchResult?.outcome === 'unknown') {
-    ctx.clearModelTruth()
-    ctx.publish()
     throw new Error('Could not verify the model change; open the terminal to check.')
+  }
+  if (dispatchResult?.outcome === 'interaction-required') {
+    const snapshot = ctx.publish()
+    ctx.onAgentPicker?.()
+    return { snapshot }
   }
   return null
 }
@@ -188,6 +216,28 @@ async function applySetOption(
     throw new Error('This option must be changed in the agent picker.')
   }
 
+  if (ctx.mode === 'live' && apply.midSession?.kind === 'restart') {
+    if (!ctx.restartSession) {
+      throw new Error('This session cannot be restarted from chat.')
+    }
+    const values = restartValues(ctx, id, value, previousModelId)
+    await ctx.restartSession(values)
+    const nextModelId = typeof values.model === 'string' ? values.model : previousModelId
+    if (nextModelId) {
+      const record = ctx.getRecord()
+      record.model = { value: nextModelId, source: 'applied' }
+      record.valuesByModel[nextModelId] = Object.fromEntries(
+        Object.entries(values)
+          .filter(([optionId]) => optionId !== 'model')
+          .map(([optionId, optionValue]) => [
+            optionId,
+            { value: optionValue, source: 'applied' as const }
+          ])
+      )
+    }
+    return finish(ctx, { modelId: nextModelId, optionId: id, value })
+  }
+
   const liveFlipOnly = ctx.mode === 'live' && isFlipOnlyMidSession(apply.midSession)
   const trackedToggle = liveFlipOnly
     ? getTrackedOption(ctx.getRecord(), previousModelId, id)
@@ -200,9 +250,6 @@ async function applySetOption(
   if (liveFlipOnly && trackedToggle?.value === value) {
     return { snapshot: ctx.publish() }
   }
-  // Why: flip-only never heals via agent report — track as applied best-known.
-  const source = liveFlipOnly || ctx.mode !== 'live' ? 'applied' : 'dispatched'
-
   // Why: baseline for detecting a model switch, typed command, or agent report
   // that lands mid-dispatch, so the commit below never overwrites newer state.
   const trackedModelBeforeDispatch = trackedModelId(ctx.getRecord())
@@ -227,13 +274,31 @@ async function applySetOption(
   if (early) {
     return early
   }
+  // A harness-confirmed command is authoritative immediately; commands with
+  // no confirmation remain dispatched until telemetry reports the new value.
+  const source =
+    liveFlipOnly || ctx.mode !== 'live' || dispatchResult?.outcome === 'applied'
+      ? 'applied'
+      : 'dispatched'
 
   const record = ctx.getRecord()
   if (id === 'model' && previousModelId !== value) {
+    const previousValues = previousModelId ? record.valuesByModel[previousModelId] : undefined
     record.model = undefined
     if (ctx.mode === 'live' && typeof value === 'string') {
-      // Why: switching models can reset effort/toggles for the destination model.
-      delete record.valuesByModel[value]
+      const nextModel = findCatalogModel({ ...ctx.catalog, models: ctx.getModels() }, value)
+      // Session-wide controls such as Claude effort and fast mode survive a
+      // model switch. A plain model selection authoritatively selects the
+      // composed control default too (`opus` means 200k, not `opus[1m]`).
+      record.valuesByModel[value] = Object.fromEntries(
+        (nextModel?.options ?? []).flatMap((option) => {
+          if (option.apply.composedIntoModel) {
+            return [[option.id, { value: option.kind.defaultValue, source }]]
+          }
+          const tracked = previousValues?.[option.id]
+          return tracked ? [[option.id, tracked]] : []
+        })
+      )
     }
   }
 

@@ -14,6 +14,8 @@ import type {
 } from '../../../../shared/native-chat-session-options'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
+import type { AgentSessionContextSnapshot } from '../../../../shared/agent-session-context'
+import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
 
 export type NativeChatComposerFieldProps = {
   textareaRef: RefObject<HTMLTextAreaElement | null>
@@ -51,6 +53,9 @@ export type NativeChatComposerFieldProps = {
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
+  context?: AgentSessionContextSnapshot
+  canCompact?: boolean
+  onCompact?: () => Promise<void>
 }
 
 export type NativeChatComposerImageAttachment = {
@@ -121,7 +126,10 @@ export function NativeChatComposerField({
   onStop,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
-  sessionOptionsPickerRequest
+  sessionOptionsPickerRequest,
+  context = EMPTY_AGENT_SESSION_CONTEXT,
+  canCompact = false,
+  onCompact
 }: NativeChatComposerFieldProps): React.JSX.Element {
   // Value the IME started from, and whether a programmatic clear was dropped on top of it.
   const compositionBaseRef = useRef('')
@@ -272,6 +280,9 @@ export function NativeChatComposerField({
                 sessionOptionsSurface={sessionOptionsSurface}
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
+                context={context}
+                canCompact={canCompact}
+                onCompact={onCompact}
               />
             </div>
           </div>

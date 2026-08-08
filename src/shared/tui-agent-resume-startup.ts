@@ -11,6 +11,7 @@ import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
+import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
 
 export function buildAgentResumeStartupPlan(args: {
   agent: ResumableTuiAgent
@@ -32,29 +33,26 @@ export function buildAgentResumeStartupPlan(args: {
   }
   const shell = resolveStartupShell(args.platform, args.shell)
   const resolvedAgentCommand = args.agentCommand?.trim()
-  const baseCommand = resolvedAgentCommand
-    ? ({
-        ok: true,
-        command: resolvedAgentCommand,
-        commandWithoutSessionOptions: resolvedAgentCommand,
-        appliedSessionOptions: {}
-      } as const)
-    : resolveAgentLaunchCommand({
-        agent: args.agent,
-        cmdOverrides: args.cmdOverrides,
-        platform: args.platform,
-        shell,
-        agentArgs: args.agentArgs,
-        sessionOptions: args.sessionOptions,
-        sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
-        isRemote: args.isRemote
-      })
+  const baseCommand = resolveAgentLaunchCommand({
+    agent: args.agent,
+    cmdOverrides: resolvedAgentCommand
+      ? { ...args.cmdOverrides, [args.agent]: resolvedAgentCommand }
+      : args.cmdOverrides,
+    platform: args.platform,
+    shell,
+    agentArgs: resolvedAgentCommand ? null : args.agentArgs,
+    sessionOptions: args.sessionOptions,
+    sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
+    isRemote: args.isRemote
+  })
   if (!baseCommand.ok) {
     return null
   }
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    agentCommand: getAgentSessionOptionCatalog(args.agent)?.capturesOptionsInLaunchCommand
+      ? baseCommand.command
+      : baseCommand.commandWithoutSessionOptions
   })
   const launchCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
   const applied = baseCommand.appliedSessionOptions
