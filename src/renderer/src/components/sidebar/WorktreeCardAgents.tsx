@@ -167,12 +167,21 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       const focusAgentTab = (): boolean => {
         // Why: remote/paired projects can host the tab under a sibling worktree key in the
         // same project graph; only this card's list would miss a live multi-agent tab (#12739).
-        const tabsByWorktree = useAppStore.getState().tabsByWorktree
-        const tabPresent = Object.values(tabsByWorktree).some((tabs) =>
-          tabs?.some((tab) => tab.id === tabId)
-        )
-        if (!tabPresent) {
+        const state = useAppStore.getState()
+        let ownerWorktreeId: string | null = null
+        for (const [wtId, tabs] of Object.entries(state.tabsByWorktree)) {
+          if (tabs?.some((tab) => tab.id === tabId)) {
+            ownerWorktreeId = wtId
+            break
+          }
+        }
+        if (!ownerWorktreeId) {
           return false
+        }
+        // Why: setActiveTab only accepts tabs owned by activeWorktreeId; activating the
+        // card key alone leaves activeTabId unchanged when the tab lives under a sibling.
+        if (state.activeWorktreeId !== ownerWorktreeId) {
+          activateAndRevealWorktree(ownerWorktreeId)
         }
         activateTabAndFocusPane(tabId, parsed.leafId, {
           ackPaneKeyOnSuccess: paneKey,
@@ -182,6 +191,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         return true
       }
       // Why: design-doc rule — every user-initiated worktree switch must route through activateAndRevealWorktree (cross-repo activation + nav history).
+      // Prefer the card worktree first for nav history; focusAgentTab re-targets the owner if needed.
       activateAndRevealWorktree(worktreeId)
       if (focusAgentTab()) {
         return
