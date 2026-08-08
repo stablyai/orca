@@ -3,7 +3,16 @@ import type { RuntimeClient } from '../runtime-client'
 import { parseArgs } from '../args'
 import { printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'
+import type * as SelectorsModule from '../selectors'
 import { TERMINAL_HANDLERS } from './terminal'
+
+vi.mock('../selectors', async () => {
+  const actual = await vi.importActual<typeof SelectorsModule>('../selectors')
+  return {
+    ...actual,
+    getBrowserWorktreeSelector: vi.fn(async () => 'active')
+  }
+})
 
 describe('terminal close CLI', () => {
   afterEach(() => {
@@ -59,5 +68,35 @@ describe('terminal close CLI', () => {
     const help = String(log.mock.calls[0]?.[0])
     expect(help).toContain('orca terminal close [--terminal <handle>] [--tab] [--json]')
     expect(help).toContain('durable persistence')
+  })
+})
+
+describe('terminal create CLI contract', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('fails closed when the runtime returns success without a handle', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        terminal: {
+          handle: null,
+          worktreeId: 'wt-1',
+          title: null
+        }
+      }
+    })
+
+    await expect(
+      TERMINAL_HANDLERS['terminal create']({
+        flags: new Map([['worktree', 'active']]),
+        client: { call, isRemote: false } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining('without a terminal handle')
+    })
   })
 })
