@@ -13220,7 +13220,8 @@
           "561251019a": "More actions",
           "8c8b7f5ff5": "Show front matter",
           "10c39d58c1": "Hide front matter",
-          "1eef809708": "Word Wrap"
+          "1eef809708": "Word Wrap",
+          "6ba04c5002": "Reload from Disk"
         },
         "EditorPanelShell": {
           "e2c4dec350": "Loading editor..."

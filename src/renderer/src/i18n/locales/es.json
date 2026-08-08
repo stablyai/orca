@@ -12783,7 +12783,8 @@
           "561251019a": "Más acciones",
           "8c8b7f5ff5": "Mostrar front matter",
           "10c39d58c1": "Ocultar front matter",
-          "1eef809708": "Ajuste de línea"
+          "1eef809708": "Ajuste de línea",
+          "6ba04c5002": "Recargar desde disco"
         },
         "EditorPanelShell": {
           "e2c4dec350": "Cargando editor…"

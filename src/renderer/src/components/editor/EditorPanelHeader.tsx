@@ -50,6 +50,8 @@ type EditorPanelHeaderProps = {
   onToggleMarkdownTableOfContents: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
+  canReloadFromDisk: boolean
+  onReloadFromDisk: () => void
 }
 
 export function EditorPanelHeader({
@@ -83,7 +85,9 @@ export function EditorPanelHeader({
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
-  onExportMarkdownToPdf
+  onExportMarkdownToPdf,
+  canReloadFromDisk,
+  onReloadFromDisk
 }: EditorPanelHeaderProps): React.JSX.Element {
   const diffComments = useAppStore((s) =>
     selectWorktreeDiffCommentsOrEmpty(s, activeFile.worktreeId)
@@ -324,6 +328,8 @@ export function EditorPanelHeader({
         onToggleEditorWordWrap={() => void updateSettings({ editorWordWrap: !editorWordWrap })}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
+        canReloadFromDisk={canReloadFromDisk}
+        onReloadFromDisk={onReloadFromDisk}
       />
     </div>
   )
