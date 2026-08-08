@@ -563,30 +563,121 @@ describe('constructed shapes the macOS captures do not contain', () => {
     rig.unmount()
   })
 
-  // A chord interrupted by Cmd+Tab or Spotlight never delivers its release here. The carry it
-  // left must not answer for a later press of the same key: a bare arrow moving the preedit
-  // caret would otherwise send the missing chord's bytes to a shell the user never aimed at.
-  it('does not answer a later press with a carry whose release never arrived', async () => {
+  // The composition can live in a rename field or the search input, and that field can unmount
+  // while the key is still down — the release then arrives with the terminal as its target and
+  // walks straight past the editable guard. Refusing to arm from such a press closes that,
+  // where refusing at the release cannot.
+  it('never arms from a press aimed at a text field, even if the field then unmounts', async () => {
+    const rig = openRig()
+    const field = document.createElement('input')
+    rig.textarea.parentElement?.append(field)
+
+    const press = new KeyboardEvent('keydown', {
+      key: 'ArrowLeft',
+      code: 'ArrowLeft',
+      altKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    Object.defineProperties(press, { isComposing: { value: true }, keyCode: { value: 229 } })
+    field.dispatchEvent(press)
+    await macrotask()
+    field.remove()
+
+    await replay(rig.textarea, [
+      { t: 'keyup', key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, isComposing: true, alt: true }
+    ])
+
+    expect(rig.inputCalls).toEqual([])
+    rig.unmount()
+  })
+
+  // The action has already run by the time the release is consumed, so there is nothing left to
+  // race — and cutting a keyup off at window capture keeps it from ever reaching xterm, whose
+  // own keyup handler clears the flags its input path reads.
+  it('leaves the keyup itself to finish propagating', async () => {
+    const rig = openRig()
+    const seen: string[] = []
+    const listener = (event: KeyboardEvent): void => {
+      seen.push(event.type)
+    }
+    rig.textarea.addEventListener('keyup', listener)
+    await replay(rig.textarea, caseNamed(JAPANESE_CASE).rows)
+    rig.textarea.removeEventListener('keyup', listener)
+
+    expect(rig.inputCalls).toEqual(['\x01', '\x1bb', '\x15', '\x1b\x7f'])
+    // Four chord releases plus the letters and modifiers around them: every one arrives.
+    expect(seen.length).toBe(
+      caseNamed(JAPANESE_CASE).rows.filter((row) => row.t === 'keyup').length
+    )
+    rig.unmount()
+  })
+
+  // Three separate ways a carry can be left with no release of its own to spend it, each with
+  // its own escape. Split apart deliberately: one test covering all three passes as long as any
+  // one of them works, which pins none of them.
+  const ARMED_ALT_ARROW: RecordedRow[] = [
+    { t: 'compositionstart', data: '' },
+    { t: 'keydown', key: 'Alt', code: 'AltLeft', keyCode: 18, isComposing: true, alt: true },
+    {
+      t: 'keydown',
+      key: 'ArrowLeft',
+      code: 'ArrowLeft',
+      keyCode: 229,
+      isComposing: true,
+      alt: true
+    }
+  ]
+
+  // The user pressed the key again for its own sake. Whatever the last press carried is over,
+  // even though this one is IME-owned too and claims no carry of its own.
+  it('lets a later press of the same key supersede the carry', async () => {
     const rig = openRig()
     await replay(rig.textarea, [
-      { t: 'compositionstart', data: '' },
-      { t: 'keydown', key: 'Alt', code: 'AltLeft', keyCode: 18, isComposing: true, alt: true },
-      {
-        t: 'keydown',
-        key: 'ArrowLeft',
-        code: 'ArrowLeft',
-        keyCode: 229,
-        isComposing: true,
-        alt: true
-      }
-      // Focus leaves the window here: no keyup for either key ever arrives.
-    ])
-    expect(rig.inputCalls).toEqual([])
-
-    window.dispatchEvent(new Event('blur'))
-    await replay(rig.textarea, [
+      ...ARMED_ALT_ARROW,
       { t: 'keydown', key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 229, isComposing: true },
       { t: 'keyup', key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, isComposing: true }
+    ])
+
+    expect(rig.inputCalls).toEqual([])
+    rig.unmount()
+  })
+
+  // Cmd+Tab or Spotlight takes the release with it. If the window gets the keyup back later,
+  // the chord it belonged to is long gone.
+  it('drops the carry when focus leaves the window', async () => {
+    const rig = openRig()
+    await replay(rig.textarea, ARMED_ALT_ARROW)
+    window.dispatchEvent(new Event('blur'))
+    await replay(rig.textarea, [
+      { t: 'keyup', key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, isComposing: true, alt: true }
+    ])
+
+    expect(rig.inputCalls).toEqual([])
+    rig.unmount()
+  })
+
+  // The release arrived but a guard turned it away. The key is still up, so the press is still
+  // over — a carry that survives a refused release answers for whatever comes next instead.
+  it('spends the carry on a release a guard refuses', async () => {
+    const rig = openRig()
+    const field = document.createElement('input')
+    rig.textarea.parentElement?.append(field)
+    await replay(rig.textarea, ARMED_ALT_ARROW)
+
+    const refused = new KeyboardEvent('keyup', {
+      key: 'ArrowLeft',
+      code: 'ArrowLeft',
+      altKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    Object.defineProperties(refused, { isComposing: { value: true }, keyCode: { value: 37 } })
+    field.dispatchEvent(refused)
+    await macrotask()
+
+    await replay(rig.textarea, [
+      { t: 'keyup', key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, isComposing: true, alt: true }
     ])
 
     expect(rig.inputCalls).toEqual([])

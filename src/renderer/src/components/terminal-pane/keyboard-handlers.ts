@@ -43,6 +43,16 @@ import {
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 
+// What runShortcutAction actually touches. Narrow so the release can hand it a chord that
+// answers for the press rather than for the event that happens to be in flight.
+type ShortcutActionEvent = {
+  key: string
+  code?: string
+  repeat: boolean
+  preventDefault: () => void
+  stopImmediatePropagation: () => void
+}
+
 type PendingImeChord = Parameters<typeof resolveTerminalShortcutAction>[0] &
   Required<Pick<Parameters<typeof resolveTerminalShortcutAction>[0], 'code' | 'repeat'>> & {
     isComposing: boolean
@@ -444,7 +454,10 @@ export function useTerminalKeyboardShortcuts({
       // Every IME-owned keydown yields, chord or not. A chord the IME then swallows is
       // recovered from its release; one it merely delays arrives as an unmarked replay.
       if (isImeOwnedKeyboardEvent(e)) {
-        if (isImeExemptTerminalChord(e)) {
+        // Not armed from a rename field or the search input: that field can unmount before the
+        // key comes up, and the release would then arrive with the terminal as its target and
+        // pass the guard below, sending a chord aimed at the field to the shell.
+        if (isImeExemptTerminalChord(e) && !isEditableTarget(e.target)) {
           pendingImeChord = imeChordSnapshot(e)
         }
         return
@@ -502,7 +515,7 @@ export function useTerminalKeyboardShortcuts({
     // Shared by the keydown path and the swallowed-chord release below, so a chord recovered
     // from a release runs the same action a press would — including remaps onto pane commands.
     function runShortcutAction(
-      e: KeyboardEvent,
+      e: ShortcutActionEvent,
       action: NonNullable<ReturnType<typeof resolveShortcutEvent>>,
       manager: PaneManager
     ): void {
@@ -746,13 +759,19 @@ export function useTerminalKeyboardShortcuts({
       if (isEditableTarget(e.target)) {
         return
       }
-      // Matched on the press, suppressed on the release: `chord` carries the modifiers as they
-      // were when the key went down, while only the real event can consume the keystroke.
-      const pressed = {
+      // Matched on the press, consumed on the release. `chord` carries the modifiers as they
+      // were when the key went down; `preventDefault` forwards to the real event.
+      //
+      // The propagation stoppers do not. On a keydown they keep a second handler from acting on
+      // the same press, but by this point the action has already run and there is nothing left
+      // to race. Cutting a keyup off at window capture only costs: it never reaches xterm's own
+      // `_keyUp`, which clears the flags its input path reads, nor any window listener that
+      // happens to be registered after this one.
+      const pressed: PendingImeChord & ShortcutActionEvent & { stopPropagation: () => void } = {
         ...chord,
         preventDefault: () => e.preventDefault(),
-        stopPropagation: () => e.stopPropagation(),
-        stopImmediatePropagation: () => e.stopImmediatePropagation()
+        stopPropagation: () => {},
+        stopImmediatePropagation: () => {}
       }
       // Same precedence as the keydown path: a chord remapped onto tab.close closes an empty
       // floating panel there, and skipping it here would close the pane instead.
@@ -775,7 +794,7 @@ export function useTerminalKeyboardShortcuts({
       if (!action || action.type === 'switchInputSource') {
         return
       }
-      runShortcutAction(e, action, manager)
+      runShortcutAction(pressed, action, manager)
     }
 
     // Why: a chord interrupted by Cmd+Tab or Spotlight never delivers its release here, and a
