@@ -233,7 +233,8 @@ export function applyTerminalAppearance(
     opacityTransitionMs: paneStyles.opacityTransitionMs,
     dividerThicknessPx: paneStyles.dividerThicknessPx,
     focusFollowsMouse: paneStyles.focusFollowsMouse,
-    paddingX: settings.terminalPaddingX,
-    paddingY: settings.terminalPaddingY
+    // Why: match settings UI defaults so unset config still stamps CSS vars (not only the 4px fallback).
+    paddingX: settings.terminalPaddingX ?? 4,
+    paddingY: settings.terminalPaddingY ?? 4
   })
 }

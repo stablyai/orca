@@ -500,23 +500,27 @@
 
 /* Baseline xterm-container layout — padding is driven by CSS custom properties
    so Ghostty-imported window-padding-x/y can be applied without inline styles.
-   The fallback 4px preserves the legacy default. */
+   The fallback 4px preserves the legacy default.
+   Why 2× on width/height: only margin-top/left were applied historically, so
+   right and bottom stayed flush with the pane edge while the setting only
+   inset the start edges (#13252). Size shrinks by both sides; the trailing
+   gap is the matching padding. */
 .xterm-container {
   box-sizing: border-box;
   position: relative;
-  width: calc(100% - var(--pane-padding-x, 4px));
-  height: calc(100% - var(--pane-padding-y, 4px));
+  width: calc(100% - (2 * var(--pane-padding-x, 4px)));
+  height: calc(100% - (2 * var(--pane-padding-y, 4px)));
   margin-top: var(--pane-padding-y, 4px);
   margin-left: var(--pane-padding-x, 4px);
 }
 
 /* When a pane has a title, shift the terminal content down to make room.
    The .pane container uses position: relative, so the absolutely-positioned
-   title bar occupies the top title-height pixels. Height is reduced by the
-   same amount to prevent overflow/clipping. */
+   title bar occupies the top title-height pixels. Keep vertical padding below
+   the title and at the bottom so settings still inset both edges. */
 .pane[data-has-title] .xterm-container {
-  margin-top: var(--orca-pane-title-height);
-  height: calc(100% - var(--orca-pane-title-height)); /* match margin-top */
+  margin-top: calc(var(--orca-pane-title-height) + var(--pane-padding-y, 4px));
+  height: calc(100% - var(--orca-pane-title-height) - (2 * var(--pane-padding-y, 4px)));
 }
 
 /* Ghostty-style URL hover: glued to the pane's true bottom-left corner. */
