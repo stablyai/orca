@@ -59,23 +59,6 @@ async function expectFontCommandTimeout(
   })
 }
 
-describe('buildWindowsFontListScript', () => {
-  it('forces UTF-8 console output before enumerating font families', async () => {
-    const { buildWindowsFontListScript } = await import('./system-fonts')
-    const script = buildWindowsFontListScript()
-    expect(script).toContain('InstalledFontCollection')
-    // Why: pin order so enumeration cannot drift above the UTF-8 setup (#12590 review).
-    const encodingIndex = script.indexOf(
-      '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)'
-    )
-    const outputEncodingIndex = script.indexOf('$OutputEncoding = [Console]::OutputEncoding')
-    const enumerationIndex = script.indexOf('$fonts.Families | ForEach-Object')
-    expect(encodingIndex).toBeGreaterThanOrEqual(0)
-    expect(outputEncodingIndex).toBeGreaterThan(encodingIndex)
-    expect(enumerationIndex).toBeGreaterThan(outputEncodingIndex)
-  })
-})
-
 describe('listSystemFontFamilies', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -84,18 +67,22 @@ describe('listSystemFontFamilies', () => {
     killMock.mockReset()
   })
 
-  it('keeps Korean font family names when PowerShell already emits UTF-8', async () => {
+  it('sets UTF-8 stdout encoding as the first statement of the Windows font script', async () => {
     await withPlatform('win32', async () => {
       execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
-        cb(null, '굴림\nG마켓 산스 Medium\nConsolas\n')
+        cb(null, 'Consolas\n')
         return { kill: killMock }
       })
       const { listSystemFontFamilies } = await import('./system-fonts')
-      await expect(listSystemFontFamilies()).resolves.toEqual(
-        expect.arrayContaining(['굴림', 'G마켓 산스 Medium', 'Consolas'])
+      await listSystemFontFamilies()
+
+      const args = (execFileMock.mock.calls[0]?.[1] ?? []) as string[]
+      const script = args[args.indexOf('-Command') + 1] ?? ''
+      // Why: match the whole statement, not a substring — anything emitted above it
+      // still leaves in the OEM code page, and a swapped encoding must not slip by.
+      expect(script.trim().split(/\r?\n/)[0]).toBe(
+        '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)'
       )
-      const script = String(execFileMock.mock.calls[0]?.[1]?.at(-1) ?? '')
-      expect(script).toContain('UTF8Encoding')
     })
   })
 
