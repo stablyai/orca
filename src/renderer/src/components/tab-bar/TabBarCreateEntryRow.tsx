@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
+import { FilePathCursorTooltip, splitTrailingSegment } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
 import type { ActiveOption } from './tab-create-entry-active-option'
 
@@ -49,7 +50,7 @@ export function EntryActionRow({
 }): React.JSX.Element {
   const presentation = getActionPresentation(option)
 
-  return (
+  const row = (
     <button
       type="button"
       id={id}
@@ -69,13 +70,40 @@ export function EntryActionRow({
       </span>
       {presentation.showDetail ? (
         <>
-          <span className="text-muted-foreground/70" aria-hidden="true">
+          <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">
             ·
           </span>
-          <span className="min-w-0 truncate">{presentation.detail}</span>
+          {presentation.prioritizeFilename ? (
+            <FilenameFirstPath path={presentation.detail} />
+          ) : (
+            <span className="min-w-0 flex-1 truncate">{presentation.detail}</span>
+          )}
         </>
       ) : null}
     </button>
+  )
+
+  // Only the filename-first rows hide information. Every other row already shows
+  // its detail in full, and STYLEGUIDE.md:162 rules out labelling those.
+  if (!presentation.prioritizeFilename) {
+    return row
+  }
+
+  return <FilePathCursorTooltip path={presentation.detail}>{row}</FilePathCursorTooltip>
+}
+
+function FilenameFirstPath({ path }: { path: string }): React.JSX.Element {
+  const { directory, filename } = splitTrailingSegment(path)
+
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-1">
+      {/* shrink-0 + max-w-full: the directory gives up all of its width before
+          the filename loses a character. */}
+      <span className="min-w-0 max-w-full shrink-0 truncate">{filename}</span>
+      {directory ? (
+        <span className="min-w-0 truncate text-muted-foreground/70">{directory}</span>
+      ) : null}
+    </span>
   )
 }
 
@@ -83,6 +111,7 @@ function getActionPresentation(option: ActiveOption): {
   detail: string
   icon: React.ReactNode
   label: string
+  prioritizeFilename?: boolean
   showDetail: boolean
 } {
   if (option.kind === 'menu') {
@@ -132,6 +161,7 @@ function getActionPresentation(option: ActiveOption): {
           : classification.relativePath,
       icon: <FileText className="size-3.5 shrink-0" aria-hidden="true" />,
       label: translate('auto.components.tab.bar.TabBarCreateEntry.25dc1cd653', 'Open file'),
+      prioritizeFilename: true,
       showDetail: true
     }
   }

@@ -8,6 +8,7 @@ import {
   FileWarning,
   GitBranch,
   GitPullRequest,
+  Loader2,
   Search,
   SquareTerminal,
   Trash2,
@@ -40,8 +41,11 @@ import {
 } from './workspace-cleanup-candidate-row-data'
 import { StatusPill } from './workspace-cleanup-status-pill'
 
+export type WorkspaceCleanupDeletionPhase = 'deleting' | 'queued'
+
 type CandidateRowProps = {
   candidate: WorkspaceCleanupCandidate
+  deletionPhase?: WorkspaceCleanupDeletionPhase
   expanded: boolean
   failure?: string
   last: boolean
@@ -99,6 +103,7 @@ function MetadataIconChip({
 // prop identity changes); virtualization, not memo, bounds that cost.
 export const CandidateRow = React.memo(function CandidateRow({
   candidate,
+  deletionPhase,
   expanded,
   failure,
   last,
@@ -112,7 +117,10 @@ export const CandidateRow = React.memo(function CandidateRow({
   onToggleSelected,
   onView
 }: CandidateRowProps): React.JSX.Element {
-  const selectable = canQueueWorkspaceCleanupCandidate(candidate) && !removing
+  const deleting = deletionPhase !== undefined
+  // Why: derive from `deleting` too, so the row never offers a checkbox or
+  // Remove button while it is queuing/deleting, even if `removing` was omitted.
+  const selectable = canQueueWorkspaceCleanupCandidate(candidate) && !removing && !deleting
   const ignored = candidate.blockers.includes('dismissed')
   const blockers = getWorkspaceCleanupBlockerLabels(candidate)
   const contextDetails = formatContextDetails(candidate)
@@ -133,6 +141,7 @@ export const CandidateRow = React.memo(function CandidateRow({
       className={cn(
         'group w-full border-b border-border/60 px-3 py-2.5 text-left text-foreground transition-colors hover:bg-accent/40',
         selected && 'bg-accent/30',
+        deleting && 'opacity-70',
         last && 'border-b-0'
       )}
     >
@@ -152,6 +161,8 @@ export const CandidateRow = React.memo(function CandidateRow({
           >
             {selected ? <Check className="size-3" strokeWidth={3} /> : null}
           </button>
+        ) : deleting ? (
+          <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground" />
         ) : (
           <div className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         )}
@@ -159,7 +170,21 @@ export const CandidateRow = React.memo(function CandidateRow({
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
-            <StatusPill tone={status.tone}>{status.label}</StatusPill>
+            {deletionPhase ? (
+              <StatusPill tone="destructive">
+                {deletionPhase === 'queued'
+                  ? translate(
+                      'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.e1135728e3',
+                      'Queued for deletion'
+                    )
+                  : translate(
+                      'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.b5d2b33e47',
+                      'Deleting…'
+                    )}
+              </StatusPill>
+            ) : (
+              <StatusPill tone={status.tone}>{status.label}</StatusPill>
+            )}
             <MetadataIconChip
               icon={Clock3}
               label={`${translate(

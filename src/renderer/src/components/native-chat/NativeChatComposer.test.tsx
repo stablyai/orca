@@ -8,12 +8,15 @@ import type {
 } from '../../../../shared/native-chat-session-options'
 import type * as nativeChatAgentProfiles from '../../../../shared/native-chat-agent-profiles'
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
+import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
 
 const mocks = vi.hoisted(() => ({
   cancelPendingSends: vi.fn(),
   fieldProps: null as {
     onSend?: () => void
     onStop?: () => void
+    onCompositionStart?: () => void
+    onCompositionEnd?: (event: { currentTarget: HTMLTextAreaElement }) => void
     sessionOptionsSurface?: SessionOptionsSurface | null
     sessionOptionsSnapshot?: SessionOptionDescriptor[]
   } | null,
@@ -26,6 +29,7 @@ const mocks = vi.hoisted(() => ({
     dispose: ReturnType<typeof vi.fn>
   } | null,
   createClaudeModelSwitchConfirmationObserver: vi.fn(),
+  discoverCommitMessageModels: vi.fn(),
   getMainBufferSnapshot: vi.fn(),
   sendHandle: { cancel: vi.fn(), settleAfterMs: 500 },
   sendNativeChatMessage: vi.fn(),
@@ -135,6 +139,7 @@ describe('NativeChatComposer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearNativeChatSessionOptionCacheForTests()
+    clearNativeChatModelEnrichmentForTests()
     mocks.fieldProps = null
     mocks.modelSwitchOutcome = 'applied'
     mocks.draftScopeKeys.length = 0
@@ -151,12 +156,36 @@ describe('NativeChatComposer', () => {
       return observer
     })
     mocks.getMainBufferSnapshot.mockResolvedValue(null)
+    mocks.discoverCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [
+        {
+          id: 'opus',
+          label: 'Opus',
+          thinkingLevels: [
+            { id: 'medium', label: 'Medium' },
+            { id: 'high', label: 'High' }
+          ]
+        },
+        {
+          id: 'sonnet',
+          label: 'Sonnet',
+          thinkingLevels: [
+            { id: 'medium', label: 'Medium' },
+            { id: 'high', label: 'High' }
+          ]
+        },
+        { id: 'fable', label: 'Fable' }
+      ]
+    })
     mocks.sendNativeChatMessage.mockReturnValue(mocks.sendHandle)
     mocks.sendNativeChatMessageVerified.mockResolvedValue(true)
     mocks.sendHandle.settleAfterMs = 500
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
+        git: { discoverCommitMessageModels: mocks.discoverCommitMessageModels },
         pty: { getMainBufferSnapshot: mocks.getMainBufferSnapshot },
         ui: { onFileDrop: () => vi.fn() }
       }
@@ -249,6 +278,99 @@ describe('NativeChatComposer', () => {
     )
 
     expect(new Set(mocks.draftScopeKeys)).toEqual(new Set(['tab-1:leaf-1']))
+  })
+
+  it('adopts an IME deletion delivered only by compositionend', () => {
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+    const textarea = document.createElement('textarea')
+    textarea.value = ''
+    mocks.setDraft.mockClear()
+
+    act(() => {
+      mocks.fieldProps?.onCompositionStart?.()
+      mocks.fieldProps?.onCompositionEnd?.({ currentTarget: textarea })
+    })
+
+    expect(mocks.setDraft).toHaveBeenCalledOnce()
+    expect(mocks.setDraft).toHaveBeenCalledWith('')
+  })
+
+  it('does not duplicate a composition value already adopted by onChange', () => {
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+    const textarea = document.createElement('textarea')
+    textarea.value = 'hello'
+    mocks.setDraft.mockClear()
+
+    act(() => mocks.fieldProps?.onCompositionEnd?.({ currentTarget: textarea }))
+
+    expect(mocks.setDraft).not.toHaveBeenCalled()
+  })
+
+  it('renders the Claude model picker while host discovery is still pending', () => {
+    mocks.discoverCommitMessageModels.mockReturnValue(new Promise(() => {}))
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="claude"
+        readTerminalScreen={() => null}
+      />
+    )
+
+    expect(mocks.fieldProps?.sessionOptionsSnapshot?.[0]).toMatchObject({
+      id: 'model',
+      kind: {
+        choices: expect.arrayContaining([
+          expect.objectContaining({ value: 'opus', label: 'Opus' }),
+          expect.objectContaining({ value: 'sonnet', label: 'Sonnet' })
+        ])
+      }
+    })
+  })
+
+  it('keeps the Claude model picker when an older remote runtime omits the catalog origin', async () => {
+    mocks.discoverCommitMessageModels.mockResolvedValue({
+      success: true,
+      defaultModelId: 'sonnet',
+      models: [{ id: 'sonnet', label: 'Sonnet' }]
+    })
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="claude"
+        readTerminalScreen={() => null}
+      />
+    )
+
+    await waitFor(() => expect(mocks.discoverCommitMessageModels).toHaveBeenCalled())
+    await act(async () => undefined)
+
+    expect(mocks.fieldProps?.sessionOptionsSnapshot?.[0]).toMatchObject({
+      id: 'model',
+      kind: {
+        choices: expect.arrayContaining([
+          expect.objectContaining({ value: 'fable', label: 'Fable' }),
+          expect.objectContaining({ value: 'haiku', label: 'Haiku' })
+        ])
+      }
+    })
   })
 
   it('shows the model already selected in the Claude TUI when chat opens', async () => {
@@ -356,7 +478,7 @@ describe('NativeChatComposer', () => {
     expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith({
       ptyId: 'pty-1',
       settings: {},
-      expectedModelLabel: 'Opus 4.8'
+      expectedModelLabel: 'Opus'
     })
     expect(onSwitchToTerminal).not.toHaveBeenCalled()
   })
@@ -387,7 +509,7 @@ describe('NativeChatComposer', () => {
     expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith({
       ptyId: 'pty-1',
       settings: {},
-      expectedModelLabel: 'Fable 5'
+      expectedModelLabel: 'Fable'
     })
     expect(mocks.confirmationObserver?.arm).toHaveBeenCalledOnce()
     expect(mocks.confirmationObserver?.arm.mock.invocationCallOrder[0]).toBeLessThan(
@@ -428,7 +550,7 @@ describe('NativeChatComposer', () => {
     expect(onSwitchToTerminal).toHaveBeenCalledOnce()
   })
 
-  it('waits for the Codex picker command before switching to the terminal', async () => {
+  it('applies a Codex model change without switching to the terminal', async () => {
     mocks.sendHandle.settleAfterMs = 0
     const onSwitchToTerminal = vi.fn()
     render(
@@ -441,17 +563,17 @@ describe('NativeChatComposer', () => {
       />
     )
 
-    // Why: Codex model is agent-picker mid-session — setOption rejects; UI uses invokeAction.
+    // Codex model changes are value-bearing commands; only effort still uses the TUI picker.
     await act(async () => {
-      await mocks.fieldProps?.sessionOptionsSurface?.invokeAction('model')
+      await mocks.fieldProps?.sessionOptionsSurface?.setOption('model', 'gpt-5.5')
     })
 
     expect(mocks.sendNativeChatMessageVerified).toHaveBeenCalledWith(
       {},
       'pty-1',
-      '/model',
+      '/model gpt-5.5',
       expect.any(AbortSignal)
     )
-    expect(onSwitchToTerminal).toHaveBeenCalledOnce()
+    expect(onSwitchToTerminal).not.toHaveBeenCalled()
   })
 })

@@ -406,7 +406,7 @@ describe('startParkedTerminalByteWatcher', () => {
   it('feeds Command Code output through the parked byte detector', async () => {
     const { dispose } = await startWatcher()
 
-    emit('# Command Code v0.27.2')
+    emit('# Command Code v0.27.2\r\n')
     emit('⌘ Parsing...')
 
     expect(commandStatusPolicy.onCommandCodeWorking).toHaveBeenCalledTimes(1)
@@ -540,6 +540,19 @@ describe('startParkedTerminalByteWatcher', () => {
 
     // Idempotent: a second dispose must not throw or clobber another watcher.
     dispose()
+  })
+
+  // Why: retained gauges would inflate every later high-water profile.
+  it('dispose drops the processor from the pty side-effect census', async () => {
+    await import('./pty-side-effect-pending-census')
+    const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
+    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
+
+    const { dispose } = await startWatcher()
+    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
+
+    dispose()
+    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
   })
 
   it('disposes the previous watcher when a new one starts for the same PTY', async () => {

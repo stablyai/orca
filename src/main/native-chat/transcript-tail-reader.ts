@@ -9,7 +9,8 @@ import { resolveSessionFilePath, type ResolveSessionFileOptions } from './sessio
 import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine
+  decodeGrokTranscriptLine,
+  decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { transcriptFallbackId } from './transcript-fallback-id'
 import {
@@ -32,6 +33,9 @@ export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineD
   }
   if (transcriptAgent === 'grok') {
     return decodeGrokTranscriptLine
+  }
+  if (transcriptAgent === 'omp') {
+    return decodeOmpTranscriptLine
   }
   return null
 }

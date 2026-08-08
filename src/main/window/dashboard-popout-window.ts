@@ -22,7 +22,7 @@ import {
   type KeybindingOverrides
 } from '../../shared/keybindings'
 
-const DEFAULT_VIEW = 'kanban'
+const DEFAULT_VIEW = 'board'
 const DASHBOARD_POPOUT_PARTITION = 'orca-dashboard-popout'
 
 // Why: singleton — the dashboard is a companion surface, so a second "Pop Out"
@@ -110,7 +110,7 @@ function broadcastPopoutOpenChanged(open: boolean): void {
  */
 export function createOrFocusDashboardPopout(
   store: Store | null,
-  view: string = DEFAULT_VIEW,
+  view?: string,
   options: { getKeybindings?: () => KeybindingOverrides | undefined } = {}
 ): BrowserWindow {
   if (dashboardPopoutWindow && !dashboardPopoutWindow.isDestroyed()) {
@@ -118,8 +118,13 @@ export function createOrFocusDashboardPopout(
       dashboardPopoutWindow.restore()
     }
     dashboardPopoutWindow.focus()
+    if (view) {
+      dashboardPopoutWindow.webContents.send('dashboard:viewRequested', view)
+    }
     return dashboardPopoutWindow
   }
+
+  const initialView = view ?? DEFAULT_VIEW
 
   const savedBounds = resolveRestoredPopoutBounds(
     store?.getUI().dashboardPopoutBounds ?? null,
@@ -230,7 +235,7 @@ export function createOrFocusDashboardPopout(
       }
     })
 
-    loadPopoutHtml(window, `view=${encodeURIComponent(view)}`)
+    loadPopoutHtml(window, `view=${encodeURIComponent(initialView)}`)
   } catch (err) {
     unsubscribeUIChanged?.()
     if (!window.isDestroyed()) {

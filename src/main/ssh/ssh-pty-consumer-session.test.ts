@@ -18,6 +18,7 @@ function legacyOwnerGrant(overrides: Record<string, unknown> = {}): Record<strin
     role: 'session-owner',
     ownerGeneration: 7,
     ownerLease: 'lease-a',
+    resumed: false,
     ...overrides
   }
 }
@@ -32,11 +33,14 @@ describe('openSshPtyConsumerSession', () => {
         expectedServerBuildId: 'build-a'
       })
     ).resolves.toEqual({
-      mode: 'negotiated',
-      clientInstanceId: 'client-a',
-      clientGeneration: 3,
-      ownerGeneration: 7,
-      ownerLease: 'lease-a'
+      state: {
+        mode: 'negotiated',
+        clientInstanceId: 'client-a',
+        clientGeneration: 3,
+        ownerGeneration: 7,
+        ownerLease: 'lease-a'
+      },
+      resumed: false
     })
     expect(request).toHaveBeenCalledWith(
       'pty.openClient',
@@ -51,9 +55,9 @@ describe('openSshPtyConsumerSession', () => {
 
   it('carries recovery generation and lease on reconnect', async () => {
     const { mux, request } = muxReturning(
-      legacyOwnerGrant({ ownerGeneration: 8, ownerLease: 'lease-b' })
+      legacyOwnerGrant({ ownerGeneration: 8, ownerLease: 'lease-a', resumed: true })
     )
-    await openSshPtyConsumerSession(mux, {
+    const admission = await openSshPtyConsumerSession(mux, {
       clientInstanceId: 'client-a',
       expectedServerBuildId: 'build-a',
       resume: { ownerGeneration: 7, ownerLease: 'lease-a' }
@@ -62,7 +66,29 @@ describe('openSshPtyConsumerSession', () => {
     expect(request.mock.calls[0][1]).toMatchObject({
       resume: { ownerGeneration: 7, ownerLease: 'lease-a' }
     })
+    expect(admission.resumed).toBe(true)
   })
+
+  it.each([undefined, 'yes', 1, null])(
+    'rejects an owner grant that does not state whether the claim was resumed',
+    async (resumed) => {
+      const grant = legacyOwnerGrant()
+      // Why not a legacy peer: the build id already matched, and client and relay ship together.
+      if (resumed === undefined) {
+        delete grant.resumed
+      } else {
+        grant.resumed = resumed
+      }
+      const { mux } = muxReturning(grant)
+
+      await expect(
+        openSshPtyConsumerSession(mux, {
+          clientInstanceId: 'client-a',
+          expectedServerBuildId: 'build-a'
+        })
+      ).rejects.toThrow('whether the claim was resumed')
+    }
+  )
 
   it('rejects a prior or mismatched relay build', async () => {
     const { mux } = muxReturning(legacyOwnerGrant({ serverBuildId: 'old-build' }))
@@ -126,9 +152,12 @@ describe('openSshPtyConsumerSession', () => {
         outputFlowControl: { requestedWindowSu: 64 }
       })
     ).resolves.toEqual({
-      mode: 'legacy-fallback',
-      clientInstanceId: 'client-a',
-      serverBuildId: 'build-a'
+      state: {
+        mode: 'legacy-fallback',
+        clientInstanceId: 'client-a',
+        serverBuildId: 'build-a'
+      },
+      resumed: false
     })
   })
 

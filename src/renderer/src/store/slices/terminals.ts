@@ -51,12 +51,18 @@ import type { SessionOptionValue } from '../../../../shared/native-chat-session-
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
+import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
+import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
-import { pushClosedTerminalTabSnapshot, pushRecentlyClosedTabKind } from './recently-closed-tabs'
+import {
+  getRecentlyClosedTabPosition,
+  pushClosedTerminalTabSnapshot,
+  pushRecentlyClosedTabKind
+} from './recently-closed-tabs'
 import { isClaudeAgent } from '@/lib/agent-status'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
@@ -681,6 +687,7 @@ export type TerminalSlice = {
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
+  setAiVaultTabTitle: (tabId: string, aiVaultTitle: AiVaultSessionTitle | null) => void
   setGeneratedTabTitleFromAgentPrompt: (
     paneKey: string,
     prompt: string,
@@ -751,6 +758,11 @@ export type TerminalSlice = {
   ) => string[]
   clearCodexRestartNotice: (ptyId: string) => void
   dismissCodexRestartNotices: (ptyIds: string[]) => void
+  /** Puts an accepted-but-unexecuted restart back to the unanswered prompt, so a
+   *  failed execution never leaves a pane input-blocked with nothing visible. */
+  reopenCodexRestartPrompt: (ptyId: string) => void
+  /** Rebinds one layout leaf to a replacement PTY without a mounted pane. */
+  replaceTerminalLayoutPanePtyId: (tabId: string, leafId: string, ptyId: string) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
@@ -1272,15 +1284,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   setCacheTimerStartedAt: (key, ts) => {
     set((s) => {
-      const next = { ...s.cacheTimerByKey, [key]: ts }
       // Why: a real pane write clears any ':seed' sentinel from seedCacheTimersForIdleTabs, avoiding phantom timers when the seed key doesn't match the real pane.
       const colonIdx = key.indexOf(':')
-      if (colonIdx !== -1) {
-        const tabId = key.slice(0, colonIdx)
-        const suffix = key.slice(colonIdx + 1)
-        if (suffix !== 'seed') {
-          delete next[`${tabId}:seed`]
-        }
+      const suffix = colonIdx === -1 ? null : key.slice(colonIdx + 1)
+      const seedKey = colonIdx !== -1 && suffix !== 'seed' ? `${key.slice(0, colonIdx)}:seed` : null
+      const hasStaleSeed = seedKey !== null && seedKey in s.cacheTimerByKey
+      // Why: parked-pane watchers replay null-over-null on every working/exit transition; each redundant write runs every subscriber's selector.
+      if (s.cacheTimerByKey[key] === ts && !hasStaleSeed) {
+        return s
+      }
+      const next = { ...s.cacheTimerByKey, [key]: ts }
+      if (seedKey !== null) {
+        delete next[seedKey]
       }
       return { cacheTimerByKey: next }
     })
@@ -1720,6 +1735,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
       // Why: only explicit user closes feed the Cmd+Shift+T reopen stack; cleanup/PTY-exit closes must not pollute undo history.
+      const closedPosition =
+        closedWorktreeId && closedTab
+          ? getRecentlyClosedTabPosition(s, closedWorktreeId, closedTab.id)
+          : undefined
       const capturedSnapshot =
         closeReason === 'user' &&
         opts?.captureRecentlyClosed !== false &&
@@ -1729,7 +1748,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               ...(closedTab.startupCwd ? { startupCwd: closedTab.startupCwd } : {}),
               ...(closedTab.shellOverride ? { shellOverride: closedTab.shellOverride } : {}),
               ...(closedTab.customTitle ? { customTitle: closedTab.customTitle } : {}),
-              ...(closedTab.color ? { color: closedTab.color } : {})
+              ...(closedTab.color ? { color: closedTab.color } : {}),
+              ...(closedPosition ? { position: closedPosition } : {})
             }
           : null
       const nextExpanded = { ...s.expandedPaneByTabId }
@@ -2114,6 +2134,37 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
       return nextState
+    })
+  },
+
+  setAiVaultTabTitle: (tabId, aiVaultTitle) => {
+    set((s) => {
+      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+      if (!ownerWorktreeId) {
+        return s
+      }
+      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
+      const current = tabs.find((tab) => tab.id === tabId)
+      const sameTitle =
+        current?.aiVaultTitle?.agent === aiVaultTitle?.agent &&
+        current?.aiVaultTitle?.sessionId === aiVaultTitle?.sessionId &&
+        current?.aiVaultTitle?.title === aiVaultTitle?.title
+      if (!current || sameTitle) {
+        return s
+      }
+      const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, aiVaultTitle } : tab))
+      const unifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
+      const nextUnifiedTabs = unifiedTabs.map((tab) =>
+        tab.contentType === 'terminal' && tab.entityId === tabId ? { ...tab, aiVaultTitle } : tab
+      )
+      scheduleRuntimeGraphSync()
+      return {
+        tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs },
+        unifiedTabsByWorktree: {
+          ...s.unifiedTabsByWorktree,
+          [ownerWorktreeId]: nextUnifiedTabs
+        }
+      }
     })
   },
 
@@ -3457,7 +3508,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             ? removeSleepingRecordsReplacedByManualWorktreeSleep(
                 s.sleepingAgentSessionsByPaneKey,
                 worktreeId,
-                opts?.sleepingPaneKeys
+                opts?.sleepingPaneKeys,
+                sleepingAgentSessionRecords
               ).records
             : s.sleepingAgentSessionsByPaneKey
         return {
@@ -3660,6 +3712,40 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
+  reopenCodexRestartPrompt: (ptyId) => {
+    set((s) => {
+      const notice = s.codexRestartNoticeByPtyId[ptyId]
+      if (!notice?.restartRequested) {
+        return {}
+      }
+      const { restartRequested: _restartRequested, ...kept } = notice
+      const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+      delete nextPendingCodexPaneRestartIds[ptyId]
+      return {
+        codexRestartNoticeByPtyId: { ...s.codexRestartNoticeByPtyId, [ptyId]: kept },
+        pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+      }
+    })
+  },
+
+  replaceTerminalLayoutPanePtyId: (tabId, leafId, ptyId) => {
+    set((s) => {
+      const layout = s.terminalLayoutsByTabId[tabId]
+      if (!layout || layout.ptyIdsByLeafId?.[leafId] === ptyId) {
+        return {}
+      }
+      return {
+        terminalLayoutsByTabId: {
+          ...s.terminalLayoutsByTabId,
+          [tabId]: {
+            ...layout,
+            ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
+          }
+        }
+      }
+    })
+  },
+
   setTabPaneExpanded: (tabId, expanded) => {
     set((s) => ({
       expandedPaneByTabId: { ...s.expandedPaneByTabId, [tabId]: expanded }
@@ -3675,20 +3761,27 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   setTabLayout: (tabId, layout) => {
     let ownershipTransfers: ReturnType<typeof resolveTerminalLayoutPtyOwnershipTransfers> = []
     set((s) => {
-      const next = { ...s.terminalLayoutsByTabId }
-      if (layout) {
-        const normalized = normalizeTerminalLayoutPtyOwnership(layout)
-        next[tabId] = normalized.snapshot
-        if (normalized.changed) {
-          ownershipTransfers = resolveTerminalLayoutPtyOwnershipTransfers(
-            layout,
-            normalized.snapshot
-          )
+      if (!layout) {
+        if (!(tabId in s.terminalLayoutsByTabId)) {
+          return s
         }
-      } else {
+        const next = { ...s.terminalLayoutsByTabId }
         delete next[tabId]
+        return { terminalLayoutsByTabId: next }
       }
-      return { terminalLayoutsByTabId: next }
+      const normalized = normalizeTerminalLayoutPtyOwnership(layout)
+      // Resolved before the bailout: normalization can transfer pane ownership even when the stored snapshot is untouched.
+      if (normalized.changed) {
+        ownershipTransfers = resolveTerminalLayoutPtyOwnershipTransfers(layout, normalized.snapshot)
+      }
+      // Why: pane-title churn re-persists structurally identical snapshots; bailing keeps every pane selector asleep.
+      const existing = s.terminalLayoutsByTabId[tabId]
+      if (existing && terminalLayoutEqual(existing, normalized.snapshot)) {
+        return s
+      }
+      return {
+        terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot }
+      }
     })
     transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)
   },
@@ -3929,6 +4022,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
                 .filter((tab) => tab.contentType === 'terminal' && tab.quickCommandLabel?.trim())
                 .map((tab) => [tab.entityId, tab.quickCommandLabel!.trim()])
             )
+            const aiVaultTitleByTerminalId = new Map(
+              (session.unifiedTabs?.[worktreeId] ?? [])
+                .filter((tab) => tab.contentType === 'terminal' && tab.aiVaultTitle)
+                .map((tab) => [tab.entityId, tab.aiVaultTitle!])
+            )
             return [
               worktreeId,
               [...tabs]
@@ -3940,9 +4038,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
                 .map((tab, index) => {
                   const quickCommandLabel =
                     tab.quickCommandLabel?.trim() || quickCommandLabelByTerminalId.get(tab.id)
+                  const aiVaultTitle = tab.aiVaultTitle ?? aiVaultTitleByTerminalId.get(tab.id)
                   return {
                     ...clearTransientTerminalState(tab, index),
                     ...(quickCommandLabel ? { quickCommandLabel } : {}),
+                    ...(aiVaultTitle ? { aiVaultTitle } : {}),
                     sortOrder: index,
                     pendingActivationSpawn: true
                   }

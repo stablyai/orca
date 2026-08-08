@@ -74,6 +74,11 @@ import {
 } from './createMainWindow'
 import { ipcMain } from 'electron'
 import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-gone-classification'
+import {
+  resetExpectedTeardownStateForTest,
+  resolveExpectedTeardownScope,
+  WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS
+} from '../crash-reporting/expected-teardown-state'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const original = process.platform
@@ -102,6 +107,7 @@ describe('createMainWindow', () => {
     vi.mocked(ipcMain.removeListener).mockReset()
     vi.mocked(ipcMain.handle).mockReset()
     vi.mocked(ipcMain.removeHandler).mockReset()
+    resetExpectedTeardownStateForTest()
     vi.useRealTimers()
   })
 
@@ -2742,7 +2748,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:toggleLeftSidebar')
   })
 
-  it('shows spellcheck context menu for editable text without relying on markdown focus mirror', () => {
+  it('opens a table-aware context menu synchronously without a renderer query', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -2778,12 +2784,22 @@ describe('createMainWindow', () => {
 
     createMainWindow(null)
 
+    const tableTargetListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'rich-markdown:context-target')?.[1]
+    tableTargetListener?.({ sender: webContents } as never, {
+      cellType: 'body',
+      targetId: 'table-target',
+      x: 42,
+      y: 84
+    })
     windowHandlers['context-menu'](
       {} as never,
       {
         x: 42,
         y: 84,
         isEditable: true,
+        formControlType: 'none',
         spellcheckEnabled: true,
         dictionarySuggestions: ['reference'],
         misspelledWord: 'refrence'
@@ -2791,7 +2807,10 @@ describe('createMainWindow', () => {
     )
 
     expect(buildFromTemplateMock).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ label: 'reference' })])
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'reference' }),
+        expect.objectContaining({ label: 'Table' })
+      ])
     )
     expect(menuPopupMock).toHaveBeenCalledWith({ window: browserWindowInstance, x: 42, y: 84 })
   })
@@ -3127,6 +3146,40 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
     expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
 
+    consoleError.mockRestore()
+  })
+
+  it('still preserves PTYs and reloads after Windows session-end', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+    const onBeforeRecoveryReload = vi.fn()
+
+    withPlatform('win32', () => {
+      createMainWindow(null, {
+        onBeforeRecoveryReload,
+        shouldRecoverRenderer: (details) =>
+          shouldRecoverRendererAfterProcessGone({
+            reason: details.reason,
+            expectedTeardown: resolveExpectedTeardownScope({
+              isQuitting: false,
+              isQuittingForUpdate: false,
+              isExpectedRendererReload: false,
+              includeSystemSessionEnd: false
+            })
+          })
+      })
+    })
+    windowHandlers['session-end']?.({} as never)
+    windowHandlers['render-process-gone']?.(
+      {} as never,
+      { reason: 'killed', exitCode: 1 } as Electron.RenderProcessGoneDetails
+    )
+    vi.runAllTimers()
+
+    expect(onBeforeRecoveryReload).toHaveBeenCalledWith(143)
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
     consoleError.mockRestore()
   })
 
@@ -3715,6 +3768,60 @@ describe('createMainWindow', () => {
 
     afterEach(() => {
       setPlatform(originalPlatform)
+    })
+
+    it('marks production teardown state on irrevocable Windows session end', () => {
+      setPlatform('win32')
+      resetExpectedTeardownStateForTest(() => 1_000)
+      const { windowHandlers } = setupCloseWindow()
+
+      createMainWindow(null)
+      windowHandlers['session-end']?.({} as never)
+
+      expect(
+        resolveExpectedTeardownScope({
+          isQuitting: false,
+          isQuittingForUpdate: false,
+          isExpectedRendererReload: false
+        })
+      ).toBe('app-shutdown')
+    })
+
+    it.each(['darwin', 'linux'] as const)(
+      'does not mark session teardown state on %s',
+      (platform) => {
+        setPlatform(platform)
+        const { windowHandlers } = setupCloseWindow()
+
+        createMainWindow(null)
+
+        expect(windowHandlers['session-end']).toBeUndefined()
+        expect(
+          resolveExpectedTeardownScope({
+            isQuitting: false,
+            isQuittingForUpdate: false,
+            isExpectedRendererReload: false
+          })
+        ).toBe('none')
+      }
+    )
+
+    it('still minimizes to tray after the session-end reporting window expires', () => {
+      setPlatform('win32')
+      let now = 1_000
+      resetExpectedTeardownStateForTest(() => now)
+      const { windowHandlers, webContents, instance } = setupCloseWindow()
+      const store = makeStore(true, true)
+
+      createMainWindow(store as never)
+      windowHandlers['session-end']?.({} as never)
+      now += WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS
+      const preventDefault = vi.fn()
+      windowHandlers.close({ preventDefault } as never)
+
+      expect(preventDefault).toHaveBeenCalledOnce()
+      expect(instance.hide).toHaveBeenCalledOnce()
+      expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', expect.anything())
     })
 
     it('hides to the tray instead of closing when the setting is on', () => {

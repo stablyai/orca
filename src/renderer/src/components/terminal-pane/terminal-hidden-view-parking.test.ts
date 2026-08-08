@@ -151,7 +151,7 @@ describe('canParkTerminalWorktreeRenderers', () => {
     ).toBe(false)
   })
 
-  it('keeps a previously mounted v19 terminal eligible for ordinary parking', async () => {
+  it('defers preserved-daemon snapshot authority to the watcher coverage gate', async () => {
     const legacyPtyId = 'repo::/worktree@@session-1'
     clearTerminalProviderSnapshotCapabilities()
     await synchronizeTerminalProviderSnapshotCapabilities([legacyPtyId], async (ids) =>

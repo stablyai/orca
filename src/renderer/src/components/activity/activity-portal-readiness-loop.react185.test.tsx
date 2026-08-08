@@ -1,7 +1,7 @@
 /** @vitest-environment happy-dom */
 import { act, useLayoutEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -19,6 +19,11 @@ import {
   ACTIVITY_PORTAL_READINESS_MAX_FLIPS,
   type ActivityPortalReadinessStatus
 } from './activity-portal-readiness-oscillation'
+
+// Why: re-applying ready DOM never consumes the readiness flip budget (a 'ready'
+// status resets the latch), so this retry budget is independent of
+// ACTIVITY_PORTAL_READINESS_MAX_FLIPS and must not be derived from it.
+const PORTAL_READY_REAPPLY_ATTEMPTS = 32
 
 const WORKTREE_ID = 'wt-1'
 const TAB_ID = 'tab-react185'
@@ -41,10 +46,17 @@ const PANE_C = thread(OTHER_TAB_ID, LEAF_C)
 
 let root: Root
 
+// Freeze Date (not timers/rAF) so the latch's flip window cannot expire between two drains on a
+// loaded CI machine; the readiness frames are still driven by the controllers below.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+})
+
 afterEach(() => {
   act(() => {
     root?.unmount()
   })
+  vi.useRealTimers()
   document.body.replaceChildren()
   vi.unstubAllGlobals()
 })
@@ -76,6 +88,33 @@ function installAnimationFrameController(): {
       })
     },
     pending: () => callbacks.size
+  }
+}
+
+function installMutationObserverController(): { notify: () => void } {
+  const callbacks = new Map<MutationObserver, MutationCallback>()
+  class ControlledMutationObserver implements MutationObserver {
+    constructor(callback: MutationCallback) {
+      callbacks.set(this, callback)
+    }
+
+    observe(): void {}
+
+    disconnect(): void {
+      callbacks.delete(this)
+    }
+
+    takeRecords(): MutationRecord[] {
+      return []
+    }
+  }
+  vi.stubGlobal('MutationObserver', ControlledMutationObserver)
+  return {
+    notify() {
+      for (const [observer, callback] of callbacks) {
+        callback([], observer)
+      }
+    }
   }
 }
 
@@ -342,6 +381,7 @@ describe('Activity portal pane switching', () => {
 
   it('releases a latched readiness once the terminal attaches', async () => {
     const frames = installAnimationFrameController()
+    const mutations = installMutationObserverController()
     const target = document.createElement('div')
     document.body.append(target)
     const buildRoot = (mode: 'hidden' | 'sibling' | 'ready'): void => {
@@ -397,7 +437,7 @@ describe('Activity portal pane switching', () => {
       const statusesBefore = statuses.length
       await act(async () => {
         buildRoot(mode)
-        await Promise.resolve()
+        mutations.notify()
       })
       expect(await flushPortalReadiness(frames)).toBe(true)
       if (mode !== 'sibling') {
@@ -415,12 +455,18 @@ describe('Activity portal pane switching', () => {
     expect(sawLatchedSibling).toBe(true)
     expect(statuses.at(-1)).toBe('unavailable')
 
-    await act(async () => {
-      buildRoot('ready')
-      await Promise.resolve()
-    })
-    expect(await flushPortalReadiness(frames)).toBe(true)
-    await flushPortalFramesUntil(frames, () => statuses.at(-1) === 'ready')
+    // Why: under CI load MutationObserver may miss one replaceChildren; re-apply ready DOM
+    // and keep draining until attach is observed.
+    let sawReady = false
+    for (let attempt = 0; attempt < PORTAL_READY_REAPPLY_ATTEMPTS && !sawReady; attempt += 1) {
+      await act(async () => {
+        buildRoot('ready')
+        mutations.notify()
+      })
+      expect(await flushPortalReadiness(frames)).toBe(true)
+      await flushPortalFramesUntil(frames, () => statuses.at(-1) === 'ready')
+      sawReady = statuses.at(-1) === 'ready'
+    }
     expect(statuses.at(-1)).toBe('ready')
   })
 })

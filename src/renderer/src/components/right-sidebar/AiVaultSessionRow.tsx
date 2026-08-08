@@ -14,6 +14,7 @@ import { SessionInlineDetails } from './AiVaultSessionDetails'
 import { latestSessionConversationTurn } from './ai-vault-session-display'
 import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
 import { SessionRowTrailingActions } from './SessionRowTrailingActions'
+import { aiVaultSessionDeleteBlockedReason } from './ai-vault-session-deletability'
 import type { AiVaultSessionResumeActions } from './ai-vault-session-resume'
 import {
   shouldShowAiVaultSessionWorktreeLine,
@@ -51,7 +52,8 @@ export function VaultSessionRow({
   onCopyPath,
   onOpenLog,
   onRevealLog,
-  onOpenCwd
+  onOpenCwd,
+  onRequestDelete
 }: {
   session: AiVaultSession
   liveState: AgentStatusState | null
@@ -77,10 +79,14 @@ export function VaultSessionRow({
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
+  onRequestDelete: (session: AiVaultSession) => void
 }) {
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
+  // Computed once so the dropdown menu and the context menu never disagree.
+  const deleteBlockedReason = aiVaultSessionDeleteBlockedReason(session, liveState)
+  const requestDelete = (): void => onRequestDelete(session)
   const detailsTooltip = detailsExpanded
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
     : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
@@ -120,7 +126,14 @@ export function VaultSessionRow({
             'group/session-row flex w-full min-w-0 cursor-pointer flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55',
             !detailsExpanded && 'min-h-[98px]'
           )}
-          onClick={() => {
+          onClick={(event) => {
+            // Radix portals this row's menus out of its DOM, but React still
+            // bubbles their clicks here — without this, choosing Delete expands
+            // the row behind the dialog.
+            const target = event.target
+            if (target instanceof Node && !event.currentTarget.contains(target)) {
+              return
+            }
             onToggleDetails()
           }}
         >
@@ -169,6 +182,8 @@ export function VaultSessionRow({
               onOpenLog={onOpenLog}
               onRevealLog={onRevealLog}
               onOpenCwd={onOpenCwd}
+              deleteBlockedReason={deleteBlockedReason}
+              onRequestDelete={requestDelete}
             />
           </div>
           {detailsExpanded && shouldShowAiVaultSessionWorktreeLine(worktreeInfo, { vaultScope }) ? (
@@ -233,6 +248,8 @@ export function VaultSessionRow({
           onOpenLog={onOpenLog}
           onRevealLog={onRevealLog}
           onOpenCwd={onOpenCwd}
+          deleteBlockedReason={deleteBlockedReason}
+          onDelete={requestDelete}
         />
       </ContextMenuContent>
     </ContextMenu>

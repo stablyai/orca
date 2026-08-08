@@ -27,6 +27,11 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   // the terminal-output debounce (which a background stream could otherwise defer).
   scheduleTabRevealWebglAtlasRecovery: () => scheduleTabRevealWebglAtlasRecovery()
 }))
+const flushDeferredPaneMetricOptionsIfMeasurable = vi.fn((_pane: unknown) => false)
+vi.mock('@/lib/pane-manager/pane-fit', () => ({
+  flushDeferredPaneMetricOptionsIfMeasurable: (pane: unknown) =>
+    flushDeferredPaneMetricOptionsIfMeasurable(pane)
+}))
 const resetTerminalLinkifierHoverState = vi.fn()
 const isTerminalLinkifierHoverActive = vi.fn((_terminal: unknown) => false)
 vi.mock('@/lib/pane-manager/terminal-linkifier-hover-reset', () => ({
@@ -131,12 +136,36 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     expect(manager.fitAllPanes).not.toHaveBeenCalled()
   })
 
+  it('leaves heavy metric flushing to the reveal fit after rendering resumes', () => {
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal: {} }])
+
+    resumeTerminalVisibility(resumeArgs(manager, false))
+
+    expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
+    expect(manager.fitAllRevealedPanes).toHaveBeenCalledTimes(1)
+    expect(flushDeferredPaneMetricOptionsIfMeasurable).not.toHaveBeenCalled()
+  })
+
   it('does not fit on a light tab reveal', () => {
     const manager = createManager()
     resumeTerminalVisibility(resumeArgs(manager, true))
 
     expect(manager.fitAllRevealedPanes).not.toHaveBeenCalled()
     expect(manager.fitAllPanes).not.toHaveBeenCalled()
+  })
+
+  it('flushes hidden-era metric options on reveal and refits the light path', () => {
+    // A font change while hidden must land and refit on reveal, or cols/rows
+    // stay pinned to the old metrics.
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal: {} }])
+    flushDeferredPaneMetricOptionsIfMeasurable.mockReturnValueOnce(true)
+
+    resumeTerminalVisibility(resumeArgs(manager, true))
+
+    expect(flushDeferredPaneMetricOptionsIfMeasurable).toHaveBeenCalledTimes(1)
+    expect(manager.fitAllRevealedPanes).toHaveBeenCalledTimes(1)
   })
 
   it('fits window wake recovery through the stable path, not the sync fit', () => {
@@ -257,8 +286,8 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     // every refocus forces a mass re-rasterization that can hit xterm's atlas
     // page-merge race (#4480) and garble streaming panes. Focus recovery must
     // resume rendering and present WITHOUT the atlas-clearing reveal repaint —
-    // scheduleRevealRepaint clears each pane's (shared) atlas, so the refocus
-    // path must route to the atlas-preserving present instead.
+    // scheduleRevealRepaint runs shared-atlas recovery, so the refocus path
+    // must route to the atlas-preserving present instead.
     const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
       await import('@/lib/pane-manager/pane-manager-registry')
     )

@@ -1987,6 +1987,51 @@ describe('RateLimitService', () => {
     expect(service.getState().inactiveCodexAccounts).toEqual([])
   })
 
+  it('keeps the inactive Codex debounce across an account switch instead of re-probing', async () => {
+    const service = new RateLimitService()
+    service.setInactiveCodexAccountsResolver(() => [
+      { id: 'account-b', managedHomePath: '/tmp/account-b/home' }
+    ])
+    vi.mocked(fetchCodexRateLimits).mockImplementation(async () => okProvider('codex', 10))
+
+    await service.fetchInactiveCodexAccountsOnOpen()
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+
+    // The switch triggers exactly one fetch: the newly active account's.
+    await service.refreshForCodexAccountChange('account-a')
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+
+    // Why: re-opening the switcher inside the debounce window must not spawn
+    // codex in every inactive credential home again.
+    await service.fetchInactiveCodexAccountsOnOpen()
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+  })
+
+  it('staggers inactive Codex probes instead of bursting every account at once', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = new RateLimitService()
+      service.setInactiveCodexAccountsResolver(() => [
+        { id: 'account-a', managedHomePath: '/tmp/account-a/home' },
+        { id: 'account-b', managedHomePath: '/tmp/account-b/home' }
+      ])
+      vi.mocked(fetchCodexRateLimits).mockImplementation(async () => okProvider('codex', 5))
+
+      const fetchOnOpen = service.fetchInactiveCodexAccountsOnOpen()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1_999)
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+      await fetchOnOpen
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves Gemini buckets through getState after fetch', async () => {
     const service = new RateLimitService()
 

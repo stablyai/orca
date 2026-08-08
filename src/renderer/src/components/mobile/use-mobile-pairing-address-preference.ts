@@ -59,11 +59,16 @@ export function useMobilePairingAddressPreference(args: {
       if (nextAddress === selectedAddressRef.current) {
         return
       }
+      // Why: the first resolution picks the same default main already minted
+      // with, so invalidating there would drop a QR that is still correct.
+      const hadSelection = selectedAddressRef.current !== undefined
       selectedAddressRef.current = nextAddress
       selectedAddressIsManualRef.current = false
       setSelectedAddress(nextAddress)
       setSelectedAddressIsCustom(false)
-      onSelectionInvalidated({ address: nextAddress, source: 'refresh' })
+      if (hadSelection) {
+        onSelectionInvalidated({ address: nextAddress, source: 'refresh' })
+      }
     },
     [onSelectionInvalidated]
   )

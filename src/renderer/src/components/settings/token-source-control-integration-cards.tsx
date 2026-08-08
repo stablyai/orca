@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
 import { translate } from '@/i18n/i18n'
+import { tokenProviderStatusLabel } from './token-source-control-status'
 
 export function BitbucketIntegrationCard(): React.JSX.Element {
   const { statuses, unavailable, refresh } = usePreflightCardStatuses('bitbucket')
@@ -32,15 +33,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
       }
       checking={status === 'checking'}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={
-        connected
-          ? 'Connected'
-          : status === 'unavailable'
-            ? 'Unavailable'
-            : status === 'not-configured'
-              ? 'Not configured'
-              : 'Auth failed'
-      }
+      statusLabel={tokenProviderStatusLabel({ configured: connected, status })}
     >
       {status !== 'checking' && !connected ? (
         <IntegrationCardDetails>
@@ -154,17 +147,11 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
       }
       checking={status === 'checking'}
       statusTone={configured ? 'connected' : 'attention'}
-      statusLabel={
-        configured
-          ? statuses.azureDevOpsAccount
-            ? 'Connected'
-            : 'Configured'
-          : status === 'unavailable'
-            ? 'Unavailable'
-            : status === 'not-configured'
-              ? 'Not configured'
-              : 'Auth failed'
-      }
+      statusLabel={tokenProviderStatusLabel({
+        configured,
+        hasAccount: Boolean(statuses.azureDevOpsAccount),
+        status
+      })}
     >
       {status !== 'checking' && !configured ? (
         <IntegrationCardDetails>
@@ -283,17 +270,12 @@ export function GiteaIntegrationCard(): React.JSX.Element {
       }
       checking={status === 'checking'}
       statusTone={configured ? 'connected' : 'attention'}
-      statusLabel={
-        configured
-          ? statuses.giteaAccount
-            ? 'Connected'
-            : 'Configured'
-          : status === 'unavailable'
-            ? 'Unavailable'
-            : status === 'not-configured'
-              ? 'Optional setup'
-              : 'Auth failed'
-      }
+      statusLabel={tokenProviderStatusLabel({
+        configured,
+        hasAccount: Boolean(statuses.giteaAccount),
+        status,
+        optional: true
+      })}
     >
       {status !== 'checking' && !configured ? (
         <IntegrationCardDetails>

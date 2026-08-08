@@ -82,6 +82,33 @@ export function formatHeadlessPairedRuntimeStartupDiagnostics(
     .join('\n')
 }
 
+export function parseHeadlessPairedRuntimePairingOffer(
+  line: string
+): RuntimeDesktopPairingOffer | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(line) as unknown
+  } catch {
+    return null
+  }
+  if (parsed === null || typeof parsed !== 'object') {
+    return null
+  }
+  const readiness = parsed as ServeReady
+  const pairing = readiness.pairing
+  if (
+    readiness.type !== 'orca_server_ready' ||
+    pairing?.available !== true ||
+    typeof pairing.url !== 'string'
+  ) {
+    return null
+  }
+  return {
+    pairingUrl: pairing.url,
+    ...(typeof pairing.webClientUrl === 'string' ? { webClientUrl: pairing.webClientUrl } : {})
+  }
+}
+
 function redactPairingMaterial(value: string): string {
   return value
     .replace(PAIRING_URL_PATTERN, 'orca://[redacted]')
@@ -138,23 +165,12 @@ async function readPairingOffer(app: ElectronApplication): Promise<RuntimeDeskto
       const lines = buffered.split(/\r?\n/)
       buffered = lines.pop() ?? ''
       for (const line of lines) {
-        let readiness: ServeReady
-        try {
-          readiness = JSON.parse(line) as ServeReady
-        } catch {
-          continue
-        }
-        const pairing = readiness.pairing
-        if (
-          readiness.type !== 'orca_server_ready' ||
-          pairing?.available !== true ||
-          typeof pairing.url !== 'string' ||
-          typeof pairing.webClientUrl !== 'string'
-        ) {
+        const offer = parseHeadlessPairedRuntimePairingOffer(line)
+        if (!offer) {
           continue
         }
         cleanup()
-        resolve({ pairingUrl: pairing.url, webClientUrl: pairing.webClientUrl })
+        resolve(offer)
         return
       }
     }
@@ -185,8 +201,7 @@ export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedR
         ORCA_E2E_HEADLESS: '1'
       },
       extraEnv: {},
-      userDataDir,
-      codexRealHomeEnabled: false
+      userDataDir
     })
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
     app = await electron.launch({

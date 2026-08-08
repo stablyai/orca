@@ -19,6 +19,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { isCrashReportReason } from '../../shared/crash-reporting'
+import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import {
   DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
   DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
@@ -42,7 +43,15 @@ import {
   type KeybindingOverrides
 } from '../../shared/keybindings'
 import { getMainE2EConfig } from '../e2e-config'
-import { buildEditableContextMenuTemplate } from './editable-context-menu'
+import {
+  buildEditableContextMenuTemplate,
+  matchingRichMarkdownContextMenuTableTarget,
+  parseRichMarkdownContextMenuTableTarget
+} from './editable-context-menu'
+import {
+  richMarkdownContextMenuTargetChannel,
+  type RichMarkdownContextMenuTableTarget
+} from '../../shared/rich-markdown-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { resolveWindowCloseAction } from './window-close-decision'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
@@ -296,6 +305,11 @@ export function createMainWindow(
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
+  // Unlike query-session-end, session-end cannot be canceled before this signal is recorded.
+  if (process.platform === 'win32') {
+    mainWindow.on('session-end', markSystemSessionEnding)
+  }
+
   if (process.platform === 'darwin') {
     // Why: preserve hidden-window power savings; stable native sizing and frame-only invalidation
     // make wake recovery independent of the throttled viewport.
@@ -527,9 +541,24 @@ export function createMainWindow(
   }
   ipcMain.on(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
 
+  let pendingRichMarkdownContextMenuTableTarget: RichMarkdownContextMenuTableTarget | null = null
+  const onRichMarkdownContextMenuTarget = (event: Electron.IpcMainEvent, value: unknown): void => {
+    if (event.sender !== mainWindow.webContents) {
+      return
+    }
+    pendingRichMarkdownContextMenuTableTarget = parseRichMarkdownContextMenuTableTarget(value)
+  }
+  ipcMain.on(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
   const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
-    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents)
-    if (template.length === 0) {
+    const tableTarget = matchingRichMarkdownContextMenuTableTarget(
+      params,
+      pendingRichMarkdownContextMenuTableTarget
+    )
+    pendingRichMarkdownContextMenuTableTarget = null
+    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
+      tableTarget
+    })
+    if (template.length === 0 || mainWindow.isDestroyed()) {
       return
     }
     // Why: the context-menu event can precede our focus-mirror update; trust Electron's editable params, not markdownEditorFocused.
@@ -540,6 +569,7 @@ export function createMainWindow(
   // Why: a dead renderer can't clear its focus mirror; default-deny carve-outs so it can't disable app shortcuts in a later lifecycle.
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
+    pendingRichMarkdownContextMenuTableTarget = null
   }
   const resetTerminalInputFocus = (): void => {
     terminalInputFocused = false
@@ -1121,6 +1151,7 @@ export function createMainWindow(
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)
     ipcMain.removeListener(floatingFocusChannel, onFloatingFocus)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
+    ipcMain.removeListener(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
     // Why: powerMonitor is app-global; without this the resume relay leaks and fires against a destroyed webContents.
     powerMonitor.removeListener('resume', onSystemResume)
     clearTrustedUIRendererWebContentsId(rendererWebContentsId)

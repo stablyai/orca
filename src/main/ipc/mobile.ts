@@ -2,8 +2,16 @@ import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { networkInterfaces } from 'node:os'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import {
+  isVirtualBridgeInterface,
+  selectAutoAdvertisedPairingAddress
+} from '../../shared/pairing-address-auto-selection'
+import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
+import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import { isTailnetIPv4Address } from '../../shared/tailnet-address'
 import type { DeviceEntry } from '../runtime/device-registry'
+import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
+import { resolveAdvertisedPairingHostname } from '../runtime/pairing-endpoint'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
 import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
@@ -60,20 +68,36 @@ function getNetworkInterfaces(): NetworkInterface[] {
     }
   }
   // Why: prefer tailnet IPv4 first (most portable across networks), then other
-  // IPv4, then IPv6 as a fallback for IPv6-only environments.
-  return result.sort((a, b) => rankAddress(a.address) - rankAddress(b.address))
+  // IPv4, then IPv6 as a fallback for IPv6-only environments. Virtual bridges
+  // sort below all of them and stay in the list so they remain explicitly
+  // pickable; the automatic default skips them entirely.
+  return result.sort((a, b) => rankInterface(a) - rankInterface(b))
 }
 
-function rankAddress(address: string): number {
+function rankInterface({ name, address }: NetworkInterface): number {
   if (isTailnetIPv4Address(address)) {
     return 0
   }
-  return address.includes(':') ? 2 : 1
+  const bridgePenalty = isVirtualBridgeInterface(name) ? 2 : 0
+  return (address.includes(':') ? 2 : 1) + bridgePenalty
 }
 
+// Why: null when every enumerated interface is a host-local bridge, so a docker0-only host
+// advertises no direct address instead of one the phone provably cannot reach.
 function getDefaultPairingAddress(): string | null {
-  const ifaces = getNetworkInterfaces()
-  return ifaces.length > 0 ? ifaces[0]!.address : null
+  return selectAutoAdvertisedPairingAddress(getNetworkInterfaces()) ?? null
+}
+
+// Why: only an explicit "This computer only" pick skips the one-way widen, and only when the address it
+// advertises really is loopback — a mismatch (a LAN address under a this-computer reach) would otherwise
+// mint a link with no listener behind it. Every other reach, including a loopback-looking Custom address
+// that fronts an SSH tunnel or reverse proxy, still opts in.
+function servesThisComputerOnly(reach: RuntimePairingReach | undefined, address: string): boolean {
+  if (reach !== 'this-computer') {
+    return false
+  }
+  const hostname = resolveAdvertisedPairingHostname(address)
+  return hostname !== null && classifyRemotePairingHostname(hostname) === 'loopback'
 }
 
 function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
@@ -125,7 +149,11 @@ export function registerMobileHandlers(
       // embed in the QR code. This supports overlay networks (Tailscale,
       // ZeroTier) where the default LAN IP isn't reachable from the phone.
       const ip = args?.address ?? getDefaultPairingAddress()
-      if (!ip) {
+      // Why: the local address is optional under Relay — the QR carries the relay invite, so a host
+      // with nothing auto-advertisable (only container bridges, or no interface at all) still pairs.
+      // The offer's endpoint then falls back to loopback, which is the phone's own device: the direct
+      // candidate loses the race by construction. LAN-only has no relay to fall back on, so it fails closed.
+      if (!ip && args?.connectionMode === 'local-only') {
         return {
           available: false as const,
           reason: 'invalid_advertised_endpoint',
@@ -165,7 +193,10 @@ export function registerMobileHandlers(
         qrDataUrl: qr.ok ? qr.qrDataUrl : null,
         ...(!qr.ok ? { qrError: qr.reason } : {}),
         pairingUrl: offer.pairingUrl,
-        endpoint: offer.endpoint,
+        // Why: with nothing advertised the offer's endpoint is the loopback fallback, which points at
+        // whichever device scans the QR — never this host. Report no endpoint so the UI omits it
+        // instead of printing an address the phone can't reach.
+        endpoint: ip ? offer.endpoint : null,
         deviceId: offer.deviceId,
         connectionMode: offer.connectionMode
       }
@@ -174,10 +205,34 @@ export function registerMobileHandlers(
 
   ipcMain.handle(
     'mobile:getRuntimePairingUrl',
-    async (_event, args?: { address?: string; rotate?: boolean }) => {
+    async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
       const ip = args?.address ?? getDefaultPairingAddress()
       if (!ip) {
         return { available: false as const }
+      }
+
+      // Why: STA-2370 — generating a runtime pairing offer is the user's explicit opt-in to remote
+      // reach, so widen the loopback listener before advertising its LAN endpoint. If the widen fails the
+      // listener stays on loopback, so report unavailable rather than advertise a dead LAN endpoint.
+      // "This computer only" is the opposite opt-in: the loopback listener already serves it, and the widen
+      // never narrows back, so that pick alone must not expose the runtime off-host.
+      const thisComputerOnly = servesThisComputerOnly(args?.reach, ip)
+      if (!thisComputerOnly) {
+        try {
+          await rpcServer.ensureNetworkExposure()
+        } catch (error) {
+          console.error(
+            '[mobile] Network exposure failed while creating a runtime pairing offer:',
+            error
+          )
+          // Why: STA-2370 — carry the specific reason/guidance to the renderer (mirrors the mobile-QR path) so
+          // a widen failure is distinguishable from a missing address, not collapsed into a bare unavailable.
+          return {
+            available: false as const,
+            reason: 'network_exposure_failed' as const,
+            guidance: NETWORK_EXPOSURE_FAILED_GUIDANCE
+          }
+        }
       }
 
       // Why: web/desktop runtime clients need full runtime access, not the
@@ -186,7 +241,10 @@ export function registerMobileHandlers(
         address: ip,
         rotate: args?.rotate,
         name: `Runtime ${new Date().toLocaleDateString()}`,
-        scope: 'runtime'
+        scope: 'runtime',
+        // Why: a grant that only ever pointed at loopback must not make the next launch bind every
+        // interface when its local client reconnects (that would restore the exposure one restart later).
+        reach: thisComputerOnly ? 'this-computer' : 'network'
       })
       if (!offer.available) {
         return { available: false as const }

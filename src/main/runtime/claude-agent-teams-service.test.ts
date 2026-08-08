@@ -248,4 +248,24 @@ describe('ClaudeAgentTeamsService', () => {
       )
     ).resolves.toMatchObject({ ok: false, exitCode: 1 })
   })
+
+  it('keeps the inherited Windows `Path` instead of minting a truncated `PATH`', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const launch = new ClaudeAgentTeamsService().createLaunchEnv({
+        leaderHandle: 'leader-handle',
+        baseEnv: { Path: 'C:\\Windows\\system32' },
+        shimDir: 'C:\\orca-shim',
+        shimBin: 'C:\\orca.exe'
+      })
+
+      expect(Object.keys(launch.env).filter((key) => /^path$/i.test(key))).toEqual(['Path'])
+      expect(launch.env.Path).toBe('C:\\orca-shim;C:\\Windows\\system32')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
 })

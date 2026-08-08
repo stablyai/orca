@@ -293,6 +293,19 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalled()
   })
 
+  it('does not stamp the created workspace with an empty agent-launch fallback', async () => {
+    await registerAndDispatch()
+
+    expect(mockCreateWorktree.mock.calls[0][10]).toBeUndefined()
+    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'claude',
+        prompt: 'run this',
+        worktreeId: 'wt-created'
+      })
+    )
+  })
+
   it('keeps launching the agent when background setup terminal launch fails', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     mockLaunchWorktreeBackgroundTerminals.mockRejectedValue(new Error('tab launch failed'))
@@ -537,6 +550,35 @@ describe('useAutomationDispatchEvents setup launch', () => {
       terminalPaneKey: null,
       terminalPtyId: null
     })
+  })
+
+  it('ignores a session-boundary done so a connecting agent cannot complete the run (STA-3386)', async () => {
+    let launchArgs: {
+      onAgentStatus?: (payload: { state: string; sessionBoundary?: boolean }) => void
+    } = {}
+    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+      launchArgs = args
+      return {
+        tabId: 'agent-tab',
+        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+        ptyId: 'agent-pty',
+        startupPlan: {},
+        terminalOwnership: {
+          finalize: mockFinalizeTerminalOwnership,
+          release: mockReleaseTerminalOwnership
+        }
+      }
+    })
+
+    await registerAndDispatch()
+    // Why: Claude fires SessionStart (a sessionBoundary done) at launch, before the argv
+    // prompt submits — treating it as run completion would close the tab on an empty run.
+    launchArgs.onAgentStatus?.({ state: 'done', sessionBoundary: true })
+    await Promise.resolve()
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+
+    launchArgs.onAgentStatus?.({ state: 'done' })
+    await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
   })
 
   it('consumes duplicate done and zero-exit completion through one finalizer', async () => {

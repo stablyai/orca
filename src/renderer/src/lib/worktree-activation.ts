@@ -19,6 +19,7 @@ import { buildSetupRunnerCommand } from './setup-runner'
 import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
@@ -111,6 +112,13 @@ function draftViewModeProps(draftText: string | undefined): {
 export type IssueCommandLaunch =
   | WorktreeSetupLaunch
   | { command: string; env?: Record<string, string> }
+
+function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'windows' | 'posix' {
+  return getSetupRunnerCommandPlatformForPath(
+    setup.runnerScriptPath,
+    navigator.userAgent.includes('Windows') ? 'windows' : 'posix'
+  )
+}
 
 type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
@@ -224,7 +232,13 @@ export function activateAndRevealFolderWorkspace(
     { runtimeEnvironmentId }
   )
   if (folderWorkspaceActivationBlocked(pathStatus)) {
-    toast.error(getFolderWorkspacePathStatusTitle(pathStatus) ?? 'Cannot open folder workspace', {
+    const title =
+      getFolderWorkspacePathStatusTitle(pathStatus) ??
+      translate(
+        'auto.lib.worktree.activation.cannotOpenFolderWorkspace',
+        'Cannot open folder workspace'
+      )
+    toast.error(title, {
       description: getFolderWorkspacePathStatusDescription(pathStatus) ?? folderWorkspace.folderPath
     })
     return false
@@ -430,14 +444,12 @@ export function ensureWorktreeHasInitialTerminal(
   let wrappedSetupCommandStr: string | undefined
 
   if (startup && setup?.waitForAgentStartup === true) {
-    const platform = getSetupRunnerCommandPlatformForPath(
-      setup.runnerScriptPath,
-      navigator.userAgent.includes('Windows') ? 'windows' : 'posix'
-    )
+    const platform = getSetupRunnerCommandPlatformForLaunch(setup)
     const sequenced = createSequencedSetupAgentCommands({
       runnerScriptPath: setup.runnerScriptPath,
       startupCommand: startup.command,
-      platform
+      platform,
+      shell: setup.shell
     })
     sequencedStartup = {
       ...startup,
@@ -670,7 +682,9 @@ function queueSetupAndIssueCommands(
     const mode = useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab'
     const setupCommand = {
       command:
-        wrappedSetupCommandStr ?? setup.command ?? buildSetupRunnerCommand(setup.runnerScriptPath),
+        wrappedSetupCommandStr ??
+        setup.command ??
+        buildSetupRunnerCommand(setup.runnerScriptPath, setup.shell),
       env: setup.envVars
     }
     if (mode === 'new-tab') {
@@ -699,7 +713,7 @@ function queueSetupAndIssueCommands(
     const queuedIssueCommand =
       'runnerScriptPath' in issueCommand
         ? {
-            command: buildSetupRunnerCommand(issueCommand.runnerScriptPath),
+            command: buildSetupRunnerCommand(issueCommand.runnerScriptPath, issueCommand.shell),
             env: issueCommand.envVars
           }
         : { command: issueCommand.command, env: issueCommand.env }

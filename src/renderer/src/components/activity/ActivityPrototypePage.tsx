@@ -56,7 +56,9 @@ import {
   resolveActivityPortalSwap
 } from './activity-portal-thread-reconciliation'
 import {
+  ACTIVITY_PORTAL_READINESS_BURST_WINDOW_MS,
   createActivityPortalReadinessLatch,
+  type ActivityPortalReadinessLatch,
   type ActivityPortalReadinessStatus
 } from './activity-portal-readiness-oscillation'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
@@ -73,6 +75,7 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { translate } from '@/i18n/i18n'
+import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import {
   getActivityThreadTaskTitle,
   getActivityThreadWorkspaceTitle,
@@ -168,24 +171,12 @@ const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit'
 })
 
-const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-
 function formatAbsoluteDate(timestamp: number): string {
   return absoluteDateFormatter.format(new Date(timestamp))
 }
 
 function formatRelativeTime(timestamp: number): string {
-  const diffMs = timestamp - Date.now()
-  const diffMinutes = Math.round(diffMs / 60_000)
-  if (Math.abs(diffMinutes) < 60) {
-    return relativeTimeFormatter.format(diffMinutes, 'minute')
-  }
-  const diffHours = Math.round(diffMinutes / 60)
-  if (Math.abs(diffHours) < 24) {
-    return relativeTimeFormatter.format(diffHours, 'hour')
-  }
-  const diffDays = Math.round(diffHours / 24)
-  return relativeTimeFormatter.format(diffDays, 'day')
+  return formatUiRelativeTime(timestamp - Date.now())
 }
 
 function findActivityTerminalPane(
@@ -300,13 +291,16 @@ export function useActivityTerminalPortalStatus(
     paneKey: null,
     status: 'loading'
   })
+  // Why: portal churn replaces every subscription identity, so the burst budget must outlive it.
+  const readinessLatchRef = useRef<ActivityPortalReadinessLatch | null>(null)
 
   useLayoutEffect(() => {
     let disposed = false
     let readinessFrame: number | null = null
+    let readinessReleaseTimer: number | null = null
     let pendingStatus: ActivityTerminalPortalReadiness['status'] | null = null
 
-    // Why: subscription churn can otherwise chain layout-effect updates past React's root-wide limit.
+    // Why: coalesce observer bursts and cancel frames from stale portal subscriptions.
     const scheduleReadiness = (status: ActivityTerminalPortalReadiness['status']): void => {
       if (disposed) {
         return
@@ -336,6 +330,10 @@ export function useActivityTerminalPortalStatus(
         cancelAnimationFrame(readinessFrame)
         readinessFrame = null
       }
+      if (readinessReleaseTimer !== null) {
+        window.clearTimeout(readinessReleaseTimer)
+        readinessReleaseTimer = null
+      }
     }
 
     if (!target || !paneKey) {
@@ -347,10 +345,22 @@ export function useActivityTerminalPortalStatus(
       return disposeFrame
     }
 
-    const readinessLatch = createActivityPortalReadinessLatch()
+    const readinessLatch = (readinessLatchRef.current ??= createActivityPortalReadinessLatch())
 
     const updateReadiness = (status: ActivityTerminalPortalReadiness['status']): void => {
-      scheduleReadiness(readinessLatch.next(status))
+      const nextStatus = readinessLatch.next(status)
+      scheduleReadiness(nextStatus)
+      if (readinessReleaseTimer !== null) {
+        window.clearTimeout(readinessReleaseTimer)
+        readinessReleaseTimer = null
+      }
+      if (nextStatus !== status) {
+        // Why: a quiet loading pane has no mutation to release the burst latch on its own.
+        readinessReleaseTimer = window.setTimeout(
+          checkReadiness,
+          ACTIVITY_PORTAL_READINESS_BURST_WINDOW_MS
+        )
+      }
     }
 
     const checkReadiness = (): void => {
@@ -580,7 +590,8 @@ function appendActivityEventsForEntry(args: {
     })
   }
 
-  if (!isActivityEventState(args.entry.state)) {
+  // Why: SessionStart creates an idle row, not an "Agent finished" activity event (STA-3386).
+  if (!isActivityEventState(args.entry.state) || args.entry.sessionBoundary === true) {
     return
   }
   appendActivityEvent({
@@ -1589,6 +1600,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     visibleThread
   ])
 
+  // Why: swap-staged makes the displayed thread selected, so this branch cannot repeat by itself.
   useLayoutEffect(() => {
     const swap = resolveActivityPortalSwap({
       selectedThread,

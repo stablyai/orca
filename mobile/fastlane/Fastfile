@@ -28,8 +28,6 @@ WORKSPACE = File.join(MOBILE_ROOT, "ios", "Orca.xcworkspace")
 BUILD_OUTPUT_DIRECTORY = File.join(MOBILE_ROOT, "build")
 SCHEME = "Orca"
 BUNDLE_ID = "com.stably.orca.mobile"
-TESTFLIGHT_GROUPS = ["peeps"].freeze
-DEFAULT_TESTFLIGHT_CHANGELOG = "Latest Orca Mobile updates and fixes.".freeze
 
 # App Store version states in which the version "train" is terminally closed to
 # new TestFlight build uploads (altool rejects with 90186 "train ... is
@@ -112,11 +110,6 @@ rescue StandardError => error
   nil
 end
 
-def testflight_changelog
-  changelog = ENV.fetch("TESTFLIGHT_CHANGELOG", "").strip
-  changelog.empty? ? DEFAULT_TESTFLIGHT_CHANGELOG : changelog
-end
-
 platform :ios do
   desc "Resolve the iOS release version and next TestFlight build number"
   lane :prepare_release_version do |options|
@@ -178,7 +171,7 @@ platform :ios do
     UI.message("Prepared Orca Mobile iOS #{version} (#{build_number})")
   end
 
-  desc "Build, sign, upload, and share Orca Mobile on TestFlight"
+  desc "Build, sign, and upload Orca Mobile to App Store Connect / TestFlight"
   lane :release do
     api_key = app_store_connect_api_key_from_env
 
@@ -221,15 +214,13 @@ platform :ios do
 
     upload_to_testflight(
       api_key: api_key,
-      # Why: fastlane can only assign external TestFlight groups after Apple
-      # finishes processing the uploaded build.
-      skip_waiting_for_build_processing: false,
-      distribute_external: true,
-      groups: TESTFLIGHT_GROUPS,
-      notify_external_testers: true,
-      # Why: fastlane requires release notes when distributing to external
-      # TestFlight testers, even for CI-triggered smoke releases.
-      changelog: testflight_changelog,
+      # Why: ASC processing wait hung for hours (0.0.42 builds 1–2) with no Ready
+      # build and no email. Exit after upload acceptance. Do not pass changelog —
+      # Pilot only fully skips waiting when changelog is nil (otherwise it still
+      # polls until the build appears). External distribute (e.g. peeps) from ASC
+      # or a follow-up lane once Ready.
+      skip_waiting_for_build_processing: true,
+      distribute_external: false,
     )
   end
 end

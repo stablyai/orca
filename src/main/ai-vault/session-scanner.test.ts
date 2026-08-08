@@ -154,7 +154,9 @@ describe('scanAiVaultSessions', () => {
 
     const result = await scanAiVaultSessions({
       ...roots,
-      platform: 'darwin'
+      platform: 'darwin',
+      limit: 1,
+      unlimited: true
     })
 
     expect(result.issues).toEqual([])
@@ -163,7 +165,6 @@ describe('scanAiVaultSessions', () => {
       'Indexed Codex resume picker title',
       'Vault polish pass'
     ])
-
     const claude = result.sessions.find((session) => session.agent === 'claude')
     expect(claude).toMatchObject({
       sessionId: 'claude-session',

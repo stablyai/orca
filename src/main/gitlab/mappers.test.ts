@@ -154,6 +154,7 @@ describe('mapMRInfo', () => {
       pipelineStatus: 'success',
       updatedAt: '2026-05-05T10:00:00Z',
       mergeable: 'MERGEABLE',
+      mergeStateStatus: 'mergeable',
       headSha: 'deadbeef'
     })
   })
@@ -170,12 +171,47 @@ describe('mapMRInfo', () => {
       'pending'
     )
     expect(info.mergeable).toBe('CONFLICTING')
+    expect(info.mergeStateStatus).toBe('conflict')
   })
 
   it('marks UNKNOWN when detailed_merge_status is non-mergeable but not a conflict', () => {
     const info = mapMRInfo(
       { iid: 1, title: 't', state: 'opened', detailed_merge_status: 'checking' },
       'pending'
+    )
+    expect(info.mergeable).toBe('UNKNOWN')
+    expect(info.mergeStateStatus).toBe('checking')
+  })
+
+  // Why: GitLab < 15.6 has no detailed_merge_status. Without the legacy fallback these MRs stay
+  // UNKNOWN, and the merge UI (which gates on MERGEABLE) shows "Checking" with no merge button.
+  it('falls back to legacy merge_status when detailed_merge_status is absent', () => {
+    const info = mapMRInfo(
+      { iid: 1, title: 't', state: 'opened', merge_status: 'can_be_merged' },
+      'success'
+    )
+    expect(info.mergeable).toBe('MERGEABLE')
+  })
+
+  it('does not let legacy merge_status override a present detailed_merge_status', () => {
+    const info = mapMRInfo(
+      {
+        iid: 1,
+        title: 't',
+        state: 'opened',
+        detailed_merge_status: 'not_approved',
+        merge_status: 'can_be_merged'
+      },
+      'success'
+    )
+    expect(info.mergeable).toBe('UNKNOWN')
+    expect(info.mergeStateStatus).toBe('not_approved')
+  })
+
+  it('keeps legacy cannot_be_merged as UNKNOWN rather than guessing a conflict', () => {
+    const info = mapMRInfo(
+      { iid: 1, title: 't', state: 'opened', merge_status: 'cannot_be_merged' },
+      'success'
     )
     expect(info.mergeable).toBe('UNKNOWN')
   })

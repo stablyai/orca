@@ -80,10 +80,6 @@ vi.mock('./WorktreeCardAgents', () => ({
   default: () => <div data-testid="inline-agents" />
 }))
 
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: () => null
-}))
-
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => (
     <div data-testid="context-menu-wrapper">{children}</div>

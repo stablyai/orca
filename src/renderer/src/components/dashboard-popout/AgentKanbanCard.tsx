@@ -14,7 +14,10 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
+import {
+  dashboardCardDisplayState,
+  type DashboardCard
+} from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
 
@@ -200,7 +203,8 @@ export const AgentKanbanCard = memo(
     // "answer me", green for "finished, look at it". Everything else stays
     // neutral so the tint keeps meaning something.
     const needsYou = card.bucket === 'attention'
-    const isDone = card.dotState === 'done'
+    const displayState = dashboardCardDisplayState(card)
+    const isDone = displayState === 'done'
     // Why: the session's own name heads the card. Without one the worktree is
     // the best heading left — and then the footer drops it rather than say it
     // twice.
@@ -240,7 +244,7 @@ export const AgentKanbanCard = memo(
             >
               {heading}
             </span>
-            {card.askSummary ? null : <AgentStateDot state={card.dotState} className="ml-auto" />}
+            {card.askSummary ? null : <AgentStateDot state={displayState} className="ml-auto" />}
           </div>
 
           {card.lastUserMessage || card.lastAgentMessage ? (
