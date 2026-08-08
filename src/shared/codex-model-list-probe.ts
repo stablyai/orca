@@ -2,6 +2,7 @@ import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit
 
 export const CODEX_MODEL_LIST_ARGS = ['debug', 'models'] as const
 export const CODEX_MODEL_LIST_COMMAND = `codex ${CODEX_MODEL_LIST_ARGS.join(' ')}`
+export const CODEX_MODEL_LIST_MAX_JSON_CHARACTERS = 4 * 1024 * 1024
 
 export const CODEX_MODEL_LIST_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 64 * 1024,
@@ -43,6 +44,9 @@ function uniqueEffortLevels(value: unknown): string[] {
 
 export function parseCodexModelList(stdout: string): CodexModelListModel[] {
   try {
+    if (stdout.length > CODEX_MODEL_LIST_MAX_JSON_CHARACTERS) {
+      return []
+    }
     assertJsonTextStructureWithinLimits(stdout, CODEX_MODEL_LIST_JSON_STRUCTURE_LIMITS)
     const parsed: unknown = JSON.parse(stdout)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
