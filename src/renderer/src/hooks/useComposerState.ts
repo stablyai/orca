@@ -346,6 +346,7 @@ export type ComposerCardProps = {
   note: string
   onNoteChange: (value: string) => void
   baseBranch: string | undefined
+  repoWorktreeBaseRef: string | null
   onBaseBranchChange: (next: string | undefined) => void
   /** Called when a PR is selected in the Start-from picker; updates baseBranch and linkedWorkItem/linkedPR in one pass. */
   onBaseBranchPrSelect: (
@@ -4674,6 +4675,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     creating,
     onCreate: () => void submit(),
     baseBranch: isProjectGroupTarget ? undefined : baseBranch,
+    repoWorktreeBaseRef: isProjectGroupTarget ? null : (selectedRepo?.worktreeBaseRef ?? null),
     onBaseBranchChange: isProjectGroupTarget ? () => {} : handleBaseBranchChange,
     onBaseBranchPrSelect: isProjectGroupTarget ? () => {} : handleBaseBranchPrSelect,
     onBaseBranchMrSelect: isProjectGroupTarget ? () => {} : handleBaseBranchMrSelect,

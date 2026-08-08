@@ -66,6 +66,34 @@ vi.mock('@/components/sparse/SparseCheckoutPresetSelect', () => ({
   default: () => <div data-testid="sparse-select" />
 }))
 
+vi.mock('@/components/new-workspace/BaseBranchPicker', () => ({
+  default: ({
+    disabled,
+    onValueChange,
+    repoId,
+    repoWorktreeBaseRef,
+    value
+  }: {
+    disabled?: boolean
+    onValueChange: (next: string | undefined) => void
+    repoId: string
+    repoWorktreeBaseRef?: string | null
+    value?: string
+  }) => (
+    <button
+      aria-label="base branch picker"
+      data-repo-id={repoId}
+      data-repo-worktree-base-ref={repoWorktreeBaseRef ?? ''}
+      data-value={value ?? ''}
+      disabled={disabled}
+      onClick={() => onValueChange('release/1.2')}
+      type="button"
+    >
+      Branch from {value ?? 'Project default'}
+    </button>
+  )
+}))
+
 vi.mock('@/components/new-workspace/SmartWorkspaceNameField', () => ({
   default: ({
     branchesEnabled,
@@ -232,6 +260,9 @@ function renderCard(
         onCreate={() => {}}
         note=""
         onNoteChange={() => {}}
+        baseBranch={undefined}
+        repoWorktreeBaseRef={null}
+        onBaseBranchChange={() => {}}
         setupConfig={null}
         requiresExplicitSetupChoice={false}
         setupDecision={null}
@@ -444,6 +475,38 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(current.container.textContent).toContain(
       'Wait for setup to complete before starting agent'
     )
+  })
+
+  it('surfaces the base branch picker for git workspaces in advanced controls', () => {
+    const baseBranchChanges: (string | undefined)[] = []
+    current = renderCard({
+      advancedOpen: true,
+      branchesEnabled: true,
+      repoWorktreeBaseRef: 'origin/main',
+      selectedRepoIsGit: true,
+      onBaseBranchChange: (next) => baseBranchChanges.push(next)
+    })
+
+    expect(current.container.textContent).toContain('Base branch')
+    const picker = current.container.querySelector<HTMLButtonElement>(
+      '[aria-label="base branch picker"]'
+    )
+    expect(picker?.getAttribute('data-repo-id')).toBe('repo-a')
+    expect(picker?.getAttribute('data-repo-worktree-base-ref')).toBe('origin/main')
+    expect(picker?.getAttribute('data-value')).toBe('')
+
+    act(() => picker?.click())
+    expect(baseBranchChanges).toEqual(['release/1.2'])
+
+    act(() => current?.root.unmount())
+    current?.container.remove()
+
+    current = renderCard({
+      advancedOpen: true,
+      branchesEnabled: true,
+      selectedRepoIsGit: false
+    })
+    expect(current.container.textContent).not.toContain('Base branch')
   })
 
   it('emits the setup startup policy toggle value when setup will run', () => {

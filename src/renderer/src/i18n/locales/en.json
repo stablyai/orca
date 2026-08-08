@@ -1420,6 +1420,7 @@
         "connectTimedOut": "Connection timed out. It may still be connecting in the background.",
         "connectingHost": "Connecting…",
         "connectHost": "Connect",
+        "baseBranch": "Base branch",
         "addHost": "Add host",
         "addHostHint": "Register another machine or Orca server",
         "addSshHost": "Add SSH host",
@@ -14882,6 +14883,16 @@
       "terminalPane": {
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."
+        }
+      },
+      "newWorkspace": {
+        "BaseBranchPicker": {
+          "defaultBranch": "{{value0}} (default)",
+          "projectDefault": "Project default",
+          "branchFrom": "Branch from",
+          "searchBranches": "Search repo branches...",
+          "searchingBranches": "Searching branches...",
+          "noBranchesFound": "No branches found."
         }
       },
       "WorktreeBaseFallbackDialog": {

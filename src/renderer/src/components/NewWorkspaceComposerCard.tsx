@@ -48,6 +48,7 @@ import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
 import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
+import BaseBranchPicker from '@/components/new-workspace/BaseBranchPicker'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
 import {
@@ -141,6 +142,9 @@ type NewWorkspaceComposerCardProps = {
   onCreate: () => void
   note: string
   onNoteChange: (value: string) => void
+  baseBranch: string | undefined
+  repoWorktreeBaseRef: string | null
+  onBaseBranchChange: (next: string | undefined) => void
   setupConfig: SetupConfig | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
@@ -352,6 +356,9 @@ export default function NewWorkspaceComposerCard({
   onCreate,
   note,
   onNoteChange,
+  baseBranch,
+  repoWorktreeBaseRef,
+  onBaseBranchChange,
   setupConfig,
   requiresExplicitSetupChoice,
   setupDecision,
@@ -988,6 +995,24 @@ export default function NewWorkspaceComposerCard({
                       'feature/my-branch'
                     )}
                     className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  />
+                </div>
+              ) : null}
+
+              {selectedRepoIsGit && branchesEnabled ? (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {translate(
+                      'auto.components.NewWorkspaceComposerCard.baseBranch',
+                      'Base branch'
+                    )}
+                  </label>
+                  <BaseBranchPicker
+                    repoId={repoId}
+                    repoWorktreeBaseRef={repoWorktreeBaseRef}
+                    value={baseBranch}
+                    onValueChange={onBaseBranchChange}
+                    disabled={selectedRepoRequiresConnection}
                   />
                 </div>
               ) : null}
