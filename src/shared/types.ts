@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import type { ExecutionHostId } from './execution-host'
+import type { LinearIssueViewResumeState } from './linear-issue-view-resume-state'
 import type {
   RemovedSshTargetTombstone,
   SshPtyConsumerRecovery,
@@ -3335,6 +3336,8 @@ export type TaskResumeState = {
     workspaceId: LinearConcreteWorkspaceId
     model?: LinearCustomViewModel
   }
+  /** Issue-list layout, grouping, ordering, columns, and per-workspace attribute filters. */
+  linearIssueView?: LinearIssueViewResumeState
   jiraPreset?: 'assigned' | 'reported' | 'all' | 'done'
   jiraQuery?: string
 }

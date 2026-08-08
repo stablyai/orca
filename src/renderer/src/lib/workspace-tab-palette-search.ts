@@ -33,10 +33,19 @@ export type SearchableWorkspaceTab = {
   secondaryText: string
   titleSearchText: string
   secondarySearchTexts: string[]
+  /**
+   * Search-only type labels (e.g. "terminal tab"). Matched without writing into
+   * the row secondary — the content icon already conveys type.
+   */
+  typeSearchAliases?: readonly string[]
   agentMetadata: AgentMetadata[]
   isCurrentTab: boolean
   isCurrentWorktree: boolean
 }
+
+// Why search-only: the status/content icon already says "terminal"; a fixed
+// secondary crowds the row. Keep these matchable so typing "terminal" still finds them.
+export const TERMINAL_TYPE_SEARCH_ALIASES = ['terminal tab', 'terminal'] as const
 
 type WorkspaceTabPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
 
@@ -221,9 +230,12 @@ export function buildSearchableWorkspaceTabs({
         entries.push({
           ...baseEntry,
           title,
-          secondaryText: 'Terminal tab',
+          // Why: type is already clear from the status/content icon; a fixed
+          // "Terminal tab" label only crowds the row (and used to leave a bare "· ·").
+          secondaryText: '',
           titleSearchText: title,
-          secondarySearchTexts: ['Terminal tab'],
+          secondarySearchTexts: [],
+          typeSearchAliases: TERMINAL_TYPE_SEARCH_ALIASES,
           agentMetadata: collectAgentMetadataForTerminal({
             terminalTabId: tab.entityId,
             worktreeId: worktree.id,

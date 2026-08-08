@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/types'
 import {
   PaletteLiveStatusProvider,
@@ -42,14 +43,14 @@ function makeAgentEntry(tabId: string, state: AgentStatusState): AgentStatusEntr
     prompt: '',
     updatedAt: Date.now(),
     stateStartedAt: Date.now(),
-    paneKey: `${tabId}:${LEAF}`,
+    paneKey: makePaneKey(tabId, LEAF),
     stateHistory: []
   }
 }
 
 function setAgentState(state: AgentStatusState): void {
   useAppStore.setState((s) => ({
-    agentStatusByPaneKey: { [`term-a:${LEAF}`]: makeAgentEntry('term-a', state) },
+    agentStatusByPaneKey: { [makePaneKey('term-a', LEAF)]: makeAgentEntry('term-a', state) },
     agentStatusEpoch: s.agentStatusEpoch + 1
   }))
 }

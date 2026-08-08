@@ -3281,6 +3281,7 @@
             "runtime_reconnecting": "Reconnecting",
             "runtime_last_close_reason": "Closed: {{value0}}",
             "runtime_reconnect_attempt": "Attempt {{value0}}",
+            "runtime_workspace_window_closed": "Workspace window closed",
             "connectedHostCount_one": "{{count}} host",
             "connectedHostCount_other": "{{count}} hosts",
             "connecting": "Connecting…",
@@ -6862,7 +6863,9 @@
           "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
           "hostStateDisconnected": "Disconnected",
           "hostStateUnknown": "Unknown",
-          "nestedHostLabel": "{{value0}} via {{value1}}"
+          "nestedHostLabel": "{{value0}} via {{value1}}",
+          "hostStateWorkspaceWindowClosed": "Workspace window closed",
+          "hostWorkspaceWindowClosedHelp": "The server is reachable but its Orca window is closed. Open Orca on {{value0}} to use this setup."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",

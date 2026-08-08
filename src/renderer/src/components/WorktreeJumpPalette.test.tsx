@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import type { Repo, Tab, TabGroup, TerminalTab, Worktree } from '../../../shared/types'
 import type { AgentStatusEntry, AgentStatusState } from '../../../shared/agent-status-types'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
@@ -431,7 +432,7 @@ function makeAgentEntry(
     prompt: '',
     updatedAt: stateStartedAt,
     stateStartedAt,
-    paneKey: `${tabId}:${LEAF_ID}`,
+    paneKey: makePaneKey(tabId, LEAF_ID),
     stateHistory: []
   }
 }
@@ -767,11 +768,35 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getCommandValue()).toBe(movedTo)
   })
 
+  it('re-ranks once when terminal entities hydrate after unified tabs', async () => {
+    // Why split hydration: unified tabs can land before tabsByWorktree; without a re-capture every
+    // row ranks IDLE. A deliberate second-row highlight must survive that one re-rank.
+    const hydrated = makeRecentTabState({
+      agentStatusByPaneKey: {
+        [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
+      },
+      lastVisitedAtByWorktreeId: { 'wt-beta': Date.now() }
+    })
+    await renderPalette({ ...hydrated, tabsByWorktree: {} })
+    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
+    const movedTo = `workspace-tab:${getTabRowIds()[1]}`
+    await act(async () => {
+      setCommandSelection?.(movedTo)
+    })
+    await flushEffects()
+    await act(async () => {
+      useAppStore.setState({ tabsByWorktree: hydrated.tabsByWorktree } as Partial<AppState>)
+    })
+    await flushEffects()
+    expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
+    expect(getCommandValue()).toBe(movedTo)
+  })
+
   it('ranks a blocked agent above a more recently visited idle tab', async () => {
     await renderPalette(
       makeRecentTabState({
         agentStatusByPaneKey: {
-          [`term-alpha:${LEAF_ID}`]: makeAgentEntry('term-alpha', 'blocked', Date.now())
+          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
         },
         lastVisitedAtByWorktreeId: { 'wt-beta': Date.now() }
       })
@@ -792,7 +817,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await act(async () => {
       useAppStore.setState({
         agentStatusByPaneKey: {
-          [`term-alpha:${LEAF_ID}`]: makeAgentEntry('term-alpha', 'blocked', Date.now())
+          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
         }
       } as Partial<AppState>)
     })

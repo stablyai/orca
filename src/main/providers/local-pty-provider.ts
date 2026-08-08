@@ -11,7 +11,7 @@ import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-ch
 import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
-import { getDefaultWslDistro, parseWslPath, isWslAvailable } from '../wsl'
+import { getDefaultWslDistro, parseWslPath, isWslAvailableAsync } from '../wsl'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import {
   injectHistoryEnv,
@@ -505,7 +505,7 @@ export type LocalPtyProviderOptions = {
   /** Why: COMSPEC is always cmd.exe, so this callback injects the user's persisted shell preference. Undefined when none set. */
   getWindowsShell?: () => string | undefined
   getWindowsPowerShellImplementation?: () => 'auto' | 'powershell.exe' | 'pwsh.exe' | undefined
-  pwshAvailable?: () => boolean
+  pwshAvailable?: () => boolean | Promise<boolean>
   onSpawned?: (id: string, incarnationId: string) => void
   onExit?: (id: string, code: number, incarnationId: string) => void
   onData?: (
@@ -617,6 +617,7 @@ export class LocalPtyProvider implements IPtyProvider {
       })
       const shouldResolvePowerShellFamily =
         powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
+      const pwshAvailable = shouldProbePwsh ? await (this.opts.pwshAvailable?.() ?? false) : false
       if (resolvedGitBashPath) {
         shellPath = resolvedGitBashPath
       } else if (shellFamily === WINDOWS_GIT_BASH_SHELL) {
@@ -626,7 +627,7 @@ export class LocalPtyProvider implements IPtyProvider {
           ? (resolveEffectiveWindowsPowerShell({
               shellFamily: resolvedShellFamily,
               implementation: powerShellImplementation,
-              pwshAvailable: shouldProbePwsh ? (this.opts.pwshAvailable?.() ?? false) : false
+              pwshAvailable
             }) ?? shellFamily)
           : shellFamily
       }
@@ -1394,7 +1395,7 @@ export class LocalPtyProvider implements IPtyProvider {
       if (gitBashPath) {
         profiles.push({ name: 'Git Bash', path: gitBashPath })
       }
-      if (isWslAvailable()) {
+      if (await isWslAvailableAsync()) {
         profiles.push({ name: 'WSL', path: 'wsl.exe' })
       }
       return profiles

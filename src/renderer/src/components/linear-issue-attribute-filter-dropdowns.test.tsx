@@ -96,10 +96,10 @@ describe('LinearIssueAttributeFilterDropdowns', () => {
           }}
           onChange={() => undefined}
           workspaceId="workspace-1"
-          isAllWorkspaces={false}
           primaryTeam={team}
           selectedTeamIds={[]}
           availableTeams={[team]}
+          teamsSettled
         />
       )
     })
@@ -128,10 +128,10 @@ describe('LinearIssueAttributeFilterDropdowns', () => {
           value={value}
           onChange={() => undefined}
           workspaceId="workspace-1"
-          isAllWorkspaces={false}
           primaryTeam={team}
           selectedTeamIds={[]}
           availableTeams={[team]}
+          teamsSettled
         />
       )
     })
@@ -143,5 +143,80 @@ describe('LinearIssueAttributeFilterDropdowns', () => {
     expect(metadataMocks.useTeamsStates).toHaveBeenCalledWith(['team-1'], undefined, 'workspace-1')
     expect(metadataMocks.useTeamsLabels).toHaveBeenCalledWith(['team-1'], undefined, 'workspace-1')
     expect(metadataMocks.useTeamsMembers).toHaveBeenCalledWith(['team-1'], undefined, 'workspace-1')
+  })
+
+  // Why: filters are stored per workspace, so with no single workspace resolved a
+  // click would be silently dropped — show the picker hint instead of the sections.
+  it.each([['all'], [null]])(
+    'offers the workspace picker hint instead of filter sections for workspaceId %s',
+    (workspaceId) => {
+      const team: LinearTeam = { id: 'team-1', name: 'Engineering', key: 'ENG' }
+      const container = document.createElement('div')
+      document.body.appendChild(container)
+      const root = createRoot(container)
+      roots.push(root)
+
+      act(() => {
+        root.render(
+          <LinearIssueAttributeFilterDropdowns
+            value={{ stateIds: [], priorities: [], assignee: null, labelIds: [] }}
+            onChange={() => undefined}
+            workspaceId={workspaceId}
+            primaryTeam={team}
+            selectedTeamIds={[]}
+            availableTeams={[team]}
+            teamsSettled
+          />
+        )
+      })
+
+      const trigger = container.querySelector('button')
+      act(() => {
+        trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+
+      expect(document.body.textContent).toContain('Select one workspace')
+      expect(metadataMocks.useTeamsStates).toHaveBeenCalledWith([], undefined, null)
+    }
+  )
+
+  // Why: restored filters render before the team fetch settles, when availableTeams is
+  // still the issue-scraped subset — pruning there deletes another team's facets for good.
+  it('prunes unknown facet ids only once teams settle on the mounted component', () => {
+    const team: LinearTeam = { id: 'team-1', name: 'Engineering', key: 'ENG' }
+    const onChange = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    const renderWith = (teamsSettled: boolean): void => {
+      act(() => {
+        root.render(
+          <LinearIssueAttributeFilterDropdowns
+            value={{
+              stateIds: ['state-from-another-team'],
+              priorities: [],
+              assignee: null,
+              labelIds: []
+            }}
+            onChange={onChange}
+            workspaceId="workspace-1"
+            primaryTeam={team}
+            selectedTeamIds={[]}
+            availableTeams={[team]}
+            teamsSettled={teamsSettled}
+          />
+        )
+      })
+    }
+
+    renderWith(false)
+    expect(onChange).not.toHaveBeenCalled()
+
+    renderWith(true)
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ stateIds: [], labelIds: [], assignee: null })
+    )
   })
 })

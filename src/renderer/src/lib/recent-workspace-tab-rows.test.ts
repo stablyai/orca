@@ -159,6 +159,26 @@ describe('orderRecentWorkspaceTabs', () => {
     ).toEqual(['second', 'third', 'first'])
   })
 
+  it('keeps input order across worktrees instead of comparing their unrelated MRU ordinals', () => {
+    // Callers pass worktree-grouped positional order; both worktrees are never-visited, so only
+    // the per-worktree focus ordinals differ — beta's larger ordinal must not hoist it over alpha.
+    const rows = [
+      row('alpha-1', { worktreeId: 'wt-alpha', unifiedTabId: 'unified-alpha-1' }),
+      row('alpha-2', { worktreeId: 'wt-alpha', unifiedTabId: 'unified-alpha-2' }),
+      row('beta-1', { worktreeId: 'wt-beta', unifiedTabId: 'unified-beta-1' })
+    ]
+
+    expect(
+      order(rows, sources([]), {
+        focusedGroupTabRecency: new Map([
+          ['unified-alpha-1', 0],
+          ['unified-alpha-2', 1],
+          ['unified-beta-1', 5]
+        ])
+      })
+    ).toEqual(['alpha-2', 'alpha-1', 'beta-1'])
+  })
+
   it('keeps input (positional) order when nothing else separates two rows', () => {
     const rows = [row('a', { worktreeId: 'wt-1' }), row('b', { worktreeId: 'wt-1' })]
 

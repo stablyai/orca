@@ -65,7 +65,7 @@ import {
   isPiCompatibleAgentType,
   type PiAgentKind
 } from '../../shared/pi-agent-kind'
-import { isPwshAvailable } from '../pwsh'
+import { isPwshAvailableAsync } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { isPtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
@@ -2347,7 +2347,7 @@ export function registerPtyHandlers(
         getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined,
-      pwshAvailable: () => isPwshAvailable(),
+      pwshAvailable: () => isPwshAvailableAsync(),
       buildSpawnEnv: (id, baseEnv, ctx) => {
         const codexSelectionTarget: CodexAccountSelectionTarget =
           ctx?.isWsl === true

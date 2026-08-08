@@ -79,7 +79,7 @@ describe('scorePaletteRelevance', () => {
     expect(worstPrimary).toBeLessThan(bestSecondary)
   })
 
-  it('treats a CJK character before the match as a word boundary', () => {
+  it('treats a CJK letter before the match as mid-word, like a Latin letter', () => {
     expect(
       scorePaletteRelevance([{ text: '工作树perf', range: { start: 3, end: 7 }, tier: 0 }])
     ).toBe(scorePaletteRelevance([{ text: 'aperf', range: { start: 1, end: 5 }, tier: 0 }]))
@@ -218,5 +218,18 @@ describe('getOpenTabMatchRelevance', () => {
       makeOpenTab({ secondaryRange: { start: 0, end: 4 } })
     )
     expect(secondary).toBeLessThan(workspace)
+  })
+
+  it('ranks search-only type aliases as secondary-tier hits', () => {
+    const typeAlias = getOpenTabMatchRelevance(
+      makeOpenTab({
+        typeAliasMatch: { text: 'terminal tab', range: { start: 0, end: 8 } }
+      })
+    )
+    const titlePrefix = getOpenTabMatchRelevance(makeOpenTab({ titleRange: { start: 0, end: 4 } }))
+    const ambient = getOpenTabMatchRelevance(makeOpenTab({ worktreeRange: { start: 0, end: 4 } }))
+    expect(typeAlias).toBeLessThan(NO_MATCH_RELEVANCE)
+    expect(titlePrefix).toBeLessThan(typeAlias)
+    expect(typeAlias).toBeLessThan(ambient)
   })
 })

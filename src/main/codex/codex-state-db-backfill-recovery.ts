@@ -21,21 +21,14 @@ import {
 
 const RECOVERY_POLL_INTERVAL_MS = 5_000
 const RECOVERY_RETRY_DELAY_MS = 2_000
-const RECOVERY_FAST_EXIT_MS = 10_000
-const RECOVERY_MAX_FAST_FAILURES = 5
+const RECOVERY_MAX_COORDINATOR_FAILURES = 5
+const RECOVERY_MAX_SPAWNS = 5
 const RECOVERY_MAX_TOTAL_MS = 60 * 60_000
 const RECOVERY_OWNER_CHECK_TIMEOUT_MS = 1_000
 const RECOVERY_CODEX_ARGS = ['-s', 'read-only', '-a', 'untrusted', 'app-server'] as const
 
 export type CodexStateDbBackfillRecoverySummary = {
-  outcome:
-    | 'completed'
-    | 'already-complete'
-    | 'not-needed'
-    | 'unreadable'
-    | 'stopped'
-    | 'gave-up'
-    | 'codex-unavailable'
+  outcome: 'completed' | 'already-complete' | 'not-needed' | 'unreadable' | 'stopped' | 'gave-up'
   spawnCount: number
 }
 
@@ -129,22 +122,15 @@ export async function runCodexStateDbBackfillRecovery(
 
   const deadline = dependencies.now() + RECOVERY_MAX_TOTAL_MS
   let spawnCount = 0
-  let fastFailures = 0
-  while (!signal.aborted && dependencies.now() < deadline) {
-    const spawnedAt = dependencies.now()
+  while (!signal.aborted && dependencies.now() < deadline && spawnCount < RECOVERY_MAX_SPAWNS) {
     const child = spawnRecoveryProcess(codexHomePath, dependencies)
     spawnCount += 1
     let childDown = false
-    let spawnFailed = false
-    let exitedAt = spawnedAt
     child.once('error', () => {
       childDown = true
-      spawnFailed = true
-      exitedAt = dependencies.now()
     })
     child.once('exit', () => {
       childDown = true
-      exitedAt = dependencies.now()
     })
 
     try {
@@ -175,14 +161,8 @@ export async function runCodexStateDbBackfillRecovery(
       await dependencies.terminate(child)
       return finish('gave-up', spawnCount)
     }
-    if (spawnFailed && spawnCount === 1) {
-      return finish('codex-unavailable', spawnCount)
-    }
-    if (exitedAt - spawnedAt < RECOVERY_FAST_EXIT_MS) {
-      fastFailures += 1
-      if (fastFailures >= RECOVERY_MAX_FAST_FAILURES) {
-        return finish('gave-up', spawnCount)
-      }
+    if (spawnCount >= RECOVERY_MAX_SPAWNS) {
+      return finish('gave-up', spawnCount)
     }
     try {
       await dependencies.sleep(RECOVERY_RETRY_DELAY_MS, signal)
@@ -227,38 +207,82 @@ type ActiveRecovery = {
 }
 
 const activeRecoveries = new Map<string, ActiveRecovery>()
+const coordinatorFailureCounts = new Map<string, number>()
 let stopping = false
 
+type RecoveryCoordinatorDependencies = {
+  isPending: typeof isCodexStateDbBackfillPending
+  run: typeof runCodexStateDbBackfillRecovery
+  withLock: typeof withCodexBackfillSupervisorLock
+}
+
+const defaultCoordinatorDependencies: RecoveryCoordinatorDependencies = {
+  isPending: isCodexStateDbBackfillPending,
+  run: runCodexStateDbBackfillRecovery,
+  withLock: withCodexBackfillSupervisorLock
+}
+
+function settleRecoveryEntry(
+  key: string,
+  task: ActiveRecovery['task'],
+  summary: CodexStateDbBackfillRecoverySummary | null
+): void {
+  if (activeRecoveries.get(key)?.task !== task) {
+    return
+  }
+  if (summary?.outcome === 'gave-up') {
+    coordinatorFailureCounts.delete(key)
+    return
+  }
+  if (summary === null) {
+    const failureCount = (coordinatorFailureCounts.get(key) ?? 0) + 1
+    if (failureCount >= RECOVERY_MAX_COORDINATOR_FAILURES) {
+      coordinatorFailureCounts.delete(key)
+      return
+    }
+    coordinatorFailureCounts.set(key, failureCount)
+  } else {
+    coordinatorFailureCounts.delete(key)
+  }
+  activeRecoveries.delete(key)
+}
+
 export function startCodexStateDbBackfillRecoveryInBackground(
-  codexHomePath: string
+  codexHomePath: string,
+  dependenciesOverride: Partial<RecoveryCoordinatorDependencies> = {}
 ): Promise<CodexStateDbBackfillRecoverySummary | null> {
+  const dependencies = { ...defaultCoordinatorDependencies, ...dependenciesOverride }
   const key = normalizeRuntimePathForComparison(codexHomePath)
   const existing = activeRecoveries.get(key)
   if (existing) {
     return existing.task
   }
-  if (stopping || !isCodexStateDbBackfillPending(codexHomePath)) {
+  if (stopping) {
+    return Promise.resolve(null)
+  }
+  if (!dependencies.isPending(codexHomePath)) {
+    coordinatorFailureCounts.delete(key)
     return Promise.resolve(null)
   }
   const controller = new AbortController()
   let markReady!: () => void
   const ready = new Promise<void>((resolve) => (markReady = resolve))
-  const task = withCodexBackfillSupervisorLock(codexHomePath, controller.signal, async () => {
-    console.info(`[codex-state-db-backfill] supervising Codex index at ${codexHomePath}`)
-    markReady()
-    return await runCodexStateDbBackfillRecovery(codexHomePath, controller.signal)
-  }).catch((error: unknown) => {
-    if (!controller.signal.aborted) {
-      console.warn('[codex-state-db-backfill] recovery supervisor stopped:', error)
-    }
-    return null
-  })
+  const task = dependencies
+    .withLock(codexHomePath, controller.signal, async () => {
+      console.info(`[codex-state-db-backfill] supervising Codex index at ${codexHomePath}`)
+      markReady()
+      return await dependencies.run(codexHomePath, controller.signal)
+    })
+    .catch((error: unknown) => {
+      if (!controller.signal.aborted) {
+        console.warn('[codex-state-db-backfill] recovery supervisor stopped:', error)
+      }
+      return null
+    })
   void task.finally(markReady)
   activeRecoveries.set(key, { controller, ready, task })
-  void task.finally(() => {
-    if (activeRecoveries.get(key)?.task === task) {
-      activeRecoveries.delete(key)
-    }
+  void task.then((summary) => {
+    settleRecoveryEntry(key, task, summary)
   })
   return task
 }
@@ -284,5 +308,6 @@ export const _internals = {
   resetForTests(): void {
     stopping = false
     activeRecoveries.clear()
+    coordinatorFailureCounts.clear()
   }
 }

@@ -705,6 +705,7 @@ describe('listAiVaultSubagentSessions gating', () => {
 describe('deleteAiVaultSession', () => {
   const args = {
     agent: 'gemini' as const,
+    sessionId: 'session-1',
     filePath: '/home/ada/.gemini/tmp/sess.json',
     executionHostId: 'local' as const
   }
@@ -718,9 +719,11 @@ describe('deleteAiVaultSession', () => {
     expect(mocks.deleteAiVaultSessionFile).toHaveBeenCalledWith(
       expect.objectContaining({
         agent: 'gemini',
+        sessionId: args.sessionId,
         filePath: args.filePath,
         executionHostId: 'local'
-      })
+      }),
+      expect.objectContaining({ getSessionLiveness: expect.any(Function) })
     )
     expect(mocks.invalidateAiVaultSessionListCache).toHaveBeenCalledTimes(1)
     expect(mocks.invalidateSessionParseCacheEntry).toHaveBeenCalledWith(args.filePath)
@@ -769,7 +772,8 @@ describe('deleteAiVaultSession', () => {
       reason: 'invalid-path'
     })
     expect(mocks.deleteAiVaultSessionFile).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '' })
+      expect.objectContaining({ filePath: '' }),
+      expect.objectContaining({ getSessionLiveness: expect.any(Function) })
     )
     expect(mocks.invalidateAiVaultSessionListCache).not.toHaveBeenCalled()
   })

@@ -180,7 +180,7 @@ vi.mock('../pi/titlebar-extension-service', () => ({
 }))
 
 vi.mock('../pwsh', () => ({
-  isPwshAvailable: isPwshAvailableMock
+  isPwshAvailableAsync: isPwshAvailableMock
 }))
 
 vi.mock('../telemetry/client', () => ({

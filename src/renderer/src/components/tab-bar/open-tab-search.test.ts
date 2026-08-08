@@ -58,7 +58,7 @@ function makeWorkspaceTab({
   id,
   title,
   contentType = 'terminal',
-  secondaryText = 'Terminal tab',
+  secondaryText = '',
   secondarySearchTexts,
   agentSnippets = [],
   tabSortIndex = 0,
@@ -85,7 +85,7 @@ function makeWorkspaceTab({
     title,
     secondaryText,
     titleSearchText: title,
-    secondarySearchTexts: secondarySearchTexts ?? [secondaryText],
+    secondarySearchTexts: secondarySearchTexts ?? (secondaryText ? [secondaryText] : []),
     agentMetadata: agentSnippets.length
       ? [{ paneKey: `${id}-pane`, textParts: [], snippetCandidates: agentSnippets }]
       : [],

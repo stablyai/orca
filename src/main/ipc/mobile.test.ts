@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as NodeOs from 'node:os'
 
-const { handleMock, networkInterfacesMock } = vi.hoisted(() => ({
+const { defaultRouteInterfaceNamesMock, handleMock, networkInterfacesMock } = vi.hoisted(() => ({
+  defaultRouteInterfaceNamesMock: vi.fn(),
   handleMock: vi.fn(),
   networkInterfacesMock: vi.fn()
 }))
@@ -25,6 +26,10 @@ vi.mock('os', async (importOriginal) => ({
   networkInterfaces: networkInterfacesMock
 }))
 
+vi.mock('../runtime/windows-default-route-interfaces', () => ({
+  getWindowsDefaultRouteInterfaceNames: defaultRouteInterfaceNamesMock
+}))
+
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -42,12 +47,13 @@ describe('registerMobileHandlers', () => {
     handleMock.mockReset()
     networkInterfacesMock.mockReset()
     networkInterfacesMock.mockReturnValue({})
+    defaultRouteInterfaceNamesMock.mockReset().mockResolvedValue(new Set())
     handleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(channel, handler)
     })
   })
 
-  it('re-reads system network interfaces on each request and prefers tailnet addresses', () => {
+  it('re-reads system network interfaces on each request and prefers tailnet addresses', async () => {
     networkInterfacesMock
       .mockReturnValueOnce({
         en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
@@ -59,15 +65,16 @@ describe('registerMobileHandlers', () => {
 
     registerMobileHandlers({} as never)
 
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [{ name: 'en0', address: '192.168.1.24' }]
     })
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
         { name: 'tailscale0', address: '100.64.1.20' },
         { name: 'en0', address: '192.168.1.24' }
       ]
     })
+    expect(defaultRouteInterfaceNamesMock).not.toHaveBeenCalled()
   })
 
   it('excludes proxy fake-ip addresses so pairing defaults to LAN (#10404)', async () => {
@@ -92,7 +99,7 @@ describe('registerMobileHandlers', () => {
 
     registerMobileHandlers({ createMobilePairingOffer } as never)
 
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
         { name: 'en0', address: '192.168.50.238' },
         { name: 'en0', address: '198.17.255.254' },
@@ -106,7 +113,7 @@ describe('registerMobileHandlers', () => {
     )
   })
 
-  it('includes IPv6 addresses (ranked after IPv4) and excludes link-local IPv6', () => {
+  it('includes IPv6 addresses (ranked after IPv4) and excludes link-local IPv6', async () => {
     networkInterfacesMock.mockReturnValue({
       en0: [
         { family: 'IPv4', internal: false, address: '192.168.1.24' },
@@ -118,7 +125,7 @@ describe('registerMobileHandlers', () => {
 
     registerMobileHandlers({} as never)
 
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
         { name: 'en0', address: '192.168.1.24' },
         { name: 'en0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' }
@@ -126,7 +133,7 @@ describe('registerMobileHandlers', () => {
     })
   })
 
-  it('ranks container and VM bridges below every reachable address', () => {
+  it('ranks container and VM bridges below every reachable address', async () => {
     // Why: a phone can never reach docker0, so advertising it makes the direct
     // path lose the pairing race and silently relays every session.
     networkInterfacesMock.mockReturnValue({
@@ -142,7 +149,7 @@ describe('registerMobileHandlers', () => {
     registerMobileHandlers({} as never)
 
     // Real IPv6 outranks a bridge IPv4: the phone can reach one, never the other.
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
         { name: 'en0', address: '192.168.1.24' },
         { name: 'en0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' },
@@ -153,7 +160,59 @@ describe('registerMobileHandlers', () => {
     })
   })
 
-  it('keeps a real LAN address that merely overlaps a container subnet', () => {
+  it('auto-advertises a route-backed Hyper-V external-switch management address', async () => {
+    networkInterfacesMock.mockReturnValue({
+      'vEthernet (Production LAN)': [{ family: 'IPv4', internal: false, address: '192.168.50.24' }],
+      'vEthernet (Default Switch)': [{ family: 'IPv4', internal: false, address: '172.28.80.1' }],
+      'vEthernet (WSL (Hyper-V firewall))': [
+        { family: 'IPv4', internal: false, address: '172.20.96.1' }
+      ],
+      Ethernet: [{ family: 'IPv4', internal: false, address: '192.168.50.25' }]
+    })
+    defaultRouteInterfaceNamesMock.mockResolvedValue(
+      new Set([
+        'vEthernet (Production LAN)',
+        'vEthernet (Default Switch)',
+        'vEthernet (WSL (Hyper-V firewall))'
+      ])
+    )
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair#external-switch',
+      endpoint: 'ws://192.168.50.24:6768',
+      deviceId: 'mobile-external-switch',
+      connectionMode: 'automatic'
+    })
+
+    registerMobileHandlers({ createMobilePairingOffer } as never)
+
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
+      interfaces: [
+        {
+          name: 'vEthernet (Production LAN)',
+          address: '192.168.50.24',
+          hasDefaultRoute: true
+        },
+        { name: 'Ethernet', address: '192.168.50.25' },
+        {
+          name: 'vEthernet (Default Switch)',
+          address: '172.28.80.1',
+          hasDefaultRoute: true
+        },
+        {
+          name: 'vEthernet (WSL (Hyper-V firewall))',
+          address: '172.20.96.1',
+          hasDefaultRoute: true
+        }
+      ]
+    })
+    await handlers.get('mobile:getPairingQR')?.(null, {})
+    expect(createMobilePairingOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ address: '192.168.50.24' })
+    )
+  })
+
+  it('keeps a real LAN address that merely overlaps a container subnet', async () => {
     // Why: Docker's 172.16/12 pool overlaps genuine corporate LANs, so the
     // bridge check keys on interface name — a subnet test would demote this.
     networkInterfacesMock.mockReturnValue({
@@ -163,7 +222,7 @@ describe('registerMobileHandlers', () => {
 
     registerMobileHandlers({} as never)
 
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
         { name: 'eth0', address: '172.17.4.9' },
         { name: 'docker0', address: '172.17.0.1' }
@@ -199,7 +258,7 @@ describe('registerMobileHandlers', () => {
       expect.objectContaining({ address: null })
     )
     // The bridges stay pickable, just never automatically.
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
         { name: 'docker0', address: '172.17.0.1' },
         { name: 'vEthernet (WSL)', address: '172.28.80.1' }
@@ -252,7 +311,7 @@ describe('registerMobileHandlers', () => {
     )
   })
 
-  it('returns an IPv6 interface on an IPv6-only host (regression: was empty, breaking mobile pairing)', () => {
+  it('returns an IPv6 interface on an IPv6-only host (regression: was empty, breaking mobile pairing)', async () => {
     networkInterfacesMock.mockReturnValue({
       eth0: [
         { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' },
@@ -262,7 +321,7 @@ describe('registerMobileHandlers', () => {
 
     registerMobileHandlers({} as never)
 
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [{ name: 'eth0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' }]
     })
   })

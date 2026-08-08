@@ -103,7 +103,7 @@ function makeResult(
     groupId: 'group-1',
     contentType: 'terminal',
     title: 'Terminal',
-    secondaryText: 'Terminal tab',
+    secondaryText: '',
     repoName: 'repo/orca',
     worktreeName: 'Palette Worktree',
     titleRange: null,

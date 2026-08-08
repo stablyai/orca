@@ -5,8 +5,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as ownerIdentity from '../agent-hooks/managed-hook-owner-identity'
 import {
+  _internals,
   resolveCodexBackfillSupervisorLockRoot,
   runCodexStateDbBackfillRecovery,
+  startCodexStateDbBackfillRecoveryInBackground,
   withCodexBackfillSupervisorLock
 } from './codex-state-db-backfill-recovery'
 import type { CodexStateDbBackfillStatus } from './codex-state-db'
@@ -35,6 +37,7 @@ async function createTemporaryRoot(): Promise<string> {
 }
 
 afterEach(async () => {
+  _internals.resetForTests()
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
@@ -44,6 +47,306 @@ afterEach(async () => {
 })
 
 describe('Codex state DB backfill recovery', () => {
+  it('does not restart an exhausted supervisor when later triggers arrive', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => {})
+    const run = vi.fn(async () => ({ outcome: 'gave-up' as const, spawnCount: 5 }))
+    const withLock = vi.fn(
+      async (_home: string, _signal: AbortSignal | undefined, claim: () => Promise<unknown>) =>
+        await claim()
+    )
+    const dependencies = {
+      isPending: vi.fn(() => true),
+      run,
+      withLock: withLock as never
+    }
+
+    const first = startCodexStateDbBackfillRecoveryInBackground('/managed-home', dependencies)
+    await expect(first).resolves.toEqual({ outcome: 'gave-up', spawnCount: 5 })
+    const repeated = startCodexStateDbBackfillRecoveryInBackground('/managed-home', dependencies)
+
+    expect(repeated).toBe(first)
+    await expect(repeated).resolves.toEqual({ outcome: 'gave-up', spawnCount: 5 })
+    expect(dependencies.isPending).toHaveBeenCalledTimes(1)
+    expect(withLock).toHaveBeenCalledTimes(1)
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases a completed supervisor entry', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => {})
+    const run = vi.fn(async () => ({ outcome: 'completed' as const, spawnCount: 1 }))
+    const dependencies = {
+      isPending: vi.fn().mockReturnValueOnce(true).mockReturnValue(false),
+      run,
+      withLock: vi.fn(
+        async (_home: string, _signal: AbortSignal | undefined, claim: () => Promise<unknown>) =>
+          await claim()
+      ) as never
+    }
+
+    await expect(
+      startCodexStateDbBackfillRecoveryInBackground('/managed-home', dependencies)
+    ).resolves.toEqual({ outcome: 'completed', spawnCount: 1 })
+    await expect(
+      startCodexStateDbBackfillRecoveryInBackground('/managed-home', dependencies)
+    ).resolves.toBeNull()
+
+    expect(dependencies.isPending).toHaveBeenCalledTimes(2)
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases a failed owner-lock attempt for later arbitration', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'info').mockImplementation(() => {})
+    const dependencies = {
+      isPending: vi.fn(() => true),
+      run: vi.fn(async () => ({ outcome: 'completed' as const, spawnCount: 1 })),
+      withLock: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('owner still live'))
+        .mockImplementation(
+          async (_home: string, _signal: AbortSignal | undefined, claim: () => Promise<unknown>) =>
+            await claim()
+        )
+    }
+
+    await expect(
+      startCodexStateDbBackfillRecoveryInBackground('/managed-home', dependencies as never)
+    ).resolves.toBeNull()
+    await expect(
+      startCodexStateDbBackfillRecoveryInBackground('/managed-home', dependencies as never)
+    ).resolves.toEqual({ outcome: 'completed', spawnCount: 1 })
+
+    expect(dependencies.isPending).toHaveBeenCalledTimes(2)
+    expect(dependencies.withLock).toHaveBeenCalledTimes(2)
+    expect(dependencies.run).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds permanent coordinator failures across later triggers', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const dependencies = {
+      isPending: vi.fn(() => true),
+      run: vi.fn(),
+      withLock: vi.fn(async () => {
+        throw new Error('permanent lock-root failure')
+      })
+    }
+    const tasks: Promise<unknown>[] = []
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const task = startCodexStateDbBackfillRecoveryInBackground(
+        '/managed-home',
+        dependencies as never
+      )
+      tasks.push(task)
+      await expect(task).resolves.toBeNull()
+    }
+
+    expect(tasks[5]).toBe(tasks[4])
+    expect(dependencies.isPending).toHaveBeenCalledTimes(5)
+    expect(dependencies.withLock).toHaveBeenCalledTimes(5)
+    expect(dependencies.run).not.toHaveBeenCalled()
+  })
+
+  it('bounds permanent claimant exits just beyond the fast-failure window', async () => {
+    const controller = new AbortController()
+    const children = new Map<ReturnType<typeof createFakeChild>, number>()
+    const timerDurations: number[] = []
+    let now = 0
+    let exitCount = 0
+    let pendingTimers = 0
+    let maxPendingTimers = 0
+    let maxLiveChildren = 0
+    let safetyFuseTripped = false
+    const terminate = vi.fn(async () => {})
+    const spawnProcess = vi.fn(() => {
+      const child = createFakeChild()
+      children.set(child, now + 10_001)
+      maxLiveChildren = Math.max(maxLiveChildren, children.size)
+      return child
+    })
+    const sleep = vi.fn(async (ms: number) => {
+      timerDurations.push(ms)
+      pendingTimers += 1
+      maxPendingTimers = Math.max(maxPendingTimers, pendingTimers)
+      const wakeAt = now + ms
+      for (const [child, exitAt] of children) {
+        if (exitAt <= wakeAt) {
+          now = exitAt
+          children.delete(child)
+          exitCount += 1
+          child.emit('exit', 1, null)
+        }
+      }
+      now = wakeAt
+      pendingTimers -= 1
+      if (ms === 2_000 && spawnProcess.mock.calls.length === 6) {
+        safetyFuseTripped = true
+        controller.abort()
+        throw Object.assign(new Error('reproduction safety fuse'), { name: 'AbortError' })
+      }
+      await Promise.resolve()
+    })
+
+    const summary = await runCodexStateDbBackfillRecovery('/managed-home', controller.signal, {
+      spawnProcess: spawnProcess as never,
+      readStatus: vi.fn(
+        (): CodexStateDbBackfillStatus => ({
+          kind: 'incomplete',
+          stateDbPath: '/state.sqlite',
+          status: 'running'
+        })
+      ),
+      terminate,
+      sleep,
+      now: () => now
+    })
+
+    expect({
+      summary,
+      spawnCount: spawnProcess.mock.calls.length,
+      exitCount,
+      timerCount: timerDurations.length,
+      pollCount: timerDurations.filter((ms) => ms === 5_000).length,
+      backoffCount: timerDurations.filter((ms) => ms === 2_000).length,
+      liveChildren: children.size,
+      pendingTimers,
+      maxLiveChildren,
+      maxPendingTimers,
+      terminateCount: terminate.mock.calls.length,
+      safetyFuseTripped
+    }).toEqual({
+      summary: { outcome: 'gave-up', spawnCount: 5 },
+      spawnCount: 5,
+      exitCount: 5,
+      timerCount: 19,
+      pollCount: 15,
+      backoffCount: 4,
+      liveChildren: 0,
+      pendingTimers: 0,
+      maxLiveChildren: 1,
+      maxPendingTimers: 1,
+      terminateCount: 0,
+      safetyFuseTripped: false
+    })
+  })
+
+  it('recovers after claimant exits just beyond the old fast-failure window', async () => {
+    const children = new Map<ReturnType<typeof createFakeChild>, number>()
+    const timerDurations: number[] = []
+    let now = 0
+    let exitCount = 0
+    let pendingTimers = 0
+    let maxLiveChildren = 0
+    const spawnProcess = vi.fn(() => {
+      const child = createFakeChild()
+      children.set(child, now + 10_001)
+      maxLiveChildren = Math.max(maxLiveChildren, children.size)
+      return child
+    })
+    const terminate = vi.fn(async (child: ReturnType<typeof createFakeChild>) => {
+      children.delete(child)
+    })
+    const sleep = vi.fn(async (ms: number) => {
+      timerDurations.push(ms)
+      pendingTimers += 1
+      const wakeAt = now + ms
+      for (const [child, exitAt] of children) {
+        if (exitAt <= wakeAt) {
+          now = exitAt
+          children.delete(child)
+          exitCount += 1
+          child.emit('exit', 1, null)
+        }
+      }
+      now = wakeAt
+      pendingTimers -= 1
+      await Promise.resolve()
+    })
+
+    const summary = await runCodexStateDbBackfillRecovery(
+      '/managed-home',
+      new AbortController().signal,
+      {
+        spawnProcess: spawnProcess as never,
+        readStatus: vi.fn(
+          (): CodexStateDbBackfillStatus =>
+            spawnProcess.mock.calls.length >= 3
+              ? { kind: 'complete', stateDbPath: '/state.sqlite' }
+              : {
+                  kind: 'incomplete',
+                  stateDbPath: '/state.sqlite',
+                  status: 'running'
+                }
+        ),
+        terminate: terminate as never,
+        sleep,
+        now: () => now
+      }
+    )
+
+    expect({
+      summary,
+      spawnCount: spawnProcess.mock.calls.length,
+      exitCount,
+      timerCount: timerDurations.length,
+      pollCount: timerDurations.filter((ms) => ms === 5_000).length,
+      backoffCount: timerDurations.filter((ms) => ms === 2_000).length,
+      liveChildren: children.size,
+      pendingTimers,
+      maxLiveChildren,
+      terminateCount: terminate.mock.calls.length
+    }).toEqual({
+      summary: { outcome: 'completed', spawnCount: 3 },
+      spawnCount: 3,
+      exitCount: 2,
+      timerCount: 9,
+      pollCount: 7,
+      backoffCount: 2,
+      liveChildren: 0,
+      pendingTimers: 0,
+      maxLiveChildren: 1,
+      terminateCount: 1
+    })
+  })
+
+  it('recovers after a transient process spawn error', async () => {
+    const children = [createFakeChild(), createFakeChild()]
+    let spawnCount = 0
+    let now = 0
+    const timerDurations: number[] = []
+    const spawnProcess = vi.fn(() => {
+      const child = children[spawnCount++]
+      if (spawnCount === 1) {
+        queueMicrotask(() => child.emit('error', new Error('temporary launch failure')))
+      }
+      return child
+    })
+    const terminate = vi.fn(async () => {})
+
+    await expect(
+      runCodexStateDbBackfillRecovery('/managed-home', new AbortController().signal, {
+        spawnProcess: spawnProcess as never,
+        readStatus: vi.fn(
+          (): CodexStateDbBackfillStatus =>
+            spawnCount >= 2
+              ? { kind: 'complete', stateDbPath: '/state.sqlite' }
+              : { kind: 'incomplete', stateDbPath: '/state.sqlite', status: 'running' }
+        ),
+        terminate,
+        sleep: vi.fn(async (ms: number) => {
+          timerDurations.push(ms)
+          now += ms
+          await Promise.resolve()
+        }),
+        now: () => now
+      })
+    ).resolves.toEqual({ outcome: 'completed', spawnCount: 2 })
+    expect(spawnProcess).toHaveBeenCalledTimes(2)
+    expect(timerDurations).toEqual([5_000, 2_000, 5_000])
+    expect(terminate).toHaveBeenCalledTimes(1)
+    expect(terminate).toHaveBeenCalledWith(children[1])
+  })
+
   it('keeps the successful app-server claimant alive until Codex marks its DB complete', async () => {
     const child = createFakeChild()
     const terminate = vi.fn(async () => {})

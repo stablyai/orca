@@ -36,6 +36,7 @@ import {
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
+import { normalizeLinearIssueViewResumeState } from '../../../../shared/linear-issue-view-resume-state'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
@@ -558,6 +559,12 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   }
   if (typeof input.linearQuery === 'string') {
     next.linearQuery = input.linearQuery
+  }
+  // Why: normalization drops a malformed preference or filter entry on its own,
+  // so corrupt Linear view state can't take the rest of the resume state down.
+  const linearIssueView = normalizeLinearIssueViewResumeState(input.linearIssueView)
+  if (linearIssueView) {
+    next.linearIssueView = linearIssueView
   }
   if (input.linearContext && typeof input.linearContext === 'object') {
     const context = input.linearContext as Record<string, unknown>

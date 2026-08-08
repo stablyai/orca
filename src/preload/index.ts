@@ -4689,7 +4689,7 @@ const api = {
 
   mobile: {
     listNetworkInterfaces: (): Promise<{
-      interfaces: { name: string; address: string }[]
+      interfaces: { name: string; address: string; hasDefaultRoute?: boolean }[]
     }> => ipcRenderer.invoke('mobile:listNetworkInterfaces'),
 
     getPairingQR: (args?: {

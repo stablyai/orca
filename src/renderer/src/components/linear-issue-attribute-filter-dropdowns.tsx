@@ -26,12 +26,14 @@ import { resolveLinearIssueAttributeFilterTeamIds } from './linear-issue-attribu
 type Props = {
   value: LinearIssueAttributeFilter
   onChange: (next: LinearIssueAttributeFilter) => void
+  /** `null` or `all` means no single workspace owns the facet ids. */
   workspaceId: string | null
-  isAllWorkspaces: boolean
   primaryTeam: LinearTeam | null
   /** Selected Linear team ids (All teams / multi-select). Empty → primary fallback. */
   selectedTeamIds: readonly string[]
   availableTeams: readonly LinearTeam[]
+  /** False while `availableTeams` is still the issue-scraped fallback, not the real fetch. */
+  teamsSettled: boolean
   settings?: RuntimeLinearSettings
 }
 
@@ -68,10 +70,10 @@ export default function LinearIssueAttributeFilterDropdowns({
   value,
   onChange,
   workspaceId,
-  isAllWorkspaces,
   primaryTeam,
   selectedTeamIds,
   availableTeams,
+  teamsSettled,
   settings
 }: Props): React.JSX.Element {
   const [popoverOpen, setPopoverOpen] = useState(false)
@@ -83,8 +85,12 @@ export default function LinearIssueAttributeFilterDropdowns({
     value.labelIds.length > 0 ||
     value.assignee?.kind === 'user'
 
+  // Why: facet ids belong to one workspace, so an unresolved id is as unusable as `all`
+  // — both must show the picker hint rather than accept a filter that goes nowhere.
+  const scopedWorkspaceId = workspaceId && workspaceId !== 'all' ? workspaceId : null
+
   const activeTeamIds = useMemo(() => {
-    if (!metadataNeeded || isAllWorkspaces) {
+    if (!metadataNeeded || !scopedWorkspaceId) {
       return [] as string[]
     }
     return resolveLinearIssueAttributeFilterTeamIds({
@@ -92,10 +98,9 @@ export default function LinearIssueAttributeFilterDropdowns({
       availableTeams,
       primaryTeamId: primaryTeam?.id ?? null
     })
-  }, [metadataNeeded, isAllWorkspaces, selectedTeamIds, availableTeams, primaryTeam?.id])
+  }, [metadataNeeded, scopedWorkspaceId, selectedTeamIds, availableTeams, primaryTeam?.id])
 
-  const concreteWorkspaceId =
-    metadataNeeded && !isAllWorkspaces && workspaceId && workspaceId !== 'all' ? workspaceId : null
+  const concreteWorkspaceId = metadataNeeded ? scopedWorkspaceId : null
 
   // Why: multi-team / All teams must union filter options across every selected team (#8739).
   const states = useTeamsStates(activeTeamIds, settings, concreteWorkspaceId)
@@ -107,6 +112,12 @@ export default function LinearIssueAttributeFilterDropdowns({
   const pruneTeamKeyRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeTeamIds.length === 0 || !concreteWorkspaceId) {
+      return
+    }
+    // Why: restored filters make this run at startup, when availableTeams may still be
+    // the issue-scraped subset. Metadata complete for a partial team set looks valid,
+    // so pruning there would permanently delete facets from another team (R12).
+    if (!teamsSettled) {
       return
     }
     if (states.loading || labels.loading || members.loading) {
@@ -141,6 +152,7 @@ export default function LinearIssueAttributeFilterDropdowns({
   }, [
     activeTeamIds,
     concreteWorkspaceId,
+    teamsSettled,
     states.loading,
     states.error,
     states.data,
@@ -234,7 +246,7 @@ export default function LinearIssueAttributeFilterDropdowns({
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-0">
-          {isAllWorkspaces ? (
+          {!scopedWorkspaceId ? (
             <div className="space-y-2 p-3 text-xs">
               <p className="font-medium text-foreground">
                 {translate(

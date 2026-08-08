@@ -62,6 +62,7 @@ type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
     getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
     scanRuntimeAiVaultSessions?: RuntimeAiVaultScanner
+    getSessionLiveness?: Parameters<typeof deleteAiVaultSession>[1]['getSessionLiveness']
   }
 
 let scanCoordinator = new AiVaultScanCoordinator()
@@ -69,7 +70,12 @@ let handlerOptions: AiVaultHandlerOptions = {}
 const listCancellations = createSenderScopedRequestCancellations()
 // Shared by the IPC registration and the test internals: a delete must drop
 // the multi-host leg cache, which this module owns the only caller of.
-const aiVaultDeleteDeps = { invalidateMultiHostListCache: invalidateAiVaultHostLegCache }
+const aiVaultDeleteDeps = {
+  invalidateMultiHostListCache: invalidateAiVaultHostLegCache,
+  getSessionLiveness: (
+    target: Parameters<NonNullable<AiVaultHandlerOptions['getSessionLiveness']>>[0]
+  ) => handlerOptions.getSessionLiveness?.(target) ?? Promise.resolve('unknown' as const)
+}
 
 async function listAiVaultSessions(
   args?: AiVaultListArgs,

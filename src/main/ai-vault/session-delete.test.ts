@@ -1,11 +1,22 @@
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { lstatMock, realpathMock, trashItemMock, tryDeleteWslUncPathMock } = vi.hoisted(() => ({
+const {
+  lstatMock,
+  realpathMock,
+  trashItemMock,
+  tryDeleteWslUncPathMock,
+  WslDeleteValidationErrorMock
+} = vi.hoisted(() => ({
   lstatMock: vi.fn(),
   realpathMock: vi.fn(),
   trashItemMock: vi.fn(),
-  tryDeleteWslUncPathMock: vi.fn()
+  tryDeleteWslUncPathMock: vi.fn(),
+  WslDeleteValidationErrorMock: class extends Error {
+    constructor(readonly reason: 'path-outside-known-roots' | 'unexpected-target-kind') {
+      super(reason)
+    }
+  }
 }))
 
 vi.mock('node:fs/promises', () => ({
@@ -18,15 +29,24 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../wsl-unc-delete', () => ({
-  tryDeleteWslUncPath: tryDeleteWslUncPathMock
+  tryDeleteWslUncPath: tryDeleteWslUncPathMock,
+  WslDeleteValidationError: WslDeleteValidationErrorMock
 }))
 
-import { deleteAiVaultSessionFile } from './session-delete'
+import { deleteAiVaultSessionFile as deleteAiVaultSessionFileWithLiveness } from './session-delete'
 
 const HOME = join('/tmp', 'orca-ai-vault-delete-exec-fixture-home')
 const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')
 const CLAUDE_ROOT = join(HOME, '.claude', 'projects')
 const ROVO_ROOT = join(HOME, '.rovodev', 'sessions')
+
+function deleteAiVaultSessionFile(
+  args: Parameters<typeof deleteAiVaultSessionFileWithLiveness>[0]
+) {
+  return deleteAiVaultSessionFileWithLiveness(args, {
+    getSessionLiveness: async () => 'not-live'
+  })
+}
 
 function enoent(): NodeJS.ErrnoException {
   const error = new Error('not found') as NodeJS.ErrnoException
@@ -181,7 +201,10 @@ describe('deleteAiVaultSessionFile', () => {
     const result = await deleteAiVaultSessionFile(baseArgs(filePath))
 
     expect(result).toEqual({ outcome: 'deleted' })
-    expect(tryDeleteWslUncPathMock).toHaveBeenCalledWith(filePath, { recursive: false })
+    expect(tryDeleteWslUncPathMock).toHaveBeenCalledWith(resolve(filePath), {
+      recursive: false,
+      approvedRoots: [resolve(GEMINI_ROOT)]
+    })
     expect(lstatMock).not.toHaveBeenCalled()
     expect(trashItemMock).not.toHaveBeenCalled()
   })
@@ -201,8 +224,26 @@ describe('deleteAiVaultSessionFile', () => {
     })
 
     expect(result).toEqual({ outcome: 'deleted' })
-    expect(tryDeleteWslUncPathMock).toHaveBeenCalledWith(join(ROVO_ROOT, 'sess-1'), {
-      recursive: true
+    expect(tryDeleteWslUncPathMock).toHaveBeenCalledWith(resolve(ROVO_ROOT, 'sess-1'), {
+      recursive: true,
+      approvedRoots: [resolve(ROVO_ROOT)]
+    })
+    expect(lstatMock).not.toHaveBeenCalled()
+    expect(trashItemMock).not.toHaveBeenCalled()
+  })
+
+  it('maps a WSL containment rejection to a delete rejection', async () => {
+    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
+    tryDeleteWslUncPathMock.mockRejectedValue(
+      new WslDeleteValidationErrorMock('path-outside-known-roots')
+    )
+
+    const result = await deleteAiVaultSessionFile(baseArgs(filePath))
+
+    expect(result).toEqual({
+      outcome: 'rejected',
+      agent: 'gemini',
+      reason: 'path-outside-known-roots'
     })
     expect(lstatMock).not.toHaveBeenCalled()
     expect(trashItemMock).not.toHaveBeenCalled()

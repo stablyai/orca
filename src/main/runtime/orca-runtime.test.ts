@@ -3541,6 +3541,50 @@ describe('OrcaRuntimeService', () => {
     expect(terminals.terminals[0]?.worktreePath).toBe(TEST_FOLDER_WORKSPACE_PATH)
   })
 
+  it('keeps same-path folder workspace instance PTYs scoped to their exact ids', async () => {
+    const firstWorktreeId = `${TEST_REPO_ID}::${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-4111-8111-111111111111`
+    const secondWorktreeId = `${TEST_REPO_ID}::${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}22222222-2222-4222-8222-222222222222`
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockRejectedValue(
+      new Error('folder explicit-id fallback should not rescan worktrees')
+    )
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: 'first-folder-pty',
+          cwd: TEST_FOLDER_WORKSPACE_PATH,
+          title: 'first',
+          worktreeId: firstWorktreeId
+        },
+        {
+          id: 'second-folder-pty',
+          cwd: TEST_FOLDER_WORKSPACE_PATH,
+          title: 'second',
+          worktreeId: secondWorktreeId
+        }
+      ]
+    })
+
+    const terminals = await runtime.listTerminals(`id:${secondWorktreeId}`)
+
+    expect(listWorktrees).not.toHaveBeenCalled()
+    expect(terminals.terminals).toHaveLength(1)
+    expect(terminals.terminals[0]).toMatchObject({
+      ptyId: 'second-folder-pty',
+      worktreeId: secondWorktreeId,
+      worktreePath: TEST_FOLDER_WORKSPACE_PATH
+    })
+    const internals = runtime as unknown as {
+      ptysById: Map<string, { worktreeId: string }>
+    }
+    expect(internals.ptysById.get('first-folder-pty')).toBeUndefined()
+    expect(internals.ptysById.get('second-folder-pty')?.worktreeId).toBe(secondWorktreeId)
+  })
+
   it('routes PTY output through the PTY leaf index in large terminal graphs', () => {
     const runtime = new OrcaRuntimeService(store)
     const liveLeafCount = 2773

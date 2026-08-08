@@ -130,7 +130,10 @@ import {
   reconcilePaletteFilter,
   type PaletteFilterState
 } from '@/components/cmd-j/palette-filter'
-import { capPaletteSection } from '@/components/cmd-j/palette-section-render-cap'
+import {
+  capPaletteSection,
+  layoutMultiPrimaryPaletteSections
+} from '@/components/cmd-j/palette-section-render-cap'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import {
@@ -335,6 +338,55 @@ function HighlightedText({
   )
 }
 
+function PaletteOpenTabPrimaryLine({
+  title,
+  titleRange,
+  secondaryText,
+  secondaryRange,
+  worktreeName,
+  worktreeRange,
+  leadingBadges
+}: {
+  title: string
+  titleRange: MatchRange | null
+  secondaryText: string
+  secondaryRange: MatchRange | null
+  worktreeName: string
+  worktreeRange: MatchRange | null
+  leadingBadges?: React.ReactNode
+}): React.JSX.Element {
+  // Why gate on non-empty: empty secondaries (terminals/simulators) used to still
+  // render two "·" separators, which read as a double mark and stole width from
+  // the worktree name until it collided with host/repo badges.
+  const showSecondary = secondaryText.trim().length > 0
+  const showWorktree = worktreeName.trim().length > 0
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+      <span className="min-w-0 max-w-[42%] shrink-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+        <HighlightedText text={title} matchRange={titleRange} />
+      </span>
+      {leadingBadges}
+      {showSecondary ? (
+        <>
+          <span className="shrink-0 text-muted-foreground/45">·</span>
+          <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
+            <HighlightedText text={secondaryText} matchRange={secondaryRange} />
+          </span>
+        </>
+      ) : null}
+      {showWorktree ? (
+        <>
+          <span className="shrink-0 text-muted-foreground/45">·</span>
+          <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
+            <HighlightedText text={worktreeName} matchRange={worktreeRange} />
+          </span>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
 function PaletteState({ title, subtitle }: { title: string; subtitle: string }): React.JSX.Element {
   return (
     <div className="px-5 py-8 text-center">
@@ -368,7 +420,9 @@ function PaletteHostBadgeChip({
         'Host: {{value0}}',
         { value0: badge.label }
       )}
-      className="max-w-[140px] truncate rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88"
+      // Why solid background: left-column text used to paint through translucent
+      // host chips when a long worktree name overflowed under the badge column.
+      className="max-w-[140px] truncate rounded-[6px] border border-border/60 bg-background px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88"
     >
       {badge.label}
     </span>
@@ -1047,19 +1101,47 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   // send ⌘3 to the wrong row; dots keep updating, positions don't.
   const [recentTabOrder, setRecentTabOrder] = useState<readonly string[]>(EMPTY_RECENT_TAB_ORDER)
   const recentTabOrderCapturedRef = useRef(false)
+  // Why: unified tabs can land before tabsByWorktree entities. A capture then ranks every chat as
+  // IDLE; allow one re-capture when entities arrive, then freeze for good.
+  const recentTabOrderAttentionReadyRef = useRef(false)
+  // Terminal rows without a tabsByWorktree entity can't resolve attention yet (see orderRecent…).
+  const recentOrderAttentionIncomplete = useMemo(() => {
+    for (const item of openTabItems) {
+      if (item.type !== 'workspace-tab' || item.result.contentType !== 'terminal') {
+        continue
+      }
+      const worktree = worktreeMap.get(item.result.worktreeId)
+      if (!worktree || worktree.isArchived || isCurrentOpenTabItem(item)) {
+        continue
+      }
+      if (!terminalTabsById.has(item.result.entityId)) {
+        return true
+      }
+    }
+    return false
+  }, [openTabItems, terminalTabsById, worktreeMap])
   // Why layout, not passive: a post-paint capture shows one frame of worktrees-only, which flashes
   // the list, renumbers ⌘1–6 under the user, and lets cmdk latch a worktree as the Enter target.
   useLayoutEffect(() => {
     if (!visible) {
       recentTabOrderCapturedRef.current = false
+      recentTabOrderAttentionReadyRef.current = false
       autoSelectedItemIdRef.current = null
       setRecentTabOrder(EMPTY_RECENT_TAB_ORDER)
       return
     }
     // Why: the query and filter are cleared by the open effect below, which runs after this one —
     // capturing before that lands would freeze the *previous* session's filtered subset for good.
-    if (recentTabOrderCapturedRef.current || hasQuery || query.length > 0 || filterActive) {
+    if (hasQuery || query.length > 0 || filterActive) {
       return
+    }
+    // Fully frozen after an attention-ready capture; provisional freeze while entities still pending
+    // so agent-status churn can't reshuffle under the cursor before the one-shot re-rank.
+    if (recentTabOrderCapturedRef.current) {
+      if (recentTabOrderAttentionReadyRef.current || recentOrderAttentionIncomplete) {
+        return
+      }
+      // Incomplete → complete: fall through and re-capture with real attention ranks.
     }
     const order = orderRecentWorkspaceTabs({
       rows: recentTabRows,
@@ -1071,11 +1153,15 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     if (order.length === 0) {
       // Why: tabs can arrive after the palette opens (cold start, session restore, a late tab
       // mirror). Latching an empty snapshot would leave Recent dead — and digits inert — until
-      // close+reopen, so stay unlatched; the stable empty ref keeps this a no-op re-render.
+      // close+reopen. Also clear a provisional latch: incomplete→complete fallthrough can hit empty
+      // if open tabs briefly vanish, and keeping captured would freeze an empty Recent forever.
+      recentTabOrderCapturedRef.current = false
+      recentTabOrderAttentionReadyRef.current = false
       setRecentTabOrder(EMPTY_RECENT_TAB_ORDER)
       return
     }
     recentTabOrderCapturedRef.current = true
+    recentTabOrderAttentionReadyRef.current = !recentOrderAttentionIncomplete
     setRecentTabOrder(order)
     // Why: recents render above the worktrees, so a row auto-selected before they arrived is no
     // longer the list head — hand Enter back to the top, matching ⌘1. Untouched selections only:
@@ -1090,6 +1176,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     hasQuery,
     lastVisitedAtByWorktreeId,
     query.length,
+    recentOrderAttentionIncomplete,
     recentTabPaneSources,
     recentTabRows,
     visible
@@ -1266,6 +1353,24 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [actionResults, deferredQuery, quickActionContext, settingsResults]
   )
 
+  // Why: both lists are relevance-sorted, so their heads carry each section's best hit. The stronger
+  // one leads; ties go to open tabs, matching the empty-query view and favouring a tab already open
+  // over a workspace the user would have to switch to.
+  const openTabsLeadSections = useMemo(() => {
+    if (!hasQuery) {
+      return true
+    }
+    const bestWorktree = worktreeItems[0]
+    const bestWorktreeRelevance = bestWorktree
+      ? (worktreeRelevanceById.get(bestWorktree.worktree.id) ?? NO_MATCH_RELEVANCE)
+      : NO_MATCH_RELEVANCE
+    const bestOpenTab = openTabItems[0]
+    const bestOpenTabRelevance = bestOpenTab
+      ? getOpenTabMatchRelevance(bestOpenTab.result)
+      : NO_MATCH_RELEVANCE
+    return bestOpenTabRelevance <= bestWorktreeRelevance
+  }, [hasQuery, openTabItems, worktreeItems, worktreeRelevanceById])
+
   const paletteSections = useMemo(() => {
     const openTabs = hasQuery
       ? capPaletteSection(openTabItems)
@@ -1288,6 +1393,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     const projectTargets = capPaletteSection(hasQuery ? projectTargetItems : [])
     const middle = capPaletteSection(hasQuery ? middleItems : [])
     const showWorktreeHint = !hasQuery && worktreeItems.length > worktreeCap
+    // Why: only interleave when both primaries have hits — a lone section keeps the
+    // full hard-capped list with no floor (empty headers / wasted slots).
+    const multiPrimaryFirstScreen =
+      hasQuery && openTabs.visible.length > 0 && worktrees.visible.length > 0
+    const multiPrimaryLayout = multiPrimaryFirstScreen
+      ? layoutMultiPrimaryPaletteSections<WorktreePaletteItem | OpenTabPaletteItem>({
+          leadingItems: openTabsLeadSections ? openTabItems : worktreeItems,
+          trailingItems: openTabsLeadSections ? worktreeItems : openTabItems
+        })
+      : null
 
     return {
       visibleWorktreeItems: worktrees.visible as PaletteItem[],
@@ -1298,46 +1413,19 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       middleOverflowCount: middle.overflowCount,
       visibleOpenTabItems: openTabs.visible as PaletteItem[],
       openTabOverflowCount: openTabs.overflowCount,
-      showWorktreeHint
+      showWorktreeHint,
+      multiPrimaryFirstScreen,
+      multiPrimaryLayout
     }
-  }, [worktreeItems, projectTargetItems, middleItems, openTabItems, recentTabItems, hasQuery])
-
-  // Why: both lists are relevance-sorted, so their heads carry each section's best hit. The stronger
-  // one leads; ties go to open tabs, matching the empty-query view and favouring a tab already open
-  // over a workspace the user would have to switch to.
-  const openTabsLeadSections = useMemo(() => {
-    if (!hasQuery) {
-      return true
-    }
-    const bestWorktree = worktreeItems[0]
-    const bestWorktreeRelevance = bestWorktree
-      ? (worktreeRelevanceById.get(bestWorktree.worktree.id) ?? NO_MATCH_RELEVANCE)
-      : NO_MATCH_RELEVANCE
-    const bestOpenTab = openTabItems[0]
-    const bestOpenTabRelevance = bestOpenTab
-      ? getOpenTabMatchRelevance(bestOpenTab.result)
-      : NO_MATCH_RELEVANCE
-    return bestOpenTabRelevance <= bestWorktreeRelevance
-  }, [hasQuery, openTabItems, worktreeItems, worktreeRelevanceById])
-
-  const selectableItems = useMemo<PaletteItem[]>(
-    () =>
-      // Why: mirrors render order, which leads with whichever section holds the strongest match.
-      openTabsLeadSections
-        ? [
-            ...paletteSections.visibleOpenTabItems,
-            ...paletteSections.visibleWorktreeItems,
-            ...paletteSections.visibleProjectTargetItems,
-            ...paletteSections.visibleMiddleItems
-          ]
-        : [
-            ...paletteSections.visibleWorktreeItems,
-            ...paletteSections.visibleProjectTargetItems,
-            ...paletteSections.visibleMiddleItems,
-            ...paletteSections.visibleOpenTabItems
-          ],
-    [openTabsLeadSections, paletteSections]
-  )
+  }, [
+    worktreeItems,
+    projectTargetItems,
+    middleItems,
+    openTabItems,
+    recentTabItems,
+    hasQuery,
+    openTabsLeadSections
+  ])
 
   // Why: badges number the snapshotted recent rows only — ⌘N is meaningless on a typed query.
   const recentTabShortcutIndexById = useMemo(
@@ -1372,7 +1460,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       worktreeOverflowCount,
       projectTargetOverflowCount,
       middleOverflowCount,
-      openTabOverflowCount
+      openTabOverflowCount,
+      multiPrimaryFirstScreen,
+      multiPrimaryLayout
     } = paletteSections
     const pushOverflowHint = (id: string, overflowCount: number): void => {
       if (overflowCount > 0) {
@@ -1381,7 +1471,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           type: 'hint',
           label: translate(
             'worktreeJumpPalette.renderCapOverflow',
-            '{{value0}} more - keep typing or add a filter to narrow',
+            '{{value0}} more — scroll or keep typing to narrow',
             { value0: overflowCount }
           )
         })
@@ -1407,22 +1497,43 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       hasQuery && visibleProjectTargetItems.length > 0 && populatedSectionCount > 1
     const showMiddleHeader = hasQuery && visibleMiddleItems.length > 0 && populatedSectionCount > 1
 
+    const pushOpenTabsHeader = (): void => {
+      if (!showOpenTabsHeader) {
+        return
+      }
+      entries.push({
+        id: '__header_open_tabs__',
+        type: 'section-header',
+        label: hasQuery
+          ? translate('auto.components.WorktreeJumpPalette.50a1d11d5b', 'Open Tabs')
+          : translate(
+              'auto.components.WorktreeJumpPalette.recentChatsTerminalsHeader',
+              'Recent Chats & Terminals'
+            )
+      })
+    }
+
+    const pushWorktreesHeader = (): void => {
+      if (!showWorktreeHeader) {
+        return
+      }
+      entries.push({
+        id: '__header_worktrees__',
+        type: 'section-header',
+        label: hasQuery
+          ? translate('auto.components.WorktreeJumpPalette.worktreesHeader', 'Worktrees')
+          : translate(
+              'auto.components.WorktreeJumpPalette.recentWorktreesHeader',
+              'Recent Worktrees'
+            )
+      })
+    }
+
     const pushWorktreeSection = (): void => {
       if (visibleWorktreeItems.length === 0) {
         return
       }
-      if (showWorktreeHeader) {
-        entries.push({
-          id: '__header_worktrees__',
-          type: 'section-header',
-          label: hasQuery
-            ? translate('auto.components.WorktreeJumpPalette.worktreesHeader', 'Worktrees')
-            : translate(
-                'auto.components.WorktreeJumpPalette.recentWorktreesHeader',
-                'Recent Worktrees'
-              )
-        })
-      }
+      pushWorktreesHeader()
       appendPaletteListEntries(entries, visibleWorktreeItems)
       if (showWorktreeHint) {
         entries.push({
@@ -1442,20 +1553,37 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       if (visibleOpenTabItems.length === 0) {
         return
       }
-      if (showOpenTabsHeader) {
-        entries.push({
-          id: '__header_open_tabs__',
-          type: 'section-header',
-          label: hasQuery
-            ? translate('auto.components.WorktreeJumpPalette.50a1d11d5b', 'Open Tabs')
-            : translate(
-                'auto.components.WorktreeJumpPalette.recentChatsTerminalsHeader',
-                'Recent Chats & Terminals'
-              )
-        })
-      }
+      pushOpenTabsHeader()
       appendPaletteListEntries(entries, visibleOpenTabItems)
       pushOverflowHint('__hint_open_tab_overflow__', openTabOverflowCount)
+    }
+
+    const pushProjectAndMiddleSections = (): void => {
+      if (visibleProjectTargetItems.length > 0) {
+        if (showProjectTargetHeader) {
+          entries.push({
+            id: '__header_projects_groups__',
+            type: 'section-header',
+            label: translate(
+              'auto.components.WorktreeJumpPalette.projectsGroupsHeader',
+              'Projects & Groups'
+            )
+          })
+        }
+        appendPaletteListEntries(entries, visibleProjectTargetItems)
+        pushOverflowHint('__hint_project_overflow__', projectTargetOverflowCount)
+      }
+      if (visibleMiddleItems.length > 0) {
+        if (showMiddleHeader) {
+          entries.push({
+            id: '__header_actions_settings__',
+            type: 'section-header',
+            label: translate('auto.components.WorktreeJumpPalette.088d66d980', 'Actions & Settings')
+          })
+        }
+        appendPaletteListEntries(entries, visibleMiddleItems)
+        pushOverflowHint('__hint_middle_overflow__', middleOverflowCount)
+      }
     }
 
     if (!hasQuery) {
@@ -1465,35 +1593,48 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       return entries
     }
 
+    // Typed query with both open tabs and worktrees: soft-split so the trailing
+    // primary is not buried under ~50 leading rows (see tmp/cmd-j-recommended.html).
+    if (multiPrimaryFirstScreen && multiPrimaryLayout) {
+      const leadingHintId = openTabsLeadSections
+        ? '__hint_open_tab_overflow__'
+        : '__hint_worktree_overflow__'
+      const trailingHintId = openTabsLeadSections
+        ? '__hint_worktree_overflow__'
+        : '__hint_open_tab_overflow__'
+
+      if (openTabsLeadSections) {
+        pushOpenTabsHeader()
+      } else {
+        pushWorktreesHeader()
+      }
+      appendPaletteListEntries(entries, multiPrimaryLayout.leadingPreview as PaletteItem[])
+      // Soft more for the leading section (scrollable rest + hard-cap tail).
+      pushOverflowHint(leadingHintId, multiPrimaryLayout.leadingMoreCount)
+      if (openTabsLeadSections) {
+        pushWorktreesHeader()
+      } else {
+        pushOpenTabsHeader()
+      }
+      // Floor first, then remaining leading rows, then trailing rest — same order
+      // as orderMultiPrimaryPaletteItems / keyboard selection.
+      appendPaletteListEntries(entries, multiPrimaryLayout.trailingFloor as PaletteItem[])
+      appendPaletteListEntries(entries, multiPrimaryLayout.leadingRest as PaletteItem[])
+      appendPaletteListEntries(entries, multiPrimaryLayout.trailingRest as PaletteItem[])
+      // Trailing rest is already on screen; only hard-cap overflow needs a hint.
+      pushOverflowHint(trailingHintId, multiPrimaryLayout.trailingHardOverflowCount)
+      pushProjectAndMiddleSections()
+      if (showCreateAction) {
+        entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
+      }
+      return entries
+    }
+
     if (openTabsLeadSections) {
       pushOpenTabSection()
     }
     pushWorktreeSection()
-    if (visibleProjectTargetItems.length > 0) {
-      if (showProjectTargetHeader) {
-        entries.push({
-          id: '__header_projects_groups__',
-          type: 'section-header',
-          label: translate(
-            'auto.components.WorktreeJumpPalette.projectsGroupsHeader',
-            'Projects & Groups'
-          )
-        })
-      }
-      appendPaletteListEntries(entries, visibleProjectTargetItems)
-      pushOverflowHint('__hint_project_overflow__', projectTargetOverflowCount)
-    }
-    if (visibleMiddleItems.length > 0) {
-      if (showMiddleHeader) {
-        entries.push({
-          id: '__header_actions_settings__',
-          type: 'section-header',
-          label: translate('auto.components.WorktreeJumpPalette.088d66d980', 'Actions & Settings')
-        })
-      }
-      appendPaletteListEntries(entries, visibleMiddleItems)
-      pushOverflowHint('__hint_middle_overflow__', middleOverflowCount)
-    }
+    pushProjectAndMiddleSections()
     if (!openTabsLeadSections) {
       pushOpenTabSection()
     }
@@ -1504,6 +1645,19 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     }
     return entries
   }, [hasQuery, openTabsLeadSections, paletteSections, showCreateAction, worktreeItems.length])
+
+  // Why derive from listEntries: multi-primary interleave must stay identical for
+  // empty-state counts and keyboard selection — dual-path builders drifted before.
+  const selectableItems = useMemo<PaletteItem[]>(
+    () =>
+      listEntries.filter(
+        (entry): entry is PaletteItem =>
+          entry.type !== 'section-header' &&
+          entry.type !== 'hint' &&
+          entry.type !== 'create-worktree'
+      ),
+    [listEntries]
+  )
 
   const selectionItemIds = useMemo(
     () => getWorktreePaletteSelectionItemIds(listEntries),
@@ -2164,7 +2318,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         'Search chats, terminals, worktrees, settings, and actions'
       )}
       overlayClassName="bg-black/55 backdrop-blur-[2px]"
-      contentClassName="top-[13%] w-[736px] max-w-[94vw] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
+      contentClassName="top-[10%] w-[900px] max-w-[96vw] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
       commandProps={{
         loop: true,
         value: commandSelectedItemId,
@@ -2196,7 +2350,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         }
       />
       <PaletteFilterChips model={filterModel} filter={filter} onFilterChange={setRawFilter} />
-      <CommandList ref={listRef} className="max-h-[min(460px,62vh)] px-2.5 pb-2.5 pt-2">
+      <CommandList ref={listRef} className="max-h-[min(600px,72vh)] px-2.5 pb-2.5 pt-2">
         {isLoading && selectableItems.length === 0 && !showCreateAction ? (
           <PaletteState
             title={translate(
@@ -2523,44 +2677,37 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                         fallback={<WorkspaceTabIcon className="size-3.5" aria-hidden="true" />}
                       />
                     </div>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="flex items-center justify-between gap-2.5">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="max-w-[40%] shrink-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                              <HighlightedText text={result.title} matchRange={result.titleRange} />
-                            </span>
-                            {result.isCurrentTab && (
-                              <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                                {translate(
-                                  'auto.components.WorktreeJumpPalette.52404f8096',
-                                  'Current Tab'
+                        <div className="min-w-0 flex-1 overflow-hidden">
+                          <PaletteOpenTabPrimaryLine
+                            title={result.title}
+                            titleRange={result.titleRange}
+                            secondaryText={result.secondaryText}
+                            secondaryRange={result.secondaryRange}
+                            worktreeName={result.worktreeName}
+                            worktreeRange={result.worktreeRange}
+                            leadingBadges={
+                              <>
+                                {result.isCurrentTab && (
+                                  <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                                    {translate(
+                                      'auto.components.WorktreeJumpPalette.52404f8096',
+                                      'Current Tab'
+                                    )}
+                                  </span>
                                 )}
-                              </span>
-                            )}
-                            {!result.isCurrentTab && result.isCurrentWorktree && (
-                              <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                                {translate(
-                                  'auto.components.WorktreeJumpPalette.c5081f2814',
-                                  'Current Worktree'
+                                {!result.isCurrentTab && result.isCurrentWorktree && (
+                                  <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                                    {translate(
+                                      'auto.components.WorktreeJumpPalette.c5081f2814',
+                                      'Current Worktree'
+                                    )}
+                                  </span>
                                 )}
-                              </span>
-                            )}
-                            <span className="shrink-0 text-muted-foreground/45">·</span>
-                            <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
-                              <HighlightedText
-                                text={result.secondaryText}
-                                matchRange={result.secondaryRange}
-                              />
-                            </span>
-                            <span className="shrink-0 text-muted-foreground/45">·</span>
-                            <span className="shrink-0 text-[12px] font-medium text-muted-foreground/92">
-                              <HighlightedText
-                                text={result.worktreeName}
-                                matchRange={result.worktreeRange}
-                              />
-                            </span>
-                          </div>
+                              </>
+                            }
+                          />
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
                           <PaletteHostBadgeChip badge={workspaceTabHostBadge} />
@@ -2612,44 +2759,37 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <Smartphone className="size-3.5" aria-hidden="true" />
                     </div>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="flex items-center justify-between gap-2.5">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="max-w-[40%] shrink-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                              <HighlightedText text={result.title} matchRange={result.titleRange} />
-                            </span>
-                            {result.isCurrentTab && (
-                              <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                                {translate(
-                                  'auto.components.WorktreeJumpPalette.52404f8096',
-                                  'Current Tab'
+                        <div className="min-w-0 flex-1 overflow-hidden">
+                          <PaletteOpenTabPrimaryLine
+                            title={result.title}
+                            titleRange={result.titleRange}
+                            secondaryText={result.secondaryText}
+                            secondaryRange={result.secondaryRange}
+                            worktreeName={result.worktreeName}
+                            worktreeRange={result.worktreeRange}
+                            leadingBadges={
+                              <>
+                                {result.isCurrentTab && (
+                                  <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                                    {translate(
+                                      'auto.components.WorktreeJumpPalette.52404f8096',
+                                      'Current Tab'
+                                    )}
+                                  </span>
                                 )}
-                              </span>
-                            )}
-                            {!result.isCurrentTab && result.isCurrentWorktree && (
-                              <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                                {translate(
-                                  'auto.components.WorktreeJumpPalette.c5081f2814',
-                                  'Current Worktree'
+                                {!result.isCurrentTab && result.isCurrentWorktree && (
+                                  <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                                    {translate(
+                                      'auto.components.WorktreeJumpPalette.c5081f2814',
+                                      'Current Worktree'
+                                    )}
+                                  </span>
                                 )}
-                              </span>
-                            )}
-                            <span className="shrink-0 text-muted-foreground/45">·</span>
-                            <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
-                              <HighlightedText
-                                text={result.secondaryText}
-                                matchRange={result.secondaryRange}
-                              />
-                            </span>
-                            <span className="shrink-0 text-muted-foreground/45">·</span>
-                            <span className="shrink-0 text-[12px] font-medium text-muted-foreground/92">
-                              <HighlightedText
-                                text={result.worktreeName}
-                                matchRange={result.worktreeRange}
-                              />
-                            </span>
-                          </div>
+                              </>
+                            }
+                          />
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
                           <PaletteHostBadgeChip badge={simulatorHostBadge} />
@@ -2698,44 +2838,37 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                     <Globe className="size-3.5" aria-hidden="true" />
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 overflow-hidden">
                     <div className="flex items-center justify-between gap-2.5">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="max-w-[40%] shrink-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                            <HighlightedText text={result.title} matchRange={result.titleRange} />
-                          </span>
-                          {result.isCurrentPage && (
-                            <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                              {translate(
-                                'auto.components.WorktreeJumpPalette.52404f8096',
-                                'Current Tab'
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <PaletteOpenTabPrimaryLine
+                          title={result.title}
+                          titleRange={result.titleRange}
+                          secondaryText={result.secondaryText}
+                          secondaryRange={result.secondaryRange}
+                          worktreeName={result.worktreeName}
+                          worktreeRange={result.worktreeRange}
+                          leadingBadges={
+                            <>
+                              {result.isCurrentPage && (
+                                <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                                  {translate(
+                                    'auto.components.WorktreeJumpPalette.52404f8096',
+                                    'Current Tab'
+                                  )}
+                                </span>
                               )}
-                            </span>
-                          )}
-                          {!result.isCurrentPage && result.isCurrentWorktree && (
-                            <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                              {translate(
-                                'auto.components.WorktreeJumpPalette.c5081f2814',
-                                'Current Worktree'
+                              {!result.isCurrentPage && result.isCurrentWorktree && (
+                                <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                                  {translate(
+                                    'auto.components.WorktreeJumpPalette.c5081f2814',
+                                    'Current Worktree'
+                                  )}
+                                </span>
                               )}
-                            </span>
-                          )}
-                          <span className="shrink-0 text-muted-foreground/45">·</span>
-                          <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
-                            <HighlightedText
-                              text={result.secondaryText}
-                              matchRange={result.secondaryRange}
-                            />
-                          </span>
-                          <span className="shrink-0 text-muted-foreground/45">·</span>
-                          <span className="shrink-0 text-[12px] font-medium text-muted-foreground/92">
-                            <HighlightedText
-                              text={result.worktreeName}
-                              matchRange={result.worktreeRange}
-                            />
-                          </span>
-                        </div>
+                            </>
+                          }
+                        />
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
                         <PaletteHostBadgeChip badge={browserHostBadge} />

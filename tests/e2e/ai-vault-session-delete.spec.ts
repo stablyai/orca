@@ -39,6 +39,7 @@ function deleteSession(page: Page, session: AiVaultSession): Promise<AiVaultDele
     async (target) =>
       window.api.aiVault.deleteSession({
         agent: target.agent,
+        sessionId: target.sessionId,
         filePath: target.filePath,
         executionHostId: target.executionHostId
       }),
