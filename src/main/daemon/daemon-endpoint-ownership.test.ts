@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   unlinkSync,
   writeFileSync
@@ -14,7 +15,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath, publishDaemonPidFile } from './daemon-spawner'
-import { readDaemonSocketIdentity } from './daemon-endpoint-ownership'
+import {
+  getDaemonSocketBindPath,
+  readDaemonEndpointOwnershipState,
+  readDaemonSocketIdentity
+} from './daemon-endpoint-ownership'
 import type { SubprocessHandle } from './session'
 
 function connectsTo(socketPath: string): Promise<boolean> {
@@ -42,6 +47,37 @@ function createMockSubprocess(): SubprocessHandle {
     dispose() {}
   }
 }
+
+describe('endpoint ownership identity rules', () => {
+  it.skipIf(process.platform === 'win32')(
+    'reports lost when the name resolves to a different inode',
+    async () => {
+      // The loss that is real: another daemon's socket now holds the name.
+      const dir = mkdtempSync(join(tmpdir(), 'endpoint-identity-lost-'))
+      const socketPath = join(dir, 'daemon.sock')
+      const ours = createServer((socket) => socket.end())
+      const usurper = createServer((socket) => socket.end())
+      try {
+        const ourBind = getDaemonSocketBindPath(socketPath)
+        await new Promise<void>((resolve) => ours.listen(ourBind, resolve))
+        linkSync(ourBind, socketPath)
+        unlinkSync(ourBind)
+        const owned = readDaemonSocketIdentity(socketPath)
+
+        const theirBind = join(dir, '.usurp')
+        await new Promise<void>((resolve) => usurper.listen(theirBind, resolve))
+        unlinkSync(socketPath)
+        linkSync(theirBind, socketPath)
+
+        expect(readDaemonEndpointOwnershipState(socketPath, owned)).toBe('lost')
+      } finally {
+        await new Promise<void>((resolve) => ours.close(() => resolve()))
+        await new Promise<void>((resolve) => usurper.close(() => resolve()))
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
+})
 
 describe('daemon endpoint ownership publication', () => {
   let dir: string
@@ -79,9 +115,7 @@ describe('daemon endpoint ownership publication', () => {
 
     expect(publishEndpointOwnership).toHaveBeenCalledOnce()
     expect(readFileSync(tokenPath, 'utf8')).toBe('previous-token')
-    if (process.platform !== 'win32') {
-      expect(existsSync(socketPath)).toBe(false)
-    }
+    await expect(connectsTo(socketPath)).resolves.toBe(false)
   })
 
   it('rolls back exact PID ownership when token publication fails', async () => {
@@ -111,11 +145,6 @@ describe('daemon endpoint ownership publication', () => {
   it.skipIf(process.platform === 'win32')(
     'keeps a replacement endpoint when the daemon it replaced closes late',
     async () => {
-      // Why: this is the split-brain mechanism. libuv unlinks the pathname a server bound to
-      // when that server closes, with no ownership check — so a daemon exiting late used to
-      // delete whichever socket then sat at the canonical path. The replacement stayed alive
-      // hosting PTYs that no client could reach, which is what "terminals ack but never run"
-      // looked like from the user's seat.
       const replacedPidPath = join(dir, 'replaced.pid')
       const replaced = new DaemonServer({
         socketPath,
@@ -130,36 +159,28 @@ describe('daemon endpoint ownership publication', () => {
           }),
         spawnSubprocess: () => createMockSubprocess()
       })
-      await replaced.start()
+      const replacement = createServer((socket) => socket.end())
+      try {
+        await replaced.start()
+        const replacementBind = getDaemonSocketBindPath(socketPath)
+        await new Promise<void>((resolve) => replacement.listen(replacementBind, resolve))
+        renameSync(replacementBind, socketPath)
+        const replacementIdentity = readDaemonSocketIdentity(socketPath)
 
-      // A replacement reclaims the endpoint the way killStaleDaemon does.
-      unlinkSync(socketPath)
-      const pidPath = join(dir, 'replacement.pid')
-      server = new DaemonServer({
-        socketPath,
-        tokenPath,
-        pidPath,
-        launchNonce: 'replacement-daemon',
-        publishEndpointOwnership: () =>
-          publishDaemonPidFile(pidPath, {
-            pid: process.pid,
-            startedAtMs: 2_000,
-            launchNonce: 'replacement-daemon'
-          }),
-        spawnSubprocess: () => createMockSubprocess()
-      })
-      await server.start()
-      const replacementIdentity = readDaemonSocketIdentity(socketPath)
+        await replaced.shutdown()
 
-      // The daemon that lost the endpoint now exits, long after the handover.
-      await replaced.shutdown()
-
-      expect(existsSync(socketPath)).toBe(true)
-      expect(readDaemonSocketIdentity(socketPath)).toEqual(replacementIdentity)
-      // The replacement is still reachable through the canonical name.
-      await expect(connectsTo(socketPath)).resolves.toBe(true)
-      // The late exit also must not remove the replacement's ownership record.
-      expect(existsSync(pidPath)).toBe(true)
+        expect(readDaemonSocketIdentity(socketPath)).toEqual(replacementIdentity)
+        await expect(connectsTo(socketPath)).resolves.toBe(true)
+      } finally {
+        await replaced.shutdown()
+        await new Promise<void>((resolve) => {
+          if (!replacement.listening) {
+            resolve()
+            return
+          }
+          replacement.close(() => resolve())
+        })
+      }
     }
   )
 
@@ -221,8 +242,11 @@ describe('daemon endpoint ownership publication', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
-    'refuses a second listener when a live daemon socket path was removed',
+    'refuses a duplicate launch through the exclusive PID record',
     async () => {
+      // Why the PID record and not the socket: this asserts the ownership record is exclusive,
+      // which is what rejects here. It does not prove a second listener was never transiently
+      // published — endpoint exclusivity is covered in daemon-endpoint-publish.test.ts.
       const pidPath = join(dir, 'daemon.pid')
       server = new DaemonServer({
         socketPath,
