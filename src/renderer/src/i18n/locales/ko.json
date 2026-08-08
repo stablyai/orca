@@ -12719,6 +12719,9 @@
           "8528a5eaf5": "해결됨",
           "69d4e210bb": "해결되지 않은"
         },
+        "CsvColumnResizeHandle": {
+          "resizeColumn": "열 크기 조절"
+        },
         "CsvViewer": {
           "eedd0d37a7": "열",
           "ac31d2cd60": "행",

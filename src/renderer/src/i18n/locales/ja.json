@@ -12719,6 +12719,9 @@
           "8528a5eaf5": "解決済み",
           "69d4e210bb": "未解決"
         },
+        "CsvColumnResizeHandle": {
+          "resizeColumn": "列のサイズを変更"
+        },
         "CsvViewer": {
           "eedd0d37a7": "列",
           "ac31d2cd60": "行",

@@ -13186,6 +13186,9 @@
           "8528a5eaf5": "Resolved",
           "69d4e210bb": "Unresolved"
         },
+        "CsvColumnResizeHandle": {
+          "resizeColumn": "Resize column"
+        },
         "CsvViewer": {
           "eedd0d37a7": "columns",
           "ac31d2cd60": "rows",
