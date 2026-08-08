@@ -3319,9 +3319,7 @@ export function useIpcEvents(): void {
       for (const entry of entries) {
         applyAgentStatus(entry, {
           replay: true,
-          ...(options?.allowBeforeWorkspaceReady === true
-            ? { allowBeforeWorkspaceReady: true }
-            : {})
+          allowBeforeWorkspaceReady: options?.allowBeforeWorkspaceReady
         })
       }
 

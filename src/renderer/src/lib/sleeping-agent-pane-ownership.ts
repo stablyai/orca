@@ -73,18 +73,10 @@ export function findUniqueAdoptableRebuiltPaneRecord(
   if (matches.length === 0) {
     return null
   }
-  // Why: a record whose leaf is still bound in the tab's layout belongs to a
-  // pane that restores its own session directly; adoption exists only for lost
-  // leaves. Any bound candidate means the identity is already owned — fail
-  // closed instead of resuming it a second time in another pane.
+  // Why: any bound candidate means the identity is already owned by its own
+  // pane — fail closed instead of resuming it a second time in another pane.
   if (
-    matches.some(([paneKey]) => {
-      const parsed = parsePaneKey(paneKey)
-      return (
-        parsed !== null &&
-        hasMatchingStablePaneLayout(parsed.tabId, parsed.leafId, state.terminalLayoutsByTabId)
-      )
-    })
+    matches.some(([paneKey]) => paneKeyLeafIsBoundInLayout(paneKey, state.terminalLayoutsByTabId))
   ) {
     return null
   }
@@ -135,7 +127,7 @@ function layoutContainsLeaf(
   )
 }
 
-export function hasMatchingStablePaneLayout(
+function hasMatchingStablePaneLayout(
   tabId: string,
   leafId: string,
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
@@ -143,6 +135,22 @@ export function hasMatchingStablePaneLayout(
   // Why: hibernation intentionally clears the live PTY binding after the pane
   // exits, but the preserved leaf still owns cold-restore for its session.
   return layoutContainsLeaf(terminalLayoutsByTabId[tabId]?.root, leafId)
+}
+
+/**
+ * Whether a stable pane key's leaf is still bound in its tab's layout. A bound
+ * leaf belongs to a pane that restores its own session directly, so adoption —
+ * which exists only for leaves a crash lost — must fail closed on it.
+ */
+export function paneKeyLeafIsBoundInLayout(
+  paneKey: string,
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
+): boolean {
+  const parsed = parsePaneKey(paneKey)
+  return (
+    parsed !== null &&
+    hasMatchingStablePaneLayout(parsed.tabId, parsed.leafId, terminalLayoutsByTabId)
+  )
 }
 
 function hasRestorableStablePanePty(
