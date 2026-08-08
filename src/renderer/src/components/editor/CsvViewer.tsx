@@ -12,6 +12,7 @@ type CsvViewerProps = {
 
 const ROW_HEIGHT = 28
 const OVERSCAN = 12
+const resizedCsvColumnsByFile = new Map<string, Record<number, number>>()
 
 // Why: CsvViewer is the table counterpart to source-mode Monaco for .csv/.tsv
 // files. Row virtualization via @tanstack/react-virtual keeps large files
@@ -47,27 +48,44 @@ export default function CsvViewer({ content, filePath }: CsvViewerProps): React.
     }
     return out
   }, [headerRow, columnCount])
+  const headerColumns = useMemo(() => {
+    const occurrences = new Map<string, number>()
+    return header.map((label) => {
+      const occurrence = occurrences.get(label) ?? 0
+      occurrences.set(label, occurrence + 1)
+      return { key: `${label}:${occurrence}`, label }
+    })
+  }, [header])
 
-  // Why: user overrides survive content updates but reset when this viewer is
-  // reused for another file. Unresized columns continue to follow auto-sizing.
+  // Why: session-scoped per-file overrides survive tab/view remounts without
+  // persisting workspace-specific paths. Unresized columns still auto-size.
   const [resizedColumns, setResizedColumns] = useState<{
     filePath: string
     widths: Record<number, number>
-  }>({ filePath, widths: {} })
+  }>({ filePath, widths: resizedCsvColumnsByFile.get(filePath) ?? {} })
   const autoColumnWidths = useMemo(
     () => getCsvColumnWidths(header, bodyRows, columnCount),
     [header, bodyRows, columnCount]
   )
   const columnWidths = useMemo(() => {
-    const overrides = resizedColumns.filePath === filePath ? resizedColumns.widths : {}
+    const overrides =
+      resizedColumns.filePath === filePath
+        ? resizedColumns.widths
+        : (resizedCsvColumnsByFile.get(filePath) ?? {})
     return autoColumnWidths.map((width, index) => overrides[index] ?? width)
   }, [autoColumnWidths, filePath, resizedColumns])
   const resizeColumn = useCallback(
     (index: number, width: number): void => {
-      setResizedColumns((current) => ({
-        filePath,
-        widths: { ...(current.filePath === filePath ? current.widths : {}), [index]: width }
-      }))
+      setResizedColumns((current) => {
+        const widths = {
+          ...(current.filePath === filePath
+            ? current.widths
+            : (resizedCsvColumnsByFile.get(filePath) ?? {})),
+          [index]: width
+        }
+        resizedCsvColumnsByFile.set(filePath, widths)
+        return { filePath, widths }
+      })
     },
     [filePath]
   )
@@ -117,17 +135,18 @@ export default function CsvViewer({ content, filePath }: CsvViewerProps): React.
             >
               #
             </div>
-            {header.map((cell, idx) => (
+            {headerColumns.map(({ key, label }, idx) => (
               <div
                 role="columnheader"
-                key={idx}
+                key={key}
                 className="relative flex items-center border-b border-r border-border/60 px-2 font-medium text-foreground"
               >
-                <span className="min-w-0 truncate" title={cell}>
-                  {cell}
+                <span className="min-w-0 truncate" title={label}>
+                  {label}
                 </span>
                 <CsvColumnResizeHandle
                   columnIndex={idx}
+                  columnLabel={label || String(idx + 1)}
                   currentWidth={columnWidths[idx]!}
                   onResize={resizeColumn}
                 />

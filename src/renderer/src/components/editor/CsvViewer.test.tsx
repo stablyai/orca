@@ -23,7 +23,7 @@ describe('CSV column resizing', () => {
     const view = render(
       <CsvViewer
         content={'Name,Description\nAda,Short\nGrace,Longer value'}
-        filePath="people.csv"
+        filePath="drag.csv"
       />
     )
     const header = view.getAllByRole('row')[0] as HTMLElement
@@ -32,22 +32,22 @@ describe('CSV column resizing', () => {
     expect(header.style.gridTemplateColumns).toBe('48px 80px 108px')
     expect(firstDataRow.style.gridTemplateColumns).toBe(header.style.gridTemplateColumns)
 
-    const handles = view.getAllByRole('separator', { name: 'Resize column' })
-    fireEvent.mouseDown(handles[0]!, { button: 0, clientX: 100 })
+    const handles = view.getAllByRole('separator', { name: 'Resize column Name' })
+    fireEvent.pointerDown(handles[0]!, { button: 0, clientX: 100, pointerId: 1 })
     expect(document.body.style.cursor).toBe('col-resize')
-    fireEvent.mouseMove(document, { clientX: 160 })
+    fireEvent.pointerMove(window, { clientX: 160, pointerId: 1 })
 
     expect(header.style.gridTemplateColumns).toBe('48px 140px 108px')
     expect(firstDataRow.style.gridTemplateColumns).toBe(header.style.gridTemplateColumns)
 
-    fireEvent.mouseUp(document)
+    fireEvent.pointerUp(window, { pointerId: 1 })
     expect(document.body.style.cursor).toBe('')
   })
 
   it('supports keyboard resizing and clamps to the minimum width', () => {
-    const view = render(<CsvViewer content={'Name\nAda'} filePath="people.csv" />)
+    const view = render(<CsvViewer content={'Name\nAda'} filePath="keyboard.csv" />)
     const header = view.getAllByRole('row')[0] as HTMLElement
-    const handle = view.getByRole('separator', { name: 'Resize column' })
+    const handle = view.getByRole('separator', { name: 'Resize column Name' })
 
     fireEvent.keyDown(handle, { key: 'ArrowLeft' })
     expect(header.style.gridTemplateColumns).toBe('48px 80px')
@@ -55,24 +55,38 @@ describe('CSV column resizing', () => {
     fireEvent.keyDown(handle, { key: 'ArrowRight' })
     expect(header.style.gridTemplateColumns).toBe('48px 96px')
     expect(handle.getAttribute('aria-valuenow')).toBe('96')
+    expect(handle.getAttribute('aria-valuemax')).toBe('10000')
   })
 
-  it('keeps resized widths across content updates and resets them for another file', () => {
-    const view = render(<CsvViewer content={'Name\nAda'} filePath="people.csv" />)
-    let handle = view.getByRole('separator', { name: 'Resize column' })
+  it('keeps resized widths across content updates and remounts', () => {
+    const view = render(<CsvViewer content={'Name\nAda'} filePath="persistent.csv" />)
+    const handle = view.getByRole('separator', { name: 'Resize column Name' })
 
-    fireEvent.mouseDown(handle, { button: 0, clientX: 100 })
-    fireEvent.mouseMove(document, { clientX: 160 })
-    fireEvent.mouseUp(document)
+    fireEvent.pointerDown(handle, { button: 0, clientX: 100, pointerId: 2 })
+    fireEvent.pointerMove(window, { clientX: 160, pointerId: 2 })
+    fireEvent.pointerUp(window, { pointerId: 2 })
 
-    view.rerender(<CsvViewer content={'Name\nAda\nGrace'} filePath="people.csv" />)
+    view.rerender(<CsvViewer content={'Name\nAda\nGrace'} filePath="persistent.csv" />)
     expect((view.getAllByRole('row')[0] as HTMLElement).style.gridTemplateColumns).toBe(
       '48px 140px'
     )
 
-    view.rerender(<CsvViewer content={'Code\nA'} filePath="codes.csv" />)
-    handle = view.getByRole('separator', { name: 'Resize column' })
-    expect((view.getAllByRole('row')[0] as HTMLElement).style.gridTemplateColumns).toBe('48px 80px')
-    expect(handle.getAttribute('aria-valuenow')).toBe('80')
+    view.unmount()
+    const reopened = render(<CsvViewer content={'Name\nAda\nGrace'} filePath="persistent.csv" />)
+    expect((reopened.getAllByRole('row')[0] as HTMLElement).style.gridTemplateColumns).toBe(
+      '48px 140px'
+    )
+  })
+
+  it('restores cursor and selection when a drag is interrupted', () => {
+    const view = render(<CsvViewer content={'Name\nAda'} filePath="cancel.csv" />)
+    const handle = view.getByRole('separator', { name: 'Resize column Name' })
+
+    fireEvent.pointerDown(handle, { button: 0, clientX: 100, pointerId: 3 })
+    expect(document.body.style.userSelect).toBe('none')
+
+    fireEvent.blur(window)
+    expect(document.body.style.cursor).toBe('')
+    expect(document.body.style.userSelect).toBe('')
   })
 })

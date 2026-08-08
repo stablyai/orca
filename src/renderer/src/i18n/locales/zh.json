@@ -12740,7 +12740,7 @@
           "69d4e210bb": "未解决"
         },
         "CsvColumnResizeHandle": {
-          "resizeColumn": "调整列宽"
+          "resizeColumn": "调整“{{value0}}”列的大小"
         },
         "CsvViewer": {
           "eedd0d37a7": "列",

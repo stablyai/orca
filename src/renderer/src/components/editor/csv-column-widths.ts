@@ -4,6 +4,7 @@ const CELL_HORIZONTAL_PADDING = 24
 const CHARACTER_WIDTH = 7
 
 export const MIN_CSV_COLUMN_WIDTH = AUTO_MIN_COLUMN_WIDTH
+export const MAX_CSV_COLUMN_WIDTH = 10_000
 export const CSV_ROW_NUMBER_COLUMN_WIDTH = 48
 
 // Sample a bounded prefix so opening a large CSV does not scan every cell.

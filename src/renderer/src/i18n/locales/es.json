@@ -12720,7 +12720,7 @@
           "69d4e210bb": "Sin resolver"
         },
         "CsvColumnResizeHandle": {
-          "resizeColumn": "Cambiar el tamaño de la columna"
+          "resizeColumn": "Cambiar el tamaño de la columna {{value0}}"
         },
         "CsvViewer": {
           "eedd0d37a7": "columnas",

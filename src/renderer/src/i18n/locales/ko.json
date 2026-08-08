@@ -12720,7 +12720,7 @@
           "69d4e210bb": "해결되지 않은"
         },
         "CsvColumnResizeHandle": {
-          "resizeColumn": "열 크기 조절"
+          "resizeColumn": "{{value0}} 열 크기 조절"
         },
         "CsvViewer": {
           "eedd0d37a7": "열",

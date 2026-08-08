@@ -12720,7 +12720,7 @@
           "69d4e210bb": "未解決"
         },
         "CsvColumnResizeHandle": {
-          "resizeColumn": "列のサイズを変更"
+          "resizeColumn": "列「{{value0}}」のサイズを変更"
         },
         "CsvViewer": {
           "eedd0d37a7": "列",
