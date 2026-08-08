@@ -1001,6 +1001,7 @@ import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/ra
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { VoiceSettings } from '../../shared/speech-types'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
+import { acquireSpeechHotwordsFile, type SpeechHotwordsFileLease } from '../speech/hotwords-file'
 import { getCatalogModel, isLocalSpeechModel, SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import {
   deleteLocalSpeechModel,
@@ -3362,6 +3363,7 @@ export class OrcaRuntimeService {
     id: string
     owner: string
     clientId?: string
+    hotwordsFile?: SpeechHotwordsFileLease
     connectionId?: string
     state: 'starting' | 'active' | 'closing'
     partialText: string
@@ -12914,7 +12916,8 @@ export class OrcaRuntimeService {
       throw new Error('voice_model_not_selected')
     }
 
-    const modelState = await getSpeechModelManager(this.store).getModelState(modelId)
+    const modelManager = getSpeechModelManager(this.store)
+    const modelState = await modelManager.getModelState(modelId)
     if (modelState.status !== 'ready') {
       throw new Error(`voice_model_not_ready:${modelState.status}`)
     }
@@ -12927,11 +12930,16 @@ export class OrcaRuntimeService {
       throw new Error('dictation_already_active')
     }
 
+    const hotwordsFile = await acquireSpeechHotwordsFile(
+      voice.customVocabulary,
+      modelManager.getModelsDir()
+    )
     const owner = `mobile:${params.dictationId}`
     this.mobileDictation = {
       id: params.dictationId,
       owner,
       clientId: params.clientId,
+      hotwordsFile,
       connectionId: params.connectionId,
       state: 'starting',
       partialText: '',
@@ -12959,14 +12967,16 @@ export class OrcaRuntimeService {
             session.errors.push(event.error ?? 'Speech worker error')
           }
         },
-        undefined,
+        hotwordsFile?.filePath,
         owner
       )
       if (this.mobileDictation?.id !== params.dictationId) {
         throw new Error('dictation_canceled')
       }
       this.mobileDictation.state = 'active'
+      void hotwordsFile?.release()
     } catch (error) {
+      void hotwordsFile?.release()
       if (this.mobileDictation?.id === params.dictationId) {
         this.mobileDictation = null
       }
@@ -13038,6 +13048,7 @@ export class OrcaRuntimeService {
       const text = [...session.finalTexts, session.partialText].join(' ').trim()
       return { dictationId: params.dictationId, text }
     } finally {
+      void session.hotwordsFile?.release()
       if (this.mobileDictation?.id === session.id) {
         this.mobileDictation = null
       }
@@ -13060,6 +13071,7 @@ export class OrcaRuntimeService {
       try {
         await getSpeechSttService(this.store!).stopDictation(session.owner)
       } finally {
+        void session.hotwordsFile?.release()
         if (this.mobileDictation?.id === session.id) {
           this.mobileDictation = null
         }
@@ -13076,6 +13088,7 @@ export class OrcaRuntimeService {
     void getSpeechSttService(this.store!)
       .stopDictation(session.owner)
       .finally(() => {
+        void session.hotwordsFile?.release()
         if (this.mobileDictation?.id === session.id) {
           this.mobileDictation = null
         }

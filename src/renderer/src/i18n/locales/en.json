@@ -9371,7 +9371,9 @@
               "micInput": "input",
               "micDevice": "device",
               "micAirpods": "airpods",
-              "micDefault": "system default"
+              "micDefault": "system default",
+              "customVocabularyTitle": "Custom Vocabulary",
+              "customVocabularyDescription": "Improve supported local speech models with names, technical terms, and mixed-language phrases."
             }
           }
         },
@@ -10451,6 +10453,11 @@
           "openAutomationsDescription": "Create schedules and inspect recent runs.",
           "title": "Automations",
           "description": "Schedule agent work and choose whether Automations appears in the sidebar."
+        },
+        "VoiceVocabularySection": {
+          "label": "Custom Vocabulary",
+          "description": "Add names, technical terms, and mixed-language phrases. Supported local models use them to improve recognition.",
+          "placeholder": "Orca\nQwen3-ASR\nPowerShell"
         }
       },
       "right": {

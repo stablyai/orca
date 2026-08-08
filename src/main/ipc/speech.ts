@@ -1,10 +1,8 @@
 import { ipcMain, BrowserWindow, systemPreferences } from 'electron'
-import { join } from 'node:path'
-import { writeFile, unlink } from 'node:fs/promises'
-import { createHash } from 'node:crypto'
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
+import { acquireSpeechHotwordsFile, type SpeechHotwordsFileLease } from '../speech/hotwords-file'
 import {
   clearOpenAiSpeechApiKey,
   hasOpenAiSpeechApiKey,
@@ -78,13 +76,6 @@ export function registerSpeechHandlers(store: Store): void {
     })
   })
 
-  const getHotwordsFilePath = (content: string): string => {
-    const digest = createHash('sha256').update(content).digest('hex').slice(0, 12)
-    // Why: sherpa-onnx cannot read non-ASCII Windows paths, so co-locate the
-    // hotwords file with the ASCII-safe model cache instead of userData.
-    return join(getSpeechModelManager(store).getModelsDir(), `speech-hotwords-${digest}.txt`)
-  }
-
   const getDesktopOwner = (senderId: number, sessionId: string): string =>
     `desktop:${senderId}:${sessionId}`
 
@@ -95,7 +86,7 @@ export function registerSpeechHandlers(store: Store): void {
       if (!window) {
         return
       }
-      let resolvedHotwordsPath: string | undefined
+      let hotwordsFile: SpeechHotwordsFileLease | undefined
       let windowClosed = false
       const owner = getDesktopOwner(event.sender.id, sessionId)
       const cleanupOnWindowClosed = (): void => {
@@ -103,9 +94,7 @@ export function registerSpeechHandlers(store: Store): void {
         void getSpeechSttService(store)
           .stopDictation(owner)
           .finally(() => {
-            if (resolvedHotwordsPath) {
-              unlink(resolvedHotwordsPath).catch(() => {})
-            }
+            void hotwordsFile?.release()
           })
           .catch(() => {})
       }
@@ -133,18 +122,16 @@ export function registerSpeechHandlers(store: Store): void {
           }
         }
 
-        if (hotwords && hotwords.length > 0) {
-          const content = `${hotwords.map((w) => `${w} :2.0`).join('\n')}\n`
-          const hotwordsFilePath = getHotwordsFilePath(content)
-          await writeFile(hotwordsFilePath, content, 'utf-8')
-          resolvedHotwordsPath = hotwordsFilePath
-        }
+        // Why: sherpa-onnx cannot read non-ASCII Windows paths, so co-locate the
+        // bounded hotwords file with the ASCII-safe model cache instead of userData.
+        hotwordsFile = await acquireSpeechHotwordsFile(
+          hotwords,
+          getSpeechModelManager(store).getModelsDir()
+        )
 
         if (windowClosed || window.isDestroyed()) {
           cleanupSessionListener()
-          if (resolvedHotwordsPath) {
-            unlink(resolvedHotwordsPath).catch(() => {})
-          }
+          void hotwordsFile?.release()
           return
         }
 
@@ -177,17 +164,13 @@ export function registerSpeechHandlers(store: Store): void {
                 break
             }
           },
-          resolvedHotwordsPath,
+          hotwordsFile?.filePath,
           owner
         )
-        if (resolvedHotwordsPath) {
-          unlink(resolvedHotwordsPath).catch(() => {})
-        }
+        void hotwordsFile?.release()
       } catch (err) {
         cleanupSessionListener()
-        if (resolvedHotwordsPath) {
-          unlink(resolvedHotwordsPath).catch(() => {})
-        }
+        void hotwordsFile?.release()
         throw err
       }
     }

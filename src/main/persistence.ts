@@ -135,6 +135,7 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { normalizeSpeechHotwords } from '../shared/speech-hotwords'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
@@ -3471,7 +3472,8 @@ export class Store {
             ),
             voice: {
               ...getDefaultVoiceSettings(),
-              ...parsed.settings?.voice
+              ...parsed.settings?.voice,
+              customVocabulary: normalizeSpeechHotwords(parsed.settings?.voice?.customVocabulary)
             }
           },
           // Why: legacy 'recent' meant the smart sort; migrate once on the raw value so a fresh 'recent' default isn't remigrated.
@@ -5849,6 +5851,16 @@ export class Store {
     }
     if ('uiLanguage' in updates) {
       sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
+    }
+    if (updates.voice && typeof updates.voice === 'object') {
+      const currentVoice = this.state.settings.voice ?? getDefaultVoiceSettings()
+      const rawVocabulary = Object.prototype.hasOwnProperty.call(updates.voice, 'customVocabulary')
+        ? updates.voice.customVocabulary
+        : currentVoice.customVocabulary
+      sanitizedUpdates.voice = {
+        ...updates.voice,
+        customVocabulary: normalizeSpeechHotwords(rawVocabulary)
+      }
     }
     if ('prBotAuthorOverrides' in updates) {
       // Why: every writer (desktop IPC, web RPC, migrations) hits this boundary, so the persisted list stays bounded and well-formed.

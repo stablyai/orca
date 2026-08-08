@@ -782,6 +782,38 @@ describe('Store', () => {
     expect(store.getUI().usagePercentageDisplayChangeNoticeDismissed).toBe(true)
   })
 
+  it('normalizes custom vocabulary when loading and updating voice settings', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...persisted,
+      settings: {
+        ...persisted.settings,
+        voice: {
+          ...persisted.settings.voice,
+          customVocabulary: [
+            ' Orca ',
+            'orca',
+            'line\nbreak',
+            'Qwen3-ASR',
+            42
+          ] as unknown as string[]
+        }
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().voice?.customVocabulary).toEqual(['Orca', 'Qwen3-ASR'])
+
+    store.updateSettings({
+      voice: {
+        ...store.getSettings().voice!,
+        customVocabulary: [' Fun-ASR ', 'fun-asr', '中文术语']
+      }
+    })
+    expect(store.getSettings().voice?.customVocabulary).toEqual(['Fun-ASR', '中文术语'])
+  })
+
   it('defaults minimizeToTrayOnClose to false when unset', async () => {
     const store = await createStore()
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)

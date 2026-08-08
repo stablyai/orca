@@ -98,6 +98,32 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
+  {
+    title: translate(
+      'auto.components.settings.voice.pane.search.customVocabularyTitle',
+      'Custom Vocabulary'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.customVocabularyDescription',
+      'Improve supported local speech models with names, technical terms, and mixed-language phrases.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.3d8b853963', 'speech'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.customVocabularyKeyword',
+        'vocabulary'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.hotwordsKeyword',
+        'hotwords'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.technicalTermsKeyword',
+        'technical terms'
+      )
+    ]
+  },
   getOpenaiTranscriptionSearchEntry(),
   {
     title: translate('auto.components.settings.voice.pane.search.7e62cd7c41', 'Speech Model'),

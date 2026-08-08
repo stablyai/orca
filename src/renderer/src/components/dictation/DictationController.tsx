@@ -183,7 +183,11 @@ export function DictationController() {
         return
       }
 
-      await window.api.speech.startDictation(modelId, undefined, sessionId)
+      await window.api.speech.startDictation(
+        modelId,
+        settings.voice.customVocabulary ?? [],
+        sessionId
+      )
       if (dictationRunRef.current !== runId) {
         discardBufferedAudio()
         insertionTargetRef.current = null
