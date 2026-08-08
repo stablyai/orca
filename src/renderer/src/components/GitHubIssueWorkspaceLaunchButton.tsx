@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React from 'react'
 import { ArrowRight, ChevronDown, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -11,8 +11,14 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
-import { loadGitHubIssueLaunchAgents } from '@/lib/github-issue-launch-agents'
+import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
+import { useAgentDetectionTargetForRepo } from '@/hooks/useAgentDetectionTarget'
+import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useAppStore } from '@/store'
+import {
+  DEFAULT_DISABLED_TUI_AGENTS,
+  filterEnabledTuiAgents
+} from '../../../shared/tui-agent-selection'
 import type { Repo, TuiAgent } from '../../../shared/types'
 
 type GitHubIssueWorkspaceLaunchButtonProps = {
@@ -21,54 +27,73 @@ type GitHubIssueWorkspaceLaunchButtonProps = {
   onStartWithAgent: (agent: TuiAgent) => void
 }
 
-type AgentLoadState =
-  | { repoKey: string; status: 'idle' | 'loading' | 'error'; agents: AgentCatalogEntry[] }
-  | { repoKey: string; status: 'ready'; agents: AgentCatalogEntry[] }
+/** Rendered only while the menu is open, so detection stays lazy per row. */
+function GitHubIssueLaunchAgentMenuItems({
+  repo,
+  onStartWithAgent
+}: {
+  repo: Repo | null
+  onStartWithAgent: (agent: TuiAgent) => void
+}): React.JSX.Element {
+  const target = useAgentDetectionTargetForRepo(repo)
+  const { detectedIds, detectionFailed } = useDetectedAgents(target)
+  const disabledAgents = useAppStore(
+    (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
+  )
+
+  if (!repo || detectionFailed) {
+    return (
+      <DropdownMenuItem disabled>
+        {translate(
+          'auto.components.GitHubIssueWorkspaceLaunchButton.9635bbe266',
+          'Unable to load agents'
+        )}
+      </DropdownMenuItem>
+    )
+  }
+  if (detectedIds === null) {
+    return (
+      <DropdownMenuItem disabled>
+        <LoaderCircle className="animate-spin" />
+        {translate(
+          'auto.components.GitHubIssueWorkspaceLaunchButton.cf532aff14',
+          'Detecting agents…'
+        )}
+      </DropdownMenuItem>
+    )
+  }
+
+  const enabled = new Set(filterEnabledTuiAgents(detectedIds, disabledAgents))
+  const agents = getAgentCatalog().filter((agent) => enabled.has(agent.id))
+  if (agents.length === 0) {
+    return (
+      <DropdownMenuItem disabled>
+        {translate(
+          'auto.components.GitHubIssueWorkspaceLaunchButton.89f202d990',
+          'No agents available'
+        )}
+      </DropdownMenuItem>
+    )
+  }
+  return (
+    <>
+      {agents.map((agent) => (
+        <DropdownMenuItem key={agent.id} onSelect={() => onStartWithAgent(agent.id)}>
+          <AgentIcon agent={agent.id} />
+          {agent.label}
+        </DropdownMenuItem>
+      ))}
+    </>
+  )
+}
 
 export function GitHubIssueWorkspaceLaunchButton({
   repo,
   onStartDefault,
   onStartWithAgent
 }: GitHubIssueWorkspaceLaunchButtonProps): React.JSX.Element {
-  const repoKey = `${repo?.id ?? ''}:${repo?.executionHostId ?? repo?.connectionId ?? ''}`
-  const [agentState, setAgentState] = useState<AgentLoadState>({
-    repoKey,
-    status: 'idle',
-    agents: []
-  })
-  const visibleAgentState: AgentLoadState =
-    agentState.repoKey === repoKey ? agentState : { repoKey, status: 'idle', agents: [] }
-  const [menuOpen, setMenuOpen] = useState(false)
-  // Why: reopening, switching repositories, or unmounting must invalidate late detection results.
-  const loadRequestRef = useRef(0)
-  const repoRef = useRef(repo)
-  repoRef.current = repo
-
-  useEffect(() => {
-    const requestId = loadRequestRef.current + 1
-    loadRequestRef.current = requestId
-    if (menuOpen) {
-      setAgentState({ repoKey, status: 'loading', agents: [] })
-      void loadGitHubIssueLaunchAgents(repoRef.current).then(
-        (agents) => {
-          if (loadRequestRef.current === requestId) {
-            setAgentState({ repoKey, status: 'ready', agents })
-          }
-        },
-        () => {
-          if (loadRequestRef.current === requestId) {
-            setAgentState({ repoKey, status: 'error', agents: [] })
-          }
-        }
-      )
-    }
-    return () => {
-      loadRequestRef.current += 1
-    }
-  }, [menuOpen, repoKey])
-
   return (
-    <DropdownMenu modal={false} onOpenChange={setMenuOpen}>
+    <DropdownMenu modal={false}>
       <ButtonGroup className="shrink-0" onClick={(event) => event.stopPropagation()}>
         <Button
           type="button"
@@ -121,36 +146,7 @@ export function GitHubIssueWorkspaceLaunchButton({
             'Start with agent'
           )}
         </DropdownMenuLabel>
-        {visibleAgentState.status === 'loading' || visibleAgentState.status === 'idle' ? (
-          <DropdownMenuItem disabled>
-            <LoaderCircle className="animate-spin" />
-            {translate(
-              'auto.components.GitHubIssueWorkspaceLaunchButton.cf532aff14',
-              'Detecting agents…'
-            )}
-          </DropdownMenuItem>
-        ) : visibleAgentState.status === 'error' ? (
-          <DropdownMenuItem disabled>
-            {translate(
-              'auto.components.GitHubIssueWorkspaceLaunchButton.9635bbe266',
-              'Unable to load agents'
-            )}
-          </DropdownMenuItem>
-        ) : visibleAgentState.agents.length === 0 ? (
-          <DropdownMenuItem disabled>
-            {translate(
-              'auto.components.GitHubIssueWorkspaceLaunchButton.89f202d990',
-              'No agents available'
-            )}
-          </DropdownMenuItem>
-        ) : (
-          visibleAgentState.agents.map((agent) => (
-            <DropdownMenuItem key={agent.id} onSelect={() => onStartWithAgent(agent.id)}>
-              <AgentIcon agent={agent.id} />
-              {agent.label}
-            </DropdownMenuItem>
-          ))
-        )}
+        <GitHubIssueLaunchAgentMenuItems repo={repo} onStartWithAgent={onStartWithAgent} />
       </DropdownMenuContent>
     </DropdownMenu>
   )
