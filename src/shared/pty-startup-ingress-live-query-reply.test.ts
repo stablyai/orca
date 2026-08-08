@@ -8,7 +8,11 @@ import type {
 } from './pty-slave-line-discipline-echo'
 
 const COLOR_SCHEME_REPLY = '\x1b[?997;1n'
-const POSIX_COOKED_ECHOES = [
+// Why: CSI replies only project ECHOCTL caret form — OSC-rewrite is identity and
+// would re-arm an ESC-led projection (#13160 review). OSC replies keep both.
+const POSIX_CSI_COOKED_ECHO = (reply: string): string => reply.replaceAll('\x1b', '^[')
+const OSC_COLOR_REPLY = '\x1b]11;rgb:00/00/00\x07'
+const POSIX_OSC_COOKED_ECHOES = [
   (reply: string): string => reply.replaceAll('\x1b', '^['),
   (reply: string): string => reply.replaceAll('\x1b]', '\x07').replaceAll('\x1b\\', '')
 ]
@@ -30,9 +34,34 @@ function visible(emissions: readonly PtyIngressEmission[]): string {
 }
 
 describe('PtyStartupIngress live query replies (#13137)', () => {
-  it('swallows a live color-scheme DSR reply echo after query authority closes', () => {
+  it('swallows a live color-scheme DSR caret echo after query authority closes', () => {
     vi.useFakeTimers()
-    for (const echoOf of POSIX_COOKED_ECHOES) {
+    const writes: string[] = []
+    const emissions: PtyIngressEmission[] = []
+    let ingress!: PtyStartupIngress
+    ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => {
+        writes.push(data)
+        ingress.accept(POSIX_CSI_COOKED_ECHO(data))
+      },
+      onEmission: (emission) => emissions.push(emission)
+    })
+
+    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    vi.advanceTimersByTime(0)
+    expect(writes).toEqual([COLOR_SCHEME_REPLY])
+    expect(visible(emissions)).toBe('')
+
+    ingress.accept('Ok to proceed? (y) ')
+    expect(visible(emissions)).toBe('Ok to proceed? (y) ')
+    ingress.drainAndClose()
+    vi.useRealTimers()
+  })
+
+  it('swallows OSC color reply echoes under both POSIX projections', () => {
+    vi.useFakeTimers()
+    for (const echoOf of POSIX_OSC_COOKED_ECHOES) {
       const writes: string[] = []
       const emissions: PtyIngressEmission[] = []
       let ingress!: PtyStartupIngress
@@ -45,13 +74,10 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
         onEmission: (emission) => emissions.push(emission)
       })
 
-      expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+      expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
       vi.advanceTimersByTime(0)
-      expect(writes).toEqual([COLOR_SCHEME_REPLY])
+      expect(writes).toEqual([OSC_COLOR_REPLY])
       expect(visible(emissions)).toBe('')
-
-      ingress.accept('Ok to proceed? (y) ')
-      expect(visible(emissions)).toBe('Ok to proceed? (y) ')
       ingress.drainAndClose()
     }
     vi.useRealTimers()

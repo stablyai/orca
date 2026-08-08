@@ -41,6 +41,8 @@ const OSC_RESPONSE_RE = new RegExp('^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u00
 // DCS-framed reports xterm emits: DECRQSS "ESC P 1 $ r Pt ST" / "ESC P 0 $ r ST"
 // (vim queries cursor style this way) and XTVERSION "ESC P > | text ST".
 const DCS_RESPONSE_RE = new RegExp('^\\u001bP(?:[01]\\$r[^\\u001b]*|>\\|[^\\u001b]*)\\u001b\\\\$')
+// Private-mode DSR (CSI ? … n) — e.g. color-scheme `?997;1n` — often lands cooked.
+const COOKED_ECHO_RISK_PRIVATE_DSR_RE = new RegExp('^\\u001b\\[\\?[0-9;]*n$')
 /* oxlint-enable no-control-regex */
 
 /**
@@ -66,4 +68,16 @@ export function isTerminalQueryReply(data: string): boolean {
     OSC_RESPONSE_RE.test(data) ||
     DCS_RESPONSE_RE.test(data)
   )
+}
+
+/**
+ * Query replies that must use the ECHO-safe write path on POSIX PTYs so cooked
+ * prompts do not paint reply bytes (e.g. `997;1n` on `npx` confirm, #13137).
+ * Latency-critical CPR/DSR without `?` stay on the immediate write path.
+ */
+export function needsCookedEchoSafeQueryReply(data: string): boolean {
+  if (data.length < 4 || data[0] !== ESC) {
+    return false
+  }
+  return COOKED_ECHO_RISK_PRIVATE_DSR_RE.test(data) || OSC_RESPONSE_RE.test(data)
 }

@@ -98,21 +98,24 @@ function replyEchoProjections(
   // reply, so a bare trailing ESC — how any read can end — is a strict prefix of it.
   // That read would be held as an echo candidate, and an expired hold releases its
   // bytes raw, past the query parser, so a query torn at its own ESC is never answered.
-  return [
-    // ECHOCTL (default cooked tty) renders each control byte as its caret form. This is
-    // the ONE projection the probe can retire, because it is the kernel's echo and a
-    // cleared ECHO bit is proof it cannot happen.
-    ...(kernelEchoImpossible ? [] : [reply.replaceAll('\x1b', '^[')]),
-    // readline: `ESC ]` is an unbound binding, so it is eaten (with a bell) and the
-    // remainder self-inserts; the ST is eaten the same way. Software echo — survives
-    // `quiet`, because readline does this with the tty already raw and ECHO off.
-    //
-    // This buys display cleanliness ONLY. The bytes self-inserted into readline's edit
-    // buffer are still there, so a user who then presses Enter runs them: `bash: 10:
-    // command not found`, with nothing on screen to explain it. Not fixable by
-    // suppressing harder — undoing it means writing a kill-line into someone's prompt.
-    reply.replaceAll('\x1b]', '\x07').replaceAll('\x1b\\', '')
-  ]
+  const projections: string[] = []
+  // ECHOCTL (default cooked tty) renders each control byte as its caret form. This is
+  // the ONE projection the probe can retire, because it is the kernel's echo and a
+  // cleared ECHO bit is proof it cannot happen.
+  if (!kernelEchoImpossible) {
+    projections.push(reply.replaceAll('\x1b', '^['))
+  }
+  // readline: `ESC ]` is an unbound binding, so it is eaten (with a bell) and the
+  // remainder self-inserts; the ST is eaten the same way. Software echo — survives
+  // `quiet`, because readline does this with the tty already raw and ECHO off.
+  //
+  // Only emit when the reply actually contains OSC open/ST. For CSI (e.g. ?997;1n)
+  // the replace is a no-op and would re-project the verbatim ESC-led reply — which
+  // violates the no-ESC-prefix rule and 500ms-holds partial ESC tails (#13160 review).
+  if (reply.includes('\x1b]')) {
+    projections.push(reply.replaceAll('\x1b]', '\x07').replaceAll('\x1b\\', ''))
+  }
+  return projections
 }
 
 /** Earliest offset whose suffix of `data` is a strict prefix of `projection`, else -1. */

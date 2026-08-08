@@ -18,6 +18,7 @@ import {
   type PtyIngressEmission,
   type PtyStartupIngressIntent
 } from '../../shared/pty-startup-ingress'
+import { needsCookedEchoSafeQueryReply } from '../../shared/terminal-query-reply'
 import type {
   PendingOutputRecord,
   SessionState,
@@ -229,6 +230,12 @@ export class Session {
     // direct write would race fresh input ahead of the buffered startup command.
     if (this._shellState === 'pending' || this.postReadyFlushGate.isPending) {
       this.preReadyStdinQueue.push(data)
+      return
+    }
+
+    // Why: daemon-hosted POSIX PTYs hit the same cooked-prompt 997 leak as local
+    // provider writes; share the ingress echo-safe path (#13137 / #13160 review).
+    if (needsCookedEchoSafeQueryReply(data) && this.startupIngress.answerLiveQueryReply(data)) {
       return
     }
 

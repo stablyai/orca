@@ -1,6 +1,6 @@
 import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
-import { isTerminalQueryReply } from './terminal-query-reply'
+import { isTerminalQueryReply, needsCookedEchoSafeQueryReply } from './terminal-query-reply'
 
 describe('isTerminalQueryReply', () => {
   it('matches synthetic query replies that must be sent immediately', () => {
@@ -62,6 +62,16 @@ describe('isTerminalQueryReply', () => {
     // Classified as a reply on purpose: order is still preserved (the immediate
     // path flushes pending input first); see the comment in terminal-query-reply.ts.
     expect(isTerminalQueryReply('\x1b[1;2R')).toBe(true)
+  })
+
+  it('routes only cooked-echo-risk replies through the ECHO-safe write path', () => {
+    // Color-scheme private DSR + OSC color — cooked prompt paint risk (#13137).
+    expect(needsCookedEchoSafeQueryReply('\x1b[?997;1n')).toBe(true)
+    expect(needsCookedEchoSafeQueryReply('\x1b]11;rgb:00/00/00\x07')).toBe(true)
+    // Latency-critical CPR / public DSR / DA stay immediate (#7329 / #13160 review).
+    expect(needsCookedEchoSafeQueryReply('\x1b[3;1R')).toBe(false)
+    expect(needsCookedEchoSafeQueryReply('\x1b[0n')).toBe(false)
+    expect(needsCookedEchoSafeQueryReply('\x1b[?1;2c')).toBe(false)
   })
 
   it('does NOT match ordinary typed input or navigation sequences', () => {
