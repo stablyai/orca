@@ -4,6 +4,8 @@ import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootst
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 
+const MAX_LOCAL_RUNTIME_STREAM_FRAME_BYTES = 8 * 1024 * 1024
+
 export type LocalRuntimeStream = {
   done: Promise<void>
   close: () => void
@@ -29,6 +31,7 @@ export function openLocalRuntimeStream<TResult>(
   const socket = createConnection(transport.endpoint)
   const requestId = randomUUID()
   let buffer = ''
+  let bufferBytes = 0
   let settled = false
   let intentionalClose = false
   let receivedFrame = false
@@ -92,10 +95,17 @@ export function openLocalRuntimeStream<TResult>(
   })
   socket.on('data', (chunk: string) => {
     buffer += chunk
+    bufferBytes += Buffer.byteLength(chunk)
     let newlineIndex = buffer.indexOf('\n')
     while (newlineIndex !== -1 && !settled) {
       const line = buffer.slice(0, newlineIndex)
       buffer = buffer.slice(newlineIndex + 1)
+      const lineBytes = Buffer.byteLength(line)
+      bufferBytes -= lineBytes + 1
+      if (lineBytes > MAX_LOCAL_RUNTIME_STREAM_FRAME_BYTES) {
+        fail(invalidResponse())
+        return
+      }
       newlineIndex = buffer.indexOf('\n')
       if (!line.trim()) {
         continue
@@ -143,6 +153,9 @@ export function openLocalRuntimeStream<TResult>(
         fail(error instanceof Error ? error : new Error(String(error)))
         return
       }
+    }
+    if (!settled && bufferBytes > MAX_LOCAL_RUNTIME_STREAM_FRAME_BYTES) {
+      fail(invalidResponse())
     }
   })
   socket.on('connect', () => {

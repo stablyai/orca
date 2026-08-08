@@ -8,6 +8,7 @@ class FakeSocket extends EventEmitter {
   writable = true
   writableLength = 0
   writeReturn = true
+  ended = false
   readonly writes: string[] = []
 
   setEncoding(): void {}
@@ -23,7 +24,9 @@ class FakeSocket extends EventEmitter {
   }
 
   end(): this {
-    return this.destroy()
+    this.ended = true
+    this.writable = false
+    return this
   }
 
   destroy(_error?: Error): this {
@@ -72,7 +75,8 @@ describe('UnixSocketTransport', () => {
       '{"result":{"type":"scrollback"}}\n',
       '{"result":{"type":"data","chunk":"live"}}\n'
     ])
-    expect(socket.destroyed).toBe(true)
+    expect(socket.ended).toBe(true)
+    expect(socket.destroyed).toBe(false)
   })
 
   it('keeps ordinary replies one-shot', () => {
@@ -93,6 +97,8 @@ describe('UnixSocketTransport', () => {
     socket.emit('data', '{"id":"one-shot","method":"status.get"}\n')
 
     expect(socket.writes).toEqual(['{"ok":true}\n'])
+    expect(socket.ended).toBe(false)
+    expect(socket.destroyed).toBe(false)
   })
 
   it('aborts a stream before socket write buffering can grow past its limit', () => {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -25,9 +26,9 @@ afterEach(async () => {
   servers.clear()
 })
 
-describe.skipIf(process.platform === 'win32')('local runtime stream transport', () => {
+describe('local runtime stream transport', () => {
   it('opts into streaming and forwards every response frame', async () => {
-    const endpoint = join(mkdtempSync(join(tmpdir(), 'orca-local-stream-')), 'runtime.sock')
+    const endpoint = localStreamEndpoint()
     let request: Record<string, unknown> | null = null
     const server = createServer((socket) => {
       sockets.add(socket)
@@ -73,7 +74,7 @@ describe.skipIf(process.platform === 'win32')('local runtime stream transport', 
   })
 
   it('rejects EOF after data when the runtime omits the protocol end frame', async () => {
-    const endpoint = join(mkdtempSync(join(tmpdir(), 'orca-local-stream-')), 'runtime.sock')
+    const endpoint = localStreamEndpoint()
     const server = createServer((socket) => {
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
@@ -103,8 +104,66 @@ describe.skipIf(process.platform === 'win32')('local runtime stream transport', 
     await expect(stream.done).rejects.toMatchObject({ code: 'runtime_unavailable' })
   })
 
+  it('refreshes the idle timeout when the runtime sends keepalive frames', async () => {
+    const endpoint = localStreamEndpoint()
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as { id: string }
+        socket.write('{"_keepalive":true}\n')
+        setTimeout(() => socket.write('{"_keepalive":true}\n'), 500)
+        setTimeout(
+          () =>
+            socket.end(
+              `${JSON.stringify({
+                id: request.id,
+                ok: true,
+                result: { type: 'end' },
+                _meta: { runtimeId: 'runtime-1' }
+              })}\n`
+            ),
+          1200
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+
+    const stream = openLocalRuntimeStream(
+      metadata(endpoint),
+      'terminal.subscribe',
+      { terminal: 'term-1' },
+      1000,
+      () => {}
+    )
+
+    await expect(stream.done).resolves.toBeUndefined()
+  })
+
+  it('rejects an unterminated runtime frame before its receive buffer grows without bound', async () => {
+    const endpoint = localStreamEndpoint()
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', () => socket.write('x'.repeat(8 * 1024 * 1024 + 1)))
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+
+    const stream = openLocalRuntimeStream(
+      metadata(endpoint),
+      'terminal.subscribe',
+      { terminal: 'term-1' },
+      10_000,
+      () => {}
+    )
+
+    await expect(stream.done).rejects.toMatchObject({ code: 'invalid_runtime_response' })
+  })
+
   it('closes an idle stream without reporting a transport failure', async () => {
-    const endpoint = join(mkdtempSync(join(tmpdir(), 'orca-local-stream-')), 'runtime.sock')
+    const endpoint = localStreamEndpoint()
     const server = createServer((socket) => {
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
@@ -124,7 +183,7 @@ describe.skipIf(process.platform === 'win32')('local runtime stream transport', 
   })
 
   it('keeps an intentional close clean after receiving stream data', async () => {
-    const endpoint = join(mkdtempSync(join(tmpdir(), 'orca-local-stream-')), 'runtime.sock')
+    const endpoint = localStreamEndpoint()
     let release = (): void => {}
     const server = createServer((socket) => {
       sockets.add(socket)
@@ -160,11 +219,17 @@ describe.skipIf(process.platform === 'win32')('local runtime stream transport', 
   })
 })
 
+function localStreamEndpoint(): string {
+  return process.platform === 'win32'
+    ? `\\\\.\\pipe\\orca-local-stream-${randomUUID()}`
+    : join(mkdtempSync(join(tmpdir(), 'orca-local-stream-')), 'runtime.sock')
+}
+
 function metadata(endpoint: string): RuntimeMetadata {
   return {
     runtimeId: 'runtime-1',
     pid: 123,
-    transports: [{ kind: 'unix', endpoint }],
+    transports: [{ kind: process.platform === 'win32' ? 'named-pipe' : 'unix', endpoint }],
     authToken: 'token',
     startedAt: 1
   }

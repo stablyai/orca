@@ -60,6 +60,8 @@ describe('CLI remote WebSocket transport', () => {
 
     expect(response.ok).toBe(true)
     expect(response.result.runtimeId).toBe('runtime-ws-1')
+    const localStream = client.streamLocal('terminal.subscribe', {}, vi.fn())
+    await expect(localStream.done).rejects.toMatchObject({ code: 'method_not_supported' })
     expect(runtime.authFrames).toContainEqual(
       expect.objectContaining({
         clientCapabilities: [

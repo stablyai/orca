@@ -72,19 +72,23 @@ export class RuntimeClient {
     params: unknown,
     onEvent: (event: RuntimeRpcSuccess<TResult>) => void
   ): LocalRuntimeStream {
-    if (this.remotePairing) {
-      throw new RuntimeClientError(
-        'method_not_supported',
-        'Local terminal bridge streaming is unavailable for paired remote runtimes.'
+    try {
+      if (this.remotePairing) {
+        throw new RuntimeClientError(
+          'method_not_supported',
+          'Local terminal bridge streaming is unavailable for paired remote runtimes.'
+        )
+      }
+      return openLocalRuntimeStream(
+        readMetadata(this.userDataPath),
+        method,
+        params,
+        this.requestTimeoutMs,
+        onEvent
       )
+    } catch (error) {
+      return rejectedLocalStream(error)
     }
-    return openLocalRuntimeStream(
-      readMetadata(this.userDataPath),
-      method,
-      params,
-      this.requestTimeoutMs,
-      onEvent
-    )
   }
 
   async call<TResult>(
@@ -266,6 +270,11 @@ export class RuntimeClient {
       'Timed out waiting for an Orca desktop window. The runtime may still be running headlessly.'
     )
   }
+}
+
+function rejectedLocalStream(error: unknown): LocalRuntimeStream {
+  const reason = error instanceof Error ? error : new Error(String(error))
+  return { done: Promise.reject(reason), close: () => {} }
 }
 
 function attachMutationRecovery(error: unknown, requestId: string | undefined): unknown {

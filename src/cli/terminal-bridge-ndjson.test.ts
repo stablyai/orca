@@ -60,6 +60,24 @@ describe('terminal bridge NDJSON I/O', () => {
     release()
   })
 
+  it('drains a final unterminated frame before reporting stdin EOF', async () => {
+    const input = new PassThrough()
+    const order: string[] = []
+    new TerminalBridgeNdjsonReader({
+      input,
+      onLine: async (line) => {
+        await Promise.resolve()
+        order.push(`line:${line}`)
+      },
+      onEnd: () => order.push('end'),
+      onError: vi.fn()
+    })
+
+    input.end('{"type":"close"}')
+
+    await vi.waitFor(() => expect(order).toEqual(['line:{"type":"close"}', 'end']))
+  })
+
   it('resumes bounded output after the destination drains', async () => {
     const output = new GatedWritable()
     const errors: Error[] = []

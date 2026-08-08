@@ -74,77 +74,77 @@ export async function runTerminalBridge({
     onError: (error) => fail(error, false)
   })
 
-  stream = client.streamLocal<StreamEvent>(
-    'terminal.subscribe',
-    {
-      terminal,
-      client: { id: clientId, type: 'desktop' },
-      // Why: register a passive, stream-owned viewport floor so later resize frames can claim it
-      // through terminal.updateViewport and stream cleanup releases it with the same client identity.
-      viewport: PASSIVE_INITIAL_VIEWPORT,
-      capabilities: { desktopViewportClaims: 1 }
-    },
-    (response: RuntimeRpcSuccess<StreamEvent>) => {
-      writer.write(response.result)
-      if (response.result.type === 'end') {
-        closing = true
-        reader?.close()
-      }
-    }
-  )
-
-  reader = new TerminalBridgeNdjsonReader({
-    input,
-    onLine: async (line) => {
-      if (closing) {
-        return
-      }
-      let frame: BridgeInput
-      try {
-        frame = parseInputFrame(line)
-      } catch (error) {
-        writer.write(errorEvent(error))
-        return
-      }
-      if (frame.type === 'close') {
-        requestClose()
-        return
-      }
-      try {
-        if (frame.type === 'resize') {
-          const response = await client.call<ViewportUpdateResult>('terminal.updateViewport', {
-            terminal,
-            client: { id: clientId, type: 'desktop' },
-            viewport: { cols: frame.cols, rows: frame.rows },
-            claim: true
-          })
-          if (!response.result.updated || !response.result.applied) {
-            writer.write(viewportRejectedEvent())
-          }
-          return
-        }
-        if (!frame.data) {
-          return
-        }
-        const response = await client.call<{ send: RuntimeTerminalSend }>('terminal.send', {
-          terminal,
-          text: frame.data,
-          enter: false,
-          interrupt: false,
-          client: { id: clientId, type: 'desktop' }
-        })
-        if (!response.result.send.accepted) {
-          writer.write(inputRejectedEvent(response.result.send.refusedReason))
-        }
-      } catch (error) {
-        writer.write(errorEvent(error))
-      }
-    },
-    onEnd: requestClose,
-    onError: (error) => fail(error, true)
-  })
-
   try {
+    stream = client.streamLocal<StreamEvent>(
+      'terminal.subscribe',
+      {
+        terminal,
+        client: { id: clientId, type: 'desktop' },
+        // Why: register a passive, stream-owned viewport floor so later resize frames can claim it
+        // through terminal.updateViewport and stream cleanup releases it with the same client identity.
+        viewport: PASSIVE_INITIAL_VIEWPORT,
+        capabilities: { desktopViewportClaims: 1 }
+      },
+      (response: RuntimeRpcSuccess<StreamEvent>) => {
+        writer.write(response.result)
+        if (response.result.type === 'end') {
+          closing = true
+          reader?.close()
+        }
+      }
+    )
+
+    reader = new TerminalBridgeNdjsonReader({
+      input,
+      onLine: async (line) => {
+        if (closing) {
+          return
+        }
+        let frame: BridgeInput
+        try {
+          frame = parseInputFrame(line)
+        } catch (error) {
+          writer.write(errorEvent(error))
+          return
+        }
+        if (frame.type === 'close') {
+          requestClose()
+          return
+        }
+        try {
+          if (frame.type === 'resize') {
+            const response = await client.call<ViewportUpdateResult>('terminal.updateViewport', {
+              terminal,
+              client: { id: clientId, type: 'desktop' },
+              viewport: { cols: frame.cols, rows: frame.rows },
+              claim: true
+            })
+            if (!response.result.updated || !response.result.applied) {
+              writer.write(viewportRejectedEvent())
+            }
+            return
+          }
+          if (!frame.data) {
+            return
+          }
+          const response = await client.call<{ send: RuntimeTerminalSend }>('terminal.send', {
+            terminal,
+            text: frame.data,
+            enter: false,
+            interrupt: false,
+            client: { id: clientId, type: 'desktop' }
+          })
+          if (!response.result.send.accepted) {
+            writer.write(inputRejectedEvent(response.result.send.refusedReason))
+          }
+        } catch (error) {
+          writer.write(errorEvent(error))
+        }
+      },
+      onEnd: requestClose,
+      onError: (error) => fail(error, true)
+    })
+
     const outcome = await Promise.race([stream.done.then(() => null), fatal])
     if (outcome) {
       throw outcome
@@ -156,7 +156,7 @@ export async function runTerminalBridge({
     process.exitCode = 1
   } finally {
     closing = true
-    reader.close()
+    reader?.close()
     closeStream()
     await writer.finish()
   }

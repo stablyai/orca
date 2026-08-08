@@ -25,6 +25,7 @@ describe('local terminal streaming RPC', () => {
       enableWebSocket: false
     })
     const dispatcher = (server as unknown as RpcServerInternals).dispatcher
+    const cleanupSubscriptions = vi.spyOn(runtime, 'cleanupSubscriptionsForConnection')
     const dispatchStreaming = vi
       .spyOn(dispatcher, 'dispatchStreaming')
       .mockImplementation(async (request, reply) => {
@@ -52,12 +53,21 @@ describe('local terminal streaming RPC', () => {
         throw new Error('runtime metadata missing')
       }
 
-      await expect(request(metadata, true)).resolves.toEqual([
+      const reusedRequestId = 'reused-client-request-id'
+      const expectedEvents = [
         { type: 'scrollback', serialized: 'ready' },
         { type: 'data', chunk: 'live' },
         { type: 'end' }
-      ])
-      expect(dispatchStreaming).toHaveBeenCalledTimes(1)
+      ]
+      await expect(request(metadata, true, reusedRequestId)).resolves.toEqual(expectedEvents)
+      await expect(request(metadata, true, reusedRequestId)).resolves.toEqual(expectedEvents)
+      expect(dispatchStreaming).toHaveBeenCalledTimes(2)
+      const connectionIds = dispatchStreaming.mock.calls.map((call) => call[2]?.connectionId)
+      expect(connectionIds[0]).toMatch(/^local:/)
+      expect(connectionIds[1]).toMatch(/^local:/)
+      expect(connectionIds[0]).not.toBe(connectionIds[1])
+      expect(cleanupSubscriptions).toHaveBeenCalledWith(connectionIds[0])
+      expect(cleanupSubscriptions).toHaveBeenCalledWith(connectionIds[1])
       await expect(request(metadata, false)).resolves.toMatchObject({
         ok: false,
         error: { code: 'method_not_supported' }
@@ -66,14 +76,78 @@ describe('local terminal streaming RPC', () => {
       await server.stop()
     }
   })
+
+  it('applies long-running dispatch admission limits to local streams', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-local-terminal-stream-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: false,
+      longPollCap: 1
+    })
+    const dispatcher = (server as unknown as RpcServerInternals).dispatcher
+    const dispatchStreaming = vi
+      .spyOn(dispatcher, 'dispatchStreaming')
+      .mockImplementation(async (_request, _reply, options) => {
+        await new Promise<void>((resolve) => {
+          options?.signal?.addEventListener('abort', () => resolve(), { once: true })
+        })
+      })
+
+    await server.start()
+    let firstSocket: ReturnType<typeof createConnection> | null = null
+    try {
+      const metadata = readRuntimeMetadata(userDataPath)
+      if (!metadata) {
+        throw new Error('runtime metadata missing')
+      }
+      firstSocket = await openStreamingSocket(metadata)
+      await vi.waitFor(() => expect(dispatchStreaming).toHaveBeenCalledTimes(1))
+
+      await expect(request(metadata, true)).rejects.toMatchObject({ code: 'runtime_busy' })
+    } finally {
+      firstSocket?.destroy()
+      await server.stop()
+    }
+  })
 })
 
-async function request(metadata: RuntimeMetadata, stream: boolean): Promise<unknown> {
+async function openStreamingSocket(
+  metadata: RuntimeMetadata
+): Promise<ReturnType<typeof createConnection>> {
   const transport = findTransport(metadata, 'unix', 'named-pipe')
   if (!transport) {
     throw new Error('local runtime transport missing')
   }
-  const id = randomUUID()
+  return await new Promise((resolve, reject) => {
+    const socket = createConnection(transport.endpoint)
+    socket.once('error', reject)
+    socket.once('connect', () => {
+      socket.write(
+        `${JSON.stringify({
+          id: randomUUID(),
+          authToken: metadata.authToken,
+          method: 'terminal.subscribe',
+          params: { terminal: 'term-1' },
+          stream: true
+        })}\n`
+      )
+      resolve(socket)
+    })
+  })
+}
+
+async function request(
+  metadata: RuntimeMetadata,
+  stream: boolean,
+  requestId: string = randomUUID()
+): Promise<unknown> {
+  const transport = findTransport(metadata, 'unix', 'named-pipe')
+  if (!transport) {
+    throw new Error('local runtime transport missing')
+  }
+  const id = requestId
   return await new Promise((resolve, reject) => {
     const socket = createConnection(transport.endpoint)
     let buffer = ''

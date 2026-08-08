@@ -1537,14 +1537,23 @@ export class OrcaRuntimeRpcServer {
       return
     }
 
+    const longPoll: LongPollClass = 'wait'
+    const rejection = this.admitLongPoll(longPoll)
+    if (rejection) {
+      reply(JSON.stringify(this.buildError(request.id, 'runtime_busy', rejection)))
+      return
+    }
+    const connectionId = `local:${randomBytes(8).toString('hex')}`
     context.startStreaming()
     context.startKeepalive()
     try {
       await this.dispatcher.dispatchStreaming(request, reply, {
-        connectionId: `local:${request.id}`,
+        connectionId,
         signal: context.signal
       })
     } finally {
+      this.runtime.cleanupSubscriptionsForConnection(connectionId)
+      this.releaseLongPoll(longPoll)
       context.finishStreaming()
     }
   }

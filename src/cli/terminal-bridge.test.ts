@@ -1,7 +1,7 @@
 import { PassThrough, Writable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeClient } from './runtime-client'
-import type { RuntimeRpcSuccess } from './runtime/types'
+import { RuntimeClientError, type RuntimeRpcSuccess } from './runtime/types'
 import { runTerminalBridge } from './terminal-bridge'
 
 type StreamEvent = Record<string, unknown> & { type?: unknown }
@@ -332,6 +332,68 @@ describe('terminal bridge', () => {
     await Promise.all(bridges)
     expect(ids).toHaveLength(2)
     expect(ids[0]).not.toBe(ids[1])
+  })
+
+  it('reports synchronous stream creation failures as structured errors', async () => {
+    const input = new PassThrough()
+    const output = new PassThrough()
+    const chunks: string[] = []
+    output.on('data', (chunk) => chunks.push(String(chunk)))
+    const client = {
+      streamLocal: vi.fn(() => {
+        throw new RuntimeClientError(
+          'method_not_supported',
+          'Local terminal bridge streaming is unavailable for paired remote runtimes.'
+        )
+      }),
+      call: vi.fn()
+    } as unknown as RuntimeClient
+    const previousExitCode = process.exitCode
+
+    try {
+      await runTerminalBridge({ client, terminal: 'term-1', input, output })
+
+      expect(chunks.map((chunk) => JSON.parse(chunk))).toEqual([
+        {
+          type: 'error',
+          error: {
+            code: 'method_not_supported',
+            message: 'Local terminal bridge streaming is unavailable for paired remote runtimes.'
+          }
+        }
+      ])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode
+    }
+  })
+
+  it('reports asynchronous stream failures and sets a failing exit code', async () => {
+    const input = new PassThrough()
+    const output = new PassThrough()
+    const chunks: string[] = []
+    output.on('data', (chunk) => chunks.push(String(chunk)))
+    const close = vi.fn()
+    const client = {
+      streamLocal: vi.fn(() => ({ done: Promise.reject(new Error('stream failed')), close })),
+      call: vi.fn()
+    } as unknown as RuntimeClient
+    const previousExitCode = process.exitCode
+
+    try {
+      await runTerminalBridge({ client, terminal: 'term-1', input, output })
+
+      expect(chunks.map((chunk) => JSON.parse(chunk))).toEqual([
+        {
+          type: 'error',
+          error: { code: 'terminal_bridge_error', message: 'stream failed' }
+        }
+      ])
+      expect(close).toHaveBeenCalledTimes(1)
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode
+    }
   })
 
   it('reports terminal input refusal as a structured rejection event', async () => {
