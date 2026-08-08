@@ -11,14 +11,29 @@ head_sha=$2
 git rev-parse --verify "${base_sha}^{tree}" >/dev/null
 git rev-parse --verify "${head_sha}^{tree}" >/dev/null
 
-declare -A base_entries=()
+# Why plain array + linear scan: stock macOS ships bash 3.2 without associative
+# arrays (`declare -A`), and `pnpm test` invokes this script via PATH `bash`
+# (#12878). Root-level entries stay tiny, so O(n^2) membership is fine.
+base_entries=()
 while IFS= read -r -d '' entry; do
-  base_entries["$entry"]=1
+  base_entries+=("$entry")
 done < <(git ls-tree -z --name-only "$base_sha")
+
+base_has_entry() {
+  local candidate=$1
+  local existing
+  # Why + expansion: bash 3.2 with set -u rejects empty "${arr[@]}" expansion.
+  for existing in ${base_entries[@]+"${base_entries[@]}"}; do
+    if [[ "$existing" == "$candidate" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
 blocked_entries=()
 while IFS= read -r -d '' entry; do
-  if [[ -z "${base_entries[$entry]+present}" ]]; then
+  if ! base_has_entry "$entry"; then
     blocked_entries+=("$entry")
   fi
 done < <(git ls-tree -z --name-only "$head_sha")

@@ -96,4 +96,12 @@ describe('root directory guard', () => {
     expect(guardStep.run).toContain('.github/scripts/check-root-directory-entries.sh')
     expect(workflow.jobs.verify.needs).toContain('root_directory_guard')
   })
+
+  it('stays runnable on stock macOS bash 3.2 without associative arrays (#12878)', () => {
+    const source = readFileSync(guardScript, 'utf8')
+    // Why: PATH bash on stock macOS is 3.2 and rejects declare -A with exit 2.
+    expect(source).not.toMatch(/^\s*declare\s+-A\b/m)
+    const syntax = spawnSync('/bin/bash', ['-n', guardScript], { encoding: 'utf8' })
+    expect(syntax.status).toBe(0)
+  })
 })
