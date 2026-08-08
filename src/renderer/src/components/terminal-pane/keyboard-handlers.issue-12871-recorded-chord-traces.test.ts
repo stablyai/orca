@@ -262,6 +262,9 @@ function macrotask(): Promise<void> {
 
 type Rig = {
   textarea: HTMLTextAreaElement
+  terminal: Terminal
+  searchSelections: string[]
+  closePaneCalls: number[]
   inputCalls: string[]
   emitted: string[]
   clearPaneCalls: number
@@ -329,8 +332,19 @@ function openRig(overrides: Record<string, unknown> = {}): Rig {
   const hook = renderHook(() => useTerminalKeyboardShortcuts(deps))
   return {
     textarea,
+    terminal,
     inputCalls,
     emitted,
+    get closePaneCalls() {
+      return (deps.onRequestClosePane as ReturnType<typeof vi.fn>).mock.calls.map(
+        ([id]) => id as number
+      )
+    },
+    get searchSelections() {
+      return (deps.onSearchSelectedText as ReturnType<typeof vi.fn>).mock.calls.map(
+        ([text]) => text as string
+      )
+    },
     get clearPaneCalls() {
       return (deps.onClearPaneScrollback as ReturnType<typeof vi.fn>).mock.calls.length
     },
@@ -511,6 +525,41 @@ describe('constructed shapes the macOS captures do not contain', () => {
     await replay(rig.textarea, throughFirstChordPress)
 
     expect(rig.inputCalls).toEqual([])
+    rig.unmount()
+  })
+
+  // The keydown path lets an empty floating panel claim a remapped tab.close before the pane
+  // does. Without the same order on the release, one chord closes a panel when pressed outside
+  // a composition and closes the pane when pressed inside one.
+  it('lets an empty floating panel claim a remapped tab.close from a release', async () => {
+    const panel = document.createElement('div')
+    panel.setAttribute('data-floating-terminal-panel', '')
+    panel.setAttribute('aria-hidden', 'false')
+    const emptyState = document.createElement('div')
+    emptyState.setAttribute('data-floating-terminal-empty-state', '')
+    panel.append(emptyState)
+    document.body.append(panel)
+
+    const rig = openRig({ keybindings: { 'tab.close': ['Mod+Backspace'] } })
+    await replay(rig.textarea, caseNamed(JAPANESE_CASE).rows)
+
+    expect(rig.closePaneCalls).toEqual([])
+    // The other three chords are untouched; only the panel's chord is withheld.
+    expect(rig.inputCalls).toEqual(['\x01', '\x1bb', '\x1b\x7f'])
+    rig.unmount()
+  })
+
+  // The keydown path runs the file-search chord ahead of the shortcut policy, so a release
+  // that went straight to the policy would make the same remap mean two different things
+  // depending on whether a composition happened to be live.
+  it('runs the file-search chord from a release, ahead of the byte fallback', async () => {
+    const rig = openRig({ keybindings: { 'sidebar.search.toggle': ['Mod+Backspace'] } })
+    vi.spyOn(rig.terminal, 'getSelection').mockReturnValue('src/main.ts')
+    await replay(rig.textarea, caseNamed(JAPANESE_CASE).rows)
+
+    expect(rig.searchSelections).toEqual(['src/main.ts'])
+    // The kill-line byte the built-in binding would have sent is not sent alongside it.
+    expect(rig.inputCalls).toEqual(['\x01', '\x1bb', '\x1b\x7f'])
     rig.unmount()
   })
 

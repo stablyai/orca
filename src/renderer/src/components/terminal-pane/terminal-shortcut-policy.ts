@@ -24,8 +24,12 @@ export type MacOptionAsAlt = 'true' | 'false' | 'left' | 'right'
 // chord over one of these keys outright — no commit, no platform replay, nothing reaching the
 // shell (#12871). Exempting them lets the terminal pane recover the chord from the key's
 // release, which is the first moment a swallowed chord is distinguishable from a delayed one
-// (keyboard-handlers.ts, `isSwallowedImeChordRelease`). Read `code`, not `key`: Windows
-// reports an IME-consumed key as `key: 'Process'` (#12171, #13033).
+// (keyboard-handlers.ts, `imeChordSnapshot`). Read `code`, not `key`: Windows reports an
+// IME-consumed key as `key: 'Process'` (#12171, #13033), which the keybinding matcher also
+// falls back on — see PHYSICAL_CODE_FALLBACK_KEYS in shared/keybindings.ts.
+//
+// Adding a code here means teaching the Cmd+Up/Down branch below to read `chordKey` too; it
+// reads `event.key`, which is the same value for every code outside this set.
 //
 // ArrowUp/ArrowDown are left out because no trace covers them, not because the reasoning
 // stops there — Cmd+↑/↓ scrolls the viewport and writes no bytes, so it is the safer half.
@@ -147,73 +151,52 @@ export function resolveTerminalShortcutAction(
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
   const chordKey = physicalChordKey(event)
-  // Why: a composition rewrites `key` to 'Process', which normalizes to no token at all, and
-  // macOS has no non-Latin physical fallback (shared/keybindings.ts). Without substituting the
-  // physical key a user's remap onto Cmd+Backspace would miss and fall through to the built-in
-  // kill-line byte — silence before the IME exemption, the wrong action after it.
-  //
-  // Field by field rather than a spread: a real KeyboardEvent keeps `key`/`metaKey`/... as
-  // prototype accessors, so `{ ...event }` yields an empty object and every lookup below
-  // silently misses. Test doubles are plain objects and hide that.
-  const chordEvent: TerminalShortcutEvent =
-    chordKey === event.key
-      ? event
-      : {
-          key: chordKey,
-          code: event.code,
-          metaKey: event.metaKey,
-          ctrlKey: event.ctrlKey,
-          altKey: event.altKey,
-          shiftKey: event.shiftKey,
-          repeat: event.repeat
-        }
-
   // Why: capture this chord even on repeat without blocking the OS default input-source switch.
-  if (keybindingMatchesAction('terminal.switchInputSource', chordEvent, platform, keybindings)) {
+  if (keybindingMatchesAction('terminal.switchInputSource', event, platform, keybindings)) {
     return { type: 'switchInputSource' }
   }
 
   if (!event.repeat) {
-    if (keybindingMatchesAction('terminal.copySelection', chordEvent, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
       return { type: 'copySelection' }
     }
 
-    if (keybindingMatchesAction('terminal.search', chordEvent, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.search', event, platform, keybindings)) {
       return { type: 'toggleSearch' }
     }
 
-    if (keybindingMatchesAction('terminal.clear', chordEvent, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.clear', event, platform, keybindings)) {
       return { type: 'clearActivePane' }
     }
 
-    if (keybindingMatchesAction('terminal.focusPreviousPane', chordEvent, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.focusPreviousPane', event, platform, keybindings)) {
       return { type: 'focusPane', direction: 'previous' }
     }
 
-    if (keybindingMatchesAction('terminal.focusNextPane', chordEvent, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.focusNextPane', event, platform, keybindings)) {
       return { type: 'focusPane', direction: 'next' }
     }
 
-    if (keybindingMatchesAction('terminal.equalizePaneSizes', chordEvent, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.equalizePaneSizes', event, platform, keybindings)) {
       return { type: 'equalizePaneSizes' }
     }
 
-    if (keybindingMatchesAction('terminal.expandPane', chordEvent, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.expandPane', event, platform, keybindings)) {
       return { type: 'toggleExpandActivePane' }
     }
 
-    if (keybindingMatchesAction('terminal.setTitle', chordEvent, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.setTitle', event, platform, keybindings)) {
       return { type: 'setTitle' }
     }
 
-    if (keybindingMatchesAction('terminal.clearPaneTitle', chordEvent, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.clearPaneTitle', event, platform, keybindings)) {
       return { type: 'clearPaneTitle' }
     }
 
     // Why: recognize the active tab.close binding as a pane-close alias too, so a user who remaps
     // tab.close alone still closes the focused split pane (never the whole tab); L2 always defers to us.
     if (
-      isTerminalPaneCloseChord(chordEvent, platform, keybindings, undefined, {
+      isTerminalPaneCloseChord(event, platform, keybindings, undefined, {
         context: 'terminal',
         terminalShortcutPolicy
       })
@@ -221,11 +204,11 @@ export function resolveTerminalShortcutAction(
       return { type: 'closeActivePane' }
     }
 
-    if (keybindingMatchesAction('terminal.splitRight', chordEvent, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.splitRight', event, platform, keybindings)) {
       return { type: 'splitActivePane', direction: 'vertical' }
     }
 
-    if (keybindingMatchesAction('terminal.splitDown', chordEvent, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.splitDown', event, platform, keybindings)) {
       return { type: 'splitActivePane', direction: 'horizontal' }
     }
   }
@@ -289,12 +272,10 @@ export function resolveTerminalShortcutAction(
       return { type: 'sendInput', data: '\x05' }
     }
     // Why: macOS users expect Cmd+↑/↓ to scroll scrollback, not write escape bytes to the shell.
-    // `chordKey` like its siblings, though it resolves to `key` today: ArrowUp/ArrowDown are not
-    // exempt codes, and reading `event.key` here would silently opt out if they ever became so.
-    if (chordKey === 'ArrowUp') {
+    if (event.key === 'ArrowUp') {
       return { type: 'scrollViewport', position: 'top' }
     }
-    if (chordKey === 'ArrowDown') {
+    if (event.key === 'ArrowDown') {
       return { type: 'scrollViewport', position: 'bottom' }
     }
   }

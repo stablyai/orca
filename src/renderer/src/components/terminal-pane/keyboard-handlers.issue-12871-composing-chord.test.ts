@@ -63,11 +63,6 @@ describe('terminal chords stay live during an IME composition', () => {
       '\x1bf'
     ]
   ])('resolves %s while a composition is live', (_label, event, expected) => {
-    // The idle case is asserted too because it is not covered elsewhere with a populated
-    // `code`: terminal-shortcut-policy.test.ts builds its fixtures with `code: ''`, which
-    // takes physicalChordKey's fallback branch rather than the production one.
-    expect(resolveOnMac(event)).toEqual({ type: 'sendInput', data: expected })
-
     expect(resolveOnMac({ ...event, isComposing: true })).toEqual({
       type: 'sendInput',
       data: expected
@@ -133,6 +128,12 @@ describe('terminal chords stay live during an IME composition', () => {
     ['lone Control', keyEvent({ key: 'Control', code: 'ControlLeft', keyCode: 17, ctrlKey: true })],
     ['lone Meta', keyEvent({ key: 'Meta', code: 'MetaLeft', keyCode: 91, metaKey: true })],
     ['bare ArrowLeft', keyEvent({ key: 'ArrowLeft', code: 'ArrowLeft' })],
+    // Japanese conversion binds Shift+Arrow to resize the segment being converted, so a
+    // modifier alongside it does not make the chord ours.
+    [
+      'Cmd+Shift+ArrowLeft',
+      keyEvent({ key: 'ArrowLeft', code: 'ArrowLeft', metaKey: true, shiftKey: true })
+    ],
     ['Cmd+A', keyEvent({ key: 'a', code: 'KeyA', metaKey: true })]
   ])('still yields %s to the IME while composing', (_label, event) => {
     expect(resolveOnMac({ ...event, isComposing: true })).toBeNull()

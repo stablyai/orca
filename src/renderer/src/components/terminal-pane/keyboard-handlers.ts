@@ -43,24 +43,9 @@ import {
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 
-/**
- * True when a live composition owns the event outright. A modifier chord over an arrow or
- * Backspace/Delete is excluded so the terminal pane can resolve one from the key's *release*
- * — see `isSwallowedImeChordRelease`. On a keydown the caller must still yield to the IME,
- * because at that moment the two cases are indistinguishable (#12871).
- */
-function isImeOwnedTerminalKeyEvent(
-  event: Parameters<typeof isImeExemptTerminalChord>[0]
-): boolean {
-  return isImeOwnedKeyboardEvent(event) && !isImeExemptTerminalChord(event)
-}
-
-// `code` and `repeat` are optional on the policy's event type but always present here, and
-// narrowing them keeps the snapshot usable by the shortcut matchers without a cast.
 type PendingImeChord = Parameters<typeof resolveTerminalShortcutAction>[0] &
   Required<Pick<Parameters<typeof resolveTerminalShortcutAction>[0], 'code' | 'repeat'>> & {
     isComposing: boolean
-    keyCode: number
   }
 
 /**
@@ -103,8 +88,9 @@ function imeChordSnapshot(event: KeyboardEvent): PendingImeChord {
     shiftKey: event.shiftKey,
     // One release is one action, so the auto-repeat presses behind it are not repeats of it.
     repeat: false,
-    isComposing: true,
-    keyCode: event.keyCode
+    // `isComposing` alone marks this as IME-owned for every consumer; the keyCode that also
+    // marked the press adds nothing once the press is over.
+    isComposing: true
   }
 }
 
@@ -129,7 +115,9 @@ export function resolveTerminalKeyboardShortcutAction(
   isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
   terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first'
 ): ReturnType<typeof resolveTerminalShortcutAction> {
-  if (isImeOwnedTerminalKeyEvent(event)) {
+  // The exempt chord is let through because the pane also calls this for such a chord's
+  // release; on a keydown the pane applies the stricter gate itself.
+  if (isImeOwnedKeyboardEvent(event) && !isImeExemptTerminalChord(event)) {
     return null
   }
   // Why: keep the host callback required at the production boundary so a
