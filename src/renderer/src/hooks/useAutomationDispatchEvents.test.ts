@@ -895,6 +895,6 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({ agentArgs: '--yolo' })
     )
-    expect(mockSubmitPromptToAgentTab).not.toHaveBeenCalled()
+    expect(mockSubmitPromptToAgentPty).not.toHaveBeenCalled()
   })
 })

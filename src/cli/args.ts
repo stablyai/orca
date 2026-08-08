@@ -120,7 +120,7 @@ export function parseArgs(argv: string[], commandPaths?: readonly string[][]): P
     }
     const hasNext = i + 1 < argv.length
     const next = argv[i + 1]
-    if (!hasNext || next.startsWith('--')) {
+    if (!hasNext || (next.startsWith('--') && flag !== 'agent-args')) {
       flags.set(flag, true)
       continue
     }

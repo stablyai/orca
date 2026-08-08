@@ -26,6 +26,18 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('text')).toBe('--help')
   })
 
+  it('accepts a space-separated flag value starting with -- for --agent-args', () => {
+    const parsed = parseArgs([
+      'automations',
+      'create',
+      '--agent-args',
+      '--dangerously-skip-permissions'
+    ])
+
+    expect(parsed.commandPath).toEqual(['automations', 'create'])
+    expect(parsed.flags.get('agent-args')).toBe('--dangerously-skip-permissions')
+  })
+
   it('splits --flag=value on the first = so values may contain =', () => {
     const parsed = parseArgs(['set', 'cookie', '--value=a=b=c'])
 
