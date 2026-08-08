@@ -152,11 +152,43 @@ export async function getTerminalHandle(
 ): Promise<string> {
   const explicit = getOptionalStringFlag(flags, 'terminal')
   if (explicit) {
-    return explicit
+    return resolveTerminalSelector(explicit, client)
   }
   const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
   const response = await client.call<{ handle: string }>('terminal.resolveActive', { worktree })
   return response.result.handle
+}
+
+/**
+ * Resolve `pty:<ptyId>` to the current handle. Handles rotate across restarts;
+ * ptyId is the stable field on terminal list (#13206).
+ */
+export async function resolveTerminalSelector(
+  selector: string,
+  client: RuntimeClient
+): Promise<string> {
+  const trimmed = selector.trim()
+  if (!trimmed.toLowerCase().startsWith('pty:')) {
+    return trimmed
+  }
+  const ptyId = trimmed.slice(trimmed.indexOf(':') + 1).trim()
+  if (!ptyId) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Empty pty id after pty:. Use a ptyId from `orca terminal list --json`.'
+    )
+  }
+  const listed = await client.call<{
+    terminals: { handle: string; ptyId: string | null }[]
+  }>('terminal.list', { limit: 500 })
+  const match = listed.result.terminals.find((terminal) => terminal.ptyId === ptyId)
+  if (!match) {
+    throw new RuntimeClientError(
+      'terminal_not_found',
+      `No live terminal with ptyId ${ptyId}. Re-run terminal list after restart or rehydration.`
+    )
+  }
+  return match.handle
 }
 
 export async function getBrowserCommandTarget(

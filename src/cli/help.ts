@@ -263,7 +263,7 @@ Common Commands:
 Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
   --worktree <selector>     Worktree selector such as id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
-  --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
+  --terminal <handle|pty:id> Runtime handle or stable \`pty:<ptyId>\` from \`orca terminal list --json\`
   --parent-worktree <selector> Parent worktree selector such as id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --no-parent               Force no parent lineage for unrelated worktree creation/update
 

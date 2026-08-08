@@ -184,19 +184,23 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit', 'include-visual-layouts'],
     notes: [
-      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.'
+      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.',
+      'Prefer ptyId from the list when addressing a terminal across restarts; use --terminal pty:<ptyId> on send/read/wait/close (handles rotate; ptyId is stable).'
     ]
   },
   {
     path: ['terminal', 'show'],
     summary: 'Show terminal metadata and preview',
-    usage: 'orca terminal show [--terminal <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal']
+    usage: 'orca terminal show [--terminal <handle|pty:id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    notes: [
+      '--terminal accepts a runtime handle or pty:<ptyId> from terminal list (ptyId survives restarts; handles do not).'
+    ]
   },
   {
     path: ['terminal', 'read'],
     summary: 'Read bounded terminal output',
-    usage: 'orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--json]',
+    usage: 'orca terminal read [--terminal <handle|pty:id>] [--cursor <n>] [--limit <n>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit'],
     notes: [
       'Omit --terminal to target the active terminal in the current worktree.',
