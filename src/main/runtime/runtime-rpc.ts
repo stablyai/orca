@@ -1139,23 +1139,25 @@ export class OrcaRuntimeRpcServer {
 
     // Why: the `.catch` guarantees reply() always fires so a throw can't strand the client or leak the AbortController.
     socketTransport.onMessage((msg, reply, context) => {
+      if (isExplicitLocalStreamRequest(msg)) {
+        void this.handleLocalStreamMessage(msg, reply, context).catch((error) => {
+          const message = error instanceof Error ? error.message : String(error)
+          reply(
+            JSON.stringify(this.buildError(requestIdFromMessage(msg), 'internal_error', message))
+          )
+          context?.finishStreaming()
+        })
+        return
+      }
       void this.handleMessage(msg, context)
         .then((response) => {
           reply(JSON.stringify(response))
         })
         .catch((error) => {
           const message = error instanceof Error ? error.message : String(error)
-          // Why: best-effort id recovery so the client can correlate the error frame to its pending request.
-          let id = 'unknown'
-          try {
-            const parsed = JSON.parse(msg) as { id?: unknown }
-            if (typeof parsed.id === 'string' && parsed.id.length > 0) {
-              id = parsed.id
-            }
-          } catch {
-            // ignore — fall through with id='unknown'
-          }
-          reply(JSON.stringify(this.buildError(id, 'internal_error', message)))
+          reply(
+            JSON.stringify(this.buildError(requestIdFromMessage(msg), 'internal_error', message))
+          )
         })
     })
 
@@ -1511,7 +1513,52 @@ export class OrcaRuntimeRpcServer {
     // Why: leave the metadata file on shutdown — shared userData may host another live runtime whose bootstrap file we'd erase.
   }
 
-  // Why: Unix socket dispatch is one-shot and auths via the shared token from the 0o600 metadata file. See §3.1.
+  private async handleLocalStreamMessage(
+    rawMessage: string,
+    reply: (response: string) => void,
+    context?: RpcMessageContext
+  ): Promise<void> {
+    const parsed = this.parseAndAuth(rawMessage)
+    if ('error' in parsed) {
+      reply(JSON.stringify(parsed.error))
+      return
+    }
+    const request = parsed.request
+    if (request.method !== 'terminal.subscribe' || !context) {
+      reply(
+        JSON.stringify(
+          this.buildError(
+            request.id,
+            'method_not_supported',
+            'Local streaming is only available for terminal.subscribe'
+          )
+        )
+      )
+      return
+    }
+
+    const longPoll: LongPollClass = 'wait'
+    const rejection = this.admitLongPoll(longPoll)
+    if (rejection) {
+      reply(JSON.stringify(this.buildError(request.id, 'runtime_busy', rejection)))
+      return
+    }
+    const connectionId = `local:${randomBytes(8).toString('hex')}`
+    context.startStreaming()
+    context.startKeepalive()
+    try {
+      await this.dispatcher.dispatchStreaming(request, reply, {
+        connectionId,
+        signal: context.signal
+      })
+    } finally {
+      this.runtime.cleanupSubscriptionsForConnection(connectionId)
+      this.releaseLongPoll(longPoll)
+      context.finishStreaming()
+    }
+  }
+
+  // Why: Unix socket dispatch is one-shot unless the authenticated request explicitly opts into terminal streaming.
   private async handleMessage(
     rawMessage: string,
     context?: RpcMessageContext
@@ -1738,6 +1785,23 @@ export class OrcaRuntimeRpcServer {
       startedAt: this.runtime.getStartedAt()
     }
     writeRuntimeMetadata(this.userDataPath, metadata)
+  }
+}
+
+function requestIdFromMessage(rawMessage: string): string {
+  try {
+    const request = JSON.parse(rawMessage) as { id?: unknown }
+    return typeof request.id === 'string' && request.id.length > 0 ? request.id : 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
+function isExplicitLocalStreamRequest(rawMessage: string): boolean {
+  try {
+    return (JSON.parse(rawMessage) as { stream?: unknown }).stream === true
+  } catch {
+    return false
   }
 }
 

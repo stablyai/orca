@@ -31,6 +31,7 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
+import { runTerminalBridge } from '../terminal-bridge'
 import {
   getBrowserWorktreeSelector,
   getOptionalWorktreeSelector,
@@ -82,6 +83,17 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })
     printResult(result, json, formatTerminalRead)
+  },
+  'terminal bridge': async ({ flags, client, cwd, json }) => {
+    if (!json) {
+      throw new RuntimeClientError('invalid_argument', 'terminal bridge requires --json')
+    }
+    await runTerminalBridge({
+      client,
+      terminal: await getTerminalHandle(flags, cwd, client),
+      input: process.stdin,
+      output: process.stdout
+    })
   },
   'terminal send': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ send: RuntimeTerminalSend }>('terminal.send', {

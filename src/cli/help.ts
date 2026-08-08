@@ -80,6 +80,7 @@ Terminals:
   terminal list             List live Orca-managed terminals
   terminal show             Show terminal metadata and preview
   terminal read             Read bounded terminal output
+  terminal bridge           Bridge a live terminal over NDJSON
   terminal send             Send input to a live terminal
   terminal wait             Wait for a terminal condition (exit, tui-idle)
   terminal stop             Stop terminals for a worktree
@@ -240,6 +241,7 @@ Common Commands:
   orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]
   orca terminal show [--terminal <handle>] [--json]
   orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--json]
+  orca terminal bridge [--terminal <handle>] --json
   orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]
   orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]
   orca terminal stop --worktree <selector> [--json]

@@ -210,6 +210,16 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['terminal', 'bridge'],
+    summary: 'Bridge a live terminal over NDJSON',
+    usage: 'orca terminal bridge [--terminal <handle>] --json',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    notes: [
+      'Stdout emits terminal stream events as NDJSON. Stdin accepts input, resize, and close frames as NDJSON.',
+      'This command targets the local Orca runtime; paired remote runtimes are not supported.'
+    ]
+  },
+  {
     path: ['terminal', 'send'],
     summary: 'Send input to a live terminal',
     usage:
