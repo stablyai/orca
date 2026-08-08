@@ -14561,7 +14561,6 @@
         "routing": {
           "preference": {
             "dialog": {
-              "badge": "Terminal link",
               "preview": "Preview",
               "keep": {
                 "title": "Keep terminal links in Orca's browser?",
@@ -14573,19 +14572,22 @@
               "title": "Open terminal links in Orca's browser?",
               "description": "Use Orca's browser for terminal links, or keep your system browser.",
               "link": {
-                "label": "Link"
+                "label": "Link:"
               },
               "orca": {
                 "note": "Orca can use imported cookies for logged-in sites.",
                 "button": "Open in Orca"
               },
               "settings": {
-                "note": "Change this later in Settings → Browser."
+                "note": {
+                  "prefix": "Change this later in",
+                  "link": "Settings → Browser"
+                }
               },
               "shortcut": {
                 "note": {
-                  "prefix": "When links open in Orca,",
-                  "suffix": "click opens system browser once."
+                  "prefix": "Hold",
+                  "suffix": "and click a link to open it in your system browser instead."
                 }
               },
               "system": {

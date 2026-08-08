@@ -14091,7 +14091,6 @@
         "routing": {
           "preference": {
             "dialog": {
-              "badge": "Terminal 링크",
               "preview": "미리보기",
               "title": "terminal 링크를 Orca 브라우저에서 열까요?",
               "description": "terminal 링크를 Orca 브라우저에서 열거나 시스템 브라우저를 계속 사용합니다.",
@@ -14100,18 +14099,21 @@
                 "note": "Orca는 가져온 쿠키를 사용해 로그인된 사이트를 열 수 있습니다."
               },
               "settings": {
-                "note": "나중에 설정 → 브라우저에서 변경할 수 있습니다."
+                "note": {
+                  "prefix": "나중에",
+                  "link": "설정 → 브라우저"
+                }
               },
               "system": {
                 "button": "시스템 브라우저 사용"
               },
               "link": {
-                "label": "링크"
+                "label": "링크:"
               },
               "shortcut": {
                 "note": {
-                  "prefix": "링크가 Orca에서 열릴 때,",
-                  "suffix": "클릭하면 한 번만 시스템 브라우저에서 열립니다."
+                  "prefix": "",
+                  "suffix": "을 누른 채 링크를 클릭하면 시스템 브라우저에서 열립니다."
                 }
               },
               "keep": {

@@ -59,6 +59,8 @@ export function LinkRoutingPreferenceDialogProvider({
   const setContextualToursBlockingSurfaceVisible = useAppStore(
     (s) => s.setContextualToursBlockingSurfaceVisible
   )
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const lastDisplayedRequestRef = useRef<LinkRoutingPreferenceDialogRequest | null>(activeRequest)
   activeRequestRef.current = activeRequest
   if (activeRequest) {
@@ -119,6 +121,14 @@ export function LinkRoutingPreferenceDialogProvider({
     })
   }, [])
 
+  // Dismiss like the overlay (keeps the current default) and jump to the Browser
+  // settings so the user can change link routing from the same place the note names.
+  const openBrowserSettings = useCallback(() => {
+    settleActiveRequest(false)
+    openSettingsPage()
+    openSettingsTarget({ pane: 'browser', repoId: null })
+  }, [settleActiveRequest, openSettingsPage, openSettingsTarget])
+
   return (
     <LinkRoutingPreferenceDialogContext.Provider value={requestPreference}>
       {children}
@@ -133,19 +143,13 @@ export function LinkRoutingPreferenceDialogProvider({
         >
           <div className="rounded-t-lg border-b border-border bg-muted/30 px-6 pt-5 pb-4">
             <DialogHeader className="gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <Badge variant="outline" className="bg-background/70 text-muted-foreground">
-                  {translate(
-                    'auto.components.link.routing.preference.dialog.badge',
-                    'Terminal link'
-                  )}
-                </Badge>
-                {displayedRequest?.options.preview ? (
+              {displayedRequest?.options.preview ? (
+                <div className="flex items-center justify-end">
                   <Badge variant="secondary">
                     {translate('auto.components.link.routing.preference.dialog.preview', 'Preview')}
                   </Badge>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <DialogTitle className="text-xl leading-tight">
                   {openLinksInAppDefault
@@ -177,7 +181,7 @@ export function LinkRoutingPreferenceDialogProvider({
             {displayHost ? (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>
-                  {translate('auto.components.link.routing.preference.dialog.link.label', 'Link')}
+                  {translate('auto.components.link.routing.preference.dialog.link.label', 'Link:')}
                 </span>
                 <span className="rounded-md border border-border bg-muted/30 px-2 py-1 font-mono">
                   {displayHost}
@@ -196,15 +200,26 @@ export function LinkRoutingPreferenceDialogProvider({
                 </p>
                 <p>
                   {translate(
-                    'auto.components.link.routing.preference.dialog.settings.note',
-                    'Change this later in Settings → Browser.'
-                  )}
+                    'auto.components.link.routing.preference.dialog.settings.note.prefix',
+                    'Change this later in'
+                  )}{' '}
+                  <button
+                    type="button"
+                    onClick={openBrowserSettings}
+                    className="underline underline-offset-2 hover:text-foreground"
+                  >
+                    {translate(
+                      'auto.components.link.routing.preference.dialog.settings.note.link',
+                      'Settings → Browser'
+                    )}
+                  </button>
+                  .
                 </p>
                 <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                   <span>
                     {translate(
                       'auto.components.link.routing.preference.dialog.shortcut.note.prefix',
-                      'When links open in Orca,'
+                      'Hold'
                     )}
                   </span>
                   <ShortcutKeyCombo
@@ -215,7 +230,7 @@ export function LinkRoutingPreferenceDialogProvider({
                   <span>
                     {translate(
                       'auto.components.link.routing.preference.dialog.shortcut.note.suffix',
-                      'click opens system browser once.'
+                      'and click a link to open it in your system browser instead.'
                     )}
                   </span>
                 </p>

@@ -14080,7 +14080,6 @@
         "routing": {
           "preference": {
             "dialog": {
-              "badge": "Enlace del terminal",
               "preview": "Vista previa",
               "title": "¿Abrir enlaces del terminal en el navegador de Orca?",
               "description": "Usa el navegador de Orca para los enlaces del terminal o conserva tu navegador del sistema.",
@@ -14089,18 +14088,21 @@
                 "note": "Orca puede usar cookies importadas para sitios con sesión iniciada."
               },
               "settings": {
-                "note": "Cámbialo después en Configuración → Navegador."
+                "note": {
+                  "prefix": "Cámbialo después en",
+                  "link": "Configuración → Navegador"
+                }
               },
               "system": {
                 "button": "Usar navegador del sistema"
               },
               "link": {
-                "label": "Enlace"
+                "label": "Enlace:"
               },
               "shortcut": {
                 "note": {
-                  "prefix": "Cuando los enlaces se abren en Orca,",
-                  "suffix": "clic abre el navegador del sistema una vez."
+                  "prefix": "Mantén pulsado",
+                  "suffix": "y haz clic en un enlace para abrirlo en tu navegador del sistema."
                 }
               },
               "keep": {

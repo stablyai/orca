@@ -14080,7 +14080,6 @@
         "routing": {
           "preference": {
             "dialog": {
-              "badge": "Terminal リンク",
               "preview": "プレビュー",
               "title": "terminal のリンクを Orca のブラウザで開きますか？",
               "description": "terminal のリンクを Orca のブラウザで開くか、システムブラウザを使い続けます。",
@@ -14089,18 +14088,21 @@
                 "note": "Orca はインポート済み Cookie を使ってログイン済みサイトを開けます。"
               },
               "settings": {
-                "note": "後で 設定 → ブラウザ から変更できます。"
+                "note": {
+                  "prefix": "後で",
+                  "link": "設定 → ブラウザ"
+                }
               },
               "system": {
                 "button": "システムブラウザを使用"
               },
               "link": {
-                "label": "リンク"
+                "label": "リンク:"
               },
               "shortcut": {
                 "note": {
-                  "prefix": "リンクを Orca で開く場合、",
-                  "suffix": "クリックで今回だけシステムブラウザで開きます。"
+                  "prefix": "",
+                  "suffix": "を押しながらリンクをクリックすると、システムブラウザで開きます。"
                 }
               },
               "keep": {
