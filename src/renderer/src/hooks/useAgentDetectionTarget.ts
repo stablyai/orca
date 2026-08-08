@@ -96,7 +96,11 @@ export function useAgentDetectionTargetForWorktree(
 export function useAgentDetectionTargetForRepo(
   repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | null | undefined
 ): AgentDetectionTarget | undefined {
-  const runtimeEnvironmentId = useAppStore((s) => getRuntimeEnvironmentIdForRepo(s, repo?.id))
+  // Why: the caller already resolved which host owns this row's repo, so scope
+  // the lookup to it — a bare id re-resolves and can pick the focused duplicate.
+  const runtimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForRepo({ repos: repo ? [repo] : [], settings: s.settings }, repo?.id)
+  )
   const repoHost = repo ? parseExecutionHostId(getRepoExecutionHostId(repo)) : null
   const connectionId = repoHost?.kind === 'ssh' ? repoHost.targetId : null
   const hasRepo = Boolean(repo)

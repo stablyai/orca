@@ -149,18 +149,20 @@ describe('GitHubIssueWorkspaceLaunchButton', () => {
     expect(uniqueTargets()).toEqual([{ kind: 'runtime', environmentId: 'env-paired' }])
   })
 
-  it('prefers the repository own SSH owner over the focused runtime', async () => {
-    const sshRepo = { ...repo, connectionId: 'ssh-host-1' }
+  // Why: two repos can share a bare id across hosts. Re-resolving by id alone
+  // picks the focused duplicate and probes a host this row does not belong to.
+  it('keeps the row own host when another repo shares its id on the focused runtime', async () => {
+    const localRepo = { ...repo, executionHostId: 'local' }
     useAppStore.setState({
-      repos: [sshRepo],
-      settings: { disabledTuiAgents: [], activeRuntimeEnvironmentId: 'env-paired' }
+      repos: [localRepo, { ...repo, executionHostId: 'runtime:env-9' }],
+      settings: { disabledTuiAgents: [], activeRuntimeEnvironmentId: 'env-9' }
     } as never)
     const user = userEvent.setup()
-    renderButton({ repo: sshRepo })
+    renderButton({ repo: localRepo })
 
     await openMenu(user)
 
-    expect(uniqueTargets()).toEqual([{ kind: 'ssh', connectionId: 'ssh-host-1' }])
+    expect(uniqueTargets()).toEqual([{ kind: 'local' }])
   })
 
   it('hides agents the user disabled in settings', async () => {
