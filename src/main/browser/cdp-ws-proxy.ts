@@ -1,16 +1,20 @@
 /* eslint-disable max-lines -- Why: this proxy owns HTTP discovery, websocket client lifecycle, and CDP debugger forwarding together. */
 import { WebSocketServer, WebSocket } from 'ws'
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
-import type { WebContents } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
 import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 
 const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
-// Why: one animation frame is enough for the renderer to move DOM focus onto the
-// guest; longer stalls every agent keystroke, shorter races the focus handoff.
-const FOCUS_HANDOFF_FRAME_MS = 16
+// Why: the renderer answers within a frame; this only bounds the wait for a host
+// that never will, so the input falls through instead of hanging on it.
+const FOCUS_ACK_TIMEOUT_MS = 64
+
+// Why: borrows are matched by id across every proxy instance, so the counter cannot
+// live on one of them.
+let nextFocusBorrowId = 0
 
 export class CdpWsProxy {
   // Why: holds each session's last DOM.focus params to replay right before the next
@@ -36,6 +40,8 @@ export class CdpWsProxy {
   private nextClientSessionOrdinal = 0
   private nextClientBrowserSessionOrdinal = 0
   private readonly pdfStreams = new CdpPdfStreamStore()
+  private readonly pendingFocusBorrows = new Map<number, (focused: boolean) => void>()
+  private focusReplyHandler: ((...args: unknown[]) => void) | null = null
 
   constructor(private readonly webContents: WebContents) {}
 
@@ -99,6 +105,13 @@ export class CdpWsProxy {
   async stop(): Promise<void> {
     this.detachDebugger()
     this.closeClient()
+    if (this.focusReplyHandler) {
+      ipcMain.removeListener('browser:agentInputFocusReply', this.focusReplyHandler)
+      this.focusReplyHandler = null
+    }
+    // Why: any borrow still in flight is settled by its own timeout, so dropping the
+    // entries here only stops late replies from resolving a stopped proxy.
+    this.pendingFocusBorrows.clear()
     if (this.wss) {
       this.wss.close()
       this.wss = null
@@ -403,7 +416,11 @@ export class CdpWsProxy {
       void this.withBorrowedFocus(
         () => this.forwardInsertText(client, clientId, msg.params ?? {}, effectiveSessionId),
         true
-      )
+      ).catch((err: Error) => {
+        // Why: forwardInsertText answers its own failures, so only a refused focus
+        // borrow reaches here — and it must still answer, or the client hangs.
+        this.sendError(clientId, err.message, client)
+      })
       return
     }
     // Why: key events need the same native focus as insertText, and mouse presses
@@ -480,19 +497,21 @@ export class CdpWsProxy {
   // Why: the guest lives inside a renderer <webview>, so only the renderer can move
   // DOM focus onto it — webContents.focus() from main does nothing here. Tell the
   // host renderer to lend focus to the guest for the input, then take it back.
-  private notifyAgentInput(phase: 'begin' | 'end'): void {
+  private notifyAgentInput(phase: 'begin' | 'end', borrowId: number): boolean {
     try {
       const host = (this.webContents as unknown as { hostWebContents?: WebContents })
         .hostWebContents
       if (host && !host.isDestroyed()) {
         // Why: the host renders every open tab's pane, so name the guest. Without it
         // a background tab would grab focus on another tab's agent input.
-        host.send('ui:browserAgentInput', { phase, guestId: this.webContents.id })
+        host.send('ui:browserAgentInput', { phase, guestId: this.webContents.id, borrowId })
+        return true
       }
     } catch {
       // Why: offscreen/headless guests have no host renderer to lend focus. The
       // handoff is a courtesy to the user's window, never a reason to drop input.
     }
+    return false
   }
 
   private async withBorrowedFocus<T>(run: () => Promise<T>, acquire: boolean): Promise<T> {
@@ -502,15 +521,60 @@ export class CdpWsProxy {
     if (!acquire) {
       return await run()
     }
-    this.notifyAgentInput('begin')
-    // Why: the renderer moves focus on its own tick; give it one frame to land before
-    // the event goes out, otherwise the input races ahead of the focus it needs.
-    await new Promise((resolve) => setTimeout(resolve, FOCUS_HANDOFF_FRAME_MS))
+    nextFocusBorrowId += 1
+    const borrowId = nextFocusBorrowId
+    // Why: register before announcing, so a reply that lands on the same tick still
+    // finds its borrow waiting.
+    const granted = this.awaitFocusGrant(borrowId)
+    if (!this.notifyAgentInput('begin', borrowId)) {
+      this.pendingFocusBorrows.get(borrowId)?.(true)
+      return await run()
+    }
     try {
+      // Why: the guest can fail to take focus while staying perfectly alive — a hidden
+      // or detached pane still answers CDP. Forwarding then puts the keystroke in
+      // whatever the user is typing into, which is the leak this whole path exists to
+      // close, so fail the command instead and let the agent see it.
+      if (!(await granted)) {
+        throw new Error('Browser tab could not take keyboard focus for agent input')
+      }
       return await run()
     } finally {
-      this.notifyAgentInput('end')
+      this.notifyAgentInput('end', borrowId)
     }
+  }
+
+  private awaitFocusGrant(borrowId: number): Promise<boolean> {
+    this.ensureFocusReplyListener()
+    return new Promise<boolean>((resolve) => {
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const settle = (focused: boolean): void => {
+        if (timer) {
+          clearTimeout(timer)
+          timer = null
+        }
+        this.pendingFocusBorrows.delete(borrowId)
+        resolve(focused)
+      }
+      // Why: no pane hosts this guest yet, so nobody will answer. Treat silence as the
+      // pre-handoff behaviour — forward the input — rather than dropping it.
+      timer = setTimeout(() => settle(true), FOCUS_ACK_TIMEOUT_MS)
+      this.pendingFocusBorrows.set(borrowId, settle)
+    })
+  }
+
+  private ensureFocusReplyListener(): void {
+    if (this.focusReplyHandler) {
+      return
+    }
+    this.focusReplyHandler = (...args: unknown[]): void => {
+      const reply = args[1] as { borrowId?: number; focused?: boolean } | undefined
+      if (typeof reply?.borrowId !== 'number') {
+        return
+      }
+      this.pendingFocusBorrows.get(reply.borrowId)?.(reply.focused === true)
+    }
+    ipcMain.on('browser:agentInputFocusReply', this.focusReplyHandler)
   }
 
   // Why: input commands must return focus once the event has landed, so they cannot

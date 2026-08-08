@@ -3225,12 +3225,10 @@ function BrowserPagePane({
         // strand focus on the browser pane once the agent is done.
         return active && active !== webviewRef.current ? active : null
       },
-      focusGuest: () => {
-        focusWebviewNow()
-      },
+      focusGuest: () => focusWebviewNow(),
       restore: (owner) => owner?.focus?.()
     })
-    return window.api.ui.onBrowserAgentInput(({ phase, guestId }) => {
+    return window.api.ui.onBrowserAgentInput(({ phase, guestId, borrowId }) => {
       const webview = webviewRef.current
       if (!webview) {
         return
@@ -3246,7 +3244,13 @@ function BrowserPagePane({
       if (ownGuestId !== guestId) {
         return
       }
-      borrow(phase)
+      const focused = borrow(phase)
+      if (phase === 'begin') {
+        // Why: main holds the input until it knows focus landed. A pane that stayed
+        // silent here — hidden, detached, or hosting another guest — leaves main to
+        // time out and forward anyway, which is the pre-handoff behaviour.
+        window.api.ui.replyBrowserAgentInputFocus({ borrowId, focused })
+      }
     })
   }, [focusWebviewNow])
 

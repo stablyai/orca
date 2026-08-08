@@ -58,7 +58,7 @@ describe('browser-focus', () => {
 })
 
 describe('createAgentInputFocusBorrow', () => {
-  function makeBorrow() {
+  function makeBorrow(focusSucceeds = true) {
     const owner = { id: 'terminal-input' }
     const calls: string[] = []
     let captured = 0
@@ -69,7 +69,10 @@ describe('createAgentInputFocusBorrow', () => {
         // left to capture, so a nested begin would record null.
         return captured === 1 ? owner : null
       },
-      focusGuest: () => calls.push('focus-guest'),
+      focusGuest: () => {
+        calls.push('focus-guest')
+        return focusSucceeds
+      },
       restore: (o) => calls.push(`restore:${o ? o.id : 'null'}`)
     })
     return { borrow, calls }
@@ -119,5 +122,26 @@ describe('createAgentInputFocusBorrow', () => {
     borrow('end')
 
     expect(calls).toEqual(['focus-guest', 'restore:terminal-input'])
+  })
+
+  // Why: main forwards the input only once the pane confirms the guest took focus.
+  it('reports whether the guest actually took focus', () => {
+    expect(makeBorrow(true).borrow('begin')).toBe(true)
+    expect(makeBorrow(false).borrow('begin')).toBe(false)
+  })
+
+  it('still unwinds a borrow whose focus failed', () => {
+    const { borrow, calls } = makeBorrow(false)
+
+    borrow('begin')
+    borrow('end')
+    calls.length = 0
+
+    // Why: a failed begin that skipped the count would strand the depth above zero and
+    // swallow every later restore.
+    borrow('begin')
+    borrow('end')
+
+    expect(calls).toEqual(['focus-guest', 'restore:null'])
   })
 })

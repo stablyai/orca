@@ -3667,14 +3667,17 @@ const api = {
       return () => ipcRenderer.removeListener('ui:focusBrowserAddressBar', listener)
     },
     onBrowserAgentInput: (
-      callback: (detail: { phase: 'begin' | 'end'; guestId: number }) => void
+      callback: (detail: { phase: 'begin' | 'end'; guestId: number; borrowId: number }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        detail: { phase: 'begin' | 'end'; guestId: number }
+        detail: { phase: 'begin' | 'end'; guestId: number; borrowId: number }
       ): void => callback(detail)
       ipcRenderer.on('ui:browserAgentInput', listener)
       return () => ipcRenderer.removeListener('ui:browserAgentInput', listener)
+    },
+    replyBrowserAgentInputFocus: (reply: { borrowId: number; focused: boolean }): void => {
+      ipcRenderer.send('browser:agentInputFocusReply', reply)
     },
     onFindInBrowserPage: browserFindSubscriptions.subscribe,
     onReloadBrowserPage: (callback: () => void): (() => void) => {

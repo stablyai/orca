@@ -9,6 +9,27 @@ import {
   type MockWebContents
 } from './cdp-ws-proxy-test-harness'
 
+const electronMock = vi.hoisted(() => {
+  const focusReplyListeners = new Set<(...args: unknown[]) => void>()
+  return {
+    replyFocusBorrow: (borrowId: number, focused: boolean): void => {
+      for (const listener of focusReplyListeners) {
+        listener({}, { borrowId, focused })
+      }
+    },
+    ipcMain: {
+      on: vi.fn((channel: string, listener: (...args: unknown[]) => void) => {
+        if (channel === 'browser:agentInputFocusReply') {
+          focusReplyListeners.add(listener)
+        }
+      }),
+      removeListener: vi.fn((_channel: string, listener: (...args: unknown[]) => void) => {
+        focusReplyListeners.delete(listener)
+      })
+    }
+  }
+})
+
 vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() },
   // Why: input forwarding borrows native focus and hands it back, so it asks the
@@ -16,7 +37,8 @@ vi.mock('electron', () => ({
   BrowserWindow: {
     getFocusedWindow: vi.fn(() => null),
     fromWebContents: vi.fn(() => null)
-  }
+  },
+  ipcMain: electronMock.ipcMain
 }))
 
 // Why: the proxy focuses the guest webContents natively before Input.insertText,
@@ -28,7 +50,15 @@ describe('CdpWsProxy DOM.focus replay', () => {
   let endpoint: string
 
   beforeEach(async () => {
-    mock = createMockWebContents()
+    // Why: stand in for a mounted pane that grants every borrow, so input tests exercise
+    // the granted path instead of falling through the no-answer timeout.
+    mock = createMockWebContents({
+      onAgentInput: ({ phase, borrowId }) => {
+        if (phase === 'begin') {
+          electronMock.replyFocusBorrow(borrowId, true)
+        }
+      }
+    })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     proxy = new CdpWsProxy(mock.webContents as any)
     endpoint = await proxy.start()

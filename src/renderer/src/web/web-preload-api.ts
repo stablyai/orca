@@ -2723,6 +2723,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     // Why: the web client streams a remote viewport instead of hosting a <webview>,
     // so there is no local guest to lend DOM focus to.
     onBrowserAgentInput: () => noopUnsubscribe,
+    replyBrowserAgentInputFocus: () => {},
     onFindInBrowserPage: () => noopUnsubscribe,
     onReloadBrowserPage: () => noopUnsubscribe,
     onBrowserHistoryNavigate: () => noopUnsubscribe,

@@ -86,7 +86,8 @@ export type AgentInputBorrowPhase = 'begin' | 'end'
 export type AgentInputFocusBorrowHandlers<T> = {
   /** The element focus should return to, or null when the guest already owns it. */
   captureOwner: () => T | null
-  focusGuest: () => void
+  /** Whether the guest actually ended up holding focus. */
+  focusGuest: () => boolean
   restore: (owner: T | null) => void
 }
 
@@ -98,10 +99,12 @@ export type AgentInputFocusBorrowHandlers<T> = {
  * owner on every begin would overwrite it with null the second time around (the
  * guest already holds focus by then) and focus would never return to the user.
  * Only the outermost begin captures, and only the outermost end restores.
+ *
+ * Returns whether the guest holds focus, which only a 'begin' can answer for.
  */
 export function createAgentInputFocusBorrow<T>(
   handlers: AgentInputFocusBorrowHandlers<T>
-): (phase: AgentInputBorrowPhase) => void {
+): (phase: AgentInputBorrowPhase) => boolean {
   let owner: T | null = null
   let depth = 0
   return (phase) => {
@@ -109,18 +112,20 @@ export function createAgentInputFocusBorrow<T>(
       if (depth === 0) {
         owner = handlers.captureOwner()
       }
+      // Why: count the borrow even when focus fails, so the matching 'end' still
+      // unwinds it instead of leaving the depth stuck above zero forever.
       depth += 1
-      handlers.focusGuest()
-      return
+      return handlers.focusGuest()
     }
     // Why: an 'end' with no matching 'begin' (a command already in flight when this
     // listener mounted) must not drive the counter negative and swallow the next
     // real restore.
     depth = Math.max(0, depth - 1)
     if (depth > 0) {
-      return
+      return true
     }
     handlers.restore(owner)
     owner = null
+    return true
   }
 }

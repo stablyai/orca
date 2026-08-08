@@ -21,6 +21,12 @@ type MockDebugger = {
 // Why: annotate the return explicitly so the exported inferred type stays nameable under
 // composite declaration emit — otherwise the vi.fn() mocks leak @vitest/spy's Procedure
 // and tsgo reports TS2883.
+export type AgentInputDetail = {
+  phase: 'begin' | 'end'
+  guestId: number
+  borrowId: number
+}
+
 export type MockWebContents = {
   webContents: {
     debugger: MockDebugger
@@ -29,7 +35,7 @@ export type MockWebContents = {
     focus: Mock<() => void>
     hostWebContents: {
       isDestroyed: Mock<() => boolean>
-      send: Mock<(channel: string, detail: { phase: 'begin' | 'end'; guestId: number }) => void>
+      send: Mock<(channel: string, detail: AgentInputDetail) => void>
     }
     printToPDF: Mock<() => Promise<Buffer>>
     reload: Mock<() => void>
@@ -42,7 +48,10 @@ export type MockWebContents = {
   emit: (event: string, ...args: unknown[]) => void
 }
 
-export function createMockWebContents(): MockWebContents {
+export function createMockWebContents(options?: {
+  /** Stands in for the host renderer answering a focus borrow. */
+  onAgentInput?: (detail: AgentInputDetail) => void
+}): MockWebContents {
   const listeners = new Map<string, DebuggerListener[]>()
   let debuggerAttached = false
   let destroyed = false
@@ -79,7 +88,12 @@ export function createMockWebContents(): MockWebContents {
       id: 1,
       focus: vi.fn(),
       // Why: the proxy lends DOM focus to the guest by messaging its host renderer.
-      hostWebContents: { isDestroyed: vi.fn(() => false), send: vi.fn() },
+      hostWebContents: {
+        isDestroyed: vi.fn(() => false),
+        send: vi.fn((_channel: string, detail: AgentInputDetail) => {
+          options?.onAgentInput?.(detail)
+        })
+      },
       printToPDF: vi.fn(async () => Buffer.from('%PDF-test')),
       reload: vi.fn(),
       reloadIgnoringCache: vi.fn(),

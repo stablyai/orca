@@ -3207,8 +3207,9 @@ export type PreloadApi = {
     onNewTerminalTab: (callback: () => void) => () => void
     onFocusBrowserAddressBar: (callback: () => void) => () => void
     onBrowserAgentInput: (
-      callback: (detail: { phase: 'begin' | 'end'; guestId: number }) => void
+      callback: (detail: { phase: 'begin' | 'end'; guestId: number; borrowId: number }) => void
     ) => () => void
+    replyBrowserAgentInputFocus: (reply: { borrowId: number; focused: boolean }) => void
     onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
     onReloadBrowserPage: (callback: () => void) => () => void
     onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
