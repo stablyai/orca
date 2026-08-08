@@ -2,7 +2,6 @@ import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 
 export type ImeChordRedispatchEvent = {
   code?: string
-  key: string
   keyCode?: number
   isComposing?: boolean
   metaKey: boolean
@@ -11,9 +10,9 @@ export type ImeChordRedispatchEvent = {
 }
 
 export type TerminalImeChordRedispatchLedger = {
-  /** Record that a chord was sent from its IME-marked keydown. */
+  /** Record that a chord was acted on from its IME-marked keydown. */
   claimSentChord: (event: ImeChordRedispatchEvent) => void
-  /** True when this keydown is the platform's replay of a chord already sent. */
+  /** True when this keydown is the platform's replay of a chord already acted on. */
   isRedispatchOfSentChord: (event: ImeChordRedispatchEvent) => boolean
   onKeyUp: (event: ImeChordRedispatchEvent) => void
   reset: () => void
@@ -28,33 +27,31 @@ function hasChordModifier(event: ImeChordRedispatchEvent): boolean {
  * source, and the two cases are indistinguishable at the marked keydown. Recorded on stock
  * macOS, both `code='ArrowLeft'` `keyCode=229` `isComposing=true`:
  *
- *   - Korean 2-Set commits the syllable, emits `compositionend`, and the platform then
- *     replays the chord unmarked (`keyCode=37`, `isComposing=false`) after keyup.
+ *   - Korean 2-Set commits the syllable, emits `compositionend`, and the platform replays the
+ *     chord unmarked (`keyCode=37`, `isComposing=false`) after keyup.
  *   - Japanese conversion swallows it: no `compositionend`, no replay, `isComposing` still
  *     true at keyup, and the chord never reaches the shell at all.
  *
- * Sending on the marked keydown covers Japanese; retiring the replay keeps Korean at one
+ * Acting on the marked keydown covers Japanese; retiring the replay keeps Korean at one
  * firing instead of two, which for `Option+←` is the difference between one word and two.
  *
- * The carry expires on the next frame rather than on keyup, because macOS delivers keyup
- * *before* the replay — the same ordering `useImeEnterGestureOwnership` documents for Enter.
+ * The carry is released when the last chord modifier comes up, not on a timer. Both traces
+ * hold the modifier across the whole gesture and release it after the replay, so that edge is
+ * the gesture's own boundary — where an animation-frame expiry would race any slow task
+ * landing between keyup and the replay and let the chord through twice.
  */
 export function createTerminalImeChordRedispatchLedger(): TerminalImeChordRedispatchLedger {
-  let pending: { code: string; token: object } | null = null
-
-  const reset = (): void => {
-    pending = null
-  }
+  let pendingCode: string | null = null
 
   return {
     claimSentChord: (event) => {
       if (!event.code) {
         return
       }
-      pending = { code: event.code, token: {} }
+      pendingCode = event.code
     },
     isRedispatchOfSentChord: (event) => {
-      if (!pending || !event.code || event.code !== pending.code) {
+      if (pendingCode === null || event.code !== pendingCode) {
         return false
       }
       // The replay is the unmarked copy of the same physical chord; a still-marked event is
@@ -62,21 +59,19 @@ export function createTerminalImeChordRedispatchLedger(): TerminalImeChordRedisp
       if (isImeOwnedKeyboardEvent(event) || !hasChordModifier(event)) {
         return false
       }
-      pending = null
+      pendingCode = null
       return true
     },
     onKeyUp: (event) => {
-      const carried = pending
-      if (!carried || event.code !== carried.code) {
-        return
+      if (!hasChordModifier(event)) {
+        pendingCode = null
       }
-      // Identity-scoped so a stale expiry cannot clear a newer chord's carry.
-      requestAnimationFrame(() => {
-        if (pending === carried) {
-          pending = null
-        }
-      })
     },
-    reset
+    // Why: a gesture interrupted by focus loss never releases its modifier, and a carry left
+    // armed would swallow an ordinary chord later. Both siblings in this effect drop their
+    // state on blur for the same reason.
+    reset: () => {
+      pendingCode = null
+    }
   }
 }

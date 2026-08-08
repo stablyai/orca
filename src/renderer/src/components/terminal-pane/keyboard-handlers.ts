@@ -444,6 +444,12 @@ export function useTerminalKeyboardShortcuts({
       if (!action) {
         return
       }
+      // Claim before acting, and for every action rather than the byte path alone: a chord
+      // remapped onto one of these keys resolves to a pane command, and the replay would run
+      // it a second time — two panes closed from one press.
+      if (isImeOwnedKeyboardEvent(e)) {
+        imeChordRedispatchLedger.claimSentChord(e)
+      }
 
       if (action.type === 'switchInputSource') {
         // Why: the OS must receive its default action, while xterm must receive
@@ -461,9 +467,6 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         pane.terminal.input(action.data)
-        if (isImeOwnedKeyboardEvent(e)) {
-          imeChordRedispatchLedger.claimSentChord(e)
-        }
         recordTerminalUserInputForLeaf(tabId, pane.leafId)
         if (action.data === '\x1b[13;2u') {
           const binding = panePtyBindingsRef.current.get(pane.id) as
@@ -664,16 +667,26 @@ export function useTerminalKeyboardShortcuts({
     }
 
     const onImeChordKeyUp = (e: KeyboardEvent): void => {
+      // Scoped like onKeyDown: another pane's release must not retire this pane's carry.
+      const keyboardScope = keyboardScopeRef.current
+      if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
+        return
+      }
       imeChordRedispatchLedger.onKeyUp(e)
+    }
+    const onImeChordBlur = (): void => {
+      imeChordRedispatchLedger.reset()
     }
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keyup', onImeChordKeyUp, { capture: true })
+    window.addEventListener('blur', onImeChordBlur)
     return () => {
       disposeNativeInputListeners()
       imeChordRedispatchLedger.reset()
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keyup', onImeChordKeyUp, { capture: true })
+      window.removeEventListener('blur', onImeChordBlur)
     }
   }, [
     isActive,

@@ -599,10 +599,11 @@ type Rig = {
   textarea: HTMLTextAreaElement
   inputCalls: string[]
   emitted: string[]
+  clearPaneCalls: number
   unmount: () => void
 }
 
-function openRig(): Rig {
+function openRig(overrides: Record<string, unknown> = {}): Rig {
   const scope = document.createElement('div')
   document.body.append(scope)
   const container = document.createElement('div')
@@ -656,7 +657,8 @@ function openRig(): Rig {
     onClearPaneTitle: vi.fn(),
     searchOpenRef: { current: false },
     searchStateRef: { current: { query: '', caseSensitive: false, regex: false } },
-    macOptionAsAltRef: { current: 'false' }
+    macOptionAsAltRef: { current: 'false' },
+    ...overrides
   } as unknown as Parameters<typeof useTerminalKeyboardShortcuts>[0]
 
   const hook = renderHook(() => useTerminalKeyboardShortcuts(deps))
@@ -664,6 +666,9 @@ function openRig(): Rig {
     textarea,
     inputCalls,
     emitted,
+    get clearPaneCalls() {
+      return (deps.onClearPaneScrollback as ReturnType<typeof vi.fn>).mock.calls.length
+    },
     unmount: () => {
       hook.unmount()
       scope.remove()
@@ -708,11 +713,10 @@ function dispatchRow(textarea: HTMLTextAreaElement, row: RecordedRow): void {
 async function replay(textarea: HTMLTextAreaElement, rows: RecordedRow[]): Promise<void> {
   for (const row of rows) {
     dispatchRow(textarea, row)
-    // Why: rows are spaced by a microtask, not a task. Chromium delivers the replayed keydown
-    // in the same input task as the marked one, so a task gap here would let the carry's
-    // animation-frame expiry run in between and the replay would no longer be recognised —
-    // a timing the hardware never produces.
-    await Promise.resolve()
+    // A full task between rows, deliberately: the carry is released by the modifier coming up
+    // rather than by a timer, so no amount of delay between the marked press and the replay
+    // may change the outcome. Spacing rows more tightly would hide a regression to a timer.
+    await macrotask()
   }
   await macrotask()
   await macrotask()
@@ -743,6 +747,19 @@ describe('recorded macOS chord traces during an IME composition', () => {
       rig.unmount()
     }
   )
+
+  // A chord remapped onto one of these keys resolves to a pane command rather than bytes.
+  // The carry has to cover that too, or the replay runs the command a second time — which is
+  // two panes closed, or two clears, from one press.
+  it('runs a remapped pane command once across the replay', async () => {
+    const rig = openRig({ keybindings: { 'terminal.clear': ['Mod+Backspace'] } })
+    await replay(rig.textarea, CASES[2].rows)
+
+    expect(rig.clearPaneCalls).toBe(1)
+    // The remap wins outright: no kill-line byte is sent alongside it.
+    expect(rig.inputCalls).toEqual([])
+    rig.unmount()
+  })
 
   // The carry must not outlive its gesture: an ordinary chord pressed later, with no
   // composition anywhere near it, still has to reach the shell.

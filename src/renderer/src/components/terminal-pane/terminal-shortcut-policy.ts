@@ -6,6 +6,7 @@ import {
   type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import type { WindowsShiftEnterEncoding } from './terminal-windows-shift-enter'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 
 export type TerminalShortcutEvent = {
   key: string
@@ -19,20 +20,29 @@ export type TerminalShortcutEvent = {
 
 export type MacOptionAsAlt = 'true' | 'false' | 'left' | 'right'
 
-// Why: an IME owns every keydown while a composition is live, but it never claims a
-// modifier chord over one of these physical keys — so Orca must still translate them
-// instead of dropping the press (#12871). Read `code`, not `key`: a CJK input source
-// rewrites `key` mid-composition while `code` keeps the physical key (#12171, #13033).
+// Why: a live composition owns every keydown, but a Japanese conversion swallows a modifier
+// chord over one of these keys outright — no commit, no platform replay, nothing reaching the
+// shell (#12871). Exempting them costs a double firing on input sources that DO replay, which
+// terminal-ime-chord-redispatch.ts retires. Read `code`, not `key`: Windows reports an
+// IME-consumed key as `key: 'Process'` (#12171, #13033).
+//
+// ArrowUp/ArrowDown are left out because no trace covers them, not because the reasoning
+// stops there — Cmd+↑/↓ scrolls the viewport and writes no bytes, so it is the safer half.
 const IME_EXEMPT_CHORD_CODES = new Set(['ArrowLeft', 'ArrowRight', 'Backspace', 'Delete'])
 
+// Gated on IME ownership so an ordinary press keeps following `key`: an X11 keysym remap
+// preserves `code` while changing `key`, and reading `code` there would silently override it.
 function physicalChordKey(event: TerminalShortcutEvent): string {
-  return event.code && IME_EXEMPT_CHORD_CODES.has(event.code) ? event.code : event.key
+  if (!isImeOwnedKeyboardEvent(event) || !event.code) {
+    return event.key
+  }
+  return IME_EXEMPT_CHORD_CODES.has(event.code) ? event.code : event.key
 }
 
 /**
  * True when an IME-owned keydown is nonetheless an Orca terminal chord. A lone modifier
  * is excluded, so a mode-switch gesture such as composing Ctrl+Space never reaches the
- * shortcut policy.
+ * shortcut policy, and so is Shift, which Japanese conversion binds to resize a segment.
  */
 export function isImeExemptTerminalChord(event: TerminalShortcutEvent): boolean {
   return (
