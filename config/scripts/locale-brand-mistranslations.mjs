@@ -126,10 +126,12 @@ export const BRAND_MISTRANSLATIONS = {
     Repos: ['リポジトリ', 'リポ'],
     repo: ['リポジトリ', 'リポ'],
     repos: ['リポジトリ', 'リポ'],
-    Terminal: ['ターミナル', '端子'],
-    Terminals: ['ターミナル', '端子'],
-    terminal: ['ターミナル', '端子'],
-    terminals: ['ターミナル', '端子']
+    // 端子 is the zh mistranslation and never appears in ja; the ja one is 端末, which the phrase
+    // fixes rewrite to ターミナル rather than back to Latin.
+    Terminal: ['ターミナル'],
+    Terminals: ['ターミナル'],
+    terminal: ['ターミナル'],
+    terminals: ['ターミナル']
   },
   es: {
     Codex: ['códice', 'Códice'],

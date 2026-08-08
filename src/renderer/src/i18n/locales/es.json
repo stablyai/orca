@@ -3980,7 +3980,7 @@
           "e643b30398": "Proyecto agregado en host SSH"
         },
         "AddRepoCreateStep": {
-          "0ae45b8238": "my-project",
+          "0ae45b8238": "mi-proyecto",
           "a8149a3a5a": "Nombre",
           "11fd2a7db8": "Repositorio Git",
           "5e97f0c4b9": "Proyecto creado",
@@ -6049,7 +6049,7 @@
           "a6c2816115": "y",
           "b8a7efb3f6": "ORCA_BITBUCKET_EMAIL",
           "8489c0aa49": "Bitbucket",
-          "e74de656ce": "glab auth login",
+          "e74de656ce": "inicio de sesión de autenticación glab",
           "05e5245af7": "La CLI de GitLab está instalada pero no autenticada. Ejecute este comando en una terminal:",
           "a83cac5726": "Instalar la CLI de GitLab",
           "35a3379372": "Instale la CLI de GitLab para habilitar solicitudes de fusión, problemas y canalizaciones.",
@@ -6464,7 +6464,7 @@
           "07ba35bc68": "Revisa la indentación bajo `scripts:`. Las claves de hooks deben usar dos espacios y las líneas de comandos deben usar cuatro.",
           "787ca433ef": "Define solo las claves admitidas: `scripts`, `setup`, `archive` e `issueCommand`.",
           "ecc73d9125": "Compara tu archivo con la plantilla funcional de abajo y copia esa estructura si hace falta.",
-          "925f9e0dc4": "text-foreground",
+          "925f9e0dc4": "texto-primer plano",
           "0cc712b823": "El archivo de configuración principal existe en la raíz del repositorio, pero Orca aún no pudo analizar las definiciones de hooks admitidas.",
           "c90b858573": "texto-ámbar-700 oscuro:texto-ámbar-300",
           "aba825233f": "El archivo contiene claves de configuración que esta versión de Orca no reconoce. Es posible que necesites actualizar Orca o revisar el archivo en busca de errores tipográficos.",
@@ -10940,7 +10940,7 @@
             "9fffaf17c1": "Alternar barra lateral derecha ({{value0}})",
             "b37ff4a89a": "puertos",
             "9f83375839": "cheques",
-            "6306b48afd": "source-control",
+            "6306b48afd": "control de fuente",
             "ef182dcb12": "buscar",
             "fc3095d2ed": "explorador",
             "aiVaultSessionHistory": "Agentes",
@@ -12411,7 +12411,7 @@
             "9220794f6a": "laboral"
           },
           "ReviewAnimatedVisual": {
-            "8df4d52b68": "pr-view",
+            "8df4d52b68": "pr-vista",
             "8ab622e4d6": "notas"
           },
           "FeatureWallBrowserAction": {
@@ -12687,7 +12687,7 @@
           "19c45cfdc0": "Expandir todo",
           "982d14bfa5": "Abrir todos los cambios",
           "3d909843bb": "Abrir diff de rama",
-          "8368d256ec": "combined-branch",
+          "8368d256ec": "rama combinada",
           "8f68ad9ca9": "Mostrar {{value0}} AI {{value1}}",
           "724a13568d": "en {{value0}}",
           "6094135eec": "frente a {{value0}}",

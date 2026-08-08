@@ -108,10 +108,10 @@ describe('locale-translation-policy ja round 5', () => {
       repairTranslatedValue({
         key: 'auto.components.status.bar.WorkspaceSpaceManagerPanel.e9528a89b3',
         enValue: 'Terminals',
-        localeValue: '端子',
+        localeValue: '端末',
         locale: 'ja'
       })
-    ).toBe('Terminals')
+    ).toBe('ターミナル')
     expect(
       repairTranslatedValue({
         key: 'auto.components.skills.SkillsPage.38e0951c3a',
