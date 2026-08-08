@@ -2669,7 +2669,10 @@ describe('SSH IPC handlers', () => {
 
     await expect(
       handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
-    ).resolves.toBeUndefined()
+    ).resolves.toEqual({
+      remoteSessionsTerminated: 0,
+      abandonedUnreachable: 1
+    })
 
     expect(mockPtyProvider.shutdown).not.toHaveBeenCalled()
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
