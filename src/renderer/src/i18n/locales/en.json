@@ -242,7 +242,8 @@
         "browser": {
           "d175274b6d": "New Browser Tab",
           "08fc23631d": "Browser",
-          "remoteCookieImportUnavailable": "Manual cookie file import is unavailable while a remote runtime is active."
+          "remoteCookieImportUnavailable": "Manual cookie file import is unavailable while a remote runtime is active.",
+          "projectProfileCleanupFailed": "Profile removed, but {{projects}} could not be updated. Pick a browser profile for them in project settings."
         },
         "editor": {
           "dcb521ed29": "This file is in a conflict state, but no working-tree file is available to edit.",

@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
+import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type {
   BrowserCookieImportResult,
@@ -337,17 +338,27 @@ async function clearDeletedProjectBrowserProfile(
   hostId: ExecutionHostId,
   profileId: string
 ): Promise<void> {
-  await Promise.all(
-    get()
-      .repos.filter(
-        (repo) =>
-          repo.defaultBrowserSessionProfileId === profileId &&
-          getRepoExecutionHostId(repo) === hostId
-      )
-      .map((repo) =>
-        get().updateRepo(repo.id, { defaultBrowserSessionProfileId: null }, { hostId })
-      )
+  const stale = get().repos.filter(
+    (repo) =>
+      repo.defaultBrowserSessionProfileId === profileId && getRepoExecutionHostId(repo) === hostId
   )
+  const cleared = await Promise.all(
+    stale.map((repo) =>
+      get().updateRepo(repo.id, { defaultBrowserSessionProfileId: null }, { hostId })
+    )
+  )
+  // Why: the profile is already gone; a failed write leaves a dead id that survives reload,
+  // and only the user can pick the replacement.
+  const failed = stale.filter((_repo, index) => !cleared[index])
+  if (failed.length > 0) {
+    toast.warning(
+      translate(
+        'auto.store.slices.browser.projectProfileCleanupFailed',
+        'Profile removed, but {{projects}} could not be updated. Pick a browser profile for them in project settings.',
+        { projects: failed.map((repo) => repo.displayName).join(', ') }
+      )
+    )
+  }
 }
 
 function browserImportStateForHostUpdate(
