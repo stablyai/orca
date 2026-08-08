@@ -7,6 +7,7 @@ import type {
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
+import { classifyExternalAppUrl } from '../../shared/external-app-url'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
 import type { Store } from '../persistence'
 import {
@@ -153,19 +154,30 @@ export function registerShellHandlers(store: Store): void {
       openInExternalEditor(store, request)
   )
 
-  ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {
-    let parsed: URL
-    try {
-      parsed = new URL(rawUrl)
-    } catch {
+  ipcMain.handle('shell:openUrl', async (_event, rawUrl: string) => {
+    const classified = classifyExternalAppUrl(rawUrl)
+    if (!classified.ok) {
       return
     }
-
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    if (classified.kind === 'http') {
+      return shell.openExternal(classified.url)
+    }
+    // Why: custom schemes open OS-registered apps; require an explicit user
+    // gesture confirmation so terminal/agent output cannot auto-launch (#13225).
+    const prompt = await dialog.showMessageBox({
+      type: 'question',
+      buttons: ['Open', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      title: 'Open external app link?',
+      message: `Open this ${classified.schemeLabel} link in the registered app?`,
+      detail: classified.url,
+      noLink: true
+    })
+    if (prompt.response !== 0) {
       return
     }
-
-    return shell.openExternal(parsed.toString())
+    return shell.openExternal(classified.url)
   })
 
   ipcMain.handle('shell:openFilePath', async (_event, filePath: string): Promise<boolean> => {
