@@ -40,6 +40,22 @@ describe('hosted-review caller host boundaries', () => {
     expectEveryCallToCarryExecutionHost(source, 'resolveMRDiscussion')
   })
 
+  it('routes GitLab runtime review calls through the active worktree owner', () => {
+    const source = readSource('ChecksPanel.tsx')
+    // Why: these helpers are component-local, so source boundaries pin both runtime RPC call sites.
+    const detailsCallStart = source.indexOf('const details = await fetchGitLabMRDetailsForChecks')
+    const resolveCallStart = source.indexOf(
+      'const result = await resolveGitLabMRDiscussionForChecks'
+    )
+    const detailsCall = source.slice(detailsCallStart, detailsCallStart + 400)
+    const resolveCall = source.slice(resolveCallStart, resolveCallStart + 400)
+
+    expect(detailsCallStart).toBeGreaterThan(-1)
+    expect(resolveCallStart).toBeGreaterThan(-1)
+    expect(detailsCall).toContain('settings: ownerSettings')
+    expect(resolveCall).toContain('settings: ownerSettings')
+  })
+
   it('scopes checks-panel recipe persistence to the active repository host', () => {
     const source = readSource('ChecksPanel.tsx')
     const callbackStart = source.indexOf('const saveLaunchActionDefault')

@@ -1956,7 +1956,7 @@ export default function ChecksPanel(): React.JSX.Element {
           repoPath: repo.path,
           repoId: repo.id,
           executionHostId: repoExecutionHostId,
-          settings,
+          settings: ownerSettings,
           iid: targetMRNumber
         })
         if (!isCurrentAsyncResult(requestKey)) {
@@ -1992,9 +1992,9 @@ export default function ChecksPanel(): React.JSX.Element {
       branch,
       hostedReviewCacheKey,
       isCurrentAsyncResult,
+      ownerSettings,
       repo,
-      repoExecutionHostId,
-      settings
+      repoExecutionHostId
     ]
   )
 
@@ -2788,7 +2788,7 @@ export default function ChecksPanel(): React.JSX.Element {
           repoPath: repo.path,
           repoId: repo.id,
           executionHostId: repoExecutionHostId,
-          settings,
+          settings: ownerSettings,
           iid: activeGitLabReview.number,
           discussionId: threadId,
           resolved: resolve
@@ -2846,10 +2846,10 @@ export default function ChecksPanel(): React.JSX.Element {
       pr?.prRepo,
       prCacheKey,
       prNumber,
+      ownerSettings,
       repo,
       repoExecutionHostId,
-      resolveReviewThread,
-      settings
+      resolveReviewThread
     ]
   )
 
