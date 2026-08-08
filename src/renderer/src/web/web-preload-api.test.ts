@@ -467,6 +467,51 @@ describe('web runtime environment identity', () => {
     ).toMatchObject({ pairedDeviceId: 'paired-device-a' })
   })
 
+  it('persists a replacement runtime id observed first by a subscription', async () => {
+    let subscriptionCallbacks:
+      | {
+          onResponse: (response: RuntimeRpcResponse<unknown>) => void
+        }
+      | undefined
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        subscribe(
+          _method: string,
+          _params: unknown,
+          callbacks: { onResponse: (response: RuntimeRpcResponse<unknown>) => void }
+        ): Promise<{ unsubscribe: () => void }> {
+          subscriptionCallbacks = callbacks
+          return Promise.resolve({ unsubscribe: vi.fn() })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const onResponse = vi.fn()
+
+    await globals.window.api.runtimeEnvironments.subscribe(
+      { selector: 'web-server-a', method: 'session.tabs.subscribeAll', params: {} },
+      { onResponse }
+    )
+    const response = {
+      id: 'session-tabs-replay',
+      ok: true,
+      streaming: true,
+      result: { type: 'snapshots', snapshots: [] },
+      _meta: { runtimeId: 'runtime-after-serve-restart' }
+    } as RuntimeRpcResponse<unknown>
+    subscriptionCallbacks?.onResponse(response)
+
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
+      { id: 'web-server-a', runtimeId: 'runtime-after-serve-restart' }
+    ])
+    expect(onResponse).toHaveBeenCalledWith(response)
+  })
+
   it('fences a web runtime response that completes after manual disconnect', async () => {
     let resolveCall!: (response: RuntimeRpcResponse<unknown>) => void
     const pendingCall = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {

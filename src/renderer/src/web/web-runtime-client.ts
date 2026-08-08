@@ -20,6 +20,7 @@ import {
 } from '../../../shared/protocol-version'
 import { createWebRuntimeUnauthorizedError } from './web-runtime-client-error'
 import { withReconnectJitter } from '../../../shared/reconnect-jitter'
+import { tagRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 
 type WebRuntimeConnectionState =
   | 'disconnected'
@@ -50,6 +51,7 @@ type RuntimeSubscription = {
   params: unknown
   callbacks: SubscriptionCallbacks
   needsReplay: boolean
+  pendingReplayTag: boolean
 }
 
 export type WebRuntimeSubscriptionHandle = {
@@ -68,6 +70,17 @@ const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 10_000
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15_000]
 const SHARED_CONNECTION_SUBSCRIPTION_METHODS = new Set(['files.watch'])
+// Why: these snapshot/event streams can resume on the same logical owner after
+// a serve-process replacement. Terminal streams are excluded because their
+// pane transport must re-resolve the authoritative handle before subscribing.
+const REPLAYABLE_SUBSCRIPTION_METHODS = new Set([
+  'accounts.subscribe',
+  'files.watch',
+  'notifications.subscribe',
+  'runtime.clientEvents.subscribe',
+  'session.tabs.subscribe',
+  'session.tabs.subscribeAll'
+])
 // Why: browser WebSockets hide pings/pongs, so a half-open socket stays OPEN with no onclose/onerror — poll liveness in-app.
 const HEARTBEAT_INTERVAL_MS = 10_000
 const HEARTBEAT_IDLE_MS = 25_000
@@ -325,7 +338,14 @@ export class WebRuntimeClient {
   ): Promise<WebRuntimeSubscriptionHandle> {
     await this.waitForConnected(options?.timeoutMs)
     const id = this.nextId()
-    const subscription: RuntimeSubscription = { id, method, params, callbacks, needsReplay: false }
+    const subscription: RuntimeSubscription = {
+      id,
+      method,
+      params,
+      callbacks,
+      needsReplay: false,
+      pendingReplayTag: false
+    }
     this.subscriptions.set(id, subscription)
     if (!this.sendEncrypted({ id, deviceToken: this.pairing.deviceToken, method, params })) {
       this.subscriptions.delete(id)
@@ -552,7 +572,21 @@ export class WebRuntimeClient {
         this.subscriptions.delete(response.id)
       }
       // Why: subscription-backed unary RPCs can return ordinary success frames.
-      subscription.callbacks.onResponse(subscriptionResponse)
+      let deliveredResponse = subscriptionResponse
+      if (subscription.pendingReplayTag) {
+        subscription.pendingReplayTag = false
+        if (subscriptionResponse.ok) {
+          deliveredResponse = tagRuntimeSubscriptionReplayResponse(subscriptionResponse)
+        }
+      }
+      subscription.callbacks.onResponse(deliveredResponse)
+      if (subscriptionResponse.ok === false) {
+        // Why: public subscriptions use onClose to release their dedicated
+        // child WebSocket. A setup/replay failure is terminal for this logical
+        // subscription, so leaving the socket open leaks an idle connection.
+        subscription.callbacks.onClose?.()
+        return
+      }
       if (subscriptionResponse.ok && isEndResult(subscriptionResponse.result)) {
         this.subscriptions.delete(response.id)
         subscription.callbacks.onClose?.()
@@ -701,7 +735,7 @@ export class WebRuntimeClient {
 
   private handleInterruptedSubscriptions(): void {
     for (const [id, subscription] of Array.from(this.subscriptions)) {
-      if (!SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(subscription.method)) {
+      if (!REPLAYABLE_SUBSCRIPTION_METHODS.has(subscription.method)) {
         this.subscriptions.delete(id)
         subscription.callbacks.onClose?.()
         continue
@@ -721,6 +755,7 @@ export class WebRuntimeClient {
       this.subscriptions.delete(subscription.id)
       subscription.id = this.nextId()
       subscription.needsReplay = false
+      subscription.pendingReplayTag = true
       this.subscriptions.set(subscription.id, subscription)
       if (
         this.sendEncrypted({

@@ -3,6 +3,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { posix as pathPosix } from 'node:path'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { tagRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
@@ -40,6 +42,7 @@ import {
   shouldApplyWebSessionTabsSnapshot,
   shouldBootstrapInitialWebRuntimeTerminal,
   shouldRespawnWebRuntimeTerminalAfterWake,
+  shouldRefreshRuntimeStatusAfterSubscriptionReplay,
   shouldSyncRuntimeSessionTabs,
   type WebSessionTabsSyncState
 } from './web-session-tabs-sync'
@@ -177,6 +180,28 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(shouldApplyWebSessionTabsSnapshot(older, ENV)).toBe(false)
     const newer = makeSnapshot([], { snapshotVersion: 6, activeTabType: null })
     expect(shouldApplyWebSessionTabsSnapshot(newer, ENV)).toBe(true)
+  })
+
+  it('refreshes runtime status only when a replay reports a replacement runtime id', () => {
+    const response = tagRuntimeSubscriptionReplayResponse({
+      id: 'session-tabs-replay',
+      ok: true,
+      streaming: true,
+      result: { type: 'snapshots', snapshots: [] },
+      _meta: { runtimeId: 'runtime-new' }
+    }) as RuntimeRpcResponse<unknown>
+
+    expect(shouldRefreshRuntimeStatusAfterSubscriptionReplay(response, 'runtime-old')).toBe(true)
+    expect(shouldRefreshRuntimeStatusAfterSubscriptionReplay(response, 'runtime-new')).toBe(false)
+    const ordinaryResponse: RuntimeRpcResponse<unknown> = {
+      id: 'session-tabs-initial',
+      ok: true,
+      result: { type: 'snapshots', snapshots: [] },
+      _meta: { runtimeId: 'runtime-new' }
+    }
+    expect(shouldRefreshRuntimeStatusAfterSubscriptionReplay(ordinaryResponse, 'runtime-old')).toBe(
+      false
+    )
   })
 
   it('scopes the replay reset to the replayed environment and worktree', () => {

@@ -134,6 +134,17 @@ type VisibilityResumeOmission = {
   visibilityGeneration: number
 }
 
+export function shouldRefreshRuntimeStatusAfterSubscriptionReplay(
+  response: RuntimeRpcResponse<unknown>,
+  currentRuntimeId: string | null | undefined
+): boolean {
+  return (
+    response.ok &&
+    isRuntimeSubscriptionReplayResponse(response) &&
+    response._meta.runtimeId !== currentRuntimeId
+  )
+}
+
 const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 const replayableSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 const latestReceivedSessionTabsSnapshotByWorktree = new Map<string, ReceivedSessionTabsSnapshot>()
@@ -3960,6 +3971,16 @@ export function useWebSessionTabsSync(): void {
                 }
                 const event = response.result as SessionTabsStreamEvent
                 const replayed = isRuntimeSubscriptionReplayResponse(response)
+                const currentRuntimeId = useAppStore
+                  .getState()
+                  .runtimeStatusByEnvironmentId.get(environmentId)?.status?.runtimeId
+                if (shouldRefreshRuntimeStatusAfterSubscriptionReplay(response, currentRuntimeId)) {
+                  // Why: subscription replay may be the first traffic from a
+                  // replacement serve process. Refresh the full status so the
+                  // renderer advances connection generation and invalidates
+                  // runtime-scoped capability/session caches.
+                  void useAppStore.getState().refreshRuntimeEnvironmentStatus(environmentId)
+                }
                 if (event.type === 'snapshots') {
                   const skipUnchangedResumeWork = awaitingVisibilityResumeInventory && !replayed
                   awaitingVisibilityResumeInventory = false

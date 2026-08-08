@@ -499,6 +499,22 @@ export function isTerminalPaneVisibilityResume(args: {
   return args.previousIsVisible === false && args.isVisible
 }
 
+export function retryTerminalPaneRecoveriesOnVisibilityResume(
+  transports: Iterable<Pick<PtyTransport, 'retryRecovery'>>,
+  resumedFromHidden: boolean
+): number {
+  if (!resumedFromHidden) {
+    return 0
+  }
+  let retried = 0
+  for (const transport of transports) {
+    if (transport.retryRecovery?.()) {
+      retried += 1
+    }
+  }
+  return retried
+}
+
 type TerminalPaneVisibilitySnapshot = {
   tabId: string
   cwd: string | null | undefined
@@ -1898,6 +1914,13 @@ export function useTerminalPaneLifecycle({
         bindingWithVisibility.noteVisibilityResume?.()
       }
     }
+    // Why: internal tab/workspace switching keeps terminal panes mounted. A
+    // serve restart can leave a remote pane latched after its bounded retry
+    // window, so revealing it must act as an explicit recovery trigger.
+    retryTerminalPaneRecoveriesOnVisibilityResume(
+      paneTransportsRef.current.values(),
+      resumedFromHidden
+    )
     if (resumedFromHidden && typeof window.api.pty.hasPty === 'function') {
       // Why: a single-PTY liveness check preserves missed-exit recovery without a daemon-wide listSessions.
       reconcileMissingSessions({
