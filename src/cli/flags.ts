@@ -67,6 +67,16 @@ export function getOptionalPositiveIntegerFlag(
   return value
 }
 
+export function getOptionalNullablePositiveIntegerFlag(
+  flags: Map<string, string | boolean>,
+  name: string
+): number | null | undefined {
+  if (flags.get(name) === 'null') {
+    return null
+  }
+  return getOptionalPositiveIntegerFlag(flags, name)
+}
+
 export function getOptionalNonNegativeIntegerFlag(
   flags: Map<string, string | boolean>,
   name: string

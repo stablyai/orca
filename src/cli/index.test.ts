@@ -453,13 +453,14 @@ describe('orca root help', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
-  it('advertises Linear issue linking on worktree create and set help', async () => {
+  it('advertises linked work item flags on worktree create and set help', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     logSpy.mockClear()
 
     await main(['worktree', 'create', '--help'], '/tmp/repo')
 
     expect(String(logSpy.mock.calls[0][0])).toContain('--linear-issue <identifier-or-url>')
+    expect(String(logSpy.mock.calls[0][0])).toContain('--pull-request <number>')
 
     logSpy.mockClear()
     await main(['worktree', 'set', '--help'], '/tmp/repo')
@@ -467,6 +468,7 @@ describe('orca root help', () => {
     const setHelp = String(logSpy.mock.calls[0][0])
     expect(setHelp).toContain('--linear-issue <identifier-or-url|null>')
     expect(setHelp).toContain('--linear-issue <id|url|null> Linked Linear issue identifier or URL')
+    expect(setHelp).toContain('--pull-request <number|null> Linked GitHub pull request number')
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -866,6 +868,99 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('passes GitHub pull request metadata through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_pr', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/feature', 'feature/foo'),
+          linkedPR: 42
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/feature',
+        '--pull-request',
+        '42',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/repo/feature',
+      displayName: undefined,
+      linkedIssue: undefined,
+      linkedPR: 42,
+      comment: undefined,
+      parentWorktree: undefined,
+      noParent: false
+    })
+  })
+
+  it('clears GitHub pull request metadata through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_clear_pr', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/feature', 'feature/foo'),
+          linkedPR: null
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/feature',
+        '--pull-request',
+        'null',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({ linkedPR: null })
+    )
+  })
+
+  it('rejects invalid GitHub pull request metadata on worktree.set before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/feature',
+        '--pull-request',
+        'not-a-number',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Invalid numeric value for --pull-request'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+  })
+
   it('passes parent lineage through worktree.set', async () => {
     queueFixtures(
       callMock,
@@ -1169,6 +1264,104 @@ describe('orca cli worktree awareness', () => {
       parentWorktree: undefined,
       noParent: false
     })
+  })
+
+  it('creates a linked GitHub pull request review worktree from its verified head', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_resolve_pr', {
+        baseBranch: 'abc123',
+        compareBaseRef: 'main',
+        headSha: 'abc123',
+        branchNameOverride: 'agent/issueflow-auto-bootstrap',
+        pushTarget: {
+          remoteName: 'origin',
+          branchName: 'agent/issueflow-auto-bootstrap'
+        }
+      }),
+      okFixture('req_create_pr', {
+        worktree: {
+          ...buildWorktree(
+            '/tmp/review-pr-10',
+            'agent/issueflow-auto-bootstrap',
+            'abc123',
+            'repo-1'
+          ),
+          linkedPR: 10
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'review-pr-10',
+        '--pull-request',
+        '10',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.resolvePrBase', {
+      repo: 'id:repo-1',
+      prNumber: 10
+    })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      repo: 'id:repo-1',
+      name: 'review-pr-10',
+      baseBranch: 'abc123',
+      compareBaseRef: 'main',
+      branchNameOverride: 'agent/issueflow-auto-bootstrap',
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'agent/issueflow-auto-bootstrap'
+      },
+      linkedIssue: undefined,
+      linkedPR: 10,
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      noParent: true,
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
+    })
+  })
+
+  it('rejects zero GitHub pull request numbers on worktree.create before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'review-pr',
+        '--pull-request',
+        '0',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Invalid positive integer for --pull-request'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
   })
 
   it('passes Linear issue metadata through worktree.create', async () => {
