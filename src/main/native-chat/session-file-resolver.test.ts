@@ -52,6 +52,23 @@ describe('resolveSessionFilePath', () => {
     ).resolves.toBe(target)
   })
 
+  it('searches an injected WSL Claude projects root after the local root', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-wsl-claude-')
+    const localProjectsDir = join(root, 'local-claude-projects')
+    const wslProjectsDir = join(root, 'wsl', 'Ubuntu', 'home', 'ada', '.claude', 'projects')
+    const projectDir = join(wslProjectsDir, '-home-ada-repo')
+    await mkdir(localProjectsDir, { recursive: true })
+    await mkdir(projectDir, { recursive: true })
+    const target = join(projectDir, 'wsl-claude-session.jsonl')
+    await writeFile(target, '{}\n')
+
+    await expect(
+      resolveSessionFilePath('claude', 'wsl-claude-session', {
+        claudeProjectsDirs: [localProjectsDir, wslProjectsDir]
+      })
+    ).resolves.toBe(target)
+  })
+
   it('resolves Grok chat_history.jsonl under encodeURIComponent(cwd)/sessionId', async () => {
     const root = await makeRoot('orca-native-chat-resolve-grok-')
     const grokSessionsDir = join(root, 'grok-sessions')
@@ -264,6 +281,32 @@ describe('resolveSessionFilePath', () => {
       transcriptPath: realFile
     })
     expect(resolved).toBe(realFile)
+  })
+
+  it('resolves a Codex rollout under an injected WSL managed sessions root', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-wsl-codex-')
+    const wslSessionsDir = join(
+      root,
+      'wsl',
+      'Ubuntu',
+      'home',
+      'ada',
+      '.local',
+      'share',
+      'orca',
+      'codex-runtime-home',
+      'home',
+      'sessions'
+    )
+    const dayDir = join(wslSessionsDir, '2026', '07', '24')
+    await mkdir(dayDir, { recursive: true })
+    const target = join(dayDir, 'rollout-2026-07-24T12-00-00-wsl-sess.jsonl')
+    await writeFile(target, '{}\n')
+
+    const resolved = await resolveSessionFilePath('codex', 'wsl-sess', {
+      codexSessionsDirs: [join(root, 'empty-managed'), wslSessionsDir]
+    })
+    expect(resolved).toBe(target)
   })
 
   it('falls back to the id glob when the hook transcriptPath does not exist', async () => {
