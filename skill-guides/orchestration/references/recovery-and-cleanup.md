@@ -128,10 +128,17 @@ ORCA orchestration worker-stop --dispatch <dispatch_id> --json
 ORCA orchestration worker-abandon --dispatch <dispatch_id> --json
 ```
 
-`worker-stop` closes only the exact proven supervised agent terminal. It never
-deletes the worktree, setup terminal, configured tabs, or unrelated processes.
-`worker-abandon` fences orchestration while accepting that resources may remain
-live; it performs no remote, process, or filesystem action.
+`worker-stop` is cancellation, not a free-form close switch. On a successful
+stop of the exact live worker, the receipt's `processAction` is
+`closed_agent_terminal` and the supervised agent terminal is already closed —
+do not pair stop with a separate `terminal close`. `closed_agent_terminal` can
+also appear on `stop_unknown` when a close was issued but the process was not
+proven dead. When `processAction` is `none` (already settled, identity changed,
+or the process is already gone) or `unknown` (close attempt did not complete),
+inspect `worker-show` before deciding whether a separate close is still needed.
+`worker-stop` never deletes the worktree, setup terminal, configured tabs, or
+unrelated processes. `worker-abandon` fences orchestration while accepting that
+resources may remain live; it performs no remote, process, or filesystem action.
 
 ## Retain and release
 
