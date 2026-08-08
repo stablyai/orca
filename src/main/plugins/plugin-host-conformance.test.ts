@@ -143,6 +143,44 @@ describe('plugin host main/relay conformance', () => {
     }
   })
 
+  it('keeps the panel surface read-only for plugin-private state', () => {
+    // No mutating plugin-private method and no secrets method may be panel-callable.
+    const panelActions = PLUGIN_HOST_API_V0.filter((entry) => entry.panel).map(
+      (entry) => entry.name
+    )
+    expect(panelActions).toEqual([
+      'workspace.readContext',
+      'terminal.sendText',
+      'notifications.show',
+      'storage.get',
+      'storage.keys'
+    ])
+    for (const entry of PLUGIN_HOST_API_V0) {
+      if (entry.panel && entry.scope === 'plugin-private') {
+        expect(entry.mutation, entry.name).toBe(false)
+      }
+      if (entry.name.startsWith('secrets.')) {
+        expect(entry.panel, entry.name).toBe(false)
+      }
+    }
+  })
+
+  it('serves panel storage reads through both transports with the storage capability', async () => {
+    const services = createServices()
+    const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['storage'], services))
+    for (const adapter of Object.values(createAdapters(resolvePolicy))) {
+      await expect(
+        adapter({ method: 'storage.get', params: { key: 'alpha' } }, true)
+      ).resolves.toEqual({ ok: true, value: { value: 'stored' } })
+      await expect(adapter({ method: 'storage.keys', params: {} }, true)).resolves.toEqual({
+        ok: true,
+        value: { keys: ['alpha'] }
+      })
+    }
+    expect(services.storage.get).toHaveBeenCalledWith(PLUGIN_KEY, 'alpha')
+    expect(services.storage.set).not.toHaveBeenCalled()
+  })
+
   it('projects workspace context without host paths on main and relay', async () => {
     const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['workspace:read']))
     for (const adapter of Object.values(createAdapters(resolvePolicy))) {
@@ -200,9 +238,16 @@ describe('plugin host main/relay conformance', () => {
     },
     {
       name: 'panel-forbidden method',
-      request: { method: 'storage.get', params: { key: 'alpha' } },
+      request: { method: 'storage.set', params: { key: 'alpha', value: 1 } },
       viaPanel: true,
       policy: () => createPolicy(['storage']),
+      code: 'panel_forbidden'
+    },
+    {
+      name: 'panel-forbidden secrets read',
+      request: { method: 'secrets.get', params: { key: 'alpha' } },
+      viaPanel: true,
+      policy: () => createPolicy(['secrets']),
       code: 'panel_forbidden'
     },
     {

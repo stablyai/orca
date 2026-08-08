@@ -150,13 +150,15 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     params: notificationsShowParams,
     result: notificationsShowResult
   }),
+  /** Panel-callable: the panel CSP blocks fetch, so reading own storage is a
+   *  panel's only data path from its worker. Mutations stay worker-only. */
   spec({
     name: 'storage.get',
     since: '1.0',
     scope: 'plugin-private',
     capability: 'storage',
     mutation: false,
-    panel: false,
+    panel: true,
     params: storageGetParams,
     result: storageGetResult
   }),
@@ -186,7 +188,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     scope: 'plugin-private',
     capability: 'storage',
     mutation: false,
-    panel: false,
+    panel: true,
     params: storageKeysParams,
     result: storageKeysResult
   }),
