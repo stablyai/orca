@@ -90,6 +90,10 @@ type PendingImeChord = Parameters<typeof resolveTerminalShortcutAction>[0] &
  * for a trace showing a user holds a chord mid-preedit.
  */
 function imeChordSnapshot(event: KeyboardEvent): PendingImeChord {
+  // Field by field, and it must stay that way: a browser keeps KeyboardEvent's fields as
+  // prototype accessors, so `{ ...event }` is an empty object and the snapshot loses its
+  // `code`, which silently disables the whole recovery. happy-dom keeps them as own properties
+  // and would go on passing, so this is the only warning that survives in the source.
   return {
     key: event.key,
     code: event.code,
@@ -441,6 +445,14 @@ export function useTerminalKeyboardShortcuts({
       if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
         return
       }
+      // Any press of this key ends whatever the last one carried, whoever owns this one. A key
+      // pressed outside a composition resolves from here, so a composition starting while it is
+      // held must not turn its release into a second firing; and a carry whose release never
+      // arrived — focus left the window mid-chord — must not answer for an unrelated later
+      // press of the same key. Scoped to this code so rollover leaves other keys alone.
+      if (pendingImeChord?.code === e.code) {
+        pendingImeChord = null
+      }
       // Every IME-owned keydown yields, chord or not. A chord the IME then swallows is
       // recovered from its release; one it merely delays arrives as an unmarked replay.
       if (isImeOwnedKeyboardEvent(e)) {
@@ -448,12 +460,6 @@ export function useTerminalKeyboardShortcuts({
           pendingImeChord = imeChordSnapshot(e)
         }
         return
-      }
-      // This key went down outside a composition, so whatever it does it does from here. Any
-      // carry for it is stale — a composition that starts while it is held must not turn its
-      // release into a second firing. Scoped to this key so rollover leaves others alone.
-      if (pendingImeChord?.code === e.code) {
-        pendingImeChord = null
       }
       // Why: replace stale state only for this physical key so rollover cannot
       // disarm a still-held native-only chord before its Kitty keyup arrives.
@@ -728,6 +734,14 @@ export function useTerminalKeyboardShortcuts({
     }
 
     const onSwallowedImeChordRelease = (e: KeyboardEvent): void => {
+      const chord = pendingImeChord
+      if (!chord || chord.code !== e.code) {
+        return
+      }
+      // Spent before any gate below can refuse: the key is up, so the press it carried is over
+      // however this release is routed. Leaving it armed past a gate is what lets a carry
+      // outlive its gesture and answer for someone else's press.
+      pendingImeChord = null
       const manager = managerRef.current
       if (!manager) {
         return
@@ -736,12 +750,6 @@ export function useTerminalKeyboardShortcuts({
       if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
         return
       }
-      const chord = pendingImeChord
-      if (!chord || chord.code !== e.code) {
-        return
-      }
-      // Spent either way: whichever branch below answers, this press is now accounted for.
-      pendingImeChord = null
       // The composition ended while the key was down, so the IME took the chord as its cue to
       // commit rather than eating it, and the platform's unmarked replay is on its way.
       if (!isImeOwnedKeyboardEvent(e)) {
@@ -782,12 +790,22 @@ export function useTerminalKeyboardShortcuts({
       runShortcutAction(e, action, manager)
     }
 
+    // Why: a chord interrupted by Cmd+Tab or Spotlight never delivers its release here, and a
+    // carry with no release to spend it sits armed. `installTerminalNativeInputListeners` drops
+    // the sibling tracker on blur for the same reason.
+    const onImeChordBlur = (): void => {
+      pendingImeChord = null
+    }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keyup', onSwallowedImeChordRelease, { capture: true })
+    window.addEventListener('blur', onImeChordBlur)
     return () => {
       disposeNativeInputListeners()
+      pendingImeChord = null
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keyup', onSwallowedImeChordRelease, { capture: true })
+      window.removeEventListener('blur', onImeChordBlur)
     }
   }, [
     isActive,

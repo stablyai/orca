@@ -15,6 +15,13 @@
 // Both directions are pinned together, because the failure modes point opposite ways: Korean
 // must stay at one firing per chord (a second \x1bb jumps two words), Japanese must go from
 // zero to one. A change that only reads the keydown cannot satisfy both.
+//
+// Two things this rig cannot speak for. The userAgent mock below only reaches Orca's own check;
+// xterm reads `navigator.platform` once at module load and does not see a Mac here, which is
+// harmless while Orca intercepts every replayed row but would diverge for anything it stops
+// intercepting. And `expectEmitted` groups bytes the way a full task between rows produces —
+// real input arrives in one burst and may group differently. Read `expectCalls` for the
+// contract; `expectEmitted` is there to show ordering, not framing.
 import { Terminal } from '@xterm/xterm'
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -502,6 +509,36 @@ describe('constructed shapes the macOS captures do not contain', () => {
       ) + 1
     )
     await replay(rig.textarea, throughFirstChordPress)
+
+    expect(rig.inputCalls).toEqual([])
+    rig.unmount()
+  })
+
+  // A chord interrupted by Cmd+Tab or Spotlight never delivers its release here. The carry it
+  // left must not answer for a later press of the same key: a bare arrow moving the preedit
+  // caret would otherwise send the missing chord's bytes to a shell the user never aimed at.
+  it('does not answer a later press with a carry whose release never arrived', async () => {
+    const rig = openRig()
+    await replay(rig.textarea, [
+      { t: 'compositionstart', data: '' },
+      { t: 'keydown', key: 'Alt', code: 'AltLeft', keyCode: 18, isComposing: true, alt: true },
+      {
+        t: 'keydown',
+        key: 'ArrowLeft',
+        code: 'ArrowLeft',
+        keyCode: 229,
+        isComposing: true,
+        alt: true
+      }
+      // Focus leaves the window here: no keyup for either key ever arrives.
+    ])
+    expect(rig.inputCalls).toEqual([])
+
+    window.dispatchEvent(new Event('blur'))
+    await replay(rig.textarea, [
+      { t: 'keydown', key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 229, isComposing: true },
+      { t: 'keyup', key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, isComposing: true }
+    ])
 
     expect(rig.inputCalls).toEqual([])
     rig.unmount()
