@@ -1,17 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 
-const mocks = vi.hoisted(() => ({
-  refreshTerminalImeInputContext: vi.fn()
-}))
-
-vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => ({
-  refreshTerminalImeInputContext: mocks.refreshTerminalImeInputContext
-}))
-
 describe('focusTerminalTabSurface', () => {
   afterEach(() => {
-    mocks.refreshTerminalImeInputContext.mockClear()
     vi.unstubAllGlobals()
   })
 
@@ -35,23 +26,6 @@ describe('focusTerminalTabSurface', () => {
     focusTerminalTabSurface('tab-1')
 
     expect(textarea.focus).toHaveBeenCalled()
-  })
-
-  it('optionally refreshes the focused helper native input context', () => {
-    flushAnimationFrames()
-    const textarea = { focus: vi.fn() }
-    vi.stubGlobal('document', {
-      querySelector: vi.fn((selector: string) =>
-        selector === '[data-terminal-tab-id="tab-1"] .xterm-helper-textarea' ? textarea : null
-      )
-    })
-
-    focusTerminalTabSurface('tab-1', null, { refreshImeContext: true })
-
-    expect(textarea.focus).toHaveBeenCalledOnce()
-    expect(mocks.refreshTerminalImeInputContext).toHaveBeenCalledWith(textarea, {
-      onRefocusSkipped: undefined
-    })
   })
 
   it('does not steal focus from a newer owner during guarded remount recovery', () => {

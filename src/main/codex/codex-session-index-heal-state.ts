@@ -72,10 +72,11 @@ export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): Pe
     const threadId = match[2].toLowerCase()
     const auditRecordId = typeof line.recordId === 'string' ? line.recordId : null
     if (
-      processed.healedThreadIds.has(threadId) ||
-      (auditRecordId
-        ? processed.missingAuditRecords.has(`${threadId}\0${auditRecordId}`)
-        : processed.legacyMissingThreadIds.has(threadId))
+      auditRecordId
+        ? processed.healedAuditRecords.has(`${threadId}\0${auditRecordId}`) ||
+          processed.missingAuditRecords.has(`${threadId}\0${auditRecordId}`)
+        : processed.legacyHealedThreadIds.has(threadId) ||
+          processed.legacyMissingThreadIds.has(threadId)
     ) {
       // Why: only the newest publication event for a thread matters. A later
       // processed event must displace an older pending event from this scan.
@@ -94,11 +95,13 @@ function lastPathSegment(filePath: string): string {
 }
 
 function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): {
-  healedThreadIds: Set<string>
+  healedAuditRecords: Set<string>
+  legacyHealedThreadIds: Set<string>
   missingAuditRecords: Set<string>
   legacyMissingThreadIds: Set<string>
 } {
-  const healedThreadIds = new Set<string>()
+  const healedAuditRecords = new Set<string>()
+  const legacyHealedThreadIds = new Set<string>()
   const missingAuditRecords = new Set<string>()
   const legacyMissingThreadIds = new Set<string>()
   const expectedRoot = normalizeRuntimePathForComparison(paths.systemSessionsRoot)
@@ -112,7 +115,11 @@ function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): {
     ) {
       const threadId = line.threadId.toLowerCase()
       if (line.outcome === 'healed') {
-        healedThreadIds.add(threadId)
+        if (typeof line.auditRecordId === 'string') {
+          healedAuditRecords.add(`${threadId}\0${line.auditRecordId}`)
+        } else {
+          legacyHealedThreadIds.add(threadId)
+        }
       } else if (typeof line.auditRecordId === 'string') {
         missingAuditRecords.add(`${threadId}\0${line.auditRecordId}`)
       } else {
@@ -120,7 +127,12 @@ function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): {
       }
     }
   }
-  return { healedThreadIds, missingAuditRecords, legacyMissingThreadIds }
+  return {
+    healedAuditRecords,
+    legacyHealedThreadIds,
+    missingAuditRecords,
+    legacyMissingThreadIds
+  }
 }
 
 export function appendHealLedgerRecord(

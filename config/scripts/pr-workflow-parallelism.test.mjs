@@ -97,6 +97,24 @@ describe('PR workflow parallelism', () => {
     expect(packageJson.scripts['build:release']).toContain('pnpm run build:web-from-renderer')
   })
 
+  it('smokes managed-hook companions under their supported Node 18 runtime', () => {
+    const steps = workflow.jobs.managed_hook_node18.steps
+    const installIndex = steps.findIndex(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    const buildIndex = steps.findIndex((step) => step.run === 'pnpm run build:relay')
+    const node18Index = steps.findIndex(
+      (step) => step.uses === 'actions/setup-node@v6' && step.with['node-version'] === '18'
+    )
+    const smokeIndex = steps.findIndex(
+      (step) => step.run === 'node config/scripts/smoke-managed-hook-runtime-node18.mjs'
+    )
+
+    expect(installIndex).toBeLessThan(buildIndex)
+    expect(buildIndex).toBeLessThan(node18Index)
+    expect(node18Index).toBeLessThan(smokeIndex)
+  })
+
   it('restores the pnpm store before dependency installation', () => {
     const steps = dependencyAction.runs.steps
     const pnpmIndex = steps.findIndex((step) => step.name === 'Setup pnpm')
@@ -130,7 +148,12 @@ describe('PR workflow parallelism', () => {
         (step) => step.uses === './.github/actions/install-node-dependencies'
       )
 
-    for (const jobName of ['static_analysis', 'typecheck', 'git_compatibility']) {
+    for (const jobName of [
+      'static_analysis',
+      'typecheck',
+      'git_compatibility',
+      'xterm_patch_sync'
+    ]) {
       expect(installFor(jobName).with, jobName).toBeUndefined()
     }
     expect(installFor('shell_contracts').with['native-runtime']).toBe('node')
@@ -176,10 +199,17 @@ describe('PR workflow parallelism', () => {
       'root_directory_guard',
       'typecheck',
       'git_compatibility',
+      'xterm_patch_sync',
       'shell_contracts',
       'test',
+      'managed_hook_node18',
       'package',
       'package_windows'
     ])
+    const verifyStep = workflow.jobs.verify.steps.find(
+      (step) => step.name === 'Require successful checks'
+    )
+    expect(verifyStep.env.MANAGED_HOOK_NODE18).toBe('${{ needs.managed_hook_node18.result }}')
+    expect(verifyStep.run).toContain('"$MANAGED_HOOK_NODE18"')
   })
 })

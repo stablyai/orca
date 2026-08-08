@@ -261,8 +261,11 @@ import {
   buildLinearIssueListReadArgs,
   buildLinearIssueListRequestSignature,
   isLinearIssueSearchActive,
+  shouldClearTeamDerivedFacets,
   shouldForceLinearIssueListRead,
-  teamDerivedFacetsForPrimaryTeamChange
+  teamDerivedFacetsForPrimaryTeamChange,
+  type LinearIssueListFilterRead,
+  type LinearPrimaryTeamObservation
 } from '@/components/task-page-linear-issue-request'
 import {
   resolveLinearIssueEmptyKind,
@@ -276,10 +279,19 @@ import {
   readLinkedLinearIssuesWithLimit
 } from '@/components/task-page-linear-in-orca-issues'
 import {
-  emptyLinearIssueAttributeFilter,
   linearIssueAttributeFilterSignature,
   type LinearIssueAttributeFilter
 } from '../../../shared/linear-issue-attribute-filter'
+import {
+  DEFAULT_LINEAR_GROUP_BY,
+  DEFAULT_LINEAR_ORDER_BY,
+  DEFAULT_LINEAR_VIEW_MODE,
+  LINEAR_DISPLAY_PROPERTIES,
+  resolveLinearIssueViewResumeState,
+  selectLinearWorkspaceIssueFilter,
+  serializeLinearIssueViewResumeState,
+  setLinearWorkspaceIssueFilter
+} from '../../../shared/linear-issue-view-resume-state'
 import {
   isNewIssueDraftContentful,
   resolveNewIssueOpenSeed,
@@ -367,6 +379,7 @@ import {
   clampLinearIssueListLimit
 } from '../../../shared/linear-issue-read-limits'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import {
@@ -407,6 +420,7 @@ import {
 } from '../../../shared/task-providers'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
+import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 import {
   getGitHubModeButtons,
   getGitHubTaskKindPresets,
@@ -431,6 +445,7 @@ import {
   type LinearOrderBy,
   type LinearViewMode
 } from '@/components/task-page-localized-options'
+import { useGitHubTaskSearchCommit } from '@/components/use-github-task-search-commit'
 
 function isGitLabMRFilter(value: GitLabTaskFilter | GitLabIssueFilter): value is GitLabTaskFilter {
   return value === 'opened' || value === 'merged' || value === 'closed' || value === 'all'
@@ -456,6 +471,53 @@ const GITHUB_TASK_ROW_SURFACE_CLASS = 'bg-background transition-colors'
 const GITHUB_TASK_ROW_HOVER_SURFACE_CLASS = 'group-hover/github-task-row:bg-accent'
 const GITHUB_TASK_HEADER_SURFACE_CLASS =
   '[background:color-mix(in_srgb,var(--muted)_25%,var(--background))]'
+
+type TaskCreationTitleInputProps = {
+  value: string
+  onChange: (value: string) => void
+  onSubmit: (value: string) => void
+  placeholder: string
+  disabled: boolean
+  variant?: 'default' | 'plain'
+  className?: string
+}
+
+export function TaskCreationTitleInput({
+  value,
+  onChange,
+  onSubmit,
+  placeholder,
+  disabled,
+  variant = 'default',
+  className
+}: TaskCreationTitleInputProps): React.JSX.Element {
+  const imeEnter = useImeEnterGestureOwnership()
+  const imeProps = {
+    onBlur: imeEnter.reset,
+    onCompositionStart: () => imeEnter.setComposing(true),
+    onCompositionEnd: () => imeEnter.setComposing(false),
+    onKeyUp: imeEnter.onKeyUp,
+    onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (imeEnter.ownsKeyDown(event)) {
+        return
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        onSubmit(event.currentTarget.value)
+      }
+    }
+  }
+  const props = {
+    autoFocus: true,
+    value,
+    onChange: (event: React.ChangeEvent<HTMLInputElement>) => onChange(event.target.value),
+    placeholder,
+    disabled,
+    className,
+    ...imeProps
+  }
+  return variant === 'plain' ? <input {...props} /> : <Input {...props} />
+}
 
 function getGitHubWorkItemWorkspaceSeed(item: GitHubWorkItem): string {
   return getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
@@ -663,15 +725,6 @@ function mergeLinearCollectionResults<T>(
     ...(results.some((result) => result.hasMore) ? { hasMore: true } : {})
   }
 }
-
-const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
-  'state',
-  'priority',
-  'assignee',
-  'team',
-  'labels',
-  'updated'
-]
 
 function getLinearStatusSectionState(section: LinearGroupSection): LinearIssue['state'] | null {
   if (!section.key.startsWith('status:')) {
@@ -2161,6 +2214,7 @@ function PRReviewCell({
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerTriggerRef = useRef<HTMLButtonElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
+  const reviewerImeEnter = useImeEnterGestureOwnership()
 
   const cancelReviewerInputFocusFrame = useCallback((): void => {
     if (reviewerInputFocusFrameRef.current === null) {
@@ -2613,12 +2667,19 @@ function PRReviewCell({
             ref={setReviewerInputNode}
             value={reviewerInput}
             onChange={(event) => setReviewerInput(event.target.value)}
+            onCompositionStart={() => reviewerImeEnter.setComposing(true)}
+            onCompositionEnd={() => reviewerImeEnter.setComposing(false)}
+            onKeyUp={reviewerImeEnter.onKeyUp}
+            onBlur={reviewerImeEnter.reset}
             placeholder={translate('auto.components.TaskPage.0b9b04f4b5', 'Type or choose a user')}
             disabled={!repo || submitting}
             className="h-8 rounded-md bg-background px-2 text-[13px]"
             aria-label={translate('auto.components.TaskPage.0b9b04f4b5', 'Type or choose a user')}
             aria-autocomplete="list"
             onKeyDown={(event) => {
+              if (reviewerImeEnter.ownsKeyDown(event)) {
+                return
+              }
               if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
                 event.preventDefault()
                 setActiveReviewerIndex((current) => (current + 1) % actionableReviewerRows.length)
@@ -3763,6 +3824,7 @@ export default function TaskPage(): React.JSX.Element {
   const taskResumeAppliedRef = useRef(false)
   const githubSearchPersistReadyRef = useRef(false)
   const linearSearchPersistReadyRef = useRef(false)
+  const linearViewPersistReadyRef = useRef(false)
   const jiraSearchPersistReadyRef = useRef(false)
   const [taskResumeApplied, setTaskResumeApplied] = useState(false)
 
@@ -4449,20 +4511,29 @@ export default function TaskPage(): React.JSX.Element {
   const [linearError, setLinearError] = useState<string | null>(null)
   const [linearSearchInput, setLinearSearchInput] = useState('')
   const [appliedLinearSearch, setAppliedLinearSearch] = useState('')
-  const [linearAttributeFilter, setLinearAttributeFilter] = useState<LinearIssueAttributeFilter>(
-    () => emptyLinearIssueAttributeFilter()
+  const [linearIssueFiltersByWorkspaceId, setLinearIssueFiltersByWorkspaceId] = useState<
+    Record<string, LinearIssueAttributeFilter>
+  >(() => ({}))
+  const linearAttributeFilterWorkspaceId =
+    selectedLinearWorkspaceId && selectedLinearWorkspaceId !== 'all'
+      ? selectedLinearWorkspaceId
+      : null
+  const linearAttributeFilter = useMemo(
+    () =>
+      selectLinearWorkspaceIssueFilter(
+        linearIssueFiltersByWorkspaceId,
+        linearAttributeFilterWorkspaceId
+      ),
+    [linearAttributeFilterWorkspaceId, linearIssueFiltersByWorkspaceId]
   )
-  const linearAttributeFilterSignatureRef = useRef(
-    linearIssueAttributeFilterSignature(emptyLinearIssueAttributeFilter())
-  )
-  const linearPrimaryTeamIdRef = useRef<string | null>(null)
-  const previousLinearWorkspaceIdForFiltersRef = useRef<string | null | undefined>(undefined)
-  const [linearViewMode, setLinearViewMode] = useState<LinearViewMode>('list')
-  const [linearGroupBy, setLinearGroupBy] = useState<LinearGroupBy>('none')
-  const [linearOrderBy, setLinearOrderBy] = useState<LinearOrderBy>('priority')
+  const linearAttributeFilterReadRef = useRef<LinearIssueListFilterRead | null>(null)
+  const linearPrimaryTeamRef = useRef<LinearPrimaryTeamObservation | null>(null)
+  const [linearViewMode, setLinearViewMode] = useState<LinearViewMode>(DEFAULT_LINEAR_VIEW_MODE)
+  const [linearGroupBy, setLinearGroupBy] = useState<LinearGroupBy>(DEFAULT_LINEAR_GROUP_BY)
+  const [linearOrderBy, setLinearOrderBy] = useState<LinearOrderBy>(DEFAULT_LINEAR_ORDER_BY)
   const [linearDisplayProperties, setLinearDisplayProperties] = useState<
     ReadonlySet<LinearDisplayProperty>
-  >(() => new Set(DEFAULT_LINEAR_DISPLAY_PROPERTIES))
+  >(() => new Set(LINEAR_DISPLAY_PROPERTIES))
   const [linearTeamPropertyTouched, setLinearTeamPropertyTouched] = useState(false)
   const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
   const [linearProjectSearchInput, setLinearProjectSearchInput] = useState('')
@@ -4739,6 +4810,14 @@ export default function TaskPage(): React.JSX.Element {
     setLinearMode(taskResumeState?.linearMode ?? 'issues')
     setLinearSearchInput(linearQuery)
     setAppliedLinearSearch(linearQuery)
+
+    const linearIssueView = resolveLinearIssueViewResumeState(taskResumeState?.linearIssueView)
+    setLinearViewMode(linearIssueView.viewMode)
+    setLinearGroupBy(linearIssueView.groupBy)
+    setLinearOrderBy(linearIssueView.orderBy)
+    setLinearDisplayProperties(new Set(linearIssueView.displayProperties))
+    setLinearTeamPropertyTouched(linearIssueView.teamPropertyTouched)
+    setLinearIssueFiltersByWorkspaceId(linearIssueView.filtersByWorkspaceId)
 
     const jiraPreset = taskResumeState?.jiraPreset ?? 'assigned'
     const jiraQuery = taskResumeState?.jiraQuery ?? ''
@@ -5246,41 +5325,50 @@ export default function TaskPage(): React.JSX.Element {
     [linearTeamOptions, linearTeamSelection]
   )
 
-  const applyLinearAttributeFilter = useCallback((next: LinearIssueAttributeFilter) => {
-    // Why: batch filter + limit/page reset so the fetch effect never issues an old expanded-limit request for the new filter.
-    setLinearAttributeFilter(next)
-    setLinearIssueLimit(LINEAR_ITEM_LIMIT)
-    setLinearIssuePage(0)
-    setLinearIssueLoadingTargetPage(null)
-  }, [])
+  const applyLinearAttributeFilter = useCallback(
+    (next: LinearIssueAttributeFilter) => {
+      if (linearAttributeFilterWorkspaceId) {
+        setLinearIssueFiltersByWorkspaceId((previous) =>
+          setLinearWorkspaceIssueFilter(previous, linearAttributeFilterWorkspaceId, next)
+        )
+      }
+      setLinearIssueLimit(LINEAR_ITEM_LIMIT)
+      setLinearIssuePage(0)
+      setLinearIssueLoadingTargetPage(null)
+    },
+    [linearAttributeFilterWorkspaceId]
+  )
 
   useEffect(() => {
-    const workspaceId = selectedLinearWorkspaceId ?? null
-    const previous = previousLinearWorkspaceIdForFiltersRef.current
-    previousLinearWorkspaceIdForFiltersRef.current = workspaceId
-    if (previous === undefined || previous === workspaceId) {
+    const nextTeamId = availableTeams.length > 0 ? (linearAttributePrimaryTeam?.id ?? null) : null
+    if (!nextTeamId) {
       return
     }
-    applyLinearAttributeFilter(emptyLinearIssueAttributeFilter())
-  }, [applyLinearAttributeFilter, selectedLinearWorkspaceId])
-
-  useEffect(() => {
-    const nextId = linearAttributePrimaryTeam?.id ?? null
-    const previousId = linearPrimaryTeamIdRef.current
-    linearPrimaryTeamIdRef.current = nextId
-    if (previousId === null || previousId === nextId) {
+    const previous = linearPrimaryTeamRef.current
+    const next: LinearPrimaryTeamObservation = {
+      workspaceId: linearAttributeFilterWorkspaceId,
+      teamId: nextTeamId
+    }
+    linearPrimaryTeamRef.current = next
+    if (!shouldClearTeamDerivedFacets({ previous, next })) {
       return
     }
     // Why: team-scoped facets; clearing them is a filter change, so reset limit/page via applyLinearAttributeFilter (R6), not a bare set.
-    const next = teamDerivedFacetsForPrimaryTeamChange(linearAttributeFilter)
+    const cleared = teamDerivedFacetsForPrimaryTeamChange(linearAttributeFilter)
     if (
       linearIssueAttributeFilterSignature(linearAttributeFilter) ===
-      linearIssueAttributeFilterSignature(next)
+      linearIssueAttributeFilterSignature(cleared)
     ) {
       return
     }
-    applyLinearAttributeFilter(next)
-  }, [applyLinearAttributeFilter, linearAttributeFilter, linearAttributePrimaryTeam?.id])
+    applyLinearAttributeFilter(cleared)
+  }, [
+    applyLinearAttributeFilter,
+    availableTeams.length,
+    linearAttributeFilter,
+    linearAttributeFilterWorkspaceId,
+    linearAttributePrimaryTeam?.id
+  ])
 
   const linearSearchActive = isLinearIssueSearchActive(linearSearchInput, appliedLinearSearch)
   const showLinearAttributeFilters =
@@ -6533,19 +6621,21 @@ export default function TaskPage(): React.JSX.Element {
     ]
   )
 
-  useEffect(() => {
-    if (!taskResumeApplied) {
-      return
-    }
-    const timeout = window.setTimeout(() => {
-      const scoped = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
+  const commitTaskSearch = useCallback(
+    (value: string): void => {
+      const scoped = scopeGitHubTaskSearch(value, activeGithubTaskKind)
       if (scoped !== appliedTaskSearch) {
         setTasksFiltering(true)
       }
       setAppliedTaskSearch(scoped)
-    }, TASK_SEARCH_DEBOUNCE_MS)
-    return () => window.clearTimeout(timeout)
-  }, [activeGithubTaskKind, appliedTaskSearch, taskSearchInput, taskResumeApplied])
+    },
+    [activeGithubTaskKind, appliedTaskSearch]
+  )
+  useGitHubTaskSearchCommit({
+    enabled: taskResumeApplied,
+    onCommit: commitTaskSearch,
+    value: taskSearchInput
+  })
 
   useEffect(() => {
     if (!taskResumeApplied) {
@@ -7140,17 +7230,11 @@ export default function TaskPage(): React.JSX.Element {
     setTaskRefreshNonce((current) => current + 1)
   }, [activeGithubTaskKind, setTaskResumeState, taskSearchInput])
 
-  const handleTaskSearchChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>): void => {
-      const next = event.target.value
-      const scoped = scopeGitHubTaskSearch(next, activeGithubTaskKind)
-      setTaskSearchInput(next)
-      setActiveTaskPreset(null)
-      // Why: visible rows are keyed by appliedTaskSearch, not the draft input; hide stale rows once the draft changes the query.
-      setTasksFiltering(scoped !== appliedTaskSearch)
-    },
-    [activeGithubTaskKind, appliedTaskSearch]
-  )
+  const handleTaskSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>): void => {
+    const next = event.target.value
+    setTaskSearchInput(next)
+    setActiveTaskPreset(null)
+  }, [])
 
   const handleSetDefaultTaskPreset = useCallback(
     (presetId: TaskViewPresetId): void => {
@@ -7191,7 +7275,11 @@ export default function TaskPage(): React.JSX.Element {
         // React SyntheticEvent does not expose isComposing; use nativeEvent.
         if (
           shouldSuppressEnterSubmit(
-            { isComposing: event.nativeEvent.isComposing, shiftKey: event.shiftKey },
+            {
+              isComposing: event.nativeEvent.isComposing,
+              keyCode: event.keyCode,
+              shiftKey: event.shiftKey
+            },
             false
           )
         ) {
@@ -7221,7 +7309,7 @@ export default function TaskPage(): React.JSX.Element {
     const onKeyDown = (event: KeyboardEvent): void => {
       const isMac = navigator.userAgent.includes('Mac')
       const modifierPressed = isMac ? event.metaKey : event.ctrlKey
-      if (!modifierPressed || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') {
+      if (!modifierPressed || event.altKey || event.shiftKey || !isLatinShortcutKey(event, 'f')) {
         return
       }
 
@@ -7815,6 +7903,15 @@ export default function TaskPage(): React.JSX.Element {
         return
       }
 
+      // Why: open menus/popovers/selects own Esc; capture-phase leave would steal it from Radix.
+      if (
+        document.querySelector(
+          '[data-slot="dropdown-menu-content"], [data-slot="popover-content"], [data-slot="select-content"], [role="menu"]'
+        )
+      ) {
+        return
+      }
+
       // Why: Esc first blurs a focused input so it doesn't accidentally close the whole page; only closes once focus is outside an input.
       if (
         target instanceof HTMLInputElement ||
@@ -7892,6 +7989,35 @@ export default function TaskPage(): React.JSX.Element {
   }, [appliedLinearSearch, setTaskResumeState, taskResumeApplied])
 
   useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    if (!linearViewPersistReadyRef.current) {
+      linearViewPersistReadyRef.current = true
+      return
+    }
+    setTaskResumeState({
+      linearIssueView: serializeLinearIssueViewResumeState({
+        viewMode: linearViewMode,
+        groupBy: linearGroupBy,
+        orderBy: linearOrderBy,
+        displayProperties: linearDisplayProperties,
+        teamPropertyTouched: linearTeamPropertyTouched,
+        filtersByWorkspaceId: linearIssueFiltersByWorkspaceId
+      })
+    })
+  }, [
+    linearDisplayProperties,
+    linearGroupBy,
+    linearIssueFiltersByWorkspaceId,
+    linearOrderBy,
+    linearTeamPropertyTouched,
+    linearViewMode,
+    setTaskResumeState,
+    taskResumeApplied
+  ])
+
+  useEffect(() => {
     setLinearIssueLimit(LINEAR_ITEM_LIMIT)
     setLinearIssuePage(0)
     setLinearIssueLoadingTargetPage(null)
@@ -7949,12 +8075,15 @@ export default function TaskPage(): React.JSX.Element {
       )
     }
 
-    const nextFilterSignature = linearIssueAttributeFilterSignature(linearAttributeFilter)
-    const previousFilterSignature = linearAttributeFilterSignatureRef.current
-    linearAttributeFilterSignatureRef.current = nextFilterSignature
+    const nextFilterRead: LinearIssueListFilterRead = {
+      workspaceId: linearAttributeFilterWorkspaceId,
+      signature: linearIssueAttributeFilterSignature(linearAttributeFilter)
+    }
+    const previousFilterRead = linearAttributeFilterReadRef.current
+    linearAttributeFilterReadRef.current = nextFilterRead
     const filterForce = shouldForceLinearIssueListRead({
-      previousFilterSignature,
-      nextFilterSignature,
+      previousFilterRead,
+      nextFilterRead,
       refreshForced: false
     })
 
@@ -9457,11 +9586,11 @@ export default function TaskPage(): React.JSX.Element {
                           <LinearIssueAttributeFilterDropdowns
                             value={linearAttributeFilter}
                             onChange={applyLinearAttributeFilter}
-                            workspaceId={selectedLinearWorkspaceId ?? null}
-                            isAllWorkspaces={selectedLinearWorkspaceId === 'all'}
+                            workspaceId={linearAttributeFilterWorkspaceId}
                             primaryTeam={linearAttributePrimaryTeam}
                             selectedTeamIds={[...linearTeamSelection]}
                             availableTeams={linearTeamOptions}
+                            teamsSettled={availableTeams.length > 0}
                             settings={linearTaskSourceContext ?? settings}
                           />
                         ) : null}
@@ -9476,6 +9605,7 @@ export default function TaskPage(): React.JSX.Element {
                                   shouldSuppressEnterSubmit(
                                     {
                                       isComposing: e.nativeEvent.isComposing,
+                                      keyCode: e.keyCode,
                                       shiftKey: e.shiftKey
                                     },
                                     false
@@ -9677,7 +9807,11 @@ export default function TaskPage(): React.JSX.Element {
                             if (e.key === 'Enter') {
                               if (
                                 shouldSuppressEnterSubmit(
-                                  { isComposing: e.nativeEvent.isComposing, shiftKey: e.shiftKey },
+                                  {
+                                    isComposing: e.nativeEvent.isComposing,
+                                    keyCode: e.keyCode,
+                                    shiftKey: e.shiftKey
+                                  },
                                   false
                                 )
                               ) {
@@ -12025,16 +12159,10 @@ export default function TaskPage(): React.JSX.Element {
               <label className="text-[11px] font-medium text-muted-foreground">
                 {translate('auto.components.TaskPage.16cba35bee', 'Title')}
               </label>
-              <Input
-                autoFocus
+              <TaskCreationTitleInput
                 value={newIssueTitle}
-                onChange={(e) => setNewIssueTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                    e.preventDefault()
-                    void handleCreateNewIssue()
-                  }
-                }}
+                onChange={setNewIssueTitle}
+                onSubmit={() => void handleCreateNewIssue()}
                 placeholder={translate('auto.components.TaskPage.578f730c16', 'Short summary')}
                 disabled={newIssueSubmitting}
               />
@@ -12199,18 +12327,13 @@ export default function TaskPage(): React.JSX.Element {
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5 scrollbar-sleek">
-            <input
-              autoFocus
+            <TaskCreationTitleInput
               value={newLinearProjectName}
-              onChange={(event) => setNewLinearProjectName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-                  event.preventDefault()
-                  void handleCreateNewLinearProject()
-                }
-              }}
+              onChange={setNewLinearProjectName}
+              onSubmit={() => void handleCreateNewLinearProject()}
               placeholder={translate('auto.components.TaskPage.ecbcc83140', 'Project name')}
               disabled={newLinearProjectSubmitting}
+              variant="plain"
               className="w-full border-none bg-transparent p-0 text-xl font-semibold text-foreground outline-none placeholder:text-muted-foreground/45 focus:outline-none focus:ring-0 focus-visible:ring-0"
             />
 
@@ -12646,18 +12769,13 @@ export default function TaskPage(): React.JSX.Element {
           {/* Form Content */}
           <div className="flex flex-col px-6 py-4 gap-3">
             {/* Title */}
-            <input
-              autoFocus
+            <TaskCreationTitleInput
               value={newLinearIssueTitle}
-              onChange={(e) => setNewLinearIssueTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                  e.preventDefault()
-                  void handleCreateNewLinearIssue()
-                }
-              }}
+              onChange={setNewLinearIssueTitle}
+              onSubmit={() => void handleCreateNewLinearIssue()}
               placeholder={translate('auto.components.TaskPage.d9151fd4e9', 'Issue title')}
               disabled={newLinearIssueSubmitting}
+              variant="plain"
               className="text-lg font-semibold bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 p-0 placeholder:text-muted-foreground/40 text-foreground w-full"
             />
 
@@ -13246,16 +13364,10 @@ export default function TaskPage(): React.JSX.Element {
               <label className="text-[11px] font-medium text-muted-foreground">
                 {translate('auto.components.TaskPage.16cba35bee', 'Title')}
               </label>
-              <Input
-                autoFocus
+              <TaskCreationTitleInput
                 value={newJiraIssueTitle}
-                onChange={(e) => setNewJiraIssueTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                    e.preventDefault()
-                    void handleCreateNewJiraIssue()
-                  }
-                }}
+                onChange={setNewJiraIssueTitle}
+                onSubmit={() => void handleCreateNewJiraIssue()}
                 placeholder={translate('auto.components.TaskPage.578f730c16', 'Short summary')}
                 disabled={newJiraIssueSubmitting}
               />

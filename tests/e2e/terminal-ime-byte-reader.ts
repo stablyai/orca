@@ -9,17 +9,14 @@ export type TerminalImeByteReader = {
   expectedLineCount: number
   readyMarker: string
   resultPrefix: string
-  scriptPath: string
+  scriptPath: string | null
+  source: string
 }
 
-export function createTerminalImeByteReader(
-  testRepoPath: string,
-  expectedLineCount: number
-): TerminalImeByteReader {
+function createReader(expectedLineCount: number): TerminalImeByteReader {
   const runId = randomUUID().replaceAll('-', '')
   const readyMarker = `ORCA_IME_READER_READY_${runId}`
   const resultPrefix = `ORCA_IME_BYTES_${runId}`
-  const scriptPath = path.join(testRepoPath, `.orca-ime-byte-reader-${runId}.cjs`)
   const source = `
 const expectedLineCount = ${expectedLineCount}
 const readyMarker = ${JSON.stringify(readyMarker)}
@@ -43,8 +40,25 @@ process.stdin.on('data', (chunk) => {
   }
 })
 `
-  writeFileSync(scriptPath, source)
-  return { expectedLineCount, readyMarker, resultPrefix, scriptPath }
+  return { expectedLineCount, readyMarker, resultPrefix, scriptPath: null, source }
+}
+
+export function createTerminalImeByteReader(
+  testRepoPath: string,
+  expectedLineCount: number
+): TerminalImeByteReader {
+  const reader = createReader(expectedLineCount)
+  const runId = reader.readyMarker.slice('ORCA_IME_READER_READY_'.length)
+  const scriptPath = path.join(testRepoPath, `.orca-ime-byte-reader-${runId}.cjs`)
+  reader.scriptPath = scriptPath
+  writeFileSync(scriptPath, reader.source)
+  return reader
+}
+
+export function createInlineTerminalImeByteReader(
+  expectedLineCount: number
+): TerminalImeByteReader {
+  return createReader(expectedLineCount)
 }
 
 export async function startTerminalImeByteReader(
@@ -52,7 +66,12 @@ export async function startTerminalImeByteReader(
   ptyId: string,
   reader: TerminalImeByteReader
 ): Promise<void> {
-  await sendToTerminal(page, ptyId, `node ${JSON.stringify(reader.scriptPath)}\r`)
+  const script = reader.scriptPath
+    ? JSON.stringify(reader.scriptPath)
+    : `-e ${JSON.stringify(
+        `eval(Buffer.from('${Buffer.from(reader.source).toString('base64')}', 'base64').toString())`
+      )}`
+  await sendToTerminal(page, ptyId, `node ${script}\r`)
   await waitForTerminalOutput(page, reader.readyMarker, 10_000, 20_000)
 }
 
@@ -83,5 +102,7 @@ export async function waitForTerminalImeBytes(
 }
 
 export function removeTerminalImeByteReader(reader: TerminalImeByteReader): void {
-  rmSync(reader.scriptPath, { force: true })
+  if (reader.scriptPath) {
+    rmSync(reader.scriptPath, { force: true })
+  }
 }

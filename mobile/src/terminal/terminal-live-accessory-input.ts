@@ -1,4 +1,4 @@
-import type { TerminalLiveAccessoryLocalEdit } from './terminal-live-text-commit'
+type TerminalLiveAccessoryLocalEdit = 'backspace' | 'delete'
 
 export type TerminalLiveAccessoryInput = {
   readonly bytes: string

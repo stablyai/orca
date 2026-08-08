@@ -28,12 +28,32 @@ export function resolveNativeChatSessionOptionDefaults(
   return values
 }
 
+/** Why: an authoritative probe proved this id gone, and a stale `model` is emitted
+ *  verbatim as a launch flag — grok exits fatally on an unknown one. Dropping only
+ *  `model` keeps the per-model option values for a later reselect. */
+export function clearNativeChatSessionOptionModel(
+  persisted: PersistedNativeChatSessionOptions | null | undefined,
+  agent: AgentType
+): PersistedNativeChatSessionOptions {
+  const currentAgent = persisted?.[agent]
+  if (!currentAgent?.model) {
+    return { ...persisted }
+  }
+  const { model: _dropped, ...rest } = currentAgent
+  return { ...persisted, [agent]: rest }
+}
+
 export function updateNativeChatSessionOptionDefaults(args: {
   persisted: PersistedNativeChatSessionOptions | null | undefined
   agent: AgentType
   modelId: string
   optionId: string
   value: SessionOptionValue
+  /** Defaults to adopting, since without a `model` no launch resolves the value at all.
+   *  Only the picker surface, which can tell a probe-confirmed id from the seed's guess
+   *  at the CLI default, withholds it: adopting a guess would emit `-m <guess>` on every
+   *  later launch, fatal on an account without that model. */
+  adoptModelAsLaunchDefault?: boolean
 }): PersistedNativeChatSessionOptions {
   const currentAgent = args.persisted?.[args.agent]
   const currentModelValues = currentAgent?.valuesByModel?.[args.modelId] ?? {}
@@ -49,7 +69,9 @@ export function updateNativeChatSessionOptionDefaults(args: {
     ...args.persisted,
     [args.agent]: {
       ...currentAgent,
-      model: args.optionId === 'model' ? String(args.value) : args.modelId,
+      ...(args.adoptModelAsLaunchDefault === false
+        ? {}
+        : { model: args.optionId === 'model' ? String(args.value) : args.modelId }),
       valuesByModel
     }
   }

@@ -359,7 +359,6 @@ vi.mock('./daemon-spawner', () => ({
     `/fake/daemon/daemon-v${version ?? PROTOCOL_VERSION}.pid`,
   serializeDaemonPidFile: (obj: unknown) => JSON.stringify(obj),
   replaceDaemonPidFile: replaceDaemonPidFileMock,
-  sweepAbandonedDaemonClaims: vi.fn(() => 0),
   unlinkOwnedDaemonPidFile: unlinkOwnedDaemonPidFileMock
 }))
 
@@ -1313,6 +1312,54 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     // STA-2376: different-app-path replacement, emitted exactly once.
     expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
     expect(trackDaemonReplacedMock).toHaveBeenCalledWith('different_app_path', 0)
+  })
+
+  it('adopts the winner when a launched daemon loses the endpoint race', async () => {
+    // Why: losing the publish race is an expected outcome, not a crash. Reporting it as a
+    // startup failure strands this app on local non-persistent PTYs beside a healthy daemon.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider(undefined, { macosLoginSessionWatch: true })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    // Force the replace-and-launch path; otherwise the launcher adopts the healthy daemon and
+    // never forks, and this test would pass without exercising anything.
+    getDaemonLaunchIdentityMock.mockReturnValueOnce('mismatch')
+    forkMock.mockImplementationOnce(() => {
+      const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+        message: [],
+        error: [],
+        exit: []
+      }
+      return {
+        pid: 24680,
+        on(event: string, cb: (arg?: unknown) => void) {
+          handlers[event]?.push(cb)
+          // Why the exit code and not the message: the launcher settles on exit, so keying
+          // adoption off the notification alone could lose that race.
+          if (event === 'exit') {
+            queueMicrotask(() => cb(20))
+          }
+          return this
+        },
+        off(event: string, cb: (arg?: unknown) => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return this
+        },
+        kill: vi.fn(),
+        disconnect: vi.fn(),
+        unref: vi.fn()
+      }
+    })
+
+    // A handle rather than a rejection means the incumbent was adopted.
+    await expect(launcher('/fake/socket', '/fake/token')).resolves.toMatchObject({
+      shutdown: expect.any(Function)
+    })
+    // Guard against passing for the wrong reason: the adoption must follow a real launch.
+    expect(forkMock).toHaveBeenCalledTimes(1)
   })
 
   it('replaces a healthy daemon whose macOS TCC attribution is severed when it has no live sessions', async () => {

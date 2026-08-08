@@ -97,6 +97,12 @@ export function resetSessionParseCacheForTests(): void {
   cache.clear()
 }
 
+// Drops one entry after its file is deleted. Cleanliness, not correctness:
+// discovery walks disk first, so a trashed file is never rediscovered anyway.
+export function invalidateSessionParseCacheEntry(path: string): void {
+  cache.delete(path)
+}
+
 // Persisted subset of a cache entry: the non-serializable `resume` parser
 // state is dropped (see session-parse-cache-persistence.ts).
 export type PersistedSessionParseCacheEntry = Omit<SessionParseCacheEntry, 'resume'>

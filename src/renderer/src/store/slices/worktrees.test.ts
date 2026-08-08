@@ -4725,7 +4725,8 @@ describe('createWorktree base status merge', () => {
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
-      path: '/path/wt1'
+      path: '/path/wt1',
+      displayName: 'feature-wt'
     })
     mockApi.worktrees.create.mockResolvedValue({
       worktree: wt,
@@ -4739,12 +4740,78 @@ describe('createWorktree base status merge', () => {
 
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
 
-    expect(toast.warning).toHaveBeenCalledWith('Local main was not refreshed', {
-      description: expect.stringContaining(expectedReason)
+    expect(toast.warning).toHaveBeenCalledWith('Local main was not refreshed for "feature-wt"', {
+      id: 'local-base-ref-refresh-failed:repo1::/path/wt1:main',
+      description: expect.stringContaining(expectedReason),
+      duration: Infinity,
+      dismissible: true
     })
     const description = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.description
+    expect(description).toContain('feature-wt')
+    // Create already succeeded — guidance must push manual recovery, not "try again".
+    expect(description).toMatch(/manually/i)
+    expect(description).not.toContain('try again')
     expect(description).not.toContain('AI tools')
     expect(description).not.toContain('git diff')
+    // Owner path is only meaningful for the dirty-owner skip; do not leak it into other reasons.
+    if (status === 'skipped_dirty_worktree') {
+      expect(description).toContain('/repo')
+    } else {
+      expect(description).not.toContain('/repo')
+    }
+  })
+
+  it('falls back to the generic dirty detail when ownerWorktreePath is missing', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      displayName: 'feature-wt'
+    })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefRefresh: {
+        status: 'skipped_dirty_worktree',
+        baseRef: 'origin/main',
+        localBranch: 'main'
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    const description = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.description
+    expect(description).toContain('uncommitted changes')
+    expect(description).toContain('where local main is checked out')
+    expect(description).not.toContain('The worktree at')
+  })
+
+  it('names the toast from branch when displayName is blank', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature',
+      displayName: '   '
+    })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefRefresh: {
+        status: 'skipped_error',
+        baseRef: 'origin/main',
+        localBranch: 'main'
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(toast.warning).toHaveBeenCalledWith(
+      'Local main was not refreshed for "feature"',
+      expect.objectContaining({
+        id: 'local-base-ref-refresh-failed:repo1::/path/wt1:main'
+      })
+    )
   })
 
   it('does not warn when the local base ref refresh succeeds', async () => {
@@ -4762,6 +4829,20 @@ describe('createWorktree base status merge', () => {
         localBranch: 'main'
       }
     })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(toast.warning).not.toHaveBeenCalled()
+  })
+
+  it('does not warn when local base ref refresh is omitted from the create result', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
 

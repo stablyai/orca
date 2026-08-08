@@ -14,6 +14,10 @@ import { warmPwshAvailabilityCache } from '../pwsh'
 import { createDaemonFileLog, createNoopDaemonFileLog } from './daemon-file-log'
 import { PROTOCOL_VERSION } from './types'
 import {
+  DAEMON_EXIT_ENDPOINT_OCCUPIED,
+  DaemonEndpointUnavailableError
+} from './daemon-endpoint-ownership'
+import {
   prepareMacosTccLoginShell,
   probeMacosLoginSessionAlive
 } from '../providers/macos-tcc-login-shell'
@@ -328,6 +332,14 @@ const isDirectExecution = !process.env.VITEST
 if (isDirectExecution) {
   main().catch((err) => {
     console.error('[daemon] Fatal:', err)
+    if (err instanceof DaemonEndpointUnavailableError && err.reason === 'occupied') {
+      // Why an exit code and not the IPC message: process.send only proves the write left this
+      // process, not that the parent dispatched 'message' before it observed the exit — and the
+      // parent settles the launch on exit. A code rides the same event that ends the wait, so it
+      // cannot lose that race. The message is still sent best-effort for log detail.
+      process.send?.({ type: 'endpoint-unavailable', reason: err.reason })
+      process.exit(DAEMON_EXIT_ENDPOINT_OCCUPIED)
+    }
     process.exit(1)
   })
 }

@@ -19,6 +19,7 @@ export type WorkspaceTabPaletteSearchResult = {
   secondaryRange: MatchRange | null
   repoRange: MatchRange | null
   worktreeRange: MatchRange | null
+  typeAliasMatch?: { text: string; range: MatchRange } | null
   isCurrentTab: boolean
   isCurrentWorktree: boolean
   score: number
@@ -179,6 +180,33 @@ export function searchWorkspaceTabs(
         score: scoreWorkspaceTabMatch({
           fieldWeight: 20,
           matchIndex: secondaryMatch.range.start,
+          entry
+        })
+      })
+      continue
+    }
+
+    // Why after display secondaries: path/file matches should beat bare type labels.
+    let typeAliasHit: { text: string; range: MatchRange } | null = null
+    for (const alias of entry.typeSearchAliases ?? []) {
+      const range = findRange(alias, trimmedQuery)
+      if (range) {
+        typeAliasHit = { text: alias, range }
+        break
+      }
+    }
+    if (typeAliasHit) {
+      results.push({
+        ...baseResult,
+        titleRange: null,
+        // Why null: aliases are search keys only — nothing to highlight in the row.
+        secondaryRange: null,
+        repoRange: null,
+        worktreeRange: null,
+        typeAliasMatch: typeAliasHit,
+        score: scoreWorkspaceTabMatch({
+          fieldWeight: 25,
+          matchIndex: typeAliasHit.range.start,
           entry
         })
       })

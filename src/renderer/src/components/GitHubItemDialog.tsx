@@ -70,6 +70,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
 import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
 import {
@@ -350,7 +351,8 @@ function WorkItemStateBadge({
   )
 }
 
-function PRReviewersPanel({
+// Exported for IME Enter guard tests; not used outside this module in production.
+export function PRReviewersPanel({
   item,
   loading,
   repoPath,
@@ -397,6 +399,7 @@ function PRReviewersPanel({
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
   const reviewerPanelMountedRef = useRef(true)
+  const reviewerImeEnter = useImeEnterGestureOwnership()
 
   const cancelReviewerInputFocusFrame = useCallback((): void => {
     if (reviewerInputFocusFrameRef.current !== null) {
@@ -889,6 +892,10 @@ function PRReviewersPanel({
                 ref={reviewerInputRef}
                 value={reviewerInput}
                 onChange={(event) => setReviewerInput(event.target.value)}
+                onCompositionStart={() => reviewerImeEnter.setComposing(true)}
+                onCompositionEnd={() => reviewerImeEnter.setComposing(false)}
+                onKeyUp={reviewerImeEnter.onKeyUp}
+                onBlur={reviewerImeEnter.reset}
                 disabled={submitting || !canRequestReview}
                 placeholder={translate(
                   'auto.components.GitHubItemDialog.bb42774171',
@@ -899,6 +906,9 @@ function PRReviewersPanel({
                 aria-haspopup="listbox"
                 className="h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"
                 onKeyDown={(event) => {
+                  if (reviewerImeEnter.ownsKeyDown(event)) {
+                    return
+                  }
                   if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
                     event.preventDefault()
                     setActiveReviewerIndex(

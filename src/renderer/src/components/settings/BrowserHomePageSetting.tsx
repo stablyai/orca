@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { ImeEnterGuardedForm } from '../ime-enter-guarded-form'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -45,7 +46,7 @@ export function BrowserHomePageSetting({
           )}
         </p>
       </div>
-      <form
+      <ImeEnterGuardedForm
         className="flex shrink-0 items-center gap-2"
         onSubmit={(event) => {
           event.preventDefault()
@@ -81,7 +82,7 @@ export function BrowserHomePageSetting({
         <Button type="submit" size="sm" variant="outline" className="h-7 text-xs">
           {translate('auto.components.settings.BrowserHomePageSetting.d4ddcd0056', 'Save')}
         </Button>
-      </form>
+      </ImeEnterGuardedForm>
     </SearchableSetting>
   )
 }

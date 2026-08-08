@@ -132,7 +132,7 @@ describe('SourceControlHeaderToolbar branch identity', () => {
   it('threads the branch line total down to the base-ref line', () => {
     const markup = renderToolbar({ branchLineTotal: { added: 24, removed: 3, mergeBase: 'base' } })
 
-    expect(markup).toContain('aria-label="24 additions, 3 deletions"')
+    expect(markup).toContain('aria-label="24 lines added, 3 lines deleted"')
     expect(markup).toContain('+24')
     expect(markup).toContain('-3')
   })

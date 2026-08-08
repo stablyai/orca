@@ -57,6 +57,7 @@ describe('PR E2E gate contract', () => {
   it('selects modified Playwright specs without running deleted tests', () => {
     expect(filterStep.run).toContain('--diff-filter=AMCR')
     expect(filterStep.run).toContain("'^tests/e2e/.*\\.spec\\.ts$'")
+    expect(filterStep.run).toContain("'-native\\.spec\\.ts$'")
     expect(filterStep.run).not.toContain('tests/playwright\\.')
   })
 

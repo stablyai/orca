@@ -77,7 +77,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       onSwitchToTerminal,
       readTerminalScreen,
       launchDraft,
-      launchDraftResolved = false
+      launchDraftResolved = false,
+      onCompositionActiveChange
     },
     ref
   ): React.JSX.Element {
@@ -412,12 +413,15 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         onKeyDown={handleKeyDown}
         onCompositionStart={() => {
           isComposingRef.current = true
+          onCompositionActiveChange?.(true)
         }}
         onCompositionEnd={(event) => {
           isComposingRef.current = false
           if (event.currentTarget.value !== draft) {
             handleDraftChange(event.currentTarget.value, event.currentTarget)
           }
+          // Released last so the draft is synced before any deferred unmount runs.
+          onCompositionActiveChange?.(false)
         }}
         onPaste={handlePaste}
         pickerListboxId={picker.listboxId}

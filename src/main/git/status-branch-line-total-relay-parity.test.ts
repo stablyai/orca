@@ -26,7 +26,13 @@ const execFileAsync = promisify(execFile)
 //   flip.txt      0  (added in the branch commit, removed again in the worktree)
 //   moved.txt     0  (pure rename)
 //   fresh.txt    +3  (untracked)
-const EXPECTED_TOTAL = { added: 6, removed: 0 }
+// No fixture path here looks like test or generated code, so it is all source.
+const EXPECTED_TOTAL = {
+  added: 6,
+  removed: 0,
+  test: { added: 0, removed: 0 },
+  generated: { added: 0, removed: 0 }
+}
 // Summing the per-area status rows instead would give this — the wrong answer
 // the shared module exists to avoid.
 const AREA_ROW_SUM = { added: 5, removed: 2 }

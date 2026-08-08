@@ -3,17 +3,24 @@ import { isTailnetIPv4Address } from './tailnet-address'
 export type PairingNetworkInterface = {
   name: string
   address: string
+  hasDefaultRoute?: boolean
 }
 
-// Why: container/VM bridges are host-local — a phone can never reach docker0 or
-// vmnet8 — but they enumerate as ordinary non-internal IPv4, so advertising one
-// makes the direct path silently lose the pairing race and every session relay.
-// Keyed on interface name, not subnet: Docker's 172.16/12 pool overlaps real
-// corporate LANs, so an address test would demote genuine addresses.
+// Why: known bridge labels are host-local, while vEthernet needs positive route evidence because
+// External Switch management adapters are reachable; subnets overlap real corporate LANs.
 const VIRTUAL_BRIDGE_INTERFACE_PATTERN =
-  /^(?:docker|br-|virbr|vmnet|vboxnet|veth|lxcbr|cni|flannel|cali|bridge)|^vEthernet |VMware Network Adapter|VirtualBox Host-Only/i
+  /^(?:docker|br-|virbr|vmnet|vboxnet|veth|lxcbr|cni|flannel|cali|bridge)|VMware Network Adapter|VirtualBox Host-Only/i
+const HYPER_V_INTERFACE_PATTERN = /^vEthernet /i
+const HOST_LOCAL_HYPER_V_INTERFACE_PATTERN =
+  /^vEthernet \((?:Default Switch|WSL(?: \(Hyper-V firewall\))?)\)$/i
 
-export function isVirtualBridgeInterface(name: string): boolean {
+export function isVirtualBridgeInterface(name: string, hasDefaultRoute?: boolean): boolean {
+  if (HOST_LOCAL_HYPER_V_INTERFACE_PATTERN.test(name)) {
+    return true
+  }
+  if (HYPER_V_INTERFACE_PATTERN.test(name)) {
+    return hasDefaultRoute !== true
+  }
   return VIRTUAL_BRIDGE_INTERFACE_PATTERN.test(name)
 }
 
@@ -24,7 +31,9 @@ export function isVirtualBridgeInterface(name: string): boolean {
 export function selectAutoAdvertisedPairingAddress(
   interfaces: readonly PairingNetworkInterface[]
 ): string | undefined {
-  const advertisable = interfaces.filter((iface) => !isVirtualBridgeInterface(iface.name))
+  const advertisable = interfaces.filter(
+    (iface) => !isVirtualBridgeInterface(iface.name, iface.hasDefaultRoute)
+  )
   return (
     advertisable.find((iface) => isTailnetIPv4Address(iface.address))?.address ??
     advertisable[0]?.address

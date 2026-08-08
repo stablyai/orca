@@ -25,6 +25,7 @@ import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-worktree'
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { Button } from '@/components/ui/button'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
@@ -264,6 +265,48 @@ type ChecksAgentComposerState = {
   launchSource: 'conflict_resolution' | 'task_page'
   commentResolution?: PendingPRCommentAiAck
 }
+export function ChecksPanelReviewTitleInput({
+  inputRef,
+  value,
+  onChange,
+  onSubmit,
+  onCancel,
+  disabled
+}: {
+  inputRef: React.Ref<HTMLInputElement>
+  value: string
+  onChange: (value: string) => void
+  onSubmit: () => void
+  onCancel: () => void
+  disabled: boolean
+}): React.JSX.Element {
+  const imeEnter = useImeEnterGestureOwnership()
+  return (
+    <input
+      ref={inputRef}
+      className="flex-1 text-[12px] bg-background border border-border rounded px-2 py-1 text-foreground outline-none focus:ring-1 focus:ring-ring"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onCompositionStart={() => imeEnter.setComposing(true)}
+      onCompositionEnd={() => imeEnter.setComposing(false)}
+      onKeyDown={(event) => {
+        if (imeEnter.ownsKeyDown(event)) {
+          return
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          onSubmit()
+        } else if (event.key === 'Escape') {
+          onCancel()
+        }
+      }}
+      onKeyUp={imeEnter.onKeyUp}
+      onBlur={imeEnter.reset}
+      disabled={disabled}
+    />
+  )
+}
+
 type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
   isRefreshing: boolean
@@ -2710,18 +2753,6 @@ export default function ChecksPanel(): React.JSX.Element {
     mountedRef
   ])
 
-  const handleTitleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        void handleSaveTitle()
-      } else if (e.key === 'Escape') {
-        handleCancelEdit()
-      }
-    },
-    [handleSaveTitle, handleCancelEdit]
-  )
-
   const handleResolve = useCallback(
     async (
       threadId: string,
@@ -4393,12 +4424,12 @@ export default function ChecksPanel(): React.JSX.Element {
         {/* Review title */}
         {editingTitle ? (
           <div className="flex items-center gap-1">
-            <input
-              ref={titleInputRef}
-              className="flex-1 text-[12px] bg-background border border-border rounded px-2 py-1 text-foreground outline-none focus:ring-1 focus:ring-ring"
+            <ChecksPanelReviewTitleInput
+              inputRef={titleInputRef}
               value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onKeyDown={handleTitleKeyDown}
+              onChange={setTitleDraft}
+              onSubmit={() => void handleSaveTitle()}
+              onCancel={handleCancelEdit}
               disabled={titleSaving}
             />
             <button

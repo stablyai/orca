@@ -46,11 +46,51 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('github-copilot/gpt-5.4-mini')
   })
 
+  it('uses --prompt (not Claude --print) for Kimi non-interactive generation', () => {
+    // Why: kimi-code 0.31+ rejects --print; non-interactive mode is --prompt/-p (#11669).
+    const spec = COMMIT_MESSAGE_AGENT_SPECS.kimi
+    expect(spec).toBeDefined()
+    expect(spec!.promptDelivery).toBe('argv')
+    const args = spec!.buildArgs({
+      prompt: 'Name a branch for adding login',
+      model: 'kimi-code/kimi-for-coding',
+      thinkingLevel: 'on'
+    })
+    expect(args).toContain('--prompt')
+    expect(args).not.toContain('--print')
+    // Why: with argv delivery the prompt is the value of --prompt.
+    const promptIndex = args.indexOf('--prompt')
+    expect(promptIndex).toBeGreaterThanOrEqual(0)
+    expect(args[promptIndex + 1]).toBe('Name a branch for adding login')
+    expect(args).toContain('--quiet')
+    expect(args).toContain('--thinking')
+    expect(args).toEqual(expect.arrayContaining(['--model', 'kimi-code/kimi-for-coding']))
+  })
+
   it('uses the provider-qualified Kimi model id accepted by the CLI', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.kimi?.models.map((m) => m.id)).toEqual([
       'default',
       'kimi-code/kimi-for-coding'
     ])
+  })
+
+  it('maps Kimi thinking off and omission to distinct argv', () => {
+    const spec = COMMIT_MESSAGE_AGENT_SPECS.kimi!
+    const offArgs = spec.buildArgs({ prompt: 'PROMPT', model: 'default', thinkingLevel: 'off' })
+    const defaultArgs = spec.buildArgs({ prompt: 'PROMPT', model: 'default' })
+
+    expect(offArgs).toContain('--no-thinking')
+    expect(offArgs).not.toContain('--thinking')
+    expect(defaultArgs).not.toContain('--thinking')
+    expect(defaultArgs).not.toContain('--no-thinking')
+  })
+
+  it('omits Kimi --model for the config default and an empty model', () => {
+    const spec = COMMIT_MESSAGE_AGENT_SPECS.kimi!
+
+    for (const model of ['default', '']) {
+      expect(spec.buildArgs({ prompt: 'PROMPT', model })).not.toContain('--model')
+    }
   })
 
   it('lists Copilot hosted CLI models even when account policy filters the picker', () => {

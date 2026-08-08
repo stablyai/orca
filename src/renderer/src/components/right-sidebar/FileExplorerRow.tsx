@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: the row owns dense file-tree rendering plus its context menu, drag target, and inline-input sibling contract. */
 import React, { useCallback, useRef } from 'react'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { basename } from '@/lib/path'
 import {
   ChevronRight,
@@ -99,6 +100,7 @@ export function InlineInputRow({
   const inputRef = useRef<HTMLInputElement>(null)
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submitted = useRef(false)
+  const imeEnter = useImeEnterGestureOwnership()
   // Grace period flag: when a menu (context or dropdown) closes, its focus
   // management can momentarily steal focus from this input before the user
   // has a chance to type. During the grace window we re-focus on blur instead
@@ -218,7 +220,16 @@ export function InlineInputRow({
         ref={setInputRef}
         className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
         defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
+        onCompositionStart={() => imeEnter.setComposing(true)}
+        onCompositionEnd={() => imeEnter.setComposing(false)}
+        onKeyUp={imeEnter.onKeyUp}
         onKeyDown={(e) => {
+          // Why: this Enter creates or renames a file on disk. A conversion-confirm
+          // Enter — and the unmarked Enter/13 redispatched after compositionend —
+          // must not reach submit(), which is one-shot and cannot be undone.
+          if (imeEnter.ownsKeyDown(e)) {
+            return
+          }
           if (e.key === 'Enter') {
             e.preventDefault()
             submit(e.currentTarget.value)
@@ -236,6 +247,7 @@ export function InlineInputRow({
           // user leaving, so commit like Finder does rather than clinging to
           // the edit state — every row is itself a context-menu trigger, so
           // relatedTarget can't tell an ordinary row click from Radix cleanup.
+          imeEnter.reset()
           if (!focusSettled.current) {
             scheduleInputRefocus()
             return
@@ -342,6 +354,14 @@ export function shouldShowCopyFileAction(
   )
 }
 
+function getLocalDownloadName(destinationPath: string, platform: NodeJS.Platform): string {
+  const lastSeparatorIndex =
+    platform === 'win32'
+      ? Math.max(destinationPath.lastIndexOf('/'), destinationPath.lastIndexOf('\\'))
+      : destinationPath.lastIndexOf('/')
+  return destinationPath.slice(lastSeparatorIndex + 1)
+}
+
 export async function downloadRemoteFile(
   node: TreeNode,
   connectionIdOrRuntimeContext: string | RuntimeFileOperationArgs
@@ -363,17 +383,22 @@ export async function downloadRemoteFile(
     if (result.canceled) {
       return
     }
+    // Why: POSIX permits backslashes in saved names; only Windows treats them as separators.
+    const savedName = getLocalDownloadName(
+      result.destinationPath,
+      window.api.platform.get().platform
+    )
     toast.success(
       node.isDirectory
         ? translate(
             'auto.components.right.sidebar.FileExplorerRow.a4029c996b',
             "Downloaded folder '{{value0}}'",
-            { value0: node.name }
+            { value0: savedName }
           )
         : translate(
             'auto.components.right.sidebar.FileExplorerRow.bce4d4e44f',
             "Downloaded '{{value0}}'",
-            { value0: node.name }
+            { value0: savedName }
           ),
       {
         action: {

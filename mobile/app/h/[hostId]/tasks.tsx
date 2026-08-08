@@ -32,6 +32,7 @@ import {
   Send,
   X
 } from 'lucide-react-native'
+import { imeGuardedSubmitProps } from '../../../src/ime/ime-submit-carry'
 import type { RpcClient } from '../../../src/transport/rpc-client'
 import type { RpcSuccess } from '../../../src/transport/types'
 import { useHostClient } from '../../../src/transport/client-context'
@@ -10835,7 +10836,7 @@ export default function MobileTasksScreen() {
             autoCorrect={false}
             secureTextEntry
             editable={linearConnectState !== 'connecting'}
-            onSubmitEditing={() => void connectLinearAccount()}
+            {...imeGuardedSubmitProps(Platform.OS, () => void connectLinearAccount())}
           />
           {linearConnectState === 'error' && linearConnectError ? (
             <Text style={styles.detailError}>{linearConnectError}</Text>

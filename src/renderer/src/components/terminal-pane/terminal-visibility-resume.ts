@@ -15,6 +15,7 @@ import {
 } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 import { focusActivePane } from './pane-helpers'
 import { scheduleTabRevealWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
+import { flushDeferredPaneMetricOptionsIfMeasurable } from '@/lib/pane-manager/pane-fit'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024
@@ -72,6 +73,12 @@ export function resumeTerminalVisibility({
   captureViewportPositions(!wasVisible)
   withSuppressedScrollTracking(() => {
     if (shouldUseLightTabResume) {
+      let flushedDeferredMetrics = false
+      for (const pane of manager.getPanes()) {
+        if (flushDeferredPaneMetricOptionsIfMeasurable(pane)) {
+          flushedDeferredMetrics = true
+        }
+      }
       // Why: intra-worktree tab switches only toggle the overlay. Keeping
       // synchronous drain and atlas rebuilds off this path avoids racing the
       // overlay's delayed geometry fit. Still request hidden-output recovery:
@@ -81,10 +88,17 @@ export function resumeTerminalVisibility({
       // — a background agent streaming in another pane must not defer this tab's
       // atlas rebuild.
       scheduleTabRevealWebglAtlasRecovery()
+      if (flushedDeferredMetrics) {
+        // Why: the light path normally skips fitting, but flushed metrics changed
+        // cell size — refit so cols/rows match before the overlay settles.
+        manager.fitAllRevealedPanes()
+      }
       if (isActive) {
         focusActivePane(manager)
       }
     } else {
+      // fitAllRevealedPanes flushes after WebGL reattaches, avoiding a redundant
+      // full refresh in the suspended DOM renderer while preserving first paint.
       resumeTerminalVisibilityHeavy(manager, isActive)
     }
     enforceTerminalViewportIntents(manager)

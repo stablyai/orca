@@ -43,6 +43,9 @@ import {
   buildBrowserIframeClickedLinkRoutingScript
 } from './browser-clicked-link-routing'
 import { cleanElectronUserAgent } from './browser-session-ua'
+import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
+import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
+import { buildViewportUserAgentOverride } from './browser-viewport-user-agent'
 import type {
   BrowserViewportOverride,
   BrowserCertificateFailure,
@@ -130,16 +133,6 @@ function isAutomationVisibilityToken(token: unknown): token is string {
   return typeof token === 'string' && token.length > 0
 }
 
-// Why: responsive sites UA-sniff; this is Chrome DevTools' default iPhone UA template with the real Chrome major spliced in to keep sec-ch-ua consistent (see setupClientHintsOverride).
-function buildMobileUserAgent(chromeMajor: string): string {
-  return `Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/${chromeMajor}.0.0.0 Mobile/15E148 Safari/604.1`
-}
-
-function extractChromeMajor(ua: string): string {
-  const match = ua.match(/Chrome\/(\d+)/)
-  return match ? match[1] : '134'
-}
-
 export type BrowserGuestRegistration = {
   browserPageId?: string
   browserTabId?: string
@@ -157,6 +150,10 @@ type BrowserDownloadDoneState = 'completed' | 'cancelled' | 'interrupted'
 type PopupOwnerContext = {
   browserTabId: string
   rootGuestWebContentsId: number
+}
+type PendingMainFrameNavigation = {
+  currentUrl: string
+  supersededUrls: string[]
 }
 const SAFE_POPUP_WINDOW_OPTIONS = {
   alwaysOnTop: false,
@@ -231,6 +228,12 @@ export class BrowserManager {
   private readonly rendererWebContentsIdByTabId = new Map<string, number>()
   // Why: serialize per-tab setViewportOverride so rapid toggles don't interleave CDP commands and leave emulation in a wrong state.
   private readonly viewportOpsByTabId = new Map<string, Promise<unknown>>()
+  // Why: presence means the preset requires a CDP UA override (installed or in flight), so navigation
+  // can re-issue it against the target URL's identity.
+  private readonly viewportUaOverrideMobileByTabId = new Map<string, boolean>()
+  // Why: the in-flight main-frame navigation target, held only until commit or failure — getURL()
+  // still reports the outgoing page until then. See resolveTabNavigationUrl.
+  private readonly pendingNavigationByGuestId = new Map<number, PendingMainFrameNavigation>()
   private readonly contextMenuCleanupByTabId = new Map<string, () => void>()
   private readonly grabShortcutCleanupByTabId = new Map<string, () => void>()
   private readonly shortcutForwardingCleanupByTabId = new Map<string, () => void>()
@@ -781,20 +784,35 @@ export class BrowserManager {
       return { action: 'deny' }
     })
 
-    const navigationGuard = (event: Electron.Event, url: string): void => {
+    const navigationGuard = (event: Electron.Event, url: string): boolean => {
       // Why: Turnstile loads challenge resources via blob:; blocking them trips error 600010. Allow only http(s) blobs, not opaque ones.
       if (url.startsWith('blob:https://') || url.startsWith('blob:http://')) {
-        return
+        return true
       }
       // Why: initial file:// attach is allowed for user-opened previews, but block later file:// redirects so remote pages can't probe the FS.
       if (url.startsWith('file:')) {
         event.preventDefault()
-        return
+        return false
       }
       if (!normalizeBrowserNavigationUrl(url)) {
         // Why: will-attach-webview only validates the initial src; keep enforcing the allowlist on later navs.
         event.preventDefault()
+        return false
       }
+      return true
+    }
+
+    const willRedirectHandler = (
+      event: Electron.Event,
+      url: string,
+      _isInPlace: boolean,
+      isMainFrame: boolean
+    ): void => {
+      if (!navigationGuard(event, url) || !isMainFrame || isChromiumInternalErrorUrl(url)) {
+        return
+      }
+      this.updatePendingNavigationForRedirect(guest.id, url)
+      this.applyGoogleAuthUserAgent(guest, url)
     }
 
     const didFailLoadHandler = (
@@ -806,6 +824,12 @@ export class BrowserManager {
     ): void => {
       if (!isMainFrame) {
         return
+      }
+      // Why: a nav that never committed must not leave its target standing as the tab's host.
+      const failedNavigationWasCurrent = this.failPendingNavigation(guest.id, validatedURL)
+      if (failedNavigationWasCurrent) {
+        // The attempted host never committed, so restore every UA layer to the document that remains.
+        this.applyGoogleAuthUserAgent(guest, guest.getURL())
       }
       const browserPageId = this.tabIdByWebContentsId.get(guest.id)
       const certificateFailure = browserPageId
@@ -850,6 +874,10 @@ export class BrowserManager {
       if (!isMainFrame || isChromiumInternalErrorUrl(url)) {
         return
       }
+      // Why: getURL() still reports the previous committed URL until this navigation commits, so
+      // every UA writer must read the in-flight target or they disagree about the tab's host.
+      this.startPendingNavigation(guest.id, url)
+      this.applyGoogleAuthUserAgent(guest, url)
       this.certificateTrustController?.onMainFrameNavigationStarted(guest.id)
       // Why: a pre-registration failure belongs only to its own nav; a replacement nav must not replay it.
       this.pendingLoadFailuresByGuestId.delete(guest.id)
@@ -865,13 +893,15 @@ export class BrowserManager {
     }
 
     const didNavigateHandler = (_event: Electron.Event, url: string): void => {
+      // Why: once committed, getURL() reports this url, so the pending target is redundant.
+      this.pendingNavigationByGuestId.delete(guest.id)
       // Why: a committed nav makes the did-start-navigation stash obsolete; drop it so a later ERR_ABORTED can't restore an error over it.
       this.clearedLoadErrorsByGuestId.delete(guest.id)
       this.certificateTrustController?.onMainFrameNavigationCommitted(guest.id, url)
     }
 
     guest.on('will-navigate', navigationGuard)
-    guest.on('will-redirect', navigationGuard)
+    guest.on('will-redirect', willRedirectHandler)
     guest.on('did-start-navigation', didStartNavigationHandler)
     guest.on('did-navigate', didNavigateHandler)
     guest.on('did-fail-load', didFailLoadHandler)
@@ -905,12 +935,130 @@ export class BrowserManager {
       }
       if (!guest.isDestroyed()) {
         guest.off('will-navigate', navigationGuard)
-        guest.off('will-redirect', navigationGuard)
+        guest.off('will-redirect', willRedirectHandler)
         guest.off('did-start-navigation', didStartNavigationHandler)
         guest.off('did-navigate', didNavigateHandler)
         guest.off('did-fail-load', didFailLoadHandler)
       }
     })
+  }
+
+  // Why: navigator.userAgent (read by Google's auth JS) reflects the WebContents UA,
+  // not the request header, so the header-level Firefox switch in setupClientHintsOverride
+  // must be matched here per navigation or the two layers disagree — itself a bot tell.
+  // Restores the session's base identity off the auth hosts. Native-UA profiles opt out
+  // of the whole clean-UA path, so they keep their untouched identity everywhere.
+  private applyGoogleAuthUserAgent(guest: Electron.WebContents, url: string): void {
+    const browserPageId = this.tabIdByWebContentsId.get(guest.id)
+    // Why: popup child windows get these policies but are never in tabIdByWebContentsId, so a direct
+    // lookup misses the native-UA opt-out and would hand a native profile's popup the Firefox UA.
+    // That is worse than doing nothing: native sessions skip setupClientHintsOverride entirely, so
+    // the popup would send the raw Electron UA on the wire while navigator.userAgent claims Firefox.
+    const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
+    // Session state is authoritative before renderer registration and after a native profile imports a source UA.
+    const mode =
+      getBrowserSessionUserAgentMode(guest.session) ??
+      (ownerTabId ? this.userAgentModeByPageId.get(ownerTabId) : undefined)
+    if (mode === 'native') {
+      return
+    }
+    const firefoxUa = googleAuthUserAgent()
+    const currentUa = guest.getUserAgent()
+    if (isGoogleAuthUrl(url)) {
+      if (currentUa !== firefoxUa) {
+        guest.setUserAgent(firefoxUa)
+      }
+    } else if (currentUa === firefoxUa) {
+      // Only restore when the auth-host override is actually in place, so normal
+      // navigation never touches the session UA.
+      guest.setUserAgent(guest.session.getUserAgent())
+    }
+    // Why: gate on the DIRECT page id, not ownerTabId — a popup has no device-metrics override of
+    // its own, so inheriting the owner tab's preset UA would pair a mobile UA with a desktop viewport.
+    if (browserPageId) {
+      this.reapplyViewportUserAgentOverride(guest, browserPageId, url)
+    }
+  }
+
+  private startPendingNavigation(guestId: number, url: string): void {
+    const pending = this.pendingNavigationByGuestId.get(guestId)
+    this.pendingNavigationByGuestId.set(guestId, {
+      currentUrl: url,
+      supersededUrls: pending ? [...pending.supersededUrls, pending.currentUrl] : []
+    })
+  }
+
+  private updatePendingNavigationForRedirect(guestId: number, url: string): void {
+    const pending = this.pendingNavigationByGuestId.get(guestId)
+    if (!pending) {
+      this.pendingNavigationByGuestId.set(guestId, {
+        currentUrl: url,
+        supersededUrls: []
+      })
+      return
+    }
+    pending.currentUrl = url
+  }
+
+  private failPendingNavigation(guestId: number, failedUrl: string): boolean {
+    const pending = this.pendingNavigationByGuestId.get(guestId)
+    if (!pending) {
+      return false
+    }
+    const supersededIndex = pending.supersededUrls.indexOf(failedUrl)
+    if (supersededIndex !== -1) {
+      pending.supersededUrls.splice(supersededIndex, 1)
+      return false
+    }
+    if (pending.currentUrl !== failedUrl) {
+      return false
+    }
+    this.pendingNavigationByGuestId.delete(guestId)
+    return true
+  }
+
+  // Why: webContents.getURL() reports the last COMMITTED url, so mid-navigation it names the host
+  // the tab is leaving, not the one it is entering. Every UA writer must resolve the host through
+  // here or two writers racing the same navigation will pick opposite identities.
+  private resolveTabNavigationUrl(guest: Electron.WebContents): string {
+    return this.pendingNavigationByGuestId.get(guest.id)?.currentUrl ?? guest.getURL()
+  }
+
+  // Why: Emulation.setUserAgentOverride is set once and stands across every later navigation,
+  // outranking setUserAgent for navigator.userAgent. A viewport preset applied before reaching an
+  // auth host would otherwise pin navigator.userAgent to the Chrome-shaped preset UA while the
+  // request header says Firefox — the two-layer disagreement this scope exists to remove.
+  private reapplyViewportUserAgentOverride(
+    guest: Electron.WebContents,
+    browserTabId: string,
+    url: string
+  ): void {
+    const mobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
+    if (mobile === undefined) {
+      return
+    }
+    // Why: no queue needed — debugger.sendCommand dispatches in call order over one channel, so the
+    // later-issued write wins. What matters is that both writers resolve the SAME host, which they
+    // now do via the navigation target rather than the stale committed URL.
+    void this.sendViewportUserAgentOverride(guest, mobile, url).catch(() => {})
+  }
+
+  private async sendViewportUserAgentOverride(
+    guest: Electron.WebContents,
+    mobile: boolean,
+    url?: string
+  ): Promise<void> {
+    if (guest.isDestroyed() || !guest.debugger.isAttached()) {
+      return
+    }
+    await guest.debugger.sendCommand(
+      'Emulation.setUserAgentOverride',
+      buildViewportUserAgentOverride({
+        url: url ?? this.resolveTabNavigationUrl(guest),
+        mobile,
+        baseUserAgent: cleanElectronUserAgent(guest.getUserAgent())
+      })
+    )
   }
 
   private createPopupChildWindowWithOriginBar(
@@ -961,6 +1109,7 @@ export class BrowserManager {
     this.clickedLinkFrameNameByGuestId.delete(guestWebContentsId)
     this.offscreenGuestIds.delete(guestWebContentsId)
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
+    this.pendingNavigationByGuestId.delete(guestWebContentsId)
     // Why: a popup must stop inheriting authorization the moment its owner retires, before Chromium destroys the child.
     if (isPrimaryGuest) {
       for (const [popupGuestId, owner] of this.popupOwnerContextByGuestId) {
@@ -1094,6 +1243,10 @@ export class BrowserManager {
     this.worktreeIdByTabId.delete(browserTabId)
     // Why: drop the viewport-op chain so the Map doesn't retain a promise keyed to a destroyed guest.
     this.viewportOpsByTabId.delete(browserTabId)
+    this.viewportUaOverrideMobileByTabId.delete(browserTabId)
+    if (wcId !== undefined) {
+      this.pendingNavigationByGuestId.delete(wcId)
+    }
     this.annotationViewportBridgeOpsByTabId.delete(browserTabId)
   }
 
@@ -1159,6 +1312,8 @@ export class BrowserManager {
     this.worktreeIdByTabId.clear()
     this.sessionProfileIdByPageId.clear()
     this.userAgentModeByPageId.clear()
+    this.viewportUaOverrideMobileByTabId.clear()
+    this.pendingNavigationByGuestId.clear()
     this.pendingLoadFailuresByGuestId.clear()
     this.loadErrorsByGuestId.clear()
     this.clearedLoadErrorsByGuestId.clear()
@@ -1552,36 +1707,10 @@ export class BrowserManager {
         })
         // Why: viewport sizing must not override a profile's explicit native-UA identity.
         if (this.userAgentModeByPageId.get(browserTabId) !== 'native') {
-          if (override.mobile) {
-            const chromeMajor = extractChromeMajor(cleanElectronUserAgent(guest.getUserAgent()))
-            // Why: userAgentMetadata must accompany the mobile UA so client hints match, or bot-detection flags the desktop-hint leak.
-            await dbg.sendCommand('Emulation.setUserAgentOverride', {
-              userAgent: buildMobileUserAgent(chromeMajor),
-              userAgentMetadata: {
-                brands: [
-                  { brand: 'Google Chrome', version: chromeMajor },
-                  { brand: 'Chromium', version: chromeMajor },
-                  { brand: 'Not/A)Brand', version: '24' }
-                ],
-                fullVersionList: [
-                  { brand: 'Google Chrome', version: `${chromeMajor}.0.0.0` },
-                  { brand: 'Chromium', version: `${chromeMajor}.0.0.0` },
-                  { brand: 'Not/A)Brand', version: '24.0.0.0' }
-                ],
-                fullVersion: `${chromeMajor}.0.0.0`,
-                platform: 'iOS',
-                platformVersion: '17.0',
-                architecture: '',
-                model: 'iPhone',
-                mobile: true
-              }
-            })
-          } else {
-            // Why: desktop presets still need the clean (non-Electron) UA so Cloudflare/Turnstile don't flag the session.
-            await dbg.sendCommand('Emulation.setUserAgentOverride', {
-              userAgent: cleanElectronUserAgent(guest.getUserAgent())
-            })
-          }
+          // Navigation must see the preset intent while the final CDP command is in flight.
+          this.viewportUaOverrideMobileByTabId.set(browserTabId, override.mobile)
+          // Why: same sender as the navigation path, so both resolve the tab's host identically.
+          await this.sendViewportUserAgentOverride(guest, override.mobile)
         }
       } else {
         await dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
@@ -1589,8 +1718,18 @@ export class BrowserManager {
           enabled: false,
           maxTouchPoints: 0
         })
+        const trackedMobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
+        // A navigation after this point must not re-install the override behind the clear.
+        this.viewportUaOverrideMobileByTabId.delete(browserTabId)
         // Why: passing an empty string restores the session default UA.
-        await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: '' })
+        try {
+          await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: '' })
+        } catch (error) {
+          if (trackedMobile !== undefined) {
+            this.viewportUaOverrideMobileByTabId.set(browserTabId, trackedMobile)
+          }
+          throw error
+        }
       }
       return true
     } catch {

@@ -61,6 +61,7 @@ import {
 } from './project-visible-table-cache'
 import { translate } from '@/i18n/i18n'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
+import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 import {
   githubProjectHost,
   githubProjectIdentityKey
@@ -1066,7 +1067,7 @@ function ProjectSearchInput({
     const onKeyDown = (event: KeyboardEvent): void => {
       const isMac = navigator.userAgent.includes('Mac')
       const modifierPressed = isMac ? event.metaKey : event.ctrlKey
-      if (!modifierPressed || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') {
+      if (!modifierPressed || event.altKey || event.shiftKey || !isLatinShortcutKey(event, 'f')) {
         return
       }
       if (document.querySelector('[role="dialog"]')) {

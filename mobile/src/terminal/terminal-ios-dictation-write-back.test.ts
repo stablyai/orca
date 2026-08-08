@@ -22,4 +22,12 @@ describe('terminal iOS dictation write-back', () => {
   it('still normalizes the buffered command text at send time', () => {
     expect(sessionRouteSource).toContain('normalizeTerminalTextInput(input)')
   })
+
+  it('leaves buffered autocorrection native and remounts Android when it changes', () => {
+    expect(sessionRouteSource).toContain('onChangeText={setInput}')
+    expect(sessionRouteSource).toContain('autoCorrect={autocompleteEnabled}')
+    expect(sessionRouteSource).toContain('spellCheck={autocompleteEnabled}')
+    expect(sessionRouteSource).toContain("? 'cmd-input-ac-on'")
+    expect(sessionRouteSource).toContain(": 'cmd-input-ac-off'")
+  })
 })

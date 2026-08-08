@@ -7,6 +7,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { linearUpdateIssue } from '@/runtime/runtime-linear-client'
 import type { LinearIssue } from '../../../shared/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
@@ -42,6 +43,7 @@ export function LinearIssueTextEditor({
   const [savingField, setSavingField] = useState<LinearIssueTextField | null>(null)
   const lastIssueIdRef = useRef(issue.id)
   const mountedRef = useMountedRef()
+  const titleImeEnter = useImeEnterGestureOwnership()
   const resolvedDraftState = resolveLinearIssueTextDraftState(draftState, issue)
   const issueChanged = draftState.issueId !== issue.id
   if (resolvedDraftState !== draftState) {
@@ -172,6 +174,9 @@ export function LinearIssueTextEditor({
 
   const handleTitleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (titleImeEnter.ownsKeyDown(event)) {
+        return
+      }
       if (event.key === 'Enter') {
         event.preventDefault()
         event.currentTarget.blur()
@@ -179,7 +184,7 @@ export function LinearIssueTextEditor({
       }
       handleDescriptionKeyDown(event)
     },
-    [handleDescriptionKeyDown]
+    [handleDescriptionKeyDown, titleImeEnter]
   )
 
   const titleClass =
@@ -193,8 +198,14 @@ export function LinearIssueTextEditor({
           <textarea
             value={titleDraft}
             onChange={(event) => updateTitleDraft(event.target.value)}
-            onBlur={() => void saveField('title')}
+            onCompositionStart={() => titleImeEnter.setComposing(true)}
+            onCompositionEnd={() => titleImeEnter.setComposing(false)}
+            onBlur={() => {
+              titleImeEnter.reset()
+              void saveField('title')
+            }}
             onKeyDown={handleTitleKeyDown}
+            onKeyUp={titleImeEnter.onKeyUp}
             disabled={savingField === 'title'}
             rows={1}
             aria-label={translate(

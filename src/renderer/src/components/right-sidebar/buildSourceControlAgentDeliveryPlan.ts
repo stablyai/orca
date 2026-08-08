@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/types'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
-import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
+import { resolveNativeChatLaunchSessionOptions } from '@/components/native-chat/native-chat-session-option-enrichment'
 
 type BuildSourceControlAgentDeliveryPlanArgs = {
   selectedAgent: TuiAgent | null
@@ -36,7 +36,7 @@ export function buildSourceControlAgentDeliveryPlan({
     commandInput,
     agentArgs,
     sessionOptions: selectedAgent
-      ? resolveNativeChatSessionOptionDefaults(
+      ? resolveNativeChatLaunchSessionOptions(
           useAppStore.getState().settings?.nativeChatSessionOptions,
           selectedAgent
         )

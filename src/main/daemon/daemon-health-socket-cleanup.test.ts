@@ -79,6 +79,7 @@ describe('daemon health socket listener cleanup', () => {
     const result = killStaleDaemon(dir, socketPath, tokenPath)
     await vi.advanceTimersByTimeAsync(500)
 
+    // The publisher re-probes before replacing, so an unknown launcher hint can allow a fork.
     await expect(result).resolves.toEqual({ killed: false, liveOwnerSurvived: false })
     expect(socket.listenerCount('connect')).toBe(0)
     expect(socket.listenerCount('error')).toBe(0)

@@ -2,8 +2,7 @@
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import type { IBuffer, IDisposable } from '@xterm/xterm'
-import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-ime-anchor'
-import { installTerminalImeCompositionRoute } from './terminal-ime-composition-route'
+import { viewportShowsParkedCursorAgentScreen } from './cursor-agent-parked-screen'
 import { detectAgentStatusFromTitle, agentTypeToIconAgent, isClaudeAgent } from '@/lib/agent-status'
 import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
 import { resolvePaneTitleDecision } from './terminal-title-evidence'
@@ -235,6 +234,7 @@ import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { isKnownTuiAgentTerminalStartupCommand } from './terminal-startup-command-classifier'
 import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
+import { createCodexBackfillErrorDetector } from './codex-backfill-error-detector'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
@@ -283,6 +283,7 @@ import {
 } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import {
   resolveTuiAgentLaunchArgs,
@@ -307,7 +308,6 @@ import {
   recognizeAgentProcessFromCommandLine
 } from '../../../../shared/agent-process-recognition'
 import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { createDraftPasteReadyScanner } from '../../../../shared/draft-paste-ready-scanner'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
@@ -334,6 +334,7 @@ import {
 } from './renderer-owned-agent-status-registry'
 import type { DirectSshPaneRetryAttempt } from '@/store/slices/direct-ssh-terminal-recovery'
 import { directSshAuthoritiesEqual } from '@/store/slices/direct-ssh-terminal-authority-ledger'
+import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -452,15 +453,13 @@ function parsedViewportShowsParkedCursorAgentScreen(
   ) {
     return null
   }
-  return (
-    resolveCursorAgentImeAnchor({
-      buffer,
-      rows: terminal.rows,
-      cols: terminal.cols,
-      cursorX: buffer.cursorX,
-      cursorY: buffer.cursorY
-    }) !== null
-  )
+  return viewportShowsParkedCursorAgentScreen({
+    buffer,
+    rows: terminal.rows,
+    cols: terminal.cols,
+    cursorX: buffer.cursorX,
+    cursorY: buffer.cursorY
+  })
 }
 
 function terminalHasFocusReportingEnabled(terminal: TerminalWithFocusMode): boolean {
@@ -2260,7 +2259,7 @@ export function connectPanePty(
     }
     if (
       (event.metaKey || event.ctrlKey) &&
-      event.key.toLowerCase() === 'c' &&
+      isLatinShortcutKey(event, 'c') &&
       pane.terminal.hasSelection()
     ) {
       return
@@ -4047,6 +4046,9 @@ export function connectPanePty(
   )
 
   const onDataDisposable = pane.terminal.onData((data) => {
+    if (disposed || deps.paneTransportsRef.current.get(pane.id) !== transport) {
+      return
+    }
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
     // OSC 10/11, focus, CPR) via onData. When we replay recorded PTY bytes
     // into xterm for scrollback/cold-restore/snapshot, those queries would
@@ -4182,13 +4184,6 @@ export function connectPanePty(
       requestRecoveryForUndeliverableInput()
     }
   })
-  const imeCompositionRouteDisposable = installTerminalImeCompositionRoute({
-    terminalElement: pane.terminal.element,
-    terminal: pane.terminal,
-    capturedTransport: transport,
-    getCurrentTransport: () => deps.paneTransportsRef.current.get(pane.id)
-  })
-
   const shouldSuppressDesktopPtyResize = (): boolean => {
     const currentPtyId = transport.getPtyId()
     return Boolean(
@@ -4630,6 +4625,10 @@ export function connectPanePty(
       }
       deps.onPtyErrorRef?.current?.(pane.id, message)
     }
+    const codexBackfillErrorDetector =
+      paneStartup?.launchAgent === 'codex' || tab?.launchAgent === 'codex'
+        ? createCodexBackfillErrorDetector()
+        : null
 
     // Why: shared registration so both fresh-spawn and reattach paths install
     // the same SerializeAddon-backed serializer plus the onTitleChange wrapper
@@ -4926,18 +4925,6 @@ export function connectPanePty(
       sessionRestoredBannerShown = reason
       deps.onShowSessionRestoredBanner(pane.id, reason)
     }
-    const getColdRestoreAgentResumePlatform = (): NodeJS.Platform => {
-      if (projectRuntime?.status === 'repair-required') {
-        return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
-      }
-      if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-        return 'linux'
-      }
-      if (connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
-        return 'linux'
-      }
-      return CLIENT_PLATFORM
-    }
     const buildColdRestoreAgentResumeStartup = (): ColdRestoreAgentResumeStartup | null => {
       if (pendingStartupCommand) {
         return null
@@ -4970,7 +4957,16 @@ export function connectPanePty(
       const launchConfig =
         (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
         matchingSleepingLaunchConfig
-      const resumePlatform = getColdRestoreAgentResumePlatform()
+      // Why: the resume line is typed into this pane's live shell, so its quoting must
+      // follow the tab's effective Windows shell, not the win32 PowerShell default.
+      const resumeTarget = resolveAgentResumeLaunchTarget({
+        projectRuntime,
+        connectionId,
+        executionHostId,
+        worktreePath: worktree?.path,
+        terminalWindowsShell: state.settings?.terminalWindowsShell,
+        tabShellOverride: shellOverride
+      })
       const startupPlan = buildAgentResumeStartupPlan({
         agent,
         providerSession,
@@ -4987,7 +4983,8 @@ export function connectPanePty(
         ...(launchConfig?.ompResumeFilePath
           ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
           : {}),
-        platform: resumePlatform
+        platform: resumeTarget.platform,
+        shell: resumeTarget.shell
       })
       if (!startupPlan) {
         return null
@@ -7747,6 +7744,10 @@ export function connectPanePty(
         commandLifecycle.handlePtyData(data)
       }
       commandCodeOutputStatusDetector?.observe(data)
+      const codexBackfillNotice = codexBackfillErrorDetector?.observe(data)
+      if (codexBackfillNotice) {
+        reportError(codexBackfillNotice)
+      }
       // Why: split panes have visible-but-inactive panes the user watches; throttle only when the pane or whole document is hidden.
       const foreground =
         shouldWritePtyOutputForeground(deps.isVisibleRef.current) && meta?.background !== true
@@ -9416,7 +9417,6 @@ export function connectPanePty(
         clearTimeout(connectFallbackTimer)
         connectFallbackTimer = null
       }
-      imeCompositionRouteDisposable.dispose()
       onDataDisposable.dispose()
       userInputActivityDisposable?.dispose()
       terminalCapabilityRepliesDisposable.dispose()
