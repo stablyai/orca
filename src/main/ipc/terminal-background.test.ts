@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -130,6 +130,30 @@ describe('registerTerminalBackgroundHandlers', () => {
 
     await expect(getHandler('terminalBackground:pick')({ sender: {} })).rejects.toThrow(
       'Unsupported file'
+    )
+  })
+
+  it('rejects a picked path that is not a file', async () => {
+    // Why: the extension gate passes for a directory named like an image, so
+    // isFile() is the only guard between a directory and copyFile.
+    const src = join(tempDir, 'looks-like-an-image.png')
+    await mkdir(src, { recursive: true })
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [src] })
+
+    await expect(getHandler('terminalBackground:pick')({ sender: {} })).rejects.toThrow(
+      'Selected path is not a file'
+    )
+  })
+
+  it('rejects a picked image above the size cap', async () => {
+    const src = join(tempDir, 'too-big.png')
+    await writeFile(src, Buffer.alloc(0))
+    // Why: extend sparsely rather than writing 64 MB of real bytes.
+    await truncate(src, 64 * 1024 * 1024 + 1)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [src] })
+
+    await expect(getHandler('terminalBackground:pick')({ sender: {} })).rejects.toThrow(
+      'File is too large'
     )
   })
 
