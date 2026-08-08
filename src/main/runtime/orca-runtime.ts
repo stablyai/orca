@@ -3697,6 +3697,9 @@ export class OrcaRuntimeService {
       throw new Error('Quick command limit reached')
     }
     const next = applyTerminalQuickCommandMutation(current, mutation)
+    if (next === null) {
+      throw new Error('Invalid mutation: stale or invalid command order')
+    }
     this.store.updateSettings({ terminalQuickCommands: next }, { notifyListeners: true })
     return this.getClientTerminalQuickCommands()
   }

@@ -146,6 +146,17 @@ export function QuickCommandsPane({
     updateSettings({ terminalQuickCommands: nextList })
   }
 
+  const reorderCommands = useCallback(
+    (orderedIds: string[]): void => {
+      const byId = new Map(commands.map((cmd) => [cmd.id, cmd]))
+      const reordered = orderedIds.map((id) => byId.get(id)).filter((cmd): cmd is TerminalQuickCommand => cmd !== undefined)
+      if (reordered.length === commands.length) {
+        updateSettings({ terminalQuickCommands: reordered })
+      }
+    },
+    [commands, updateSettings]
+  )
+
   const removeCommand = async (command: TerminalQuickCommand): Promise<void> => {
     const confirmed = await confirm({
       title: translate(
@@ -208,6 +219,7 @@ export function QuickCommandsPane({
         repoById={repoById}
         onEdit={(command) => setEditor({ mode: 'edit', command })}
         onRemove={(command) => void removeCommand(command)}
+        onReorder={reorderCommands}
       />
 
       {editor !== null ? (

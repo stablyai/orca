@@ -3,6 +3,7 @@ import { ChevronDown, Play } from 'lucide-react'
 import {
   Command,
   CommandEmpty,
+  CommandGroup,
   CommandInput,
   CommandList,
   CommandSeparator
@@ -338,39 +339,57 @@ export function TabBarQuickCommandsMenu({
                       )}
                 </CommandEmpty>
               ) : null}
-              {filteredRepoCommands.map((command) => (
-                <TabBarQuickCommandItem
-                  key={command.id}
-                  command={command}
-                  onRun={() => runAndClose(command)}
-                  onEdit={() => {
-                    closeMenu()
-                    onEditCommand(command)
-                  }}
-                  onDelete={() => {
-                    closeMenu()
-                    onDeleteCommand(command)
-                  }}
-                />
-              ))}
+              {filteredRepoCommands.length > 0 ? (
+                <CommandGroup
+                  heading={translate(
+                    'auto.components.tab.bar.TabBarQuickCommandsButton.repo-commands',
+                    'Project'
+                  )}
+                >
+                  {filteredRepoCommands.map((command) => (
+                    <TabBarQuickCommandItem
+                      key={command.id}
+                      command={command}
+                      onRun={() => runAndClose(command)}
+                      onEdit={() => {
+                        closeMenu()
+                        onEditCommand(command)
+                      }}
+                      onDelete={() => {
+                        closeMenu()
+                        onDeleteCommand(command)
+                      }}
+                    />
+                  ))}
+                </CommandGroup>
+              ) : null}
               {filteredRepoCommands.length > 0 && filteredGlobalCommands.length > 0 ? (
                 <CommandSeparator className="my-1" />
               ) : null}
-              {filteredGlobalCommands.map((command) => (
-                <TabBarQuickCommandItem
-                  key={command.id}
-                  command={command}
-                  onRun={() => runAndClose(command)}
-                  onEdit={() => {
-                    closeMenu()
-                    onEditCommand(command)
-                  }}
-                  onDelete={() => {
-                    closeMenu()
-                    onDeleteCommand(command)
-                  }}
-                />
-              ))}
+              {filteredGlobalCommands.length > 0 ? (
+                <CommandGroup
+                  heading={translate(
+                    'auto.components.tab.bar.TabBarQuickCommandsButton.global-commands',
+                    'Global'
+                  )}
+                >
+                  {filteredGlobalCommands.map((command) => (
+                    <TabBarQuickCommandItem
+                      key={command.id}
+                      command={command}
+                      onRun={() => runAndClose(command)}
+                      onEdit={() => {
+                        closeMenu()
+                        onEditCommand(command)
+                      }}
+                      onDelete={() => {
+                        closeMenu()
+                        onDeleteCommand(command)
+                      }}
+                    />
+                  ))}
+                </CommandGroup>
+              ) : null}
             </CommandList>
             <div className="border-t border-border/50 p-1">
               <button

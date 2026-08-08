@@ -22,6 +22,7 @@ const DEFAULT_TERMINAL_QUICK_COMMANDS: TerminalQuickCommand[] = []
 export type TerminalQuickCommandMutation =
   | { type: 'upsert'; command: TerminalQuickCommand }
   | { type: 'delete'; id: string }
+  | { type: 'reorder'; orderedIds: readonly string[] }
 
 export function getDefaultTerminalQuickCommands(): TerminalQuickCommand[] {
   return DEFAULT_TERMINAL_QUICK_COMMANDS.map((command) => ({ ...command }))
@@ -236,9 +237,34 @@ export function parseNormalizedTerminalQuickCommands(
 export function applyTerminalQuickCommandMutation(
   commands: readonly TerminalQuickCommand[],
   mutation: TerminalQuickCommandMutation
-): TerminalQuickCommand[] {
+): TerminalQuickCommand[] | null {
   if (mutation.type === 'delete') {
     return commands.filter((command) => command.id !== mutation.id)
+  }
+  if (mutation.type === 'reorder') {
+    if (mutation.orderedIds.length !== commands.length) {
+      return null
+    }
+    const seen = new Set<string>()
+    for (const id of mutation.orderedIds) {
+      if (typeof id !== 'string' || seen.has(id)) {
+        return null
+      }
+      seen.add(id)
+    }
+    const byId = new Map<string, TerminalQuickCommand>()
+    for (const cmd of commands) {
+      byId.set(cmd.id, cmd)
+    }
+    const reordered: TerminalQuickCommand[] = []
+    for (const id of mutation.orderedIds) {
+      const command = byId.get(id)
+      if (!command) {
+        return null
+      }
+      reordered.push(command)
+    }
+    return reordered
   }
   const existingIndex = commands.findIndex((command) => command.id === mutation.command.id)
   if (existingIndex === -1) {
