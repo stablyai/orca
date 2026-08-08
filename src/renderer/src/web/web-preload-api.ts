@@ -9,6 +9,7 @@ import type {
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { parseHostAccessLink } from '../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing-verification'
+import { classifyExternalAppUrl } from '../../../shared/external-app-url'
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import type {
@@ -3216,7 +3217,24 @@ function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
       Promise.resolve(window.open(path, '_blank', 'noopener,noreferrer') as never),
     openInFileManager: () => Promise.resolve(openResult),
     openInExternalEditor: () => Promise.resolve(openResult),
-    openUrl: (url) => Promise.resolve(window.open(url, '_blank', 'noopener,noreferrer') as never),
+    openUrl: async (url) => {
+      // Why: desktop shell:openUrl classifies + confirms custom schemes; web must not
+      // silently window.open app handlers (no openExternal confirm dialog) (#13225).
+      const classified = classifyExternalAppUrl(url)
+      if (!classified.ok) {
+        return
+      }
+      if (classified.kind === 'http') {
+        window.open(classified.url, '_blank', 'noopener,noreferrer')
+        return
+      }
+      const ok = window.confirm(
+        `Open this ${classified.schemeLabel} link in the registered app?\n\n${classified.url}`
+      )
+      if (ok) {
+        window.open(classified.url, '_blank', 'noopener,noreferrer')
+      }
+    },
     openFilePath: () => Promise.resolve(false),
     openFileUri: (uri) =>
       Promise.resolve(window.open(uri, '_blank', 'noopener,noreferrer') as never),

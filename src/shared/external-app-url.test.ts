@@ -39,6 +39,22 @@ describe('classifyExternalAppUrl', () => {
       ok: false,
       reason: 'denied'
     })
+    expect(classifyExternalAppUrl('smb://server/share')).toEqual({
+      ok: false,
+      reason: 'denied'
+    })
+    expect(classifyExternalAppUrl('jnlp://example.com/app.jnlp')).toEqual({
+      ok: false,
+      reason: 'denied'
+    })
+    expect(classifyExternalAppUrl('ms-msdt://idpcmdi?page=...')).toEqual({
+      ok: false,
+      reason: 'denied'
+    })
+    expect(classifyExternalAppUrl('search-ms:query=test')).toEqual({
+      ok: false,
+      reason: 'denied'
+    })
   })
 
   it('rejects invalid input', () => {
@@ -52,5 +68,12 @@ describe('TERMINAL_WEB_AND_APP_URL_REGEX', () => {
     const text = 'see https://ex.com and obsidian://open?vault=v file.md'
     const matches = text.match(new RegExp(TERMINAL_WEB_AND_APP_URL_REGEX.source, 'g'))
     expect(matches).toEqual(expect.arrayContaining(['https://ex.com', 'obsidian://open?vault=v']))
+  })
+
+  it('does not linkify denied schemes', () => {
+    const text =
+      'file:///etc/passwd javascript:alert(1) chrome://settings data:text/html,hi smb://host/share jnlp://x/app.jnlp'
+    const matches = text.match(new RegExp(TERMINAL_WEB_AND_APP_URL_REGEX.source, 'g'))
+    expect(matches).toBeNull()
   })
 })

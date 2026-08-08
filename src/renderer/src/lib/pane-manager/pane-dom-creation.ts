@@ -6,7 +6,10 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
 import type { ITerminalOptions } from '@xterm/xterm'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
-import { TERMINAL_WEB_AND_APP_URL_REGEX } from '../../../../shared/external-app-url'
+import {
+  classifyExternalAppUrl,
+  TERMINAL_WEB_AND_APP_URL_REGEX
+} from '../../../../shared/external-app-url'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-pointer'
 import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
@@ -16,7 +19,16 @@ import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
 import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
 import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
 
+function customAppSchemeOpenHint(): string {
+  const mac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+  return mac ? '⌘+click to open in the registered app' : 'Ctrl+click to open in the registered app'
+}
+
 function defaultLinkTooltipText(uri: string, openLinkHint: string): string {
+  const classified = classifyExternalAppUrl(uri)
+  if (classified.ok && classified.kind === 'custom') {
+    return `${uri} (${customAppSchemeOpenHint()})`
+  }
   return `${uri} (${openLinkHint})`
 }
 
