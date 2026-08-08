@@ -160,6 +160,48 @@ describe('resolveNativeChatLeafRoute', () => {
     ).toEqual({ chatLeafId: null, exitChat: true })
   })
 
+  it('keeps chat open on confirmed exit when a recent send suppresses the handoff (#10098)', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'exited-agent',
+        activeLeafId: 'exited-agent',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true,
+        chatLeafHasConfirmedAgentExit: true,
+        suppressExitChat: true
+      })
+    ).toEqual({ chatLeafId: 'exited-agent', exitChat: false })
+  })
+
+  it('does not retarget to an eligible sibling while suppress is active (#10098)', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'sending-leaf',
+        activeLeafId: 'agent-sibling',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true,
+        chatLeafHasConfirmedAgentExit: true,
+        suppressExitChat: true
+      })
+    ).toEqual({ chatLeafId: 'sending-leaf', exitChat: false })
+  })
+
+  it('still exits when suppress is set but the chat leaf is gone', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'closed-agent',
+        activeLeafId: 'shell-leaf',
+        chatLeafStillMounted: false,
+        activeLeafIsEligible: false,
+        chatLeafHasConfirmedAgentExit: true,
+        suppressExitChat: true
+      })
+    ).toEqual({ chatLeafId: null, exitChat: true })
+  })
+
   it('moves chat to an eligible sibling after the owning agent exits', () => {
     expect(
       resolveNativeChatLeafRoute({

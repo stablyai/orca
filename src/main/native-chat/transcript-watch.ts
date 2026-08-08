@@ -1,5 +1,6 @@
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { resolveHostReadableTranscriptPath } from './host-readable-transcript-path'
 import { resolveSessionFilePath } from './session-file-resolver'
 import { installTranscriptWatcher } from './transcript-watch-engine'
 import type {
@@ -39,7 +40,12 @@ const FALLBACK_RESOLVE_POLL_MS = 5_000
 
 function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | null {
   const path = args.transcriptPath?.trim()
-  return path && extname(path) === '.jsonl' ? path : null
+  if (!path || extname(path) !== '.jsonl') {
+    return null
+  }
+  // Why: WSL hooks report Linux paths; translate to a host-openable UNC so the
+  // exact-path install does not wait for the slower id-glob fallback (#10523).
+  return resolveHostReadableTranscriptPath(path)
 }
 
 /**

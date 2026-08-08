@@ -266,6 +266,34 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(realFile)
   })
 
+  it('resolves a Codex rollout under an injected WSL managed sessions root', async () => {
+    // Why (#10523): WSL Codex writes under the guest managed home; id search must
+    // include those roots so Chat UI can load when the hook path is still Linux-only.
+    const root = await makeRoot('orca-native-chat-resolve-wsl-codex-')
+    const wslSessionsDir = join(
+      root,
+      'wsl',
+      'Ubuntu',
+      'home',
+      'ada',
+      '.local',
+      'share',
+      'orca',
+      'codex-runtime-home',
+      'home',
+      'sessions'
+    )
+    const dayDir = join(wslSessionsDir, '2026', '07', '24')
+    await mkdir(dayDir, { recursive: true })
+    const target = join(dayDir, 'rollout-2026-07-24T12-00-00-wsl-sess.jsonl')
+    await writeFile(target, '{}\n')
+
+    const resolved = await resolveSessionFilePath('codex', 'wsl-sess', {
+      codexSessionsDirs: [join(root, 'empty-managed'), wslSessionsDir]
+    })
+    expect(resolved).toBe(target)
+  })
+
   it('falls back to the id glob when the hook transcriptPath does not exist', async () => {
     const root = await makeRoot('orca-native-chat-resolve-path-stale-')
     const claudeProjectsDir = join(root, 'claude-projects')
