@@ -58,9 +58,19 @@ describe('parseClaudeModelList', () => {
       label: 'Opus (1M context)',
       description: 'Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok',
       effortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
-      supportsFastMode: true
+      supportsFastMode: true,
+      supportsAdaptiveThinking: false
     })
-    expect(parsed[2]).toMatchObject({ effortLevels: [], supportsFastMode: false })
+    expect(parsed[1]).toMatchObject({
+      id: 'sonnet',
+      supportsAdaptiveThinking: true,
+      description: expect.stringContaining('Adaptive thinking')
+    })
+    expect(parsed[2]).toMatchObject({
+      effortLevels: [],
+      supportsFastMode: false,
+      supportsAdaptiveThinking: false
+    })
   })
 
   it('skips init noise, CRLF endings, and duplicate values', () => {
@@ -73,14 +83,26 @@ describe('parseClaudeModelList', () => {
         { value: '  ', displayName: 'Blank' }
       ])}\r\n`
     expect(parseClaudeModelList(stdout)).toEqual([
-      { id: 'sonnet', label: 'Sonnet', effortLevels: [], supportsFastMode: false }
+      {
+        id: 'sonnet',
+        label: 'Sonnet',
+        effortLevels: [],
+        supportsFastMode: false,
+        supportsAdaptiveThinking: false
+      }
     ])
   })
 
   it('skips non-object model entries instead of failing the discovery response', () => {
     const stdout = controlResponseLine([null, 7, [], { value: 'sonnet', displayName: 'Sonnet' }])
     expect(parseClaudeModelList(stdout)).toEqual([
-      { id: 'sonnet', label: 'Sonnet', effortLevels: [], supportsFastMode: false }
+      {
+        id: 'sonnet',
+        label: 'Sonnet',
+        effortLevels: [],
+        supportsFastMode: false,
+        supportsAdaptiveThinking: false
+      }
     ])
   })
 

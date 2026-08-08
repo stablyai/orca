@@ -31,6 +31,8 @@ export type ClaudeListedModel = {
   /** `--effort` values this model accepts; empty when it has no effort control. */
   effortLevels: string[]
   supportsFastMode: boolean
+  /** Model can use adaptive thinking budgets when the host CLI reports the flag (#13208). */
+  supportsAdaptiveThinking: boolean
 }
 
 const CLAUDE_MODEL_LIST_JSON_LIMITS = {
@@ -53,6 +55,7 @@ type RawListedModel = {
   supportsEffort?: unknown
   supportedEffortLevels?: unknown
   supportsFastMode?: unknown
+  supportsAdaptiveThinking?: unknown
 }
 
 function toListedModel(value: unknown): ClaudeListedModel | null {
@@ -65,18 +68,27 @@ function toListedModel(value: unknown): ClaudeListedModel | null {
     return null
   }
   const label = typeof raw.displayName === 'string' && raw.displayName.trim() ? raw.displayName : id
-  const description =
+  let description =
     typeof raw.description === 'string' && raw.description.trim() ? raw.description : undefined
   const effortLevels =
     raw.supportsEffort === true && Array.isArray(raw.supportedEffortLevels)
       ? raw.supportedEffortLevels.filter((level): level is string => typeof level === 'string')
       : []
+  const supportsAdaptiveThinking = raw.supportsAdaptiveThinking === true
+  // Why: the catalog previously dropped this flag entirely (#13208); surface it
+  // on the picker description so hosts that report it are not silent.
+  if (supportsAdaptiveThinking && description && !/adaptive thinking/i.test(description)) {
+    description = `${description} · Adaptive thinking`
+  } else if (supportsAdaptiveThinking && !description) {
+    description = 'Adaptive thinking'
+  }
   return {
     id,
     label,
     ...(description ? { description } : {}),
     effortLevels,
-    supportsFastMode: raw.supportsFastMode === true
+    supportsFastMode: raw.supportsFastMode === true,
+    supportsAdaptiveThinking
   }
 }
 
