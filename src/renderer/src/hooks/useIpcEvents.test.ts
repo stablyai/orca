@@ -6698,7 +6698,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expectWorktreeRouting('wt-1'),
       undefined
     )
-    expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Codex - action required')
+    expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Codex - action required', {
+      worktreeId: 'wt-1',
+      site: 'ipc-agent-status-title'
+    })
     expect(observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(1)
   })
 
@@ -7423,7 +7426,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
       undefined
     )
     expect(updateTabTitle).toHaveBeenCalledTimes(1)
-    expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Codex ready')
+    // The payload carried no worktree, so the context falls back to the store lookup.
+    expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Codex ready', {
+      worktreeId: 'wt-1',
+      site: 'ipc-agent-status-title'
+    })
   })
 
   it('drops nested child done push events when the parent pane agent is still active', async () => {

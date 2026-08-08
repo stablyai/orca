@@ -1762,7 +1762,10 @@ export function connectPanePty(
     // can still decide whether an agent TUI is truly alive.
     deps.setRuntimePaneTitle(deps.tabId, pane.id, neutralTitle)
     if (manager.getActivePane()?.id === pane.id) {
-      deps.updateTabTitle(deps.tabId, neutralTitle)
+      deps.updateTabTitle(deps.tabId, neutralTitle, {
+        worktreeId: deps.worktreeId,
+        site: 'pty-inferred-interrupt-clear'
+      })
     }
   }
   let titleOnlyInterruptTimer: ReturnType<typeof setTimeout> | null = null
@@ -2089,7 +2092,10 @@ export function connectPanePty(
     const neutralTitle = neutralTerminalTitle()
     deps.setRuntimePaneTitle(deps.tabId, pane.id, neutralTitle)
     if (manager.getActivePane()?.id === pane.id) {
-      deps.updateTabTitle(deps.tabId, neutralTitle)
+      deps.updateTabTitle(deps.tabId, neutralTitle, {
+        worktreeId: deps.worktreeId,
+        site: 'pty-confirmed-shell-clear'
+      })
     }
   }
   let deferredCommandFinishedStatusDrop: (() => void) | null = null
@@ -2828,7 +2834,10 @@ export function connectPanePty(
     // focus changes, onActivePaneChange syncs the newly active pane's stored
     // title to the tab.
     if (manager.getActivePane()?.id === pane.id) {
-      deps.updateTabTitle(deps.tabId, paneTitle)
+      deps.updateTabTitle(deps.tabId, paneTitle, {
+        worktreeId: deps.worktreeId,
+        site: 'pty-title-change'
+      })
     }
 
     if (!hasConsideredInitialCacheTimerSeed) {

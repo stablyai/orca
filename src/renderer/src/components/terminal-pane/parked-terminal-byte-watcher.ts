@@ -129,7 +129,10 @@ export function startParkedTerminalByteWatcher(
       wroteRuntimeTitleSlot = true
       state.setRuntimePaneTitle(tabId, paneId, title)
       if (drivesTabTitle) {
-        state.updateTabTitle(tabId, title)
+        state.updateTabTitle(tabId, title, {
+          worktreeId,
+          site: 'parked-byte-watcher'
+        })
       }
     },
     onBell: (): void => {

@@ -26,6 +26,7 @@ import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/termina
 import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
 import { useAppStore } from '@/store'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
+import type { TerminalTabTitleWriteContext } from '@/store/slices/tab-title-write-attribution'
 import {
   createFilePathLinkProvider,
   getTerminalFileOpenHint,
@@ -275,7 +276,11 @@ type UseTerminalPaneLifecycleDeps = {
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   isPtyShutdownPending: (ptyId: string) => boolean
-  updateTabTitle: (tabId: string, title: string) => void
+  updateTabTitle: (
+    tabId: string,
+    title: string,
+    writeContext?: TerminalTabTitleWriteContext
+  ) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   updateTabPtyId: (
@@ -1251,7 +1256,10 @@ export function useTerminalPaneLifecycle({
         if (newActivePane) {
           reportActiveRendererPtyForPane(paneTransportsRef.current, newActivePane.id)
           const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
-          updateTabTitle(tabId, resolveTabTitleAfterPaneClose(paneTitles, newActivePane.id))
+          updateTabTitle(tabId, resolveTabTitleAfterPaneClose(paneTitles, newActivePane.id), {
+            worktreeId,
+            site: 'pane-closed'
+          })
         }
         scheduleRuntimeGraphSync()
       },
@@ -1289,7 +1297,7 @@ export function useTerminalPaneLifecycle({
         const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
         const paneTitle = paneTitles[pane.id]
         if (paneTitle) {
-          updateTabTitle(tabId, paneTitle)
+          updateTabTitle(tabId, paneTitle, { worktreeId, site: 'pane-focus-sync' })
         }
       },
       onLayoutChanged: () => {

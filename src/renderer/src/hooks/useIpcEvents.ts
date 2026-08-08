@@ -3288,7 +3288,7 @@ export function useIpcEvents(): void {
             }
           : undefined
       )
-      applyResolvedAgentTerminalTitleToTab(store, paneKey, title, terminalTitle)
+      applyResolvedAgentTerminalTitleToTab(store, paneKey, title, terminalTitle, statusWorktreeId)
       if (options?.replay !== true && statusWorktreeId) {
         // Why: local Codex/Claude hooks arrive via this main-process IPC path, not the PTY OSC fallback, so task-complete notifications must observe accepted hook state here too.
         const notificationPayload =
@@ -3707,7 +3707,8 @@ function applyResolvedAgentTerminalTitleToTab(
   store: ReturnType<typeof useAppStore.getState>,
   paneKey: string,
   previousTitle: string | undefined,
-  nextTitle: string | undefined
+  nextTitle: string | undefined,
+  worktreeId: string | undefined
 ): void {
   if (!nextTitle || nextTitle === previousTitle) {
     return
@@ -3721,7 +3722,11 @@ function applyResolvedAgentTerminalTitleToTab(
     return
   }
   // Why: hook completion can arrive while the pane transport is unmounted; keep the tab label synced to the resolved state title.
-  store.updateTabTitle(parsed.tabId, nextTitle)
+  store.updateTabTitle(
+    parsed.tabId,
+    nextTitle,
+    worktreeId === undefined ? undefined : { worktreeId, site: 'ipc-agent-status-title' }
+  )
 }
 
 /** Resolve a paneKey (tabId:leafId) to liveness, current title, owning worktree,

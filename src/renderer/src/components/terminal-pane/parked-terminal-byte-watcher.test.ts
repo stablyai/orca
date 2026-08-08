@@ -11,6 +11,10 @@ const PANE_KEY = `${TAB_ID}:${LEAF_ID}`
 const PANE_ID = 1
 // Mirrors PARKED_NOTIFICATION_GRACE_MS / AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS.
 const NOTIFICATION_GRACE_MS = 250
+const TITLE_WRITE_CONTEXT = {
+  worktreeId: WORKTREE_ID,
+  site: 'parked-byte-watcher'
+}
 
 // Real agent-detection titles: braille spinner classifies as working,
 // the "✳ " Claude prefix as idle, and both as Claude agents.
@@ -169,8 +173,8 @@ describe('startParkedTerminalByteWatcher', () => {
       [TAB_ID, PANE_ID, IDLE_TITLE]
     ])
     expect(mockStoreState.updateTabTitle.mock.calls).toEqual([
-      [TAB_ID, '⠋ Build feature'],
-      [TAB_ID, IDLE_TITLE]
+      [TAB_ID, '⠋ Build feature', TITLE_WRITE_CONTEXT],
+      [TAB_ID, IDLE_TITLE, TITLE_WRITE_CONTEXT]
     ])
     dispose()
   })
@@ -758,7 +762,11 @@ describe('startParkedTerminalByteWatcher', () => {
 
       expect(getSideEffectSnapshot).toHaveBeenCalledWith(PTY_ID)
       expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, PANE_ID, IDLE_TITLE)
-      expect(mockStoreState.updateTabTitle).toHaveBeenCalledWith(TAB_ID, IDLE_TITLE)
+      expect(mockStoreState.updateTabTitle).toHaveBeenCalledWith(
+        TAB_ID,
+        IDLE_TITLE,
+        TITLE_WRITE_CONTEXT
+      )
       expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
       expect(mockStoreState.setCacheTimerStartedAt).not.toHaveBeenCalled()
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()

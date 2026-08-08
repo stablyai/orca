@@ -39,6 +39,10 @@ import {
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { buildByIdIndex, buildWorktreeByIdIndex } from './worktree-by-id-index'
 import { resolveActiveTabOwnerWorktreeId } from './active-tab-owner-worktree'
+import {
+  recordTabTitleWriteWorktreeMismatch,
+  type TerminalTabTitleWriteContext
+} from './tab-title-write-attribution'
 import { isSameCodexRestartNoticeAccount } from './codex-restart-notice-account-identity'
 import {
   getRepoIdFromWorktreeId,
@@ -683,7 +687,11 @@ export type TerminalSlice = {
   setTabBarOrder: (worktreeId: string, order: string[]) => void
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
-  updateTabTitle: (tabId: string, title: string) => void
+  updateTabTitle: (
+    tabId: string,
+    title: string,
+    writeContext?: TerminalTabTitleWriteContext
+  ) => void
   setAiVaultTabTitle: (tabId: string, aiVaultTitle: AiVaultSessionTitle | null) => void
   setGeneratedTabTitleFromAgentPrompt: (
     paneKey: string,
@@ -1988,7 +1996,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }))
   },
 
-  updateTabTitle: (tabId, title) => {
+  updateTabTitle: (tabId, title, writeContext) => {
     set((s) => {
       // Why: update only the owner to preserve selector equality for background worktrees.
       const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
@@ -2033,6 +2041,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             }
           : s
       }
+      // Past both no-op returns: only writes that actually change the title are worth a crumb.
+      recordTabTitleWriteWorktreeMismatch({
+        tabId,
+        ownerWorktreeId,
+        tabsByWorktree: s.tabsByWorktree,
+        context: writeContext
+      })
       const ownerTabs = tabs.map((tab) =>
         tab.id === tabId
           ? {

@@ -328,12 +328,14 @@ function buildUncapturedCrashReportText(
 // suppressed count instead.
 const DUPLICATE_TAB_OWNER_BREADCRUMB = 'terminal_tab_id_owned_by_multiple_worktrees'
 const PARK_VERDICT_CHURN_BREADCRUMB = 'terminal_park_verdict_churn'
+const TAB_TITLE_WRITE_MISMATCH_BREADCRUMB = 'terminal_tab_title_write_worktree_mismatch'
 const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   'renderer_error',
   'renderer_unhandled_rejection',
   'terminal_safe_fit_retry_exhausted',
   DUPLICATE_TAB_OWNER_BREADCRUMB,
   PARK_VERDICT_CHURN_BREADCRUMB,
+  TAB_TITLE_WRITE_MISMATCH_BREADCRUMB,
   TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB
 ])
 const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
@@ -372,6 +374,11 @@ function rendererBreadcrumbCoalesceKey(
   // last-write coalescing cannot erase the other signal while remaining bounded.
   if (name === DUPLICATE_TAB_OWNER_BREADCRUMB) {
     return `${name}:${String(data?.resolvedToActiveWorktree ?? '')}`
+  }
+  // Why: keying by call site bounds a many-tab storm to one slot per site while
+  // keeping different write paths from masking each other.
+  if (name === TAB_TITLE_WRITE_MISMATCH_BREADCRUMB) {
+    return `${name}:${String(data?.site ?? '')}`
   }
   const primaryMessage = name === 'renderer_error' ? data?.message : data?.reasonMessage
   const fallbackMessage = name === 'renderer_error' ? data?.errorMessage : undefined

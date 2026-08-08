@@ -55,6 +55,15 @@ async function drainFakeTimerWork(limit = 20): Promise<void> {
   vi.clearAllTimers()
 }
 
+const TITLE_CHANGE_WRITE_CONTEXT = {
+  worktreeId: 'wt-1',
+  site: 'pty-title-change'
+}
+const INTERRUPT_CLEAR_WRITE_CONTEXT = {
+  worktreeId: 'wt-1',
+  site: 'pty-inferred-interrupt-clear'
+}
+
 // Why: a reveal remount reads the still-live park watcher entry at connect time to
 // tell itself apart from an in-place reattach; the host disposes it a beat later.
 async function parkTabForReveal(tabId: string, ptyId: string, worktreeId = 'wt-1'): Promise<void> {
@@ -2418,7 +2427,11 @@ describe('connectPanePty', () => {
 
     expect(transport.sendInput).toHaveBeenCalledWith('omp\r')
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'OMP ready')
-    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'OMP ready')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      'OMP ready',
+      TITLE_CHANGE_WRITE_CONTEXT
+    )
     expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
       state: 'done',
       agentType: 'omp',
@@ -2446,7 +2459,11 @@ describe('connectPanePty', () => {
 
     // Display/runtime/tab title and the GPU gate all come from the same decision.
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, '✦ Gemini CLI')
-    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', '✦ Gemini CLI')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      '✦ Gemini CLI',
+      TITLE_CHANGE_WRITE_CONTEXT
+    )
     // Genuine Gemini under the default `auto` setting takes the DOM fallback.
     expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
   })
@@ -2710,7 +2727,11 @@ describe('connectPanePty', () => {
 
     expect(transport.sendInput).toHaveBeenCalledWith('pi\r')
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Pi ready')
-    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Pi ready')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      'Pi ready',
+      TITLE_CHANGE_WRITE_CONTEXT
+    )
     expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
       state: 'done',
       agentType: 'pi',
@@ -4585,7 +4606,11 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Terminal')
-    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Terminal')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      'Terminal',
+      INTERRUPT_CLEAR_WRITE_CONTEXT
+    )
     expect(
       resolveWorktreeStatus({
         tabs: [{ id: 'tab-1', title: 'Codex working' }],
@@ -4645,7 +4670,11 @@ describe('connectPanePty', () => {
 
     expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Terminal')
-    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Terminal')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      'Terminal',
+      INTERRUPT_CLEAR_WRITE_CONTEXT
+    )
   })
 
   it('does not clear title-only working indicators when interrupt writes are unacknowledged', async () => {
@@ -20399,7 +20428,11 @@ describe('connectPanePty', () => {
     titleHandler('Codex - action required', 'Codex - action required')
 
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Codex - action required')
-    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Codex - action required')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      'Codex - action required',
+      TITLE_CHANGE_WRITE_CONTEXT
+    )
   })
 
   it('normalizes Pi-compatible remote titles to authoritative OMP launch identity', async () => {
@@ -20427,10 +20460,18 @@ describe('connectPanePty', () => {
     }
     titleHandler('\u280b Pi', '\u280b Pi')
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, '\u280b OMP')
-    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', '\u280b OMP')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      '\u280b OMP',
+      TITLE_CHANGE_WRITE_CONTEXT
+    )
     titleHandler('π: tmp', 'π: tmp')
     expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, 'OMP ready')
-    expect(deps.updateTabTitle).toHaveBeenLastCalledWith('tab-1', 'OMP ready')
+    expect(deps.updateTabTitle).toHaveBeenLastCalledWith(
+      'tab-1',
+      'OMP ready',
+      TITLE_CHANGE_WRITE_CONTEXT
+    )
 
     const statusHandler = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'working'; prompt: string; agentType: 'pi' }) => void)
@@ -20509,7 +20550,11 @@ describe('connectPanePty', () => {
     expect(manager.setPaneGpuRendering).toHaveBeenCalledTimes(1)
     expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, true)
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, '\u280b OMP')
-    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', '\u280b OMP')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      '\u280b OMP',
+      TITLE_CHANGE_WRITE_CONTEXT
+    )
   })
 
   it('leaves local IPC OSC 9999 status ownership in the main runtime', async () => {

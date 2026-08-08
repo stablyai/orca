@@ -15,6 +15,7 @@ import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/termin
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
+import type { TerminalTabTitleWriteContext } from '@/store/slices/tab-title-write-attribution'
 
 export type PtyConnectionDeps = {
   tabId: string
@@ -68,7 +69,11 @@ export type PtyConnectionDeps = {
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   isPtyShutdownPending: (ptyId: string) => boolean
-  updateTabTitle: (tabId: string, title: string) => void
+  updateTabTitle: (
+    tabId: string,
+    title: string,
+    writeContext?: TerminalTabTitleWriteContext
+  ) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   updateTabPtyId: (

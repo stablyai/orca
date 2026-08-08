@@ -379,6 +379,49 @@ describe('renderer breadcrumb IPC routing', () => {
     ])
   })
 
+  // Why: the renderer guard is once per tab/worktree/site, so a worktree with
+  // many tabs can emit a crumb per tab in one burst.
+  it('coalesces tab-title write mismatches across tabs sharing a site', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_tab_title_write_worktree_mismatch',
+      data: { tabId: 'tab-1', site: 'pty-title-change', ownerCount: 1, sameRepo: true }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_tab_title_write_worktree_mismatch',
+      data: { tabId: 'tab-2', site: 'pty-title-change', ownerCount: 1, sameRepo: true }
+    })
+
+    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
+    expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(2)
+    for (const call of recordCoalescedCrashBreadcrumbMock.mock.calls) {
+      expect(call[0]).toMatchObject({
+        coalesceKey: 'terminal_tab_title_write_worktree_mismatch:pty-title-change'
+      })
+    }
+  })
+
+  // Why site-scoped: coalescing keeps only the newest payload, so a chatty write
+  // path would erase the quieter one that actually explains the misattribution.
+  it('keeps tab-title write mismatches from different sites in separate slots', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_tab_title_write_worktree_mismatch',
+      data: { tabId: 'tab-1', site: 'pty-title-change', ownerCount: 1, sameRepo: true }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_tab_title_write_worktree_mismatch',
+      data: { tabId: 'tab-1', site: 'ipc-agent-status-title', ownerCount: 1, sameRepo: true }
+    })
+
+    expect(
+      recordCoalescedCrashBreadcrumbMock.mock.calls.map(
+        (call) => (call[0] as { coalesceKey: string }).coalesceKey
+      )
+    ).toEqual([
+      'terminal_tab_title_write_worktree_mismatch:pty-title-change',
+      'terminal_tab_title_write_worktree_mismatch:ipc-agent-status-title'
+    ])
+  })
+
   it('records non-error renderer breadcrumbs without coalescing', () => {
     emitRendererBreadcrumb({ name: 'renderer_bootstrap_started', data: { dev: true } })
 
