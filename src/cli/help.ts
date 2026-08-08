@@ -29,6 +29,7 @@ Skills:
   skills get                Print a version-matched skill guide as Markdown
   skills install            Install bundled Orca skills globally via the community skills CLI
   skills update             Update already-installed Orca skills via the community skills CLI
+  skills remove             Remove installed Orca skills via the community skills CLI
 
 Environments:
   environment add           Save a remote Orca runtime from a pairing code

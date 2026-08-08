@@ -817,12 +817,23 @@ orca skills update --skill orca-cli --dry-run             # print the npx comman
 generally, a 0 exit means the `skills` CLI ran without erroring, not that it
 wrote anything; read its output to confirm what changed.
 
+To uninstall skills on a headless host, `orca skills remove` uses the same
+selection flags and resolves to `npx skills remove <names...>` — with `--global`
+by default, or project scope when you pass `--local` (the skills CLI's default
+when `--global` is omitted):
+
+```bash
+orca skills remove --skill computer-use                   # remove globally
+orca skills remove --skill orca-cli --local --dry-run     # print project-local remove command
+```
+
 `--json` covers the skill listing and `--dry-run`. A real run streams the
 `skills` CLI's own non-JSON output and rejects `--json`.
 
-Both commands install onto the machine that runs them. In an Orca SSH workspace
-or the WSL bridge the `orca` shim forwards commands to the Orca host, so they
-refuse to run there and print the command to run on the machine you want.
+Install, update, and remove all write onto the machine that runs them. In an
+Orca SSH workspace or the WSL bridge the `orca` shim forwards commands to the
+Orca host, so they refuse to run there and print the command to run on the
+machine you want.
 
 ## Troubleshooting
 

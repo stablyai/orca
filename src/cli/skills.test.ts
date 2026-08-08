@@ -225,8 +225,12 @@ describe('orca skills CLI', () => {
     expect(String(logSpy.mock.calls[1]?.[0])).toContain(
       'update             Update already-installed Orca skills'
     )
+    expect(String(logSpy.mock.calls[1]?.[0])).toContain(
+      'remove             Remove installed Orca skills'
+    )
     expect(String(logSpy.mock.calls[2]?.[0])).toContain('Skills:\n  skills installed')
     expect(String(logSpy.mock.calls[2]?.[0])).toContain('skills update')
+    expect(String(logSpy.mock.calls[2]?.[0])).toContain('skills remove')
     expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
   })
 
