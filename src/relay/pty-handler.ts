@@ -48,6 +48,7 @@ import {
   parsePtyStartupIngressIntent,
   type PtyIngressEmission
 } from '../shared/pty-startup-ingress'
+import { isTerminalQueryReply } from '../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
 import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environment-expansion'
@@ -1688,6 +1689,11 @@ export class PtyHandler {
     if (managed && !managed.disposed) {
       this.lastInputAtByPty.set(id, performance.now())
       this.interactiveOutputCharsByPty.set(id, 0)
+      // Why: live query replies (color-scheme 997, CPR, …) must share the startup
+      // echo-safe path or cooked prompts paint `997;1n` (#13137).
+      if (isTerminalQueryReply(data) && managed.startupIngress?.answerLiveQueryReply(data)) {
+        return
+      }
       managed.pty.write(data)
     }
   }

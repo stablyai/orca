@@ -66,6 +66,7 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
+import { isTerminalQueryReply } from '../../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import {
   createPtySlaveEchoProbe,
@@ -1075,6 +1076,15 @@ export class LocalPtyProvider implements IPtyProvider {
     return ptyProcesses.has(id)
   }
   write(id: string, data: string): void {
+    // Why: live xterm query replies (DSR color-scheme 997, CPR, DA, …) must use
+    // the ingress echo-safe path; raw master writes while ECHO is on paint
+    // `997;1n` into cooked prompts (#13137).
+    if (isTerminalQueryReply(data)) {
+      const ingress = startupIngressByPty.get(id)
+      if (ingress?.answerLiveQueryReply(data)) {
+        return
+      }
+    }
     ptyProcesses.get(id)?.write(data)
   }
   resize(id: string, cols: number, rows: number): void {

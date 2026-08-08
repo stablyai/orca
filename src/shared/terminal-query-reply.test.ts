@@ -9,6 +9,9 @@ describe('isTerminalQueryReply', () => {
     expect(isTerminalQueryReply('\x1b[22;1R')).toBe(true)
     // DSR device status.
     expect(isTerminalQueryReply('\x1b[0n')).toBe(true)
+    // Contour color-scheme report (answer to CSI ?996n / mode-2031 push).
+    expect(isTerminalQueryReply('\x1b[?997;1n')).toBe(true)
+    expect(isTerminalQueryReply('\x1b[?997;2n')).toBe(true)
     // DA1/DA2/DA3 device attributes.
     expect(isTerminalQueryReply('\x1b[?1;2c')).toBe(true)
     expect(isTerminalQueryReply('\x1b[?61;4c')).toBe(true)

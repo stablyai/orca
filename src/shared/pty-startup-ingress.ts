@@ -92,6 +92,18 @@ export class PtyStartupIngress {
     return this.rawHighWater
   }
 
+  /**
+   * Live emulator query replies (xterm onData CPR/DSR/DA/OSC/color-scheme 997).
+   * Uses the same ECHO-safe write + echo strip as startup color replies so cooked
+   * prompts (e.g. `npx` confirm) never show `997;1n` junk (#13137 / #12112 family).
+   */
+  answerLiveQueryReply(reply: string): boolean {
+    if (this.closed || reply.length === 0) {
+      return false
+    }
+    return this.delivery.answer(reply)
+  }
+
   drainAndClose(): number {
     this.enqueue({ kind: 'teardown' })
     return this.rawHighWater
