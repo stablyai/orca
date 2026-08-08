@@ -9,7 +9,8 @@ import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 import {
   isParkRestorableTerminalPty,
   type TerminalParkRestorePolicy
-} from './terminal-hidden-view-parking'
+} from './terminal-park-pty-restore-eligibility'
+import { getTerminalParkWorktreeOwner } from './terminal-park-worktree-owner'
 import type { ParkableTerminalTabModel } from './terminal-parked-watcher-reconciliation'
 import {
   resolveTabTitleAfterPaneClose,
@@ -38,7 +39,12 @@ export function startParkedPtyWatcher(args: {
     !ptyId ||
     entry.disposersByPtyId.has(ptyId) ||
     !isTerminalLeafId(pane.leafId) ||
-    !isParkRestorableTerminalPty(ptyId, worktreeId, restorePolicy)
+    !isParkRestorableTerminalPty(
+      ptyId,
+      worktreeId,
+      getTerminalParkWorktreeOwner(state, worktreeId),
+      restorePolicy
+    )
   ) {
     return
   }

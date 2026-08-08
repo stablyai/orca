@@ -3,11 +3,11 @@ import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
-  isSnapshotBackedTerminalPty,
   selectIdsBeyondHotRetain,
   type ColdParkRetainCandidate,
   type TerminalColdParkPolicyOverrides
 } from './terminal-hidden-view-parking'
+import { isSnapshotBackedTerminalPty } from './terminal-park-pty-restore-eligibility'
 import type { TerminalTab } from '../../../../shared/types'
 
 // Why these sizes: a retained hidden pane costs a measured ~2.5MB of V8 heap

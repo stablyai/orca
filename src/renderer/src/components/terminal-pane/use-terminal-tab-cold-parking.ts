@@ -16,10 +16,11 @@ import {
 import { getTerminalTabColdParkRecheckDelayMs } from './terminal-cold-park-recheck-deadlines'
 import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
-  selectPairedRuntimeParkingEnvironmentIds,
   selectColdParkedTerminalTabs,
   type TerminalTabColdParkCandidate
 } from './terminal-hidden-view-parking'
+import { selectPairedRuntimeParkingEnvironmentIds } from './terminal-park-pty-restore-eligibility'
+import { useTerminalParkWorktreeOwner } from './terminal-park-worktree-owner'
 import {
   recordParkVerdictFlips,
   type ParkVerdictFlipRecord
@@ -102,6 +103,7 @@ export function useTerminalTabColdParking(args: {
   const terminalSshParkingEnabled = useAppStore(
     (state) => state.settings?.terminalSshViewParking !== false
   )
+  const worktreeOwner = useTerminalParkWorktreeOwner(worktreeId)
   const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
   const pairedRuntimeParkingEnvironmentIds = useMemo(
     () => selectPairedRuntimeParkingEnvironmentIds(runtimeStatusByEnvironmentId),
@@ -208,6 +210,7 @@ export function useTerminalTabColdParking(args: {
 
     const nextColdParkedTerminalTabIds = selectColdParkedTerminalTabs({
       worktreeId,
+      worktreeOwner,
       terminalTabs: candidates,
       pendingStartupByTabId,
       parkingEnabled: terminalParkingEnabled,
@@ -268,7 +271,8 @@ export function useTerminalTabColdParking(args: {
     terminalTabParkingRevision,
     terminalParkingAssignmentsDependency,
     terminalParkingTabsDependency,
-    worktreeId
+    worktreeId,
+    worktreeOwner
   ])
 
   // Why subscribed: the exemption also reads layout leaf PTYs, which change

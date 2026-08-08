@@ -36,7 +36,9 @@ vi.mock('../../store', async () => {
     settings: {} as Record<string, unknown>,
     terminalLayoutsByTabId: {} as Record<string, unknown>,
     runtimePaneTitlesByTabId: {} as Record<string, unknown>,
-    tabsByWorktree: {} as Record<string, TerminalTab[]>
+    tabsByWorktree: {} as Record<string, TerminalTab[]>,
+    worktreesByRepo: {} as Record<string, object[]>,
+    repos: [] as object[]
   }))
   return { useAppStore }
 })

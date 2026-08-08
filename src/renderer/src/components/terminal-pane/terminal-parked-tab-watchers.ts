@@ -15,7 +15,8 @@ import {
   isParkRestorableTerminalPty,
   selectPairedRuntimeParkingEnvironmentIds,
   type TerminalParkRestorePolicy
-} from './terminal-hidden-view-parking'
+} from './terminal-park-pty-restore-eligibility'
+import { getTerminalParkWorktreeOwner } from './terminal-park-worktree-owner'
 import {
   reconcileParkedWatcherPtyIds,
   resolveParkedTerminalPaneCandidates,
@@ -87,13 +88,14 @@ export function canWatcherCoverParkedTerminalTab(
   const state = useAppStore.getState()
   const panes = resolveParkedTerminalPaneCandidates(tab, state)
   const restorePolicy = parkRestorePolicyFromState(state)
+  const worktreeOwner = getTerminalParkWorktreeOwner(state, worktreeId)
   return (
     panes.length > 0 &&
     panes.every(
       (pane) =>
         pane.ptyId !== null &&
         isTerminalLeafId(pane.leafId) &&
-        isParkRestorableTerminalPty(pane.ptyId, worktreeId, restorePolicy) &&
+        isParkRestorableTerminalPty(pane.ptyId, worktreeId, worktreeOwner, restorePolicy) &&
         isPtyEligible(pane.ptyId)
     )
   )
@@ -188,11 +190,12 @@ function watchablePanes(
 ): Map<string, ParkedTerminalPaneCapture> {
   const state = useAppStore.getState()
   const restorePolicy = parkRestorePolicyFromState(state)
+  const worktreeOwner = getTerminalParkWorktreeOwner(state, worktreeId)
   return new Map(
     resolveParkedTerminalPaneCandidates(tab, state).flatMap((pane) =>
       pane.ptyId &&
       isTerminalLeafId(pane.leafId) &&
-      isParkRestorableTerminalPty(pane.ptyId, worktreeId, restorePolicy)
+      isParkRestorableTerminalPty(pane.ptyId, worktreeId, worktreeOwner, restorePolicy)
         ? [[pane.ptyId, pane] as const]
         : []
     )

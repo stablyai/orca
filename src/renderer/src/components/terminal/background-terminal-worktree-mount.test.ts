@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { isSnapshotBackedTerminalPty } from '../terminal-pane/terminal-hidden-view-parking'
+import { isSnapshotBackedTerminalPty } from '../terminal-pane/terminal-park-pty-restore-eligibility'
 import {
   clearTerminalProviderSnapshotCapabilities,
   synchronizeTerminalProviderSnapshotCapabilities,

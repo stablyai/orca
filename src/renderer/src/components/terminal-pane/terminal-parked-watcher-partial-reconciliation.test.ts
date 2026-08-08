@@ -43,6 +43,8 @@ const state = {
   runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
   settings: null,
   runtimeStatusByEnvironmentId: new Map(),
+  worktreesByRepo: {} as Record<string, object[]>,
+  repos: [] as object[],
   clearRuntimePaneTitle: vi.fn(),
   setRuntimePaneTitle: vi.fn()
 }

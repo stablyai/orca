@@ -9,12 +9,16 @@ import {
   TERMINAL_WORKTREE_PARK_DELAY_MS,
   canParkTerminalTabRenderer,
   canParkTerminalWorktreeRenderers,
-  isParkRestorableTerminalPty,
-  isSnapshotBackedTerminalPty,
-  selectPairedRuntimeParkingEnvironmentIds,
   selectColdParkedTerminalTabs,
   selectColdParkedTerminalWorktrees
 } from './terminal-hidden-view-parking'
+import {
+  isParkRestorableTerminalPty,
+  isSnapshotBackedTerminalPty,
+  selectPairedRuntimeParkingEnvironmentIds
+} from './terminal-park-pty-restore-eligibility'
+
+const LOCAL_WORKTREE_OWNER = { connectionId: null, runtimeEnvironmentId: null }
 
 describe('selectPairedRuntimeParkingEnvironmentIds', () => {
   it('selects only reachable hosts advertising the paired parking contract', () => {
@@ -76,40 +80,103 @@ describe('isSnapshotBackedTerminalPty', () => {
 describe('isParkRestorableTerminalPty', () => {
   const worktreeId = 'repo::/worktree'
   const sshPolicy = { sshParkingEnabled: true }
+  const pairedPolicy = {
+    ...sshPolicy,
+    pairedRuntimeParkingEnvironmentIds: new Set(['env-1', 'env-2'])
+  }
+  const unhydratedOwner = { connectionId: undefined, runtimeEnvironmentId: null }
+  const localOwner = LOCAL_WORKTREE_OWNER
 
-  it('accepts every snapshot-backed pty regardless of policy', () => {
-    expect(isParkRestorableTerminalPty(`${worktreeId}@@session-1`, worktreeId)).toBe(true)
-    expect(isParkRestorableTerminalPty(`${worktreeId}@@session-1`, worktreeId, sshPolicy)).toBe(
+  it('accepts every snapshot-backed pty regardless of policy or owner', () => {
+    expect(isParkRestorableTerminalPty(`${worktreeId}@@session-1`, worktreeId, localOwner)).toBe(
       true
     )
+    expect(
+      isParkRestorableTerminalPty(
+        `${worktreeId}@@session-1`,
+        worktreeId,
+        unhydratedOwner,
+        sshPolicy
+      )
+    ).toBe(true)
   })
 
   it('accepts SSH ptys only when the SSH-parking policy is enabled', () => {
-    expect(isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, sshPolicy)).toBe(true)
-    expect(isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId)).toBe(false)
+    const owner = { connectionId: 'ssh-1', runtimeEnvironmentId: null }
+    expect(isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, owner, sshPolicy)).toBe(true)
+    expect(isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, owner)).toBe(false)
     expect(
-      isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, { sshParkingEnabled: false })
+      isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, owner, {
+        sshParkingEnabled: false
+      })
     ).toBe(false)
   })
 
-  it('accepts paired ptys only for the exact snapshot-capable owner', () => {
-    const pairedPolicy = {
-      ...sshPolicy,
-      pairedRuntimeParkingEnvironmentIds: new Set(['env-1'])
+  // Why unknown still parks: refusing costs the tab's parked watchers (bells,
+  // titles, completions) while the pane is torn down anyway.
+  it('accepts an SSH pty unless the worktree owns a different connection', () => {
+    for (const owner of [unhydratedOwner, localOwner]) {
+      expect(isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, owner, sshPolicy)).toBe(
+        true
+      )
     }
+    expect(
+      isParkRestorableTerminalPty(
+        'ssh:ssh-1@@pty-1',
+        worktreeId,
+        { connectionId: 'ssh-2', runtimeEnvironmentId: null },
+        sshPolicy
+      )
+    ).toBe(false)
+  })
 
-    expect(isParkRestorableTerminalPty('remote:env-1@@terminal-1', worktreeId, pairedPolicy)).toBe(
-      true
-    )
-    expect(isParkRestorableTerminalPty('remote:env-2@@terminal-1', worktreeId, pairedPolicy)).toBe(
-      false
-    )
-    expect(isParkRestorableTerminalPty('remote:terminal-1', worktreeId, pairedPolicy)).toBe(false)
+  it('accepts paired ptys only for a snapshot-capable environment', () => {
+    const capableEnv1 = { ...sshPolicy, pairedRuntimeParkingEnvironmentIds: new Set(['env-1']) }
+    expect(
+      isParkRestorableTerminalPty('remote:env-1@@terminal-1', worktreeId, localOwner, capableEnv1)
+    ).toBe(true)
+    expect(
+      isParkRestorableTerminalPty('remote:env-2@@terminal-1', worktreeId, localOwner, capableEnv1)
+    ).toBe(false)
+    expect(
+      isParkRestorableTerminalPty('remote:terminal-1', worktreeId, localOwner, pairedPolicy)
+    ).toBe(false)
+  })
+
+  // Why: a worktree reached through a paired HUB keeps its SSH host while the HUB
+  // owns its ptys, so its own remote pty must still park.
+  it('accepts a paired pty for a HUB-owned worktree', () => {
+    expect(
+      isParkRestorableTerminalPty(
+        'remote:env-1@@terminal-1',
+        worktreeId,
+        { connectionId: 'ssh-1', runtimeEnvironmentId: 'env-1' },
+        pairedPolicy
+      )
+    ).toBe(true)
+  })
+
+  // Why env-2 also advertises: capability alone would pass this pty, so only the
+  // proven owner mismatch can explain the rejection.
+  it('accepts a paired pty unless the worktree owns a different environment', () => {
+    for (const owner of [unhydratedOwner, localOwner]) {
+      expect(
+        isParkRestorableTerminalPty('remote:env-2@@terminal-1', worktreeId, owner, pairedPolicy)
+      ).toBe(true)
+    }
+    expect(
+      isParkRestorableTerminalPty(
+        'remote:env-2@@terminal-1',
+        worktreeId,
+        { connectionId: null, runtimeEnvironmentId: 'env-1' },
+        pairedPolicy
+      )
+    ).toBe(false)
   })
 
   it('rejects paired, fail-open, foreign, and null ptys without capability evidence', () => {
     for (const ptyId of ['remote:env-1@@terminal-1', 'pty-local-detached', 'other@@s-1', null]) {
-      expect(isParkRestorableTerminalPty(ptyId, worktreeId, sshPolicy)).toBe(false)
+      expect(isParkRestorableTerminalPty(ptyId, worktreeId, unhydratedOwner, sshPolicy)).toBe(false)
     }
   })
 })
@@ -119,6 +186,7 @@ describe('canParkTerminalWorktreeRenderers', () => {
   const nowMs = hiddenSinceMs + TERMINAL_WORKTREE_PARK_DELAY_MS
   const base = {
     worktreeId: 'repo::/worktree',
+    worktreeOwner: LOCAL_WORKTREE_OWNER,
     terminalTabs: [{ id: 'tab-1', ptyId: 'repo::/worktree@@session-1' }],
     pendingStartupByTabId: {},
     parkingEnabled: true,
@@ -136,12 +204,21 @@ describe('canParkTerminalWorktreeRenderers', () => {
   it('parks a hidden SSH worktree only under the SSH restore policy', () => {
     const sshArgs = {
       ...base,
+      worktreeOwner: { connectionId: 'conn-1', runtimeEnvironmentId: null },
       terminalTabs: [{ id: 'tab-1', ptyId: 'ssh:conn-1@@pty-1' }]
     }
     expect(canParkTerminalWorktreeRenderers(sshArgs)).toBe(false)
     expect(
       canParkTerminalWorktreeRenderers({ ...sshArgs, restorePolicy: { sshParkingEnabled: true } })
     ).toBe(true)
+    // A worktree on another connection must not park that connection's pty.
+    expect(
+      canParkTerminalWorktreeRenderers({
+        ...sshArgs,
+        worktreeOwner: { connectionId: 'conn-2', runtimeEnvironmentId: null },
+        restorePolicy: { sshParkingEnabled: true }
+      })
+    ).toBe(false)
     expect(
       canParkTerminalWorktreeRenderers({
         ...sshArgs,
@@ -250,6 +327,7 @@ describe('canParkTerminalWorktreeRenderers', () => {
     expect(
       canParkTerminalWorktreeRenderers({
         ...base,
+        worktreeOwner: { connectionId: null, runtimeEnvironmentId: 'env-1' },
         terminalTabs: [
           {
             id: 'tab-1',
@@ -267,6 +345,7 @@ describe('canParkTerminalTabRenderer', () => {
   const hiddenSinceMs = 1_000
   const base = {
     worktreeId: 'wt-1',
+    worktreeOwner: LOCAL_WORKTREE_OWNER,
     terminalTab: {
       id: 'tab-1',
       ptyId: 'wt-1@@session-1',
@@ -288,6 +367,7 @@ describe('canParkTerminalTabRenderer', () => {
     expect(
       canParkTerminalTabRenderer({
         ...base,
+        worktreeOwner: { connectionId: null, runtimeEnvironmentId: 'env-1' },
         terminalTab: {
           ...base.terminalTab,
           ptyId: 'remote:env-1@@terminal-1',
@@ -319,6 +399,7 @@ describe('selectColdParkedTerminalWorktrees', () => {
   function localCandidate(worktreeId: string, hiddenSinceMs: number) {
     return {
       worktreeId,
+      worktreeOwner: LOCAL_WORKTREE_OWNER,
       terminalTabs: [{ id: `tab-${worktreeId}`, ptyId: `${worktreeId}@@session-1` }],
       isVisible: false,
       shouldMeasureHiddenWorktree: false,
@@ -500,6 +581,7 @@ describe('selectColdParkedTerminalTabs', () => {
   it('keeps visible and recent inactive terminal tabs mounted', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
+      worktreeOwner: LOCAL_WORKTREE_OWNER,
       terminalTabs: [
         { ...localTab('tab-visible', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS), isVisible: true },
         localTab('tab-recent-1', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
@@ -517,6 +599,7 @@ describe('selectColdParkedTerminalTabs', () => {
   it('cold-parks the oldest inactive local tabs beyond the retain limit', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
+      worktreeOwner: LOCAL_WORKTREE_OWNER,
       terminalTabs: [
         localTab('tab-1', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
         localTab('tab-2', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS - 1),
@@ -536,6 +619,7 @@ describe('selectColdParkedTerminalTabs', () => {
   it('selects nothing while the post-measure cool-down is active', () => {
     const args = {
       worktreeId: 'wt-1',
+      worktreeOwner: LOCAL_WORKTREE_OWNER,
       terminalTabs: [
         localTab('tab-1', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
         localTab('tab-2', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS - 1),
@@ -557,6 +641,7 @@ describe('selectColdParkedTerminalTabs', () => {
   it('cold-parks aged inactive local tabs even when under the retain limit', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
+      worktreeOwner: LOCAL_WORKTREE_OWNER,
       terminalTabs: [
         // Why: tab-recent is last-active exempt; tab-1 proves the TTL sweep
         // still parks an aged tab under the cap.
@@ -575,6 +660,7 @@ describe('selectColdParkedTerminalTabs', () => {
   it('never cold-parks the single most-recently-hidden (last-active) tab', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
+      worktreeOwner: LOCAL_WORKTREE_OWNER,
       terminalTabs: [localTab('tab-1', nowMs - TERMINAL_TAB_HOT_RETAIN_MS)],
       pendingStartupByTabId: {},
       parkingEnabled: true,
@@ -588,6 +674,7 @@ describe('selectColdParkedTerminalTabs', () => {
   it('selects nothing when the settings kill switch disables parking', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
+      worktreeOwner: LOCAL_WORKTREE_OWNER,
       terminalTabs: [
         localTab('tab-1', nowMs - TERMINAL_TAB_HOT_RETAIN_MS),
         localTab('tab-2', nowMs - TERMINAL_TAB_HOT_RETAIN_MS * 2)
@@ -604,6 +691,9 @@ describe('selectColdParkedTerminalTabs', () => {
   it('does not cold-park inactive terminal tabs without local snapshot recovery', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
+      // Why this owner: it matches no remote pty, so the restore policy is the
+      // only thing that can keep ssh/remote out of the candidate set.
+      worktreeOwner: LOCAL_WORKTREE_OWNER,
       terminalTabs: [
         // Why: tab-recent is last-active exempt; tab-local proves the aged
         // local tab still parks while ssh/remote never enter the candidate set.
@@ -630,6 +720,7 @@ describe('selectColdParkedTerminalTabs', () => {
   it('keeps portaled, pending-startup, and pending-activation terminal tabs mounted', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
+      worktreeOwner: LOCAL_WORKTREE_OWNER,
       terminalTabs: [
         {
           ...localTab('tab-portal', nowMs - TERMINAL_TAB_HOT_RETAIN_MS),

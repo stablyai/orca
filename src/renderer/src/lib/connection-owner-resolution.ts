@@ -12,7 +12,7 @@ import {
   getFolderWorkspaceConnectionId
 } from './folder-workspace-connection'
 
-type ConnectionOwnerState = Pick<
+export type ConnectionOwnerState = Pick<
   AppState,
   'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
 >

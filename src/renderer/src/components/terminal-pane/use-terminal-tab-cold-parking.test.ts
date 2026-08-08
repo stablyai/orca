@@ -11,6 +11,12 @@ const mocks = vi.hoisted(() => ({
     runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
     settings: {} as Record<string, unknown>,
     terminalLayoutsByTabId: {} as Record<string, { ptyIdsByLeafId?: Record<string, string> }>,
+    /** Transport ownership the park predicate compares a remote pty id's owner against. */
+    worktreesByRepo: {} as Record<
+      string,
+      { id: string; repoId: string; hostId: string; runtimeOwnerEnvironmentId?: string }[]
+    >,
+    repos: [] as { id: string; connectionId: string | null }[],
     sleepingAgentSessionsByPaneKey: {} as Record<
       string,
       { paneKey: string; tabId?: string; worktreeId: string }
@@ -81,10 +87,19 @@ function hookArgs(shouldMeasureHiddenWorktree: boolean) {
   }
 }
 
+function setWorktreeOwner(
+  owner: { hostId: string; runtimeOwnerEnvironmentId?: string } | null
+): void {
+  mocks.storeState.worktreesByRepo = owner
+    ? { repo: [{ id: WORKTREE_ID, repoId: 'repo', ...owner }] }
+    : {}
+}
+
 describe('useTerminalTabColdParking measure-clock contract', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
+    setWorktreeOwner({ hostId: 'local' })
   })
 
   afterEach(() => {
@@ -106,10 +121,21 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
         { ...terminalTab('tab-2'), ptyId: `remote:${environmentId}@@term-2` }
       ]
     }
-    for (const [advertisedEnvironmentId, expected] of [
-      [environmentId, new Set(['tab-2'])],
-      ['other-env', new Set()]
+    // Why the owner column: row 3 is the only one capability alone would park,
+    // and rows 4-5 are the ones a stricter owner check would wrongly refuse — an
+    // unhydrated worktree and one whose ptys a paired HUB owns behind its SSH host.
+    for (const [advertisedEnvironmentId, worktreeOwner, expected] of [
+      [environmentId, { hostId: `runtime:${environmentId}` }, new Set(['tab-2'])],
+      ['other-env', { hostId: `runtime:${environmentId}` }, new Set()],
+      [environmentId, { hostId: 'runtime:other-env' }, new Set()],
+      [environmentId, null, new Set(['tab-2'])],
+      [
+        environmentId,
+        { hostId: 'ssh:conn-1', runtimeOwnerEnvironmentId: environmentId },
+        new Set(['tab-2'])
+      ]
     ] as const) {
+      setWorktreeOwner(worktreeOwner)
       mocks.storeState.runtimeStatusByEnvironmentId = new Map([
         [advertisedEnvironmentId, { status: { capabilities: ['terminal.paired-parking.v1'] } }]
       ])

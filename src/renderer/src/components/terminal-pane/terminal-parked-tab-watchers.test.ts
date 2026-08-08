@@ -79,6 +79,9 @@ type MockStoreState = {
     }
   >
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  /** Transport ownership the park predicate compares a remote pty id's owner against. */
+  worktreesByRepo: Record<string, { id: string; repoId: string; hostId: string }[]>
+  repos: { id: string; connectionId: string | null }[]
   settings: { terminalSshViewParking?: boolean } | null
   runtimeStatusByEnvironmentId: Map<
     string,
@@ -126,6 +129,15 @@ function capturePanes(
   captureParkedTerminalPaneCandidates(args?.tabId ?? TAB_ID, args?.worktreeId ?? WORKTREE_ID, panes)
 }
 
+function setWorktreeConnection(connectionId: string | null): void {
+  mockStoreState.repos = [{ id: 'repo', connectionId }]
+}
+
+function setWorktreeRuntimeEnvironment(environmentId: string): void {
+  const worktree = { id: WORKTREE_ID, repoId: 'repo', hostId: `runtime:${environmentId}` }
+  mockStoreState.worktreesByRepo = { repo: [worktree] }
+}
+
 function syncParked(args?: {
   worktreeId?: string
   tabs?: { id: string; ptyId: string | null }[]
@@ -148,6 +160,8 @@ describe('terminal-parked-tab-watchers', () => {
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
       runtimePaneTitlesByTabId: {},
+      worktreesByRepo: { repo: [{ id: WORKTREE_ID, repoId: 'repo', hostId: 'local' }] },
+      repos: [{ id: 'repo', connectionId: null }],
       settings: null,
       runtimeStatusByEnvironmentId: new Map(),
       clearTabLaunchAgent: vi.fn(),
@@ -238,6 +252,7 @@ describe('terminal-parked-tab-watchers', () => {
   })
 
   it('starts a fact watcher for snapshot-capable paired PTYs', () => {
+    setWorktreeRuntimeEnvironment('env-1')
     mockStoreState.runtimeStatusByEnvironmentId.set('env-1', {
       status: { capabilities: ['terminal.paired-parking.v1'] },
       checkedAt: Date.now()
@@ -255,12 +270,39 @@ describe('terminal-parked-tab-watchers', () => {
     expect(exitSubscriptions).toEqual([])
   })
 
+  // Why env-1 advertises: capability alone would start this watcher, so the
+  // proven environment mismatch is the only thing that can refuse it.
+  it('never starts watchers for a paired PTY the worktree does not own', () => {
+    setWorktreeRuntimeEnvironment('env-2')
+    mockStoreState.runtimeStatusByEnvironmentId.set('env-1', {
+      status: { capabilities: ['terminal.paired-parking.v1'] },
+      checkedAt: Date.now()
+    })
+    capturePanes([
+      { ptyId: 'remote:env-1@@terminal-1', paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }
+    ])
+    syncParked({ tabs: [{ id: TAB_ID, ptyId: 'remote:env-1@@terminal-1' }] })
+
+    expect(startParkedTerminalByteWatcher).not.toHaveBeenCalled()
+  })
+
   it('starts watchers for SSH PTYs (C1 SSH parking, default on)', () => {
+    setWorktreeConnection('conn-1')
     capturePanes([{ ptyId: 'ssh:conn-1@@pty-1', paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
     syncParked({ tabs: [{ id: TAB_ID, ptyId: 'ssh:conn-1@@pty-1' }] })
 
     expect(startParkedTerminalByteWatcher).toHaveBeenCalledTimes(1)
     expect(startedWatchers[0].options).toMatchObject({ ptyId: 'ssh:conn-1@@pty-1' })
+  })
+
+  // Why: the pane's connection is known to be someone else's, so revealing it
+  // here would drop the user onto a foreign host's shell.
+  it('never starts watchers for an SSH PTY on another connection than the worktree', () => {
+    setWorktreeConnection('conn-2')
+    capturePanes([{ ptyId: 'ssh:conn-1@@pty-1', paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+    syncParked({ tabs: [{ id: TAB_ID, ptyId: 'ssh:conn-1@@pty-1' }] })
+
+    expect(startParkedTerminalByteWatcher).not.toHaveBeenCalled()
   })
 
   it('never starts watchers for SSH PTYs when terminalSshViewParking is off', () => {
@@ -780,6 +822,7 @@ describe('terminal-parked-tab-watchers', () => {
     })
 
     it('accepts an SSH PTY under the default C1 SSH-parking policy', () => {
+      setWorktreeConnection('conn-1')
       capturePanes([
         { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
         { ptyId: 'ssh:conn-1@@pty-1', paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
@@ -787,6 +830,14 @@ describe('terminal-parked-tab-watchers', () => {
       expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(
         true
       )
+    })
+
+    it('rejects an SSH PTY whose connection is not the worktree owner', () => {
+      setWorktreeConnection('conn-2')
+      capturePanes([
+        { ptyId: 'ssh:conn-1@@pty-1', paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }
+      ])
+      expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: null })).toBe(false)
     })
 
     it('rejects an SSH PTY when terminalSshViewParking is off', () => {

@@ -109,11 +109,17 @@ import { getTerminalWorktreeColdParkRecheckDelayMs } from './terminal-pane/termi
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
   canParkTerminalWorktreeRenderers,
-  isParkRestorableTerminalPty,
-  selectPairedRuntimeParkingEnvironmentIds,
   selectColdParkedTerminalWorktrees,
   type TerminalWorktreeColdParkCandidate
 } from './terminal-pane/terminal-hidden-view-parking'
+import {
+  isParkRestorableTerminalPty,
+  selectPairedRuntimeParkingEnvironmentIds
+} from './terminal-pane/terminal-park-pty-restore-eligibility'
+import {
+  getTerminalParkWorktreeOwner,
+  useTerminalParkWorktreeOwner
+} from './terminal-pane/terminal-park-worktree-owner'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
   hasPendingRetentionSpawnWork,
@@ -320,6 +326,7 @@ function Terminal(): React.JSX.Element | null {
   const activeWorktreeDeferralHostId = useAppStore((s) =>
     getResolvedExecutionHostIdForWorktree(s, renderedActiveWorktreeId)
   )
+  const activeWorktreeParkOwner = useTerminalParkWorktreeOwner(renderedActiveWorktreeId)
   const activeView = useAppStore((s) => s.activeView)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
@@ -920,6 +927,8 @@ function Terminal(): React.JSX.Element | null {
       }
     }
 
+    // Why hoisted: the loop below resolves an owner per worktree off this snapshot.
+    const ownerState = useAppStore.getState()
     const retentionCandidates: TerminalWorktreeColdParkCandidate[] = []
     for (const workspace of workspaceSurfaces) {
       const worktreeId = workspace.id
@@ -965,6 +974,7 @@ function Terminal(): React.JSX.Element | null {
 
       retentionCandidates.push({
         worktreeId,
+        worktreeOwner: getTerminalParkWorktreeOwner(ownerState, worktreeId),
         terminalTabs: tabsByWorktree[worktreeId] ?? [],
         isVisible,
         shouldMeasureHiddenWorktree,
@@ -1307,7 +1317,7 @@ function Terminal(): React.JSX.Element | null {
     })
     const isColdActivationPtyEligible = (ptyId: string): boolean =>
       isRemoteRuntimePtyId(ptyId)
-        ? isParkRestorableTerminalPty(ptyId, renderedActiveWorktreeId, {
+        ? isParkRestorableTerminalPty(ptyId, renderedActiveWorktreeId, activeWorktreeParkOwner, {
             pairedRuntimeParkingEnvironmentIds
           })
         : terminalProviderHasAuthoritativeSnapshot(ptyId)

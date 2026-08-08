@@ -1,9 +1,10 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
-import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
-import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { TerminalTab } from '../../../../shared/types'
+import {
+  isParkRestorableTerminalPty,
+  type TerminalParkRestorePolicy,
+  type TerminalParkWorktreeOwner
+} from './terminal-park-pty-restore-eligibility'
 
 // Why: cold-park hysteresis keeps a hidden pane mounted for 30s so quick tab
 // flips never pay a re-hydrate; hot-retain keeps a bounded recently-visible
@@ -34,6 +35,8 @@ export type ColdParkableTerminalTab = Pick<TerminalTab, 'id' | 'ptyId' | 'pendin
 
 export type TerminalWorktreeColdParkCandidate = {
   worktreeId: string
+  /** Transport owner of the worktree; a remote pty proven to belong elsewhere never parks. */
+  worktreeOwner: TerminalParkWorktreeOwner
   terminalTabs: readonly ColdParkableTerminalTab[]
   isVisible: boolean
   shouldMeasureHiddenWorktree: boolean
@@ -65,65 +68,9 @@ function hasPendingActivationSpawn(tab: ColdParkableTerminalTab): boolean {
   )
 }
 
-// Why: snapshot-backed = local daemon session owned by this worktree (foreign
-// ids reattach through a path parking cannot replay). SSH is restorable too,
-// via isParkRestorableTerminalPty + main's headless model; only remote-runtime
-// ptys, which never transit main, stay unrestorable.
-export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: string): boolean {
-  if (!ptyId) {
-    return false
-  }
-  if (isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
-    return false
-  }
-  // Why: separator-less ids come from the daemon-fail-open LocalPtyProvider;
-  // they have no daemon session model, so revealing a parked pane would
-  // silently respawn a fresh shell instead of restoring the snapshot.
-  const separatorIdx = ptyId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
-  return separatorIdx !== -1 && ptyId.slice(0, separatorIdx) === worktreeId
-}
-
-export type TerminalParkRestorePolicy = {
-  /** settings.terminalSshViewParking !== false — the C1 SSH-parking kill switch. */
-  sshParkingEnabled?: boolean
-  /** Exact paired environments whose host advertises bounded snapshot restore. */
-  pairedRuntimeParkingEnvironmentIds?: ReadonlySet<string>
-}
-
-export function selectPairedRuntimeParkingEnvironmentIds(
-  statuses: ReadonlyMap<string, { status: { capabilities?: readonly string[] } | null | undefined }>
-): Set<string> {
-  const capable = new Set<string>()
-  for (const [environmentId, entry] of statuses) {
-    if (entry.status?.capabilities?.includes(TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)) {
-      capable.add(environmentId)
-    }
-  }
-  return capable
-}
-
-// Why: SSH uses local main's model; paired PTYs are eligible only when their
-// exact host advertises authoritative bounded restore.
-export function isParkRestorableTerminalPty(
-  ptyId: string | null,
-  worktreeId: string,
-  policy?: TerminalParkRestorePolicy
-): boolean {
-  if (isSnapshotBackedTerminalPty(ptyId, worktreeId)) {
-    return true
-  }
-  if (ptyId && isRemoteRuntimePtyId(ptyId)) {
-    const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
-    return (
-      environmentId !== null &&
-      policy?.pairedRuntimeParkingEnvironmentIds?.has(environmentId) === true
-    )
-  }
-  return policy?.sshParkingEnabled === true && ptyId !== null && parseAppSshPtyId(ptyId) !== null
-}
-
 export function canParkTerminalWorktreeRenderers(args: {
   worktreeId: string
+  worktreeOwner: TerminalParkWorktreeOwner
   terminalTabs: readonly ColdParkableTerminalTab[]
   pendingStartupByTabId: Readonly<Record<string, unknown>>
   // Why: callers pass settings.terminalHiddenViewParking !== false — the
@@ -161,12 +108,18 @@ export function canParkTerminalWorktreeRenderers(args: {
     if (hasPendingActivationSpawn(tab)) {
       return false
     }
-    return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)
+    return isParkRestorableTerminalPty(
+      tab.ptyId,
+      args.worktreeId,
+      args.worktreeOwner,
+      args.restorePolicy
+    )
   })
 }
 
 export function canParkTerminalTabRenderer(args: {
   worktreeId: string
+  worktreeOwner: TerminalParkWorktreeOwner
   terminalTab: TerminalTabColdParkCandidate
   pendingStartupByTabId: Readonly<Record<string, unknown>>
   parkingEnabled: boolean
@@ -195,7 +148,12 @@ export function canParkTerminalTabRenderer(args: {
   if (hasPendingActivationSpawn(tab)) {
     return false
   }
-  return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)
+  return isParkRestorableTerminalPty(
+    tab.ptyId,
+    args.worktreeId,
+    args.worktreeOwner,
+    args.restorePolicy
+  )
 }
 
 export type ColdParkRetainCandidate = { id: string; hiddenSinceMs: number }
@@ -293,6 +251,7 @@ export function selectColdParkedTerminalWorktrees(
 export function selectColdParkedTerminalTabs(
   args: {
     worktreeId: string
+    worktreeOwner: TerminalParkWorktreeOwner
     terminalTabs: readonly TerminalTabColdParkCandidate[]
     pendingStartupByTabId: Readonly<Record<string, unknown>>
     parkingEnabled: boolean
@@ -311,6 +270,7 @@ export function selectColdParkedTerminalTabs(
       tab.hiddenSinceMs === null ||
       !canParkTerminalTabRenderer({
         worktreeId: args.worktreeId,
+        worktreeOwner: args.worktreeOwner,
         terminalTab: tab,
         pendingStartupByTabId: args.pendingStartupByTabId,
         parkingEnabled: args.parkingEnabled,

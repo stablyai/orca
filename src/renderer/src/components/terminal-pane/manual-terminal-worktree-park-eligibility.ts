@@ -43,6 +43,9 @@ export function canManuallyParkTerminalWorktreeRenderers(args: {
     canParkTerminalWorktreeRenderers({
       ...args,
       terminalTabs: withoutSettledActivationSpawn(args.terminalTabs, args.hasLivePty),
+      // Why unknown: this path passes no restorePolicy, so only snapshot-backed
+      // local ptys ever qualify and no remote owner is needed to decide.
+      worktreeOwner: { connectionId: undefined, runtimeEnvironmentId: null },
       // Why: the user asked for this park explicitly, so skip the hidden-duration
       // hysteresis the automatic path uses — but keep every safety gate below it.
       isVisible: false,
