@@ -74,6 +74,7 @@ import {
 import { callRuntimeEnvironment } from './ipc/runtime-environment-transport-routing'
 import { resolveEnvironment } from '../shared/runtime-environment-store'
 import { getPreferredPairingOffer } from '../shared/runtime-environments'
+import { getServeOptions, type ServeOptions } from './startup/serve-options'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import {
   recordRuntimeRpcStartFailure,
@@ -1762,45 +1763,6 @@ const syntheticTitleSpinnerByPaneKey = new Map<
 >()
 let syntheticTitleSpinnerTimer: ReturnType<typeof setInterval> | null = null
 
-type ServeOptions = {
-  json: boolean
-  wsPort?: number
-  pairingAddress: string | null
-  noPairing: boolean
-  mobilePairing: boolean
-  recipeJson: boolean
-  projectRoot: string | null
-}
-
-function getServeOptions(argv = process.argv): ServeOptions {
-  const valueAfter = (flag: string): string | null => {
-    const index = argv.indexOf(flag)
-    if (index === -1) {
-      return null
-    }
-    const value = argv[index + 1]
-    return value && !value.startsWith('--') ? value : null
-  }
-  const rawPort = valueAfter('--serve-port')
-  let wsPort: number | undefined
-  if (rawPort) {
-    const parsedPort = Number(rawPort)
-    if (!Number.isInteger(parsedPort) || parsedPort < 0 || parsedPort > 65535) {
-      throw new Error(`Invalid --serve-port value: ${rawPort}`)
-    }
-    wsPort = parsedPort
-  }
-  return {
-    json: argv.includes('--serve-json'),
-    ...(wsPort !== undefined ? { wsPort } : {}),
-    pairingAddress: valueAfter('--serve-pairing-address'),
-    noPairing: argv.includes('--serve-no-pairing'),
-    mobilePairing: argv.includes('--serve-mobile-pairing'),
-    recipeJson: argv.includes('--serve-recipe-json'),
-    projectRoot: valueAfter('--serve-project-root')
-  }
-}
-
 function getBundledWebClientRoot(): string | undefined {
   const appPath = app.getAppPath()
   const roots = [
@@ -2848,7 +2810,7 @@ void app.whenReady().then(async () => {
   const devWsPort = is.dev && !isE2E ? 6769 : undefined
   let serveOptions: ServeOptions | null = null
   try {
-    serveOptions = isServeMode ? getServeOptions() : null
+    serveOptions = isServeMode ? getServeOptions(process.argv) : null
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     app.exit(1)
