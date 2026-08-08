@@ -31,7 +31,7 @@ optional: without it, use the AppImage's supported extraction path:
 ```bash
 cd /opt/orca
 ./orca-linux.AppImage --appimage-extract
-/opt/orca/squashfs-root/AppRun serve --port 6768
+/opt/orca/squashfs-root/AppRun serve --port 6769
 ```
 
 Docker commonly has no FUSE device. Use `--appimage-extract` once or
@@ -61,7 +61,7 @@ command -v Xvfb
 Start with a foreground run before creating a service:
 
 ```bash
-LIBGL_ALWAYS_SOFTWARE=1 /opt/orca/orca-linux.AppImage serve --port 6768
+LIBGL_ALWAYS_SOFTWARE=1 /opt/orca/orca-linux.AppImage serve --port 6769
 ```
 
 For remote clients, pass the address they should use to reach this server. A
@@ -69,7 +69,7 @@ Tailscale address is usually the safest option for private servers:
 
 ```bash
 LIBGL_ALWAYS_SOFTWARE=1 /opt/orca/orca-linux.AppImage serve \
-  --port 6768 \
+  --port 6769 \
   --pairing-address 100.64.1.20
 ```
 
@@ -86,15 +86,15 @@ pairing initialization complete:
 
 ```text
 Orca server ready
-Bound endpoint: ws://0.0.0.0:6768
-Advertised endpoint: ws://100.64.1.20:6768
+Bound endpoint: ws://0.0.0.0:6769
+Advertised endpoint: ws://100.64.1.20:6769
 Pairing URL: orca://pair?code=...
 ```
 
 For supervisors, request the versioned single-line JSON contract:
 
 ```bash
-/opt/orca/orca-linux.AppImage serve --port 6768 \
+/opt/orca/orca-linux.AppImage serve --port 6769 \
   --pairing-address 100.64.1.20 --json
 ```
 
@@ -106,14 +106,14 @@ readability:
   "type": "orca_server_ready",
   "schemaVersion": 1,
   "runtimeId": "...",
-  "endpoint": "ws://0.0.0.0:6768",
-  "boundEndpoint": "ws://0.0.0.0:6768",
-  "advertisedEndpoint": "ws://100.64.1.20:6768",
+  "endpoint": "ws://0.0.0.0:6769",
+  "boundEndpoint": "ws://0.0.0.0:6769",
+  "advertisedEndpoint": "ws://100.64.1.20:6769",
   "managedWslCliReconciliation": "settled",
   "pairing": {
     "available": true,
     "url": "orca://pair?code=...",
-    "endpoint": "ws://100.64.1.20:6768",
+    "endpoint": "ws://100.64.1.20:6769",
     "deviceId": "...",
     "webClientUrl": "...",
     "scope": "runtime",
@@ -133,12 +133,92 @@ because its contract requires a pairing URL. Stop a foreground server with
 `device_registry_unavailable`, `e2ee_key_unavailable`, and
 `invalid_advertised_endpoint`.
 
+## Connect a client to your server
+
+The steps above only get you a pairing URL. This section is the other half:
+how to use that URL from a machine you actually work on.
+
+### Pick the right remote path first
+
+| Goal | Prefer |
+| --- | --- |
+| Drive the **existing** desktop Orca on a machine you can log into (same projects, agents, auth) | **SSH host** from the Orca desktop sidebar, or a reverse tunnel into that desktop — not a second `orca serve` |
+| Run a **headless** runtime that has no local UI (VPS, CI box, always-on server) | **`orca serve`** + remote-server pairing (this guide) |
+| Reach the runtime from a phone or browser without installing the desktop app | Mobile app pairing, or the `webClientUrl` printed with the ready JSON |
+
+Installing `orca serve` as a dedicated service user creates an **empty** Orca
+profile: none of the projects, worktrees, agent sessions, or CLI auth from a
+desktop install on the same box are shared. That is intentional (a separate
+userData directory per OS user / profile), but it is the usual surprise after
+following the `useradd --system` steps below. If you needed the work already
+on the machine, pair to the desktop app (or SSH into it) instead of standing
+up a second runtime.
+
+### Port 6768 collides with the desktop app
+
+`6768` is the default WebSocket port for the **packaged desktop app**. If you
+also run `orca serve --port 6768` on the same host (common: desktop for local
+work, headless for remote access), the server fails to bind, walks candidate
+ports, and may land on an **OS-assigned random port** that changes every
+restart. The ready block still prints a valid-looking pairing URL — on that
+ephemeral port — so a systemd unit that hard-codes `6768` silently goes stale
+after the first collision.
+
+Prefer a dedicated port that the desktop app will not take, for example
+`6769`, and put the same value in both `ExecStart` and any firewall rules:
+
+```bash
+LIBGL_ALWAYS_SOFTWARE=1 /opt/orca/orca-linux.AppImage serve \
+  --port 6769 \
+  --pairing-address 100.64.1.20
+```
+
+If you must keep `--port 0` (or lose the bind race), read the bound port from
+the ready block / `--json` line every start and update clients; do not assume
+the advertised port is stable across restarts.
+
+### Desktop client (macOS / Linux / Windows)
+
+1. On the server, confirm the ready block shows `Pairing URL: orca://pair?code=...`
+   (or `pairing.url` with `--json`). Treat that URL as a **credential** — anyone
+   who has it can pair until the offer expires.
+2. On the client machine, open the Orca desktop app.
+3. Sidebar → **Add remote host** → **Remote server**.
+4. Paste the full `orca://pair?code=...` URL (or the short code the dialog
+   accepts) and confirm.
+
+The desktop UI help string is the same contract in one sentence: run
+`orca serve --pairing-address <host>` on the server and paste the printed
+pairing URL. After a successful pair, the host appears in the sidebar like any
+other remote; open projects and terminals against it as usual.
+
+### Mobile and web clients
+
+- **Mobile**: open Orca Mobile → add / pair host → scan or paste the same
+  pairing URL the server printed. Pairing is relay- or LAN-backed depending on
+  the offer; keep the server reachable at the advertised endpoint while pairing
+  completes.
+- **Web client**: the ready JSON includes `pairing.webClientUrl` when the
+  server can mint one. Open that URL in a browser on a machine that can reach
+  the advertised endpoint. It is also a credential for the duration of the
+  offer.
+
+If pairing fails with a connection error, re-check that `--pairing-address` is
+reachable from the client (Tailscale IP vs LAN IP vs reverse-proxy URL) and that
+firewalls allow the **actual bound port** from the ready block, not only the
+port you intended.
+
 ## Systemd Service
 
 Create a dedicated service user and install directory. Run the service as this
 user instead of root so the AppImage can keep Chromium's sandbox enabled. Keep
 the install directory root-owned: the service needs to read and execute the
 AppImage, but must not be able to replace it or the rollback artifacts.
+
+This service user gets its **own** userData profile under that home directory.
+Projects and agent state from a desktop Orca on the same host are not visible
+until you open or clone them again in this runtime — see
+[Connect a client to your server](#connect-a-client-to-your-server).
 
 ```bash
 sudo useradd --system --create-home --shell /usr/sbin/nologin orca
@@ -147,7 +227,8 @@ sudo chmod 755 /opt/orca /opt/orca/orca-linux.AppImage
 ```
 
 For most hosts, one `orca serve` service is enough because Orca starts Xvfb on
-display `:99` when no display exists:
+display `:99` when no display exists. Use a port other than `6768` when a
+desktop Orca may also run on the host (see port collision note above):
 
 ```ini
 # /etc/systemd/system/orca-serve.service
@@ -163,7 +244,7 @@ Type=simple
 User=orca
 WorkingDirectory=/home/orca
 Environment=LIBGL_ALWAYS_SOFTWARE=1
-ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
+ExecStart=/opt/orca/orca-linux.AppImage serve --port 6769 --pairing-address 100.64.1.20
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure
@@ -253,7 +334,7 @@ User=orca
 WorkingDirectory=/home/orca
 Environment=DISPLAY=:99
 Environment=LIBGL_ALWAYS_SOFTWARE=1
-ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
+ExecStart=/opt/orca/orca-linux.AppImage serve --port 6769 --pairing-address 100.64.1.20
 Restart=on-failure
 RestartPreventExitStatus=3
 RestartSec=5
@@ -282,7 +363,7 @@ Running an AppImage as root requires Chromium's `--no-sandbox` switch before
 the command:
 
 ```bash
-/opt/orca/orca-linux.AppImage --no-sandbox serve --port 6768
+/opt/orca/orca-linux.AppImage --no-sandbox serve --port 6769
 ```
 
 This disables a security boundary. Prefer a dedicated unprivileged service
