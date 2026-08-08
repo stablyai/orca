@@ -25,6 +25,41 @@ export function parseGlabApiResponse(stdout: string): GlabApiResponse {
   return { body, headers }
 }
 
+/** A non-list body carrying no GitLab error text — opaque data, so there is nothing to classify. */
+export class GlabNonListResponseError extends Error {}
+
+/**
+ * Parse a glab list response, failing readably when GitLab answers with a JSON object.
+ *
+ * Why: glab exits 0 on error envelopes and proxy wrappers, so `JSON.parse(...).map` threw an
+ * opaque `.map is not a function` that the caller's classifier could only report as "unknown".
+ */
+export function parseGlabJsonList<T>(payload: string): T[] {
+  const parsed: unknown = JSON.parse(payload)
+  if (Array.isArray(parsed)) {
+    return parsed as T[]
+  }
+  const reported = gitlabErrorText(parsed)
+  if (reported) {
+    throw new Error(`GitLab returned an error: ${reported}`)
+  }
+  // Why: slice the raw payload rather than re-serializing `parsed` — same text, without
+  // stringifying a multi-megabyte body just to keep 300 characters.
+  throw new GlabNonListResponseError(
+    `GitLab returned a non-list response: ${payload.trim().slice(0, 300)}`
+  )
+}
+
+/** GitLab reports API failures as `{ message }` or `{ error }`; anything else is opaque data. */
+function gitlabErrorText(parsed: unknown): string | null {
+  if (typeof parsed !== 'object' || parsed === null) {
+    return null
+  }
+  const { message, error } = parsed as { message?: unknown; error?: unknown }
+  const text = typeof message === 'string' ? message : error
+  return typeof text === 'string' && text.trim() ? text.trim().slice(0, 300) : null
+}
+
 function findHeaderBodySeparator(stdout: string): { index: number; bodyStart: number } | null {
   let lineStart = 0
   for (let index = 0; index < stdout.length; index++) {

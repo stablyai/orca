@@ -900,14 +900,52 @@ describe('gitlab client — MR operations', () => {
       expect(result.items).toEqual([])
     })
 
-    it('surfaces a readable error instead of crashing when the API returns a non-array body', async () => {
+    it('reports the body instead of ".map is not a function" when the API returns a non-array', async () => {
       glabApiWithHeadersMock.mockResolvedValueOnce({
         body: JSON.stringify({ data: [], total: 0 }),
         headers: {}
       })
       const result = await listMergeRequests('/repo', 'opened')
       expect(result.items).toEqual([])
-      expect(result.error?.message).toContain('"data":[]')
+      expect(result.error?.message).toContain('{"data":[],"total":0}')
+      expect(result.error?.message).not.toContain('is not a function')
+    })
+
+    it('reports the body instead of ".map is not a function" when the cwd fallback returns a non-array', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({ data: [], total: 0 })
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.items).toEqual([])
+      expect(result.error?.message).toContain('{"data":[],"total":0}')
+      expect(result.error?.message).not.toContain('is not a function')
+    })
+
+    // Why: the whole point of surfacing the body — a GitLab error envelope now
+    // classifies like any other glab failure instead of collapsing to 'unknown'.
+    it('classifies a GitLab error envelope returned on exit 0', async () => {
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify({ message: '403 Forbidden' }),
+        headers: {}
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.items).toEqual([])
+      expect(result.error?.type).toBe('permission_denied')
+    })
+
+    // Why: the classifier substring-matches, so an envelope is reported by its own error text —
+    // otherwise this MR title would read as a network failure and replace it with canned copy.
+    it('classifies an error envelope by its message, not its sibling payload', async () => {
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify({
+          message: '403 Forbidden',
+          data: [{ iid: 7, title: 'Fix network timeout in the worker' }]
+        }),
+        headers: {}
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.error?.type).toBe('permission_denied')
     })
   })
 

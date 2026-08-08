@@ -17,8 +17,10 @@ import {
   _resetProjectRefCache,
   classifyGlabError,
   classifyJobLogError,
+  classifyListFetchError,
   classifyListIssuesError,
   getIssueProjectRef,
+  parseGlabJsonList,
   isMissingJobLogError,
   getGlabKnownHosts,
   getProjectRef,
@@ -498,6 +500,45 @@ gitlab.example.com:8080:
       'gitlab.example.com:3030',
       'gitlab.example.com:8443'
     ])
+  })
+})
+
+describe('parseGlabJsonList', () => {
+  it('returns the parsed list unchanged', () => {
+    expect(parseGlabJsonList<{ iid: number }>('[{"iid":1}]')).toEqual([{ iid: 1 }])
+  })
+
+  it.each([
+    ['null', 'null'],
+    ['a number', '0'],
+    ['a string', '"nope"'],
+    ['an object', '{"data":[]}']
+  ])('reports the raw payload for %s', (_label, payload) => {
+    expect(() => parseGlabJsonList(payload)).toThrow(payload)
+  })
+
+  it('reports a GitLab error envelope by its own message', () => {
+    expect(() => parseGlabJsonList('{"message":"403 Forbidden"}')).toThrow(
+      'GitLab returned an error: 403 Forbidden'
+    )
+  })
+
+  it('keeps opaque payload text away from the error classifier', () => {
+    // Why: the title would otherwise substring-match as a network failure and replace the payload.
+    const payload = '{"data":[{"title":"fix network timeout"}]}'
+    let thrown: unknown
+    try {
+      parseGlabJsonList(payload)
+    } catch (err) {
+      thrown = err
+    }
+    const classified = classifyListFetchError(thrown)
+    expect(classified.type).toBe('unknown')
+    expect(classified.message).toContain('fix network timeout')
+  })
+
+  it('still classifies ordinary glab failures by their stderr', () => {
+    expect(classifyListFetchError(new Error('HTTP 403 Forbidden')).type).toBe('permission_denied')
   })
 })
 

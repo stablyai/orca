@@ -1,4 +1,5 @@
 import type { ClassifiedError } from '../../shared/types'
+import { GlabNonListResponseError } from './glab-api-response'
 
 // Why: glab CLI surfaces API errors as unstructured stderr. Map known
 // patterns to typed errors so callers can show user-friendly messages.
@@ -49,6 +50,20 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
     unknown: `Failed to load issues: ${trimmed}`
   }
   return { type: c.type, message: readMessages[c.type] }
+}
+
+/**
+ * Classify a thrown list fetch, keeping opaque response bodies out of the substring matcher.
+ *
+ * Why: classifyGlabError reads stderr, where words like "network" are diagnostics. In a response
+ * body they are content — an MR titled "fix network timeout" would otherwise render as
+ * "check your connection" and replace the body the user needs to see.
+ */
+export function classifyListFetchError(err: unknown): ClassifiedError {
+  if (err instanceof GlabNonListResponseError) {
+    return { type: 'unknown', message: err.message }
+  }
+  return classifyListIssuesError(err instanceof Error ? err.message : String(err))
 }
 
 // Why: a job trace is a read on a pipeline job, so classifyGlabError's issue-edit
