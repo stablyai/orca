@@ -87,7 +87,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
-  it('escalates to the containing entry when dropping a leaf leaves a required field missing', () => {
+  it('drops the containing entry when the corruption sits in one of its required fields', () => {
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         terminalLayoutsByTabId: {
@@ -106,8 +106,8 @@ describe('parseWorkspaceSessionSalvaging', () => {
     )
     expect(result.ok).toBe(true)
     if (result.ok) {
-      // Why: the escalated repair reports only the final self-contained entry it
-      // removed, so dropped counts reflect distinct corrupt records.
+      // Why: the entry is the smallest self-contained unit, so dropped counts
+      // reflect distinct corrupt records rather than symptoms.
       expect(result.droppedPaths).toEqual(['terminalLayoutsByTabId.tab-bad'])
       expect(result.value.terminalLayoutsByTabId['tab-bad']).toBeUndefined()
       expect(result.value.terminalLayoutsByTabId['tab-good']?.root).toEqual({
@@ -118,8 +118,6 @@ describe('parseWorkspaceSessionSalvaging', () => {
   })
 
   it('salvages systemic single-field corruption without inflating the dropped count', () => {
-    // Why: each two-step escalation (drop the field, then its emptied parent) is
-    // one repair, so dropped counts reflect distinct corrupt records.
     const layouts: Record<string, unknown> = {}
     for (let i = 0; i < 20; i += 1) {
       layouts[`tab-${i}`] = {
@@ -136,11 +134,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
-  it('reports one repair when a record raises both a bad-field and a missing-field issue', () => {
-    // Why: zod reports every issue in a record at once. The bad field and the
-    // container the missing fields condemn are nested, so counting both would
-    // report two corrupt records — and bill `dropped_count` telemetry for two —
-    // where the user has one.
+  it('reports one drop when a record raises both a bad-field and a missing-field issue', () => {
+    // Why: the user has one corrupt record; billing `dropped_count` telemetry for
+    // each issue it raises would report two.
     const result = parseWorkspaceSessionSalvaging(
       baseSession({ terminalSurfaceTombstonesByPaneKey: { 'tab-1:leaf-1': { worktreeId: 42 } } })
     )
@@ -151,10 +147,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
-  it('reports one repair when two fields of a record escalate to the same entry', () => {
-    // Why: both fields are dropped in pass 0 and both escalate to the same
-    // container in pass 1. Only one slot can carry the escalation, so the other
-    // must retire rather than linger as a stale sub-path of the entry that went.
+  it('reports one drop when two fields of the same record are corrupt', () => {
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         terminalSurfaceTombstonesByPaneKey: {
@@ -176,10 +169,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
-  it('repairs a dotted map key and its same-named nested path independently', () => {
+  it('reports a dotted map key and its same-named nested path independently', () => {
     // Why: map keys are user data, so 'a.root' and the nested path a → root are
-    // different entries that read alike once joined. Each must produce its own
-    // repair; nothing may treat one as containing the other.
+    // different entries that read alike once joined.
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         terminalLayoutsByTabId: {
@@ -243,7 +235,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
-  it('salvages multiple corrupt entries across different maps in one pass', () => {
+  it('salvages multiple corrupt entries across different maps in one load', () => {
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         tabsByWorktree: { [WT]: [terminalTab('tab-1'), { id: 'tab-bad' }] },
@@ -257,28 +249,25 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
-  it('reports unsalvageable instead of throwing when the validator overflows', () => {
-    // Why: zod materializes an issue per bad field; a payload with hundreds of
-    // thousands of them blows the stack. This parse runs in the Store
-    // constructor, so an escaping RangeError is an unrecoverable launch failure.
+  it('salvages rather than throwing on a payload large enough to overflow the validator', () => {
+    // Why: this parse runs in the Store constructor, so an escaping RangeError is
+    // an unrecoverable launch failure. Per-entry validation never accumulates the
+    // issue list that used to overflow.
     const worktreeId = 'repo-1::/huge'
     const tabs = Array.from({ length: 200_000 }, (_, i) => ({ id: `bad-${i}` }))
-    expect(() =>
-      parseWorkspaceSessionSalvaging(baseSession({ tabsByWorktree: { [worktreeId]: tabs } }))
-    ).not.toThrow()
-    expect(
-      parseWorkspaceSessionSalvaging(baseSession({ tabsByWorktree: { [worktreeId]: tabs } })).ok
-    ).toBe(false)
+    const result = parseWorkspaceSessionSalvaging(
+      baseSession({ tabsByWorktree: { [worktreeId]: tabs } })
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.droppedPaths).toHaveLength(200_000)
+      expect(result.value.tabsByWorktree[worktreeId]).toEqual([])
+    }
   })
 
   it('fails for a payload that is not an object', () => {
-    const result = parseWorkspaceSessionSalvaging('not a session')
-    expect(result.ok).toBe(false)
-  })
-
-  it('fails when a required top-level field cannot be salvaged', () => {
-    const result = parseWorkspaceSessionSalvaging(baseSession({ tabsByWorktree: 'nope' }))
-    expect(result.ok).toBe(false)
+    expect(parseWorkspaceSessionSalvaging('not a session').ok).toBe(false)
+    expect(parseWorkspaceSessionSalvaging(null).ok).toBe(false)
   })
 
   it('drops an optional top-level field whose value is the wrong type', () => {
@@ -289,13 +278,16 @@ describe('parseWorkspaceSessionSalvaging', () => {
     if (result.ok) {
       expect(result.droppedPaths).toEqual(['terminalTopologyRevisionByRepoId'])
       expect(result.value.terminalTopologyRevisionByRepoId).toBeUndefined()
+      // Why: an explicit undefined key would shadow the caller's default in the
+      // `{ ...defaults, ...value }` spread both call sites do.
+      expect(Object.hasOwn(result.value, 'terminalTopologyRevisionByRepoId')).toBe(false)
     }
   })
 
   it('salvages systemic corruption far larger than any single-entry budget', () => {
     // Why: the reported failure was one bad record, but a bad writer projects the
-    // same wrong shape across every tab it touches. Dropping every entry zod
-    // reports per pass keeps that case a salvage instead of a full-session reset.
+    // same wrong shape across every entry it touches. The dropped count is
+    // unbounded so that case stays a salvage instead of a full-session reset.
     const incarnations: Record<string, unknown> = {}
     for (let i = 0; i < 400; i += 1) {
       incarnations[`tab-${i}:leaf-${i}`] = i % 2 === 0 ? i : `inc-${i}`
@@ -333,47 +325,31 @@ describe('parseWorkspaceSessionSalvaging', () => {
   })
 
   it('keeps the rest of the session when a required top-level field is unsalvageable', () => {
-    // Why: without a default to fall back on, one bad legacy `tabsByWorktree`
-    // would still cost every worktree's unified tabs, groups and layouts.
-    const defaults = {
-      activeRepoId: null,
-      activeWorktreeId: null,
-      activeTabId: null,
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {}
-    } as unknown as Parameters<typeof parseWorkspaceSessionSalvaging>[1]
+    // Why: without a fallback, one bad legacy `tabsByWorktree` would still cost
+    // every worktree's unified tabs, groups and layouts.
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         tabsByWorktree: 'nope',
+        activeRepoId: 42,
         terminalPtyIncarnationsByPaneKey: { 'tab-1:leaf-1': 'inc-1' }
-      }),
-      defaults
+      })
     )
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.droppedPaths).toEqual(['tabsByWorktree'])
+      expect(result.droppedPaths.toSorted()).toEqual(['activeRepoId', 'tabsByWorktree'])
       expect(result.value.tabsByWorktree).toEqual({})
+      expect(result.value.activeRepoId).toBeNull()
       expect(result.value.terminalPtyIncarnationsByPaneKey).toEqual({ 'tab-1:leaf-1': 'inc-1' })
     }
   })
 
-  it('still rejects a foreign object payload even when defaults are available', () => {
-    // Why: defaults must repair fields this module dropped, never manufacture a
-    // session out of an unrelated JSON blob that simply lacks every field.
-    const defaults = {
-      activeRepoId: null,
-      activeWorktreeId: null,
-      activeTabId: null,
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {}
-    } as unknown as Parameters<typeof parseWorkspaceSessionSalvaging>[1]
-    const result = parseWorkspaceSessionSalvaging({ unrelated: 'payload', count: 3 }, defaults)
-    expect(result.ok).toBe(false)
+  it('still rejects a foreign object payload rather than posing as a repaired session', () => {
+    // Why: a fallback repairs a field we could not read, it must never manufacture
+    // a session out of an unrelated JSON blob that simply lacks every field.
+    expect(parseWorkspaceSessionSalvaging({ unrelated: 'payload', count: 3 }).ok).toBe(false)
   })
 
   it('drops a whole layout entry when the corruption sits inside a recursive union', () => {
-    // Why: zod reports a union failure at the union's own path, so the salvage
-    // granularity for a corrupt split tree is the containing map entry.
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         tabGroupLayouts: {
