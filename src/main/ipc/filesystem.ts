@@ -98,6 +98,7 @@ import {
   isENOENT,
   authorizeExternalPath
 } from './filesystem-auth'
+import { authorizeSymlinkTargetPath } from './filesystem-symlink-target-authorization'
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
@@ -918,6 +919,12 @@ export function registerFilesystemHandlers(
   ipcMain.handle('fs:authorizeExternalPath', (_event, args: { targetPath: string }): void => {
     authorizeExternalPath(args.targetPath)
   })
+
+  ipcMain.handle(
+    'fs:authorizeSymlinkTarget',
+    async (_event, args: { targetPath: string }): Promise<string | null> =>
+      authorizeSymlinkTargetPath(args.targetPath, store)
+  )
 
   ipcMain.handle(
     'fs:stat',

@@ -3,6 +3,7 @@ preload API plus remote fallbacks; keeping route coverage together makes local
 versus environment behavior easy to audit. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  authorizeRuntimeSymlinkTarget,
   cancelRuntimeFileList,
   copyRuntimePath,
   createRuntimePath,
@@ -44,6 +45,7 @@ const fsCreateFile = vi.fn()
 const fsRename = vi.fn()
 const fsDeletePath = vi.fn()
 const fsStat = vi.fn()
+const fsAuthorizeSymlinkTarget = vi.fn()
 const fsPathExists = vi.fn()
 const fsSearch = vi.fn()
 const fsListFiles = vi.fn()
@@ -74,6 +76,7 @@ beforeEach(() => {
   fsRename.mockReset()
   fsDeletePath.mockReset()
   fsStat.mockReset()
+  fsAuthorizeSymlinkTarget.mockReset()
   fsPathExists.mockReset()
   fsSearch.mockReset()
   fsListFiles.mockReset()
@@ -118,6 +121,7 @@ beforeEach(() => {
         rename: fsRename,
         deletePath: fsDeletePath,
         stat: fsStat,
+        authorizeSymlinkTarget: fsAuthorizeSymlinkTarget,
         pathExists: fsPathExists,
         search: fsSearch,
         listFiles: fsListFiles,
@@ -2172,6 +2176,34 @@ describe('runtime file client', () => {
       params: { worktree: 'id:wt-1', relativePath: 'readme.md' },
       timeoutMs: 15_000
     })
+  })
+
+  it('authorizes symlink targets only for locally owned paths', async () => {
+    await authorizeRuntimeSymlinkTarget(
+      { settings: { activeRuntimeEnvironmentId: null }, worktreeId: 'wt-1', worktreePath: '/repo' },
+      '/repo/linked-docs'
+    )
+    expect(fsAuthorizeSymlinkTarget).toHaveBeenCalledWith({ targetPath: '/repo/linked-docs' })
+
+    fsAuthorizeSymlinkTarget.mockClear()
+    await authorizeRuntimeSymlinkTarget(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'ssh-1'
+      },
+      '/repo/linked-docs'
+    )
+    await authorizeRuntimeSymlinkTarget(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      '/remote/repo/linked-docs'
+    )
+    expect(fsAuthorizeSymlinkTarget).not.toHaveBeenCalled()
   })
 
   it('uses quiet local path existence checks when no runtime environment is active', async () => {

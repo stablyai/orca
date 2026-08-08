@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useRef, useState } from 'react'
 import type { DirCache, FileExplorerTreeRefreshOutcome } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
-import { statRuntimePath } from '@/runtime/runtime-file-client'
+import { authorizeRuntimeSymlinkTarget, statRuntimePath } from '@/runtime/runtime-file-client'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import {
   getFileExplorerOperationOwner,
@@ -28,6 +28,7 @@ type UseFileExplorerTreeResult = {
     options?: { force?: boolean; failOnError?: boolean }
   ) => Promise<boolean>
   statPath: (path: string) => Promise<{ isDirectory: boolean }>
+  authorizeSymlinkTarget: (path: string) => Promise<void>
   markPathAsDirectory: (path: string) => void
   refreshTree: () => Promise<FileExplorerTreeRefreshOutcome>
   refreshDir: (dirPath: string) => Promise<void>
@@ -155,6 +156,26 @@ export function useFileExplorerTree(
     [activeWorktreeId, worktreePath]
   )
 
+  const authorizeSymlinkTarget = useCallback(
+    async (path: string) => {
+      const operationOwner = getFileExplorerOperationOwner(activeWorktreeId)
+      const route = getFileExplorerOperationRoute(operationOwner)
+      if (!route) {
+        throw new Error(getFileExplorerOwnerUnresolvedMessage())
+      }
+      await authorizeRuntimeSymlinkTarget(
+        {
+          settings: route.settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId: route.connectionId
+        },
+        path
+      )
+    },
+    [activeWorktreeId, worktreePath]
+  )
+
   const refreshTree = useCallback(async (): Promise<FileExplorerTreeRefreshOutcome> => {
     if (!worktreePath) {
       // Why: not 'root-unreadable' — no read was attempted, and that outcome tells callers to DROP
@@ -252,6 +273,7 @@ export function useFileExplorerTree(
     rootError,
     loadDir,
     statPath,
+    authorizeSymlinkTarget,
     markPathAsDirectory,
     refreshTree,
     refreshDir,

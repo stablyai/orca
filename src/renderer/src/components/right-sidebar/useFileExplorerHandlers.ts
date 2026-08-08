@@ -40,6 +40,7 @@ type UseFileExplorerHandlersParams = {
     options?: { force?: boolean; failOnError?: boolean }
   ) => Promise<boolean>
   statPath: (path: string) => Promise<{ isDirectory: boolean }>
+  authorizeSymlinkTarget?: (path: string) => Promise<void>
   markPathAsDirectory: (path: string) => void
   setSelectedPath: (path: string) => void
   scrollRef: RefObject<HTMLDivElement | null>
@@ -64,6 +65,7 @@ export async function activateFileExplorerNode(args: {
   canToggleDirectories?: boolean
   loadDir: UseFileExplorerHandlersParams['loadDir']
   statPath: UseFileExplorerHandlersParams['statPath']
+  authorizeSymlinkTarget?: UseFileExplorerHandlersParams['authorizeSymlinkTarget']
   markPathAsDirectory: (path: string) => void
   setSelectedPath: (path: string) => void
 }): Promise<void> {
@@ -75,6 +77,7 @@ export async function activateFileExplorerNode(args: {
     canToggleDirectories = true,
     loadDir,
     statPath,
+    authorizeSymlinkTarget,
     markPathAsDirectory,
     setSelectedPath
   } = args
@@ -94,6 +97,9 @@ export async function activateFileExplorerNode(args: {
     // them only after the user explicitly activates the row.
     let targetIsDirectory = false
     try {
+      // Why: a link inside the workspace usually points outside it, and every read is gated on the
+      // workspace roots; activation is the consent that widens the allow-list to this destination.
+      await authorizeSymlinkTarget?.(node.path)
       targetIsDirectory = (await statPath(node.path)).isDirectory
     } catch {
       toast.error(
@@ -163,6 +169,7 @@ export function useFileExplorerHandlers({
   canToggleDirectories = true,
   loadDir,
   statPath,
+  authorizeSymlinkTarget,
   markPathAsDirectory,
   setSelectedPath,
   scrollRef
@@ -228,6 +235,7 @@ export function useFileExplorerHandlers({
         canToggleDirectories,
         loadDir,
         statPath,
+        authorizeSymlinkTarget,
         markPathAsDirectory,
         setSelectedPath
       })
@@ -241,6 +249,7 @@ export function useFileExplorerHandlers({
       markPathAsDirectory,
       openFile,
       statPath,
+      authorizeSymlinkTarget,
       toggleDir,
       setSelectedPath
     ]

@@ -1031,6 +1031,23 @@ export async function statRuntimePath(
   )
 }
 
+/**
+ * Widen the local allow-list to a symlink's destination before reading it.
+ *
+ * Why: only the local IPC layer rejects symlinks that escape the workspace roots; remote runtimes
+ * and SSH providers resolve links host-side and have no allow-list to widen.
+ */
+export async function authorizeRuntimeSymlinkTarget(
+  context: RuntimeFileOperationArgs,
+  absolutePath: string
+): Promise<void> {
+  if (context.connectionId || getRemoteFileArgs(context, absolutePath)) {
+    return
+  }
+  assertLocalFilesystemFallbackAllowed(context)
+  await window.api.fs.authorizeSymlinkTarget({ targetPath: absolutePath })
+}
+
 export async function subscribeRuntimeFileChanges(
   context: RuntimeFileOperationArgs,
   onPayload: (payload: FsChangedPayload) => void,

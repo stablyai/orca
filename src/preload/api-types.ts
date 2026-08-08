@@ -2845,6 +2845,7 @@ export type PreloadApi = {
       } & SshMutationExpectation
     ) => Promise<void>
     authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
+    authorizeSymlinkTarget: (args: { targetPath: string }) => Promise<string | null>
     stat: (args: {
       filePath: string
       connectionId?: string

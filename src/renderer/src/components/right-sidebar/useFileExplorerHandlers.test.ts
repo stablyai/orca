@@ -72,6 +72,52 @@ describe('activateFileExplorerNode', () => {
     expect(openFile).not.toHaveBeenCalled()
   })
 
+  it('authorizes the symlink target before probing it', async () => {
+    const calls: string[] = []
+    const authorizeSymlinkTarget = vi.fn(async () => {
+      calls.push('authorize')
+    })
+    const statPath = vi.fn(async () => {
+      calls.push('stat')
+      return { isDirectory: true }
+    })
+
+    await activateFileExplorerNode({
+      node: symlinkNode,
+      activeWorktreeId: 'wt-1',
+      openFile: vi.fn(),
+      toggleDir: vi.fn(),
+      loadDir: vi.fn().mockResolvedValue(true),
+      statPath,
+      authorizeSymlinkTarget,
+      markPathAsDirectory: vi.fn(),
+      setSelectedPath: vi.fn()
+    })
+
+    expect(authorizeSymlinkTarget).toHaveBeenCalledWith('/repo/linked-docs')
+    expect(calls).toEqual(['authorize', 'stat'])
+  })
+
+  it('does not read a symlink target that authorization refuses', async () => {
+    const statPath = vi.fn()
+    const openFile = vi.fn()
+
+    await activateFileExplorerNode({
+      node: symlinkNode,
+      activeWorktreeId: 'wt-1',
+      openFile,
+      toggleDir: vi.fn(),
+      loadDir: vi.fn(),
+      statPath,
+      authorizeSymlinkTarget: vi.fn().mockRejectedValue(new Error('Access denied')),
+      markPathAsDirectory: vi.fn(),
+      setSelectedPath: vi.fn()
+    })
+
+    expect(statPath).not.toHaveBeenCalled()
+    expect(openFile).not.toHaveBeenCalled()
+  })
+
   it('falls back to opening a symlink as a file when directory loading fails', async () => {
     const openFile = vi.fn()
     useAppStore.setState({

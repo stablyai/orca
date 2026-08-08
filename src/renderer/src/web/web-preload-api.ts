@@ -1893,6 +1893,8 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       captureSession: captureWebFileMutationSession
     }),
     authorizeExternalPath: () => Promise.resolve(),
+    // Why: the paired host resolves symlinks itself; the web client has no local allow-list to widen.
+    authorizeSymlinkTarget: () => Promise.resolve(null),
     stat: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
       return callRuntimeResult('files.stat', {
