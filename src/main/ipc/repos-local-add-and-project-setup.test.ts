@@ -81,6 +81,75 @@ describe('repos:add + repos:clone', () => {
     expect(result).toHaveProperty('repo.externalWorktreeVisibilityLegacy', false)
   })
 
+  it('refuses repos:add when Git reports dubious ownership instead of creating a zero-worktree project', async () => {
+    const safeDirectory = await import('../git/git-safe-directory')
+    const accessSpy = vi
+      .spyOn(safeDirectory, 'getLocalGitRepoAccessBlocker')
+      .mockReturnValue(
+        [
+          'Git refuses to use this repository because of dubious ownership.',
+          'Repository path:',
+          'D:/workspace/example',
+          'Trust that exact path with Git safe.directory (quote it for your shell), for example:',
+          'git config --global --add safe.directory <path>',
+          'Then re-add the project in Orca.'
+        ].join('\n')
+      )
+
+    try {
+      const result = await handlers.get('repos:add')!(null, {
+        path: 'D:/workspace/example',
+        kind: 'git'
+      })
+
+      expect(result).toMatchObject({
+        error: expect.stringMatching(
+          /dubious ownership[\s\S]*D:\/workspace\/example[\s\S]*safe\.directory/
+        )
+      })
+      expect(mockStore.addRepo).not.toHaveBeenCalled()
+      expect(prepareLocalWorktreeRootForRepoMock).not.toHaveBeenCalled()
+      expect(accessSpy).toHaveBeenCalledWith('D:/workspace/example')
+    } finally {
+      accessSpy.mockRestore()
+    }
+  })
+
+  it('surfaces safe.directory when re-adding a previously empty git project', async () => {
+    const existing = {
+      id: 'repo-empty-import',
+      path: 'D:/workspace/example',
+      displayName: 'example',
+      kind: 'git' as const,
+      badgeColor: '#22c55e'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+    const safeDirectory = await import('../git/git-safe-directory')
+    const accessSpy = vi
+      .spyOn(safeDirectory, 'getLocalGitRepoAccessBlocker')
+      .mockReturnValue(
+        [
+          'Git refuses to use this repository because of dubious ownership.',
+          'Repository path:',
+          'D:/workspace/example',
+          'git config --global --add safe.directory <path>'
+        ].join('\n')
+      )
+
+    try {
+      const result = await handlers.get('repos:add')!(null, {
+        path: 'D:/workspace/example',
+        kind: 'git'
+      })
+      expect(result).toMatchObject({
+        error: expect.stringContaining('dubious ownership')
+      })
+      expect(mockStore.addRepo).not.toHaveBeenCalled()
+    } finally {
+      accessSpy.mockRestore()
+    }
+  })
+
   it('prepares the worktree root when adding a local git repo', async () => {
     await handlers.get('repos:add')!(null, { path: '/tmp/from-add', kind: 'git' })
 
