@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { describeRuntimeCapabilities } from '../../shared/runtime-capability-docs'
 import type { CommandHandler } from '../dispatch'
 import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
@@ -137,6 +138,24 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.getCliStatus()
     if (!json && !result.result.runtime.reachable) {
       process.exitCode = 1
+    }
+    if (json) {
+      // Why: status --json historically listed bare capability names with no
+      // semantics (#13202). Attach a one-line map so agents can reason without
+      // trial-and-error. Client-side only — no wire change for older hosts.
+      const capabilityDocs = describeRuntimeCapabilities(result.result.runtime.capabilities)
+      const enriched = {
+        ...result,
+        result: {
+          ...result.result,
+          runtime: {
+            ...result.result.runtime,
+            capabilityDocs
+          }
+        }
+      }
+      printResult(enriched, json, formatStatus)
+      return
     }
     printResult(result, json, formatStatus)
   }

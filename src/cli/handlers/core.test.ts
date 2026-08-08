@@ -131,3 +131,38 @@ describe('orca claude-teams CLI handler', () => {
     }
   )
 })
+
+describe('orca status CLI capability docs', () => {
+  it('attaches capabilityDocs on --json for advertised flags', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const client = {
+      getCliStatus: vi.fn().mockResolvedValue({
+        result: {
+          app: { running: true, pid: 1 },
+          runtime: {
+            state: 'ready',
+            reachable: true,
+            runtimeId: 'rt-1',
+            capabilities: ['aiVault.v1', 'unknown.future.v9']
+          },
+          graph: { state: 'ready' }
+        }
+      })
+    } as unknown as RuntimeClient
+
+    await CORE_HANDLERS.status({
+      flags: new Map(),
+      client,
+      cwd: '/tmp/repo',
+      json: true
+    })
+
+    const payload = JSON.parse(String(log.mock.calls[0]?.[0])) as {
+      result: { runtime: { capabilities: string[]; capabilityDocs: Record<string, string> } }
+    }
+    expect(payload.result.runtime.capabilities).toEqual(['aiVault.v1', 'unknown.future.v9'])
+    expect(payload.result.runtime.capabilityDocs['aiVault.v1']).toMatch(/Agent Session History/)
+    expect(payload.result.runtime.capabilityDocs['unknown.future.v9']).toBeUndefined()
+    log.mockRestore()
+  })
+})

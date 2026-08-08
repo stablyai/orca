@@ -16,6 +16,11 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Show app/runtime/graph readiness',
     usage: 'orca status [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'JSON includes runtime.capabilities (flag names the host advertises) and runtime.capabilityDocs (one-line semantics per known flag).',
+      'Use capabilityDocs to decide whether an RPC or client feature is safe before calling it; unknown future flags appear only in capabilities.',
+      'Absence of a flag means the host does not support that feature — do not invent behavior from the name alone.'
+    ],
     examples: ['orca status', 'orca status --json']
   },
   {
