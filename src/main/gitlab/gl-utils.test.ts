@@ -29,6 +29,7 @@ import {
   parseGlabAuthStatusHosts,
   resolveIssueSource
 } from './gl-utils'
+import { GlabNonListResponseError } from './glab-api-response'
 import { rememberGlabKnownHost, rememberGlabKnownHosts } from './gitlab-known-host-probe'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
@@ -513,17 +514,23 @@ describe('parseGlabJsonList', () => {
     ['a number', '0'],
     ['a string', '"nope"'],
     ['an object', '{"data":[]}']
-  ])('reports the raw payload for %s', (_label, payload) => {
+  ])('reports the raw payload for %s as an unclassifiable body', (_label, payload) => {
+    expect(() => parseGlabJsonList(payload)).toThrow(GlabNonListResponseError)
     expect(() => parseGlabJsonList(payload)).toThrow(payload)
   })
 
-  it('reports a GitLab error envelope by its own message', () => {
-    expect(() => parseGlabJsonList('{"message":"403 Forbidden"}')).toThrow(
-      'GitLab returned an error: 403 Forbidden'
-    )
+  it.each([
+    ['message', '{"message":"403 Forbidden"}', '403 Forbidden'],
+    ['error', '{"error":"insufficient_scope"}', 'insufficient_scope']
+  ])('reports a GitLab error envelope by its %s field', (_label, payload, reported) => {
+    // Why: an envelope is GitLab's own diagnostic, so it stays classifiable — unlike a raw body.
+    expect(() => parseGlabJsonList(payload)).toThrow(`GitLab returned an error: ${reported}`)
+    expect(() => parseGlabJsonList(payload)).not.toThrow(GlabNonListResponseError)
   })
+})
 
-  it('keeps opaque payload text away from the error classifier', () => {
+describe('classifyListFetchError', () => {
+  it('keeps opaque payload text away from the classifier', () => {
     // Why: the title would otherwise substring-match as a network failure and replace the payload.
     const payload = '{"data":[{"title":"fix network timeout"}]}'
     let thrown: unknown
@@ -532,6 +539,7 @@ describe('parseGlabJsonList', () => {
     } catch (err) {
       thrown = err
     }
+    expect(thrown).toBeInstanceOf(GlabNonListResponseError)
     const classified = classifyListFetchError(thrown)
     expect(classified.type).toBe('unknown')
     expect(classified.message).toContain('fix network timeout')
