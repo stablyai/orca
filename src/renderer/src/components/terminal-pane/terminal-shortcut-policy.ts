@@ -19,6 +19,28 @@ export type TerminalShortcutEvent = {
 
 export type MacOptionAsAlt = 'true' | 'false' | 'left' | 'right'
 
+// Why: an IME owns every keydown while a composition is live, but it never claims a
+// modifier chord over one of these physical keys — so Orca must still translate them
+// instead of dropping the press (#12871). Read `code`, not `key`: a CJK input source
+// rewrites `key` mid-composition while `code` keeps the physical key (#12171, #13033).
+const IME_EXEMPT_CHORD_CODES = new Set(['ArrowLeft', 'ArrowRight', 'Backspace', 'Delete'])
+
+function physicalChordKey(event: TerminalShortcutEvent): string {
+  return event.code && IME_EXEMPT_CHORD_CODES.has(event.code) ? event.code : event.key
+}
+
+/**
+ * True when an IME-owned keydown is nonetheless an Orca terminal chord. A lone modifier
+ * is excluded, so a mode-switch gesture such as composing Ctrl+Space never reaches the
+ * shortcut policy.
+ */
+export function isImeExemptTerminalChord(event: TerminalShortcutEvent): boolean {
+  return (
+    IME_EXEMPT_CHORD_CODES.has(event.code ?? '') &&
+    (event.metaKey || event.ctrlKey || event.altKey)
+  )
+}
+
 // Shared close-chord predicate: the terminal pane (L3) and the floating panel's focused-terminal
 // branch (L2) both treat terminal.closePane OR a terminal-scope tab.close as "close the active
 // pane," so the two layers can't diverge. Callers pass the options each binding needs —
@@ -112,53 +134,60 @@ export function resolveTerminalShortcutAction(
   hasCtrlEnterCsiUAuthority?: () => boolean
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+  const chordKey = physicalChordKey(event)
+  // Why: a composition rewrites `key` to 'Process', which normalizes to no token at all, and
+  // macOS has no non-Latin physical fallback (shared/keybindings.ts). Without substituting the
+  // physical key a user's remap onto Cmd+Backspace would miss and fall through to the built-in
+  // kill-line byte — silence before the IME exemption, the wrong action after it.
+  const chordEvent: TerminalShortcutEvent =
+    chordKey === event.key ? event : { ...event, key: chordKey }
 
   // Why: capture this chord even on repeat without blocking the OS default input-source switch.
-  if (keybindingMatchesAction('terminal.switchInputSource', event, platform, keybindings)) {
+  if (keybindingMatchesAction('terminal.switchInputSource', chordEvent, platform, keybindings)) {
     return { type: 'switchInputSource' }
   }
 
   if (!event.repeat) {
-    if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.copySelection', chordEvent, platform, keybindings)) {
       return { type: 'copySelection' }
     }
 
-    if (keybindingMatchesAction('terminal.search', event, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.search', chordEvent, platform, keybindings)) {
       return { type: 'toggleSearch' }
     }
 
-    if (keybindingMatchesAction('terminal.clear', event, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.clear', chordEvent, platform, keybindings)) {
       return { type: 'clearActivePane' }
     }
 
-    if (keybindingMatchesAction('terminal.focusPreviousPane', event, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.focusPreviousPane', chordEvent, platform, keybindings)) {
       return { type: 'focusPane', direction: 'previous' }
     }
 
-    if (keybindingMatchesAction('terminal.focusNextPane', event, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.focusNextPane', chordEvent, platform, keybindings)) {
       return { type: 'focusPane', direction: 'next' }
     }
 
-    if (keybindingMatchesAction('terminal.equalizePaneSizes', event, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.equalizePaneSizes', chordEvent, platform, keybindings)) {
       return { type: 'equalizePaneSizes' }
     }
 
-    if (keybindingMatchesAction('terminal.expandPane', event, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.expandPane', chordEvent, platform, keybindings)) {
       return { type: 'toggleExpandActivePane' }
     }
 
-    if (keybindingMatchesAction('terminal.setTitle', event, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.setTitle', chordEvent, platform, keybindings)) {
       return { type: 'setTitle' }
     }
 
-    if (keybindingMatchesAction('terminal.clearPaneTitle', event, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.clearPaneTitle', chordEvent, platform, keybindings)) {
       return { type: 'clearPaneTitle' }
     }
 
     // Why: recognize the active tab.close binding as a pane-close alias too, so a user who remaps
     // tab.close alone still closes the focused split pane (never the whole tab); L2 always defers to us.
     if (
-      isTerminalPaneCloseChord(event, platform, keybindings, undefined, {
+      isTerminalPaneCloseChord(chordEvent, platform, keybindings, undefined, {
         context: 'terminal',
         terminalShortcutPolicy
       })
@@ -166,11 +195,11 @@ export function resolveTerminalShortcutAction(
       return { type: 'closeActivePane' }
     }
 
-    if (keybindingMatchesAction('terminal.splitRight', event, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.splitRight', chordEvent, platform, keybindings)) {
       return { type: 'splitActivePane', direction: 'vertical' }
     }
 
-    if (keybindingMatchesAction('terminal.splitDown', event, platform, keybindings)) {
+    if (keybindingMatchesAction('terminal.splitDown', chordEvent, platform, keybindings)) {
       return { type: 'splitActivePane', direction: 'horizontal' }
     }
   }
@@ -214,23 +243,23 @@ export function resolveTerminalShortcutAction(
     !event.metaKey &&
     !event.altKey &&
     !event.shiftKey &&
-    event.key === 'Backspace'
+    chordKey === 'Backspace'
   ) {
     return { type: 'sendInput', data: '\x17' }
   }
 
   if (isMac && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-    if (event.key === 'Backspace') {
+    if (chordKey === 'Backspace') {
       return { type: 'sendInput', data: '\x15' }
     }
-    if (event.key === 'Delete') {
+    if (chordKey === 'Delete') {
       return { type: 'sendInput', data: '\x0b' }
     }
     // Why: xterm.js has no Cmd+Arrow mapping; translate Cmd+←/→ to readline Ctrl+A/Ctrl+E for line start/end (iTerm2/Ghostty).
-    if (event.key === 'ArrowLeft') {
+    if (chordKey === 'ArrowLeft') {
       return { type: 'sendInput', data: '\x01' }
     }
-    if (event.key === 'ArrowRight') {
+    if (chordKey === 'ArrowRight') {
       return { type: 'sendInput', data: '\x05' }
     }
     // Why: macOS users expect Cmd+↑/↓ to scroll scrollback, not write escape bytes to the shell.
@@ -247,7 +276,7 @@ export function resolveTerminalShortcutAction(
     !event.ctrlKey &&
     event.altKey &&
     !event.shiftKey &&
-    event.key === 'Backspace'
+    chordKey === 'Backspace'
   ) {
     // Why: a kitty-protocol TUI binds the CSI 127;3u xterm emits natively; the legacy \x1b\x7f fallback would bypass it.
     if (isKittyKeyboardActivePane?.()) {
@@ -261,14 +290,14 @@ export function resolveTerminalShortcutAction(
     !event.ctrlKey &&
     event.altKey &&
     !event.shiftKey &&
-    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+    (chordKey === 'ArrowLeft' || chordKey === 'ArrowRight')
   ) {
     // Why: a kitty-protocol TUI binds alt+arrow via xterm's native CSI 1;3D/C; \eb/\ef would reach it as alt+b/f.
     if (isKittyKeyboardActivePane?.()) {
       return null
     }
     // Why: readline doesn't bind xterm's \e[1;3D/C for alt+←/→, so translate to \eb/\ef for word-nav (iTerm2 "Esc+" behavior).
-    return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
+    return { type: 'sendInput', data: chordKey === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
   }
 
   if (
@@ -277,14 +306,14 @@ export function resolveTerminalShortcutAction(
     event.ctrlKey &&
     !event.altKey &&
     !event.shiftKey &&
-    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+    (chordKey === 'ArrowLeft' || chordKey === 'ArrowRight')
   ) {
     // Why: local Windows ConPTY (PSReadLine) binds Ctrl+←/→ itself; sending \eb/\ef prints stray b/f. Remote/WSL run readline.
     if (isLocalWindowsConptyPane?.()) {
       return null
     }
     // Why: readline ignores xterm's \e[1;5D/C, so translate Ctrl+←/→ to \eb/\ef for word-nav; !isMac since Mac reserves Ctrl+Arrow.
-    return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
+    return { type: 'sendInput', data: chordKey === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
   }
 
   // Why: macOptionIsMeta stays off so non-US layouts can compose @/€; match event.code since composition rewrites event.key.

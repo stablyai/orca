@@ -1,0 +1,94 @@
+// Issue #12871. Unit half: which events the shortcut layer still resolves while a composition
+// is live. The end-to-end half lives in keyboard-handlers.issue-12871-recorded-chord-traces.test.ts,
+// which replays captured macOS Korean and Japanese traces through the real handler and xterm.
+//
+// The exemption exists because a Japanese conversion swallows a modifier chord outright — no
+// commit, no platform replay, nothing reaches the shell. Its counterweight is the redispatch
+// ledger, since Korean's input source *does* replay the chord and would otherwise fire twice.
+//
+// Scope: shapes here are constructed from the DOM contract, not captured. The captured file is
+// where hardware fidelity lives; this file pins the decision boundary, including the negatives.
+import { describe, expect, it } from 'vitest'
+import { resolveTerminalKeyboardShortcutAction } from './keyboard-handlers'
+import type { TerminalShortcutEvent } from './terminal-shortcut-policy'
+
+// `isComposing` alone decides ownership; `keyCode` is carried so each fixture reads as the
+// shape hardware actually produces, matching the recorded traces in the sibling IME tests.
+type ComposingKeyEvent = TerminalShortcutEvent & { isComposing: boolean; keyCode: number }
+
+function keyEvent(overrides: Partial<ComposingKeyEvent>): ComposingKeyEvent {
+  return {
+    key: '',
+    code: '',
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    repeat: false,
+    isComposing: false,
+    keyCode: 0,
+    ...overrides
+  }
+}
+
+function resolveOnMac(event: ComposingKeyEvent): ReturnType<typeof resolveTerminalKeyboardShortcutAction> {
+  return resolveTerminalKeyboardShortcutAction(
+    event,
+    true,
+    'false',
+    0,
+    false,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    () => false
+  )
+}
+
+describe('terminal chords stay live during an IME composition', () => {
+  it.each([
+    ['Cmd+ArrowLeft', keyEvent({ key: 'ArrowLeft', code: 'ArrowLeft', metaKey: true }), '\x01'],
+    ['Cmd+ArrowRight', keyEvent({ key: 'ArrowRight', code: 'ArrowRight', metaKey: true }), '\x05'],
+    ['Cmd+Backspace', keyEvent({ key: 'Backspace', code: 'Backspace', metaKey: true }), '\x15'],
+    ['Cmd+Delete', keyEvent({ key: 'Delete', code: 'Delete', metaKey: true }), '\x0b'],
+    ['Option+ArrowLeft', keyEvent({ key: 'ArrowLeft', code: 'ArrowLeft', altKey: true }), '\x1bb'],
+    ['Option+ArrowRight', keyEvent({ key: 'ArrowRight', code: 'ArrowRight', altKey: true }), '\x1bf']
+  ])('resolves %s while a composition is live', (_label, event, expected) => {
+    // The idle case is asserted too because it is not covered elsewhere with a populated
+    // `code`: terminal-shortcut-policy.test.ts builds its fixtures with `code: ''`, which
+    // takes physicalChordKey's fallback branch rather than the production one.
+    expect(resolveOnMac(event)).toEqual({ type: 'sendInput', data: expected })
+
+    expect(resolveOnMac({ ...event, isComposing: true })).toEqual({
+      type: 'sendInput',
+      data: expected
+    })
+  })
+
+  // A CJK input source rewrites `key` while `code` keeps the physical key, which is what
+  // #12171 and #13033 turned on. Matching `key` here would drop the chord again.
+  it('matches the physical code when the input source has rewritten key', () => {
+    const event = keyEvent({
+      key: 'Process',
+      code: 'ArrowLeft',
+      metaKey: true,
+      isComposing: true,
+      keyCode: 229
+    })
+
+    expect(resolveOnMac(event)).toEqual({ type: 'sendInput', data: '\x01' })
+  })
+
+  // The exemption is for chords over a physical key, not for the IME's own gesture keys.
+  // A composing Ctrl+Space mode switch reaches the policy as a lone Control keydown.
+  it.each([
+    ['lone Control', keyEvent({ key: 'Control', code: 'ControlLeft', keyCode: 17, ctrlKey: true })],
+    ['lone Meta', keyEvent({ key: 'Meta', code: 'MetaLeft', keyCode: 91, metaKey: true })],
+    ['bare ArrowLeft', keyEvent({ key: 'ArrowLeft', code: 'ArrowLeft' })],
+    ['Cmd+A', keyEvent({ key: 'a', code: 'KeyA', metaKey: true })]
+  ])('still yields %s to the IME while composing', (_label, event) => {
+    expect(resolveOnMac({ ...event, isComposing: true })).toBeNull()
+  })
+})

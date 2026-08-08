@@ -6,9 +6,13 @@ import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { safeFind } from '../terminal-search-safe-find'
-import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
+import {
+  isImeExemptTerminalChord,
+  resolveTerminalShortcutAction
+} from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
+import { createTerminalImeChordRedispatchLedger } from './terminal-ime-chord-redispatch'
 import { installTerminalNativeInputListeners } from './terminal-native-input-listeners'
 import {
   keybindingMatchesAction,
@@ -43,6 +47,16 @@ import {
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 
+/**
+ * True when a live composition owns the keydown outright. A chord over an arrow or
+ * Backspace/Delete is excluded: the IME never claims those, and dropping them makes
+ * Cmd+← do nothing mid-syllable (#12871). xterm queues the resulting bytes behind the
+ * preedit, so letting them through cannot reorder them ahead of the commit.
+ */
+function isImeOwnedTerminalKeyEvent(event: Parameters<typeof isImeExemptTerminalChord>[0]): boolean {
+  return isImeOwnedKeyboardEvent(event) && !isImeExemptTerminalChord(event)
+}
+
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],
   isMac: Parameters<typeof resolveTerminalShortcutAction>[1],
@@ -57,7 +71,7 @@ export function resolveTerminalKeyboardShortcutAction(
   isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
   terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first'
 ): ReturnType<typeof resolveTerminalShortcutAction> {
-  if (isImeOwnedKeyboardEvent(event)) {
+  if (isImeOwnedTerminalKeyEvent(event)) {
     return null
   }
   // Why: keep the host callback required at the production boundary so a
@@ -271,6 +285,7 @@ export function useTerminalKeyboardShortcuts({
     // location from its own keydown event and clear it on keyup.
     let optionKeyLocation = 0
     const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
+    const imeChordRedispatchLedger = createTerminalImeChordRedispatchLedger()
     const disposeNativeInputListeners = installTerminalNativeInputListeners(
       window,
       nativeOnlyShortcutTracker,
@@ -372,7 +387,14 @@ export function useTerminalKeyboardShortcuts({
       if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
         return
       }
-      if (isImeOwnedKeyboardEvent(e)) {
+      if (isImeOwnedTerminalKeyEvent(e)) {
+        return
+      }
+      // Korean's input source replays the chord unmarked after committing; it was already
+      // sent from the marked keydown, so let the replay pass without acting on it again.
+      if (imeChordRedispatchLedger.isRedispatchOfSentChord(e)) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
         return
       }
       // Why: replace stale state only for this physical key so rollover cannot
@@ -439,6 +461,9 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         pane.terminal.input(action.data)
+        if (isImeOwnedKeyboardEvent(e)) {
+          imeChordRedispatchLedger.claimSentChord(e)
+        }
         recordTerminalUserInputForLeaf(tabId, pane.leafId)
         if (action.data === '\x1b[13;2u') {
           const binding = panePtyBindingsRef.current.get(pane.id) as
@@ -638,10 +663,17 @@ export function useTerminalKeyboardShortcuts({
       }
     }
 
+    const onImeChordKeyUp = (e: KeyboardEvent): void => {
+      imeChordRedispatchLedger.onKeyUp(e)
+    }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
+    window.addEventListener('keyup', onImeChordKeyUp, { capture: true })
     return () => {
       disposeNativeInputListeners()
+      imeChordRedispatchLedger.reset()
       window.removeEventListener('keydown', onKeyDown, { capture: true })
+      window.removeEventListener('keyup', onImeChordKeyUp, { capture: true })
     }
   }, [
     isActive,
