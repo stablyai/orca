@@ -5,6 +5,7 @@ import {
   type ResumableTuiAgent
 } from './agent-session-resume'
 import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runtime-types'
+import type { ProviderAccountRef } from './provider-account-ref'
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import type { TuiAgent } from './tui-agent'
@@ -23,6 +24,10 @@ export const AGENT_SESSION_RPC_ERROR_CODES = [
   'agent_session_operation_conflict',
   'agent_session_operation_expired',
   'agent_session_operation_capacity',
+  'agent_session_account_agent_mismatch',
+  'agent_session_account_runtime_mismatch',
+  'agent_session_account_unavailable',
+  'agent_session_account_unsupported',
   'agent_session_legacy_required',
   'execution_owner_reconciling',
   'execution_owner_unavailable'
@@ -110,6 +115,7 @@ export type RuntimeEnsureAgentSessionRequest =
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
       launchPreferences?: AgentLaunchPreferences
+      providerAccountRef?: ProviderAccountRef
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
     }
@@ -132,6 +138,7 @@ export type RuntimeCreateAgentSessionRequest = {
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }
   viewMode?: 'terminal' | 'chat'
+  providerAccountRef?: ProviderAccountRef
 }
 
 export type RuntimeCreateAgentSessionResult = {

@@ -16,6 +16,7 @@ import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/termin
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
+import type { ProviderAccountRef } from '../../../../shared/provider-account-ref'
 
 export type PtyConnectionDeps = {
   tabId: string
@@ -33,6 +34,7 @@ export type PtyConnectionDeps = {
     resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
+    providerAccountRef?: ProviderAccountRef
     /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
     agentArgsOverride?: string | null
     draftPrompt?: string

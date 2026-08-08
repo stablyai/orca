@@ -23,6 +23,7 @@ import type { TerminalPaneSplitSource } from '../shared/feature-education-teleme
 import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
+import type { ProviderAccountRef } from '../shared/provider-account-ref'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -967,6 +968,7 @@ const api = {
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
+      providerAccountRef?: ProviderAccountRef
       startupCommandDelivery?: StartupCommandDelivery
       connectionId?: string | null
       worktreeId?: string

@@ -29,6 +29,7 @@ import {
 } from 'node:path'
 import { app } from 'electron'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
+import type { ProviderAccountRef } from '../../shared/provider-account-ref'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import type { Store } from '../persistence'
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
@@ -265,6 +266,77 @@ export class CodexRuntimeHomeService {
       resolveHostCodexSessionSourceHome(this.store.getSettings())
     )
     return this.getRuntimeHomePath()
+  }
+
+  /** Resolves one launch without changing the user's global account selection. */
+  prepareForCodexAccountLaunch(
+    ref: ProviderAccountRef,
+    options?: { unavailableManagedHomePath?: string }
+  ): string | null {
+    if (ref.provider !== 'codex') {
+      throw new Error('agent_session_account_agent_mismatch')
+    }
+    const target: CodexAccountSelectionTarget =
+      ref.runtime === 'wsl'
+        ? { runtime: 'wsl', wslDistro: ref.wslDistro ?? null }
+        : { runtime: 'host' }
+    if (ref.accountId === null) {
+      if (ref.runtime === 'wsl') {
+        const wslTarget = this.resolveWslDefaultTarget(target)
+        const home = this.getWslSystemCodexHomePath(wslTarget)
+        if (!home) {
+          throw new Error('agent_session_account_unavailable')
+        }
+        this.syncWslConfigAndGlobalInstructionsForLaunch(wslTarget, home)
+        this.startWslSessionBridgeForLaunch(wslTarget, home)
+        return home
+      }
+      return null
+    }
+
+    const account = this.store
+      .getSettings()
+      .codexManagedAccounts.find((candidate) => candidate.id === ref.accountId)
+    if (!account) {
+      throw new Error('agent_session_account_unavailable')
+    }
+    if (
+      getCodexSelectionLaneKey(getCodexSelectionTargetForAccount(account)) !==
+      getCodexSelectionLaneKey(target)
+    ) {
+      throw new Error('agent_session_account_runtime_mismatch')
+    }
+    if (ref.runtime === 'wsl') {
+      const home = this.getWslManagedHomePath(account)
+      if (!home) {
+        throw new Error('agent_session_account_unavailable')
+      }
+      this.syncWslConfigAndGlobalInstructionsForLaunch(target, home)
+      this.startWslSessionBridgeForLaunch(target, home)
+      return home
+    }
+
+    const home = this.getTrustedSelfContainedManagedHomePath(account)
+    if (!home) {
+      throw new Error('agent_session_account_unavailable')
+    }
+    if (
+      options?.unavailableManagedHomePath &&
+      normalizeRuntimePathForComparison(options.unavailableManagedHomePath) ===
+        normalizeRuntimePathForComparison(home)
+    ) {
+      const absence = this.credentialAbsenceGrace.assess(join(home, 'auth.json'))
+      if (absence.state !== 'present' && absence.durable) {
+        throw new Error('agent_session_account_unavailable')
+      }
+    }
+    syncSystemCodexResourcesIntoManagedHome(home)
+    syncSystemConfigIntoManagedCodexHome({
+      runtimeHomePath: home,
+      systemHomePath: getSystemCodexHomePath()
+    })
+    this.startSelfContainedSessionBridgeForLaunch(home)
+    return home
   }
 
   /**

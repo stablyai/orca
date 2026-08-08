@@ -56,6 +56,39 @@ describe('remote agent-session launch routing', () => {
     expect(hostAuthority).not.toHaveBeenCalled()
   })
 
+  it('fails closed instead of dropping a required account reference on an old host', async () => {
+    const hostAuthority = vi.fn().mockResolvedValue('structured')
+    const legacy = vi.fn().mockResolvedValue('legacy')
+    mocks.supportsCapability.mockResolvedValue(false)
+
+    await expect(
+      runRemoteAgentSessionLaunch({
+        environmentId: 'env-1',
+        hostAuthority,
+        hostAuthorityCapability: 'agent-session.account-ref.v1',
+        requireHostAuthority: true,
+        legacy
+      })
+    ).rejects.toThrow('agent_session_account_unsupported')
+    expect(hostAuthority).not.toHaveBeenCalled()
+    expect(legacy).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when a required account capability probe is unavailable', async () => {
+    const legacy = vi.fn().mockResolvedValue('legacy')
+    mocks.supportsCapability.mockRejectedValue(new Error('status temporarily unavailable'))
+
+    await expect(
+      runRemoteAgentSessionLaunch({
+        environmentId: 'env-1',
+        hostAuthority: vi.fn(),
+        requireHostAuthority: true,
+        legacy
+      })
+    ).rejects.toThrow('agent_session_account_unsupported')
+    expect(legacy).not.toHaveBeenCalled()
+  })
+
   it('keeps legacy behavior when a read-only capability probe fails', async () => {
     const hostAuthority = vi.fn().mockResolvedValue('structured')
     const legacy = vi.fn().mockResolvedValue('legacy')
@@ -145,5 +178,18 @@ describe('remote agent-session launch routing', () => {
       'legacy'
     )
     expect(mocks.supportsCapability).not.toHaveBeenCalled()
+  })
+
+  it('does not use a legacy-only placement when account authority is required', async () => {
+    const legacy = vi.fn().mockResolvedValue('legacy')
+
+    await expect(
+      runRemoteAgentSessionLaunch({
+        environmentId: 'env-1',
+        requireHostAuthority: true,
+        legacy
+      })
+    ).rejects.toThrow('agent_session_account_unsupported')
+    expect(legacy).not.toHaveBeenCalled()
   })
 })

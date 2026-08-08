@@ -449,6 +449,28 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
+  it('queues a provider account reference with the local startup contract', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const providerAccountRef = {
+      provider: 'codex',
+      accountId: 'account-a',
+      runtime: 'host'
+    } as const
+
+    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', providerAccountRef })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({ launchAgent: 'codex', providerAccountRef })
+    )
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.not.objectContaining({ providerAccountRef })
+    )
+  })
+
   it('preserves paired-host draft delivery and supported launch preferences', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     store.settings = {
@@ -515,6 +537,28 @@ describe('launchAgentInNewTab', () => {
         agent: 'codex',
         viewMode: 'chat'
       })
+    )
+  })
+
+  it('passes a provider account reference to the paired host launch contract', async () => {
+    mockIsWebRuntimeSessionActive.mockReturnValue(true)
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: 'web-runtime'
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const providerAccountRef = {
+      provider: 'codex',
+      accountId: 'account-a',
+      runtime: 'host'
+    } as const
+
+    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', providerAccountRef })
+
+    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ providerAccountRef })
     )
   })
 
