@@ -92,25 +92,34 @@ function setValue(textarea: HTMLTextAreaElement, value: string): void {
   textarea.selectionEnd = value.length
 }
 
-/** Recorded shape: `r` then `k` on the 2-Set layout assemble ㄱ → 가. */
-async function composeGa(textarea: HTMLTextAreaElement): Promise<void> {
-  dispatchKeydown(textarea, { key: 'Process', code: 'KeyR', keyCode: 229, isComposing: false })
+/** Recorded shape: a lead jamo key then a vowel key assemble one syllable (`r`+`k` → 가). */
+async function composeSyllable(
+  textarea: HTMLTextAreaElement,
+  leadCode: string,
+  jamo: string,
+  syllable: string
+): Promise<void> {
+  dispatchKeydown(textarea, { key: 'Process', code: leadCode, keyCode: 229, isComposing: false })
   dispatchCompositionEvent(textarea, 'compositionstart')
-  setValue(textarea, 'ㄱ')
-  dispatchCompositionEvent(textarea, 'compositionupdate', 'ㄱ')
-  dispatchComposedInput(textarea, 'ㄱ')
+  setValue(textarea, jamo)
+  dispatchCompositionEvent(textarea, 'compositionupdate', jamo)
+  dispatchComposedInput(textarea, jamo)
   await nextEventLoop()
 
   dispatchKeydown(textarea, { key: 'Process', code: 'KeyK', keyCode: 229, isComposing: true })
-  setValue(textarea, '가')
-  dispatchCompositionEvent(textarea, 'compositionupdate', '가')
-  dispatchComposedInput(textarea, '가')
+  setValue(textarea, syllable)
+  dispatchCompositionEvent(textarea, 'compositionupdate', syllable)
+  dispatchComposedInput(textarea, syllable)
   await nextEventLoop()
 
   // Third update: the IME re-reports the assembled syllable as it finalizes.
-  dispatchCompositionEvent(textarea, 'compositionupdate', '가')
-  dispatchComposedInput(textarea, '가')
+  dispatchCompositionEvent(textarea, 'compositionupdate', syllable)
+  dispatchComposedInput(textarea, syllable)
   await nextEventLoop()
+}
+
+function composeGa(textarea: HTMLTextAreaElement): Promise<void> {
+  return composeSyllable(textarea, 'KeyR', 'ㄱ', '가')
 }
 
 /** The recorded finalization: compositionend, and only then a plain Enter. */
@@ -164,5 +173,22 @@ describe('STA-3132 — Korean commit reaches the PTY before the physical Enter',
 
     // The paired latin arm of the same capture session read `61 62 63 0d` at the PTY.
     expect(emitted.join('')).toBe('abc\r')
+  })
+
+  // Restores coverage deleted with terminal-ime-hangul-syllable-flush.test.ts: #12278 fixed a
+  // syllable that was not flushed before the next composition began, which is the force-end path
+  // and the one that leaves stale glyphs behind. Recorded b2b arms read `가\r나` at 25/60/120 ms.
+  it('keeps the first syllable when the next composition starts immediately', async () => {
+    const { emitted, textarea } = openTerminal()
+    await composeGa(textarea)
+    await finalizeThenEnter(textarea)
+    await composeSyllable(textarea, 'KeyS', 'ㄴ', '나')
+    dispatchCompositionEvent(textarea, 'compositionend', '나')
+    await nextEventLoop()
+
+    const stream = emitted.join('')
+    expect(stream).toBe('가\r나')
+    // A dropped flush loses the leading syllable; a double flush repeats it.
+    expect(stream.match(/가/g)).toHaveLength(1)
   })
 })
