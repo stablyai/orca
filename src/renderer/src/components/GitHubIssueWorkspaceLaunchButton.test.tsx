@@ -123,7 +123,7 @@ describe('GitHubIssueWorkspaceLaunchButton', () => {
   })
 
   it('detects on the repository owning runtime host', async () => {
-    const runtimeRepo = { ...repo, executionHostId: 'runtime:env-9' }
+    const runtimeRepo = { ...repo, executionHostId: 'runtime:env-9' as const }
     useAppStore.setState({ repos: [runtimeRepo] } as never)
     const user = userEvent.setup()
     renderButton({ repo: runtimeRepo })
@@ -152,9 +152,9 @@ describe('GitHubIssueWorkspaceLaunchButton', () => {
   // Why: two repos can share a bare id across hosts. Re-resolving by id alone
   // picks the focused duplicate and probes a host this row does not belong to.
   it('keeps the row own host when another repo shares its id on the focused runtime', async () => {
-    const localRepo = { ...repo, executionHostId: 'local' }
+    const localRepo = { ...repo, executionHostId: 'local' as const }
     useAppStore.setState({
-      repos: [localRepo, { ...repo, executionHostId: 'runtime:env-9' }],
+      repos: [localRepo, { ...repo, executionHostId: 'runtime:env-9' as const }],
       settings: { disabledTuiAgents: [], activeRuntimeEnvironmentId: 'env-9' }
     } as never)
     const user = userEvent.setup()
