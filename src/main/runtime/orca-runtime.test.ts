@@ -33438,6 +33438,68 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('keeps valid Run heartbeats silent without hiding substantive mail', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      db.setRun({
+        id: 'run_heartbeat_mailbox',
+        coordinator_handle: terminal.handle,
+        coordinator_pane_key: `${terminal.tabId}:${terminal.leafId}`
+      })
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      db.insertMessage({
+        from: 'term_worker',
+        to: 'run:run_heartbeat_mailbox',
+        subject: 'alive',
+        type: 'heartbeat'
+      })
+
+      runtime.notifyMessageArrived('run:run_heartbeat_mailbox', 'heartbeat')
+      await Promise.resolve()
+      expect(write).not.toHaveBeenCalled()
+
+      db.insertMessage({
+        from: 'term_worker',
+        to: 'run:run_heartbeat_mailbox',
+        subject: 'Rejected heartbeat: invalid sender',
+        type: 'heartbeat',
+        priority: 'high',
+        payload: JSON.stringify({
+          _orcaLifecycleRejection: { code: 'sender_not_assignee', reason: 'invalid sender' }
+        })
+      })
+      db.insertMessage({
+        from: 'term_worker',
+        to: 'run:run_heartbeat_mailbox',
+        subject: 'work complete',
+        type: 'worker_done'
+      })
+
+      runtime.notifyMessageArrived('run:run_heartbeat_mailbox', 'worker_done')
+      await Promise.resolve()
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        '\nYou have 2 orchestration messages. Run `orca orchestration check`.\n'
+      )
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('points already-idle Run mail after Codex replaces its completion title', async () => {
     const runtime = new OrcaRuntimeService(store)
     const db = new InMemoryOrchestrationMessages()

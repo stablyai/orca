@@ -107,7 +107,7 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
-import { OrchestrationDb } from './orchestration/db'
+import { hasLifecycleRejectionMarker, OrchestrationDb } from './orchestration/db'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import {
@@ -32086,6 +32086,7 @@ export class OrcaRuntimeService {
       .getUndeliveredUnreadMessages(mailboxHandle)
       .filter(
         (message) =>
+          (message.type !== 'heartbeat' || hasLifecycleRejectionMarker(message.payload)) &&
           !options.reservedTypes?.has(message.type) &&
           !messageTypeHasLiveWaiter(waiters, message.type)
       )

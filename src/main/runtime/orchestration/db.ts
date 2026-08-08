@@ -131,7 +131,7 @@ function addLifecycleRejectionMarker(payload: string | null, code: string, reaso
   })
 }
 
-function hasLifecycleRejectionMarker(payload: string | null): boolean {
+export function hasLifecycleRejectionMarker(payload: string | null): boolean {
   try {
     const value: unknown = JSON.parse(payload ?? 'null')
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
