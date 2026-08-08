@@ -266,7 +266,7 @@ Recovery is conditional, never a fixed destructive sequence:
 - `worker-show --dispatch <id>` says `ready`: keep waiting or read bounded output.
 - It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus an explicit `--on`/`--worktree` and `--agent`/`--terminal` choice. Retry does not silently inherit placement.
 - It remains `outcome_unknown`: either `worker-stop --dispatch <id>` and inspect again, or explicitly `worker-abandon --dispatch <id>` while accepting that resources may still be live. Abandon performs no remote, process, or filesystem action.
-- `worker-stop` closes only the exact supervised agent terminal. It never deletes the worktree, setup terminal, configured tabs, or unrelated processes.
+- `worker-stop` is cancellation, not a free-form close switch. On a successful stop of the exact live worker, the receipt's `processAction` is `closed_agent_terminal` and the supervised agent terminal is already closed — do not pair stop with a separate `terminal close`. When `processAction` is `none` (already settled, identity changed, or the process is already gone) or `unknown` (close attempt did not complete), inspect `worker-show` before deciding whether a separate close is still needed. `worker-stop` never deletes the worktree, setup terminal, configured tabs, or unrelated processes.
 
 Low-level `worktree create`, `terminal create`, and `dispatch --inject` remain valid recipes for custom argv or topology that `worker-start` does not express.
 
