@@ -1134,6 +1134,9 @@ async function fetchAllItems(args: {
     }
     totalCount = fallback.page.totalCount
     appendNodes(fallback.page.nodes)
+    // Continue paginating without the query so we pull the full unfiltered
+    // result set instead of re-applying the stale indexed filter.
+    args.query = ''
   }
 
   // Paginate
