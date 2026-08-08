@@ -2,7 +2,7 @@
 // home-scoped file operations the shared remote hook installers need, as
 // JSON-RPC request handlers over the relay's stdio channel — so the host
 // installs hook configs/scripts into the distro without per-file wsl.exe
-// spawns (load-sensitive, see docs/agent-status-over-wsl.md).
+// spawns (load-sensitive, see docs/reference/agent-status-over-wsl.md).
 import { promises as fs } from 'node:fs'
 import { posix } from 'node:path'
 

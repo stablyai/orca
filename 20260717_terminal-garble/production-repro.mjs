@@ -17,13 +17,10 @@ import {
   dismissOverlays,
   ensureTerminal,
   focusActiveTerminal
-} from './win-update-e2e/app-driver.mjs'
-import { createSeededRepo } from './win-update-e2e/onboarding-profile.mjs'
-import { recoverProductionTerminalRefs } from './terminal-garble-react-terminal-recovery.mjs'
-import {
-  analyzeTerminalFrame,
-  findPersistentCellDivergences
-} from './terminal-garble-frame-analysis.mjs'
+} from '../tools/win-update-e2e/app-driver.mjs'
+import { createSeededRepo } from '../tools/win-update-e2e/onboarding-profile.mjs'
+import { recoverProductionTerminalRefs } from './react-terminal-recovery.mjs'
+import { analyzeTerminalFrame, findPersistentCellDivergences } from './frame-analysis.mjs'
 
 const DEFAULT_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
 const DEFAULT_PROFILE = path.join(os.homedir(), 'Library', 'Application Support', 'orca')

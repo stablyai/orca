@@ -3,7 +3,7 @@
 // process and the host manager can never drift on where the relay lives,
 // which JSON-RPC methods the fs bridge speaks, or which exit codes signal
 // "reinstall me" vs "no usable node".
-// See docs/agent-status-over-wsl.md (STA-1515).
+// See docs/reference/agent-status-over-wsl.md (STA-1515).
 
 /** Guest-side install dir for the relay bundle, relative to `$HOME`. */
 export const WSL_HOOK_RELAY_DIR = '.orca-wsl/hook-relay'

@@ -109,10 +109,10 @@ GPU/driver history, and real occlusion/parking schedule.
 
 Reusable tooling now lives in:
 
-- `tools/terminal-garble-production-repro.mjs`
-- `tools/terminal-garble-session-replay.mjs`
-- `tools/terminal-garble-react-terminal-recovery.mjs`
-- `tools/terminal-garble-frame-analysis.mjs`
+- `production-repro.mjs`
+- `session-replay.mjs`
+- `react-terminal-recovery.mjs`
+- `frame-analysis.mjs`
 
 ## The bug
 

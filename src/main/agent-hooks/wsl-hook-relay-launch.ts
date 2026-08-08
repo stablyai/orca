@@ -2,7 +2,7 @@
 // bundle resolution on the Windows side, the guest launch/install scripts,
 // and the sentinel wait that turns a wsl.exe child's stdio into a
 // MultiplexerTransport. Kept separate from the manager so the state machine
-// stays readable. See docs/agent-status-over-wsl.md (STA-1515).
+// stays readable. See docs/reference/agent-status-over-wsl.md (STA-1515).
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
