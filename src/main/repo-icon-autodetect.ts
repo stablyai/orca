@@ -1,6 +1,11 @@
 import { readFile, stat } from 'node:fs/promises'
 import type { GitHubRepositoryIdentity, RepoKind } from '../shared/types'
-import { faviconUrlFromWebsite, githubAvatarIcon, type RepoIcon } from '../shared/repo-icon'
+import {
+  faviconUrlFromWebsite,
+  githubAvatarIcon,
+  githubAvatarSlug,
+  type RepoIcon
+} from '../shared/repo-icon'
 import { getRepoSlug, getRepoUpstream } from './github/client'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from './providers/types'
@@ -77,12 +82,7 @@ export async function detectGitHubAvatarIcon(
   upstream?: GitHubRepositoryIdentity | null
 ): Promise<RepoIcon | null> {
   try {
-    const origin = await getRepoSlug(repoPath, connectionId).catch(() => null)
-    // Why: a same-name fork is a personal copy identified by its upstream owner;
-    // a renamed fork is its own project, so its origin owner wins.
-    const renamedFork =
-      upstream && origin && origin.repo.toLowerCase() !== upstream.repo.toLowerCase()
-    const slug = renamedFork ? origin : (upstream ?? origin)
+    const slug = githubAvatarSlug(await getRepoSlug(repoPath, connectionId), upstream)
     return slug ? githubAvatarIcon(slug) : null
   } catch {
     return null

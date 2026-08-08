@@ -1,5 +1,5 @@
 import type { GitHubRepositoryIdentity, Repo } from '../../../../shared/types'
-import { githubAvatarIcon, type RepoIcon } from '../../../../shared/repo-icon'
+import { githubAvatarIcon, githubAvatarSlug, type RepoIcon } from '../../../../shared/repo-icon'
 import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
 import { callRuntimeRpc, type getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
@@ -62,16 +62,10 @@ export async function resolveRepositoryGitHubAvatar(
   // Why: a null live upstream is ambiguous (offline/unauthed vs. not-a-fork). Keep
   // the last-known parent so a transient failure can't clobber fork identity.
   const upstream = liveUpstream ?? repo.upstream ?? null
-  if (!upstream) {
-    const slug = await resolveRepositorySlugLive(runtimeTarget, repo)
-    return { repoIcon: slug ? githubAvatarIcon(slug) : null, upstream: null }
-  }
-  // Why: a same-name fork is a personal copy identified by its upstream owner; a
-  // renamed fork is its own project, so its origin owner wins. A failed origin
-  // probe degrades to the upstream owner.
-  const origin = await resolveRepositorySlugLive(runtimeTarget, repo).catch(() => null)
-  const renamedFork = origin && origin.repo.toLowerCase() !== upstream.repo.toLowerCase()
-  return { repoIcon: githubAvatarIcon(renamedFork ? origin : upstream), upstream }
+  // Why: a rejected origin probe is also ambiguous, so it propagates — callers keep
+  // the stored icon rather than flipping a renamed fork back to the parent avatar.
+  const slug = githubAvatarSlug(await resolveRepositorySlugLive(runtimeTarget, repo), upstream)
+  return { repoIcon: slug ? githubAvatarIcon(slug) : null, upstream }
 }
 
 function sameRepositoryIdentity(

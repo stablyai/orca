@@ -195,6 +195,22 @@ describe('repository GitHub avatar resolution', () => {
     expect(buildRepositoryGitHubAvatarUpdate(repo, resolution)).toBeNull()
   })
 
+  it('propagates an ambiguous origin probe failure instead of flipping to the parent avatar', async () => {
+    // A renamed fork already showing its own owner. A rejected origin probe cannot
+    // tell renamed from same-name, so it must surface rather than resolve to the
+    // parent avatar — callers keep the stored icon.
+    const repo = makeRepo({
+      upstream: { owner: 'upstream-org', repo: 'rocket' },
+      repoIcon: githubAvatarIcon({ owner: 'acme', repo: 'rocket-pro' })
+    })
+    apiMocks.repoUpstream.mockResolvedValueOnce({ owner: 'upstream-org', repo: 'rocket' })
+    apiMocks.repoSlug.mockRejectedValueOnce(new Error('runtime rpc timeout'))
+
+    await expect(
+      resolveRepositoryGitHubAvatar({ kind: 'local' }, repo, { forceLive: true })
+    ).rejects.toThrow('runtime rpc timeout')
+  })
+
   it('persists an upstream change when only the GitHub host differs', () => {
     const repo = makeRepo({
       upstream: { owner: 'acme', repo: 'widgets', host: 'github.com' }
