@@ -961,6 +961,24 @@ describe('orca cli worktree awareness', () => {
     process.exitCode = priorExitCode
   })
 
+  it('rejects a missing GitHub pull request value on worktree.set before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/feature', '--pull-request', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --pull-request.'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+  })
+
   it('passes parent lineage through worktree.set', async () => {
     queueFixtures(
       callMock,
@@ -1333,6 +1351,68 @@ describe('orca cli worktree awareness', () => {
       callerTerminalHandle: undefined,
       cliProvenanceRequest: {}
     })
+  })
+
+  it('rejects unresolved GitHub pull requests before worktree.create', async () => {
+    queueFixtures(callMock, okFixture('req_resolve_pr', { error: 'PR not found' }))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'review-pr',
+        '--pull-request',
+        '404',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledOnce()
+    expect(callMock).toHaveBeenCalledWith('worktree.resolvePrBase', {
+      repo: 'id:repo-1',
+      prNumber: 404
+    })
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain('PR not found')
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects a missing GitHub pull request value on worktree.create before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'review-pr',
+        '--pull-request',
+        '--base-branch',
+        'main',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --pull-request.'
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
   })
 
   it('rejects zero GitHub pull request numbers on worktree.create before RPC', async () => {

@@ -71,6 +71,10 @@ export function getOptionalNullablePositiveIntegerFlag(
   flags: Map<string, string | boolean>,
   name: string
 ): number | null | undefined {
+  const raw = flags.get(name)
+  if (flags.has(name) && (typeof raw !== 'string' || raw === '')) {
+    throw new RuntimeClientError('invalid_argument', `Missing value for --${name}.`)
+  }
   if (flags.get(name) === 'null') {
     return null
   }

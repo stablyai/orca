@@ -427,6 +427,9 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
+  if (command === 'worktree create' && flag === 'pull-request') {
+    return '--pull-request <number>      Linked GitHub pull request number'
+  }
   if (command === 'skills install' && flag === 'agent') {
     return '--agent <names>        Comma-separated install targets; default is detected agents'
   }
