@@ -20,6 +20,15 @@ describe('normalizeAgentRowDisplayFields', () => {
   it('allows an empty selection', () => {
     expect(normalizeAgentRowDisplayFields([])).toEqual([])
   })
+
+  it('defaults when the persisted value is not an array', () => {
+    expect(normalizeAgentRowDisplayFields({ model: true } as never)).toEqual(
+      DEFAULT_AGENT_ROW_DISPLAY_FIELDS
+    )
+    expect(normalizeAgentRowDisplayFields('model' as never)).toEqual(
+      DEFAULT_AGENT_ROW_DISPLAY_FIELDS
+    )
+  })
 })
 
 describe('agentRowShowsField', () => {

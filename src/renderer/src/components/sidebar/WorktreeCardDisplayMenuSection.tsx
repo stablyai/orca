@@ -100,6 +100,25 @@ export function WorktreeCardDisplayMenuSection({
               {opt.label}
             </DropdownMenuCheckboxItem>
           ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+            {translate(
+              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowFields',
+              'Agent row fields'
+            )}
+          </DropdownMenuLabel>
+          {AGENT_ROW_DISPLAY_FIELD_OPTIONS.map((opt) => (
+            <DropdownMenuCheckboxItem
+              key={opt.id}
+              checked={agentRowDisplayFields.includes(opt.id)}
+              onCheckedChange={(checked) =>
+                handleAgentRowDisplayFieldChange(opt.id, checked === true)
+              }
+              onSelect={(e) => e.preventDefault()}
+            >
+              {opt.label}
+            </DropdownMenuCheckboxItem>
+          ))}
         </DropdownMenuSubContent>
       </DropdownMenuSub>
     )

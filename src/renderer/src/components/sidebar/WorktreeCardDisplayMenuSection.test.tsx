@@ -210,4 +210,13 @@ describe('WorktreeCardDisplayMenuSection', () => {
       'relative-time'
     ])
   })
+
+  it('exposes agent row field toggles under experimental new card style', () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+
+    renderMenu()
+
+    expect(container?.textContent).toContain('Agent row fields')
+    expect(container?.textContent).toContain('Model label')
+  })
 })
