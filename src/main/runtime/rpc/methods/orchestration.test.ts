@@ -1903,6 +1903,27 @@ describe('orchestration RPC methods', () => {
         call('orchestration.taskUpdate', { id: 'task_fake', status: 'completed' })
       ).rejects.toThrow('was not found')
     })
+
+    it('updates deps without requiring status', async () => {
+      setup()
+      const parent = db.createTask({ spec: 'parent' })
+      const child = db.createTask({ spec: 'child', deps: [parent.id] })
+      expect(child.status).toBe('pending')
+
+      const result = (await call('orchestration.taskUpdate', {
+        id: child.id,
+        deps: JSON.stringify([])
+      })) as { task: { status: string; deps: string } }
+
+      expect(result.task.status).toBe('ready')
+      expect(JSON.parse(result.task.deps)).toEqual([])
+    })
+
+    it('rejects taskUpdate with neither status nor deps', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      await expect(call('orchestration.taskUpdate', { id: task.id })).rejects.toThrow(/status|deps/)
+    })
   })
 
   describe('orchestration.dispatch', () => {

@@ -150,11 +150,28 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'task-update'],
-    summary: 'Update a task status',
+    summary: 'Update a task status and/or dependencies',
     usage:
-      'orca orchestration task-update --id <task_id> --status <status> [--result <json>] [--run <run_id>] [--from <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'status', 'result', 'run', 'from', 'retry-request'],
-    notes: ['Valid --status values: pending, ready, dispatched, completed, failed, blocked.']
+      'orca orchestration task-update --id <task_id> [--status <status>] [--deps <json_array>] [--result <json>] [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'id',
+      'status',
+      'deps',
+      'result',
+      'run',
+      'from',
+      'retry-request'
+    ],
+    notes: [
+      'Provide --status and/or --deps. Valid --status values: pending, ready, dispatched, completed, failed, blocked.',
+      '--deps is a JSON array of task IDs (same shape as task-create). Only pending or ready tasks accept deps changes; status flips between pending and ready from whether all deps are completed.',
+      '--result requires --status.'
+    ],
+    examples: [
+      'orca orchestration task-update --id task_abc --status completed --json',
+      `orca orchestration task-update --id task_abc --deps '["task_dep1","task_dep2"]' --json`
+    ]
   },
   ...ORCHESTRATION_WORKER_COMMAND_SPECS,
   {

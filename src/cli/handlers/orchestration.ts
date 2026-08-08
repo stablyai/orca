@@ -830,8 +830,18 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration task-update': async ({ flags, client, cwd, json }) => {
-    const status = getRequiredStringFlag(flags, 'status')
-    if (!TASK_STATUS_VALUES.includes(status as (typeof TASK_STATUS_VALUES)[number])) {
+    const status = getOptionalStringFlag(flags, 'status')
+    const deps = getOptionalStringFlag(flags, 'deps')
+    if (status === undefined && deps === undefined) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Provide --status and/or --deps (JSON array of task IDs)'
+      )
+    }
+    if (
+      status !== undefined &&
+      !TASK_STATUS_VALUES.includes(status as (typeof TASK_STATUS_VALUES)[number])
+    ) {
       throw new RuntimeClientError(
         'invalid_argument',
         `invalid status '${status}', expected one of: ${TASK_STATUS_VALUES.join(', ')}`
@@ -843,8 +853,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       'orchestration.taskUpdate',
       {
         id: getRequiredStringFlag(flags, 'id'),
-        status,
+        ...(status !== undefined ? { status } : {}),
         result: getOptionalStringFlag(flags, 'result'),
+        ...(deps !== undefined ? { deps } : {}),
         run: getOptionalStringFlag(flags, 'run'),
         callerTerminalHandle: await resolveCoordinatorTerminalHandle(flags, cwd, client)
       }

@@ -171,25 +171,42 @@ const TaskListParams = z.object({
   callerTerminalHandle: OptionalString
 })
 
-const TaskUpdateParams = z.object({
-  id: requiredString('Missing --id'),
-  status: z
-    .unknown()
-    .transform((v) => {
-      if (typeof v === 'string' && TASK_STATUSES.includes(v as TaskStatus)) {
-        return v as TaskStatus
-      }
-      return ''
-    })
-    .pipe(
-      z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked'], {
-        message: 'Missing --status'
+const TaskUpdateParams = z
+  .object({
+    id: requiredString('Missing --id'),
+    status: z
+      .unknown()
+      .optional()
+      .transform((v) => {
+        if (v === undefined || v === null || v === '') {
+          return undefined
+        }
+        if (typeof v === 'string' && TASK_STATUSES.includes(v as TaskStatus)) {
+          return v as TaskStatus
+        }
+        return ''
       })
-    ),
-  result: OptionalString,
-  run: OptionalString,
-  callerTerminalHandle: OptionalString
-})
+      .pipe(
+        z
+          .enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked'], {
+            message: 'Invalid --status'
+          })
+          .optional()
+      ),
+    result: OptionalString,
+    // Why: same JSON array shape as task-create --deps (#7430).
+    deps: OptionalString,
+    run: OptionalString,
+    callerTerminalHandle: OptionalString
+  })
+  .superRefine((value, ctx) => {
+    if (value.status === undefined && value.deps === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Provide --status and/or --deps'
+      })
+    }
+  })
 
 const DispatchParams = z.object({
   task: requiredString('Missing --task'),
@@ -1189,9 +1206,32 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           `Task ${params.id} was not found in Run ${run.id}.`
         )
       }
-      const task = db.updateTaskStatus(params.id, params.status, params.result)
-      if (!task) {
-        throw new Error(`Task not found: ${params.id}`)
+      let task = existing
+      if (params.deps !== undefined) {
+        let deps: string[]
+        try {
+          const parsed = JSON.parse(params.deps)
+          if (!Array.isArray(parsed) || !parsed.every((d) => typeof d === 'string')) {
+            throw new Error('not an array of strings')
+          }
+          deps = parsed
+        } catch {
+          throw new Error('Invalid --deps: must be a JSON array of task IDs')
+        }
+        const updated = db.updateTaskDeps(params.id, deps)
+        if (!updated) {
+          throw new Error(`Task not found: ${params.id}`)
+        }
+        task = updated
+      }
+      if (params.status !== undefined) {
+        const updated = db.updateTaskStatus(params.id, params.status, params.result)
+        if (!updated) {
+          throw new Error(`Task not found: ${params.id}`)
+        }
+        task = updated
+      } else if (params.result !== undefined) {
+        throw new Error('--result requires --status')
       }
       return { task }
     }

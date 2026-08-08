@@ -3945,6 +3945,38 @@ export class OrchestrationDb {
     return this.getTask(id)
   }
 
+  // Why: deps were write-once at create; wrong --deps forced recreate-or-nuke (#7430).
+  // Only pending/ready tasks may change deps — dispatched work already owns a worker.
+  updateTaskDeps(id: string, deps: string[]): TaskRow | undefined {
+    const task = this.getTask(id)
+    if (!task) {
+      return undefined
+    }
+    if (task.status !== 'pending' && task.status !== 'ready') {
+      throw new Error(
+        `Cannot update deps for task ${id} in status ${task.status}; only pending or ready tasks accept --deps`
+      )
+    }
+    for (const depId of deps) {
+      if (depId === id) {
+        throw new Error(`Task ${id} cannot depend on itself`)
+      }
+      const dependency = this.getTask(depId)
+      if (!dependency || dependency.run_id !== task.run_id) {
+        throw new Error(`Dependency task ${depId} must belong to run ${task.run_id}`)
+      }
+    }
+    const allDepsCompleted = deps.every((depId) => {
+      const dep = this.getTask(depId)
+      return dep?.status === 'completed'
+    })
+    const nextStatus: TaskStatus = allDepsCompleted ? 'ready' : 'pending'
+    this.db
+      .prepare('UPDATE tasks SET deps = ?, status = ? WHERE id = ?')
+      .run(JSON.stringify(deps), nextStatus, id)
+    return this.getTask(id)
+  }
+
   // Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.
   private promoteReadyTasks(completedTaskId: string): void {
     const candidates = this.db
