@@ -14,7 +14,8 @@ const {
   guestSetWindowOpenHandlerMock,
   guestOpenDevToolsMock,
   webContentsFromIdMock,
-  screenGetCursorScreenPointMock
+  screenGetCursorScreenPointMock,
+  openExternalAppUrlWithUserApprovalMock
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(() => '/downloads'),
   shellOpenExternalMock: vi.fn(),
@@ -27,7 +28,8 @@ const {
   guestOpenDevToolsMock: vi.fn(),
   webContentsFromIdMock: vi.fn(),
   screenGetCursorScreenPointMock: vi.fn(() => ({ x: 0, y: 0 })),
-  openPopupWithOriginBarMock: vi.fn()
+  openPopupWithOriginBarMock: vi.fn(),
+  openExternalAppUrlWithUserApprovalMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -52,6 +54,10 @@ vi.mock('electron', () => ({
 
 vi.mock('./popup-origin-bar-window', () => ({
   openPopupWithOriginBar: openPopupWithOriginBarMock
+}))
+
+vi.mock('../external-app-url-open', () => ({
+  openExternalAppUrlWithUserApproval: openExternalAppUrlWithUserApprovalMock
 }))
 
 import { browserManager } from './browser-manager'
@@ -562,6 +568,76 @@ describe('browserManager', () => {
     )
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',
+      origin: 'null',
+      action: 'blocked'
+    })
+  })
+
+  it('prompts and opens custom app schemes from popup and will-navigate paths', async () => {
+    const rendererSendMock = vi.fn()
+    openExternalAppUrlWithUserApprovalMock.mockReset()
+    openExternalAppUrlWithUserApprovalMock.mockResolvedValue('opened')
+    const guest = {
+      id: 107,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      getURL: vi.fn(() => 'https://login.example.com/sso'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-app-scheme',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const handler = guestSetWindowOpenHandlerMock.mock.calls.at(-1)?.[0] as (details: {
+      url: string
+    }) => { action: 'allow' | 'deny' }
+    expect(handler({ url: 'oktaverify://bind?token=1' })).toEqual({ action: 'deny' })
+    await vi.waitFor(() => {
+      expect(openExternalAppUrlWithUserApprovalMock).toHaveBeenCalledWith(
+        'oktaverify://bind?token=1',
+        expect.objectContaining({ requestingOrigin: 'https://login.example.com' })
+      )
+    })
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
+      browserPageId: 'browser-app-scheme',
+      origin: 'null',
+      action: 'opened-external'
+    })
+
+    openExternalAppUrlWithUserApprovalMock.mockClear()
+    rendererSendMock.mockClear()
+    openExternalAppUrlWithUserApprovalMock.mockResolvedValue('cancelled')
+    const willNavigateHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'will-navigate'
+    )?.[1] as ((event: { preventDefault: () => void }, url: string) => void) | undefined
+    const preventDefault = vi.fn()
+    willNavigateHandler?.({ preventDefault }, 'oktaverify://bind?token=2')
+    expect(preventDefault).toHaveBeenCalled()
+    await vi.waitFor(() => {
+      expect(openExternalAppUrlWithUserApprovalMock).toHaveBeenCalledWith(
+        'oktaverify://bind?token=2',
+        expect.objectContaining({ requestingOrigin: 'https://login.example.com' })
+      )
+    })
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
+      browserPageId: 'browser-app-scheme',
       origin: 'null',
       action: 'blocked'
     })

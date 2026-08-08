@@ -55,4 +55,27 @@ describe('openExternalAppUrlWithUserApproval', () => {
     expect(showMessageBoxMock).not.toHaveBeenCalled()
     expect(openExternalMock).not.toHaveBeenCalled()
   })
+
+  it('serializes concurrent custom-scheme prompts', async () => {
+    let releaseFirst!: (value: { response: number }) => void
+    showMessageBoxMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ response: number }>((resolve) => {
+            releaseFirst = resolve
+          })
+      )
+      .mockResolvedValueOnce({ response: 1 })
+
+    const first = openExternalAppUrlWithUserApproval('oktaverify://one')
+    const second = openExternalAppUrlWithUserApproval('oktaverify://two')
+
+    // Second must wait until the first dialog resolves.
+    await Promise.resolve()
+    expect(showMessageBoxMock).toHaveBeenCalledTimes(1)
+    releaseFirst({ response: 1 })
+    await expect(first).resolves.toBe('cancelled')
+    await expect(second).resolves.toBe('cancelled')
+    expect(showMessageBoxMock).toHaveBeenCalledTimes(2)
+  })
 })
