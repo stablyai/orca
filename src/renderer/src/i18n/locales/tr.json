@@ -1,51 +1,51 @@
 {
   "app": {
     "recoverableError": {
-      "rootTitle": "Orca hit a renderer error.",
-      "rootDescription": "The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.",
-      "webTitle": "Orca web hit a renderer error.",
-      "webDescription": "Retry the web client or reconnect to the paired runtime."
+      "rootTitle": "Orca bir işleyici (renderer) hatası ile karşılaştı.",
+      "rootDescription": "Uygulama kabuğu işleme sürecini tamamlayamadı. Yeniden bağlamak için tekrar deneyin veya hata devam ederse Orca'yı yeniden başlatın.",
+      "webTitle": "Orca web bir işleyici hatası ile karşılaştı.",
+      "webDescription": "Web istemcisini tekrar deneyin veya eşleştirilmiş çalışma zamanına yeniden bağlanın."
     }
   },
   "browser": {
     "loadFailure": {
-      "connectionNotSecure": "Connection isn't secure",
-      "cantReachHost": "Can't reach {{value0}}",
-      "cantLoadPage": "Can't load this page",
+      "connectionNotSecure": "Bağlantı güvenli değil",
+      "cantReachHost": "{{value0}} sunucusuna ulaşılamıyor",
+      "cantLoadPage": "Bu sayfa yüklenemiyor",
       "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
       "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
       "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
       "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
       "trustedCertificateGuidance": "For local development, use a trusted local certificate when possible.",
-      "retry": "Retry",
-      "copyAddress": "Copy Address",
-      "addressCopied": "Copied the current page address.",
-      "openExternally": "Open Externally",
-      "tryHttps": "Try HTTPS",
-      "proceedUnsafe": "Proceed Anyway (Unsafe)",
-      "connecting": "Connecting…",
+      "retry": "Tekrar Dene",
+      "copyAddress": "Adresi Kopyala",
+      "addressCopied": "Mevcut sayfa adresi kopyalandı.",
+      "openExternally": "Harici Aç",
+      "tryHttps": "HTTPS Dene",
+      "proceedUnsafe": "Yine de Devam Et (Güvensiz)",
+      "connecting": "Bağlanılıyor…",
       "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
       "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     },
     "guestRecovery": {
-      "title": "Browser page stopped",
-      "failed": "The browser page stopped unexpectedly. Retry to restore it."
+      "title": "Tarayıcı sayfası durdu",
+      "failed": "Tarayıcı sayfası beklenmedik bir şekilde durdu. Geri yüklemek için tekrar deneyin."
     }
   },
   "settings": {
     "appearance": {
       "language": {
-        "title": "Language",
-        "description": "Choose the language used by the Orca interface.",
-        "system": "System",
+        "title": "Dil",
+        "description": "Orca arayüzü tarafından kullanılan dili seçin.",
+        "system": "Sistem",
         "english": "English",
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
         "spanish": "Español",
-        "turkish": "Turkish"
+        "turkish": "Türkçe"
       },
       "statusBar": {
         "claudeToggleDescription": "Show Claude token and cost usage for the active workspace.",
@@ -67,41 +67,41 @@
     }
   },
   "menu": {
-    "checkForUpdates": "Check for Updates...",
-    "settings": "Settings",
-    "exploreOrca": "Explore Orca",
-    "gettingStarted": "Getting Started with Orca",
-    "reportCrash": "Report Crash...",
-    "file": "File",
-    "exit": "Exit",
-    "edit": "Edit",
-    "appearance": "Appearance",
-    "toggleLeftSidebar": "Toggle Left Sidebar",
-    "toggleRightSidebar": "Toggle Right Sidebar",
-    "showStatusBar": "Show Status Bar",
-    "showTasksButton": "Show Tasks Button",
-    "showAutomationsButton": "Show Automations Button",
-    "showMobileButton": "Show Orca Mobile Button",
-    "showTitlebarAppName": "Show Titlebar App Name",
-    "view": "View",
-    "reload": "Reload",
-    "forceReload": "Force Reload",
-    "resetSize": "Reset Size",
-    "zoomIn": "Zoom In",
-    "zoomOut": "Zoom Out",
-    "openWorktreePalette": "Open Worktree Palette",
-    "window": "Window",
-    "help": "Help",
-    "paste": "Paste"
+    "checkForUpdates": "Güncellemeleri Kontrol Et...",
+    "settings": "Ayarlar",
+    "exploreOrca": "Orca'yı Keşfet",
+    "gettingStarted": "Orca'ya Başlarken",
+    "reportCrash": "Çökme Raporla...",
+    "file": "Dosya",
+    "exit": "Çıkış",
+    "edit": "Düzenle",
+    "appearance": "Görünüm",
+    "toggleLeftSidebar": "Sol Kenar Çubuğunu Aç/Kapat",
+    "toggleRightSidebar": "Sağ Kenar Çubuğunu Aç/Kapat",
+    "showStatusBar": "Durum Çubuğunu Göster",
+    "showTasksButton": "Görevler Düğmesini Göster",
+    "showAutomationsButton": "Otomasyonlar Düğmesini Göster",
+    "showMobileButton": "Orca Mobil Düğmesini Göster",
+    "showTitlebarAppName": "Başlık Çubuğunda Uygulama Adını Göster",
+    "view": "Görünüm",
+    "reload": "Yeniden Yükle",
+    "forceReload": "Zorla Yeniden Yükle",
+    "resetSize": "Boyutu Sıfırla",
+    "zoomIn": "Yakınlaştır",
+    "zoomOut": "Uzaklaştır",
+    "openWorktreePalette": "Çalışma Ağacı Paletini Aç",
+    "window": "Pencere",
+    "help": "Yardım",
+    "paste": "Yapıştır"
   },
   "tray": {
-    "openOrca": "Open Orca",
-    "quit": "Quit",
+    "openOrca": "Orca'yı Aç",
+    "quit": "Çık",
     "minimizeNotice": {
-      "body": "Orca is still running in the system tray"
+      "body": "Orca hâlâ sistem tepsisinde çalışıyor"
     },
-    "activityWaiting": "Orca - activity waiting",
-    "activityWaitingSuffix": "activity waiting"
+    "activityWaiting": "Orca - beklemede etkinlik var",
+    "activityWaitingSuffix": "beklemede etkinlik var"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -1217,26 +1217,26 @@
         "commentTooLarge": "Comment is too large to submit safely."
       },
       "Landing": {
-        "76a95f7f47": "Create",
-        "f05d237049": "Add a project first",
-        "f9eaa9e12d": "Add Project",
+        "76a95f7f47": "Oluştur",
+        "f05d237049": "Önce bir proje ekleyin",
+        "f9eaa9e12d": "Proje Ekle",
         "6ca6ff404e": "ORCA",
         "520304a067": "Orca logo",
-        "ce44fad849": "Missing dependencies",
-        "c1cf168479": "Hide",
-        "00cee697c1": "Run \"gh auth login\" in a terminal to connect your GitHub account.",
-        "9f96d018b7": "GitHub CLI is not authenticated",
-        "73e1ad4282": "Orca uses the GitHub CLI (gh) to show pull requests, issues, and checks.",
-        "5beaef5f9e": "GitHub CLI is not installed",
-        "b673e7cf1b": "Git is required for Git projects, source control, and workspace management.",
-        "e5b7296d9d": "Git is not installed",
-        "cd21242762": "Add a project to get started.",
-        "9c00bd4adf": "Select a workspace from the sidebar to begin.",
+        "ce44fad849": "Eksik bağımlılıklar",
+        "c1cf168479": "Gizle",
+        "00cee697c1": "GitHub hesabınızı bağlamak için bir terminalde gh auth login komutunu çalıştırın.",
+        "9f96d018b7": "GitHub CLI yetkilendirilmemiş",
+        "73e1ad4282": "Orca; pull requestleri, sorunları ve kontrolleri göstermek için GitHub CLI (gh) kullanır.",
+        "5beaef5f9e": "GitHub CLI yüklü değil",
+        "b673e7cf1b": "Git projeleri, kaynak denetimi ve çalışma alanı yönetimi için Git gereklidir.",
+        "e5b7296d9d": "Git yüklü değil",
+        "cd21242762": "Başlamak için bir proje ekleyin.",
+        "9c00bd4adf": "Başlamak için kenar çubuğundan bir çalışma alanı seçin.",
         "16e9e3df89": "starred",
-        "0d0ace8861": "Star on GitHub",
-        "ec43b38ba7": "Starred on GitHub",
-        "157bb5ecbb": "Open GitHub",
-        "preflightDismiss": "Dismiss"
+        "0d0ace8861": "GitHub üzerinde Yıldız Ver",
+        "ec43b38ba7": "GitHub üzerinde Yıldız Verildi",
+        "157bb5ecbb": "GitHubı Aç",
+        "preflightDismiss": "Kapat"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -14968,44 +14968,44 @@
     },
     "runtime": {
       "remoteServerUpdateErrors": {
-        "manualRequired": "This server must be updated manually through its service manager.",
-        "notAvailable": "The server no longer reports an available update. Check again.",
-        "notDownloaded": "The server update has not finished downloading.",
-        "legacyServer": "Update this server manually once to enable remote updates.",
-        "updaterTimeout": "Timed out waiting for the server updater.",
-        "requestedVersionUnavailable": "The server updater did not offer the requested Orca version.",
-        "updateUnavailable": "The server did not report an available update.",
-        "downloadIncomplete": "The server update did not finish downloading.",
-        "reconnectTimeout": "The server did not reconnect on the updated version."
+        "manualRequired": "Bu sunucu hizmet yöneticisi aracılığıyla manuel olarak güncellenmelidir.",
+        "notAvailable": "Sunucu artık kullanılabilir bir güncelleme bildirmiyor. Tekrar kontrol edin.",
+        "notDownloaded": "Sunucu güncellemesinin indirilmesi henüz tamamlanmadı.",
+        "legacyServer": "Uzaktan güncellemeleri etkinleştirmek için bu sunucuyu bir kez manuel olarak güncelleyin.",
+        "updaterTimeout": "Sunucu güncelleyicisi beklenirken zaman aşımına uğradı.",
+        "requestedVersionUnavailable": "Sunucu güncelleyicisi istenen Orca sürümünü sunmadı.",
+        "updateUnavailable": "Sunucu kullanılabilir bir güncelleme bildirmedi.",
+        "downloadIncomplete": "Sunucu güncellemesinin indirilmesi tamamlanmadı.",
+        "reconnectTimeout": "Sunucu güncellenen sürümde yeniden bağlanmadı."
       },
       "webRuntimeSession": {
-        "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."
+        "remoteHostDisconnected": "Çalışma alanı uzak bir Orca sunucusuna bağlı değil."
       },
       "gitlabJobTraceClient": {
-        "loadFailed": "Failed to load the GitLab job log.",
-        "emptyTrace": "No log is available for this GitLab job.",
-        "timedOut": "Timed out loading the GitLab job log."
+        "loadFailed": "GitLab iş günlüğü yüklenemedi.",
+        "emptyTrace": "Bu GitLab işi için kullanılabilir bir günlük yok.",
+        "timedOut": "GitLab iş günlüğü yüklenirken zaman aşımına uğradı."
       }
     },
     "ssh": {
       "sshConnectVerb": {
-        "reconnect": "Reconnect",
-        "retry": "Retry",
-        "connect": "Connect",
-        "connecting": "Connecting…"
+        "reconnect": "Yeniden Bağlan",
+        "retry": "Tekrar Dene",
+        "connect": "Bağlan",
+        "connecting": "Bağlanılıyor…"
       }
     },
     "main": {
       "window": {
         "editableContextMenu": {
-          "table": "Table",
-          "insertRowAbove": "Insert row above",
-          "insertRowBelow": "Insert row below",
-          "deleteRow": "Delete row",
-          "insertColumnLeft": "Insert column left",
-          "insertColumnRight": "Insert column right",
-          "deleteColumn": "Delete column",
-          "deleteTable": "Delete table"
+          "table": "Tablo",
+          "insertRowAbove": "Üste satır ekle",
+          "insertRowBelow": "Alta satır ekle",
+          "deleteRow": "Satırı sil",
+          "insertColumnLeft": "Sola sütun ekle",
+          "insertColumnRight": "Sağa sütun ekle",
+          "deleteColumn": "Sütunu sil",
+          "deleteTable": "Tabloyu sil"
         }
       }
     }
