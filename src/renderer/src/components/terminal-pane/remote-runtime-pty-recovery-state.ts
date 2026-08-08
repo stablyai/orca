@@ -34,6 +34,9 @@ export class RemoteRuntimePtyRecoveryState {
   private deadlineTimer: ReturnType<typeof setTimeout> | null = null
   private pendingRetry: ((epoch: number) => void) | null = null
   private pendingEpoch: number | null = null
+  // Why: only the real 60s auto-recovery deadline may spend the window; UI latches via
+  // markDisconnected must not defeat require-replacement same-handle fencing (#12683).
+  private autoRecoveryWindowSpentByDeadline = false
 
   constructor(private readonly onChange?: () => void) {}
 
@@ -53,6 +56,10 @@ export class RemoteRuntimePtyRecoveryState {
     return this.attempt
   }
 
+  get didSpendAutoRecoveryWindow(): boolean {
+    return this.autoRecoveryWindowSpentByDeadline
+  }
+
   begin(): number {
     if (this.phase === 'disposed') {
       return this.epoch
@@ -60,6 +67,7 @@ export class RemoteRuntimePtyRecoveryState {
     if (!this.isActive) {
       this.epoch += 1
       this.attempt = 0
+      this.autoRecoveryWindowSpentByDeadline = false
       this.armDeadline(this.epoch)
     }
     this.clearRetryTimer()
@@ -153,6 +161,7 @@ export class RemoteRuntimePtyRecoveryState {
       return
     }
     this.clearTimers()
+    this.autoRecoveryWindowSpentByDeadline = false
     this.phase = 'idle'
     this.attempt = 0
     this.onChange?.()
@@ -162,6 +171,7 @@ export class RemoteRuntimePtyRecoveryState {
     if (this.phase === 'disposed') {
       return
     }
+    // Why: UI latch only — do not spend the auto-recovery window (#12683).
     this.clearTimers()
     this.phase = 'disconnected'
     this.onChange?.()
@@ -173,6 +183,7 @@ export class RemoteRuntimePtyRecoveryState {
     }
     this.epoch += 1
     this.clearTimers()
+    this.autoRecoveryWindowSpentByDeadline = false
     this.phase = 'idle'
     this.attempt = 0
     this.onChange?.()
@@ -194,6 +205,7 @@ export class RemoteRuntimePtyRecoveryState {
       this.deadlineTimer = null
       // Why: the cutoff stops self-initiated retries but must keep the pane revivable by online/resume/reconnect.
       this.stopRetryTimer()
+      this.autoRecoveryWindowSpentByDeadline = true
       this.phase = 'disconnected'
       this.onChange?.()
     }, REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)

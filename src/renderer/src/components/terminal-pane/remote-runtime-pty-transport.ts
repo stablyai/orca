@@ -247,7 +247,11 @@ export function createRemoteRuntimePtyTransport(
       clearPublishedHandleWait()
     }
     if (recovery.currentPhase === 'disconnected') {
-      autoRecoveryWindowSpent = true
+      // Why: only the real auto-recovery deadline spends the window; bare markDisconnected
+      // must not enable same-handle reattach under require-replacement (#12683).
+      if (recovery.didSpendAutoRecoveryWindow) {
+        autoRecoveryWindowSpent = true
+      }
       // Why: cached pixels may remain, but no stream from the exhausted epoch may keep delivering or accepting terminal traffic.
       subscriptionGeneration += 1
       closeMultiplexedStream()
