@@ -831,19 +831,23 @@ If Orca detects no agent at all, `orca skills install` stops and asks for
 # Core CLI + multi-agent coordination (most orchestration hosts)
 orca skills install --skill orca-cli --skill orchestration --agent claude-code,codex
 
-# Linear issue workflows (needs Linear credentials on the host — see below)
-orca skills install --skill orca-linear --skill linear-tickets --agent claude-code,codex
+# Linear issue workflows (needs Linear connected on this host runtime — see below)
+# Prefer orca-linear; install linear-tickets only if an existing agent still
+# looks for that legacy skill name.
+orca skills install --skill orca-linear --agent claude-code,codex
 
-# Desktop automation on a Linux host that has accessibility permissions
+# Desktop automation only on hosts with a real AT-SPI-capable session (see below)
 orca skills install --skill computer-use --agent claude-code,codex
 ```
 
-After install, confirm agents can load the guide (exact paths depend on the
-agent; Claude Code and Codex use their usual skills directories):
+After install, verify the **agent-side** skill directory (not `orca skills get` —
+that only dumps the CLI's bundled guide and succeeds with no install):
 
 ```bash
+# Install command exit 0 + skill path printed by `npx skills` is the install proof.
+# From an agent session on this host: "load the orchestration skill" / skills list.
+# Optional: confirm the guide content you will reinstall after upgrades:
 orca skills get orchestration --full | head
-# From an agent session on this host: "load the orchestration skill" / skills list
 ```
 
 ### Integrations and secrets on a serve host
@@ -853,9 +857,9 @@ markdown and not in the repo:
 
 | Integration | Typical host setup | Skill |
 | --- | --- | --- |
-| GitHub / `gh` | Install `gh`, run `gh auth login` (or set `GH_TOKEN` for non-interactive) as the same user that runs agents | `orca-cli`, `orchestration` |
-| Linear | Configure Linear in Orca (desktop once, or host env / secrets that the Linear skill documents); never commit API keys | `orca-linear`, `linear-tickets` |
-| Computer use | Linux accessibility / display permissions for the serve user; often needs a real or virtual display (`DISPLAY`, see Xvfb above) | `computer-use` |
+| GitHub / `gh` | Install `gh`, run `gh auth login` (or set `GH_TOKEN` for non-interactive) as the same user that runs agents; verify with `gh auth status` | `orca-cli`, `orchestration` |
+| Linear | Connect Linear against **this host's** Orca runtime from a paired desktop/client (tokens live under `~/.orca` via safeStorage — there is no `orca linear connect` CLI and no skill-documented env secret path). Keep tokens out of git/journals. Verify while serve is running: `orca linear team list --workspace all --json` | `orca-linear` (legacy: `linear-tickets`) |
+| Computer use | Linux provider is an AT-SPI bridge (`python3-gi` + Atspi), not macOS-style accessibility grants. Needs an active desktop session (`XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS`) for the serve user — Xvfb for Electron startup alone is not enough, and pure no-desktop VPS hosts often cannot run it. Probe: `orca computer capabilities --json` | `computer-use` |
 
 Prefer environment variables or a secret manager owned by the serve user. Do not
 put tokens in `orca-data.json` copies you share, in worktree files agents can
