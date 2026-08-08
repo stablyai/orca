@@ -115,7 +115,8 @@ export function AutoRenameFailedDialog({
           )}
         </p>
         {/* Why: agent-CLI output is literal and often multi-line, so render it
-            verbatim (mono, wrapped) inside a height-capped scroll region. */}
+            verbatim (mono, wrapped) inside a height-capped scroll region.
+            min-w-0 keeps an unbroken token from widening this grid column. */}
         <div className="min-w-0 space-y-1.5">
           <p className="text-xs font-medium text-foreground">
             {translate(
