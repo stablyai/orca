@@ -110,7 +110,7 @@ describe('disposePane fault isolation', () => {
     'drag-listener',
     'focus-listener',
     'scroll-listener',
-    'composition-listener',
+    'arabic-shaping-joiner',
     'ligature-addon',
     'search-addon',
     'serialize-addon',
@@ -151,10 +151,9 @@ describe('disposePane fault isolation', () => {
           throw new Error('scroll listener cleanup failed')
         })
       }
-    } else if (failurePoint === 'composition-listener') {
-      pane.compositionHandler = vi.fn()
-      pane.terminal.element!.removeEventListener = vi.fn().mockImplementationOnce(() => {
-        throw new Error('composition listener cleanup failed')
+    } else if (failurePoint === 'arabic-shaping-joiner') {
+      pane.arabicShapingJoinerCleanup = vi.fn().mockImplementationOnce(() => {
+        throw new Error('arabic shaping joiner cleanup failed')
       })
     } else if (failurePoint === 'ligature-addon') {
       pane.ligaturesAddon = {

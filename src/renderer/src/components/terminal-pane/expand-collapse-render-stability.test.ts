@@ -78,6 +78,7 @@ describe('terminal keyboard effect registration stability', () => {
       worktreeId: 'worktree-1',
       isActive: true,
       keyboardScopeRef: { current: scope },
+      canSplitPane: true,
       managerRef: { current: manager },
       paneTransportsRef: {
         current: new Map([[pane.id, transport as unknown as PtyTransport]])

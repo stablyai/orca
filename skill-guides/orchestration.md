@@ -366,13 +366,8 @@ Sidebar lineage and orchestration lifecycle are related but not identical. A sam
 Other terminal commands coordinators often need:
 
 ```bash
-<<<<<<< HEAD
 orca terminal list [--worktree <selector>] [--include-visual-layouts] [--json]
-orca terminal create [--worktree <selector>] [--title <text>] [--command <cmd>] [--json]
-=======
-orca terminal list [--worktree <selector>] [--json]
 orca terminal create [--worktree <selector>] [--title <text>] [--command <cmd>] [--placement tab|orchestration-grid] [--json]
->>>>>>> a012b76e0 (fix(skills): migrate grid guidance to canonical sources)
 orca terminal split --terminal <handle> [--direction horizontal|vertical] [--command <cmd>] [--json]
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms <n> --json
 orca terminal read --terminal <handle> --json

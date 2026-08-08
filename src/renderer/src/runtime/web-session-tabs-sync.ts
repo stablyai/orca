@@ -1977,61 +1977,6 @@ function isMirroredCommandCodeTurnBump(
   )
 }
 
-function sameStringRecord(
-  a: Readonly<Record<string, string>> | undefined,
-  b: Readonly<Record<string, string>> | undefined
-): boolean {
-  const left = a ?? {}
-  const right = b ?? {}
-  const leftKeys = Object.keys(left)
-  const rightKeys = Object.keys(right)
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key) => Object.prototype.hasOwnProperty.call(right, key) && left[key] === right[key]
-    )
-  )
-}
-
-function terminalLayoutNodeEqual(
-  a: TerminalPaneLayoutNode | null | undefined,
-  b: TerminalPaneLayoutNode | null | undefined
-): boolean {
-  if (!a || !b) {
-    return !a && !b
-  }
-  if (a.type !== b.type) {
-    return false
-  }
-  if (a.type === 'leaf') {
-    return b.type === 'leaf' && a.leafId === b.leafId
-  }
-  return (
-    b.type === 'split' &&
-    a.direction === b.direction &&
-    a.ratio === b.ratio &&
-    terminalLayoutNodeEqual(a.first, b.first) &&
-    terminalLayoutNodeEqual(a.second, b.second)
-  )
-}
-
-function terminalLayoutEqual(
-  a: TerminalLayoutSnapshot | undefined,
-  b: TerminalLayoutSnapshot
-): boolean {
-  return (
-    // Why: an absent mode means ordinary layout; crossing the grid boundary
-    // must replace the record so the live pane can acquire or release ownership.
-    a?.layoutMode === b.layoutMode &&
-    terminalLayoutNodeEqual(a?.root, b.root) &&
-    (a?.activeLeafId ?? null) === b.activeLeafId &&
-    (a?.expandedLeafId ?? null) === b.expandedLeafId &&
-    sameStringRecord(a?.ptyIdsByLeafId, b.ptyIdsByLeafId) &&
-    sameStringRecord(a?.buffersByLeafId, b.buffersByLeafId) &&
-    sameStringRecord(a?.scrollbackRefsByLeafId, b.scrollbackRefsByLeafId) &&
-    sameStringRecord(a?.titlesByLeafId, b.titlesByLeafId)
-  )
-}
 function sanitizeRecentTabIds(recent: string[] | undefined, tabOrder: string[]): string[] {
   if (!recent || recent.length === 0) {
     return []

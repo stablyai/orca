@@ -91,7 +91,6 @@ function createPane(id: number, leafId: TerminalLeafId, hasWebgl: boolean): Mana
     serializeAddon: {} as never,
     unicode11Addon: {} as never,
     webLinksAddon: {} as never,
-    compositionHandler: null,
     pendingSplitScrollState: null,
     pendingSplitScrollRafIds: [],
     pendingSplitScrollTimerId: null,

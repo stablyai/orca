@@ -9564,7 +9564,6 @@ export function connectPanePty(
         () => onResizeDisposable.dispose()
       )
       if (onBufferChangeDisposable) {
-        cleanups.push(() => onBufferChangeDisposable.dispose())
       }
       cleanups.push(() =>
         pane.container.removeEventListener(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT, onHeldPtyResizeFlush)
@@ -9572,13 +9571,7 @@ export function connectPanePty(
       if (geometryReportObserver) {
         cleanups.push(() => geometryReportObserver.disconnect())
       }
-      imeCompositionRouteDisposable.dispose()
-      onDataDisposable.dispose()
-      userInputActivityDisposable?.dispose()
-      terminalCapabilityRepliesDisposable.dispose()
-      onResizeDisposable.dispose()
-      pane.container.removeEventListener(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT, onHeldPtyResizeFlush)
-      geometryReportObserver?.disconnect()
+
       if (pendingGeometryReportRaf !== null) {
         const rafId = pendingGeometryReportRaf
         pendingGeometryReportRaf = null

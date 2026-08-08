@@ -42,6 +42,7 @@ export function terminalLayoutEqual(
   b: TerminalLayoutSnapshot
 ): boolean {
   return (
+    a?.layoutMode === b.layoutMode &&
     terminalLayoutNodeEqual(a?.root, b.root) &&
     (a?.activeLeafId ?? null) === b.activeLeafId &&
     (a?.expandedLeafId ?? null) === b.expandedLeafId &&

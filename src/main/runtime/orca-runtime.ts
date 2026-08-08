@@ -1741,6 +1741,7 @@ type RuntimePtyController = {
     id: string
     incarnationId?: PtyIncarnationId
     wslDistro?: string
+    isReattach?: boolean
     stablePaneOwner?: { handle: string; tabId: string; leafId: string }
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
   }>
@@ -4833,7 +4834,24 @@ export class OrcaRuntimeService {
       return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
-    const repo = this.store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
+    const repoId = getRepoIdFromWorktreeId(resolvedWorktreeId)
+    const metaHostId = this.store?.getWorktreeMeta?.(worktreeId)?.hostId
+    if (metaHostId) {
+      const repo = this.store?.getRepoForHost?.(repoId, metaHostId)
+      return repo ? getRepoExecutionHostId(repo) : metaHostId
+    }
+    const persistedHostIds = (this.store?.getWorkspaceSessionHostIds?.() ?? []).filter(
+      (hostId) =>
+        this.store?.getWorkspaceSession?.(hostId)?.tabsByWorktree[worktreeId] !== undefined
+    )
+    if (persistedHostIds.length === 1) {
+      return persistedHostIds[0]!
+    }
+    const matchingRepos = (this.store?.getRepos?.() ?? []).filter((repo) => repo.id === repoId)
+    if (matchingRepos.length === 1) {
+      return getRepoExecutionHostId(matchingRepos[0]!)
+    }
+    const repo = this.store?.getRepo?.(repoId)
     return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
   }
 
@@ -4878,7 +4896,7 @@ export class OrcaRuntimeService {
 
   private getWorkspaceSessionHydrationTargets(
     includeAllPersistedWorktrees: boolean
-  ): Map<string, WorkspaceSessionState> {
+  ): Map<string, { session: WorkspaceSessionState; hostId: ExecutionHostId }> {
     const repos = this.store?.getRepos?.() ?? []
     const repoHostIdByRepoId = new Map(
       repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)] as const)
@@ -4900,7 +4918,7 @@ export class OrcaRuntimeService {
       hostIds.add(hostId)
     }
 
-    const targets = new Map<string, WorkspaceSessionState>()
+    const targets = new Map<string, { session: WorkspaceSessionState; hostId: ExecutionHostId }>()
     for (const hostId of hostIds) {
       const session = this.store?.getWorkspaceSession?.(hostId)
       if (!session) {
@@ -4919,7 +4937,7 @@ export class OrcaRuntimeService {
           (includeAllPersistedWorktrees ||
             this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs))
         ) {
-          targets.set(worktreeId, session)
+          targets.set(worktreeId, { session, hostId })
         }
       }
     }
@@ -5121,6 +5139,73 @@ export class OrcaRuntimeService {
         }
       }
     }
+  }
+  async getAiVaultSessionLiveness(target: {
+    agent: AiVaultAgent
+    sessionId: string | undefined
+    filePath: string
+  }): Promise<AiVaultSessionLiveness> {
+    const provider = this.getLocalProviderFn?.()
+    if (!provider || !this.getAgentProviderSessionSnapshotFn) {
+      return 'unknown'
+    }
+    const identity = await readAiVaultSessionIdentity(target)
+    if (identity.outcome !== 'found') {
+      return 'unknown'
+    }
+    const deadlineMs = Date.now() + 3_000
+    return await resolveAiVaultSessionLiveness(
+      {
+        agent: target.agent,
+        sessionId: identity.sessionId
+      },
+      {
+        deadlineMs,
+        listProcesses: async () => {
+          const result = await withTimeoutResult(
+            provider.listProcesses({ deadlineMs }),
+            Math.max(1, deadlineMs - Date.now())
+          )
+          if (!result.ok) {
+            throw new Error('agent_session_ownership_unknown')
+          }
+          return result.value
+        },
+        getStatusSnapshot: this.getAgentProviderSessionSnapshotFn,
+        inspectForegroundProcess: async (ptyId) => {
+          const result = await withTimeoutResult(
+            provider.getForegroundProcess(ptyId),
+            Math.max(1, deadlineMs - Date.now())
+          )
+          return result.ok
+            ? { available: true, process: result.value }
+            : { available: false, process: null }
+        },
+        getStatusPtyId: (status) => {
+          if (status.terminalHandle) {
+            const live = this.getLivePtyForHandle(status.terminalHandle)
+            if (live) {
+              return live.pty.ptyId
+            }
+            for (const [ptyId, handle] of this.handleByPtyId) {
+              if (handle === status.terminalHandle) {
+                return ptyId
+              }
+            }
+          }
+          return this.getPtyRecordForPaneKey(status.paneKey)?.ptyId ?? null
+        },
+        getAgentHint: (process) => {
+          const pty = this.ptysById.get(process.id)
+          const runtimeHint = pty?.foregroundAgent ?? pty?.launchAgent
+          if (runtimeHint) {
+            return runtimeHint
+          }
+          const ownerAgents = new Set(process.agentSessionOwners?.map((owner) => owner.claim.agent))
+          return ownerAgents.size === 1 ? ([...ownerAgents][0] ?? null) : null
+        }
+      }
+    )
   }
   setPtyController(controller: RuntimePtyController | null): void {
     // Why: CLI terminal writes must go through the main-owned PTY registry
@@ -5973,8 +6058,7 @@ export class OrcaRuntimeService {
       onlyRuntimeOwnedTerminals?: boolean
       runtimeOwnedTerminalCandidateKnown?: boolean
       workspaceSession?: WorkspaceSessionState
-      onlyServeOwnedTerminals?: boolean
-      hostId?: ExecutionHostId
+      workspaceSessionHostId?: ExecutionHostId
     } = {}
   ): Set<string> {
     // Why: report which worktrees were reconciled in place so callers don't
@@ -5983,6 +6067,9 @@ export class OrcaRuntimeService {
     if (this.getAvailableAuthoritativeWindow() && options.allowAttachedWindow !== true) {
       return reconciledWorktreeIds
     }
+    const sessionHostId = worktreeId
+      ? (options.workspaceSessionHostId ?? this.getWorkspaceSessionHostIdForWorktree(worktreeId))
+      : LOCAL_EXECUTION_HOST_ID
     const session =
       options.workspaceSession ??
       (worktreeId
@@ -25707,6 +25794,11 @@ export class OrcaRuntimeService {
         }
       }
     }
+    if (opts.startupAgent && worktreeSelector === undefined) {
+      // Why: the launch is resolved against a workspace, so with no selector
+      // startupAgent is silently dropped and the terminal is a bare shell.
+      throw new Error(`startupAgent ${opts.startupAgent} requires a workspace selector.`)
+    }
     const presentation = resolveTerminalPresentation(opts)
     const requiresRendererFocus = opts.presentation === 'focused' || opts.focus === true
     const availableAuthoritativeWindow = this.getAvailableAuthoritativeWindow()
@@ -25782,10 +25874,39 @@ export class OrcaRuntimeService {
         isValidHostTerminalTabId(hintedTabId) &&
         launchOpts.leafId !== undefined &&
         isTerminalLeafId(launchOpts.leafId)
-      const tabId =
-        orchestrationGridTarget?.tabId ?? (canAdoptPaneIdentity ? hintedTabId! : randomUUID())
-      const leafId = canAdoptPaneIdentity ? (launchOpts.leafId as string) : randomUUID()
-      const paneKey = makePaneKey(tabId, leafId)
+      let tabId =
+        orchestrationGridTarget?.tabId ??
+        (canAdoptPaneIdentity ? (hintedTabId as string) : randomUUID())
+      let leafId = canAdoptPaneIdentity ? (launchOpts.leafId as string) : randomUUID()
+      let paneKey = makePaneKey(tabId, leafId)
+      const claimedStablePaneCreate = ptyController.claimStablePaneCreate?.({
+        worktreeId: workspace.id,
+        connectionId: workspace.connectionId,
+        tabId,
+        leafId
+      })
+      let stablePaneCreateReleased = false
+      const releaseStablePaneCreate = (): void => {
+        if (stablePaneCreateReleased) {
+          return
+        }
+        stablePaneCreateReleased = true
+        claimedStablePaneCreate?.()
+      }
+      if (launchOpts.signal?.aborted) {
+        releaseStablePaneCreate()
+        throw new Error('client_disconnected')
+      }
+      const adoptedBeforeLaunch = await ptyController.adoptStablePane?.({
+        cols: 120,
+        rows: 40,
+        cwd,
+        connectionId: workspace.connectionId,
+        worktreeId: workspace.id,
+        preAllocatedHandle,
+        tabId,
+        leafId
+      })
       const launchToken = launchOpts.launchConfig
         ? (launchOpts.launchToken ?? randomUUID())
         : undefined
@@ -25886,8 +26007,17 @@ export class OrcaRuntimeService {
         : (agentTeamsPlan?.command ?? launchOpts.command)
       let surface: RuntimeTerminalCreate['surface'] = 'background'
       let warning: string | undefined
-      let result: { id: string; runtimeRegistration?: RuntimePtyRegistrationReceipt } | null = null
+      let result: {
+        id: string
+        incarnationId?: PtyIncarnationId
+        wslDistro?: string
+        isReattach?: boolean
+        runtimeRegistration?: RuntimePtyRegistrationReceipt
+        stablePaneOwner?: { handle: string; tabId: string; leafId: string }
+        agentSessionEnsure?: AgentSessionClaimedSpawnResult
+      } | null = null
       let handle: string | null = null
+      let returnedTitle = launchOpts.title ?? null
       let spawnedPtyId: string | null = null
       let gridPersistedAtomically = false
       let rendererGridRollback: (() => void | Promise<void>) | null = null
@@ -25989,16 +26119,17 @@ export class OrcaRuntimeService {
               })
               gridPersistedAtomically = true
             } else if (this.store?.persistPtyBinding) {
-              // Why: narrow test/alternate stores may expose only the legacy
-              // binding primitive; production Store always takes the branch above.
-              this.store.persistPtyBinding({
-                hostId: executionHostId,
-                worktreeId: workspace.id,
-                tabId,
-                leafId,
-                ptyId: result.id,
-                startupCwd: cwd
-              })
+              this.store.persistPtyBinding(
+                {
+                  worktreeId: workspace.id,
+                  tabId,
+                  leafId,
+                  ptyId: result.id,
+                  ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
+                  startupCwd: cwd
+                },
+                executionHostId
+              )
             }
           } catch (error) {
             console.error('[terminal-create] failed to persist orchestration grid:', error)
@@ -26021,22 +26152,28 @@ export class OrcaRuntimeService {
         }
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
         if (pty) {
-          if (launchOpts.title) {
-            const observedAt = this.nextTitleObservationSequence()
-            pty.title = launchOpts.title
-            pty.titleUpdatedAt = observedAt
-            this.setPtyManagementTitleFromObservedTitle(pty, launchOpts.title, observedAt)
-          } else {
-            pty.title = null
-            pty.titleUpdatedAt = null
+          if (launchOpts.persistHostSessionBinding) {
+            pty.runtimeSessionOwned = true
           }
+          if (!adoptedBeforeLaunch) {
+            if (launchOpts.title) {
+              const observedAt = this.nextTitleObservationSequence()
+              pty.title = launchOpts.title
+              pty.titleUpdatedAt = observedAt
+              this.setPtyManagementTitleFromObservedTitle(pty, launchOpts.title, observedAt)
+            } else {
+              pty.title = null
+              pty.titleUpdatedAt = null
+            }
+            pty.launchConfig = effectiveLaunchConfig
+              ? copySleepingAgentLaunchConfig(effectiveLaunchConfig)
+              : null
+            pty.launchToken = launchToken ?? null
+            pty.launchAgent = launchOpts.launchAgent ?? null
+          }
+          returnedTitle = pty.title
           pty.tabId = tabId
           pty.paneKey = paneKey
-          pty.launchConfig = effectiveLaunchConfig
-            ? copySleepingAgentLaunchConfig(effectiveLaunchConfig)
-            : null
-          pty.launchToken = launchToken ?? null
-          pty.launchAgent = launchOpts.launchAgent ?? null
         }
         handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
         if (pty && launchOpts.deferMobileSessionPublish !== true) {
@@ -26044,10 +26181,8 @@ export class OrcaRuntimeService {
             this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
               tabId,
               leafId,
-              title: launchOpts.title ?? null,
+              title: returnedTitle,
               activate: presentation === 'focused',
-              // Why: explicit background presentation may carry legacy activate
-              // metadata from an already-owned renderer pane; don't select it on mobile.
               selectIfNoActiveTab: presentation !== 'background',
               ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
               ...(cwd !== workspace.path ? { startupCwd: cwd } : {}),
@@ -26078,8 +26213,6 @@ export class OrcaRuntimeService {
             if (!gridPersistedAtomically) {
               throw error
             }
-            // Why: renderer and durable state already own this pane; a failed
-            // best-effort mobile projection must not kill its committed PTY.
             console.warn('[terminal-create] failed to publish committed orchestration grid:', error)
           }
         }
@@ -26190,67 +26323,25 @@ export class OrcaRuntimeService {
           console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
           warning = createTerminalRevealWarning(handle, err)
         }
-        const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
-        if (pty && !adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
-          this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
-            tabId,
-            leafId,
-            title: launchOpts.title ?? null,
-            activate: presentation === 'focused',
-            // Why: explicit background presentation may carry legacy activate
-            // metadata from an already-owned renderer pane; don't select it on mobile.
-            selectIfNoActiveTab: presentation !== 'background',
-            ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
-            ...(cwd !== workspace.path ? { startupCwd: cwd } : {})
-          })
-        }
-        let surface: RuntimeTerminalCreate['surface'] = 'background'
-        let warning: string | undefined
-        if (presentation !== 'background' && this.notifier?.revealTerminalSession) {
-          try {
-            // Why: after the PTY is spawned, renderer tab adoption is best-effort;
-            // failing here must not strand a live process without returning a handle.
-            // Pass the pre-minted tabId so the renderer adopts under the same id
-            // already baked into the PTY env — keeps paneKey hook attribution intact.
-            await this.notifier.revealTerminalSession(workspace.id, {
-              ptyId: result.id,
-              title: launchOpts.title ?? null,
-              ...(cwd !== workspace.path ? { cwd } : {}),
-              ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
-              ...(launchToken ? { launchToken } : {}),
-              ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
-              ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
-              activate: presentation === 'focused',
-              ...(presentation ? { presentation } : {}),
-              ...ownerSurfacing(opts.surfaceOwner !== false),
-              tabId,
-              leafId
-            })
-            surface = 'visible'
-          } catch (err) {
-            console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
-            warning = createTerminalRevealWarning(handle, err)
-          }
-        } else if (presentation !== 'background') {
-          warning = createTerminalRevealWarning(handle)
-        }
-        return {
-          handle,
-          tabId,
-          paneKey,
-          ptyId: result.id,
-          worktreeId: workspace.id,
-          title: pty?.title ?? launchOpts.title ?? null,
-          ...this.getPtyExecutionHostMetadata(result.id),
-          surface,
-          ...(result.agentSessionEnsure
-            ? { agentSessionDisposition: result.agentSessionEnsure.disposition }
-            : {}),
-          ...(adoptedStablePane ? { isReattach: true as const } : {}),
-          ...(warning ? { warning } : {})
-        }
-      } finally {
-        releaseStablePaneCreate()
+      } else if (!requiresRendererCommit && presentation !== 'background') {
+        // Why: the authoritative renderer transaction already proved that a
+        // committed grid append is discoverable, even though this fallback is skipped.
+        warning = createTerminalRevealWarning(handle)
+      }
+      return {
+        handle,
+        tabId,
+        paneKey,
+        ptyId: result.id,
+        worktreeId: workspace.id,
+        title: returnedTitle,
+        ...this.getPtyExecutionHostMetadata(result.id),
+        surface,
+        ...(result.agentSessionEnsure
+          ? { agentSessionDisposition: result.agentSessionEnsure.disposition }
+          : {}),
+        ...(result.isReattach ? { isReattach: true as const } : {}),
+        ...(warning ? { warning } : {})
       }
     }
 
@@ -27271,6 +27362,25 @@ export class OrcaRuntimeService {
     )
   }
 
+  // Why: a create can settle over a renderer PTY that spawned without its
+  // startup command (the renderer stalled), silently binding the client to a
+  // plain shell under an agent tab forever. Spawn commands are recorded per PTY
+  // at spawn time, so a missing record proves the launch never ran.
+  private deliverPendingStartupCommandToBareRendererPty(worktreeId: string, tabId: string): void {
+    const pending = this.pendingMobileTerminalCreatesByKey.get(`${worktreeId}::${tabId}`)
+    const command = pending?.startupCommand
+    if (!command) {
+      return
+    }
+    const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
+    if (!pty || this.terminalSpawnCommandsByPtyId.has(pty.ptyId)) {
+      return
+    }
+    if (this.ptyController?.write(pty.ptyId, command)) {
+      this.ptyController.write(pty.ptyId, '\r')
+      this.noteTerminalSpawnCommand(pty.ptyId, command)
+    }
+  }
   private waitForTerminalHandle(
     tabId: string,
     leafId?: string,
@@ -30509,22 +30619,26 @@ export class OrcaRuntimeService {
       onlyServeOwnedTerminals: true
     })
     // Why: graph sync must scan each persisted host session once, not once per workspace.
-    const worktreeSessionsToHydrate = new Map<string, WorkspaceSessionState | null>(
+    const worktreeSessionsToHydrate = new Map(
       this.getWorkspaceSessionHydrationTargets(Boolean(this.offscreenBrowserBackend))
     )
     if (this.offscreenBrowserBackend) {
       for (const snapshot of snapshots) {
         if (!worktreeSessionsToHydrate.has(snapshot.worktree)) {
-          worktreeSessionsToHydrate.set(snapshot.worktree, null)
+          worktreeSessionsToHydrate.set(snapshot.worktree, {
+            session: this.store!.getWorkspaceSession!(),
+            hostId: LOCAL_EXECUTION_HOST_ID
+          })
         }
       }
     }
-    // Why: an empty renderer publication after HUB restart must not hide SSH panes persisted in this HUB's host partition.
-    for (const [worktreeId, workspaceSession] of worktreeSessionsToHydrate) {
+    for (const [worktreeId, target] of worktreeSessionsToHydrate) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
         onlyRuntimeOwnedTerminals: true,
-        ...(workspaceSession ? { runtimeOwnedTerminalCandidateKnown: true, workspaceSession } : {})
+        runtimeOwnedTerminalCandidateKnown: true,
+        workspaceSession: target.session,
+        workspaceSessionHostId: target.hostId
       })
     }
     const nextWorktrees = new Set<string>()

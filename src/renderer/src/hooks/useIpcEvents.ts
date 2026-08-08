@@ -1866,7 +1866,7 @@ export function useIpcEvents(): void {
             store.queueTabStartupCommand(tab.id, {
               command: data.command ?? '',
               ...(startupEnv ? { env: startupEnv } : {}),
-              ...(data.envToDelete ? { envToDelete: data.envToDelete } : {})
+              ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
               ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
               ...(data.resumeProviderSession
                 ? { resumeProviderSession: data.resumeProviderSession }

@@ -228,11 +228,11 @@ export function preparePanesForSplitMove(
 type PaneCleanupLedger = { pending: (() => void)[]; releases: (() => void)[] }
 type PaneCleanupField =
   | 'arabicShapingJoinerCleanup'
-  | 'compositionHandler'
   | 'focusClassSyncCleanup'
   | 'ligaturesAddon'
   | 'linkifierHoverResetDisposable'
   | 'linkifierMouseLeaveResetDisposable'
+  | 'linkifierWindowBlurResetDisposable'
   | 'paneDragCleanup'
   | 'paneMouseEnterHandler'
   | 'panePointerDownHandler'
@@ -293,11 +293,10 @@ function createPaneResourceCleanupLedger(pane: ManagedPaneInternal): PaneCleanup
   trackPaneCleanupField(ledger, pane, 'linkifierMouseLeaveResetDisposable', (item) =>
     item.dispose()
   )
+  trackPaneCleanupField(ledger, pane, 'linkifierWindowBlurResetDisposable', (item) =>
+    item.dispose()
+  )
   trackPaneCleanupField(ledger, pane, 'arabicShapingJoinerCleanup', (cleanup) => cleanup())
-  trackPaneCleanupField(ledger, pane, 'compositionHandler', (handler) => {
-    pane.terminal.element?.removeEventListener('compositionstart', handler)
-    pane.terminal.element?.removeEventListener('compositionupdate', handler)
-  })
   trackPaneCleanupField(ledger, pane, 'ligaturesAddon', (addon) => addon.dispose())
   ledger.pending.push(
     () => cancelPendingWebglRefresh(pane),

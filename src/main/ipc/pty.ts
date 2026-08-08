@@ -2478,10 +2478,22 @@ export function registerPtyHandlers(
         })
         // Why: agents need their terminal handle at process start to self-identify in orchestration messages without an extra RPC.
         const requestedHandle = baseEnv.ORCA_TERMINAL_HANDLE
+        // Renderer-created local PTYs already have an exact runtime reservation.
+        // Claim it before considering staged/preallocated handles so a stale or
+        // forged renderer value cannot override the reservation (or trigger a
+        // needless replacement handle).
+        const claimedRendererHandle =
+          requestedHandle !== undefined
+            ? (runtime?.claimRendererTerminalHandle?.(requestedHandle) ?? null)
+            : null
+        if (claimedRendererHandle) {
+          runtime?.registerPreAllocatedHandleForPty(id, claimedRendererHandle)
+        }
         const preAllocatedHandle =
-          requestedHandle && trustedTerminalHandleEnv.has(requestedHandle)
+          claimedRendererHandle ??
+          (requestedHandle && trustedTerminalHandleEnv.has(requestedHandle)
             ? requestedHandle
-            : runtime?.preAllocateHandleForPty(id)
+            : runtime?.preAllocateHandleForPty(id))
         if (requestedHandle && preAllocatedHandle === requestedHandle) {
           // Why: local-provider callbacks can fire before spawn resolves; the
           // trusted handle identifies exactly which staged create owns this id.
@@ -5059,14 +5071,19 @@ export function registerPtyHandlers(
                 ? { expectedSourceBinding: hostSessionBinding.expectedSourceBinding }
                 : {})
             }
-            const persisted = args.connectionId
-              ? hostSessionBinding.store.persistPtyBinding(
-                  binding,
-                  toSshExecutionHostId(args.connectionId)
-                )
-              : hostSessionBinding.store.persistPtyBinding(binding)
-            if (persisted === false) {
-              throw new Error('terminal_split_source_not_found')
+            if (args.connectionId) {
+              const persisted = hostSessionBinding.store.persistPtyBinding(
+                binding,
+                toSshExecutionHostId(args.connectionId)
+              )
+              if (persisted === false) {
+                throw new Error(createTerminalSessionStateSaveFailureMessage())
+              }
+            } else {
+              const persisted = hostSessionBinding.store.persistPtyBinding(binding)
+              if (persisted === false) {
+                throw new Error(createTerminalSessionStateSaveFailureMessage())
+              }
             }
           } catch (err) {
             console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
@@ -5168,8 +5185,26 @@ export function registerPtyHandlers(
           for (const step of registrationSteps) {
             step()
           }
-          const response = { id: result.id }
-          return resolvePaneSpawnReservation(materializedPaneKey, paneSpawnReservation, response)
+          sendPtySpawnedToRenderer(result.id)
+          const response = {
+            id: result.id,
+            ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
+            ...(stablePaneOwner && (stablePaneOwner.handle || args.preAllocatedHandle)
+              ? {
+                  stablePaneOwner: {
+                    handle: stablePaneOwner.handle ?? args.preAllocatedHandle!,
+                    tabId: stablePaneOwner.tabId,
+                    leafId: stablePaneOwner.leafId
+                  }
+                }
+              : {}),
+            ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {})
+          }
+          return resolvePaneSpawnReservation(
+            paneSpawnReservationKey,
+            paneSpawnReservation,
+            response
+          )
         }
 
         let receiptState: 'pending' | 'committed' | 'aborted' = 'pending'
@@ -6665,10 +6700,11 @@ export function registerPtyHandlers(
               ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
               ...(cwd ? { startupCwd: cwd } : {})
             }
-            if (args.connectionId) {
-              store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
-            } else {
-              store.persistPtyBinding(binding)
+            const persisted = args.connectionId
+              ? store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
+              : store.persistPtyBinding(binding)
+            if (persisted === false) {
+              throw new Error(createTerminalSessionStateSaveFailureMessage())
             }
           } catch (err) {
             console.error('[pty] failed to persist PTY binding after spawn:', err)

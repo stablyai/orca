@@ -1510,6 +1510,9 @@ type PersistPtyBindingTestArgs = {
 
 function makeRuntimeStoreWithWorkspaceSession(
   initialSession: WorkspaceSessionState,
+  // Why: sessions are partitioned by execution host, so the stub must answer for
+  // one partition only — a loose stub lets a hardcoded host id pass unnoticed.
+  ownerHostId = 'local',
   options: { materializeMissingPtyTab?: boolean } = {}
 ): {
   runtimeStore: typeof store & {
