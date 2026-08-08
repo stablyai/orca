@@ -73,31 +73,31 @@ export function getRepoDisplayLabelsByPath(
       continue
     }
     // Why: same path+name across local/remote cannot be disambiguated by parent
-    // path segments — expanding to a full path is what #13221 reports. Prefer a
-    // Local/SSH/Remote role when hosts differ; keep path expansion for same-host clashes.
+    // path alone (#13221). Path-expand within each host role first so two Local
+    // apis stay payments/api vs billing/api, then append Local/SSH/Remote when
+    // the collision group spans more than one role.
     const hostRoles = new Set(collidingItems.map((item) => getRepoDisplayHostRole(item)))
-    if (hostRoles.size > 1) {
-      for (const item of collidingItems) {
-        labels.set(
-          getRepoDisplayLabelKey(item),
-          `${item.displayName} · ${getRepoDisplayHostRole(item)}`
-        )
+    const appendHostRole = hostRoles.size > 1
+    const itemsByRole = new Map<string, RepoDisplayLabelItem[]>()
+    for (const item of collidingItems) {
+      const role = getRepoDisplayHostRole(item)
+      const group = itemsByRole.get(role) ?? []
+      group.push(item)
+      itemsByRole.set(role, group)
+    }
+    for (const [role, roleItems] of itemsByRole) {
+      const maxDepth = Math.max(...roleItems.map((item) => normalizePathSegments(item.path).length))
+      let depth = 1
+      let nextLabels = roleItems.map((item) => labelForDepth(item, depth))
+      while (depth < maxDepth && hasDuplicateLabels(nextLabels)) {
+        depth += 1
+        nextLabels = roleItems.map((item) => labelForDepth(item, depth))
       }
-      continue
+      roleItems.forEach((item, index) => {
+        const base = nextLabels[index] ?? item.displayName
+        labels.set(getRepoDisplayLabelKey(item), appendHostRole ? `${base} · ${role}` : base)
+      })
     }
-    const maxDepth = Math.max(
-      ...collidingItems.map((item) => normalizePathSegments(item.path).length)
-    )
-    let depth = 1
-    let nextLabels = collidingItems.map((item) => labelForDepth(item, depth))
-    while (depth < maxDepth && hasDuplicateLabels(nextLabels)) {
-      depth += 1
-      nextLabels = collidingItems.map((item) => labelForDepth(item, depth))
-    }
-    collidingItems.forEach((item, index) => {
-      labels.set(getRepoDisplayLabelKey(item), nextLabels[index] ?? item.displayName)
-    })
   }
-
   return labels
 }

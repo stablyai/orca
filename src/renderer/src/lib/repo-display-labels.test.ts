@@ -72,6 +72,28 @@ describe('getRepoDisplayLabelsByPath', () => {
     expect(labels.get(getRepoDisplayLabelKey(runtimeRepo))).toBe('foo · Remote')
   })
 
+  it('path-expands same-role collisions before appending the host role', () => {
+    // Two Local apis must stay distinct when a Remote api joins the collision group.
+    const payments = { path: '/workspace/platform/payments/api', displayName: 'api' }
+    const billing = { path: '/workspace/platform/billing/api', displayName: 'api' }
+    const remote = {
+      path: '/workspace/platform/payments/api',
+      displayName: 'api',
+      executionHostId: 'runtime:env-1' as const
+    }
+    const ssh = {
+      path: '/workspace/platform/api',
+      displayName: 'api',
+      connectionId: 'ssh-prod'
+    }
+    const labels = getRepoDisplayLabelsByPath([payments, billing, remote, ssh])
+
+    expect(labels.get(getRepoDisplayLabelKey(payments))).toBe('payments/api · Local')
+    expect(labels.get(getRepoDisplayLabelKey(billing))).toBe('billing/api · Local')
+    expect(labels.get(getRepoDisplayLabelKey(remote))).toBe('api · Remote')
+    expect(labels.get(getRepoDisplayLabelKey(ssh))).toBe('api · SSH')
+  })
+
   it('normalizes Windows separators to slash display labels', () => {
     const labels = getRepoDisplayLabelsByPath([
       { path: 'C:\\workspace\\payments\\api', displayName: 'api' },
