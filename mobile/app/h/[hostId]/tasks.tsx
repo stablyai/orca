@@ -86,6 +86,10 @@ import {
   type GitHubRepoSlugCacheEntry
 } from '../../../src/tasks/github-project-repo-match'
 import {
+  canCreateWorkspaceFromProjectRow,
+  projectRowType
+} from '../../../src/tasks/github-project-row-kind'
+import {
   parseGitHubProjectInput as parseProjectInput,
   type GitHubProjectOwnerType,
   type GitHubProjectPartialFailure,
@@ -930,22 +934,6 @@ function githubKindFromQuery(query: string, fallbackPreset: GitHubPreset): GitHu
   return fallbackPreset === 'prs' || fallbackPreset === 'my-prs' || fallbackPreset === 'review'
     ? 'prs'
     : 'issues'
-}
-
-function projectRowType(row: GitHubProjectRow): 'issue' | 'pr' | null {
-  if (row.itemType === 'ISSUE') {
-    return 'issue'
-  }
-  if (row.itemType === 'PULL_REQUEST') {
-    return 'pr'
-  }
-  return null
-}
-
-function canCreateWorkspaceFromProjectRow(row: GitHubProjectRow): boolean {
-  // Why: desktop only exposes Project "Start work" for backed issue/PR rows
-  // with enough GitHub identity to build the linked work item.
-  return projectRowType(row) !== null && row.content.number != null && Boolean(row.content.url)
 }
 
 function splitRepositorySlug(slug: string | null): { owner: string; repo: string } | null {
