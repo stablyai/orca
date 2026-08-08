@@ -1,4 +1,8 @@
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 
 type RepoDisplayLabelItem = {
   path: string
@@ -36,6 +40,20 @@ function hasDuplicateLabels(labels: readonly string[]): boolean {
   return new Set(labels).size !== labels.length
 }
 
+/** Compact host role for project headers when the same name exists on multiple hosts. */
+export function getRepoDisplayHostRole(
+  item: Pick<RepoDisplayLabelItem, 'connectionId' | 'executionHostId'>
+): 'Local' | 'SSH' | 'Remote' {
+  const parsed = parseExecutionHostId(getRepoExecutionHostId(item))
+  if (!parsed || parsed.kind === 'local') {
+    return 'Local'
+  }
+  if (parsed.kind === 'ssh') {
+    return 'SSH'
+  }
+  return 'Remote'
+}
+
 export function getRepoDisplayLabelsByPath(
   items: readonly RepoDisplayLabelItem[]
 ): Map<string, string> {
@@ -52,6 +70,19 @@ export function getRepoDisplayLabelsByPath(
 
   for (const collidingItems of itemsByName.values()) {
     if (collidingItems.length < 2) {
+      continue
+    }
+    // Why: same path+name across local/remote cannot be disambiguated by parent
+    // path segments — expanding to a full path is what #13221 reports. Prefer a
+    // Local/SSH/Remote role when hosts differ; keep path expansion for same-host clashes.
+    const hostRoles = new Set(collidingItems.map((item) => getRepoDisplayHostRole(item)))
+    if (hostRoles.size > 1) {
+      for (const item of collidingItems) {
+        labels.set(
+          getRepoDisplayLabelKey(item),
+          `${item.displayName} · ${getRepoDisplayHostRole(item)}`
+        )
+      }
       continue
     }
     const maxDepth = Math.max(

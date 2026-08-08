@@ -56,19 +56,20 @@ describe('getRepoDisplayLabelsByPath', () => {
     expect(labels.size).toBe(2)
   })
 
-  it('keeps cross-host repos with identical path AND name as separate entries', () => {
-    // Hardening: when paths are byte-identical the same-name collision loop runs
-    // and re-sets each entry, so host scoping must survive that pass too — neither
-    // host may overwrite the other. Label text can still coincide; that residual is
-    // disambiguated by the host section/badge, not this map.
-    const localRepo = { path: '/Users/alice', displayName: 'home' }
-    const sshRepo = { path: '/Users/alice', displayName: 'home', connectionId: 'prod-ssh' }
-    const labels = getRepoDisplayLabelsByPath([localRepo, sshRepo])
+  it('disambiguates cross-host same-name projects with Local/SSH/Remote roles', () => {
+    // Why: path-segment expansion cannot separate identical paths across hosts and
+    // used to fall through to near-absolute path labels (#13221).
+    const localRepo = { path: '/Users/me/workspace/foo', displayName: 'foo' }
+    const runtimeRepo = {
+      path: '/Users/me/workspace/foo',
+      displayName: 'foo',
+      executionHostId: 'runtime:env-1' as const
+    }
+    const labels = getRepoDisplayLabelsByPath([localRepo, runtimeRepo])
 
-    expect(getRepoDisplayLabelKey(localRepo)).not.toBe(getRepoDisplayLabelKey(sshRepo))
-    expect(labels.size).toBe(2)
-    expect(labels.get(getRepoDisplayLabelKey(localRepo))).toBeDefined()
-    expect(labels.get(getRepoDisplayLabelKey(sshRepo))).toBeDefined()
+    expect(getRepoDisplayLabelKey(localRepo)).not.toBe(getRepoDisplayLabelKey(runtimeRepo))
+    expect(labels.get(getRepoDisplayLabelKey(localRepo))).toBe('foo · Local')
+    expect(labels.get(getRepoDisplayLabelKey(runtimeRepo))).toBe('foo · Remote')
   })
 
   it('normalizes Windows separators to slash display labels', () => {
