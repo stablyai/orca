@@ -13,6 +13,7 @@ import {
   matchNativeChatCatalogModelId,
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
+import { resolveEffectiveNativeChatModelId } from './native-chat-session-option-snapshot'
 
 export function parseBuiltSessionOptionCommand(
   build: (value: SessionOptionValue) => string,
@@ -90,15 +91,18 @@ function recordCommandApply(args: {
    *  "/model is a weird word"), and tracking that renders raw prose as the
    *  current value — and, for the model, drops every option the model owns. */
   canonicalize: (value: string) => string | null
+  /** The model the picker draws this option under. Reading the tracked model alone
+   *  would drop a typed `/effort low` under a CLI default, and treat a typed
+   *  `/model <that default>` as a switch that resets the model's tracked state. */
+  effectiveModelId: string | null
   persist?: PersistSessionOption
 }): boolean {
-  const { record, optionId, midSession, command, canonicalize, persist } = args
+  const { record, optionId, midSession, command, canonicalize, effectiveModelId, persist } = args
   if (!midSession || midSession.kind === 'unsupported') {
     return false
   }
   if (isFlipOnlyMidSession(midSession) && command === midSession.command) {
-    const modelId = typeof record.model?.value === 'string' ? record.model.value : null
-    clearTrackedSessionOption(record, modelId, optionId)
+    clearTrackedSessionOption(record, effectiveModelId, optionId)
     return true
   }
   if (isSessionOptionAgentPickerCommand(midSession, command)) {
@@ -116,7 +120,7 @@ function recordCommandApply(args: {
   if (!value) {
     return false
   }
-  const previousModelId = typeof record.model?.value === 'string' ? record.model.value : null
+  const previousModelId = effectiveModelId
   if (optionId === 'model') {
     if (previousModelId !== value) {
       // Why: a model command can reset model-scoped state, so an older value
@@ -166,9 +170,11 @@ export function recordNativeChatSessionOptionCommand(args: {
           // the list (withTrackedNativeChatModel) rather than blanking the row.
           (matchNativeChatCatalogModelId({ ...catalog, models: [...models] }, value) ??
           matchNativeChatCatalogModelId(catalog, value)),
+    effectiveModelId: resolveEffectiveNativeChatModelId(catalog, models, record),
     persist
   })
-  const modelId = typeof record.model?.value === 'string' ? record.model.value : null
+  // Re-resolved: the command above may have just tracked a model.
+  const modelId = resolveEffectiveNativeChatModelId(catalog, models, record)
   const model = modelId ? models.find((candidate) => candidate.id === modelId) : undefined
   for (const option of model?.options ?? []) {
     opensAgentPicker =
@@ -184,6 +190,7 @@ export function recordNativeChatSessionOptionCommand(args: {
           !option.kind.choices.some((choice) => choice.value === value)
             ? null
             : value,
+        effectiveModelId: modelId,
         persist
       }) || changed
   }

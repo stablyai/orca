@@ -1004,10 +1004,62 @@ describe('CodexRuntimeHomeService', () => {
     const store = createStore(createSettings())
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
-
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
-    // Why: a mirror launch never leaves the real home, so its backfill stays valid.
-    expect(existsSync(markerPath)).toBe(true)
+    expect(existsSync(markerPath)).toBe(false)
+    service.finishHostSystemDefaultSessionMigrationPass()
+    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
+      true
+    )
+    service.finishHostSystemDefaultSessionMigrationPass()
+    writeFileSync(
+      markerPath,
+      `${JSON.stringify({
+        version: 3,
+        systemSessionsRoot: join(getSystemCodexHomePath(), 'sessions'),
+        summary: { scannedFiles: 1 }
+      })}\n`,
+      'utf-8'
+    )
+    service.prepareForCodexLaunch()
+    writeFileSync(
+      markerPath,
+      `${JSON.stringify({
+        version: 3,
+        systemSessionsRoot: join(getSystemCodexHomePath(), 'sessions'),
+        summary: { scannedFiles: 1 }
+      })}\n`,
+      'utf-8'
+    )
+    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
+      false
+    )
+    expect(existsSync(markerPath)).toBe(false)
+    service.prepareForCodexLaunch()
+    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
+      false
+    )
+    expect(service.beginHostSystemDefaultSessionMigrationLaunch(null)).toBeNull()
+    service.finishHostSystemDefaultSessionMigrationPass()
+    writeFileSync(
+      markerPath,
+      `${JSON.stringify({
+        version: 3,
+        systemSessionsRoot: join(getSystemCodexHomePath(), 'sessions'),
+        summary: { scannedFiles: 1 }
+      })}\n`,
+      'utf-8'
+    )
+    expect(service.beginHostSystemDefaultSessionMigrationLaunch(null, { reattached: true })).toBe(
+      false
+    )
+    expect(existsSync(markerPath)).toBe(false)
+    store.updateSettings({
+      codexSessionSourceHome: { host: join(testState.fakeHomeDir, 'moved-history'), wsl: {} }
+    })
+    service.prepareForCodexLaunch()
+    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
+      true
+    )
     expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
     expect(existsSync(getRuntimeCodexHomePath())).toBe(true)
@@ -1037,6 +1089,10 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(markerPath, '{}\n', 'utf-8')
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
     expect(existsSync(markerPath)).toBe(false)
+    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
+      true
+    )
+    service.finishHostSystemDefaultSessionMigrationPass()
     service.setRealHomeLaneGate(() => true)
     const perSpawnCustomHome = join(testState.fakeHomeDir, 'per-spawn-custom-codex-home')
     writeFileSync(markerPath, '{}\n', 'utf-8')
@@ -1045,6 +1101,11 @@ describe('CodexRuntimeHomeService', () => {
       getRuntimeCodexHomePath()
     )
     expect(existsSync(markerPath)).toBe(true)
+    expect(
+      service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath(), {
+        launchEnv: { CODEX_HOME: perSpawnCustomHome }
+      })
+    ).toBeNull()
     if (process.platform !== 'win32') {
       // Why: shell startup CODEX_HOME discovery is a POSIX-shell lane; Windows
       // must not invoke an ambient WSL bash while evaluating this contract.
@@ -1719,7 +1780,11 @@ describe('CodexRuntimeHomeService', () => {
 
     // A host managed account's own home is its CODEX_HOME.
     expect(service.isHostSystemDefaultRealHome()).toBe(false)
+    expect(service.isHostSystemDefaultSessionMigrationEligible()).toBe(false)
     expect(service.prepareForCodexLaunch()).toBe(managedHomePath)
+    expect(
+      service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())
+    ).toBeNull()
     // The per-account home keeps its own auth in place; the shared mirror's
     // auth.json is never hot-swapped, so two accounts cannot race one file.
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(

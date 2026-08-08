@@ -2059,8 +2059,6 @@
         "556e7232ca": "Current",
         "684e8d7bc2": "Gathering your recent worktrees and open tabs.",
         "ff908adfe9": "Loading jump targets",
-        "1ebe225fee": "Search worktrees, settings, tabs, and actions...",
-        "4e4ff044d5": "Search worktrees, settings, tabs, and actions",
         "4ee378034d": "Jump to...",
         "f7fda8d562": "Create a worktree or open a tab in Orca to get started.",
         "1628fd7dfa": "No active worktrees, settings, actions, or open tabs",
@@ -2088,7 +2086,10 @@
         "projectsGroupsHeader": "Projects & Groups",
         "projectBadge": "Project",
         "repoGroupBadge": "Repo group",
-        "pluginCommandFailed": "Could not run the plugin command."
+        "pluginCommandFailed": "Could not run the plugin command.",
+        "recentChatsTerminalsHeader": "Recent Chats & Terminals",
+        "27f10cca63": "Search chats, terminals, worktrees, settings, and actions...",
+        "2770f02910": "Search chats, terminals, worktrees, settings, and actions"
       },
       "github": {
         "pr": {

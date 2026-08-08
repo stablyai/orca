@@ -3074,16 +3074,25 @@ describe('registerPtyHandlers', () => {
         new Promise<void>((resolve) => (releaseRecovery = resolve))
       )
       readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
+      const onCodexHomePtySpawned = vi.fn()
       handlers.clear()
-      registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
-        codexManagedAccounts: [
-          {
-            id: 'account-1',
-            managedHomePath: TEST_CODEX_HOME,
-            managedHomeRuntime: 'host'
-          }
-        ]
-      })) as never)
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        () => TEST_CODEX_HOME,
+        (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never,
+        undefined,
+        undefined,
+        { onCodexHomePtySpawned }
+      )
 
       const spawnPromise = handlers.get('pty:spawn')!(null, {
         cols: 80,
@@ -3094,10 +3103,17 @@ describe('registerPtyHandlers', () => {
         expect(ensureCodexBackfillRecoveryMock).toHaveBeenCalledWith(TEST_CODEX_HOME)
       )
       expect(spawnMock).not.toHaveBeenCalled()
+      expect(onCodexHomePtySpawned).not.toHaveBeenCalled()
 
       releaseRecovery()
-      await spawnPromise
+      const result = (await spawnPromise) as { id: string }
       expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(onCodexHomePtySpawned).toHaveBeenCalledWith({
+        id: result.id,
+        codexHomePath: TEST_CODEX_HOME,
+        startedAt: expect.any(Date),
+        startedSequence: expect.any(Number)
+      })
     })
 
     it('does not gate a bare local shell on managed Codex auth', async () => {
@@ -3108,19 +3124,37 @@ describe('registerPtyHandlers', () => {
         return ''
       })
       handlers.clear()
-      registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
-        codexManagedAccounts: [
-          {
-            id: 'account-1',
-            managedHomePath: TEST_CODEX_HOME,
-            managedHomeRuntime: 'host'
-          }
-        ]
-      })) as never)
+      const onCodexHomePtySpawned = vi.fn()
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        () => TEST_CODEX_HOME,
+        (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never,
+        undefined,
+        undefined,
+        { onCodexHomePtySpawned }
+      )
 
-      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+      const result = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24
+      })) as { id: string }
 
       expect(spawnMock).toHaveBeenCalledOnce()
+      expect(onCodexHomePtySpawned).toHaveBeenCalledWith({
+        id: result.id,
+        codexHomePath: TEST_CODEX_HOME,
+        startedAt: expect.any(Date),
+        startedSequence: expect.any(Number)
+      })
     })
 
     it('leaves an inherited CODEX_HOME untouched for system default when the flag is OFF', async () => {
@@ -8883,6 +8917,7 @@ describe('registerPtyHandlers', () => {
       const prepareClaudeAuth = vi.fn(() => {
         throw new Error('replacement auth preflight must not run')
       })
+      const onCodexHomePtySpawned = vi.fn()
       let controller: RuntimeSpawnController | null = null
       const runtime = {
         setPtyController: vi.fn((value) => {
@@ -8920,7 +8955,8 @@ describe('registerPtyHandlers', () => {
         undefined,
         undefined,
         prepareClaudeAuth,
-        store as never
+        store as never,
+        { onCodexHomePtySpawned }
       )
       const spawnController = controller as unknown as RuntimeSpawnController
       await spawnController.spawn({
@@ -9014,6 +9050,7 @@ describe('registerPtyHandlers', () => {
         rows: 40,
         cwd,
         command: 'codex resume should-not-run',
+        launchAgent: 'codex',
         worktreeId,
         preAllocatedHandle: 'term-live-owner',
         tabId,
@@ -9038,6 +9075,13 @@ describe('registerPtyHandlers', () => {
         id: 'pty-live-owner',
         incarnationId: 'inc-live-owner',
         isReattach: true
+      })
+      expect(onCodexHomePtySpawned).toHaveBeenCalledWith({
+        id: 'pty-live-owner',
+        codexHomePath: null,
+        reattached: true,
+        startedAt: expect.any(Date),
+        startedSequence: expect.any(Number)
       })
       expect(claimedResult).toMatchObject({
         id: 'pty-live-owner',
