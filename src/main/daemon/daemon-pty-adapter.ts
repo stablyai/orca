@@ -3,6 +3,11 @@ import { basename } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { DaemonClient } from './client'
+import {
+  classifyAttachOnlyKillError,
+  trackAttachOnlyOrphanRisk
+} from './daemon-attach-only-orphan-event'
+import { retireAccidentalAttachOnlySpawn } from './daemon-attach-only-retire'
 import { DAEMON_ENDPOINT_LOST_MESSAGE } from './daemon-endpoint-ownership'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
@@ -1063,14 +1068,29 @@ export class DaemonPtyAdapter implements IPtyProvider {
     })
     if (result.isNew) {
       // Why: a pre-v31 daemon ignores attachOnly; retire its accidental spawn
-      // instead of publishing a fresh shell as an attach.
-      await this.client.request('kill', { sessionId: id, immediate: true }).catch((error) => {
-        // Why surface, not swallow: a failed retire leaves an untracked orphan shell.
-        console.warn('[daemon] attach-only retire of accidental legacy spawn failed', {
-          sessionId: id,
-          error
-        })
+      // instead of publishing a fresh shell as an attach (#12589 / #12662).
+      // One kill only: kill is session-id keyed, not incarnation-fenced.
+      const retire = await retireAccidentalAttachOnlySpawn({
+        kill: async () => {
+          await this.client.request('kill', { sessionId: id, immediate: true })
+        }
       })
+      if (!retire.ok) {
+        // Why: console + telemetry — packaged/headless support must find orphans
+        // beyond a single stderr line.
+        console.error(
+          '[daemon] attach-only retire of accidental legacy spawn failed; orphan may remain',
+          {
+            sessionId: id,
+            protocolVersion: this.protocolVersion,
+            error: retire.error
+          }
+        )
+        trackAttachOnlyOrphanRisk({
+          protocolVersion: this.protocolVersion,
+          killErrorClass: classifyAttachOnlyKillError(retire.error)
+        })
+      }
       throw new SessionNotFoundError(id)
     }
     this.clearSessionAwaitingDaemonRecovery(id)

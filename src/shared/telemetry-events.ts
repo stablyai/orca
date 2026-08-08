@@ -372,6 +372,15 @@ const agentErrorSchema = z
 // Why: daemon start-failure signal (fleet-wide outage like v1.4.129-rc.1); enum-only so raw stderr never reaches the wire.
 const daemonStartFailedSchema = z.object({ error_class: errorClassSchema }).strict()
 
+// Why (#12662): pre-v31 attachOnly ignore leaves an orphan shell when kill fails;
+// enum-only so no session paths reach the wire; rare (≪1/user/day).
+const daemonAttachOnlyOrphanRiskSchema = z
+  .object({
+    protocol_version: z.number().int().nonnegative(),
+    kill_error_class: z.enum(['transport', 'timeout', 'not_found', 'unknown'])
+  })
+  .strict()
+
 export const runtimeRpcStartErrorClassSchema = z.enum([
   'permission_denied',
   'address_in_use',
@@ -1446,6 +1455,7 @@ export const eventSchemas = {
   agent_hook_unattributed: agentHookUnattributedSchema,
 
   daemon_start_failed: daemonStartFailedSchema,
+  daemon_attach_only_orphan_risk: daemonAttachOnlyOrphanRiskSchema,
   main_thread_hang_detected: mainThreadHangDetectedSchema,
   daemon_lifecycle: daemonLifecycleSchema,
   daemon_audit_eligibility: daemonAuditEligibilitySchema,
