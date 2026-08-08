@@ -28,6 +28,7 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
+  GitPullRequestDraft,
   ListChecks,
   Link2,
   LoaderCircle,
@@ -3024,7 +3025,11 @@ function PRActionsPanel({
     <aside className="rounded-lg border border-border/50 bg-card/50 p-3 shadow-xs">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <GitPullRequest className="size-3.5 text-muted-foreground" />
+          {item.state === 'draft' ? (
+            <GitPullRequestDraft className="size-3.5 text-muted-foreground" />
+          ) : (
+            <GitPullRequest className="size-3.5 text-muted-foreground" />
+          )}
           <span className="text-[13px] font-medium text-foreground">
             {translate('auto.components.GitHubItemDialog.a2495e4784', 'Pull request')}
           </span>
@@ -3111,6 +3116,8 @@ function PRActionsPanel({
             <LoaderCircle className="size-3.5 animate-spin" />
           ) : nextState === 'closed' ? (
             <GitPullRequestClosed className="size-3.5 text-destructive" />
+          ) : localState === 'draft' ? (
+            <GitPullRequestDraft className="size-3.5 text-muted-foreground" />
           ) : (
             <CircleDot className="size-3.5" />
           )}
