@@ -42,6 +42,28 @@ describe('native chat transcript interruption messages', () => {
     ).toMatchObject({ role: 'assistant', blocks: record.message.content })
   })
 
+  it('marks Claude API failures as provider errors instead of assistant speech', () => {
+    expect(
+      decodeClaudeTranscriptLine(
+        JSON.stringify({
+          type: 'assistant',
+          uuid: 'api-error',
+          isApiErrorMessage: true,
+          timestamp: '2026-08-10T00:32:45.261Z',
+          message: {
+            role: 'assistant',
+            model: '<synthetic>',
+            stop_reason: 'stop_sequence',
+            content: [
+              { type: 'text', text: 'API Error: 400 speed: Extra inputs are not permitted' }
+            ]
+          }
+        }),
+        'fallback'
+      )
+    ).toMatchObject({ role: 'assistant', providerError: true })
+  })
+
   it('normalizes Claude interruption boilerplate into one visible status row', () => {
     const message = decodeClaudeTranscriptLine(
       JSON.stringify({

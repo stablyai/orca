@@ -222,12 +222,21 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
   // persistence (as we have); our fix is to reset 1004 and friends after
   // scrollback replay so the mode state matches the fresh shell
   // underneath. See POST_REPLAY_MODE_RESET in shared/terminal-mode-reset-profiles.ts.
-  session.onBell = (): void => {
+  session.onBell = (meta?: { roomDeliveryId?: string; roomCompletion?: true }): void => {
     // Why: restored Claude Code sessions have been observed to emit a real
     // standalone BEL some time after daemon snapshot reattach, even when Orca
     // did not just forward focus/control input. Treat the BEL as authoritative
     // PTY output here; any product-side suppression should be an explicit UX
     // decision higher up, not a transport-layer guess.
+    const roomDeliveryId =
+      meta?.roomDeliveryId ??
+      useAppStore.getState().agentStatusByPaneKey[session.cacheKey]?.roomDeliveryId
+    if (
+      roomDeliveryId &&
+      (meta?.roomCompletion || session.hasPendingAgentTaskCompleteNotification())
+    ) {
+      return
+    }
     session.deps.markWorktreeUnread(session.deps.worktreeId)
     session.deps.markTerminalTabUnread(session.deps.tabId)
     if (useAppStore.getState().settings?.experimentalTerminalAttention === true) {

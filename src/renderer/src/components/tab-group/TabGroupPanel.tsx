@@ -10,12 +10,9 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import TabBar from '../tab-bar/TabBar'
-
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
-import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
+import { TabGroupTabBar } from './TabGroupTabBar'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
@@ -27,6 +24,7 @@ import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hos
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
+const RoomsPage = lazy(() => import('../rooms/RoomsPage'))
 
 export default function TabGroupPanel({
   groupId,
@@ -64,15 +62,7 @@ export default function TabGroupPanel({
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
-  const {
-    activeTab,
-    agentSessionItems,
-    browserItems,
-    commands,
-    editorItems,
-    tabBarOrder,
-    terminalTabs
-  } = model
+  const { activeTab, commands } = model
   // Why: one strip owns the worktree's client-hosted rows, or every split repeats them.
   const ownsClientHostedRows = useAppStore(
     (state) =>
@@ -102,117 +92,11 @@ export default function TabGroupPanel({
   )
 
   const tabBar = (
-    <TabBar
-      tabs={terminalTabs}
-      activeTabId={
-        activeTab?.contentType === 'terminal'
-          ? activeTab.entityId
-          : activeTab?.contentType === 'agent-session'
-            ? activeTab.id
-            : null
-      }
+    <TabGroupTabBar
+      model={model}
       groupId={groupId}
       worktreeId={worktreeId}
-      expandedPaneByTabId={model.expandedPaneByTabId}
-      onActivate={commands.activateTerminal}
-      onClose={(terminalId) => {
-        const item = resolveGroupTabFromVisibleId(model.groupTabs, terminalId)
-        if (item?.contentType === 'terminal' || item?.contentType === 'agent-session') {
-          commands.closeItem(item.id)
-          return
-        }
-        // Why: agent quick-launch can briefly desync unified/runtime tab ids before the host snapshot lands, so still route close through the shared helper.
-        closeTerminalTab(terminalId)
-      }}
-      onCloseOthers={(visibleId) => {
-        // Why: TabBar emits entityId for terminals/browsers but unifiedTabId for editors; match both so the menu works on every tab kind.
-        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
-        if (item) {
-          commands.closeOthers(item.id)
-        }
-      }}
-      onCloseToRight={(visibleId) => {
-        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
-        if (item) {
-          commands.closeToRight(item.id)
-        }
-      }}
-      onCloseToLeft={(visibleId) => {
-        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
-        if (item) {
-          commands.closeToLeft(item.id)
-        }
-      }}
-      onNewTerminalTab={commands.newTerminalTab}
-      onNewTerminalWithShell={commands.newTerminalWithShell}
-      onNewBrowserTab={commands.newBrowserTab}
-      onNewSimulatorTab={commands.newSimulatorTab}
-      onOpenEntry={commands.openEntry}
-      onNewFileTab={commands.newFileTab}
-      onSetCustomTitle={commands.setTabCustomTitle}
-      onSetTabColor={commands.setTabColor}
-      onTogglePaneExpand={commands.toggleTerminalPaneExpand}
-      editorFiles={editorItems}
-      browserTabs={browserItems}
       clientHostedBrowserRows={clientHostedRows}
-      groupActiveTabId={activeTab?.id ?? null}
-      agentSessionTabs={agentSessionItems}
-      activeFileId={
-        activeTab?.contentType === 'terminal' ||
-        activeTab?.contentType === 'agent-session' ||
-        activeTab?.contentType === 'browser' ||
-        activeTab?.contentType === 'simulator'
-          ? null
-          : activeTab?.id
-      }
-      activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
-      activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
-      activeTabType={
-        activeTab?.contentType === 'terminal'
-          ? 'terminal'
-          : activeTab?.contentType === 'agent-session'
-            ? 'agent-session'
-            : activeTab?.contentType === 'browser'
-              ? 'browser'
-              : activeTab?.contentType === 'simulator'
-                ? 'simulator'
-                : 'editor'
-      }
-      onActivateFile={commands.activateEditor}
-      onCloseFile={commands.closeItem}
-      onActivateBrowserTab={commands.activateBrowser}
-      onActivateAgentSession={commands.activateAgentSession}
-      onCloseBrowserTab={(browserTabId) => {
-        const item = model.groupTabs.find(
-          (candidate) => candidate.entityId === browserTabId && candidate.contentType === 'browser'
-        )
-        if (item) {
-          commands.closeItem(item.id)
-        }
-      }}
-      onDuplicateBrowserTab={commands.duplicateBrowserTab}
-      onCloseAllFiles={commands.closeAllEditorTabsInGroup}
-      onMakePreviewFilePermanent={(_fileId, tabId) => {
-        if (!tabId) {
-          return
-        }
-        const item = model.groupTabs.find((candidate) => candidate.id === tabId)
-        if (!item) {
-          return
-        }
-        commands.makePreviewFilePermanent(item.entityId, item.id)
-      }}
-      onPinFile={(_fileId, tabId) => {
-        if (!tabId) {
-          return
-        }
-        const item = model.groupTabs.find((candidate) => candidate.id === tabId)
-        if (!item) {
-          return
-        }
-        commands.pinFile(item.entityId, item.id)
-      }}
-      tabBarOrder={tabBarOrder}
       hoveredTabInsertion={hoveredTabInsertion}
     />
   )
@@ -351,7 +235,8 @@ export default function TabGroupPanel({
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'agent-session' &&
           activeTab.contentType !== 'browser' &&
-          activeTab.contentType !== 'simulator' && (
+          activeTab.contentType !== 'simulator' &&
+          activeTab.contentType !== 'room' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
               {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
               <Suspense
@@ -373,6 +258,14 @@ export default function TabGroupPanel({
               </Suspense>
             </div>
           )}
+
+        {isVisible && activeTab?.contentType === 'room' ? (
+          <div className="absolute inset-0 flex min-h-0 min-w-0">
+            <Suspense fallback={null}>
+              <RoomsPage />
+            </Suspense>
+          </div>
+        ) : null}
 
         {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
       </div>

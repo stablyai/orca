@@ -3,56 +3,19 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { agentArgOptionTokens, removeAgentArgOption } from './agent-session-option-agent-args'
+import { removeAgentArgOption } from './agent-session-option-agent-args'
 import {
   CLAUDE_MODEL_LIST_ARGS,
   CLAUDE_MODEL_LIST_STDIN,
   parseClaudeModelList
 } from './claude-model-list-probe'
 import { hasFlag } from './agent-cli-flag-detection'
-
-function hasCodexEffortOverride(tokens: readonly string[]): boolean {
-  if (hasFlag(tokens, ['--reasoning-effort'])) {
-    return true
-  }
-  const optionTokens = agentArgOptionTokens(tokens)
-  return optionTokens.some((token, index) => {
-    const previous = optionTokens[index - 1]
-    return (
-      (token.startsWith('model_reasoning_effort=') &&
-        (previous === '-c' || previous === '--config')) ||
-      token.startsWith('-cmodel_reasoning_effort=') ||
-      token.startsWith('-c=model_reasoning_effort=') ||
-      token.startsWith('--config=model_reasoning_effort=')
-    )
-  })
-}
-
-function removeCodexEffortOverride(tokens: readonly string[]): string[] {
-  const withoutFlag = removeAgentArgOption(tokens, ['--reasoning-effort'])
-  const result: string[] = []
-  for (let index = 0; index < withoutFlag.length; index += 1) {
-    const token = withoutFlag[index]
-    if (token === '--') {
-      result.push(...withoutFlag.slice(index))
-      break
-    }
-    const next = withoutFlag[index + 1]
-    if ((token === '-c' || token === '--config') && next?.startsWith('model_reasoning_effort=')) {
-      index += 1
-      continue
-    }
-    if (
-      token.startsWith('-cmodel_reasoning_effort=') ||
-      token.startsWith('-c=model_reasoning_effort=') ||
-      token.startsWith('--config=model_reasoning_effort=')
-    ) {
-      continue
-    }
-    result.push(token)
-  }
-  return result
-}
+import {
+  hasCodexConfigOverride,
+  hasCodexEffortOverride,
+  removeCodexConfigOverride,
+  removeCodexEffortOverride
+} from './codex-config-args'
 
 const STANDARD_EFFORT_CHOICES = [
   { value: 'low', label: 'Low' },
@@ -126,7 +89,27 @@ const CLAUDE_FAST_MODE: CatalogOption = {
   label: 'Fast mode',
   category: 'mode',
   kind: { type: 'boolean', defaultValue: false },
-  apply: { midSession: { kind: 'toggle-command', command: '/fast' } }
+  apply: {
+    midSession: {
+      kind: 'command',
+      build: (value) => `/fast ${value === true ? 'on' : 'off'}`,
+      pickerCommand: '/fast'
+    }
+  }
+}
+
+const CODEX_FAST_MODE: CatalogOption = {
+  id: 'fastMode',
+  label: 'Fast mode',
+  category: 'mode',
+  launchDefault: false,
+  kind: { type: 'boolean', defaultValue: false },
+  apply: {
+    launchArgs: (value) => ['-c', `service_tier=${value === true ? '"priority"' : '"default"'}`],
+    agentArgsOverride: (tokens) => hasCodexConfigOverride(tokens, 'service_tier'),
+    removeAgentArgs: (tokens) => removeCodexConfigOverride(tokens, 'service_tier'),
+    midSession: { kind: 'toggle-command', command: '/fast' }
+  }
 }
 
 const CLAUDE_CONTEXT_WINDOW: CatalogOption = {
@@ -243,6 +226,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
 }
 
 const CODEX_EFFORT_CHOICES = [
+  { value: 'minimal', label: 'Minimal' },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
@@ -273,6 +257,19 @@ export function codexEffortFromChoices(
   }
 }
 
+export function createCodexCatalogOptions(args: {
+  effortChoices: { value: string; label: string }[]
+  defaultEffort?: string
+  supportsFastMode?: boolean
+}): CatalogOption[] {
+  return [
+    ...(args.effortChoices.length > 0
+      ? [codexEffortFromChoices(args.effortChoices, args.defaultEffort)]
+      : []),
+    ...(args.supportsFastMode ? [CODEX_FAST_MODE] : [])
+  ]
+}
+
 // Why: Codex can clamp higher values, so expose only each model's advertised levels.
 function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
   const ceilingIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
@@ -281,18 +278,36 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
 
 export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
+  // Why: codex model/effort are pure CLI flags that die with the process; they
+  // must be embedded in every cold-restore launch command.
   capturesOptionsInLaunchCommand: true,
   // Why: Codex model access depends on auth. Keep this seed short and allow
   // unknown persisted ids to pass through instead of claiming a complete list.
   models: [
-    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [codexEffort('ultra')] },
-    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', options: [codexEffort('ultra')] },
-    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', options: [codexEffort('max')] },
-    { id: 'gpt-5.5', label: 'GPT-5.5', options: [codexEffort('xhigh')] },
+    {
+      id: 'gpt-5.6-sol',
+      label: 'GPT-5.6 Sol',
+      options: [codexEffort('ultra'), CODEX_FAST_MODE]
+    },
+    {
+      id: 'gpt-5.6-terra',
+      label: 'GPT-5.6 Terra',
+      options: [codexEffort('ultra'), CODEX_FAST_MODE]
+    },
+    {
+      id: 'gpt-5.6-luna',
+      label: 'GPT-5.6 Luna',
+      options: [codexEffort('max'), CODEX_FAST_MODE]
+    },
+    {
+      id: 'gpt-5.5',
+      label: 'GPT-5.5',
+      options: [codexEffort('xhigh'), CODEX_FAST_MODE]
+    },
     {
       id: 'gpt-5.2-codex',
       label: 'GPT-5.2 Codex',
-      options: [codexEffort('xhigh')]
+      options: [codexEffort('xhigh'), CODEX_FAST_MODE]
     }
   ],
   modelApply: {
@@ -303,5 +318,5 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     // command and let its own picker apply the account-supported model.
     midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },
-  unknownModelOptions: [codexEffort('xhigh')]
+  unknownModelOptions: [codexEffort('xhigh'), CODEX_FAST_MODE]
 }

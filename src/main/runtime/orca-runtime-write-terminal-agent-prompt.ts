@@ -17,6 +17,12 @@ import {
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../shared/agent-tui-input-clear'
+
+type AgentPromptWriteOptions = RuntimeTerminalWriteOptions & {
+  clearInput?: boolean
+  prefixPastePayloads?: readonly string[]
+}
 
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
   protected async writeTerminalAgentPrompt(
@@ -24,7 +30,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     ptyId: string,
     generation: number,
     pastePayload: string,
-    options: RuntimeTerminalWriteOptions = {}
+    options: AgentPromptWriteOptions = {}
   ): Promise<number> {
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
@@ -35,7 +41,30 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
     const renderGate = this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
+    let wrotePasteBytes = false
     try {
+      if (options.clearInput) {
+        await options.beforeWrite?.(ptyId)
+        agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
+        if (!this.ptyController?.write(ptyId, AGENT_TUI_CLEAR_INPUT_MAX)) {
+          throw new Error('terminal_not_writable')
+        }
+      }
+      for (const prefixPayload of options.prefixPastePayloads ?? []) {
+        assertAgentPromptRequestActive(options.signal)
+        this.assertAgentPromptGeneration(ptyId, generation)
+        await options.beforeWrite?.(ptyId)
+        this.assertAgentPromptPermissionSafe(
+          permissionBaseline,
+          this.getAgentPromptActivity(handle, ptyId)
+        )
+        agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
+        if (!this.ptyController?.write(ptyId, prefixPayload)) {
+          throw new Error('terminal_not_writable')
+        }
+        wrotePasteBytes = true
+        await waitForAgentPromptDelay(300, options.signal)
+      }
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
       await options.beforeWrite?.(ptyId)
@@ -52,7 +81,11 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       if (!this.ptyController?.write(ptyId, pastePayload)) {
         throw new Error('terminal_not_writable')
       }
+      wrotePasteBytes = true
     } catch (error) {
+      if (options.clearInput && wrotePasteBytes) {
+        this.ptyController?.write(ptyId, AGENT_TUI_CLEAR_INPUT_MAX)
+      }
       renderGate?.dispose()
       throw error
     }

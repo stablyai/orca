@@ -86,6 +86,7 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
   orchestration?: AgentStatusOrchestrationContext
   promptInteractionKey?: string
   restoredUnconfirmed?: boolean
+  roomDeliveryId?: string
   /** Ingress provenance for this write (STA-4293). Read by nothing yet; a caller that omits
    *  it produces exactly the entry it produces today. See agent-status-observation.ts. */
   observation?: AgentStatusObservation

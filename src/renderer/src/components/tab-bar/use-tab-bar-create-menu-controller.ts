@@ -12,33 +12,17 @@ import { useAppStore } from '../../store'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
-import {
-  buildWindowsShellMenuEntries,
-  type WindowsShellMenuEntry
-} from './tab-bar-windows-shell-options'
+import { buildWindowsShellMenuEntries } from './tab-bar-windows-shell-options'
 import type {
   getProjectRuntimeShellMenuMode,
   resolveWindowsPowerShellImplementationSetting
 } from './use-tab-bar-runtime-model'
+import type { TabBarCreateMenuController } from './tab-bar-create-menu-controller-types'
+
+export type { TabBarCreateMenuController } from './tab-bar-create-menu-controller-types'
 
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
-
-export type TabBarCreateMenuController = {
-  newTabMenuOpen: boolean
-  setNewTabMenuOpen: (open: boolean) => void
-  setCreateMenuQuery: (query: string) => void
-  createMenuOptions: TabCreateMenuOption[]
-  windowsShellEntries: WindowsShellMenuEntry[] | undefined
-  handleSelectCreateMenuOption: (option: TabCreateMenuOption) => void
-  launchAgentFromNewTabEntry: (agent: TuiAgent) => void
-  runPendingNewTabMenuFocusAfterClose: () => void
-  clearPendingNewTabMenuFocusOnUnmount: (node: HTMLDivElement | null) => void
-  queueNewActiveTerminalFocusAfterNewTabMenuClose: () => void
-  queueTerminalTabFocusAfterNewTabMenuClose: (tabId: string) => void
-  queueFocusAfterNewTabMenuClose: (focus: () => void) => void
-  showStaticCreateMenuItems: boolean
-}
 
 export function useTabBarCreateMenuController({
   worktreeId,
@@ -85,6 +69,7 @@ export function useTabBarCreateMenuController({
 }): TabBarCreateMenuController {
   // Why: <webview> clicks are out-of-process, so Radix's document-pointerdown outside-click check misses them; use window blur.
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  const [roomSelectorOpen, setRoomSelectorOpen] = useState(false)
   const [createMenuQuery, setCreateMenuQuery] = useState('')
   const pendingNewTabMenuFocusRef = useRef<(() => void) | null>(null)
   const pendingNewTabMenuFocusAnimationRef = useRef<number | null>(null)
@@ -167,6 +152,7 @@ export function useTabBarCreateMenuController({
         hasNewBrowser: !terminalOnly && managedBrowserCreationEnabled,
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
+        hasRooms: !terminalOnly,
         hasSimulator:
           !terminalOnly &&
           mobileEmulatorEnabled &&
@@ -217,6 +203,9 @@ export function useTabBarCreateMenuController({
       case 'new-simulator':
       case 'go-to-simulator':
         onNewSimulatorTab?.()
+        break
+      case 'rooms':
+        setRoomSelectorOpen(true)
         break
     }
   }
@@ -291,6 +280,8 @@ export function useTabBarCreateMenuController({
   return {
     newTabMenuOpen,
     setNewTabMenuOpen,
+    roomSelectorOpen,
+    setRoomSelectorOpen,
     setCreateMenuQuery,
     createMenuOptions,
     windowsShellEntries,

@@ -57,7 +57,9 @@ export function resolveAgentSessionOptionLaunch(
         }
         return [[option.id, explicitValue]]
       }
-      return model && includeCatalogDefaults ? [[option.id, option.kind.defaultValue]] : []
+      return model && includeCatalogDefaults && option.launchDefault !== false
+        ? [[option.id, option.kind.defaultValue]]
+        : []
     })
   )
   const composedModelId = catalog.composeModelValue

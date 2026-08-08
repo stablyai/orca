@@ -272,6 +272,7 @@ describe('toVisibleTabType', () => {
     expect(toVisibleTabType('conflict-review')).toBe('editor')
     expect(toVisibleTabType('check-details')).toBe('editor')
     expect(toVisibleTabType('terminal')).toBe('terminal')
+    expect(toVisibleTabType('room')).toBe('terminal')
     expect(toVisibleTabType('browser')).toBe('browser')
     expect(toVisibleTabType('simulator')).toBe('simulator')
   })

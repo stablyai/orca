@@ -14,9 +14,10 @@ type FunctionDefinition = { declaration: ts.FunctionDeclaration; sourceFile: ts.
 
 function readDefinitions(): Map<string, FunctionDefinition> {
   const definitions = new Map<string, FunctionDefinition>()
-  for (const relativePath of readdirSync(__dirname).filter((name) =>
-    LISTENER_SOURCE_PATTERN.test(name)
-  )) {
+  for (const relativePath of [
+    ...readdirSync(__dirname).filter((name) => LISTENER_SOURCE_PATTERN.test(name)),
+    '../native-chat/native-chat-shortcut.ts'
+  ]) {
     const filePath = join(__dirname, relativePath)
     const sourceFile = ts.createSourceFile(
       filePath,
@@ -31,7 +32,8 @@ function readDefinitions(): Map<string, FunctionDefinition> {
         node.name &&
         (node.name.text === 'TerminalPane' ||
           node.name.text === 'registerTerminalPanePasteListeners' ||
-          node.name.text.startsWith('useTerminalPane'))
+          node.name.text.startsWith('useTerminalPane') ||
+          node.name.text === 'useNativeChatToggleRequest')
       ) {
         definitions.set(node.name.text, { declaration: node, sourceFile })
       }

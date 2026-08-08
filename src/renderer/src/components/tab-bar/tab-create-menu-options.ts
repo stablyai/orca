@@ -11,6 +11,7 @@ export type TabCreateMenuOptionKind =
   | 'new-terminal'
   | 'new-terminal-shell'
   | 'open-markdown'
+  | 'rooms'
 
 export type TabCreateMenuOption = {
   id: string
@@ -24,6 +25,7 @@ export type TabCreateMenuOptionsContext = {
   hasNewBrowser: boolean
   hasNewMarkdown: boolean
   hasOpenMarkdown: boolean
+  hasRooms: boolean
   hasSimulator: boolean
   simulatorIsGoTo: boolean
   terminalOnly: boolean
@@ -162,6 +164,16 @@ export function buildTabCreateMenuOptions(
         translate('auto.components.tab.bar.tab.create.menu.options.7ecdc5ef08', 'ipad'),
         translate('auto.components.tab.bar.tab.create.menu.options.14965cc123', 'mobile')
       ]
+    })
+  }
+
+  if (context.hasRooms) {
+    const label = translate('rooms.menu.label', 'Rooms')
+    options.push({
+      id: 'rooms',
+      kind: 'rooms',
+      label,
+      keywords: [label, 'room', 'multi-agent']
     })
   }
 

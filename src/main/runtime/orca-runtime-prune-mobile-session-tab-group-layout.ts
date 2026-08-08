@@ -110,12 +110,23 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     retained: RuntimeAgentRowSnapshot | null,
     getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
-    return buildRuntimeMobileAgentStatus(pty, tab, terminalHandle, retained, getHookRowsForPane, {
-      getPaneKey: (candidate) => this.getMobileTerminalPaneKey(candidate),
-      getLeaf: (candidate) =>
-        this.leaves.get(this.getLeafKey(candidate.parentTabId, candidate.leafId)) ?? null,
-      getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId)
-    })
+    const result = buildRuntimeMobileAgentStatus(
+      pty,
+      tab,
+      terminalHandle,
+      retained,
+      getHookRowsForPane,
+      {
+        getPaneKey: (candidate) => this.getMobileTerminalPaneKey(candidate),
+        getLeaf: (candidate) =>
+          this.leaves.get(this.getLeafKey(candidate.parentTabId, candidate.leafId)) ?? null,
+        getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId)
+      }
+    )
+    const roomDeliveryId = this.getRoomDeliveryIdForPaneKey?.(this.getMobileTerminalPaneKey(tab))
+    return 'agentStatus' in result && roomDeliveryId
+      ? { agentStatus: { ...result.agentStatus, roomDeliveryId } }
+      : result
   }
 
   protected getFreshRetainedAgentStatusForMobileTab(

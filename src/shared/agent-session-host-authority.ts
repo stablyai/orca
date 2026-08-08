@@ -2,7 +2,8 @@ import {
   hasUnsafeProviderSessionIdChars,
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
-  type ResumableTuiAgent
+  type ResumableTuiAgent,
+  type SleepingAgentLaunchConfig
 } from './agent-session-resume'
 import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runtime-types'
 import { isTerminalLeafId } from './stable-pane-id'
@@ -109,6 +110,11 @@ export type RuntimeEnsureAgentSessionRequest =
       ompResumeFilePath?: string
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
+      /** Trusted local UI startup metadata. Remote callers remain host-owned. */
+      command?: string
+      env?: Record<string, string>
+      envToDelete?: string[]
+      launchConfig?: SleepingAgentLaunchConfig
       /** Appended after the resolved launch args (room-owned panes suppress
        *  interactive CLI nudges that would deadlock an unwatched pane). */
       extraAgentArgs?: string

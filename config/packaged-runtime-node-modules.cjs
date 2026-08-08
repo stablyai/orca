@@ -19,6 +19,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@linear/sdk',
   '@parcel/watcher',
   'electron-updater',
+  'fflate',
   'i18next',
   'jsonc-parser',
   'node-pty',

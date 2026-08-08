@@ -209,6 +209,7 @@ export function registerRuntimeWindowLifecycle(
       send('runtime:terminalDriverChanged', { ptyId, driver }),
     nativeChatLaunchDraftResolved: (tabId, resolution) =>
       send('runtime:nativeChatLaunchDraftResolved', { tabId, ...resolution }),
+    roomEvent: (roomId, event) => send('runtime:roomEvent', { roomId, event }),
     browserDriverChanged: (browserPageId, driver) =>
       send('runtime:browserDriverChanged', { browserPageId, driver }),
     browserRemoteViewersChanged: (browserPageId, hasRemoteViewers) =>

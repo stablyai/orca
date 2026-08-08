@@ -19,10 +19,21 @@ describe('applyNativeChatReportedSessionOptions', () => {
     const record = claudeRecord()
     record.model = { value: 'sonnet', source: 'dispatched' }
     record.valuesByModel.opus = { effort: { value: 'high', source: 'dispatched' } }
+    // Guard: a dispatched selection is newer than lagging provider telemetry.
+    // Provider echoing a different model while a dispatch is pending is rejected.
+    expect(applyNativeChatReportedSessionOptions(record, { model: 'opus' })).toBe(false)
+    expect(record.model).toEqual({ value: 'sonnet', source: 'dispatched' })
+    expect(record.valuesByModel.opus).toEqual({ effort: { value: 'high', source: 'dispatched' } })
+  })
+
+  it('reported model change wins when no dispatch is in flight', () => {
+    const record = claudeRecord()
+    record.model = { value: 'sonnet', source: 'reported' }
+    record.valuesByModel.opus = { effort: { value: 'high', source: 'dispatched' } }
     expect(applyNativeChatReportedSessionOptions(record, { model: 'opus' })).toBe(true)
     expect(record.model).toEqual({ value: 'opus', source: 'reported' })
-    // A model change invalidates previously tracked values for the destination.
-    expect(record.valuesByModel.opus).toEqual({})
+    // Provider reported only the model; existing dispatched per-model options are preserved.
+    expect(record.valuesByModel.opus).toEqual({ effort: { value: 'high', source: 'dispatched' } })
   })
 
   it('promotes a dispatched guess the report confirms', () => {

@@ -126,14 +126,16 @@ describe('Claude terminal session option detection', () => {
     // The descriptor sits eight rows under the version, below the welcome art.
     expect(readClaudeSessionOptionsFromTerminalScreen(FRESH_SESSION_100_COLS)).toEqual({
       model: 'fable',
-      effort: 'high'
+      effort: 'high',
+      contextWindow: 'standard'
     })
   })
 
   it('reads a real 60-column frame that drops the version and wraps billing', () => {
     expect(readClaudeSessionOptionsFromTerminalScreen(FRESH_SESSION_60_COLS)).toEqual({
       model: 'fable',
-      effort: 'high'
+      effort: 'high',
+      contextWindow: 'standard'
     })
   })
 
@@ -248,7 +250,7 @@ describe('Claude terminal session option detection', () => {
         frame('Opus 4.8 with high effort · API Usage Billing'),
         DISCOVERED
       )
-    ).toEqual({ model: 'opus', effort: 'high' })
+    ).toEqual({ model: 'opus', effort: 'high', contextWindow: 'standard' })
   })
 
   it('still reports a custom model when the host list cannot name it', () => {
@@ -268,7 +270,8 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'opus',
-      effort: 'high'
+      effort: 'high',
+      contextWindow: '1m'
     })
   })
 
@@ -279,8 +282,9 @@ describe('Claude terminal session option detection', () => {
       '~/Documents/projects/orca'
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
-      model: 'claude-opus-4-8',
-      effort: 'high'
+      model: 'opus',
+      effort: 'high',
+      contextWindow: 'standard'
     })
   })
 
@@ -291,7 +295,8 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'sonnet',
-      effort: 'medium'
+      effort: 'medium',
+      contextWindow: 'standard'
     })
   })
 
@@ -311,7 +316,8 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'sonnet',
-      effort: 'medium'
+      effort: 'medium',
+      contextWindow: 'standard'
     })
   })
 
@@ -324,7 +330,8 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'opus',
-      effort: 'xhigh'
+      effort: 'xhigh',
+      contextWindow: '1m'
     })
   })
 

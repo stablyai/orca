@@ -8,7 +8,7 @@ import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution
 export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyId {
   async focusTerminal(
     handle: string,
-    options: { navigateHost?: boolean } = {}
+    options: { navigateHost?: boolean; viewMode?: 'terminal' | 'chat' } = {}
   ): Promise<RuntimeTerminalFocus> {
     const navigateHost = options.navigateHost !== false
     const livePtyIdentity = (): RuntimeTerminalFocus => {
@@ -79,7 +79,12 @@ export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyI
             ptyId: live.pty.ptyId,
             title: getLatestPtyTitle(live.pty),
             ...(live.pty.launchConfig
-              ? { launchConfig: copySleepingAgentLaunchConfig(live.pty.launchConfig) }
+              ? {
+                  launchConfig: {
+                    ...copySleepingAgentLaunchConfig(live.pty.launchConfig),
+                    ...(options.viewMode ? { viewMode: options.viewMode } : {})
+                  }
+                }
               : {}),
             ...(live.pty.launchToken ? { launchToken: live.pty.launchToken } : {}),
             ...(live.pty.launchAgent ? { launchAgent: live.pty.launchAgent } : {}),
