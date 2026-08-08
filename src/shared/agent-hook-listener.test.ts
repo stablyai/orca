@@ -171,6 +171,26 @@ describe('shared agent-hook-listener', () => {
     expect(event?.hookEventName).toBe('beforeSubmitPrompt')
   })
 
+  // Why: pins the allowance to exactly one leading U+FEFF, so nobody widens it into a trim.
+  it('still rejects a hook payload that is malformed once the BOM is removed', () => {
+    const bom = '\uFEFF'
+    const body = '{"hook_event_name":"beforeSubmitPrompt"}'
+    for (const payload of [
+      `${bom}${bom}${body}`,
+      `${bom}not json`,
+      ` ${bom}${body}`,
+      `{"hook_event_name"${bom}:"beforeSubmitPrompt"}`
+    ]) {
+      const event = normalizeHookPayload(
+        state,
+        'cursor',
+        { paneKey: PANE_KEY, payload },
+        'production'
+      )
+      expect(event).toBeNull()
+    }
+  })
+
   it('normalizes Gemini BeforeTool to working with tool fields', () => {
     const event = normalizeHookPayload(
       state,
