@@ -239,8 +239,14 @@
           "34a03a6565": "{{value0}} を最新の状態に保つ",
           "fa9299a66f": "新規ワークツリーは最新ですが、ローカル {{value0}} は {{value1}} {{value2}} 遅れています。AI の差分に最近のコミットが反映されない可能性があります。",
           "14bc053a47": "ローカル {{value0}} は更新されませんでした",
+          "localBaseRefRefreshFailedForWorktree": "「{{value1}}」のローカル {{value0}} は更新されませんでした",
           "4a18052018": "ローカル {{value0}} は {{value1}} より遅れています",
-          "903b51c2ed": "ワークスペースは {{value0}} から作成されましたが、{{value2}} のため Orca はローカル {{value1}} を fast-forward できませんでした",
+          "903b51c2ed": "ワークスペースは {{value0}} から作成されましたが、Orca はローカル {{value1}} を fast-forward できませんでした。{{value2}}",
+          "localBaseRefRefreshFailedDescriptionNamed": "ワークスペース「{{value0}}」は {{value1}} から作成されましたが、Orca はローカル {{value2}} を fast-forward できませんでした。{{value3}}",
+          "localBaseRefRefreshFailedDetailDirtyNamed": "{{value0}} のワークツリー（ローカル {{value1}} がチェックアウトされている場所）に未コミットの変更があります。コミット、stash、または破棄してから、ローカル {{value1}} を手動で更新してください。",
+          "localBaseRefRefreshFailedDetailDirty": "ローカル {{value0}} がチェックアウトされているワークツリーに未コミットの変更があります。コミット、stash、または破棄してから、ローカル {{value0}} を手動で更新してください。",
+          "localBaseRefRefreshFailedDetailNotFastForward": "ローカル {{value0}} が存在しないか、リモートのベースからクリーンに fast-forward できません。手動で更新する前に、ローカルにのみ存在するコミットがないか確認してください。",
+          "localBaseRefRefreshFailedDetailError": "ローカル {{value0}} の更新中に Git がエラーを返しました。ロックされた refs や異常なワークツリー状態がないか確認し、ローカル {{value0}} を手動で更新してください。",
           "0216895fb5": "ブランチの削除に失敗しました",
           "19db0085fb": "ローカルブランチが削除されました",
           "2b0afc7f14": "ローカル {{value0}} を最新の状態に維持できませんでした",
@@ -349,7 +355,8 @@
               "8d6eedf97e": "Orca CLI を PATH に登録できませんでした。",
               "0f116999f1": "セットアップ前にシェルを再起動するか、Orca CLI ディレクトリを PATH に追加します。",
               "15cbedc3e3": "Agent スキルのセットアップを実行する前に、Orca CLI をインストールしてください。",
-              "windowsPathUnknown": "Orca は Windows のユーザー PATH を確認できませんでした"
+              "windowsPathUnknown": "Orca は Windows のユーザー PATH を確認できませんでした",
+              "refreshCliRegistration": "CLI の登録状態を更新してから、もう一度お試しください。"
             }
           }
         }
@@ -560,6 +567,9 @@
             "0b01ff98d2": "ポート",
             "7d732521ec": "コメント"
           }
+        },
+        "activation": {
+          "cannotOpenFolderWorkspace": "フォルダーワークスペースを開けません"
         }
       },
       "folderWorkspacePathStatus": {
@@ -1972,8 +1982,6 @@
         "556e7232ca": "現在",
         "684e8d7bc2": "最近のワークツリーと開いているタブを収集します。",
         "ff908adfe9": "ジャンプターゲットを読み込み中",
-        "1ebe225fee": "ワークツリー、設定、タブ、操作を検索します…",
-        "4e4ff044d5": "ワークツリー、設定、タブ、操作を検索する",
         "4ee378034d": "移動先…",
         "f7fda8d562": "まず、ワークツリーを作成するか、Orca でタブを開きます。",
         "1628fd7dfa": "アクティブなワークツリー、設定、操作、または開いているタブがありません",
@@ -2001,7 +2009,10 @@
         "projectsGroupsHeader": "プロジェクトとグループ",
         "projectBadge": "プロジェクト",
         "repoGroupBadge": "リポジトリグループ",
-        "pluginCommandFailed": "プラグインのコマンドを実行できませんでした。"
+        "pluginCommandFailed": "プラグインのコマンドを実行できませんでした。",
+        "27f10cca63": "チャット、ターミナル、ワークツリー、設定、操作を検索します…",
+        "2770f02910": "チャット、ターミナル、ワークツリー、設定、操作を検索します",
+        "recentChatsTerminalsHeader": "最近のチャットとターミナル"
       },
       "github": {
         "pr": {
@@ -2976,8 +2987,7 @@
             "d62d63b807": "ファイルの作成",
             "25dc1cd653": "ファイルを開く",
             "7cdf8ee0c8": "URLを開く",
-            "b27864279e": "Agent を起動",
-            "39676a184c": "任意のファイル、URL、Agent などを開きます…"
+            "b27864279e": "Agent を起動"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "コマンド",
@@ -3011,7 +3021,6 @@
                 "classifier": {
                   "42e6262ae9": "利用可能な操作はありません。",
                   "097a982ee0": "ファイルを読み込み中…",
-                  "5a9c83c04b": "任意のファイル、URL、Agent などを開きます…",
                   "90eb94dc48": "http:// または https:// URL を入力します。",
                   "5553b283ce": "URL またはファイルパスを入力します。",
                   "queryTooLarge": "検索テキストが大きすぎます。",
@@ -3174,7 +3183,12 @@
             "runtime_disconnect_failed": "切断に失敗しました",
             "runtime_reconnecting": "再接続中",
             "runtime_last_close_reason": "クローズ: {{value0}}",
-            "runtime_reconnect_attempt": "試行 {{value0}}"
+            "runtime_reconnect_attempt": "試行 {{value0}}",
+            "connectedHostCount_one": "{{count}} 台のホスト",
+            "connectedHostCount_other": "{{count}} 台のホスト",
+            "connecting": "接続中…",
+            "workspaceConflict": "ワークスペースの競合",
+            "workspaceSyncError": "ワークスペースの同期エラー"
           },
           "StatusBar": {
             "9659e38343": "ポート",
@@ -3234,7 +3248,8 @@
             "antigravityUsage": "Antigravity の使用状況",
             "antigravityUsageDetails": "Antigravity の使用状況詳細を開く",
             "grokUsageAria": "Grok の使用状況詳細を開く",
-            "grokUsageMenu": "Grok の使用状況"
+            "grokUsageMenu": "Grok の使用状況",
+            "floatingTerminalNewActivity": "{{label}}、新規アクティビティ"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -3443,6 +3458,21 @@
               "metric": {
                 "workingSetDescription": "合計ワーキングセット(WS)。共有ページが複数のプロセスに表示されることがあります。",
                 "rssDescription": "合計レジデントセットサイズ(RSS)。共有またはエイリアスされたページが複数のプロセスに表示されることがあります。"
+              }
+            },
+            "manager": {
+              "terminal": {
+                "copy": {
+                  "terminalSessionCount_one": "{{count}} 件のターミナルセッション",
+                  "terminalSessionCount_other": "{{count}} 件のターミナルセッション",
+                  "memoryUnavailable": "メモリ情報を取得できません",
+                  "tooltipSummary": "リソースマネージャー - {{memory}} - {{sessions}}",
+                  "spaceScanReady": "容量スキャンの準備完了",
+                  "sessionsGroupedByWorkspace": "ターミナルセッションはワークスペースごとにグループ化されます。",
+                  "noTerminalSessions": "ターミナルセッションはまだありません。",
+                  "ariaLabel": "リソースマネージャー、{{sessions}}",
+                  "ariaLabelWithSpaceScan": "リソースマネージャー、{{sessions}}、{{spaceScan}}"
+                }
               }
             }
           },
@@ -5609,7 +5639,8 @@
           "f00d6aa9b5": "このマシンでは WSL を利用できません。",
           "7c776ff9d8": "wsl",
           "fc0fcf72fd": "スキルセットアップ前に WSL シェルコマンドを登録してください。",
-          "windowsPathUnknown": "WSL のシェルコマンド PATH を確認できませんでした"
+          "windowsPathUnknown": "WSL のシェルコマンド PATH を確認できませんでした",
+          "refreshCliRegistration": "CLI の登録状態を更新してから、もう一度お試しください。"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "ソース管理 AI をカスタマイズしていないリポジトリによって使用されます。",
@@ -5988,6 +6019,11 @@
           "3d172725cc": "なし",
           "1f32ba27a6": "カスタム",
           "a182c5125e": "Git のユーザー名",
+          "sourceControlGroupOrderTitle": "ソース管理のグループ順序",
+          "sourceControlGroupOrderDescription": "ソース管理で「変更」「ステージ済みの変更」「未追跡ファイル」のどれを先に表示するかを選択します。",
+          "changesFirst": "変更を先頭",
+          "stagedFirst": "ステージ済みを先頭",
+          "untrackedFirst": "未追跡を先頭",
           "compareAgainstUpstreamTitle": "既定の比較ベース",
           "compareAgainstUpstreamDescription": "ソース管理がコミット済み変更の比較に既定で使うベースを選択します。ブランチの upstream は現在のブランチに自動的に追従し、upstream がない場合はリポジトリの既定ブランチにフォールバックします。比較ベースは各ワークツリーの Git パネルからワークツリーごとに変更できます。Pull Request やリベースの対象は変更されません。",
           "compareBaseRepositoryDefault": "リポジトリ既定",
@@ -8253,7 +8289,14 @@
             "f83c8937c4": "ブランチの命名",
             "5ecd91c5ef": "ワークツリーの作成時にブランチ名に追加されるプレフィックス。",
             "68bd65fdb8": "ブランチプレフィックス",
+            "sourceControlGroupOrderTitle": "ソース管理のグループ順序",
+            "sourceControlGroupOrderDescription": "ソース管理で「変更」「ステージ済みの変更」「未追跡ファイル」のどれを先に表示するかを選択します。",
+            "groupOrder": "グループ順序",
+            "changesFirst": "変更を先頭",
+            "stagedFirst": "ステージ済みを先頭",
+            "untrackedFirst": "未追跡を先頭",
             "sourceControl": "ソース管理",
+            "gitChanges": "git の変更",
             "compareAgainstUpstreamTitle": "既定の比較ベース",
             "compareAgainstUpstreamDescription": "ソース管理がコミット済み変更の比較に既定で使うベースを選択します。ブランチの upstream は現在のブランチに自動的に追従し、upstream がない場合はリポジトリの既定ブランチにフォールバックします。比較ベースは各ワークツリーの Git パネルからワークツリーごとに変更できます。Pull Request やリベースの対象は変更されません。",
             "compareBase": "比較ベース",
@@ -11126,7 +11169,9 @@
             "openSupportedWorkspace": "セッションを再開する前に、ワークスペースを開いてください。",
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースを開いてください。",
             "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。",
-            "prepareSessionResumeFailed": "このセッションを再開用に準備できませんでした。"
+            "prepareSessionResumeFailed": "このセッションを再開用に準備できませんでした。",
+            "sessionDeleted": "セッションを削除しました",
+            "sessionDeleteFailed": "セッションを削除できませんでした"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "セッションをスキャンしています",
@@ -11258,7 +11303,17 @@
             "jumpToWorktree": "ワークツリーにジャンプ",
             "recoverableBadge": "未保存",
             "subagentCountSingular": "1 件のサブ Agent",
-            "subagentCountPlural": "{{value0}} 件のサブ Agent"
+            "subagentCountPlural": "{{value0}} 件のサブ Agent",
+            "delete": "削除",
+            "deleteReasonNonLocalHost": "このデバイス上のセッションのみ削除できます。",
+            "deleteReasonSyntheticPath": "このセッションは Orca では削除できません。",
+            "deleteReasonUnsupportedAgent": "{{value0}} のセッションは Orca では削除できません。",
+            "deleteReasonSessionLive": "このセッションはまだ実行中です — 削除する前に完了を待ってください。"
+          },
+          "AiVaultSessionDeleteDialog": {
+            "title": "このセッションを削除しますか?",
+            "description": "「{{value0}}」を削除します。削除すると、{{value1}} 自体のコマンドラインからも再開できなくなります。",
+            "confirm": "削除"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "ファイルを検索",
@@ -14714,7 +14769,7 @@
       "continueButton": "CLI なしで続行",
       "title": "Orca CLI を利用できません",
       "message": "Orca はローカルコマンドの通信経路を開始できませんでした。",
-      "detail": "Orca will continue to work, but commands such as orca status, orca terminal, and orchestration are unavailable for this session.\n\n{{guidance}}\n\nCause: {{cause}}",
+      "detail": "Orca は引き続き使用できますが、このセッションでは orca status や orca terminal などのコマンドとオーケストレーションを利用できません。\n\n{{guidance}}\n\n原因: {{cause}}",
       "guidance": {
         "permissionDenied": "Orca はランタイムファイルを書き込めませんでした。Orca のデータフォルダーの権限を確認してから、再起動してください。",
         "storageUnavailable": "ディスクの空き容量がないか、読み取り専用になっている可能性があります。空き容量を確保してから、Orca を再起動してください。",

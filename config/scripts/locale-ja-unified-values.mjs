@@ -240,5 +240,7 @@ export const JA_UNIFIED_VALUES = {
   agent: 'Agent',
   '{{value0}} workspace{{value1}} connected':
     '{{value0}} ワークスペース{{value1}} が接続されました',
-  Plugins: 'プラグイン'
+  Plugins: 'プラグイン',
+  'Orca will continue to work, but commands such as orca status, orca terminal, and orchestration are unavailable for this session.\n\n{{guidance}}\n\nCause: {{cause}}':
+    'Orca は引き続き使用できますが、このセッションでは orca status や orca terminal などのコマンドとオーケストレーションを利用できません。\n\n{{guidance}}\n\n原因: {{cause}}'
 }
