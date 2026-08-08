@@ -137,6 +137,66 @@ describe('lifecycle reconciliation', () => {
       priority: 'high',
       subject: 'Rejected worker_done: Done'
     })
+    // Why: payload.dispatchId routes the bounce to dispatch:<id>; otherwise the
+    // terminal handle mailbox is the no-dispatch check fallback (#13199).
+    let bounceTo = 'term_worker'
+    try {
+      const parsed = payload ? (JSON.parse(payload) as { dispatchId?: unknown }) : null
+      if (parsed && typeof parsed.dispatchId === 'string' && parsed.dispatchId.trim()) {
+        bounceTo = `dispatch:${parsed.dispatchId.trim()}`
+      }
+    } catch {
+      // invalid payload keeps the terminal handle
+    }
+    const bounce = db
+      .getAllMessages(bounceTo, 10)
+      .find((entry) => entry.subject.startsWith('Rejected worker_done:'))
+    expect(bounce).toMatchObject({
+      from_handle: 'orca',
+      to_handle: bounceTo,
+      type: 'status',
+      priority: 'high'
+    })
+    expect(JSON.parse(bounce?.payload ?? '{}')).toMatchObject({
+      lifecycleRejection: true,
+      rejectedMessageId: message.id,
+      code
+    })
+  })
+
+  it('bounces supervised lifecycle rejections to the dispatch mailbox', () => {
+    // Why: check/check --wait for active workers only reads dispatch:<id> (#13199).
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker')
+    const message = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        outcome: 'maybe'
+      })
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
+      action: 'rejected',
+      code: 'invalid_outcome'
+    })
+    const bounce = db
+      .getAllMessages(`dispatch:${dispatch.id}`, 10)
+      .find((entry) => entry.subject.startsWith('Rejected worker_done:'))
+    expect(bounce).toMatchObject({
+      from_handle: 'orca',
+      to_handle: `dispatch:${dispatch.id}`,
+      type: 'status',
+      priority: 'high'
+    })
+    expect(db.getAllMessages('term_worker', 10).some((entry) => entry.type === 'status')).toBe(
+      false
+    )
   })
 
   it('completes worker_done from the same leaf after a pane break-out changed the tab half', () => {

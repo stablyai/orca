@@ -252,6 +252,8 @@ orca orchestration send --type worker_done --subject "<status>" --body "<what ch
 # On failure, use --outcome failed; never encode failure only in prose.
 ```
 
+If Orca rejects a lifecycle report (wrong dispatch, invalid outcome, authority mismatch), the coordinator inbox shows a `Rejected …` subject **and** the worker receives a high-priority `status` bounce on the Dispatch mailbox (`dispatch:<id>` when supervised, otherwise the terminal handle). A failed `orca orchestration send` also surfaces `Rejected…` on stderr — do not assume silence means acceptance.
+
 A worker question defaults to its owning Run. Timeout leaves it pending:
 
 ```bash

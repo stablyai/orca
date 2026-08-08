@@ -3480,7 +3480,50 @@ export class OrchestrationDb {
          WHERE id = ?`
       )
       .run(`Rejected ${message.type}: ${message.subject}`, body, payload, messageId)
+    // Why: recipient inbox alone leaves the sender blind to bounces (#13199). Mirror a
+    // high-priority status to the worker mailbox check actually reads (dispatch:<id>
+    // when supervised, else the terminal handle).
+    if (message.from_handle && message.from_handle !== message.to_handle) {
+      this.insertMessage({
+        from: 'orca',
+        to: this.resolveLifecycleRejectionBounceTo(message),
+        subject: `Rejected ${message.type}: ${message.subject}`,
+        body: `Orca rejected your ${message.type}: ${reason}`,
+        type: 'status',
+        priority: 'high',
+        payload: JSON.stringify({
+          lifecycleRejection: true,
+          rejectedMessageId: messageId,
+          rejectedType: message.type,
+          code,
+          reason
+        }),
+        runId: message.run_id,
+        deliveryContract: message.delivery_contract ?? 'current_delivery'
+      })
+    }
     return this.getMessageById(messageId)
+  }
+
+  /** Prefer dispatch:<id> so supervised workers see bounces on check/check --wait. */
+  private resolveLifecycleRejectionBounceTo(message: MessageRow): string {
+    try {
+      const parsed = message.payload
+        ? (JSON.parse(message.payload) as { dispatchId?: unknown })
+        : null
+      const dispatchId =
+        parsed && typeof parsed.dispatchId === 'string' ? parsed.dispatchId.trim() : ''
+      if (dispatchId) {
+        return `dispatch:${dispatchId}`
+      }
+    } catch {
+      // invalid JSON payload — fall through
+    }
+    const active = this.getActiveDispatchForIdentity(message.from_handle)
+    if (active?.id) {
+      return `dispatch:${active.id}`
+    }
+    return message.from_handle
   }
 
   // Why: delivered_at IS NULL filter — push-on-idle delivers each row at most once; read (set only by check) wouldn't prevent replay.
