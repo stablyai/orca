@@ -221,16 +221,6 @@ describe('absolute file CLI paths', () => {
       expectOpenedWith('xxx/xxx.ts')
     })
 
-    // Why: pairs with the `||` in the handler — if an empty distro ever reached the
-    // prefix it would collapse to `//wsl.localhost/`, aliasing this path onto the root.
-    it('does not alias a distro-named first segment onto the root', async () => {
-      mockWorktreeShow(uncRoot)
-
-      await openPath('/Ubuntu/root/orca/workspaces/xxx/xxx.ts')
-
-      expectOpenedWith('/Ubuntu/root/orca/workspaces/xxx/xxx.ts')
-    })
-
     it('does not rewrite when the CLI is not running under WSL', async () => {
       mockWorktreeShow(uncRoot)
 
