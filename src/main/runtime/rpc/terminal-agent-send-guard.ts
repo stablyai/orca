@@ -33,6 +33,12 @@ export async function assertTerminalAgentSendable(
     }
     const remainingMs = deadline - Date.now()
     if (remainingMs <= 0) {
+      // Why: pre-v11 daemon / transport inspect returns unavailable:true while
+      // getForegroundProcess is still null — same as "no agent" until we split
+      // the guard error so callers can offer "send anyway" (#12946).
+      if (await options.runtime.isTerminalForegroundStatusUnavailable?.(options.handle)) {
+        throw new Error('terminal_guard_status_unavailable')
+      }
       throw new Error('terminal_guard_no_agent')
     }
     // Why: title and foreground caches refresh asynchronously; require fresh

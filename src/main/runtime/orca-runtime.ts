@@ -31165,6 +31165,19 @@ export class OrcaRuntimeService {
     return this.titleObservationSequence
   }
 
+  /**
+   * True when the pane is live but foreground membership cannot be read
+   * (pre-v11 daemon, transport throw). Distinct from "no agent" (#12946).
+   */
+  async isTerminalForegroundStatusUnavailable(handle: string): Promise<boolean> {
+    try {
+      const inspection = await this.inspectTerminalProcess(handle)
+      return inspection.unavailable === true
+    } catch {
+      return false
+    }
+  }
+
   // Why: title is the tightest agent-presence signal, but a Claude management title is negative evidence for task activity.
   async isTerminalRunningAgent(handle: string): Promise<boolean> {
     try {
