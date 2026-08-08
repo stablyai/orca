@@ -159,10 +159,12 @@ up a second runtime.
 `6768` is the default WebSocket port for the **packaged desktop app**. If you
 also run `orca serve --port 6768` on the same host (common: desktop for local
 work, headless for remote access), the server fails to bind, walks candidate
-ports, and may land on an **OS-assigned random port** that changes every
-restart. The ready block still prints a valid-looking pairing URL — on that
-ephemeral port — so a systemd unit that hard-codes `6768` silently goes stale
-after the first collision.
+ports, and falls back to an OS-assigned port. For a non-zero `--port` pin,
+Orca **persists** that fallback (STA-1511) so later restarts prefer the same
+fallback while the pin stays busy — not a new random port every launch. The
+ready block still prints a pairing URL on the **actual** bound port, so
+clients, firewalls, health checks, and a systemd unit that hard-code `6768`
+go stale after the first collision even though the service itself starts.
 
 Prefer a dedicated port that the desktop app will not take, for example
 `6769`, and put the same value in both `ExecStart` and any firewall rules:
@@ -173,9 +175,9 @@ LIBGL_ALWAYS_SOFTWARE=1 /opt/orca/orca-linux.AppImage serve \
   --pairing-address 100.64.1.20
 ```
 
-If you must keep `--port 0` (or lose the bind race), read the bound port from
-the ready block / `--json` line every start and update clients; do not assume
-the advertised port is stable across restarts.
+`--port 0` does **not** persist a fallback; each start can bind a new port.
+Read the bound port from the ready block / `--json` line every start and
+update clients; do not assume the advertised port is stable across restarts.
 
 ### Desktop client (macOS / Linux / Windows)
 
