@@ -222,6 +222,51 @@ describe('OrchestrationDb worker Dispatch state', () => {
     expect(d.getTask(task.id)?.status).toBe('completed')
   })
 
+  // Why: #13005 — low-level orchestration.dispatch never inserts worker_dispatches; release
+  // verbs must still fence the context so the assignee terminal can be reused.
+  it('abandons and stops a context-only Dispatch without a worker_dispatches row', () => {
+    const d = createDb()
+    const abandonTask = d.createTask({ spec: 'mail-only abandon' })
+    const abandonDispatch = d.createDispatchContext(
+      abandonTask.id,
+      'term_mail_abandon',
+      'tab_mail:leaf_abandon'
+    )
+    expect(d.getWorkerDispatch(abandonDispatch.id)).toBeUndefined()
+
+    expect(d.abandonWorkerDispatch(abandonDispatch.id)).toMatchObject({
+      disposition: 'context_only',
+      state: 'abandoned',
+      alreadySettled: false,
+      releasedCurrentTask: true
+    })
+    expect(d.getDispatchContextById(abandonDispatch.id)).toMatchObject({
+      status: 'failed',
+      last_failure: 'abandoned'
+    })
+    expect(d.getTask(abandonTask.id)?.status).toBe('blocked')
+    expect(d.getActiveDispatchForIdentity('term_mail_abandon')).toBeUndefined()
+
+    const stopTask = d.createTask({ spec: 'mail-only stop' })
+    const stopDispatch = d.createDispatchContext(
+      stopTask.id,
+      'term_mail_stop',
+      'tab_mail:leaf_stop'
+    )
+    expect(d.beginWorkerStop(stopDispatch.id)).toMatchObject({
+      disposition: 'context_only',
+      state: 'stopped',
+      alreadySettled: false,
+      releasedCurrentTask: true
+    })
+    expect(d.getDispatchContextById(stopDispatch.id)).toMatchObject({
+      status: 'failed',
+      last_failure: 'stopped'
+    })
+    expect(d.getTask(stopTask.id)?.status).toBe('blocked')
+    expect(d.getActiveDispatchForIdentity('term_mail_stop')).toBeUndefined()
+  })
+
   it('lets the stop fence win before a late worker completion', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'race' })
