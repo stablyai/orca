@@ -4,7 +4,11 @@ import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
-import { isPathInsideOrEqual } from '../shared/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  isWindowsAbsolutePathLike,
+  normalizeRuntimePathSeparators
+} from '../shared/cross-platform-path'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
@@ -27,6 +31,15 @@ export function buildCurrentWorktreeSelector(cwd: string): string {
 export function normalizeWorktreeSelector(selector: string, cwd: string): string {
   if (selector === 'active' || selector === 'current') {
     return buildCurrentWorktreeSelector(cwd)
+  }
+  // Why: PowerShell / Resolve-Path emit backslashes; registered worktree paths use
+  // forward slashes. Fold only Windows-shaped path: selectors so POSIX filenames
+  // that contain `\` stay literal (#12303).
+  if (selector.startsWith('path:')) {
+    const pathPart = selector.slice('path:'.length)
+    if (isWindowsAbsolutePathLike(pathPart)) {
+      return `path:${normalizeRuntimePathSeparators(pathPart)}`
+    }
   }
   return selector
 }
