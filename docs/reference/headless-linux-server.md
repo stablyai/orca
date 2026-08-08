@@ -786,8 +786,10 @@ orca skills get computer-use --full
 orca skills get orca-linear --full
 ```
 
-Guides are version-matched to the CLI; after an Orca upgrade, re-read or
-re-install so agents do not keep an older guide.
+Guides are version-matched to the CLI; after an Orca upgrade, run
+`orca skills update` (or reinstall) so agent-side copies do not keep an older
+guide. `orca skills get` only shows the CLI's bundled text — it does not refresh
+installed agent directories.
 
 ### Install on the serve host
 
@@ -840,14 +842,19 @@ orca skills install --skill orca-linear --agent claude-code,codex
 orca skills install --skill computer-use --agent claude-code,codex
 ```
 
-After install, verify the **agent-side** skill directory (not `orca skills get` —
-that only dumps the CLI's bundled guide and succeeds with no install):
+After install, verify the **agent-side** skill directories that `npx skills`
+wrote. Do **not** use `orca skills get` as install proof — it only dumps the
+CLI's bundled guide and succeeds even when nothing is installed.
 
 ```bash
-# Install command exit 0 + skill path printed by `npx skills` is the install proof.
-# From an agent session on this host: "load the orchestration skill" / skills list.
-# Optional: confirm the guide content you will reinstall after upgrades:
-orca skills get orchestration --full | head
+# Global install targets (exact set depends on --agent):
+ls -la ~/.agents/skills                  # universal / shared (always when universal is a target)
+ls -la ~/.claude/skills 2>/dev/null      # claude-code
+ls -la ~/.codex/skills 2>/dev/null       # codex
+# Expect a directory per skill (e.g. orchestration/ with SKILL.md inside).
+# Project-local (--local): .agents/skills under the project cwd instead of ~/.agents.
+# Install exit 0 + paths printed by npx skills is also proof; from an agent session
+# on this host: "load the orchestration skill" / the agent's skills list.
 ```
 
 ### Integrations and secrets on a serve host
@@ -857,9 +864,9 @@ markdown and not in the repo:
 
 | Integration | Typical host setup | Skill |
 | --- | --- | --- |
-| GitHub / `gh` | Install `gh`, run `gh auth login` (or set `GH_TOKEN` for non-interactive) as the same user that runs agents; verify with `gh auth status` | `orca-cli`, `orchestration` |
-| Linear | Connect Linear against **this host's** Orca runtime from a paired desktop/client (tokens live under `~/.orca` via safeStorage — there is no `orca linear connect` CLI and no skill-documented env secret path). Keep tokens out of git/journals. Verify while serve is running: `orca linear team list --workspace all --json` | `orca-linear` (legacy: `linear-tickets`) |
-| Computer use | Linux provider is an AT-SPI bridge (`python3-gi` + Atspi), not macOS-style accessibility grants. Needs an active desktop session (`XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS`) for the serve user — Xvfb for Electron startup alone is not enough, and pure no-desktop VPS hosts often cannot run it. Probe: `orca computer capabilities --json` | `computer-use` |
+| GitHub / `gh` | Install `gh`, run `gh auth login` (or set `GH_TOKEN` for non-interactive) as the same user who runs agents; verify with `gh auth status` | `orca-cli`, `orchestration` |
+| Linear | Connect Linear on **this host's** Orca runtime (Settings → Linear on a desktop once, or the runtime `linear.connect` RPC/IPC from a paired client). Tokens are stored under `~/.orca` (safeStorage) — there is **no** `orca linear connect` CLI and **no** skill-documented host env/secret path. Keep tokens out of git/journals. Verify while serve is running: `orca linear team list --workspace all --json` | `orca-linear` (legacy: `linear-tickets`) |
+| Computer use | Linux provider is an AT-SPI bridge, not macOS-style accessibility grants. Install `python3-gi`, `gir1.2-atspi-2.0`, and `at-spi2-core`. The serve user needs an active session bus (`XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS`) and a real AT-SPI-capable desktop — the Xvfb used only for Electron/`DISPLAY` startup is not enough. Pure no-desktop VPS hosts often cannot run computer-use. Probe: `orca computer capabilities --json` | `computer-use` |
 
 Prefer environment variables or a secret manager owned by the serve user. Do not
 put tokens in `orca-data.json` copies you share, in worktree files agents can
@@ -896,7 +903,8 @@ CLI's current names; agent skill trees can lag until update runs.
 
 ### Where the command runs
 
-Both install and update install onto the machine that runs them. In an Orca SSH
+Both commands operate on the machine that runs them. `install` adds skills;
+`update` refreshes only skills that are already installed. In an Orca SSH
 workspace or the WSL bridge the `orca` shim forwards commands to the Orca host,
 so they refuse to run there and print the command to run on the machine you want.
 For `orca serve`, that is almost always the server itself (the same user as
