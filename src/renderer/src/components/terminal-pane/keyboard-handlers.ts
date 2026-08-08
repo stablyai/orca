@@ -6,13 +6,9 @@ import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { safeFind } from '../terminal-search-safe-find'
-import {
-  isImeExemptTerminalChord,
-  resolveTerminalShortcutAction
-} from './terminal-shortcut-policy'
+import { isImeExemptTerminalChord, resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
-import { createTerminalImeChordRedispatchLedger } from './terminal-ime-chord-redispatch'
 import { installTerminalNativeInputListeners } from './terminal-native-input-listeners'
 import {
   keybindingMatchesAction,
@@ -48,13 +44,40 @@ import {
 } from '@/lib/pane-manager/terminal-scroll-intent'
 
 /**
- * True when a live composition owns the keydown outright. A chord over an arrow or
- * Backspace/Delete is excluded: the IME never claims those, and dropping them makes
- * Cmd+← do nothing mid-syllable (#12871). xterm queues the resulting bytes behind the
- * preedit, so letting them through cannot reorder them ahead of the commit.
+ * True when a live composition owns the event outright. A modifier chord over an arrow or
+ * Backspace/Delete is excluded so the terminal pane can resolve one from the key's *release*
+ * — see `isSwallowedImeChordRelease`. On a keydown the caller must still yield to the IME,
+ * because at that moment the two cases are indistinguishable (#12871).
  */
-function isImeOwnedTerminalKeyEvent(event: Parameters<typeof isImeExemptTerminalChord>[0]): boolean {
+function isImeOwnedTerminalKeyEvent(
+  event: Parameters<typeof isImeExemptTerminalChord>[0]
+): boolean {
   return isImeOwnedKeyboardEvent(event) && !isImeExemptTerminalChord(event)
+}
+
+/**
+ * Whether a chord the IME took on keydown must be sent from this release instead.
+ *
+ * Recorded on stock macOS, and the two input sources answer in opposite ways. Both marked
+ * keydowns are identical (`code='ArrowLeft'`, `keyCode=229`, `isComposing=true`), so nothing
+ * can be decided when the key goes down. By the time it comes up they have separated:
+ *
+ *   - Korean 2-Set committed the syllable and ended the composition, then the platform
+ *     replays the chord unmarked. `isComposing` is false at release, and that replay resolves
+ *     on its own — acting here too would send it twice, which for `Option+←` is two words.
+ *   - Japanese conversion swallowed the chord whole: no commit, no replay, and the
+ *     composition is still live at release. Nothing else will ever deliver it.
+ *
+ * So a still-composing release means the chord has no other route to the shell. xterm queues
+ * the bytes behind the preedit and flushes them on commit, so sending them cannot reorder
+ * them ahead of the text being composed.
+ *
+ * TODO: one release is one action, so holding a swallowed chord down repeats nothing. Acting
+ * on the auto-repeat instead would have to run before the two cases separate, so this waits
+ * for a trace showing a user holds a chord mid-preedit.
+ */
+function isSwallowedImeChordRelease(event: KeyboardEvent): boolean {
+  return isImeOwnedKeyboardEvent(event) && isImeExemptTerminalChord(event)
 }
 
 export function resolveTerminalKeyboardShortcutAction(
@@ -285,7 +308,6 @@ export function useTerminalKeyboardShortcuts({
     // location from its own keydown event and clear it on keyup.
     let optionKeyLocation = 0
     const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
-    const imeChordRedispatchLedger = createTerminalImeChordRedispatchLedger()
     const disposeNativeInputListeners = installTerminalNativeInputListeners(
       window,
       nativeOnlyShortcutTracker,
@@ -387,14 +409,9 @@ export function useTerminalKeyboardShortcuts({
       if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
         return
       }
-      if (isImeOwnedTerminalKeyEvent(e)) {
-        return
-      }
-      // Korean's input source replays the chord unmarked after committing; it was already
-      // sent from the marked keydown, so let the replay pass without acting on it again.
-      if (imeChordRedispatchLedger.isRedispatchOfSentChord(e)) {
-        e.preventDefault()
-        e.stopImmediatePropagation()
+      // Every IME-owned keydown yields, chord or not. A chord the IME then swallows is
+      // recovered from its release; one it merely delays arrives as an unmarked replay.
+      if (isImeOwnedKeyboardEvent(e)) {
         return
       }
       // Why: replace stale state only for this physical key so rollover cannot
@@ -444,13 +461,16 @@ export function useTerminalKeyboardShortcuts({
       if (!action) {
         return
       }
-      // Claim before acting, and for every action rather than the byte path alone: a chord
-      // remapped onto one of these keys resolves to a pane command, and the replay would run
-      // it a second time — two panes closed from one press.
-      if (isImeOwnedKeyboardEvent(e)) {
-        imeChordRedispatchLedger.claimSentChord(e)
-      }
+      runShortcutAction(e, action, manager)
+    }
 
+    // Shared by the keydown path and the swallowed-chord release below, so a chord recovered
+    // from a release runs the same action a press would — including remaps onto pane commands.
+    function runShortcutAction(
+      e: KeyboardEvent,
+      action: NonNullable<ReturnType<typeof resolveShortcutEvent>>,
+      manager: PaneManager
+    ): void {
       if (action.type === 'switchInputSource') {
         // Why: the OS must receive its default action, while xterm must receive
         // none of the keydown, keypress, or keyup sequence.
@@ -666,27 +686,36 @@ export function useTerminalKeyboardShortcuts({
       }
     }
 
-    const onImeChordKeyUp = (e: KeyboardEvent): void => {
-      // Scoped like onKeyDown: another pane's release must not retire this pane's carry.
+    const onSwallowedImeChordRelease = (e: KeyboardEvent): void => {
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
       const keyboardScope = keyboardScopeRef.current
       if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
         return
       }
-      imeChordRedispatchLedger.onKeyUp(e)
-    }
-    const onImeChordBlur = (): void => {
-      imeChordRedispatchLedger.reset()
+      if (!isSwallowedImeChordRelease(e)) {
+        return
+      }
+      if (isEditableTarget(e.target)) {
+        return
+      }
+      const action = resolveShortcutEvent(e)
+      // A native-only chord arms from its press so the OS still sees the gesture; arming it
+      // from a release would leave the tracker holding a key that is already up.
+      if (!action || action.type === 'switchInputSource') {
+        return
+      }
+      runShortcutAction(e, action, manager)
     }
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
-    window.addEventListener('keyup', onImeChordKeyUp, { capture: true })
-    window.addEventListener('blur', onImeChordBlur)
+    window.addEventListener('keyup', onSwallowedImeChordRelease, { capture: true })
     return () => {
       disposeNativeInputListeners()
-      imeChordRedispatchLedger.reset()
       window.removeEventListener('keydown', onKeyDown, { capture: true })
-      window.removeEventListener('keyup', onImeChordKeyUp, { capture: true })
-      window.removeEventListener('blur', onImeChordBlur)
+      window.removeEventListener('keyup', onSwallowedImeChordRelease, { capture: true })
     }
   }, [
     isActive,

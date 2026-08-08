@@ -22,9 +22,10 @@ export type MacOptionAsAlt = 'true' | 'false' | 'left' | 'right'
 
 // Why: a live composition owns every keydown, but a Japanese conversion swallows a modifier
 // chord over one of these keys outright — no commit, no platform replay, nothing reaching the
-// shell (#12871). Exempting them costs a double firing on input sources that DO replay, which
-// terminal-ime-chord-redispatch.ts retires. Read `code`, not `key`: Windows reports an
-// IME-consumed key as `key: 'Process'` (#12171, #13033).
+// shell (#12871). Exempting them lets the terminal pane recover the chord from the key's
+// release, which is the first moment a swallowed chord is distinguishable from a delayed one
+// (keyboard-handlers.ts, `isSwallowedImeChordRelease`). Read `code`, not `key`: Windows
+// reports an IME-consumed key as `key: 'Process'` (#12171, #13033).
 //
 // ArrowUp/ArrowDown are left out because no trace covers them, not because the reasoning
 // stops there — Cmd+↑/↓ scrolls the viewport and writes no bytes, so it is the safer half.
@@ -40,14 +41,13 @@ function physicalChordKey(event: TerminalShortcutEvent): string {
 }
 
 /**
- * True when an IME-owned keydown is nonetheless an Orca terminal chord. A lone modifier
- * is excluded, so a mode-switch gesture such as composing Ctrl+Space never reaches the
- * shortcut policy, and so is Shift, which Japanese conversion binds to resize a segment.
+ * True when an IME-owned event is nonetheless an Orca terminal chord. A lone modifier is
+ * excluded, so a mode-switch gesture such as composing Ctrl+Space never reaches the shortcut
+ * policy, and so is Shift, which Japanese conversion binds to resize a segment.
  */
 export function isImeExemptTerminalChord(event: TerminalShortcutEvent): boolean {
   return (
-    IME_EXEMPT_CHORD_CODES.has(event.code ?? '') &&
-    (event.metaKey || event.ctrlKey || event.altKey)
+    IME_EXEMPT_CHORD_CODES.has(event.code ?? '') && (event.metaKey || event.ctrlKey || event.altKey)
   )
 }
 
@@ -149,8 +149,22 @@ export function resolveTerminalShortcutAction(
   // macOS has no non-Latin physical fallback (shared/keybindings.ts). Without substituting the
   // physical key a user's remap onto Cmd+Backspace would miss and fall through to the built-in
   // kill-line byte — silence before the IME exemption, the wrong action after it.
+  //
+  // Field by field rather than a spread: a real KeyboardEvent keeps `key`/`metaKey`/... as
+  // prototype accessors, so `{ ...event }` yields an empty object and every lookup below
+  // silently misses. Test doubles are plain objects and hide that.
   const chordEvent: TerminalShortcutEvent =
-    chordKey === event.key ? event : { ...event, key: chordKey }
+    chordKey === event.key
+      ? event
+      : {
+          key: chordKey,
+          code: event.code,
+          metaKey: event.metaKey,
+          ctrlKey: event.ctrlKey,
+          altKey: event.altKey,
+          shiftKey: event.shiftKey,
+          repeat: event.repeat
+        }
 
   // Why: capture this chord even on repeat without blocking the OS default input-source switch.
   if (keybindingMatchesAction('terminal.switchInputSource', chordEvent, platform, keybindings)) {

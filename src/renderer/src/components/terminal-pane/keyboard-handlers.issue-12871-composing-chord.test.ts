@@ -3,8 +3,9 @@
 // which replays captured macOS Korean and Japanese traces through the real handler and xterm.
 //
 // The exemption exists because a Japanese conversion swallows a modifier chord outright — no
-// commit, no platform replay, nothing reaches the shell. Its counterweight is the redispatch
-// ledger, since Korean's input source *does* replay the chord and would otherwise fire twice.
+// commit, no platform replay, nothing reaches the shell. It is what lets the pane resolve such
+// a chord from its *release*; on the keydown the pane still yields, because Korean's input
+// source replays the chord instead and acting on both copies would fire it twice.
 //
 // Scope: shapes here are constructed from the DOM contract, not captured. The captured file is
 // where hardware fidelity lives; this file pins the decision boundary, including the negatives.
@@ -31,7 +32,9 @@ function keyEvent(overrides: Partial<ComposingKeyEvent>): ComposingKeyEvent {
   }
 }
 
-function resolveOnMac(event: ComposingKeyEvent): ReturnType<typeof resolveTerminalKeyboardShortcutAction> {
+function resolveOnMac(
+  event: ComposingKeyEvent
+): ReturnType<typeof resolveTerminalKeyboardShortcutAction> {
   return resolveTerminalKeyboardShortcutAction(
     event,
     true,
@@ -54,7 +57,11 @@ describe('terminal chords stay live during an IME composition', () => {
     ['Cmd+Backspace', keyEvent({ key: 'Backspace', code: 'Backspace', metaKey: true }), '\x15'],
     ['Cmd+Delete', keyEvent({ key: 'Delete', code: 'Delete', metaKey: true }), '\x0b'],
     ['Option+ArrowLeft', keyEvent({ key: 'ArrowLeft', code: 'ArrowLeft', altKey: true }), '\x1bb'],
-    ['Option+ArrowRight', keyEvent({ key: 'ArrowRight', code: 'ArrowRight', altKey: true }), '\x1bf']
+    [
+      'Option+ArrowRight',
+      keyEvent({ key: 'ArrowRight', code: 'ArrowRight', altKey: true }),
+      '\x1bf'
+    ]
   ])('resolves %s while a composition is live', (_label, event, expected) => {
     // The idle case is asserted too because it is not covered elsewhere with a populated
     // `code`: terminal-shortcut-policy.test.ts builds its fixtures with `code: ''`, which
