@@ -208,7 +208,9 @@ describe('UsageRow', () => {
 
     expect(markup.match(/data-usage-window=/g)).toHaveLength(1)
     expect(markup).not.toContain('data-usage-bar')
-    expect(markup).toContain('Fable')
+    // fableWeekly falls back to the window-duration label when no reset time is
+    // known; the window name is reserved for non-remaining display (#13041).
+    expect(markup).not.toContain('Fable')
     expect(markup).toContain('75%')
     expect(markup).not.toContain('25%')
     expect(markup).not.toContain('60%')
