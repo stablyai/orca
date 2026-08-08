@@ -74,6 +74,45 @@ describe('terminal chords stay live during an IME composition', () => {
     })
   })
 
+  // Chromium defines KeyboardEvent's fields as accessors on the prototype, not as own
+  // properties, so anything that copies an event by enumerating it gets nothing. happy-dom
+  // does the opposite, which means a plain-object fixture cannot see that class of bug and a
+  // real `new KeyboardEvent(...)` cannot either under this runner. Modelling the browser's
+  // shape explicitly is the only form of it that runs here.
+  it('resolves an event whose fields live on the prototype, as in a browser', () => {
+    const fields = keyEvent({
+      key: 'Process',
+      code: 'Backspace',
+      metaKey: true,
+      isComposing: true,
+      keyCode: 229
+    })
+    const prototype = Object.create(
+      null,
+      Object.fromEntries(
+        Object.entries(fields).map(([name, value]) => [name, { get: () => value }])
+      )
+    ) as ComposingKeyEvent
+    const event = Object.create(prototype) as ComposingKeyEvent
+    expect(Object.keys(event)).toEqual([])
+
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        event,
+        true,
+        'false',
+        0,
+        false,
+        { 'terminal.clear': ['Mod+Backspace'] },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => false
+      )
+    ).toEqual({ type: 'clearActivePane' })
+  })
+
   // A CJK input source rewrites `key` while `code` keeps the physical key, which is what
   // #12171 and #13033 turned on. Matching `key` here would drop the chord again.
   it('matches the physical code when the input source has rewritten key', () => {

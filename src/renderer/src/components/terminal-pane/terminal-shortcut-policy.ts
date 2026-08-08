@@ -287,10 +287,12 @@ export function resolveTerminalShortcutAction(
       return { type: 'sendInput', data: '\x05' }
     }
     // Why: macOS users expect Cmd+↑/↓ to scroll scrollback, not write escape bytes to the shell.
-    if (event.key === 'ArrowUp') {
+    // `chordKey` like its siblings, though it resolves to `key` today: ArrowUp/ArrowDown are not
+    // exempt codes, and reading `event.key` here would silently opt out if they ever became so.
+    if (chordKey === 'ArrowUp') {
       return { type: 'scrollViewport', position: 'top' }
     }
-    if (event.key === 'ArrowDown') {
+    if (chordKey === 'ArrowDown') {
       return { type: 'scrollViewport', position: 'bottom' }
     }
   }

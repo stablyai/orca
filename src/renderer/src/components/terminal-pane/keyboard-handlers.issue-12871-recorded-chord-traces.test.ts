@@ -381,6 +381,18 @@ async function replay(textarea: HTMLTextAreaElement, rows: RecordedRow[]): Promi
   await macrotask()
 }
 
+const JAPANESE_CASE = 'Japanese, a bare arrow and four chords across one live preedit'
+
+// By name, not by index: each test below needs a particular gesture, and inserting a case
+// would otherwise silently repoint them at the wrong trace while still passing.
+function caseNamed(name: string): RecordedCase {
+  const found = CASES.find((testCase) => testCase.name === name)
+  if (!found) {
+    throw new Error(`recorded case not found: ${name}`)
+  }
+  return found
+}
+
 describe('recorded macOS chord traces during an IME composition', () => {
   beforeEach(() => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
@@ -412,7 +424,7 @@ describe('recorded macOS chord traces during an IME composition', () => {
   // only bytes would leave a remapped Cmd+Backspace dead during a Japanese preedit.
   it('runs a remapped pane command from a swallowed release', async () => {
     const rig = openRig({ keybindings: { 'terminal.clear': ['Mod+Backspace'] } })
-    await replay(rig.textarea, CASES[3].rows)
+    await replay(rig.textarea, caseNamed(JAPANESE_CASE).rows)
 
     expect(rig.clearPaneCalls).toBe(1)
     // The remap wins outright: no kill-line byte alongside it, and the other chords are
@@ -425,7 +437,7 @@ describe('recorded macOS chord traces during an IME composition', () => {
   // so the remap must run exactly once, from the replay alone.
   it('runs a remapped pane command once when the platform replays instead', async () => {
     const rig = openRig({ keybindings: { 'terminal.clear': ['Mod+Backspace'] } })
-    await replay(rig.textarea, CASES[2].rows)
+    await replay(rig.textarea, caseNamed('Korean 2-Set, Cmd+Backspace').rows)
 
     expect(rig.clearPaneCalls).toBe(1)
     expect(rig.inputCalls).toEqual([])
@@ -457,6 +469,85 @@ describe('recorded macOS chord traces during an IME composition', () => {
     }
 
     expect(rig.inputCalls).toEqual([])
+    rig.unmount()
+  })
+})
+
+// Constructed, not recorded. Both cases below need a shape the two captures happen not to
+// contain, and the file above is kept to captured rows only so its fidelity claim stays true.
+describe('constructed shapes the macOS captures do not contain', () => {
+  beforeEach(() => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      measureText: () => ({ width: 10 })
+    } as unknown as CanvasRenderingContext2D)
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(MAC_USER_AGENT)
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+    document.body.replaceChildren()
+  })
+
+  // The decision is the release's alone. Pinned directly rather than left to be inferred from
+  // the call counts above, because `resolveTerminalKeyboardShortcutAction` does resolve a
+  // composing exempt chord — it is the pane that declines to act on it until the key comes up.
+  it('does nothing while the chord is still held down', async () => {
+    const rig = openRig()
+    const japanese = caseNamed(JAPANESE_CASE)
+    const throughFirstChordPress = japanese.rows.slice(
+      0,
+      japanese.rows.findIndex(
+        (row) => row.keyCode === 229 && row.code === 'ArrowLeft' && row.meta
+      ) + 1
+    )
+    await replay(rig.textarea, throughFirstChordPress)
+
+    expect(rig.inputCalls).toEqual([])
+    rig.unmount()
+  })
+
+  // Windows reports an IME-consumed key as `key: 'Process'` (#12171), which normalizes to no
+  // token at all, so the keybinding lookup has to run on the physical `code` instead. macOS
+  // leaves `key` alone, so no capture reaches that substitution — without this the branch is
+  // only ever exercised by plain-object fixtures, never by a real event through the handler.
+  it('honours a remap when the input source has rewritten key to Process', async () => {
+    const rig = openRig({ keybindings: { 'terminal.clear': ['Mod+Backspace'] } })
+    const japanese = caseNamed(JAPANESE_CASE)
+    const rows = japanese.rows.map((row) =>
+      row.code === 'Backspace' ? { ...row, key: 'Process' } : row
+    )
+    await replay(rig.textarea, rows)
+
+    // Without the physical-code substitution this falls through to the built-in kill-line
+    // byte: the wrong action, silently, for anyone who remapped the chord.
+    expect(rig.clearPaneCalls).toBe(1)
+    expect(rig.inputCalls).toEqual(['\x01', '\x1bb', '\x1b\x7f'])
+    rig.unmount()
+  })
+
+  // Escape during a preedit ends the composition with an empty commit. xterm flushes whatever
+  // the chord queued at that point, so this pins where those bytes go rather than leaving it
+  // to be discovered in a shell.
+  it('still delivers a chord when the composition is cancelled instead of committed', async () => {
+    const rig = openRig()
+    const japanese = caseNamed(JAPANESE_CASE)
+    const upToFirstChord = japanese.rows.slice(
+      0,
+      japanese.rows.findIndex((row) => row.t === 'keyup' && row.code === 'MetaLeft') + 1
+    )
+    // Escape clears the preedit out of the helper textarea before the composition ends; xterm
+    // reads the commit from that textarea, so omitting this row would commit 日本語 after all.
+    await replay(rig.textarea, [
+      ...upToFirstChord,
+      { t: 'input', inputType: 'deleteCompositionText', value: '' },
+      { t: 'compositionend', data: '' }
+    ])
+
+    // The chord was aimed at the shell's line, not at the preedit, so cancelling the text does
+    // not retract it. Only the composed characters are dropped.
+    expect(rig.inputCalls).toEqual(['\x01'])
+    expect(rig.emitted).toEqual(['\x01'])
     rig.unmount()
   })
 })

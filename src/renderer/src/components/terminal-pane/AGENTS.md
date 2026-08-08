@@ -36,6 +36,6 @@ Each rule below was paid for by a shipped defect. The parenthetical is the issue
   event shape. Real IMEs produce sequences nobody guesses correctly; see
   `tests/e2e/terminal-ime-observed-event-sequences.ts`.
 - **A paired negative** proving ordinary non-IME input is unchanged. It must be a genuine control:
-  an arm that dispatches `compositionupdate` is a Latin *preedit*, not ordinary input.
+  an arm that dispatches `compositionupdate` is a Latin _preedit_, not ordinary input.
 - **A mutation check.** Removing or bypassing the fix must make the positive fail while the negative
   passes. A test that survives deleting the code it guards is guarding nothing.

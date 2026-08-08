@@ -80,6 +80,13 @@ function isSwallowedImeChordRelease(event: KeyboardEvent): boolean {
   return isImeOwnedKeyboardEvent(event) && isImeExemptTerminalChord(event)
 }
 
+/**
+ * Note the asymmetry with the pane's own keydown handler, which yields on *every* IME-owned
+ * event. This resolver deliberately lets an exempt chord through, because the pane also calls
+ * it for such a chord's release, where resolving is the whole point. A composing exempt chord
+ * therefore resolves here while producing nothing from a keydown — asserting a keydown outcome
+ * against this function alone would pin something the pane does not do.
+ */
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],
   isMac: Parameters<typeof resolveTerminalShortcutAction>[1],
@@ -699,6 +706,11 @@ export function useTerminalKeyboardShortcuts({
         return
       }
       if (isEditableTarget(e.target)) {
+        return
+      }
+      // Same precedence as the keydown path: a chord remapped onto tab.close closes an empty
+      // floating panel there, and skipping it here would close the pane instead.
+      if (handleEmptyFloatingWorkspacePanelCloseShortcut(e, shortcutPlatform, keybindings)) {
         return
       }
       const action = resolveShortcutEvent(e)
