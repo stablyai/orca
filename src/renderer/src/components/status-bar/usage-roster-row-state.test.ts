@@ -33,7 +33,7 @@ describe('getUsageRosterRowState', () => {
         provider({
           status: 'error',
           error: 'OAuth token is stale',
-          usageMetadata: { failureKind: 'stale-token' }
+          usageMetadata: { failureKind: 'stale-token', refreshingSinceMs: Date.now() }
         }),
         false
       )
@@ -48,6 +48,23 @@ describe('getUsageRosterRowState', () => {
         false
       )
     ).toEqual({ kind: 'error', statusLabel: 'Network issue' })
+  })
+
+  it('offers sign-in after Claude refreshing sign-in has been stuck past the escalate window', () => {
+    expect(
+      getUsageRosterRowState(
+        provider({
+          status: 'error',
+          error: 'OAuth token is stale',
+          usageMetadata: {
+            failureKind: 'stale-token',
+            // Well past CLAUDE_REFRESHING_SIGN_IN_ESCALATE_AFTER_MS (2 minutes).
+            refreshingSinceMs: Date.now() - 5 * 60 * 1000
+          }
+        }),
+        false
+      )
+    ).toEqual({ kind: 'sign-in', statusLabel: 'Sign-in needs refresh' })
   })
 
   it('offers sign-in only for confirmed signed-out failures', () => {

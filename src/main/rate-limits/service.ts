@@ -7,6 +7,7 @@ import type {
   InactiveAccountUsage,
   RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
+import { stampClaudeRefreshingSince } from '../../shared/claude-refreshing-sign-in'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
 import { mapClaudeUsageWindow } from './claude-usage-window'
@@ -2028,19 +2029,22 @@ export class RateLimitService {
   ): ProviderRateLimits {
     // Fresh data is fine — use it
     if (fresh.status === 'ok') {
-      return {
-        ...fresh,
-        usageMetadata: {
-          ...fresh.usageMetadata,
-          lastSuccessfulSource:
-            fresh.usageMetadata?.source ?? fresh.usageMetadata?.lastSuccessfulSource
-        }
-      }
+      return stampClaudeRefreshingSince(
+        {
+          ...fresh,
+          usageMetadata: {
+            ...fresh.usageMetadata,
+            lastSuccessfulSource:
+              fresh.usageMetadata?.source ?? fresh.usageMetadata?.lastSuccessfulSource
+          }
+        },
+        previous
+      )
     }
 
     // Explicitly unavailable (e.g. setting cleared): discard stale data so the UI shows the provider as disabled/unconfigured.
     if (fresh.status === 'unavailable') {
-      return fresh
+      return stampClaudeRefreshingSince(fresh, previous)
     }
 
     const previousHasData = Boolean(
@@ -2053,7 +2057,7 @@ export class RateLimitService {
 
     // No previous data to fall back on
     if (!previous || !previousHasData) {
-      return fresh
+      return stampClaudeRefreshingSince(fresh, previous)
     }
 
     // Previous data is too old — don't show stale data
@@ -2062,21 +2066,24 @@ export class RateLimitService {
         ? RATE_LIMITED_STALE_THRESHOLD_MS
         : STALE_THRESHOLD_MS
     if (Date.now() - previous.updatedAt > staleThresholdMs) {
-      return fresh
+      return stampClaudeRefreshingSince(fresh, previous)
     }
 
     // Why: keep showing a recent snapshot through repeated transient failures until it ages out, so the bar doesn't flap to empty.
-    return {
-      ...previous,
-      error: fresh.error,
-      status: 'error',
-      usageMetadata: {
-        ...previous.usageMetadata,
-        ...fresh.usageMetadata,
-        lastSuccessfulSource:
-          previous.usageMetadata?.lastSuccessfulSource ?? previous.usageMetadata?.source
-      }
-    }
+    return stampClaudeRefreshingSince(
+      {
+        ...previous,
+        error: fresh.error,
+        status: 'error',
+        usageMetadata: {
+          ...previous.usageMetadata,
+          ...fresh.usageMetadata,
+          lastSuccessfulSource:
+            previous.usageMetadata?.lastSuccessfulSource ?? previous.usageMetadata?.source
+        }
+      },
+      previous
+    )
   }
 
   private buildInactiveArray(

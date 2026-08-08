@@ -1,4 +1,5 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import { isClaudeRefreshingSignInEscalated } from '../../../../shared/claude-refreshing-sign-in'
 import { translate } from '@/i18n/i18n'
 
 export function getProviderDisplayName(provider: ProviderRateLimits['provider']): string {
@@ -84,6 +85,13 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
     return translate('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
   }
   if (p.provider === 'claude') {
+    // Why: #8974 — in-flight repair stays soft; once the stamp ages out, stop implying progress.
+    if (isClaudeRefreshingSignInEscalated(p)) {
+      return translate(
+        'auto.components.status.bar.usage-error-copy.3f8f498baa',
+        'Sign-in needs refresh'
+      )
+    }
     switch (p.usageMetadata?.failureKind) {
       case 'deferred-by-live-session':
         return translate(
@@ -139,6 +147,12 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
     )
   }
   if (p.provider === 'claude') {
+    if (isClaudeRefreshingSignInEscalated(p)) {
+      return translate(
+        'auto.components.status.bar.usage-error-copy.1c37de1668',
+        'Claude usage sign-in could not be refreshed. Agent sessions may still be signed in — re-authenticate to restore usage tracking.'
+      )
+    }
     switch (p.usageMetadata?.failureKind) {
       case 'deferred-by-live-session':
         return translate(

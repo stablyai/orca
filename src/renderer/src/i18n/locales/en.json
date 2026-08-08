@@ -3591,6 +3591,10 @@
                 }
               }
             }
+          },
+          "usage-error-copy": {
+            "3f8f498baa": "Sign-in needs refresh",
+            "1c37de1668": "Claude usage sign-in could not be refreshed. Agent sessions may still be signed in — re-authenticate to restore usage tracking."
           }
         }
       },
