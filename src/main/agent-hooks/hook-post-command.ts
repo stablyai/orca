@@ -3,7 +3,11 @@ import { ORCA_HOOK_RAW_JSON_TRANSPORT } from '../../shared/agent-hook-types'
 
 export function buildPosixAgentHookPostCommand(
   source: AgentHookSource,
-  options: { curlCommand?: string; indent?: string } = {}
+  options: {
+    curlCommand?: string
+    indent?: string
+    agent?: 'claude' | 'openclaude'
+  } = {}
 ): string[] {
   const curlCommand = options.curlCommand ?? 'curl'
   const indent = options.indent ?? '  '
@@ -18,6 +22,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}-H "X-Orca-Agent-Hook-Token: \${ORCA_AGENT_HOOK_TOKEN}" \\`,
     `  ${indent}-H "X-Orca-Agent-Hook-Meta-Encoding: base64" \\`,
     `  ${indent}-H "X-Orca-Agent-Hook-Meta: \${orca_hook_metadata}" \\`,
+    ...(options.agent ? [`  ${indent}-H "X-Orca-Agent: ${options.agent}" \\`] : []),
     `  ${indent}--data-binary @-`,
     'else',
     `  printf '%s' "$payload" | ${curlCommand} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/${source}" \\`,
@@ -31,6 +36,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}--data-urlencode "worktreeId=\${ORCA_WORKTREE_ID}" \\`,
     `  ${indent}--data-urlencode "env=\${ORCA_AGENT_HOOK_ENV}" \\`,
     `  ${indent}--data-urlencode "version=\${ORCA_AGENT_HOOK_VERSION}" \\`,
+    ...(options.agent ? [`  ${indent}--data-urlencode "agent=${options.agent}" \\`] : []),
     `  ${indent}--data-urlencode "payload@-"`,
     'fi'
   ]

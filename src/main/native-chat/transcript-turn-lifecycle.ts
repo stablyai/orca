@@ -86,6 +86,9 @@ export function decodeClaudeTurnLifecycle(
     return { state: 'interrupted', turnId: interruptedMessageId, timestamp }
   }
   if (record.type === 'assistant') {
+    if (message?.model === '<synthetic>' && !decodeClaudeTranscriptLine(line, fallbackId)) {
+      return null
+    }
     const stopReason = message?.stop_reason
     // Why: capable hosts rely on explicit terminals (prose is only a backup when
     // the latest lifecycle is not mid-generation). Emit completed for every real

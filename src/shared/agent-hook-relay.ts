@@ -67,6 +67,14 @@ export function isAgentHookSource(value: unknown): value is AgentHookSource {
  *  a dev-vs-prod build tag, so main-process env mismatch diagnostics ignore it. */
 export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
 
+/** Provider-authored details for one native tool hook. The stable operation id
+ * stays in `toolUseId`; this carries only the JSON-safe arguments and result. */
+export type AgentHookToolActivity = {
+  input?: unknown
+  output?: string
+  isError?: boolean
+}
+
 /** Wire envelope for a single hook event flowing relay → Orca. */
 export type AgentHookRelayEnvelope = {
   source: AgentHookSource
@@ -91,6 +99,8 @@ export type AgentHookRelayEnvelope = {
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool execution id, when the source hook provides one. */
   toolUseId?: string
+  /** Native Pre/PostToolUse payload used by chat activity timelines. */
+  toolActivity?: AgentHookToolActivity
   /** Claude subagent identity, when the source hook provides one. */
   toolAgentId?: string
   /** Claude teammate name carried by TeammateIdle. */

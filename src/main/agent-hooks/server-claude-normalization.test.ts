@@ -30,6 +30,20 @@ afterEach(() => {
 })
 
 describe('Claude hook normalization', () => {
+  it('keeps OpenClaude attribution on its Claude-compatible hook wire format', () => {
+    const result = _internals.normalizeHookPayload(
+      'claude',
+      {
+        ...buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'hello' }),
+        agent: 'openclaude'
+      },
+      'production'
+    )
+
+    expect(result?.hookEventName).toBe('UserPromptSubmit')
+    expect(result?.payload.agentType).toBe('openclaude')
+  })
+
   it('PostToolUse for Edit surfaces toolName + file_path preview', () => {
     const result = _internals.normalizeHookPayload(
       'claude',

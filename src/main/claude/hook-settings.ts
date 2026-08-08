@@ -253,17 +253,23 @@ export function getStatusLineInstallMarkerPath(settings = CLAUDE_HOOK_SETTINGS):
   return getSharedManagedScriptPath(`${getStatusLineScriptBaseName(settings)}.installed`)
 }
 
+export function getStatusLineBackupPath(settings = CLAUDE_HOOK_SETTINGS): string {
+  return getSharedManagedScriptPath(`${getStatusLineScriptBaseName(settings)}.user.json`)
+}
+
 // Why: statusLine is a single settings slot, not a hooks array — never overwrite a
 // user-owned status line; the usage feed then simply falls back to the OAuth poll.
 export function applyManagedStatusLine(
   config: HooksConfig,
   command: string,
-  scriptFileName = getStatusLineScriptFileName()
+  scriptFileName = getStatusLineScriptFileName(),
+  wrapUser = false
 ): HooksConfig {
-  if (getStatusLineSlotState(config, scriptFileName) === 'user') {
+  if (getStatusLineSlotState(config, scriptFileName) === 'user' && !wrapUser) {
     return config
   }
-  return { ...config, statusLine: { type: 'command', command } }
+  const current = isPlainObject(config.statusLine) ? config.statusLine : {}
+  return { ...config, statusLine: { ...current, type: 'command', command } }
 }
 
 export function removeManagedStatusLine(

@@ -37,6 +37,18 @@ describe('getManagedStatusLineScript (posix)', () => {
     expect(script).toContain('#!/bin/sh')
     expect(script).not.toContain('curl.exe')
   })
+
+  it('attributes OpenClaude without changing the shared endpoint contract', () => {
+    const script = getManagedStatusLineScript('posix', 'openclaude')
+    expect(script).toContain('/statusline/claude')
+    expect(script).toContain('--data-urlencode "agent=openclaude"')
+  })
+
+  it('chains a user statusline with shell-safe quoting', () => {
+    const script = getManagedStatusLineScript('posix', 'claude', "printf '%s' \"it's mine\"")
+    expect(script).toContain("trap 'orca_user_statusline' EXIT")
+    expect(script).toContain("/bin/sh -c 'printf '\\''%s'\\'' \"it'\\''s mine\"'")
+  })
 })
 
 describe('getManagedStatusLineScript (win32 local)', () => {

@@ -17,6 +17,31 @@ function expectNormalizedInterruption(message: NativeChatMessage | null): void {
 }
 
 describe('native chat transcript interruption messages', () => {
+  it('drops only Claude synthetic no-response markers', () => {
+    const record = {
+      type: 'assistant',
+      uuid: 'synthetic-no-response',
+      timestamp: '2026-07-16T23:46:01.000Z',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'No response requested.' }]
+      }
+    }
+
+    expect(
+      decodeClaudeTranscriptLine(
+        JSON.stringify({ ...record, message: { ...record.message, model: '<synthetic>' } }),
+        'fallback'
+      )
+    ).toBeNull()
+    expect(
+      decodeClaudeTranscriptLine(
+        JSON.stringify({ ...record, message: { ...record.message, model: 'claude-opus-5' } }),
+        'fallback'
+      )
+    ).toMatchObject({ role: 'assistant', blocks: record.message.content })
+  })
+
   it('normalizes Claude interruption boilerplate into one visible status row', () => {
     const message = decodeClaudeTranscriptLine(
       JSON.stringify({

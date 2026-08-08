@@ -38,6 +38,8 @@ const STATUSLINE_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'claude-statusline.cmd' : 'claude-statusline.sh'
 const OPENCLAUDE_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'openclaude-hook.cmd' : 'openclaude-hook.sh'
+const OPENCLAUDE_STATUSLINE_SCRIPT_FILE_NAME =
+  process.platform === 'win32' ? 'openclaude-statusline.cmd' : 'openclaude-statusline.sh'
 const isClaudeManagedCommand = createManagedCommandMatcher(CLAUDE_SCRIPT_FILE_NAME)
 const isOpenClaudeManagedCommand = createManagedCommandMatcher(OPENCLAUDE_SCRIPT_FILE_NAME)
 
@@ -312,7 +314,7 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
-  it('never overwrites a user-owned statusLine command', () => {
+  it('wraps and restores a user-owned statusLine command on POSIX', () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-user-statusline-'))
     vi.stubEnv('HOME', tmpHome)
     vi.stubEnv('USERPROFILE', tmpHome)
@@ -324,7 +326,8 @@ describe('ClaudeHookService.install', () => {
         JSON.stringify({
           statusLine: {
             type: 'command',
-            command: '/usr/local/bin/my-statusline'
+            command: '/usr/local/bin/my-statusline',
+            padding: 3
           }
         })
       )
@@ -332,17 +335,21 @@ describe('ClaudeHookService.install', () => {
       expect(new ClaudeHookService().install().state).toBe('installed')
 
       const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'))
-      expect(settings.statusLine).toEqual({
-        type: 'command',
-        command: '/usr/local/bin/my-statusline'
-      })
+      if (process.platform === 'win32') {
+        expect(settings.statusLine.command).toBe('/usr/local/bin/my-statusline')
+      } else {
+        expect(settings.statusLine.command).toContain('claude-statusline')
+        expect(
+          readFileSync(join(tmpHome, '.orca', 'agent-hooks', STATUSLINE_SCRIPT_FILE_NAME), 'utf8')
+        ).toContain("/bin/sh -c '/usr/local/bin/my-statusline'")
+      }
 
-      // remove() must also leave the user's statusLine untouched.
       new ClaudeHookService().remove()
       const afterRemove = JSON.parse(readFileSync(settingsPath, 'utf-8'))
       expect(afterRemove.statusLine).toEqual({
         type: 'command',
-        command: '/usr/local/bin/my-statusline'
+        command: '/usr/local/bin/my-statusline',
+        padding: 3
       })
     } finally {
       vi.unstubAllEnvs()
@@ -812,9 +819,17 @@ describe('OpenClaudeHookService-compatible install', () => {
       ).toContain('/hook/claude')
       expect(
         readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
+      ).toContain('agent=openclaude')
+      expect(
+        readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).not.toContain('DEVIN_PROJECT_DIR')
-      // Why: the statusline usage feed is Claude-only; OpenClaude installs must not set statusLine.
-      expect(parsed.statusLine).toBeUndefined()
+      expect(parsed.statusLine.command).toContain(OPENCLAUDE_STATUSLINE_SCRIPT_FILE_NAME)
+      expect(
+        readFileSync(
+          join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_STATUSLINE_SCRIPT_FILE_NAME),
+          'utf-8'
+        )
+      ).toContain('agent=openclaude')
       expect(existsSync(join(tmpHome, '.claude', 'settings.json'))).toBe(false)
     } finally {
       vi.unstubAllEnvs()
@@ -837,5 +852,8 @@ describe('OpenClaudeHookService-compatible install', () => {
     expect(command).toContain('"${HOME-}/.orca/agent-hooks/openclaude-hook.sh"')
     expect(command).not.toContain('/home/dev/.orca/agent-hooks/openclaude-hook.sh')
     expect(fs.files.get('/home/dev/.orca/agent-hooks/openclaude-hook.sh')).toContain('/hook/claude')
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/openclaude-hook.sh')).toContain(
+      'agent=openclaude'
+    )
   })
 })

@@ -1,7 +1,11 @@
 import { track } from '../../telemetry/client'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
-import { isAgentHookSource, restoreShedStatusFields } from '../../../shared/agent-hook-relay'
+import {
+  isAgentHookSource,
+  restoreShedStatusFields,
+  type AgentHookToolActivity
+} from '../../../shared/agent-hook-relay'
 import {
   MAX_PANE_KEY_LEN,
   normalizeClaudePromptId,
@@ -36,6 +40,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestT
       providerPromptId?: unknown
       compactTrigger?: unknown
       toolUseId?: string
+      toolActivity?: unknown
       toolAgentId?: string
       teammateName?: string
       toolAgentType?: string
@@ -140,6 +145,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestT
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
         : undefined
+    const toolActivity = normalizeToolActivity(envelope.toolActivity)
     const toolAgentId =
       typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0
         ? envelope.toolAgentId.trim()
@@ -253,6 +259,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestT
       providerPromptId,
       compactTrigger,
       toolUseId,
+      toolActivity,
       toolAgentId,
       teammateName,
       toolAgentType,
@@ -279,4 +286,20 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestT
         : undefined
     )
   }
+}
+
+function normalizeToolActivity(value: unknown): AgentHookToolActivity | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined
+  }
+  const record = value as Record<string, unknown>
+  const hasInput = Object.hasOwn(record, 'input')
+  const output = typeof record.output === 'string' ? record.output : undefined
+  return hasInput || output !== undefined || record.isError === true
+    ? {
+        ...(hasInput ? { input: record.input } : {}),
+        ...(output !== undefined ? { output } : {}),
+        ...(record.isError === true ? { isError: true } : {})
+      }
+    : undefined
 }
