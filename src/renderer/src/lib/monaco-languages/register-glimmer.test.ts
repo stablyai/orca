@@ -136,6 +136,7 @@ describe('registerGlimmerLanguages', () => {
     })
     expect(setMonarchTokensProvider).toHaveBeenCalledWith('glimmer-ts', glimmerTsMonarchLanguage)
     expect(setMonarchTokensProvider).toHaveBeenCalledWith('glimmer-js', glimmerJsMonarchLanguage)
+    expect(setMonarchTokensProvider).toHaveBeenCalledTimes(2)
     expect(setLanguageConfiguration).toHaveBeenCalledWith(
       'glimmer-ts',
       glimmerLanguageConfiguration
@@ -144,5 +145,6 @@ describe('registerGlimmerLanguages', () => {
       'glimmer-js',
       glimmerLanguageConfiguration
     )
+    expect(setLanguageConfiguration).toHaveBeenCalledTimes(2)
   })
 })
