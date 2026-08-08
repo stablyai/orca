@@ -45,6 +45,8 @@ import {
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
 } from './codex/codex-pane-account-registry'
+import { recordCodexSessionAccount } from './codex/codex-session-account-registry'
+import { captureCodexSessionAccountAttributions } from './codex/codex-session-account-attribution'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from './ipc/folder-repo-git-upgrade'
@@ -2332,6 +2334,11 @@ void app.whenReady().then(async () => {
   agentAwakeService.setStatuses([])
   const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
   const publishProviderSessionChanges = (identities: AgentHookProviderSessionIdentity[]): void => {
+    captureCodexSessionAccountAttributions(identities, {
+      getPtyIdForPaneKey,
+      getPaneAccount: getCodexPaneAccount,
+      recordSessionAccount: recordCodexSessionAccount
+    })
     const ownedIdentities = identities.map((identity) => ({
       ...identity,
       worktreeId:

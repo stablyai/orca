@@ -2,6 +2,8 @@
 import { app } from 'electron'
 import { join } from 'node:path'
 import type {
+  CodexUsageAccountFilter,
+  CodexUsageAccountOption,
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
   CodexUsageDailyPoint,
@@ -17,6 +19,7 @@ import type { CodexUsagePersistedState } from './types'
 import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-provider'
 import { getLocalUsageDay, getUsageRangeCutoff } from '../usage/usage-calendar-range'
 import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
+import { parseCodexUsageAccountFilterArg } from '../../shared/codex-usage-account-filter-contract'
 
 const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
@@ -316,12 +319,34 @@ type ScopedCodexUsageModelRow = {
   totalTokens: number
 }
 
+const ALL_CODEX_USAGE_ACCOUNTS: CodexUsageAccountFilter = { kind: 'all' }
+
+function matchesAccountFilter(
+  accountId: string | null | undefined,
+  filter: CodexUsageAccountFilter
+): boolean {
+  if (filter.kind === 'all') {
+    return true
+  }
+  if (filter.kind === 'system') {
+    return accountId === null
+  }
+  if (filter.kind === 'unattributed') {
+    return accountId === undefined
+  }
+  return accountId === filter.accountId
+}
+
 export class CodexUsageStore extends UsageProviderStoreLifecycle<
   'processedFiles',
   CodexUsagePersistedState,
   'hasAnyCodexData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  private readonly accountSettingsStore: Partial<Pick<Store, 'getSettings'>>
+
+  constructor(
+    store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'> & Partial<Pick<Store, 'getSettings'>>
+  ) {
     super(store, {
       logTag: '[codex-usage]',
       resolveCacheFile: getCodexUsageFile,
@@ -331,31 +356,56 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
       dataPresenceKey: 'hasAnyCodexData',
       scan: codexUsageProvider.scan
     })
+    this.accountSettingsStore = store
+  }
+
+  private resolveAccountFilter(
+    accountFilter: CodexUsageAccountFilter | undefined
+  ): CodexUsageAccountFilter {
+    if (accountFilter === undefined) {
+      return ALL_CODEX_USAGE_ACCOUNTS
+    }
+    const parsed = parseCodexUsageAccountFilterArg(accountFilter)
+    if (!parsed) {
+      throw new Error('invalid_codex_usage_account_filter')
+    }
+    return parsed
   }
 
   getSnapshot(
     scope: CodexUsageScope,
     range: CodexUsageRange,
-    recentSessionLimit = 10
+    recentSessionLimit = 10,
+    accountFilter: CodexUsageAccountFilter = ALL_CODEX_USAGE_ACCOUNTS
   ): CodexUsageSnapshot {
+    accountFilter = this.resolveAccountFilter(accountFilter)
     return {
       scanState: this.getScanState(),
-      summary: this.buildSummary(scope, range),
-      daily: this.buildDaily(scope, range),
-      modelBreakdown: this.buildBreakdown(scope, range, 'model'),
-      projectBreakdown: this.buildBreakdown(scope, range, 'project'),
-      recentSessions: this.buildRecentSessions(scope, range, recentSessionLimit)
+      accountOptions: this.buildAccountOptions(),
+      summary: this.buildSummary(scope, range, accountFilter),
+      daily: this.buildDaily(scope, range, accountFilter),
+      modelBreakdown: this.buildBreakdown(scope, range, 'model', accountFilter),
+      projectBreakdown: this.buildBreakdown(scope, range, 'project', accountFilter),
+      recentSessions: this.buildRecentSessions(scope, range, recentSessionLimit, accountFilter)
     }
   }
 
-  async getSummary(scope: CodexUsageScope, range: CodexUsageRange): Promise<CodexUsageSummary> {
+  async getSummary(
+    scope: CodexUsageScope,
+    range: CodexUsageRange,
+    accountFilter: CodexUsageAccountFilter = ALL_CODEX_USAGE_ACCOUNTS
+  ): Promise<CodexUsageSummary> {
     await this.refresh(false)
-    return this.buildSummary(scope, range)
+    return this.buildSummary(scope, range, this.resolveAccountFilter(accountFilter))
   }
 
-  private buildSummary(scope: CodexUsageScope, range: CodexUsageRange): CodexUsageSummary {
-    const filteredDaily = this.getFilteredDaily(scope, range)
-    const filteredSessions = this.getFilteredSessions(scope, range)
+  private buildSummary(
+    scope: CodexUsageScope,
+    range: CodexUsageRange,
+    accountFilter: CodexUsageAccountFilter
+  ): CodexUsageSummary {
+    const filteredDaily = this.getFilteredDaily(scope, range, accountFilter)
+    const filteredSessions = this.getFilteredSessions(scope, range, accountFilter)
 
     let inputTokens = 0
     let cachedInputTokens = 0
@@ -414,14 +464,22 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
     }
   }
 
-  async getDaily(scope: CodexUsageScope, range: CodexUsageRange): Promise<CodexUsageDailyPoint[]> {
+  async getDaily(
+    scope: CodexUsageScope,
+    range: CodexUsageRange,
+    accountFilter: CodexUsageAccountFilter = ALL_CODEX_USAGE_ACCOUNTS
+  ): Promise<CodexUsageDailyPoint[]> {
     await this.refresh(false)
-    return this.buildDaily(scope, range)
+    return this.buildDaily(scope, range, this.resolveAccountFilter(accountFilter))
   }
 
-  private buildDaily(scope: CodexUsageScope, range: CodexUsageRange): CodexUsageDailyPoint[] {
+  private buildDaily(
+    scope: CodexUsageScope,
+    range: CodexUsageRange,
+    accountFilter: CodexUsageAccountFilter
+  ): CodexUsageDailyPoint[] {
     const byDay = new Map<string, CodexUsageDailyPoint>()
-    for (const row of this.getFilteredDaily(scope, range)) {
+    for (const row of this.getFilteredDaily(scope, range, accountFilter)) {
       const existing = byDay.get(row.day) ?? {
         day: row.day,
         inputTokens: 0,
@@ -443,20 +501,22 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
   async getBreakdown(
     scope: CodexUsageScope,
     range: CodexUsageRange,
-    kind: CodexUsageBreakdownKind
+    kind: CodexUsageBreakdownKind,
+    accountFilter: CodexUsageAccountFilter = ALL_CODEX_USAGE_ACCOUNTS
   ): Promise<CodexUsageBreakdownRow[]> {
     await this.refresh(false)
-    return this.buildBreakdown(scope, range, kind)
+    return this.buildBreakdown(scope, range, kind, this.resolveAccountFilter(accountFilter))
   }
 
   private buildBreakdown(
     scope: CodexUsageScope,
     range: CodexUsageRange,
-    kind: CodexUsageBreakdownKind
+    kind: CodexUsageBreakdownKind,
+    accountFilter: CodexUsageAccountFilter
   ): CodexUsageBreakdownRow[] {
     const rows = new Map<string, CodexUsageBreakdownRow>()
-    const filteredDaily = this.getFilteredDaily(scope, range)
-    const filteredSessions = this.getFilteredSessions(scope, range)
+    const filteredDaily = this.getFilteredDaily(scope, range, accountFilter)
+    const filteredSessions = this.getFilteredSessions(scope, range, accountFilter)
 
     for (const daily of filteredDaily) {
       const key = kind === 'model' ? (daily.model ?? 'unknown') : daily.projectKey
@@ -530,18 +590,20 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
   async getRecentSessions(
     scope: CodexUsageScope,
     range: CodexUsageRange,
-    limit = 12
+    limit = 12,
+    accountFilter: CodexUsageAccountFilter = ALL_CODEX_USAGE_ACCOUNTS
   ): Promise<CodexUsageSessionRow[]> {
     await this.refresh(false)
-    return this.buildRecentSessions(scope, range, limit)
+    return this.buildRecentSessions(scope, range, limit, this.resolveAccountFilter(accountFilter))
   }
 
   private buildRecentSessions(
     scope: CodexUsageScope,
     range: CodexUsageRange,
-    limit = 12
+    limit: number,
+    accountFilter: CodexUsageAccountFilter
   ): CodexUsageSessionRow[] {
-    return this.getFilteredSessions(scope, range)
+    return this.getFilteredSessions(scope, range, accountFilter)
       .slice(0, limit)
       .map((session) => {
         const matchingLocations = session.locationBreakdown.filter((entry) =>
@@ -580,6 +642,7 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
         )
         return {
           sessionId: session.sessionId,
+          ...(session.accountId !== undefined ? { accountId: session.accountId } : {}),
           lastActiveAt: session.lastTimestamp,
           durationMinutes,
           projectLabel:
@@ -746,7 +809,11 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
     }
   }
 
-  private getFilteredDaily(scope: CodexUsageScope, range: CodexUsageRange) {
+  private getFilteredDaily(
+    scope: CodexUsageScope,
+    range: CodexUsageRange,
+    accountFilter: CodexUsageAccountFilter
+  ) {
     const cutoff = getUsageRangeCutoff(range)
     return this.state.dailyAggregates.filter((entry) => {
       if (cutoff && entry.day < cutoff) {
@@ -755,11 +822,15 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
       if (scope === 'orca' && entry.worktreeId === null) {
         return false
       }
-      return true
+      return matchesAccountFilter(entry.accountId, accountFilter)
     })
   }
 
-  private getFilteredSessions(scope: CodexUsageScope, range: CodexUsageRange) {
+  private getFilteredSessions(
+    scope: CodexUsageScope,
+    range: CodexUsageRange,
+    accountFilter: CodexUsageAccountFilter
+  ) {
     const cutoff = getUsageRangeCutoff(range)
     return this.state.sessions.filter((session) => {
       const day = getLocalUsageDay(session.lastTimestamp)
@@ -769,11 +840,44 @@ export class CodexUsageStore extends UsageProviderStoreLifecycle<
       if (cutoff && day < cutoff) {
         return false
       }
+      if (!matchesAccountFilter(session.accountId, accountFilter)) {
+        return false
+      }
       if (scope === 'orca') {
         return session.locationBreakdown.some((entry) => entry.worktreeId !== null)
       }
       return true
     })
+  }
+
+  private buildAccountOptions(): CodexUsageAccountOption[] {
+    const currentAccounts = new Map(
+      (this.accountSettingsStore.getSettings?.().codexManagedAccounts ?? []).map((account) => [
+        account.id,
+        account.workspaceLabel?.trim() || null
+      ])
+    )
+    const observedManagedIds = new Set<string>()
+    let hasUnattributedUsage = false
+    for (const session of this.state.sessions) {
+      if (session.accountId === undefined) {
+        hasUnattributedUsage = true
+      } else if (session.accountId !== null) {
+        observedManagedIds.add(session.accountId)
+      }
+    }
+    const options: CodexUsageAccountOption[] = [{ kind: 'system' }]
+    for (const [accountId, workspaceLabel] of currentAccounts) {
+      options.push({ kind: 'managed', accountId, workspaceLabel, deleted: false })
+      observedManagedIds.delete(accountId)
+    }
+    for (const accountId of [...observedManagedIds].sort()) {
+      options.push({ kind: 'managed', accountId, workspaceLabel: null, deleted: true })
+    }
+    if (hasUnattributedUsage) {
+      options.push({ kind: 'unattributed' })
+    }
+    return options
   }
 
   private getScopedSessionModels(

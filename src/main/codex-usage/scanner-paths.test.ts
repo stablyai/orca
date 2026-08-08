@@ -38,6 +38,10 @@ import {
   listCodexSessionFiles,
   scanCodexUsageFiles
 } from './scanner'
+import {
+  recordCodexSessionAccount,
+  resetCodexSessionAccountRegistryForTests
+} from '../codex/codex-session-account-registry'
 
 const originalCodexHome = process.env.CODEX_HOME
 let fakeHomeDir: string
@@ -108,9 +112,11 @@ beforeEach(() => {
     }
     throw new Error(`unexpected app.getPath(${name})`)
   })
+  resetCodexSessionAccountRegistryForTests()
 })
 
 afterEach(() => {
+  resetCodexSessionAccountRegistryForTests()
   rmSync(fakeHomeDir, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
   if (originalCodexHome === undefined) {
@@ -124,6 +130,79 @@ afterEach(() => {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
   vi.clearAllMocks()
+})
+
+it('rescans an unchanged rollout when its launch account snapshot becomes available', async () => {
+  const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+  mkdirSync(sessionsDir, { recursive: true })
+  const rolloutPath = join(sessionsDir, 'session-account.jsonl')
+  writeFileSync(
+    rolloutPath,
+    `${JSON.stringify({
+      type: 'session_meta',
+      payload: { id: 'session-account', cwd: join(fakeHomeDir, 'repo') }
+    })}\n${usageRecord('2026-05-26T12:00:00.000Z', 10)}`,
+    'utf-8'
+  )
+
+  const first = await scanCodexUsageFiles([], [])
+  expect(first.sessions[0]?.accountId).toBeUndefined()
+
+  expect(recordCodexSessionAccount('session-account', 'account-a', 100)).toBe(true)
+  const second = await scanCodexUsageFiles([], first.processedFiles)
+
+  expect(second.sessions[0]?.accountId).toBe('account-a')
+  expect(second.dailyAggregates[0]?.accountId).toBe('account-a')
+})
+
+it('preserves cached account attribution after bounded launch evidence is gone', async () => {
+  const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+  mkdirSync(sessionsDir, { recursive: true })
+  writeFileSync(
+    join(sessionsDir, 'session-retained.jsonl'),
+    `${JSON.stringify({
+      type: 'session_meta',
+      payload: { id: 'session-retained', cwd: join(fakeHomeDir, 'repo') }
+    })}\n${usageRecord('2026-05-26T12:00:00.000Z', 10)}`,
+    'utf-8'
+  )
+  recordCodexSessionAccount('session-retained', 'account-removed', 100)
+  const first = await scanCodexUsageFiles([], [])
+  expect(first.sessions[0]?.accountId).toBe('account-removed')
+
+  unlinkSync(join(userDataDir, 'codex-session-accounts.json'))
+  resetCodexSessionAccountRegistryForTests()
+  const second = await scanCodexUsageFiles([], first.processedFiles)
+
+  expect(second.sessions[0]?.accountId).toBe('account-removed')
+})
+
+it('keeps same-day usage from different accounts in separate rollups', async () => {
+  const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+  mkdirSync(sessionsDir, { recursive: true })
+  for (const [sessionId, accountId, tokens] of [
+    ['session-a', 'account-a', 10],
+    ['session-b', 'account-b', 20]
+  ] as const) {
+    writeFileSync(
+      join(sessionsDir, `${sessionId}.jsonl`),
+      `${JSON.stringify({
+        type: 'session_meta',
+        payload: { id: sessionId, cwd: join(fakeHomeDir, 'repo') }
+      })}\n${usageRecord('2026-05-26T12:00:00.000Z', tokens)}`,
+      'utf-8'
+    )
+    recordCodexSessionAccount(sessionId, accountId, 100)
+  }
+
+  const result = await scanCodexUsageFiles([], [])
+
+  expect(
+    result.dailyAggregates.map((aggregate) => [aggregate.accountId, aggregate.totalTokens]).sort()
+  ).toEqual([
+    ['account-a', 10],
+    ['account-b', 20]
+  ])
 })
 
 describe('getCodexSessionsDirectory', () => {

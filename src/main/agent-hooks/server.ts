@@ -126,6 +126,8 @@ export type AgentHookStatusChangeEntry = {
 export type AgentHookProviderSessionIdentity = {
   paneKey: string
   sessionId: string
+  agentType?: AgentType
+  observedInCurrentRuntime?: true
   transcriptPath?: string
   worktreeId?: string
 }
@@ -943,6 +945,10 @@ export class AgentHookServer {
         providerSessions.push({
           paneKey,
           sessionId: enriched.providerSession.id,
+          ...(enriched.payload.agentType ? { agentType: enriched.payload.agentType } : {}),
+          ...(this.runtimeObservedStatusPaneKeys.has(paneKey)
+            ? { observedInCurrentRuntime: true }
+            : {}),
           ...(enriched.providerSession.transcriptPath
             ? { transcriptPath: enriched.providerSession.transcriptPath }
             : {}),

@@ -5,6 +5,8 @@ import type {
   ClaudeUsageSnapshot
 } from '../../../../shared/claude-usage-types'
 import type {
+  CodexUsageAccountFilter,
+  CodexUsageAccountOption,
   CodexUsageRange,
   CodexUsageScope,
   CodexUsageSnapshot
@@ -55,6 +57,7 @@ type UsageApi<T extends UsageShape<string, string, UsageSnapshot>> = {
     scope: T['scope']
     range: T['range']
     limit?: number
+    accountFilter?: unknown
   }) => Promise<T['snapshot']>
 }
 
@@ -82,6 +85,8 @@ type UsageProviderConfig<
   initialRange: T['range']
   getApi: () => UsageApi<T>
   hasCachedData: (scanState: T['snapshot']['scanState']) => boolean
+  getExtraSnapshotArgs?: (state: AppState) => Record<string, unknown>
+  mapSnapshotExtras?: (snapshot: T['snapshot']) => Partial<AppState>
 }
 
 const usageDataFields = [
@@ -164,7 +169,8 @@ function createUsageProviderSlice<
         const snapshot = await api.getSnapshot({
           scope: selection.scope,
           range: selection.range,
-          limit: 10
+          limit: 10,
+          ...config.getExtraSnapshotArgs?.(get())
         })
         if (
           snapshot.scanState.lastScanCompletedAt !== null ||
@@ -177,19 +183,25 @@ function createUsageProviderSlice<
                 ? { ...snapshot.scanState, isScanning: true }
                 : snapshot.scanState
           })
+          if (config.mapSnapshotExtras) {
+            set(config.mapSnapshotExtras(snapshot))
+          }
         } else {
           update({ scanState: { ...scanState, isScanning: true, lastScanError: null } })
         }
 
         await api.refresh({ force: opts?.forceRefresh ?? false })
         const refreshedSelection = read()
-        update(
-          await api.getSnapshot({
-            scope: refreshedSelection.scope,
-            range: refreshedSelection.range,
-            limit: 10
-          })
-        )
+        const refreshedSnapshot = await api.getSnapshot({
+          scope: refreshedSelection.scope,
+          range: refreshedSelection.range,
+          limit: 10,
+          ...config.getExtraSnapshotArgs?.(get())
+        })
+        update(refreshedSnapshot)
+        if (config.mapSnapshotExtras) {
+          set(config.mapSnapshotExtras(refreshedSnapshot))
+        }
       } catch (error) {
         console.error(`Failed to fetch ${config.name} usage:`, error)
       }
@@ -218,6 +230,13 @@ function createUsageProviderSlice<
           projectBreakdown: [],
           recentSessions: []
         })
+        if (config.mapSnapshotExtras) {
+          set({
+            ...config.mapSnapshotExtras({
+              accountOptions: []
+            } as T['snapshot'])
+          })
+        }
         if (enabled) {
           await fetchUsage({ forceRefresh: true })
         }
@@ -260,7 +279,11 @@ type CodexUsageShape = UsageShape<CodexUsageScope, CodexUsageRange, CodexUsageSn
 type OpenCodeUsageShape = UsageShape<OpenCodeUsageScope, OpenCodeUsageRange, OpenCodeUsageSnapshot>
 
 export type ClaudeUsageSlice = ProviderUsageSlice<'claude', 'Claude', ClaudeUsageShape>
-export type CodexUsageSlice = ProviderUsageSlice<'codex', 'Codex', CodexUsageShape>
+export type CodexUsageSlice = ProviderUsageSlice<'codex', 'Codex', CodexUsageShape> & {
+  codexUsageAccountFilter: CodexUsageAccountFilter
+  codexUsageAccountOptions: CodexUsageAccountOption[]
+  setCodexUsageAccountFilter: (filter: CodexUsageAccountFilter) => Promise<void>
+}
 export type OpenCodeUsageSlice = ProviderUsageSlice<'openCode', 'OpenCode', OpenCodeUsageShape>
 
 export const createClaudeUsageSlice = createUsageProviderSlice<
@@ -276,13 +299,37 @@ export const createClaudeUsageSlice = createUsageProviderSlice<
   hasCachedData: (state) => state.hasAnyClaudeData
 })
 
-export const createCodexUsageSlice = createUsageProviderSlice<'codex', 'Codex', CodexUsageShape>({
+const createCodexUsageProviderSlice = createUsageProviderSlice<
+  'codex',
+  'Codex',
+  CodexUsageShape
+>({
   prefix: 'codex',
   name: 'Codex',
   initialScope: 'orca',
   initialRange: '30d',
   getApi: () => window.api.codexUsage,
-  hasCachedData: (state) => state.hasAnyCodexData
+  hasCachedData: (state) => state.hasAnyCodexData,
+  getExtraSnapshotArgs: (state) => ({ accountFilter: state.codexUsageAccountFilter }),
+  mapSnapshotExtras: (snapshot) => ({
+    codexUsageAccountOptions: snapshot.accountOptions ?? []
+  })
+})
+
+export const createCodexUsageSlice: StateCreator<AppState, [], [], CodexUsageSlice> = (
+  set,
+  get,
+  api
+) => ({
+  ...createCodexUsageProviderSlice(set, get, api),
+  codexUsageAccountFilter: { kind: 'all' },
+  codexUsageAccountOptions: [],
+  setCodexUsageAccountFilter: async (filter) => {
+    set({
+      codexUsageAccountFilter: filter
+    })
+    await get().fetchCodexUsage()
+  }
 })
 
 export const createOpenCodeUsageSlice = createUsageProviderSlice<
