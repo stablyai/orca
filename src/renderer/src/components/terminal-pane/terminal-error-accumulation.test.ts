@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { appendTerminalErrorMessage } from './terminal-error-accumulation'
+import {
+  appendTerminalErrorMessage,
+  capTerminalErrorSurfaceNewest,
+  MAX_TERMINAL_ERROR_SURFACE_CHARS
+} from './terminal-error-accumulation'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
 
 const MULTILINE_ERROR = 'Remote terminal write failed.\nThe remote runtime rejected the request.'
@@ -66,5 +70,28 @@ describe('appendTerminalErrorMessage', () => {
       MULTILINE_ERROR
     )
     expect(stripSshReconnectOwnedErrorLines(accumulated)).toBe(MULTILINE_ERROR)
+  })
+
+  it('caps a storm of distinct messages so the surface cannot grow unbound (#12685)', () => {
+    let surface: string | null = null
+    for (let i = 0; i < 200; i += 1) {
+      surface = appendTerminalErrorMessage(surface, `Distinct error number ${i}.`)
+    }
+    expect(surface!.length).toBeLessThanOrEqual(MAX_TERMINAL_ERROR_SURFACE_CHARS)
+    // Newest messages survive the cap.
+    expect(surface).toContain('Distinct error number 199.')
+    expect(surface).not.toContain('Distinct error number 0.')
+  })
+
+  it('cuts the capped suffix on a newline when possible', () => {
+    const text = `${'a'.repeat(100)}\nnewest-line`
+    expect(capTerminalErrorSurfaceNewest(text, 20)).toBe('newest-line')
+  })
+
+  it('keeps the head of a single oversized line so SSH prefixes survive', () => {
+    const owned = `SSH connection failed: ${'x'.repeat(3_000)}`
+    const capped = capTerminalErrorSurfaceNewest(owned, 80)
+    expect(capped.startsWith('SSH connection failed:')).toBe(true)
+    expect(capped.length).toBe(80)
   })
 })
