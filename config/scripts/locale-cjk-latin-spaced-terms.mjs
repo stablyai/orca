@@ -47,14 +47,15 @@ export const CJK_LATIN_SPACED_TERMS = [
   'Git AI Author',
   'Token',
   'token',
-  // Why: the ja phrase fixes write these back in Latin (クッキー→Cookie, 早送り→fast-forward),
-  // so they need the same 和欧間スペース treatment as the terms MT already leaves in Latin.
   'fast-forward',
   'Cookie',
   'Cookies',
-  // Why: the ja phrase fixes restore these from 上流 / 起源 / エルメス / パワーシェル / アヒルアヒル.
   'upstream',
   'origin',
   'Hermes',
-  'DuckDuckGo'
+  'DuckDuckGo',
+  'Mermaid',
+  'VS Code',
+  'IDE',
+  'Git'
 ]

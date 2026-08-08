@@ -7,19 +7,19 @@ export const JA_VALUE_OVERRIDES = {
   'Choose folder': 'フォルダーを選択',
   'Choose pet': 'ペットを選択',
   'Choose a sound': 'サウンドを選択',
-  'Pick your default agent': 'デフォルトのエージェントを選択',
+  'Pick your default agent': 'デフォルトの Agent を選択',
   'Complete {{artifact_url}}': '{{artifact_url}} を完了',
   'Control terminals and agents from your phone.':
-    'スマートフォンからターミナルとエージェントを操作します。',
+    'スマートフォンからターミナルと Agent を操作します。',
   'Add reviewer': 'レビュアーを追加',
   Reviewer: 'レビュアー',
   Reviewers: 'レビュアー',
   'Fix broken checks': '失敗したチェックを修正',
   'No broken checks to fix.': '修正が必要なチェックはありません。',
   'Started an AI agent for the broken checks.':
-    '失敗したチェックに対して AI エージェントを開始しました。',
+    '失敗したチェックに対して AI Agent を開始しました。',
   'Failed to start an AI agent for the broken checks: {{value0}}':
-    '失敗したチェックのため AI エージェントを開始できませんでした: {{value0}}',
+    '失敗したチェックのため AI Agent を開始できませんでした: {{value0}}',
   'Checks unavailable': 'チェックは利用できません',
   'Checks pending': '保留中のチェック',
   checks: 'チェック',
@@ -92,7 +92,7 @@ export const JA_VALUE_OVERRIDES = {
   Launch: '起動',
   'Launch:': '起動：',
   'Launch plan': '起動プラン',
-  'Launch agent': 'エージェントを起動',
+  'Launch agent': 'Agent を起動',
   'Launch {{value0}} in a new terminal': '新規ターミナルで {{value0}} を起動',
   Play: '再生',
   Action: '操作',
@@ -148,8 +148,8 @@ export const JA_VALUE_OVERRIDES = {
   'Select a workspace to browse files': 'ファイルを参照するワークスペースを選択',
   'Select a workspace to search': '検索するワークスペースを選択',
   'Select a workspace to view changes': '変更を表示するワークスペースを選択',
-  'Choose agent to fix commit failure': 'コミット失敗を修正するエージェントを選択',
-  'Choose an agent for this commit failure': 'このコミット失敗に対するエージェントを選択',
+  'Choose agent to fix commit failure': 'コミット失敗を修正する Agent を選択',
+  'Choose an agent for this commit failure': 'このコミット失敗に対する Agent を選択',
   'Enter a commit message to commit': 'コミットメッセージを入力してコミット',
   'Choose parent folder...': '親フォルダーを選択...',
   'Check for stuck work, stale generated files, failing validation, and anything that needs human attention. Report only actionable issues.':
@@ -235,9 +235,8 @@ export const JA_VALUE_OVERRIDES = {
   'Cursor Shape': 'カーソル形状',
   'Blinking Cursor': 'カーソルの点滅',
   'Terminal Cursor': 'ターミナルのカーソル',
-  // Round 7: strings the Latin-noun revert left broken, plus commands MT translated into unrunnable text.
   'Local folders and Git repositories': 'ローカルフォルダーと Git リポジトリ',
-  'Started an AI agent for the conflicts.': '競合の解決のために AI エージェントを開始しました。',
+  'Started an AI agent for the conflicts.': '競合の解決のために AI Agent を開始しました。',
   'Previous conflict': '前の競合',
   '1 commit ahead of {{value0}}': '{{value0}} より 1 コミット進んでいます',
   '1 commit behind {{value0}}': '{{value0}} より 1 コミット遅れています',
@@ -250,7 +249,6 @@ export const JA_VALUE_OVERRIDES = {
   'Not found. Install Android Studio, then create a Virtual Device.':
     '見つかりません。Android Studio をインストールしてから、仮想デバイスを作成してください。',
   'ANSI blue color': 'ANSI青色',
-  // Round 8: dev-domain homographs MT got wrong — MR read as a courtesy title, State as a US state.
   'MR !{{value0}}': 'MR !{{value0}}',
   mrs: 'MR',
   'No human comments.': 'ユーザーによるコメントはありません。',
@@ -263,20 +261,16 @@ export const JA_VALUE_OVERRIDES = {
   'behind main': 'main より遅れています',
   'behind (base commit:': '遅れ (ベースコミット:',
   'No pending todos. You’re all caught up!': '保留中の ToDo はありません。すべて完了しています！',
-  // 優先度は「高い/中くらい/低い」ではなくラベルとして「高/中/低」
   High: '高',
   Medium: '中',
   Low: '低',
-  // 分割操作は「スプリット〜」の音写と「〜に分割」が混在していた
   'Split Terminal Down': 'ターミナルを下に分割',
   'Split Terminal Right': 'ターミナルを右に分割',
   'Split Up': '上に分割',
   'Split Down': '下に分割',
-  // Browser Use is a feature name; MT translated it and lost the sentence structure.
   "Install the Browser Use skill so agents can operate Orca's browser.":
-    'Browser Use スキルをインストールすると、エージェントが Orca のブラウザを操作できるようになります。',
+    'Browser Use スキルをインストールすると、 Agent が Orca のブラウザを操作できるようになります。',
   'bold ·': '太字 ·',
-  // Issue は Latin 表記に統一する（末尾の phrase fix は原文に "issue" がある場合しか効かない）
   'Duplicate of another issue in this repository': 'このリポジトリ内の別の Issue と重複',
   'Choose a different issue.': '別の Issue を選択してください。',
   'No matching issues loaded.': '一致する Issue がありません。',
@@ -285,16 +279,13 @@ export const JA_VALUE_OVERRIDES = {
   'closed this': 'がこの Issue をクローズしました',
   'reopened this': 'がこの Issue を再オープンしました',
   'moved this': 'がこの Issue を移動しました',
-  // 句点の欠落（他 2,300 件超は句点で終わる）
   'Failed to save setup startup behavior.': 'セットアップ時の起動設定を保存できませんでした。',
   'Failed to resolve MR base.': 'MR のベースブランチを特定できませんでした。',
   'Failed to copy context.': 'コンテキストのコピーに失敗しました。',
-  // 検索結果なしは [前半][検索語]["] の3分割で描画される。閉じ側は既に 」 なので前半で文を完結させる。
+  // 3-way split: [this][query]["]. The closing side is already 」, so end the sentence here.
   'No settings found for "': '検索条件に一致する設定が見つかりませんでした:「',
-  // Round 9: 英語原文が更新されたのに旧原文が残っていた箇所（訳ですらなかった）
-  'This SSH host is not connected.': 'この SSH ホストは接続されていません。',
   "Doesn't apply to agents where you've overridden launch arguments.":
-    '起動引数を上書きしているエージェントには適用されません。',
+    '起動引数を上書きしている Agent には適用されません。',
   'Check for Server Updates': 'サーバーの更新を確認',
   'All servers are up to date.': 'すべてのサーバーが最新です。',
   'Open worktree': 'ワークツリーを開く',
@@ -302,7 +293,6 @@ export const JA_VALUE_OVERRIDES = {
   'Git repository': 'Git リポジトリ',
   '{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.':
     '{{host}} は保存済みの SSH ホストではなくなったため、このワークスペースは稼働中のホストに接続されていません。Orca から削除することのみ可能です。リモート上のファイルとブランチはそのまま残ります。',
-  // Round 9: 直訳調・語順・助詞の調整
   'The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.':
     'アプリシェルのレンダリングを完了できませんでした。再マウントを試すか、エラーが解決しない場合は Orca を再起動してください。',
   'Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server.':
@@ -311,24 +301,19 @@ export const JA_VALUE_OVERRIDES = {
   'Orca Cloud sign-in is not configured': 'Orca Cloud へのサインインが設定されていません',
   '{{provider}} could not authenticate the credentials available in this environment. Check the {{provider}} login or environment token, then retry.':
     '{{provider}} はこの環境で利用できる認証情報で認証できませんでした。{{provider}} のログインまたは環境トークンを確認して、再試行してください。',
-  // コマンド例は実行できる形のまま残す
   'e.g. ollama run llama3.1 {prompt}': '例: ollama run llama3.1 {prompt}',
   'e.g. ollama run llama3.1 {{value0}}': '例: ollama run llama3.1 {{value0}}',
-  // 三点リーダーは日本語側では … に統一する（末尾の phrase fix が最終的に揃える）
   'Connecting terminal...': 'ターミナルに接続中…',
   'Starring…': 'スターを付けています…',
-  // 設定検索の語: カタログ内の既存訳・並びの他項目に合わせる
   'self-hosted': 'セルフホスト',
   'not-authenticated': '未認証',
   'side-by-side': '左右に並べて',
   'Side-by-side': '左右に並べて',
-  // Round 10: 名詞句を動詞に読み違えた訳と、UI 用語の直訳
   'Pull requests and commit statuses via the Gitea REST API.':
     'Gitea REST API 経由の PR とコミットステータス。',
   Key: 'キー',
   slug: 'スラッグ',
-  // 環境変数の説明は [断片][変数名][断片] の連結で描画される。1キーに統合するのが本筋だが、
-  // それまでの間、連結して日本語として読める割り当てにしておく（2 つのカードが同じ断片を共有）。
+  // Rendered as [fragment][var name][fragment] by two cards that share these fragments.
   'Public repositories are detected from their git remote. Set':
     'パブリックリポジトリは git リモートから検出されます。設定:',
   'for private repositories, and set': '（プライベートリポジトリ用）。また、',
@@ -340,13 +325,11 @@ export const JA_VALUE_OVERRIDES = {
   '. Set': '。設定:',
   ', or set': '、または',
   and: 'と',
-  // Why: these render concatenated, so the leading space is part of the string, not padding.
+  // Concatenated: the leading space is part of the string, not padding.
   ' and ': ' と ',
   ' in {{value0}}': '（{{value0}}）',
   ' • Last scan error: {{value0}}': ' • 最終スキャンエラー: {{value0}}',
   ' vs {{value0}}': ' vs {{value0}}',
-  // Why: these two descriptions render as [text] <code> [text]. The Japanese closed the sentence
-  // with 。 and dropped the "such as"/"like" hand-off, so the code span fell outside the sentence.
   'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as':
     'ワークスペースを作成すると、Orca はリモートベースを更新し、一致するローカルブランチを安全に fast-forward します。対象は',
   '. This keeps commands like': '。これにより、',
@@ -385,11 +368,8 @@ export const JA_VALUE_OVERRIDES = {
   'Update all {{value0}} servers': '{{value0}} 台のサーバーをすべて更新',
   'This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.':
     'この QR コードでは、モバイル向けの制限付きアクセスのみ利用できます。完全版の Web アプリを使用するには、[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] → [新規リンク] から、ブラウザ用アクセスリンクを開いてください。',
-  'Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.':
-    'IP アドレスまたはホスト名（Tailscale の MagicDNS 名、DDNS ドメイン、LAN のホスト名など）を入力してください。必要に応じて :port を付けることもできます。',
   'Loading skills...': 'スキルを読み込み中…',
-  'Start agents on your tasks without leaving Orca':
-    'Orca から離れずに、タスクからエージェントを開始',
+  'Start agents on your tasks without leaving Orca': 'Orca から離れずに、タスクから Agent を開始',
   'Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}} because {{value2}}':
     'ワークスペースは {{value0}} から作成されましたが、{{value2}} のため Orca はローカル {{value1}} を fast-forward できませんでした',
   'Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.':
@@ -397,17 +377,15 @@ export const JA_VALUE_OVERRIDES = {
   'The dashboard could not finish rendering. Retry to remount it, or reopen it.':
     'ダッシュボードのレンダリングを完了できませんでした。再マウントを試すか、開き直してください。',
 
-  // 原文と内容が一致していなかった（古い訳が残存）
   'Review the prompt before starting an agent.':
-    'エージェントを開始する前に、プロンプトを確認してください。',
+    'Agent を開始する前に、プロンプトを確認してください。',
   'Use Add Project to enter a path on the selected host.':
     '[プロジェクトの追加] から、選択したホスト上のパスを入力します。',
   'Use repo-relative paths like packages/web or apps/api.':
     'packages/web や apps/api などのリポジトリ相対パスを使用します。',
-  // 構文・修飾関係の取り違え
   'orca.yaml first, then your local commands.': 'まず orca.yaml、次にローカルのコマンドの順です。',
   'Rename Orca-created branches from the initial agent task.':
-    'Orca が作成したブランチの名前を、最初のエージェントタスクに基づいて変更します。',
+    'Orca が作成したブランチの名前を、最初の Agent タスクに基づいて変更します。',
   'Dim files matched by .gitignore in the file explorer.':
     'ファイルエクスプローラーで、.gitignore に一致するファイルを薄く表示します。',
   'Command line Orca runs when a text recipe uses Custom command.':
@@ -417,10 +395,9 @@ export const JA_VALUE_OVERRIDES = {
   'Choose which optional saved Codex account powers live quota reads.':
     'ライブクォータの取得に使用する、保存済みの Codex アカウント（任意）を選択します。',
   'This plugin has no worker process. Its instructional content can still cause actions when you or an agent use it. Review the instructions and commands below before enabling it.':
-    'このプラグインにはワーカープロセスがありません。それでも、ユーザーやエージェントが使用したときに、記載された手順が操作を引き起こす可能性があります。有効にする前に、以下の手順とコマンドを確認してください。',
+    'このプラグインにはワーカープロセスがありません。それでも、ユーザーや Agent が使用したときに、記載された手順が操作を引き起こす可能性があります。有効にする前に、以下の手順とコマンドを確認してください。',
   'This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.':
     '保存済みの SSH ホストとその認証情報を、このコンピュータから削除します。リモートのファイルは削除されません。',
-  // 危険度が変わる誤訳
   'Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind. AI diffs may miss recent commits.':
     '新規ワークツリーは最新ですが、ローカル {{value0}} は {{value1}} {{value2}} 遅れています。AI の差分に最近のコミットが反映されない可能性があります。',
   'This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.':
@@ -431,7 +408,6 @@ export const JA_VALUE_OVERRIDES = {
     'リモートランタイムがアクティブな間は、ローカルターミナルの表示は利用できません',
   'No quick commands saved.': '保存されているクイックコマンドはありません。',
   'Repository not in Orca': 'このリポジトリは Orca に登録されていません',
-  // host と server / worktree と workspace の取り違え
   'host folder not selected': 'ホストフォルダーが選択されていません',
   'Add a Git repository or folder that already exists on the selected host.':
     '選択したホストに既に存在する Git リポジトリまたはフォルダーを追加します。',
@@ -447,44 +423,39 @@ export const JA_VALUE_OVERRIDES = {
     'このホスト上に、添付に使用できるプロジェクトパスがありません。',
   'Clears them from Orca only. Remote files, worktrees, and branches are left untouched.':
     'Orca からのみ削除します。リモートのファイル、ワークツリー、ブランチはそのまま残ります。',
-  'Agent location': 'エージェントの実行場所',
-  // Git 用語を一般語義に訳していた
+  'Agent location': 'Agent の実行場所',
   upstream: 'upstream',
   Upstream: 'upstream',
   'Commit staged changes': 'ステージ済みの変更をコミット',
   'Generate the commit message from staged changes.':
     'ステージ済みの変更からコミットメッセージを生成します。',
-  // 識別子・キー名は翻訳しない
   lan: 'LAN',
   deploy: 'deploy',
   'Connect this source to check for Hermes automations in the remote profile.':
     'このソースに接続すると、リモートプロファイル内の Hermes オートメーションを確認できます。',
-  // ユーザーへの指示は「〜してください」、完了通知は過去形にする
-  'Notes sent to active agent.': 'メモをアクティブなエージェントに送信しました。',
+  'Notes sent to active agent.': 'メモをアクティブな Agent に送信しました。',
   'Review before attaching. Captured page context may include visible site content.':
     '添付する前に確認してください。取得したページのコンテキストには、表示中のサイトの内容が含まれる場合があります。',
   'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.':
-    'エージェントの起動に時間がかかりすぎました。ワークスペースの準備はできています。エージェントがアイドル状態になったら {{value0}} を貼り付けてください。',
+    'Agent の起動に時間がかかりすぎました。ワークスペースの準備はできています。 Agent がアイドル状態になったら {{value0}} を貼り付けてください。',
   'Install the Orca CLI before running agent skill setup.':
-    'エージェントスキルのセットアップを実行する前に、Orca CLI をインストールしてください。',
+    'Agent スキルのセットアップを実行する前に、Orca CLI をインストールしてください。',
   'Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.':
     'Orca を実行しているコンピュータのターミナルで grok を実行し、起動するまで待ってください。サインインを求められた場合は完了してから、使用状況を再取得してください。チャットメッセージを送る必要はありません。',
-  'Choose an enabled agent before saving.': '保存する前に、有効なエージェントを選択してください。',
+  'Choose an enabled agent before saving.': '保存する前に、有効な Agent を選択してください。',
   'Selected agent is disabled. Choose an enabled agent before creating.':
-    '選択したエージェントは無効です。作成する前に、有効なエージェントを選択してください。',
-  'Choose an agent before starting.': '開始する前に、エージェントを選択してください。',
+    '選択した Agent は無効です。作成する前に、有効な Agent を選択してください。',
+  'Choose an agent before starting.': '開始する前に、 Agent を選択してください。',
   'Change this later from the project menu.': '後でプロジェクトメニューから変更できます。',
   "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time.":
-    'Orca はすべての CLI エージェントで動作します。最もよく使うものを選択してください。いつでも切り替えられます。',
-  // 状態ラベルは体言で揃える
+    'Orca はすべての CLI Agent で動作します。最もよく使うものを選択してください。いつでも切り替えられます。',
   'Downloading paused': 'ダウンロード一時停止中',
   Canceled: 'キャンセル済み',
   'Thinking...': '思考中…',
   'No attached worktrees yet': '紐づくワークツリーはまだありません',
   'Started an AI agent for the commit failure.':
-    'コミット失敗を修正するために AI エージェントを開始しました。',
+    'コミット失敗を修正するために AI Agent を開始しました。',
   'terminals until reset': 'リセットするまでターミナルを維持',
-  // 日本語として壊れていた語順・重複・語彙
   'Failed to import repo icon': 'リポジトリアイコンのインポートに失敗しました',
   'Terminal Panes': 'ターミナルペイン',
   'Option composes special characters for your keyboard layout.':
@@ -494,20 +465,19 @@ export const JA_VALUE_OVERRIDES = {
   'Auto-generates a new name when you leave this text box empty.':
     'このテキストボックスを空のままにすると、名前が自動生成されます。',
   'Auto-name workspace from first agent message':
-    '最初のエージェントメッセージからワークスペース名を自動生成',
+    '最初の Agent メッセージからワークスペース名を自動生成',
   'Controls the split divider line between panes in light mode.':
     'ライトモードでのペイン間の分割線を制御します。',
   'Controls the split divider line between panes in dark mode.':
     'ダークモードでのペイン間の分割線を制御します。',
   'Countdown timer showing time until prompt cache expires (Claude agents).':
-    'プロンプトキャッシュが期限切れになるまでの時間を示すカウントダウンタイマー（Claude エージェント）。',
+    'プロンプトキャッシュが期限切れになるまでの時間を示すカウントダウンタイマー（Claude Agent ）。',
   'Install and manage experimental Orca plugins.':
     '実験的機能の Orca プラグインをインストール・管理します。',
   "Resident memory held by Orca plus the processes under each worktree's terminals.":
     'Orca が保持する常駐メモリと、各ワークツリーのターミナル配下で実行中のプロセス。',
   'No local Claude, Codex, or OpenCode usage found yet. The overview will populate after the next agent session writes token logs.':
-    'ローカルの Claude、Codex、OpenCode の使用状況はまだ見つかりません。次のエージェントセッションがトークンログを書き込むと、概要に反映されます。',
-  // Round 12: full-catalog sweep — instructions that lost their predicate, and residual literals.
+    'ローカルの Claude、Codex、OpenCode の使用状況はまだ見つかりません。次の Agent セッションがトークンログを書き込むと、概要に反映されます。',
   'Choose or add a project before creating a workspace.':
     'ワークスペースを作成する前に、プロジェクトを選択または追加してください。',
   'Choose a project to get started.': '開始するには、プロジェクトを選択してください。',
@@ -549,13 +519,26 @@ export const JA_VALUE_OVERRIDES = {
     '保存する前に、使用可能なワークスペースを選択してください。',
   'Enter a valid advanced schedule before saving.':
     '保存する前に、有効な詳細スケジュールを入力してください。',
-  // Round 13: a DeepL cross-check surfaced these — progress labels missing 〜中, a stale
-  // sidebar string, and a fragment that never resolved into Japanese.
   'Creating...': '作成中…',
   'Creating…': '作成中…',
   'Reopening...': '再オープン中…',
   'Thinking…': '思考中…',
   'Hide from sidebar': 'サイドバーから非表示',
   'Show in sidebar': 'サイドバーに表示',
-  'Recent or tab strip.': '「最近」またはタブストリップ。'
+  'Recent or tab strip.': '「最近」またはタブストリップ。',
+  // Settings-search keywords: proper nouns keep their canonical spelling, and the rest were
+  // translated in the wrong sense (windows→窓, gitignore→ギティ無視, component→成分).
+  windows: 'Windows',
+  'windows powershell': 'Windows PowerShell',
+  'powershell 7': 'PowerShell 7',
+  neovim: 'Neovim',
+  hermes: 'Hermes',
+  duckduckgo: 'DuckDuckGo',
+  gitignore: 'gitignore',
+  component: 'コンポーネント',
+  compose: '特殊文字の入力',
+  sidekick: 'Sidekick',
+  'api token': 'API トークン',
+  'compare base': '比較ベース',
+  ahead: '進んでいる'
 }

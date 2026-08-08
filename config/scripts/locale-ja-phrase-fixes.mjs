@@ -3,27 +3,21 @@
 
 const JA_SENTENCE_CHAR = '[぀-ヿ一-龯、。・「」（）]'
 
-// Why: `git commit` and `orca terminal` are two-word commands, so the second word must stay Latin
-// even though the first word is not a `-`/word-char neighbour the position guards would catch.
+// Two-word commands (`git commit`, `orca terminal`) must keep their second word in Latin.
 const COMMAND_HEAD = '(?<!\\b(?:git|gh|glab|orca|npm|pnpm|npx|yarn|docker|kubectl) )'
 
-// Why: #12113 reverted these renderings to Latin inside Japanese sentences before the
-// canonical-rendering guard landed, so ~700 values still read "terminal を閉じる". The guard stops
-// new damage; this heals what the catalog already carries. Both sides are anchored on an adjacent
-// Japanese character and reject a `-`, word char or `.` neighbour, so `--agent` and agents.md keep
-// their spelling; a following Latin word keeps a Latin-only label such as "Agent SDK" intact.
+// #12113 stopped new damage; ~700 values still read "terminal を閉じる" and are healed here.
+// Anchored on adjacent Japanese, so `--agent`, agents.md and "Agent SDK" keep their spelling.
 const RELOCALIZED_GENERIC_TERMS = [
   ['[Tt]erminals?', 'ターミナル', 'terminal'],
   ['[Cc]ommits?', 'コミット', 'commit'],
   ['[Rr]epos?', 'リポジトリ', 'repo'],
-  // Why: Agent is the one term ja keeps in Latin; this only normalizes the case so a sentence
-  // never mixes "agent" and "Agent". The spacing term list restores the 和欧間スペース.
+  // Agent stays Latin in ja; this only normalizes the case.
   ['[Aa]gents?', 'Agent', 'agent'],
   ['[Ww]orktrees?', 'ワークツリー', 'worktree']
 ].flatMap(([latin, katakana, whenEnIncludes]) => [
   {
-    // Why: the trailing space only goes when Japanese follows — "ターミナル {{value0}} 件" keeps its
-    // 和欧間スペース, while "ローカル terminal の" closes up to "ローカルターミナルの".
+    // The trailing space only goes when Japanese follows, so 和欧間スペース survives before {{…}}.
     pattern: new RegExp(
       `(?<=${JA_SENTENCE_CHAR}) ?${COMMAND_HEAD}${latin}(?![-\\w.])(?! [A-Za-z])(?: (?=${JA_SENTENCE_CHAR}))?`,
       'g'
@@ -43,12 +37,10 @@ const RELOCALIZED_GENERIC_TERMS = [
 
 export const JA_PHRASE_FIXES = [
   ...RELOCALIZED_GENERIC_TERMS,
-  // Why: ja house style keeps Agent in Latin — it names Orca's own concept, not the everyday word.
-  // Runs before 代理人→エージェント so both spellings converge on Agent.
   { pattern: /エージェント/g, replacement: 'Agent', whenEnIncludes: 'agent' },
   { pattern: /解雇/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
   { pattern: /却下/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
-  { pattern: /代理人/g, replacement: 'エージェント', whenEnIncludes: 'agent' },
+  { pattern: /代理人/g, replacement: 'Agent', whenEnIncludes: 'agent' },
   { pattern: /支店/g, replacement: 'ブランチ', whenEnIncludes: 'ranch' },
   { pattern: /港(?!口)/g, replacement: 'ポート', whenEnIncludes: 'ort' },
   { pattern: /会議/g, replacement: 'セッション', whenEnIncludes: 'session' },
@@ -280,8 +272,7 @@ export const JA_PHRASE_FIXES = [
     whenEnIncludes: 'More PR actions'
   },
   { pattern: /アクション/g, replacement: '操作', whenEnIncludes: 'action' },
-  // Why: Orca's "host" covers SSH hosts and this computer, so サーバー is both wrong and narrower.
-  // Skipped when the English also says "server", where the two words are deliberately distinct.
+  // Orca's host covers SSH hosts and this computer; skipped where the English also says server.
   {
     pattern: /(ランタイム)?サーバー/g,
     replacement: 'ホスト',
@@ -290,15 +281,11 @@ export const JA_PHRASE_FIXES = [
   { pattern: /上流/g, replacement: 'upstream', whenEnIncludes: 'upstream' },
   { pattern: /起源/g, replacement: 'origin', whenEnIncludes: 'origin' },
   { pattern: /段階的な変更/g, replacement: 'ステージ済みの変更', whenEnIncludes: 'staged' },
-  { pattern: /(エルメス|ヘルメス)/g, replacement: 'Hermes', whenEnIncludes: 'Hermes' },
-  { pattern: /パワーシェル/g, replacement: 'PowerShell', whenEnIncludes: 'PowerShell' },
-  { pattern: /アヒルアヒル/g, replacement: 'DuckDuckGo', whenEnIncludes: 'duckduckgo' },
   { pattern: /紛争/g, replacement: '競合', whenEnIncludes: 'conflict' },
   { pattern: /資格情報/g, replacement: '認証情報', whenEnIncludes: 'credential' },
   { pattern: /未知/g, replacement: '不明', whenEnIncludes: 'unknown' },
   { pattern: /クッキー/g, replacement: 'Cookie', whenEnIncludes: 'cookie' },
   { pattern: /プロフィール/g, replacement: 'プロファイル', whenEnIncludes: 'profile' },
-  // Why: 「読み込み」が多数派。ダウンロード/アップロード/リロードの語尾は巻き込まない。
   { pattern: /(?<![ンプリ])ロード中/g, replacement: '読み込み中', whenEnIncludes: 'load' },
   {
     pattern: /(?<![ンプリ])ロードしています/g,
@@ -307,15 +294,10 @@ export const JA_PHRASE_FIXES = [
   },
   { pattern: /構成されて/g, replacement: '設定されて', whenEnIncludes: 'configur' },
   { pattern: /第一方/g, replacement: 'ファーストパーティ', whenEnIncludes: 'first-party' },
-  // Why: Git's fast-forward is kept in Latin here; 早送り reads as video scrubbing.
   { pattern: /早送り/g, replacement: 'fast-forward', whenEnIncludes: 'fast-forward' },
   { pattern: /ファストフォワード/g, replacement: 'fast-forward', whenEnIncludes: 'fast-forward' },
-  // Why: Japanese uses the full-width ellipsis. Anchoring on a preceding Japanese character keeps
-  // URLs, token samples (sk-...) and git ranges (main...HEAD) out of it.
   { pattern: /([぀-ヿ一-龯])\.\.\./g, replacement: '$1…', whenEnMatches: /./ },
-  // Why: Japanese compound katakana is written solid — MT inserts Microsoft-style separator spaces.
   { pattern: /([゠-ヿ]) (?=[゠-ヿ])/g, replacement: '$1', whenEnMatches: /./ },
-  // Why: the long-vowel mark differs per word in Japanese usage, so each one follows the catalog majority.
   { pattern: /サーバ(?!ー)/g, replacement: 'サーバー', whenEnMatches: /./ },
   { pattern: /フォルダ(?!ー)/g, replacement: 'フォルダー', whenEnMatches: /./ },
   { pattern: /エディタ(?!ー)/g, replacement: 'エディター', whenEnMatches: /./ },
