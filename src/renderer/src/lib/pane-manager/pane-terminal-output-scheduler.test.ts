@@ -1677,4 +1677,71 @@ describe('pane terminal output scheduler', () => {
     vi.advanceTimersByTime(100)
     expect(throwing.write).toHaveBeenCalledTimes(1)
   })
+
+  describe('input-protection freeze recovery', () => {
+    // Why: a dense-SGR entry frozen inside the input window must resume when
+    // the window expires even if no new output arrives (the flood stopped
+    // exactly inside the window) — otherwise queued output strands until the
+    // next chunk.
+    function denseSgrChunk(count = 8): string {
+      return Array.from({ length: count }, (_, index) => `\x1b[38;5;${index}mX\x1b[0m`).join('')
+    }
+
+    it('freezes dense-SGR foreground output while the user is typing', async () => {
+      vi.useFakeTimers()
+      const { writeTerminalOutput, markTerminalUserInput } = await loadScheduler()
+      const terminal = createTerminal()
+
+      markTerminalUserInput(terminal)
+      writeTerminalOutput(terminal, denseSgrChunk(), {
+        foreground: true,
+        latencySensitive: false
+      })
+
+      vi.advanceTimersByTime(0)
+      expect(terminal.write).not.toHaveBeenCalled()
+    })
+
+    it('resumes the frozen backlog once the input window expires', async () => {
+      // Why explicit toFake: the default fake set leaves performance.now()
+      // real, so the input window would never expire; and toFake replaces the
+      // default set, so the scheduler's setTimeout must be listed too.
+      vi.useFakeTimers({
+        toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']
+      })
+      const { writeTerminalOutput, markTerminalUserInput } = await loadScheduler()
+      const terminal = createTerminal()
+
+      markTerminalUserInput(terminal)
+      writeTerminalOutput(terminal, denseSgrChunk(), {
+        foreground: true,
+        latencySensitive: false
+      })
+      vi.advanceTimersByTime(0)
+      expect(terminal.write).not.toHaveBeenCalled()
+
+      // The window-expiry recovery timer drains the frozen entry (501ms: the
+      // recovery timer fires strictly after the <=-bound window closes, then
+      // the drain's own 0ms timer runs — advance one more ms so the recovery
+      // callback's newly scheduled drain job is picked up).
+      vi.advanceTimersByTime(501)
+      vi.advanceTimersByTime(1)
+      expect(terminal.write).toHaveBeenCalled()
+    })
+
+    it('keeps plain-text foreground output flowing during the input window', async () => {
+      vi.useFakeTimers()
+      const { writeTerminalOutput, markTerminalUserInput } = await loadScheduler()
+      const terminal = createTerminal()
+
+      markTerminalUserInput(terminal)
+      writeTerminalOutput(terminal, 'plain text output', {
+        foreground: true,
+        latencySensitive: false
+      })
+
+      vi.advanceTimersByTime(0)
+      expect(terminal.write).toHaveBeenCalledWith('plain text output', expect.any(Function))
+    })
+  })
 })

@@ -19,6 +19,7 @@ import type { GlobalSettings, TuiAgent } from '../../shared/types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
+import { isDenseSgr } from '../../shared/terminal-sgr-density'
 import type {
   PtyDeliveryWriteOff,
   PtyRendererDeliveryHealthReply,
@@ -2113,6 +2114,11 @@ export type PtyRendererDeliveryDebugSnapshot = {
   hiddenDeliveryDroppedChars: number
   hiddenDeliveryDroppedChunks: number
   pendingDroppedChars: number
+  /** Chars dropped by the input-protection gate (flood chunks while typing). */
+  inputProtectionDroppedChars: number
+  /** Chars/count sent on the dedicated interactive (echo) lane. */
+  interactiveLaneSentChars: number
+  interactiveLaneSentCount: number
   /** One-paste freeze diagnostics: per-pty delivery table + event history. */
   diagnostics: PtyMainDeliveryDiagnostics
   // Why: a nonzero lastLifecycleResetClearedChars is the exact signature of the leaked-accounting freeze this reset fixes.
@@ -2166,6 +2172,9 @@ const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebugSnapsh
   hiddenDeliveryDroppedChars: 0,
   hiddenDeliveryDroppedChunks: 0,
   pendingDroppedChars: 0,
+  inputProtectionDroppedChars: 0,
+  interactiveLaneSentChars: 0,
+  interactiveLaneSentCount: 0,
   diagnostics: EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,
   rendererLifecycleResetCount: 0,
   lastLifecycleResetClearedChars: 0,
@@ -2523,6 +2532,17 @@ export function registerPtyHandlers(
   const PTY_RENDERER_INTERACTIVE_RESERVE_CHARS = 256 * 1024
   // Why: reserve a bounded lane so an active pane's keystroke redraw reaches the renderer ahead of hidden bulk output's ACKs.
   const PTY_RENDERER_ACTIVE_PTY_IN_FLIGHT_RESERVE_CHARS = 512 * 1024
+  // Why: echo/keystroke-sized chunks get their own lane so a parse-starved
+  // flood (dense SGR) occupying the normal window can't park the keystroke
+  // echo behind it. xterm's FIFO still preserves byte order: the echo is
+  // written after already-delivered flood bytes and parses after them.
+  // The lane's in-flight gate is canSendPtyDataToRenderer (same as the
+  // interactive batch path), NOT a tiny lane-only budget — per-send payloads
+  // are capped at INTERACTIVE_OUTPUT_MAX_CHARS, so the lane cannot outgrow the
+  // window, and a flood-saturated in-flight total is exactly when the echo
+  // needs the lane.
+  let interactiveLaneSentChars = 0
+  let interactiveLaneSentCount = 0
   // Why: request/response hygiene only (never mutates delivery state) — clears the outstanding-probe flag so a later arrival can re-probe, logs once per silent streak.
   const PTY_DELIVERY_RESYNC_TIMEOUT_MS = 5_000
   // Why: a heal write-off destroys delivery accounting; require this much main-side ACK silence (independent of renderer evidence) before declaring the channel dead.
@@ -2539,6 +2559,31 @@ export function registerPtyHandlers(
   let ackGatedFlushSkipCount = 0
   let rendererLifecycleResetCount = 0
   let lastLifecycleResetClearedChars = 0
+  // Why: while the user types, a parse-starved flood (dense SGR styling) parks
+  // the keystroke echo behind the pending backlog in this FIFO. Drop flood-size
+  // chunks inside the input window so echo reaches the renderer promptly; small
+  // chunks (echo, tiny redraws) always pass through.
+  const PTY_INPUT_PROTECTION_DROP_WINDOW_MS = 500
+  // Why 16KB: a conservative flood-size floor — echo chunks are far smaller
+  // and always pass; the renderer-side freeze+drop is the primary guard.
+  const PTY_INPUT_PROTECTION_DROP_MIN_CHARS = PTY_BATCH_FLUSH_CHUNK_CHARS
+  let inputProtectionDroppedChars = 0
+  /** True within the input window of the pty's last keystroke. */
+  const isInsidePtyInputProtectionWindow = (id: string): boolean => {
+    const lastInputAt = lastInputAtByPty.get(id)
+    return (
+      lastInputAt !== undefined &&
+      performance.now() - lastInputAt <= PTY_INPUT_PROTECTION_DROP_WINDOW_MS
+    )
+  }
+  /** Counts dropped flood chars and breadcrumbs them for diagnostics. */
+  const recordInputProtectionDrop = (id: string, chars: number): void => {
+    inputProtectionDroppedChars += chars
+    mainDeliveryBreadcrumbs.record('input-protection-drop', {
+      id: redactPtyIdForDiagnostics(id),
+      chars
+    })
+  }
   // Why: count of watchdog gate force-opens (no handshake arrived); nonzero flags a dropped-handshake self-heal.
   let rendererDispatcherReadyForcedCount = 0
   // Why: gate sends until the page's pty:data listener exists; else webContents.send drops bytes but still counts them in-flight, permanently pinning the gate.
@@ -2691,6 +2736,9 @@ export function registerPtyHandlers(
       hiddenDeliveryGatedVisiblePtyCount,
       hiddenDeliveryGatedActivePtyCount,
       pendingDroppedChars,
+      inputProtectionDroppedChars,
+      interactiveLaneSentChars,
+      interactiveLaneSentCount,
       diagnostics: buildMainDeliveryDiagnostics(),
       rendererLifecycleResetCount,
       lastLifecycleResetClearedChars,
@@ -3691,6 +3739,36 @@ export function registerPtyHandlers(
       }
       return
     }
+    // Why: inside the input window a parse-starved flood (dense SGR) parks the
+    // keystroke echo behind the pending backlog in this FIFO. Drop flood-size
+    // dense-SGR chunks before they are appended; small chunks (echo, tiny
+    // redraws) and non-dense output (plain text, TUI repaints — both parse
+    // fast) always pass through, so typing never truncates ordinary output.
+    // Projection-tracked SSH spans keep their accounting intact.
+    if (
+      !projection?.desktopSpan &&
+      rawLength > PTY_INPUT_PROTECTION_DROP_MIN_CHARS &&
+      isInsidePtyInputProtectionWindow(payload.id) &&
+      isDenseSgr(payload.data)
+    ) {
+      recordInputProtectionDrop(payload.id, rawLength)
+      if (projectionId) {
+        sshOutputIntake?.transferProjections([projectionId], 'input-protection-drop')
+      }
+      // Why: a mid-stream gap corrupts the pane; the sentinel repaints from
+      // main's authoritative buffer and realigns by sequence. Query bytes ride
+      // along so reply-eliciting probes (DSR/CPR, DA, DECRQM, OSC 10/11) in the
+      // dropped chunk still reach the program.
+      sendPtyDataToRenderer(payload.id, {
+        id: payload.id,
+        data: extractDroppedPtyQueryBytes(payload.data).slice(
+          0,
+          DROPPED_QUERY_SALVAGE_MAX_CHARS
+        ),
+        droppedOutput: true
+      })
+      return
+    }
     const containsBackgroundOutput =
       rendererPtyIsKnownHidden(payload.id) || ptyHasHiddenRendererResizeOutput(payload.id)
     if (containsBackgroundOutput) {
@@ -3699,6 +3777,52 @@ export function registerPtyHandlers(
     const overflowMarkedBeforeAppend = pendingOverflowMarkedPtys.has(payload.id)
     if (projection?.desktopSpan) {
       sourceCreditPendingPtys.add(payload.id)
+    }
+    // Why payload.data (not the merged pending tail): a keystroke echo arriving
+    // during a flood would otherwise be judged by the flood's size and lose its
+    // interactive identity, then queue behind the flood in this FIFO. Judged by
+    // its own chunk, echo gets the dedicated lane below. The lane is NOT widened
+    // to the whole input-protection window: small flood chunks would exhaust it
+    // and re-introduce echo lag in plain-text scenarios.
+    const pendingBefore = pendingData.get(payload.id)
+    const combinedLength = (pendingBefore?.data.length ?? 0) + rawLength
+    const isInteractiveOutput =
+      !projection?.desktopSpan &&
+      shouldSendInteractiveOutputNow(payload.id, payload.data, performance.now())
+    if (isInteractiveOutput && rendererPtyDispatcherReady) {
+      // Why: judged by its own chunk (payload.data) so a keystroke echo is not
+      // swallowed by a flood-sized pending tail; then sent merged WITH the
+      // pending tail so byte order is preserved. The lane reuses the
+      // interactive in-flight gate instead of a tiny lane-only budget: a
+      // flood-saturated window is exactly when the echo needs to bypass the
+      // normal path, and the per-send cap (INTERACTIVE_OUTPUT_MAX_CHARS) keeps
+      // the lane from outgrowing the window. Oversized tails fall back to the
+      // normal pending path (the input-protection drop keeps those bounded).
+      if (
+        canSendPtyDataToRenderer(payload.id, { interactive: true }) &&
+        combinedLength <= INTERACTIVE_OUTPUT_MAX_CHARS &&
+        !pendingBefore?.droppedOutput
+      ) {
+        const combined = (pendingBefore?.data ?? '') + payload.data
+        const laneProjectionState = compactPendingProjectionState(pendingBefore ?? {}, projectionId)
+        deletePendingPtyData(payload.id)
+        clearFlushTimerIfIdle()
+        sendPtyDataToRenderer(
+          payload.id,
+          makePtyDataPayload(
+            payload.id,
+            combined,
+            startSeq,
+            containsBackgroundOutput,
+            combinedLength,
+            payload.transformed === true
+          ),
+          laneProjectionState.projectionAdmissionIds
+        )
+        interactiveLaneSentChars += combinedLength
+        interactiveLaneSentCount += 1
+        return
+      }
     }
     const pending = appendPendingPtyData(
       payload.id,
@@ -3716,12 +3840,16 @@ export function registerPtyHandlers(
       !overflowMarkedBeforeAppend &&
       pendingOverflowMarkedPtys.has(payload.id)
     const nextData = pending.data + getDroppedMode2031RendererData(pending)
-    const isInteractiveOutput = shouldSendInteractiveOutputNow(
-      payload.id,
-      nextData,
-      performance.now()
-    )
-    if (isInteractiveOutput && rendererPtyDispatcherReady) {
+    // Why the bound: the lane branch above already handled small echoes. A
+    // chunk merged onto an existing pending tail past the interactive size
+    // limit must fall back to the batch path; a standalone chunk with no
+    // pending tail (no reorder risk) up to the redraw limit still sends
+    // immediately.
+    const pendingEmpty = !pendingBefore || pendingBefore.data.length === 0
+    const interactiveTailInLimit = pendingEmpty
+      ? rawLength <= INTERACTIVE_REDRAW_MAX_CHARS
+      : combinedLength <= INTERACTIVE_OUTPUT_MAX_CHARS
+    if (isInteractiveOutput && rendererPtyDispatcherReady && interactiveTailInLimit) {
       if (!canSendPtyDataToRenderer(payload.id, { interactive: true })) {
         setPendingPtyData(payload.id, pending)
         if (shouldEmitPendingCapRestoreMarker) {

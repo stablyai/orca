@@ -152,6 +152,7 @@ import { isHostAnsweredSnapshotRetryCause } from '@/runtime/remote-runtime-termi
 import {
   discardTerminalOutput,
   flushTerminalOutput,
+  markTerminalUserInput,
   registerTerminalBacklogRecovery,
   waitForTerminalOutputParsed,
   writeTerminalOutput
@@ -3727,6 +3728,9 @@ export function connectPanePty(
     lastTerminalInputAt = performance.now()
     // Why: input must probe a wedged xterm even when the PTY produces no renderer output.
     requestTerminalWritePipelineProbe(pane.terminal)
+    // Why: the output scheduler drops parse-starved foreground backlog inside
+    // the input window so keystroke echo doesn't queue behind a dense-SGR flood.
+    markTerminalUserInput(pane.terminal)
   }
   const recordTerminalInputForHibernation = (): void => {
     useAppStore.getState().recordTerminalInput(cacheKey)
@@ -3741,6 +3745,9 @@ export function connectPanePty(
     recordTerminalInputForHibernation()
     // Takeover must never fire from the onData fallback below: it mixes in auto-replies.
     reportWorkerTerminalUserInput(cacheKey, runtimeEnvironmentId)
+    // Why: the output scheduler drops parse-starved foreground backlog inside
+    // the input window so keystroke echo doesn't queue behind a dense-SGR flood.
+    markTerminalUserInput(pane.terminal)
   }
   const userInputActivityDisposable = subscribeToTerminalUserInput(
     pane.terminal,
@@ -4114,6 +4121,10 @@ export function connectPanePty(
       clearPendingTerminalInputIntent()
       return
     }
+    // Why: fallback for builds without the core onUserInput signal; placed
+    // after the replay, lock, stale, and query-reply guards so the scheduler's
+    // input window opens for real input only.
+    markTerminalUserInput(pane.terminal)
     const intent = pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to

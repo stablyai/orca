@@ -6,6 +6,8 @@ import {
   type ForegroundTerminalOutputTarget
 } from './pane-terminal-foreground-render-settle'
 import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
+import { isDenseSgr } from '../../../../shared/terminal-sgr-density'
+import { normalizeSgrDensity } from './terminal-sgr-normalizer'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   discardInFlightTerminalOutputAckCredits,
@@ -85,14 +87,19 @@ type QueueEntry = {
   foregroundCoalesceDelayMs: number
   foregroundHoldSafetyTimer: ReturnType<typeof setTimeout> | null
   foregroundCoalesceTimer: ReturnType<typeof setTimeout> | null
+  /** True when the queued data carries dense SGR styling (parse-starved in xterm). */
+  denseSgr: boolean
 }
 
 const BACKGROUND_FLUSH_DELAY_MS = 50
 const BACKGROUND_DRAIN_INTERVAL_MS = 16
 const HIGH_PRIORITY_DRAIN_INTERVAL_MS = 4
 const BACKGROUND_CHUNK_CHARS = 16 * 1024
+// Why 4KB: a dense-SGR batch parses ~50x slower than plain text; smaller
+// batches keep the in-xterm FIFO shallow so keystroke echo stays responsive.
+const DENSE_SGR_CHUNK_CHARS = 4 * 1024
 const MAX_WRITES_PER_DRAIN = 2
-// Why 8: per-tick volume (8 x 16KB = 128KB ≈ 1.3ms parse) sets the sustained ceiling (~30MB/s) within DRAIN_TIME_BUDGET_MS; at 2 it was only 8MB/s against a ~100MB/s parser (see throughput bench).
+// Why 8: per-tick volume (8 x 16KB = 128KB ≈ 1.3ms parse) sets the sustained ceiling (~30MB/s) within DRAIN_TIME_BUDGET_MS; at 2 it was only 8MB/s against a ~100MB/s parser (see throughput bench). Dense-SGR entries break to one batch per drain in drainQueuedOutput.
 const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 8
 const DRAIN_TIME_BUDGET_MS = 8
 const LARGE_BACKLOG_CHARS = 512 * 1024
@@ -100,6 +107,95 @@ const SYNC_FOREGROUND_FLUSH_CHARS = 256 * 1024
 // Why mutable: the cap scales with the user's scrollback setting (terminalOutputBacklogCapChars), configured when settings apply; the chunk-count cap stays fixed.
 let maxQueueChars = TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS
 const MAX_BACKGROUND_QUEUE_CHUNKS = 4096
+// Why: while the user is typing, a flood that outruns xterm parse (dense SGR
+// styling) parks the keystroke echo behind the backlog in every FIFO layer.
+// Drop the backlog once it exceeds a small bound inside the input window so
+// echo latency stays bounded instead of growing with the flood. The generic
+// cap (maxQueueChars) stays large for memory-bound scrollback retention.
+const FOREGROUND_INPUT_PROTECTION_WINDOW_MS = 500
+const FOREGROUND_INPUT_SENSITIVE_BACKLOG_CHARS = 16 * 1024
+const lastUserInputAtByTerminal = new WeakMap<TerminalOutputTarget, number>()
+let lastAnyUserInputAt = Number.NEGATIVE_INFINITY
+// Why: a dense-SGR entry frozen by the input window has no drain re-arm when
+// the flood stops inside the window (no new enqueue, and drains only re-arm
+// while hasDrainableBacklog()); drain once the window expires so frozen
+// backlog always resumes instead of stranding until the next output chunk.
+const inputProtectionRecoveryTimers = new WeakMap<
+  TerminalOutputTarget,
+  ReturnType<typeof setTimeout>
+>()
+
+/** Opens the terminal's input window and re-arms the recovery drain. */
+export function markTerminalUserInput(terminal: TerminalOutputTarget): void {
+  const now = performance.now()
+  lastUserInputAtByTerminal.set(terminal, now)
+  lastAnyUserInputAt = now
+  const existing = inputProtectionRecoveryTimers.get(terminal)
+  if (existing) {
+    clearTimeout(existing)
+  }
+  inputProtectionRecoveryTimers.set(
+    terminal,
+    setTimeout(() => {
+      inputProtectionRecoveryTimers.delete(terminal)
+      scheduleDrain(0)
+      // Why +1ms: hasRecentTerminalInput uses `<= WINDOW`, so a timer at
+      // exactly WINDOW_MS still sees the window open and the entry stays
+      // frozen — the recovery drain must fire strictly after expiry.
+    }, FOREGROUND_INPUT_PROTECTION_WINDOW_MS + 1)
+  )
+}
+
+/** Any terminal received input within the protection window. */
+function hasRecentAnyInput(): boolean {
+  return performance.now() - lastAnyUserInputAt <= FOREGROUND_INPUT_PROTECTION_WINDOW_MS
+}
+
+/** This terminal received input within the protection window. */
+function hasRecentTerminalInput(terminal: TerminalOutputTarget): boolean {
+  const lastInputAt = lastUserInputAtByTerminal.get(terminal)
+  return (
+    lastInputAt !== undefined &&
+    performance.now() - lastInputAt <= FOREGROUND_INPUT_PROTECTION_WINDOW_MS
+  )
+}
+
+// Why shared: write paths and the debug snapshot must agree on what trips the
+// input-protection drop, or diagnostics report a drop that never fires.
+function shouldDropInputProtectedBacklog(entry: QueueEntry): boolean {
+  return (
+    entry.denseSgr &&
+    hasRecentTerminalInput(entry.terminal) &&
+    entry.queuedChars > FOREGROUND_INPUT_SENSITIVE_BACKLOG_CHARS
+  )
+}
+
+// Why: strict parse-clock pacing — a delivered batch counts in-flight until
+// xterm's parse-completion callback decrements it, so no drain entry point
+// (pacer OR enqueue) can deliver faster than xterm parses. Without this a
+// dense-SGR flood's enqueue-triggered drains pile up an in-xterm FIFO that
+// keystroke echo waits behind (the "agent output makes typing lag" bug).
+const inFlightBatchesByTerminal = new WeakMap<TerminalOutputTarget, number>()
+
+/** Delivered-but-unparsed batch count for a terminal. */
+function getInFlightBatches(terminal: TerminalOutputTarget): number {
+  return inFlightBatchesByTerminal.get(terminal) ?? 0
+}
+
+/** Counts a delivered batch as pending parse completion. */
+function markBatchDelivered(terminal: TerminalOutputTarget): void {
+  inFlightBatchesByTerminal.set(terminal, getInFlightBatches(terminal) + 1)
+}
+
+/** Decrements the pending batch count once parse completes. */
+function markBatchParsed(terminal: TerminalOutputTarget): void {
+  const remaining = getInFlightBatches(terminal) - 1
+  if (remaining > 0) {
+    inFlightBatchesByTerminal.set(terminal, remaining)
+  } else {
+    inFlightBatchesByTerminal.delete(terminal)
+  }
+}
 
 export function configureTerminalOutputBacklogCap(scrollbackRows: unknown): void {
   maxQueueChars = terminalOutputBacklogCapChars(scrollbackRows)
@@ -181,6 +277,12 @@ type TerminalOutputSchedulerDebugSnapshot = {
   peakQueuedCharsByTerminal: number
   droppedBacklogCount: number
   drainWrites: number[]
+  /** Latest input-protection window state: true while any terminal has recent input. */
+  hasRecentInput: boolean
+  /** Latest input-protection backlog over threshold (should have dropped). */
+  inputProtectionDropPending: boolean
+  /** Latest latencySensitive (echo) write timestamp in renderer performance.now(). */
+  lastEchoWriteAt: number
 }
 
 type TerminalOutputSchedulerDebugApi = {
@@ -202,7 +304,10 @@ const debugState: TerminalOutputSchedulerDebugSnapshot = {
   peakQueuedChars: 0,
   peakQueuedCharsByTerminal: 0,
   droppedBacklogCount: 0,
-  drainWrites: []
+  drainWrites: [],
+  hasRecentInput: false,
+  inputProtectionDropPending: false,
+  lastEchoWriteAt: 0
 }
 
 function resetDebugState(): void {
@@ -272,7 +377,11 @@ function exposeDebugApi(): void {
       recordQueueDebugPressure()
       return {
         ...debugState,
-        drainWrites: [...debugState.drainWrites]
+        drainWrites: [...debugState.drainWrites],
+        hasRecentInput: hasRecentAnyInput(),
+        inputProtectionDropPending: Array.from(queuedByTerminal.values()).some((entry) =>
+          shouldDropInputProtectedBacklog(entry)
+        )
       }
     }
   }
@@ -323,7 +432,8 @@ function createQueueEntry(
     foregroundCoalesce: false,
     foregroundCoalesceDelayMs: FOREGROUND_COALESCE_DELAY_MS,
     foregroundHoldSafetyTimer: null,
-    foregroundCoalesceTimer: null
+    foregroundCoalesceTimer: null,
+    denseSgr: false
   }
 }
 
@@ -380,7 +490,17 @@ function scheduleForegroundCoalesceRelease(
 }
 
 function isEntryDrainable(entry: QueueEntry): boolean {
-  return !entry.foregroundHold && !entry.foregroundCoalesce
+  if (entry.foregroundHold || entry.foregroundCoalesce) {
+    return false
+  }
+  // Why: while the user types, don't feed a dense-SGR flood (parse-starved in
+  // xterm) into the shared FIFO ahead of the keystroke echo. Plain-text floods
+  // parse fast and keep flowing, so their ACKs stay live and in-flight never
+  // saturates (that would park the echo at main for any output shape).
+  if (entry.denseSgr && hasRecentTerminalInput(entry.terminal)) {
+    return false
+  }
+  return true
 }
 
 function findCursorPositionSequenceEnd(
@@ -692,6 +812,12 @@ function enqueueChunk(
     ackCredit: options?.ackCredit
   })
   entry.queuedChars += data.length
+  // Why: dense-SGR floods parse ~50x slower than plain text; the input
+  // protection freeze only applies to them (plain-text floods keep flowing so
+  // ACKs stay live and the keystroke echo is never parked behind in-flight).
+  if (!entry.denseSgr && isDenseSgr(data)) {
+    entry.denseSgr = true
+  }
   recordQueueDebugPressure()
 }
 
@@ -826,6 +952,12 @@ function takeNextDrainableEntry(): QueueEntry | null {
     if (!isEntryDrainable(entry)) {
       continue
     }
+    // Why: strict parse-clock — never deliver a new batch while one is still
+    // parsing in xterm, or a dense-SGR flood piles an in-xterm FIFO that
+    // keystroke echo waits behind.
+    if (entry.denseSgr && getInFlightBatches(entry.terminal) > 0) {
+      continue
+    }
     // Why: active/foreground output should be chosen first, not left in insertion order behind older background terminals.
     if (entry.highPriority) {
       queuedByTerminal.delete(entry.terminal)
@@ -841,6 +973,9 @@ function takeNextDrainableEntry(): QueueEntry | null {
   }
   for (const entry of queuedByTerminal.values()) {
     if (!isEntryDrainable(entry)) {
+      continue
+    }
+    if (entry.denseSgr && getInFlightBatches(entry.terminal) > 0) {
       continue
     }
     queuedByTerminal.delete(entry.terminal)
@@ -880,6 +1015,33 @@ function composeParsedCallback(
   }
 }
 
+// Why separate from composeParsedCallback: only drain-delivered batches count
+// toward the parse-clock in-flight bound, so their completion callback must
+// decrement it. Flush/echo completions share xterm's FIFO but were never
+// counted, so they must NOT decrement (a spurious decrement would re-open the
+// flood gate early and re-grow the in-xterm FIFO ahead of keystroke echo).
+/**
+ * Parsed callback for drain-delivered batches: also decrements the parse-clock
+ * in-flight bound, paces the next drain, and settles the stall watch.
+ */
+function composeDrainParsedCallback(
+  terminal: TerminalOutputTarget,
+  onParsed: TerminalOutputParsedCallback | undefined,
+  ackCreditsParsed: (() => void) | undefined,
+  pacer: (() => void) | undefined
+): TerminalOutputParsedCallback {
+  return () => {
+    try {
+      onParsed?.()
+    } finally {
+      ackCreditsParsed?.()
+      markBatchParsed(terminal)
+      pacer?.()
+      settleTerminalWriteStallWatch(terminal)
+    }
+  }
+}
+
 function composeWriteFailureCallback(
   terminal: TerminalOutputTarget,
   ackCreditsParsed: (() => void) | undefined
@@ -902,7 +1064,7 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
     discardTerminalOutput(entry.terminal)
     return null
   }
-  const queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
+  const queuedWrite = takeQueuedChunk(entry, entry.denseSgr ? DENSE_SGR_CHUNK_CHARS : BACKGROUND_CHUNK_CHARS)
   if (!queuedWrite) {
     return null
   }
@@ -914,17 +1076,24 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
   })
   try {
     queuedWrite.beforeWrite?.(queuedWrite.data)
+    // Why: collapse redundant SGR bytes (identical sequences, reset-then-
+    // covering-SGR) before xterm parses — a dense-SGR flood parses ~50x slower
+    // than plain text and its synchronous parse parks keystroke echo on the
+    // shared FIFO. The transform is semantics-preserving (see terminal-sgr-normalizer).
+    const dataToWrite = normalizeSgrDensity(
+      queuedWrite.stripTransientCursorShows
+        ? removeTransientCursorShowSequences(queuedWrite.data)
+        : queuedWrite.data
+    )
     const writeAccepted = queuedWrite.foreground
       ? writeForegroundTerminalChunk(
           entry.terminal,
-          queuedWrite.stripTransientCursorShows
-            ? removeTransientCursorShowSequences(queuedWrite.data)
-            : queuedWrite.data,
+          dataToWrite,
           {
             forceViewportRefresh: queuedWrite.forceForegroundRefresh,
             followupViewportRefresh: queuedWrite.followupForegroundRefresh,
             shouldRefreshViewportSynchronously: queuedWrite.shouldRefreshForegroundSynchronously,
-            onParsed: composeParsedCallback(
+            onParsed: composeDrainParsedCallback(
               entry.terminal,
               queuedWrite.onParsed,
               ackCreditsParsed,
@@ -935,8 +1104,8 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
         )
       : writeBackgroundTerminalChunk(
           entry.terminal,
-          queuedWrite.data,
-          composeParsedCallback(entry.terminal, queuedWrite.onParsed, ackCreditsParsed, pacer),
+          dataToWrite,
+          composeDrainParsedCallback(entry.terminal, queuedWrite.onParsed, ackCreditsParsed, pacer),
           composeWriteFailureCallback(entry.terminal, ackCreditsParsed)
         )
     if (!writeAccepted) {
@@ -950,6 +1119,10 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
       recordQueueDebugPressure()
       return null
     }
+    // Why: count the batch in-flight until xterm's parse-completion callback
+    // decrements it — the strict parse-clock that keeps a dense-SGR flood from
+    // piling an in-xterm FIFO ahead of keystroke echo.
+    markBatchDelivered(entry.terminal)
   } catch {
     // Why: beforeWrite or write setup can fail before xterm owns the bytes; cancel the armed watch without claiming parser failure.
     cancelTerminalWriteStallWatch(entry.terminal)
@@ -998,6 +1171,12 @@ function drainQueuedOutput(): void {
           debugState.backgroundWriteCount++
         }
       }
+      // Why: a dense-SGR flood parses ~50x slower than plain text — one batch
+      // per drain keeps its in-xterm FIFO shallow (parse-clock paced). Plain
+      // text is not throughput-limited, so it keeps the multi-batch budget.
+      if (entry.denseSgr) {
+        break
+      }
     }
     if (hasQueuedChunks(entry)) {
       queuedByTerminal.set(entry.terminal, entry)
@@ -1017,14 +1196,18 @@ function drainQueuedOutput(): void {
   }
   recordQueueDebugPressure()
   if (queuedByTerminal.size > 0 && hasDrainableBacklog()) {
-    // Why 0 on the channel path: a posted message already yields (input/paint serviced between macrotasks), so the 4ms interval only deepened the queue; timer path keeps it for fake-timer tests.
-    scheduleDrain(
-      hasHighPriorityBacklog()
-        ? useMessageChannelDrain
-          ? 0
-          : HIGH_PRIORITY_DRAIN_INTERVAL_MS
-        : BACKGROUND_DRAIN_INTERVAL_MS
-    )
+    if (hasHighPriorityBacklog()) {
+      // Why: high-priority foreground floods are pacer-clocked — the parse-
+      // completion callback re-arms the drain. Re-arming here at 0ms on the
+      // channel path would deliver faster than xterm parses a dense-SGR flood,
+      // growing the in-xterm FIFO that keystroke echo waits behind. Background
+      // (non-high-priority) terminals keep the fixed cadence below.
+      if (!useMessageChannelDrain) {
+        scheduleDrain(HIGH_PRIORITY_DRAIN_INTERVAL_MS)
+      }
+    } else {
+      scheduleDrain(BACKGROUND_DRAIN_INTERVAL_MS)
+    }
   }
 }
 
@@ -1068,6 +1251,14 @@ export function writeTerminalOutput(
       }
       // Why: a visible pane's queue was previously uncapped — a flood the drain couldn't keep up with ballooned renderer memory without bound.
       if (queueCapExceeded(queued)) {
+        replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
+        scheduleDrain(0)
+        return
+      }
+      // Why: inside the input window a parse-starved flood (dense SGR) parks
+      // the keystroke echo behind this backlog in xterm's FIFO; drop it so
+      // echo latency stays bounded. Fires once per entry (backgroundBacklogDropped).
+      if (shouldDropInputProtectedBacklog(queued)) {
         replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
         scheduleDrain(0)
         return
@@ -1167,6 +1358,11 @@ export function writeTerminalOutput(
       }
       if (queueCapExceeded(queued)) {
         replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
+      } else if (shouldDropInputProtectedBacklog(queued)) {
+        // Why: inside the input window a parse-starved flood (dense SGR) parks
+        // the keystroke echo behind this backlog in xterm's FIFO; drop it so
+        // echo latency stays bounded. Fires once per entry (backgroundBacklogDropped).
+        replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
       }
       // Why: visible command floods are throughput work, not keystroke echo — queue behind a zero-delay drain so one IPC callback can't pin the renderer while input/paint wait.
       scheduleDrain(0)
@@ -1175,6 +1371,7 @@ export function writeTerminalOutput(
     flushTerminalOutput(terminal)
     if (debugEnabled) {
       debugState.foregroundWriteCount++
+      debugState.lastEchoWriteAt = performance.now()
     }
     const ackCreditsParsed = registerTerminalOutputAckCredits(
       terminal,
@@ -1263,7 +1460,7 @@ export function flushTerminalOutput(
   }
 
   let flushedChars = 0
-  let queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
+  let queuedWrite = takeQueuedChunk(entry, entry.denseSgr ? DENSE_SGR_CHUNK_CHARS : BACKGROUND_CHUNK_CHARS)
   while (queuedWrite) {
     flushedChars += queuedWrite.data.length
     if (debugEnabled) {
@@ -1275,12 +1472,17 @@ export function flushTerminalOutput(
     })
     try {
       queuedWrite.beforeWrite?.(queuedWrite.data)
+      // Why: same SGR collapse as the drain path — a flushed dense-SGR backlog
+      // pays the same xterm parse cost otherwise.
+      const dataToWrite = normalizeSgrDensity(
+        queuedWrite.stripTransientCursorShows
+          ? removeTransientCursorShowSequences(queuedWrite.data)
+          : queuedWrite.data
+      )
       const writeAccepted = queuedWrite.foreground
         ? writeForegroundTerminalChunk(
             terminal,
-            queuedWrite.stripTransientCursorShows
-              ? removeTransientCursorShowSequences(queuedWrite.data)
-              : queuedWrite.data,
+            dataToWrite,
             {
               forceViewportRefresh: queuedWrite.forceForegroundRefresh,
               followupViewportRefresh: queuedWrite.followupForegroundRefresh,
@@ -1296,7 +1498,7 @@ export function flushTerminalOutput(
           )
         : writeBackgroundTerminalChunk(
             terminal,
-            queuedWrite.data,
+            dataToWrite,
             composeParsedCallback(terminal, queuedWrite.onParsed, ackCreditsParsed, undefined),
             composeWriteFailureCallback(terminal, ackCreditsParsed)
           )
@@ -1320,7 +1522,7 @@ export function flushTerminalOutput(
     if (options?.maxChars !== undefined && flushedChars >= options.maxChars) {
       break
     }
-    queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
+    queuedWrite = takeQueuedChunk(entry, entry.denseSgr ? DENSE_SGR_CHUNK_CHARS : BACKGROUND_CHUNK_CHARS)
   }
   if (hasQueuedChunks(entry)) {
     entry.highPriority = true
@@ -1404,6 +1606,8 @@ export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   }
   discardInFlightTerminalOutputAckCredits(terminal)
   queuedByTerminal.delete(terminal)
+  // Why: a reused terminal object must not inherit stale in-flight batches, or dense-SGR drains stay gated forever.
+  inFlightBatchesByTerminal.delete(terminal)
   discardForegroundRenderSettle(terminal)
   // Why: cancel the watch without masquerading as parse progress; replay guards use real completions to tell slow from wedged.
   cancelTerminalWriteStallWatch(terminal)
