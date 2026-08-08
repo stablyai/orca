@@ -1665,6 +1665,7 @@ function TerminalPane(
     panePtyBindingsRef,
     paneCwdRef,
     fallbackCwd: cwd ?? '',
+    koreanWonToBackquoteEnabled: settings?.terminalKoreanWonToBackquote === true,
     expandedPaneIdRef,
     setExpandedPane,
     restoreExpandedLayout,
