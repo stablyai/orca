@@ -290,6 +290,28 @@ describe('orca root help', () => {
     logSpy.mockRestore()
   })
 
+  it('lists previously hidden root-help command groups (#13201)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+    const rootHelp = String(logSpy.mock.calls[0][0])
+
+    // Why: whole groups were served but invisible in `orca --help` (#13201).
+    expect(rootHelp).toContain('Agent Hooks:')
+    expect(rootHelp).toContain('agent hooks status')
+    expect(rootHelp).toContain('Artifacts:')
+    expect(rootHelp).toContain('artifacts list')
+    expect(rootHelp).toContain('artifacts share')
+    expect(rootHelp).toContain('claude-teams')
+    expect(rootHelp).toContain('cookie get')
+    expect(rootHelp).toContain('intercept enable')
+    expect(rootHelp).toContain('capture start')
+    expect(rootHelp).toContain('full-screenshot')
+    expect(rootHelp).toContain('emulator devices')
+    expect(rootHelp).toContain('emulator logcat')
+    logSpy.mockRestore()
+  })
+
   it('advertises host-local account management', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 

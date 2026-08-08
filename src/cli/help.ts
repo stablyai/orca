@@ -17,6 +17,7 @@ Diagnostics:
 
 Agent Discovery:
   agent-context             Print the machine-readable command schema for agents
+  claude-teams              Start Claude Code Agent Teams in the current Orca terminal
 
 Accounts:
   account add               Add a managed Claude or Codex account on this Orca host
@@ -32,6 +33,18 @@ Skills:
 
 Hosts:
   host list                 List targetable machines and how to name each one
+
+Agent Hooks:
+  agent hooks status        Show whether Orca-managed agent status hooks are enabled
+  agent hooks on            Enable Orca-managed agent status hooks
+  agent hooks off           Disable Orca-managed agent status hooks and remove local hook entries
+
+Artifacts:
+  artifacts list            List artifacts owned by the signed-in Orca account
+  artifacts share           Share an HTML or Markdown file with your Orca account
+  artifacts update          Update a file previously shared from this Orca profile
+  artifacts unshare         Delete the artifact associated with a previously shared file
+  artifacts delete          Delete an artifact owned by the signed-in Orca account
 
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
@@ -145,8 +158,9 @@ Computer Use:
 Linear:
   linear                    Read Linear ticket context for agents
 
-Mobile Emulator (iOS Simulator):
+Mobile Emulator (iOS Simulator / Android):
   emulator list             List available/running emulators (Orca-managed + raw serve-sim)
+  emulator devices          List all emulator devices/AVDs across iOS and Android
   emulator attach <device>  Attach/start helper and make active for the worktree
   emulator tap <x> <y>      Tap at normalized 0..1 coords (preferred for single taps)
   emulator type <text>      Type text (US ASCII only)
@@ -155,6 +169,12 @@ Mobile Emulator (iOS Simulator):
   emulator rotate <o>       Rotate device (portrait|landscape_left|...)
   emulator exec --command   Raw serve-sim subcommand passthrough (no "serve-sim" prefix)
   emulator kill             Stop helper for device
+  emulator shutdown         Stop helper and shut down the simulator device
+  emulator install          Install an APK onto the target Android device
+  emulator launch           Launch an Android app by package (and optional activity)
+  emulator permissions      Grant/revoke/reset Android runtime permissions
+  emulator ax               Dump the accessibility tree (Android/iOS)
+  emulator logcat           Capture a one-shot logcat dump from the Android device
 
 Browser Automation:
   tab create                Create a new browser tab (navigates to --url)
@@ -176,12 +196,15 @@ Browser Automation:
   fill                      Clear and fill input by --element ref with --value
   type                      Type --input text at the current focus (no element needed)
   select                    Select dropdown option by --element ref and --value
+  select-all                Select all content in an element by --element ref
   hover                     Hover element by --element ref
   keypress                  Press a key (e.g. --key Enter, --key Tab)
   scroll                    Scroll --direction (up/down) by --amount pixels
   back                      Navigate back in browser history
   reload                    Reload the active browser tab
   screenshot                Capture viewport screenshot (--format png|jpeg)
+  full-screenshot           Capture a full-page screenshot
+  pdf                       Export the page as PDF
   eval                      Evaluate --expression JavaScript in the page context
   wait                      Wait for page idle or --timeout ms
   check                     Check a checkbox by --element ref
@@ -196,6 +219,17 @@ Browser Automation:
   get                       Get element property (--what: text, html, value, url, title)
   is                        Check element state (--what: visible, enabled, checked)
   inserttext                Insert text without key events
+  cookie get                Get cookies for the active tab
+  cookie set                Set a cookie
+  cookie delete             Delete a cookie by name
+  geolocation               Override browser geolocation
+  intercept enable          Enable request interception
+  intercept disable         Disable request interception
+  intercept list            List paused (intercepted) requests
+  capture start             Start capturing console and network events
+  capture stop              Stop capturing console and network events
+  console                   Show captured console log entries
+  network                   Show captured network requests
   mouse move                Move mouse to --x --y coordinates
   mouse down                Press mouse button
   mouse up                  Release mouse button
