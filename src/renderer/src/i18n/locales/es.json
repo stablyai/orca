@@ -9112,7 +9112,7 @@
         "agent-awake-copy": {
           "e5995ce268": "Mantener la computadora activa mientras los agentes están trabajando",
           "95d3031db2": "Mantiene esta computadora y la pantalla activas mientras los agentes están trabajando. El comportamiento al cerrar la tapa sigue la configuración de energía de este dispositivo.",
-          "a42f6fbdd8": "Mantiene esta computadora y la pantalla activas mientras los agentes están trabajando. Orca también le pide a este dispositivo que permanezca activo cuando la tapa está cerrada, sujeto a su política de energía."
+          "a42f6fbdd8": "Mantiene este equipo activo para que los agentes sigan ejecutándose mientras estás ausente. Orca también solicita que el dispositivo permanezca activo con la tapa cerrada, según su política de energía."
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Hooks de estado del agente",
