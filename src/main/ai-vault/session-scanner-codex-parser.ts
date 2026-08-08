@@ -29,18 +29,19 @@ import {
   extractModel,
   extractString,
   normalizeCodexUsage,
-  normalizeTitleText,
   parseJsonObject,
   subtractCodexUsage
 } from './session-scanner-values'
 import { remoteSessionContentLines } from './remote-session-content-lines'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
+import { extractCodexSessionMetadataTitle, isCodexWorkerSession } from './codex-session-metadata'
 
 export async function parseCodexSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
   codexHome: string | null = null,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  allowWorker = false
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
     input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
@@ -53,6 +54,7 @@ export async function parseCodexSessionFile(
     platform,
     codexHome,
     executionHostId,
+    allowWorker,
     titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
   })
 }
@@ -106,13 +108,12 @@ function createCodexParseState(file: FileWithMtime): CodexSessionParseState {
 
 function cloneCodexParseState(state: CodexSessionParseState): CodexSessionParseState {
   return {
-    // previousTotals snapshots are replaced, never mutated, so sharing is safe.
     ...state,
     accumulator: cloneSessionAccumulator(state.accumulator)
   }
 }
 
-function consumeCodexRecordLine(state: CodexSessionParseState, line: string): void {
+function consumeCodexLine(state: CodexSessionParseState, line: string, allowWorker = false): void {
   if (state.rejectedWorkerSession) {
     return
   }
@@ -126,9 +127,7 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
 
   const payload = asRecord(record.payload)
   if (record.type === 'session_meta' && payload) {
-    if (isCodexWorkerSession(payload)) {
-      // Why: Codex writes internal worker/sub-agent transcripts into the same
-      // history tree; AI Vault should show user-started sessions only.
+    if (!allowWorker && isCodexWorkerSession(payload)) {
       state.rejectedWorkerSession = true
       return
     }
@@ -237,7 +236,6 @@ async function finalizeCodexParseState(
   if (state.rejectedWorkerSession) {
     return null
   }
-  // Finalize a snapshot: the live state keeps accumulating appended lines.
   const snapshot = cloneCodexParseState(state)
   // Why: Codex names threads lazily in session_index.jsonl, so the lookup runs
   // per finalize (the index read is signature-cached) — a title that appears
@@ -270,13 +268,13 @@ function codexResumeStateFromParseState(
   titleReader: (sessionId: string) => Promise<string | null>
 ): ResumableSessionParseState {
   return {
-    consumeLine: (line) => consumeCodexRecordLine(state, line),
+    consumeLine: (line) => consumeCodexLine(state, line),
     consumeLineBytes: (line) => {
       const timelineOnlyRecord = readCodexTimelineOnlyRecord(line)
       if (timelineOnlyRecord) {
         updateTimeline(state.accumulator, timelineOnlyRecord.timestamp)
       } else {
-        consumeCodexRecordLine(state, line.toString('utf8'))
+        consumeCodexLine(state, line.toString('utf8'))
       }
     },
     shouldStop: () => state.rejectedWorkerSession,
@@ -298,12 +296,12 @@ async function parseCodexSessionLines(args: {
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
   titleReader?: (sessionId: string) => Promise<string | null>
+  allowWorker?: boolean
 }): Promise<AiVaultSession | null> {
   const state = createCodexParseState(args.file)
   for await (const line of args.lines) {
-    consumeCodexRecordLine(state, line)
+    consumeCodexLine(state, line, args.allowWorker === true)
     if (state.rejectedWorkerSession) {
-      // Worker transcripts are excluded outright; stop reading early.
       return null
     }
   }
@@ -313,22 +311,4 @@ async function parseCodexSessionLines(args: {
     executionHostId: args.executionHostId,
     executionHostPlatform: args.executionHostPlatform
   })
-}
-
-function isCodexWorkerSession(payload: Record<string, unknown>): boolean {
-  const threadSource = extractString(payload.thread_source) ?? extractString(payload.threadSource)
-  if (threadSource) {
-    return threadSource.toLowerCase() !== 'user'
-  }
-
-  const source = asRecord(payload.source)
-  return Boolean(asRecord(source?.subagent))
-}
-
-function extractCodexSessionMetadataTitle(payload: Record<string, unknown>): string | null {
-  return (
-    normalizeTitleText(extractString(payload.title) ?? '') ??
-    normalizeTitleText(extractString(payload.thread_name) ?? '') ??
-    normalizeTitleText(extractString(payload.threadName) ?? '')
-  )
 }

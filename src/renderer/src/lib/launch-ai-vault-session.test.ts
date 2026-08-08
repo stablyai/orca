@@ -79,9 +79,12 @@ describe('launchAiVaultSessionInNewTab', () => {
       command: 'claude --resume session-1'
     })
 
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-1')
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-1', undefined, {
+      launchAgent: 'claude'
+    })
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: 'claude --resume session-1',
+      launchAgent: 'claude',
       telemetry: {
         agent_kind: 'claude',
         launch_source: 'sidebar',
@@ -110,7 +113,8 @@ describe('launchAiVaultSessionInNewTab', () => {
     })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      startupCwd: 'C:\\Users\\alice\\repo'
+      startupCwd: 'C:\\Users\\alice\\repo',
+      launchAgent: 'claude'
     })
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
@@ -141,7 +145,9 @@ describe('launchAiVaultSessionInNewTab', () => {
     })
 
     expect(mockCreateEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-new')
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-new', undefined, {
+      launchAgent: 'codex'
+    })
   })
 
   it('creates runtime-hosted resume terminals through the paired host', async () => {

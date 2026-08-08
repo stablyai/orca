@@ -204,6 +204,10 @@ export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
+export function extractThreadSource(payload: Record<string, unknown>): string | null {
+  return extractString(payload.thread_source) ?? extractString(payload.threadSource)
+}
+
 export {
   addCodexUsage,
   claudeUsageTotal,

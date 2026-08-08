@@ -1,7 +1,11 @@
 import { resolve } from 'node:path'
 import { getAiVaultWslHomeDirs } from '../ai-vault/cached-session-list'
 import { listAiVaultSubagentSessionsInBackground } from '../ai-vault/session-scanner-background'
-import { claudeProjectsRootDirs, ompSessionsRootDirs } from '../ai-vault/session-scanner-roots'
+import {
+  claudeProjectsRootDirs,
+  codexSessionsRootDirs,
+  ompSessionsRootDirs
+} from '../ai-vault/session-scanner-roots'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {
@@ -9,19 +13,16 @@ import type {
   AiVaultSubagentListResult
 } from '../../shared/ai-vault-types'
 
-// Provider-gated: only Claude and OMP materialize Task subagent transcripts as
-// sibling files today; other agents resolve to an empty list.
+// Provider-gated: only Claude, OMP and Codex materialize subagent transcripts
+// as sibling files today; other agents resolve to an empty list.
 export async function listAiVaultSubagentSessions(
   args?: AiVaultSubagentListArgs
 ): Promise<AiVaultSubagentListResult> {
   // IPC payloads are untyped at runtime; malformed input resolves empty like
   // every other rejected input instead of throwing.
-  if (
-    !args ||
-    (args.agent !== 'claude' && args.agent !== 'omp') ||
-    typeof args.parentFilePath !== 'string' ||
-    !args.parentFilePath.trim()
-  ) {
+  const agent =
+    args?.agent === 'claude' || args?.agent === 'omp' || args?.agent === 'codex' ? args.agent : null
+  if (!args || !agent || typeof args.parentFilePath !== 'string' || !args.parentFilePath.trim()) {
     return { sessions: [], issues: [] }
   }
   // Why: subagent transcripts are read from the local filesystem. The UI
@@ -38,11 +39,13 @@ export async function listAiVaultSubagentSessions(
   const parentFilePath = resolve(args.parentFilePath)
   const wslHomeDirs = await getAiVaultWslHomeDirs()
   const roots =
-    args.agent === 'claude'
+    agent === 'claude'
       ? claudeProjectsRootDirs({ wslHomeDirs })
-      : ompSessionsRootDirs({ wslHomeDirs })
+      : agent === 'omp'
+        ? ompSessionsRootDirs({ wslHomeDirs })
+        : codexSessionsRootDirs({ wslHomeDirs })
   if (!roots.some((root) => isPathInsideOrEqual(resolve(root), parentFilePath))) {
     return { sessions: [], issues: [] }
   }
-  return listAiVaultSubagentSessionsInBackground({ agent: args.agent, parentFilePath })
+  return listAiVaultSubagentSessionsInBackground({ agent, parentFilePath })
 }
