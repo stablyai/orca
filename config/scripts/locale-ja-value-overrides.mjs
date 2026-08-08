@@ -548,5 +548,14 @@ export const JA_VALUE_OVERRIDES = {
   'Choose an available workspace before saving.':
     '保存する前に、使用可能なワークスペースを選択してください。',
   'Enter a valid advanced schedule before saving.':
-    '保存する前に、有効な詳細スケジュールを入力してください。'
+    '保存する前に、有効な詳細スケジュールを入力してください。',
+  // Round 13: a DeepL cross-check surfaced these — progress labels missing 〜中, a stale
+  // sidebar string, and a fragment that never resolved into Japanese.
+  'Creating...': '作成中…',
+  'Creating…': '作成中…',
+  'Reopening...': '再オープン中…',
+  'Thinking…': '思考中…',
+  'Hide from sidebar': 'サイドバーから非表示',
+  'Show in sidebar': 'サイドバーに表示',
+  'Recent or tab strip.': '「最近」またはタブストリップ。'
 }

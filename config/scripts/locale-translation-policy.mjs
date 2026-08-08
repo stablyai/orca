@@ -4,6 +4,7 @@ import {
   overlapsCanonicalRendering
 } from './locale-generic-ui-terms.mjs'
 import { isScreenCursorContext } from './locale-screen-cursor-exemptions.mjs'
+import { isStyleValue } from './locale-style-values.mjs'
 import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
 import { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
 import { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
@@ -365,13 +366,6 @@ export function isEnglishOnlyKey(key) {
   return ENGLISH_ONLY_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
 }
 
-// Why: a style block is code. MT rewrote a selector to [データスラッシュメニュー], `background:` to
-// `背景:` and a keyframe name to ブラウザフラッシュ, silently breaking the view in that locale only.
-// Matches at-rules, bare selectors (with or without a following block) and declaration blocks,
-// since MT damages all three — a selector alone has no braces to key off.
-const STYLE_BLOCK =
-  /@(keyframes|media|supports|font-face)\b|[.#][a-zA-Z][\w-]*[^{}]*\{[^{}]*[a-z-]+\s*:|\[[a-z-]+=["'][^"']*["']\]|\{[^{}]*[a-z-]+\s*:\s*[^{}]*[;}]/
-
 export function shouldPreserveEnglishValue(enValue, key = '') {
   if (!enValue?.trim()) {
     return true
@@ -382,7 +376,7 @@ export function shouldPreserveEnglishValue(enValue, key = '') {
   if (isEnglishOnlyKey(key)) {
     return true
   }
-  if (STYLE_BLOCK.test(enValue)) {
+  if (isStyleValue(enValue)) {
     return true
   }
   return NEVER_TRANSLATE_VALUES.has(enValue)

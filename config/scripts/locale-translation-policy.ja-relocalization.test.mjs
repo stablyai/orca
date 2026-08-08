@@ -106,4 +106,25 @@ describe('locale-translation-policy ja relocalization', () => {
       expect(shouldPreserveEnglishValue(value)).toBe(true)
     }
   })
+
+  it('preserves a selector that has no declaration block', () => {
+    for (const value of [
+      'div.pricing-grid > div.card.starter:nth-of-type(1) > a.cta',
+      '.pp-cta',
+      '#dialog',
+      '.pp-card[data-card="starter"] .pp-cta'
+    ]) {
+      expect(shouldPreserveEnglishValue(value)).toBe(true)
+    }
+    // Why: two ordinary sentences carry two periods, which must not read as selector joins.
+    for (const value of [
+      'Open Settings > Git and try again.',
+      'Show live workspace ports. Click it for workspace-scoped ports and external listeners.',
+      'orca.yaml + local',
+      '.gitignore',
+      '#{{value0}}'
+    ]) {
+      expect(shouldPreserveEnglishValue(value)).toBe(false)
+    }
+  })
 })
