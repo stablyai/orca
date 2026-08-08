@@ -22,12 +22,18 @@
 // intercepting. And `expectEmitted` groups bytes the way a full task between rows produces —
 // real input arrives in one burst and may group differently. Read `expectCalls` for the
 // contract; `expectEmitted` is there to show ordering, not framing.
+//
+// IN_APP_TRACE_CASES is a second, independent recording taken inside the app rather than on a
+// bare page (provenance and per-case notes in keyboard-handlers.issue-12871-in-app-chord-traces
+// .ts). It is replayed through the same rig below. The two surfaces captured different subsets
+// of the same gestures, so each case there states which half of the contract it can speak for.
 import { Terminal } from '@xterm/xterm'
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
+import { IN_APP_TRACE_CASES } from './keyboard-handlers.issue-12871-in-app-chord-traces'
 
 type RecordedRow = {
   t: string
@@ -428,7 +434,7 @@ describe('recorded macOS chord traces during an IME composition', () => {
     document.body.replaceChildren()
   })
 
-  it.each(CASES.map((testCase) => [testCase.name, testCase] as const))(
+  it.each([...CASES, ...IN_APP_TRACE_CASES].map((testCase) => [testCase.name, testCase] as const))(
     '%s',
     async (_name, testCase) => {
       const rig = openRig()
