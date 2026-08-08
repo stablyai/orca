@@ -115,6 +115,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     skillTransactionRecovery: state.skillTransactionRecovery
   })
   state.runtime = runtime
+  runtime.getRoomService()
   runtime.prepareLegacyWorkerTerminalRecovery()
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.

@@ -104,6 +104,41 @@ function createRepo(id: string, connectionId: string | null): AppState['repos'][
 }
 
 describe('buildWorkspaceSessionPayload', () => {
+  it('persists room tabs in their workspace group', () => {
+    const roomTab = {
+      id: 'room-tab-1',
+      entityId: 'room-1',
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      contentType: 'room' as const,
+      label: 'Research room',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        unifiedTabsByWorktree: { 'wt-1': [roomTab] },
+        groupsByWorktree: {
+          'wt-1': [
+            {
+              id: 'group-1',
+              worktreeId: 'wt-1',
+              activeTabId: roomTab.id,
+              tabOrder: [roomTab.id]
+            }
+          ]
+        },
+        layoutByWorktree: { 'wt-1': { type: 'leaf', groupId: 'group-1' } },
+        activeGroupIdByWorktree: { 'wt-1': 'group-1' }
+      })
+    )
+
+    expect(payload.unifiedTabs?.['wt-1']).toEqual([roomTab])
+    expect(payload.tabGroups?.['wt-1']?.[0].activeTabId).toBe(roomTab.id)
+  })
+
   it('preserves activeWorktreeIdsOnShutdown for full replacement writes', () => {
     const payload = buildWorkspaceSessionPayload(createSnapshot())
 

@@ -80,7 +80,11 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       modelLabel: 'Model',
       liveTransport: 'catalog'
     })
-    expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
+    expect(snapshot.map((descriptor) => descriptor.id)).toEqual([
+      'model',
+      'effort',
+      'contextWindow'
+    ])
     expect(snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
   })
 
@@ -258,7 +262,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     })
   })
 
-  it('marks flip-only toggles without a baseline as toggle actions', () => {
+  it('keeps deterministic toggles settable without a baseline', () => {
     const record = claudeRecord()
     record.model = { value: 'opus', source: 'reported' }
     const snapshot = buildNativeChatSessionOptionSnapshot({
@@ -270,7 +274,8 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       liveTransport: 'catalog'
     })
     const fastMode = snapshot.find((descriptor) => descriptor.id === 'fastMode')
-    expect(fastMode).toMatchObject({ action: { type: 'toggle-command' } })
+    expect(fastMode).toMatchObject({ settable: true })
+    expect(fastMode?.action).toBeUndefined()
   })
 })
 

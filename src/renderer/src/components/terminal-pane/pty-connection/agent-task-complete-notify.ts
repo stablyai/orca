@@ -143,7 +143,7 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
   // 5 s per-worktree dedupe as the final guard.
   session.onAgentBecameIdle = (
     title: string,
-    meta?: { staleWorkingTitleClear?: boolean }
+    meta?: { staleWorkingTitleClear?: boolean; roomDeliveryId?: string }
   ): void => {
     // Why: a stale-derived idle comes from main's UNTHROTTLED 3s timer, not
     // observed bytes — a merely-paused agent (>3s silent mid-task, window

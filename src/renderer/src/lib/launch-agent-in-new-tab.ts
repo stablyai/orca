@@ -334,7 +334,6 @@ function launchAgentInNewTabInternal(
 
   // Why: persist tab-bar order so reconcileTabOrder doesn't fall back to terminals-first and jump the new tab to index 0.
   persistAgentLaunchTabOrder(worktreeId, tab.id)
-
   return {
     tabId: tab.id,
     startupPlan,

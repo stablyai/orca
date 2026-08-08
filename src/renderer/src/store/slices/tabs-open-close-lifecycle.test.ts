@@ -32,6 +32,16 @@ describe('TabsSlice', () => {
   // ─── createUnifiedTab ───────────────────────────────────────────────
 
   describe('createUnifiedTab', () => {
+    it('creates a room in the workspace tab group', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'room', {
+        entityId: 'room-1',
+        label: 'Research room'
+      })
+
+      expect(tab).toMatchObject({ contentType: 'room', entityId: 'room-1' })
+      expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(tab.id)
+    })
+
     it('creates a terminal tab and auto-creates a group', () => {
       const tab = store.getState().createUnifiedTab(WT, 'terminal')
 

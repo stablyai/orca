@@ -346,4 +346,31 @@ describe('native chat session option enrichment', () => {
       })
     ).resolves.toBeNull()
   })
+
+  it('publishes Codex Fast mode only for models that advertise it', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      defaultModelId: 'gpt-5.6-sol',
+      models: [
+        {
+          id: 'gpt-5.6-sol',
+          label: 'GPT-5.6 Sol',
+          thinkingLevels: [{ id: 'high', label: 'High' }],
+          defaultThinkingLevel: 'high',
+          supportsFastMode: true
+        },
+        { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' }
+      ]
+    })
+
+    const result = await discoverNativeChatCatalogModels('codex', {
+      settings: {},
+      worktreeId: 'repo::/worktree',
+      worktreePath: '/worktree'
+    })
+
+    expect(result?.models[0].options.map(({ id }) => id)).toEqual(['effort', 'fastMode'])
+    expect(result?.models[1].options).toEqual([])
+  })
 })

@@ -102,6 +102,7 @@ export function parseCodexModels(stdout: string): CommitMessageModel[] {
         display_name?: string
         supported_reasoning_levels?: { effort?: string }[]
         default_reasoning_level?: string
+        additional_speed_tiers?: string[]
       }[]
     }
     return uniqueModels(
@@ -121,7 +122,8 @@ export function parseCodexModels(stdout: string): CommitMessageModel[] {
                   })),
                 defaultThinkingLevel: model.default_reasoning_level ?? 'low'
               }
-            : {})
+            : {}),
+          ...(model.additional_speed_tiers?.includes('fast') ? { supportsFastMode: true } : {})
         }))
     )
   } catch {

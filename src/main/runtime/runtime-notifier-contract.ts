@@ -3,6 +3,7 @@ import type { TerminalPaneSplitSource } from '../../shared/feature-education-tel
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
+import type { RoomEvent } from '../../shared/rooms'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
@@ -144,6 +145,7 @@ export type RuntimeNotifier = {
     tabId: string,
     resolution: { text: string; createdAt: number }
   ): void
+  roomEvent?(roomId: string, event: RoomEvent): void
   browserDriverChanged?(browserPageId: string, driver: RuntimeBrowserDriverState): void
   browserRemoteViewersChanged?(browserPageId: string, hasRemoteViewers: boolean): void
   clientHostedBrowserRowsChanged?(event: ClientHostedBrowserRowsEvent): void

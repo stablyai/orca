@@ -141,7 +141,10 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
         onCommandCodeWorking: session.seedCommandCodeOutputWorkingStatus,
         onCommandCodeDone: session.scheduleCommandCodeOutputDoneStatus,
         ...(session.shouldOwnAgentStatusInRenderer
-          ? { onAgentStatus: (payload) => session.handleRendererOwnedAgentStatus(payload) }
+          ? {
+              onAgentStatus: (payload, meta) =>
+                session.handleRendererOwnedAgentStatus(payload, meta)
+            }
           : {}),
         // Why: gated hidden panes never see the subscribe bytes; the fact
         // replaces the byte scan (and the old post-latch subscribe drop).

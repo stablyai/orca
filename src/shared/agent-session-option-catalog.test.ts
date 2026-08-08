@@ -19,10 +19,13 @@ describe('agent session option catalog', () => {
     const catalog = getAgentSessionOptionCatalog('claude')
     expect(catalog?.models.map(({ id }) => id)).toEqual(['fable', 'opus', 'sonnet', 'haiku'])
     expect(
+      catalog?.models.find((model) => model.id === 'fable')?.options.map(({ id }) => id)
+    ).toEqual(['effort', 'contextWindow'])
+    expect(
       catalog?.models.find((model) => model.id === 'opus')?.options.map(({ id }) => id)
     ).toEqual(['effort', 'contextWindow', 'fastMode'])
     expect(
-      catalog?.models.find((model) => model.id === 'fable')?.options.map(({ id }) => id)
+      catalog?.models.find((model) => model.id === 'sonnet')?.options.map(({ id }) => id)
     ).toEqual(['effort', 'contextWindow'])
     expect(catalog?.models.find((model) => model.id === 'haiku')?.options).toEqual([])
   })
@@ -42,6 +45,29 @@ describe('agent session option catalog', () => {
         contextWindow: '1m'
       }
     })
+  })
+
+  it('applies Codex Fast mode only when it is explicitly known', () => {
+    expect(
+      resolveAgentSessionOptionLaunch('codex', {
+        model: 'gpt-5.6-sol',
+        effort: 'high'
+      }).args
+    ).toEqual(['-m', 'gpt-5.6-sol', '-c', 'model_reasoning_effort=high'])
+    expect(
+      resolveAgentSessionOptionLaunch('codex', {
+        model: 'gpt-5.6-sol',
+        effort: 'high',
+        fastMode: true
+      }).args
+    ).toEqual([
+      '-m',
+      'gpt-5.6-sol',
+      '-c',
+      'model_reasoning_effort=high',
+      '-c',
+      'service_tier="priority"'
+    ])
   })
 
   it('normalizes Claude latest aliases and their context suffix', () => {

@@ -47,6 +47,13 @@ export type TabBarItem =
       isPinned: boolean
       data: Tab & { contentType: 'agent-session' }
     }
+  | {
+      type: 'room'
+      id: string
+      unifiedTabId: string
+      isPinned: boolean
+      data: Tab & { contentType: 'room' }
+    }
 
 export function getTabDragLabel(item: TabBarItem, generatedTitlesEnabled: boolean): string {
   if (item.type === 'terminal') {
@@ -57,6 +64,9 @@ export function getTabDragLabel(item: TabBarItem, generatedTitlesEnabled: boolea
   }
   if (item.type === 'simulator' || item.type === 'agent-session') {
     return item.data.label || 'Mobile Emulator'
+  }
+  if (item.type === 'room') {
+    return item.data.customLabel ?? item.data.label
   }
   return getEditorDisplayLabel(item.data)
 }
@@ -107,6 +117,7 @@ export function buildOrderedTabItems({
   browserTabIds,
   simulatorTabIds,
   agentSessionTabIds,
+  roomTabIds,
   terminalMap,
   editorMap,
   browserMap,
@@ -119,6 +130,7 @@ export function buildOrderedTabItems({
   browserTabIds: string[]
   simulatorTabIds: string[]
   agentSessionTabIds: string[]
+  roomTabIds: string[]
   terminalMap: Map<string, TerminalTab & { unifiedTabId?: string }>
   editorMap: Map<string, OpenFile & { tabId?: string }>
   browserMap: Map<string, BrowserTabState & { tabId?: string }>
@@ -131,7 +143,8 @@ export function buildOrderedTabItems({
     editorFileIds,
     browserTabIds,
     simulatorTabIds,
-    agentSessionTabIds
+    agentSessionTabIds,
+    roomTabIds
   )
   const items: TabBarItem[] = []
   for (const id of ids) {
@@ -191,6 +204,17 @@ export function buildOrderedTabItems({
         isPinned: agentSession.isPinned === true,
         data: agentSession
       })
+      continue
+    }
+    const roomTab = unifiedTabByVisibleId.get(id)
+    if (roomTab?.contentType === 'room') {
+      items.push({
+        type: 'room',
+        id,
+        unifiedTabId: roomTab.id,
+        isPinned: roomTab.isPinned === true,
+        data: roomTab as Tab & { contentType: 'room' }
+      })
     }
   }
   return items
@@ -218,9 +242,13 @@ export function findActiveVisibleTabId(
     activeBrowserTabId?: string | null
     activeSimulatorTabId?: string | null
     activeTabType?: WorkspaceVisibleTabType
+    activeGroupTabId?: string | null
   }
 ): string | null {
   const activeItem = items.find((item) => {
+    if (item.type === 'room') {
+      return item.unifiedTabId === active.activeGroupTabId
+    }
     if (item.type === 'terminal') {
       return (
         (active.activeTabType === 'terminal' || active.activeTabType === 'simulator') &&

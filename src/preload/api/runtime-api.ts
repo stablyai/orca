@@ -14,6 +14,7 @@ import type {
   BrowserPageCreationPlacement
 } from '../../shared/browser-client-host-placement'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime-shared-control-types'
+import type { RoomEvent } from '../../shared/rooms'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
   unsubscribe: () => void
@@ -64,6 +65,7 @@ export type RuntimeApi = {
     onNativeChatLaunchDraftResolved?: (
       callback: (event: { tabId: string; text: string; createdAt: number }) => void
     ) => () => void
+    onRoomEvent: (callback: (payload: { roomId: string; event: RoomEvent }) => void) => () => void
     onBrowserDriverChanged: (
       callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
     ) => () => void

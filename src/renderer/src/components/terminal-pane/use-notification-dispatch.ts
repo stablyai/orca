@@ -11,6 +11,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { isSupersededAgentCompletionSnapshot } from './agent-completion-snapshot-staleness'
+import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
 import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
@@ -57,8 +58,25 @@ export type TerminalNotificationEvent = {
   agentStatusSnapshot?: AgentCompletionStatusSnapshot
   agentCompletionSource?: AgentCompletionDispatchMeta['source']
   suppressOsNotification?: boolean
+  roomDeliveryId?: string
 }
 
+export function dispatchNotification(event: NotificationDispatchRequest): void {
+  const notifications = useAppStore.getState().settings?.notifications
+  void window.api.notifications
+    .dispatch(event)
+    .then((result) => {
+      if (result.delivered) {
+        void playDesktopNotificationSound(
+          notifications?.customSoundId ?? 'system',
+          notifications?.customSoundVolume ?? null
+        )
+      } else if (result.reason === 'blocked-by-system') {
+        showBlockedNotificationFallbackToast()
+      }
+    })
+    .catch((error) => console.warn('Failed to dispatch notification:', error))
+}
 /**
  * Returns a stable dispatch function for terminal notifications.
  * Reads repo/worktree labels from the store at dispatch time rather
@@ -71,6 +89,17 @@ export function dispatchTerminalNotification(
   event: TerminalNotificationEvent
 ): void {
   const state = useAppStore.getState()
+  const roomDeliveryId =
+    event.roomDeliveryId ??
+    event.agentStatusSnapshot?.roomDeliveryId ??
+    (event.source === 'agent-task-complete' && event.paneKey
+      ? state.agentStatusByPaneKey[event.paneKey]?.roomDeliveryId
+      : undefined)
+  const isInputAttention =
+    event.agentStatusSnapshot?.state === 'waiting' || event.agentStatusSnapshot?.state === 'blocked'
+  if (roomDeliveryId && !isInputAttention) {
+    return
+  }
   // Why: the completion title is the live identity. If it explicitly names an
   // agent, any snapshot from another agent is stale pane-reuse residue and must
   // not lend its prompt/agentType or timing id to this notification.

@@ -68,6 +68,7 @@ export function initializeMainProcessObservers(): void {
   // would keep the pane's last projection until an unrelated PTY touch came along.
   const hookStatusChangedSessionTabs = createHookStatusSessionTabsInvalidator()
   const unsubscribeHookStatusSessionTabs = agentHookServer.subscribeEnrichedStatus((enriched) => {
+    state.runtime?.ingestRoomAgentStatus(enriched)
     if (hookStatusChangedSessionTabs(enriched)) {
       state.runtime?.touchMobileSessionTabsForPane(enriched.paneKey, enriched.worktreeId ?? null)
     }

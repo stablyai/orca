@@ -17655,5 +17655,171 @@
     "title": "Orca keeps failing to load",
     "stalledMessage": "The app window stopped responding while reloading after a crash.",
     "crashLoopMessage": "The app window crashed repeatedly and stopped reloading automatically."
+  },
+  "rooms": {
+    "sidebar": {
+      "label": "Rooms",
+      "newRoom": "New room",
+      "roomActions": "Room actions",
+      "restoreRoom": "Restore room",
+      "archiveRoom": "Archive room",
+      "roomName": "Room name",
+      "channelName": "Channel name",
+      "channels": "Channels",
+      "newChannel": "New channel"
+    },
+    "addAgent": {
+      "title": "Add agent",
+      "description": "Launch a clean harness, attach a running one, or resume local history.",
+      "harness": "Harness",
+      "worktree": "Worktree",
+      "identity": "Room identity",
+      "session": "Session",
+      "loadingSessions": "Loading sessions…",
+      "noMatchingSessions": "No matching sessions found.",
+      "chooseRunning": "Choose a running {{agent}} session.",
+      "chooseHistory": "Choose local {{agent}} history.",
+      "searchSessions": "Search sessions…",
+      "runningNow": "Running now",
+      "chooseSession": "Choose session…"
+    },
+    "common": {
+      "select": "Select…",
+      "room": "Room",
+      "archivedSuffix": " (archived)",
+      "settings": "Settings",
+      "add": "Add",
+      "send": "Send",
+      "messageDeleted": "Message deleted",
+      "edit": "Edit",
+      "delete": "Delete",
+      "agent": "Agent",
+      "cancel": "Cancel",
+      "save": "Save",
+      "remove": "Remove",
+      "description": "Description",
+      "name": "Name",
+      "back": "Back",
+      "archived": "Archived"
+    },
+    "archive": {
+      "preparingExport": "Preparing room archive…",
+      "exportProgress": "Exporting room… {{percent}}%",
+      "saved": "Room archive saved",
+      "importing": "Importing room…",
+      "importProgress": "Importing room… {{percent}}%",
+      "imported": "Room archive imported",
+      "export": "Export archive",
+      "import": "Import archive"
+    },
+    "composer": {
+      "noPausedLoop": "No paused agent loop in the room",
+      "replyingTo": "Replying to @{{identity}}: {{body}}",
+      "cancelReply": "Cancel reply",
+      "removeAttachment": "Remove attachment",
+      "uploading": "Uploading attachment…",
+      "uploadProgress": "Uploading attachment… {{percent}}%",
+      "placeholder": "Message the room — use @agent to invite a response",
+      "attachFile": "Attach file",
+      "dictate": "Dictate",
+      "continueSuggestion": "/continue · resume a paused agent loop",
+      "allAgentsSuggestion": "@all · all agents"
+    },
+    "inspector": {
+      "pins": "Pins"
+    },
+    "feed": {
+      "selectChannel": "Select a channel",
+      "loadOlder": "Load older",
+      "newMessages": "{{count}} new messages"
+    },
+    "message": {
+      "reply": "Reply",
+      "markPinDone": "Mark pin done",
+      "unpin": "Unpin",
+      "pin": "Pin",
+      "threadReply": "Reply in thread",
+      "saveEdit": "Save edit",
+      "cancelEdit": "Cancel edit",
+      "retryDelivery": "Delivery failed — retry",
+      "loopPaused": "Agent loop paused at the room limit · send /continue to resume",
+      "edited": "edited"
+    },
+    "attachment": {
+      "downloading": "Downloading {{fileName}}…",
+      "saved": "Attachment saved"
+    },
+    "header": {
+      "defaultTopic": "Multi-agent room"
+    },
+    "context": {
+      "compactAgent": "Compact {{identity}}",
+      "compact": "Compact context",
+      "unavailable": "{{agent}} · context unavailable",
+      "limitUnavailable": "{{used}} used · limit unavailable",
+      "usage": "{{used}} / {{max}} · {{remaining}} free",
+      "compaction": {
+        "queued": "queued",
+        "running": "compacting",
+        "completed": "compacted",
+        "failed": "compact failed"
+      }
+    },
+    "activity": {
+      "agentWorking": "{{identity}} is working",
+      "thinking": "Thinking",
+      "reading": "Reading file",
+      "searching": "Searching code",
+      "editing": "Editing file",
+      "command": "Running command",
+      "web": "Searching the web",
+      "working": "Working",
+      "failed": "Failed",
+      "interrupted": "Interrupted"
+    },
+    "people": {
+      "participants": "Participants",
+      "you": "You",
+      "participantActions": "Participant actions",
+      "remove": "Remove from room",
+      "stopAndRemove": "Stop agent and remove",
+      "roleFor": "Role for {{identity}}",
+      "noRole": "No role",
+      "roles": "Roles",
+      "role": "Role",
+      "editRole": "Edit role",
+      "deleteRole": "Delete role",
+      "noPrompt": "No prompt",
+      "roleName": "Role name",
+      "roleInstructions": "Instructions for this role"
+    },
+    "pins": {
+      "empty": "No pinned messages",
+      "fallback": "Pinned message",
+      "done": "Done",
+      "reopen": "Reopen"
+    },
+    "settings": {
+      "saved": "Room settings saved",
+      "title": "Room settings",
+      "description": "Room behavior and the currently selected channel.",
+      "loopLimit": "Agent reply loop limit (0 = off)",
+      "confirmDeleteChannel": "Confirm delete channel",
+      "deleteChannel": "Delete channel"
+    },
+    "page": {
+      "selectProject": "Select a project",
+      "selectProjectDescription": "Rooms belong to a project and can use any of its worktrees.",
+      "empty": "No rooms yet",
+      "emptyDescription": "Create a room for {{name}}.",
+      "defaultRoomName": "Research room",
+      "create": "Create room",
+      "archived": "This room is archived. Restore it from the room menu to continue."
+    },
+    "selector": {
+      "title": "Choose a room",
+      "description": "Switch rooms or create a new workspace for agents.",
+      "newRoom": "New room name"
+    }
   }
 }

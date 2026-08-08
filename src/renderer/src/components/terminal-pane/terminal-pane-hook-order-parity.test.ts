@@ -13,13 +13,15 @@ const TERMINAL_PANE_HOOK_SOURCE_PATTERN =
 // `useTerminalPaneStoreActions()` calls, each one `useMemo` (204 hooks, 8 useMemo).
 // Restoring the terminal/chat switcher added four `useCallback`s -- three in
 // chat-state (can-toggle, toggle-for-leaf, toggle-active) and the context-menu
-// toggle in projection (208 hooks, still 8 useMemo).
+// toggle in projection plus Rooms chat hooks (210 hooks, still 8 useMemo).
+// Extraction is byte-for-byte equivalent after flattening the hook calls.
 const PRE_REFACTOR_HOOK_ORDER_SHA256 =
-  '983ad067c9feca82c5435eb1b865674344489c368ec2007dc7bb40c81aef037c'
+  'f25cb65a9b3b99037a31fbab02ae04ed1332126c6aa23630b8a9115f9d609227'
 
 const sourceFiles = readdirSync(__dirname)
   .filter((name) => TERMINAL_PANE_HOOK_SOURCE_PATTERN.test(name))
   .sort()
+sourceFiles.push('../native-chat/native-chat-shortcut.ts')
 
 function readFunctionDefinitions(): Map<string, ts.FunctionDeclaration> {
   const definitions = new Map<string, ts.FunctionDeclaration>()
@@ -36,7 +38,9 @@ function readFunctionDefinitions(): Map<string, ts.FunctionDeclaration> {
       if (
         ts.isFunctionDeclaration(node) &&
         node.name &&
-        (node.name.text === 'TerminalPane' || node.name.text.startsWith('useTerminalPane'))
+        (node.name.text === 'TerminalPane' ||
+          node.name.text.startsWith('useTerminalPane') ||
+          node.name.text === 'useNativeChatToggleRequest')
       ) {
         definitions.set(node.name.text, node)
       }
@@ -80,7 +84,7 @@ function readFlattenedHookOrder(): string[] {
 describe('TerminalPane refactor hook parity', () => {
   it('preserves the recursively flattened render hook order', () => {
     const hooks = readFlattenedHookOrder()
-    expect(hooks).toHaveLength(208)
+    expect(hooks).toHaveLength(210)
     expect(hooks.filter((hook) => hook === 'useMemo')).toHaveLength(8)
     expect(createHash('sha256').update(hooks.join('\n')).digest('hex')).toBe(
       PRE_REFACTOR_HOOK_ORDER_SHA256
@@ -88,7 +92,7 @@ describe('TerminalPane refactor hook parity', () => {
   })
 
   it('aggregates every extracted hook stage', () => {
-    expect(sourceFiles).toHaveLength(20)
+    expect(sourceFiles).toHaveLength(21)
     expect(sourceFiles).toContain('TerminalPane.tsx')
     expect(sourceFiles).toContain('use-terminal-pane-controller.ts')
   })

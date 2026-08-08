@@ -225,6 +225,12 @@ describe('SidebarNav', () => {
     expect(mocks.getAgentBucketCounts).not.toHaveBeenCalled()
   })
 
+  it('does not expose rooms as a global sidebar destination', async () => {
+    const container = await renderSidebarNav()
+
+    expect(queryButtonByText(container, 'Rooms')).toBeNull()
+  })
+
   it('mounts the Agent Dashboard row only when its experiment is enabled', async () => {
     setSidebarState({
       settings: {

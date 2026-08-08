@@ -5,6 +5,8 @@ export type AgentSessionContextSnapshot = {
   model?: string | null
   /** Provider-reported reasoning effort for this exact live session, when available. */
   effort?: string | null
+  /** Provider-reported Fast mode for this exact live session, when available. */
+  fastMode?: boolean | null
   usedTokens: number | null
   maxTokens: number | null
   remainingTokens: number | null

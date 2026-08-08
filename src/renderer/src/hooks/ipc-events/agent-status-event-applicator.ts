@@ -11,7 +11,6 @@ import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-tit
 import { track } from '@/lib/telemetry'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import type { AgentStatusBatchUpdate, AgentStatusUpdate } from '@/store/slices/agent-status'
-import { observeAgentHookCompletionForNotification } from '../agent-hook-completion-notifications'
 import { useAppStore } from '../../store'
 import {
   applyResolvedAgentTerminalTitleToTab,
@@ -31,6 +30,7 @@ import type {
   PendingAgentStatusEvent
 } from './agent-status-bridge-types'
 import { normalizeAgentStatusEvent } from './normalize-agent-status-event'
+import { applyAgentStatusCompletionNotification } from './agent-status-completion-notification'
 
 export function createAgentStatusEventApplicator(args: {
   pendingAgentStatusEvents: PendingAgentStatusEvent[]
@@ -185,6 +185,9 @@ export function createAgentStatusEventApplicator(args: {
     const statusPayloadWithObservation = data.observation
       ? { ...statusPayloadWithProvenance, observation: data.observation }
       : statusPayloadWithProvenance
+    const statusPayloadWithRoomDelivery = data.roomDeliveryId
+      ? { ...statusPayloadWithObservation, roomDeliveryId: data.roomDeliveryId }
+      : statusPayloadWithObservation
     const identity = resolveAgentStatusIdentity({
       existing: existingStatus
         ? {
@@ -222,7 +225,7 @@ export function createAgentStatusEventApplicator(args: {
     const statusWorktreeId = data.worktreeId ?? owningWorktreeId
     const update: AgentStatusUpdate = {
       paneKey,
-      payload: statusPayloadWithObservation,
+      payload: statusPayloadWithRoomDelivery,
       terminalTitle,
       timing: {
         updatedAt: data.receivedAt,
@@ -246,18 +249,14 @@ export function createAgentStatusEventApplicator(args: {
           : undefined
     }
     const applyPostCommitNotification = (): void => {
-      if (statusWorktreeId && (options?.replay !== true || resolvedPayload.state === 'working')) {
-        const notificationPayload =
-          typeof data.stateStartedAt === 'number'
-            ? { ...resolvedPayload, stateStartedAt: data.stateStartedAt }
-            : resolvedPayload
-        observeAgentHookCompletionForNotification({
-          paneKey,
-          worktreeId: statusWorktreeId,
-          payload: notificationPayload,
-          ...(options?.replay === true ? { seedOnly: true } : {})
-        })
-      }
+      applyAgentStatusCompletionNotification({
+        paneKey,
+        worktreeId: statusWorktreeId,
+        payload: resolvedPayload,
+        stateStartedAt: data.stateStartedAt,
+        roomDeliveryId: data.roomDeliveryId,
+        replay: options?.replay === true
+      })
     }
     if (options?.batch) {
       if (!options.batch.transaction.apply(update)) {

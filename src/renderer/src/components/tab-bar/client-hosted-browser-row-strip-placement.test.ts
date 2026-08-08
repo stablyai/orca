@@ -51,7 +51,7 @@ describe('tab-bar activation census', () => {
 
   it('clears the placeholder before handing off to the real activation', () => {
     expect(itemSurfaceSource()).toMatch(
-      /clearClientHostedBrowserRowSelection\(\)\s*\n\s*activate\?\.\(arg\)/
+      /clearClientHostedBrowserRowSelection\(\)\s*\n\s*activate\?\.\(\.\.\.args\)/
     )
   })
 })

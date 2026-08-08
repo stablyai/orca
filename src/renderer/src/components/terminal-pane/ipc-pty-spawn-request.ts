@@ -1,4 +1,8 @@
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
+import { isResumableTuiAgent } from '../../../../shared/agent-session-resume'
+import type { RuntimeEnsureAgentSessionResult } from '../../../../shared/agent-session-host-authority'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { toRuntimeTerminalWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
 
@@ -24,6 +28,8 @@ export async function spawnIpcPty(
     commandDelivery,
     launchConfig,
     resumeProviderSession,
+    agentArgsOverride,
+    agentLaunchPreferences,
     launchToken,
     launchAgent,
     startupCommandDelivery,
@@ -38,6 +44,48 @@ export async function spawnIpcPty(
   } = transportOptions
   const shouldSendLocalCwdFallback =
     cwdFallback === 'worktree' && !connectionId && !admittedSessionId
+  const providerSessionToResume = connectOptions.resumeProviderSession ?? resumeProviderSession
+  const launchAgentToSend = connectOptions.launchAgent ?? launchAgent
+  const launchConfigToSend = connectOptions.launchConfig ?? launchConfig
+  if (
+    !connectionId &&
+    !admittedSessionId &&
+    worktreeId &&
+    providerSessionToResume &&
+    isResumableTuiAgent(launchAgentToSend)
+  ) {
+    try {
+      const ensured = await callRuntimeRpc<RuntimeEnsureAgentSessionResult>(
+        { kind: 'local' },
+        'terminal.ensureAgentSession',
+        {
+          kind: 'explicit',
+          worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
+          agent: launchAgentToSend,
+          providerSession: providerSessionToResume,
+          ...(launchConfigToSend?.ompResumeFilePath
+            ? { ompResumeFilePath: launchConfigToSend.ompResumeFilePath }
+            : {}),
+          ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
+          ...(agentLaunchPreferences ? { launchPreferences: agentLaunchPreferences } : {}),
+          placement: { tabId, leafId },
+          presentation: 'background'
+        }
+      )
+      if (!ensured.terminal.ptyId) {
+        throw new Error('Agent session did not provide a PTY')
+      }
+      return {
+        id: ensured.terminal.ptyId,
+        isReattach: ensured.disposition === 'adopted',
+        launchAgent: launchAgentToSend,
+        ...(launchConfigToSend ? { launchConfig: launchConfigToSend } : {})
+      }
+    } catch (error) {
+      transportOptions.onProviderSessionResumeFailure?.()
+      throw error
+    }
+  }
   return window.api.pty.spawn({
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,
@@ -51,18 +99,12 @@ export async function spawnIpcPty(
     ...((connectOptions.commandDelivery ?? commandDelivery)
       ? { commandDelivery: connectOptions.commandDelivery ?? commandDelivery }
       : {}),
-    ...((connectOptions.launchConfig ?? launchConfig)
-      ? { launchConfig: connectOptions.launchConfig ?? launchConfig }
-      : {}),
-    ...((connectOptions.resumeProviderSession ?? resumeProviderSession)
-      ? { resumeProviderSession: connectOptions.resumeProviderSession ?? resumeProviderSession }
-      : {}),
+    ...(launchConfigToSend ? { launchConfig: launchConfigToSend } : {}),
+    ...(providerSessionToResume ? { resumeProviderSession: providerSessionToResume } : {}),
     ...((connectOptions.launchToken ?? launchToken)
       ? { launchToken: connectOptions.launchToken ?? launchToken }
       : {}),
-    ...((connectOptions.launchAgent ?? launchAgent)
-      ? { launchAgent: connectOptions.launchAgent ?? launchAgent }
-      : {}),
+    ...(launchAgentToSend ? { launchAgent: launchAgentToSend } : {}),
     ...((connectOptions.startupCommandDelivery ?? startupCommandDelivery)
       ? {
           startupCommandDelivery: connectOptions.startupCommandDelivery ?? startupCommandDelivery

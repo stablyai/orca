@@ -567,6 +567,15 @@ describe('renderer startup runtime routing', () => {
     expect(appSource).toContain('<Toaster closeButton')
   })
 
+  it('keeps rooms in the stacked titlebar instead of suppressing its tab target', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+
+    expect(source).not.toContain("(activeView === 'rooms' && shouldMountTerminalWorkbench)")
+    expect(source).toContain(
+      "activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive"
+    )
+  })
+
   it('checkpoints activeView and all session snapshots through one beforeunload handler (#9002)', () => {
     const source = readSource(SESSION_PERSISTENCE_PATH)
     const checkpointStart = source.indexOf(

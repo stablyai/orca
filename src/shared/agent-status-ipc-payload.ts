@@ -49,6 +49,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   promptInteractionKey?: string
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
+  /** Room delivery owning the current terminal turn. */
+  roomDeliveryId?: string
 } & WithAgentStatusObservation
 
 /** Identity used by UI-only cleanup to evict exactly the status it cleared.
