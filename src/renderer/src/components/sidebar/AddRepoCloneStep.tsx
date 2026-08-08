@@ -4,6 +4,7 @@ import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/di
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { RemoteFileBrowser } from './RemoteFileBrowser'
 
 type CloneStepProps = {
@@ -38,11 +39,15 @@ export function CloneStep({
   onClone
 }: CloneStepProps): React.JSX.Element {
   const [browsingDestination, setBrowsingDestination] = useState(false)
+  const imeEnter = useImeEnterGestureOwnership()
   const isRemoteClone = Boolean(runtimeEnvironmentId || sshTargetId)
   const canBrowseRemoteDestination = isRemoteClone
   const canClone = !!cloneUrl.trim() && !!cloneDestination.trim() && !isCloning
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+    if (imeEnter.ownsKeyDown(e)) {
+      return
+    }
+    if (e.key === 'Enter') {
       e.preventDefault()
       if (canClone) {
         onClone()
@@ -117,6 +122,10 @@ export function CloneStep({
           <Input
             value={cloneUrl}
             onChange={(e) => onUrlChange(e.target.value)}
+            onBlur={imeEnter.reset}
+            onCompositionStart={() => imeEnter.setComposing(true)}
+            onCompositionEnd={() => imeEnter.setComposing(false)}
+            onKeyUp={imeEnter.onKeyUp}
             onKeyDown={handleKeyDown}
             placeholder={translate(
               'auto.components.sidebar.AddRepoSteps.b698a4a29d',
@@ -136,6 +145,10 @@ export function CloneStep({
             <Input
               value={cloneDestination}
               onChange={(e) => onDestChange(e.target.value)}
+              onBlur={imeEnter.reset}
+              onCompositionStart={() => imeEnter.setComposing(true)}
+              onCompositionEnd={() => imeEnter.setComposing(false)}
+              onKeyUp={imeEnter.onKeyUp}
               onKeyDown={handleKeyDown}
               placeholder={
                 isRemoteClone

@@ -234,7 +234,6 @@ import {
   resyncTerminalFocusForWindowFocus,
   setRegularTerminalInputFocusAttribute
 } from './regular-terminal-focus-ownership'
-import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
 
 type TerminalPaneProps = {
   tabId: string
@@ -1773,8 +1772,6 @@ function TerminalPane(
     }
     let ownsRegularTerminalFocus = false
     let releasedHelperOnWindowBlur: HTMLElement | null = null
-    // Why: the IME refresh's blur emits a focusout that would clear terminalInputFocused mid-handoff; latch it so Terminal-first shortcut routing survives until refocus.
-    let refreshingImeInputContext = false
     const syncFocused = (focused: boolean): void => {
       ownsRegularTerminalFocus = focused
       if (focused) {
@@ -1788,24 +1785,12 @@ function TerminalPane(
         return
       }
       syncFocused(true)
-      // Why: helper→helper handoffs skip window blur and can leave a stale macOS NSTextInputContext; the refocus's non-helper relatedTarget prevents recursion.
-      if (isXtermHelperTextarea(event.relatedTarget) && event.relatedTarget !== event.target) {
-        refreshingImeInputContext = true
-        try {
-          refreshTerminalImeInputContext(event.target, {})
-        } finally {
-          refreshingImeInputContext = false
-        }
-      }
     }
     const onFocusOut = (event: FocusEvent): void => {
       if (!isXtermHelperTextarea(event.target)) {
         return
       }
       if (isXtermHelperTextarea(event.relatedTarget)) {
-        return
-      }
-      if (refreshingImeInputContext) {
         return
       }
       syncFocused(false)

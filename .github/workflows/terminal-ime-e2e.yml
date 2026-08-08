@@ -9,10 +9,20 @@ permissions:
   contents: read
 
 jobs:
-  linux-x11:
-    name: Linux X11 terminal IME
-    runs-on: ubuntu-22.04
+  linux:
+    name: Linux ${{ matrix.label }} terminal IME
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: X11
+            os: ubuntu-22.04
+            display_server: x11
+          - label: Wayland
+            os: ubuntu-24.04
+            display_server: wayland
 
     steps:
       - name: Checkout
@@ -27,10 +37,17 @@ jobs:
           build-essential
           dbus-x11
           dconf-gsettings-backend
+          fcitx5
+          fcitx5-chinese-addons
+          fcitx5-frontend-gtk3
+          fcitx5-hangul
           ibus
           ibus-hangul
+          ibus-libpinyin
           libglib2.0-bin
           python3
+          sway
+          wtype
           xdotool
           xfwm4
           xvfb
@@ -56,7 +73,57 @@ jobs:
       - name: Build Electron app for E2E
         run: pnpm exec electron-vite build --mode e2e
 
+      - name: Run native IBus exact-byte tests
+        if: matrix.display_server == 'x11'
+        env:
+          ORCA_E2E_NATIVE_IME: ibus
+          SKIP_BUILD: '1'
+        run: pnpm run test:e2e:terminal-ime-native
+
+      - name: Upload native IBus evidence
+        if: ${{ always() && matrix.display_server == 'x11' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-ime-native-evidence
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Run native Fcitx5 exact-byte tests
+        if: matrix.display_server == 'x11'
+        env:
+          ORCA_E2E_NATIVE_IME: fcitx5
+          SKIP_BUILD: '1'
+        run: pnpm run test:e2e:terminal-ime-native
+
+      - name: Upload native Fcitx5 evidence
+        if: ${{ always() && matrix.display_server == 'x11' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-ime-native-fcitx5-evidence
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Run native Fcitx5 Wayland exact-byte tests
+        if: matrix.display_server == 'wayland'
+        env:
+          ORCA_E2E_NATIVE_DISPLAY_SERVER: wayland
+          ORCA_E2E_NATIVE_IME: fcitx5
+          SKIP_BUILD: '1'
+        run: pnpm run test:e2e:terminal-ime-native
+
+      - name: Upload native Fcitx5 Wayland evidence
+        if: ${{ always() && matrix.display_server == 'wayland' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-ime-native-fcitx5-wayland-evidence
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Run deterministic terminal IME boundary tests
+        if: matrix.display_server == 'x11'
         run: >-
           xvfb-run --auto-servernum
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1
@@ -64,13 +131,8 @@ jobs:
           tests/e2e/terminal-ime-exact-byte.spec.ts
           --workers=1
 
-      - name: Run native IBus Hangul exact-byte tests
-        env:
-          SKIP_BUILD: '1'
-        run: pnpm run test:e2e:terminal-ime-native
-
       - name: Upload terminal IME evidence
-        if: always()
+        if: ${{ always() && matrix.display_server == 'x11' }}
         uses: actions/upload-artifact@v7
         with:
           name: terminal-ime-evidence

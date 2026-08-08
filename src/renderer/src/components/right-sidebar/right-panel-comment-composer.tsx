@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
@@ -171,6 +172,11 @@ export function RightPanelCommentComposer({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Mode B redispatch carries no modifier so it can't reach this chord; the real risk is a
+      // chord pressed mid-composition, which would post the unconverted preedit.
+      if (isImeOwnedKeyboardEvent(event)) {
+        return
+      }
       const modifierPressed = isMac ? event.metaKey : event.ctrlKey
       if (event.key === 'Enter' && modifierPressed) {
         event.preventDefault()

@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Loader2 } from 'lucide-react'
 
 export type CustomAddressValidator = (input: string) => { ok: true; value: string } | { ok: false }
@@ -119,6 +120,10 @@ export function CustomAddressDialog({
               setConfirmationFailed(false)
             }}
             onKeyDown={(e) => {
+              // Why: an Enter confirming a CJK IME candidate must not submit a half-composed address.
+              if (isImeCompositionKeyDown(e)) {
+                return
+              }
               if (e.key === 'Enter') {
                 e.preventDefault()
                 void submit()

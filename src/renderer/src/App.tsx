@@ -26,6 +26,11 @@ import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import {
+  isImeOwnedKeyboardEvent,
+  markImeOwnedShortcutEvent,
+  resolveImeModifierGesture
+} from '@/lib/ime-composition-keyboard-event'
+import {
   isPairedWebClientWindow,
   shouldRenderDesktopWindowChrome
 } from '@/lib/desktop-window-chrome'
@@ -69,7 +74,6 @@ import { onOnboardingReopened } from './components/onboarding/show-onboarding-ev
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
-import { OrcaProfileSwitcher } from './components/orca-profiles/OrcaProfileSwitcher'
 import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
@@ -335,6 +339,7 @@ const AutomationsPage = lazy(() => import('./components/automations/AutomationsP
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
 const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
+const ArtifactsPage = lazy(() => import('./components/artifacts/ArtifactsPage'))
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
@@ -1525,9 +1530,6 @@ function App(): React.JSX.Element {
   })
   // Full-page navigation surfaces own the whole content area, so suppress right-sidebar controls.
   const showRightSidebarControls = !creationLayoutActive && canShowRightSidebarForView(activeView)
-  const showProfileSwitcherInSidebarFooter = showSidebar && sidebarOpen
-  const showProfileSwitcherInTopRight = !showProfileSwitcherInSidebarFooter
-
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
       return
@@ -1571,6 +1573,7 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     const doubleTapDetector = new ModifierDoubleTapDetector()
+    let imeOwnedModifierGesture = false
 
     const createRegisteredCommandHandlers = (
       input?: ShortcutDispatchInput,
@@ -1865,6 +1868,18 @@ function App(): React.JSX.Element {
         return
       }
 
+      if (matchShortcut('worktree.palette')) {
+        input.preventDefault()
+        notifyTerminalCapture('worktree.palette')
+        const store = useAppStore.getState()
+        if (store.activeModal === 'worktree-palette') {
+          store.closeModal()
+        } else {
+          store.openModal('worktree-palette')
+        }
+        return
+      }
+
       // Skip editable surfaces so TipTap's Cmd+B bold works; this renderer-side fallback covers the blur→press IPC race (docs/markdown-cmd-b-bold-design.md).
       if (isEditableTarget(input.target)) {
         return
@@ -1931,6 +1946,15 @@ function App(): React.JSX.Element {
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
+      const gesture = resolveImeModifierGesture(imeOwnedModifierGesture, e)
+      imeOwnedModifierGesture = gesture.active
+      if (gesture.owned || isImeOwnedKeyboardEvent(e)) {
+        if (gesture.carried) {
+          markImeOwnedShortcutEvent(e)
+        }
+        doubleTapDetector.reset()
+        return
+      }
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: 'keyDown',
@@ -1971,6 +1995,12 @@ function App(): React.JSX.Element {
     }
 
     const onKeyUp = (e: KeyboardEvent): void => {
+      const gesture = resolveImeModifierGesture(imeOwnedModifierGesture, e)
+      imeOwnedModifierGesture = gesture.active
+      if (gesture.owned || isImeOwnedKeyboardEvent(e)) {
+        doubleTapDetector.reset()
+        return
+      }
       doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: 'keyUp',
@@ -1986,7 +2016,10 @@ function App(): React.JSX.Element {
     }
 
     // Why: a window blur mid-gesture must not leave the detector armed.
-    const onBlur = (): void => doubleTapDetector.reset()
+    const onBlur = (): void => {
+      imeOwnedModifierGesture = false
+      doubleTapDetector.reset()
+    }
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keyup', onKeyUp, { capture: true })
@@ -2199,33 +2232,12 @@ function App(): React.JSX.Element {
           </TooltipContent>
         </Tooltip>
       )}
-      {showProfileSwitcherInTopRight ? <OrcaProfileSwitcher /> : null}
       {/* Why: the open right sidebar's header renders its own close button, so hide this duplicate. */}
       {!rightSidebarOpen && rightSidebarToggle}
       {/* Why: reserve space so the Windows/Linux window-controls overlay doesn't obscure content. */}
       {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
     </>
   )
-  const workspaceProfileSwitcher =
-    showProfileSwitcherInTopRight &&
-    workspaceChromeActive &&
-    leftTitlebarChromeLayout.shouldMount &&
-    !stackedSidebarOpen ? (
-      <div
-        className="absolute top-0 z-10 flex h-[36px] items-center"
-        style={
-          {
-            right: showRightSidebarControls
-              ? 'calc(var(--window-controls-width) + 42px)'
-              : 'var(--window-controls-width)',
-            WebkitAppRegion: 'no-drag'
-          } as React.CSSProperties
-        }
-      >
-        <OrcaProfileSwitcher />
-      </div>
-    ) : null
-
   return (
     <div
       ref={setAppRootNode}
@@ -2362,7 +2374,6 @@ function App(): React.JSX.Element {
                             {rightSidebarToggle}
                           </div>
                         )}
-                        {workspaceProfileSwitcher}
                         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
                           {shouldMountTerminalWorkbench ? (
                             <div
@@ -2404,6 +2415,7 @@ function App(): React.JSX.Element {
                             >
                               {activeView === 'settings' ? <Settings /> : null}
                               {activeView === 'skills' ? <SkillsPage /> : null}
+                              {activeView === 'artifacts' ? <ArtifactsPage /> : null}
                               {activeView === 'tasks' ? <TaskPage /> : null}
                               {activeView === 'automations' ? <AutomationsPage /> : null}
                               {activeView === 'activity' ? <ActivityPrototypePage /> : null}

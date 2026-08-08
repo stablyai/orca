@@ -1362,7 +1362,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
   })
 
-  it('forwards ctrl/cmd+j to the worktree palette toggle event', () => {
+  it('leaves worktree palette shortcuts to the renderer', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -1419,12 +1419,10 @@ describe('createMainWindow', () => {
     ]) {
       const preventDefault = vi.fn()
       windowHandlers['before-input-event']({ preventDefault } as never, input as never)
-      expect(preventDefault).toHaveBeenCalledTimes(1)
+      expect(preventDefault).not.toHaveBeenCalled()
     }
 
-    expect(webContents.send).toHaveBeenCalledTimes(2)
-    expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:toggleWorktreePalette')
-    expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:toggleWorktreePalette')
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:toggleWorktreePalette')
   })
 
   it('suppresses auto-repeat quick-command menu toggles from before-input-event', () => {
@@ -1632,7 +1630,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:openQuickOpen')
   })
 
-  it('notifies before Orca-first captures a risky terminal-focused shortcut', () => {
+  it('leaves terminal-focused worktree palette capture to the renderer', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -1690,11 +1688,12 @@ describe('createMainWindow', () => {
       } as never
     )
 
-    expect(preventDefault).toHaveBeenCalledTimes(1)
-    expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:terminalShortcutCaptured', {
-      actionId: 'worktree.palette'
-    })
-    expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:toggleWorktreePalette')
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith(
+      'ui:terminalShortcutCaptured',
+      expect.anything()
+    )
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:toggleWorktreePalette')
   })
 
   it('notifies before Orca-first captures a terminal-focused double-tap shortcut', () => {

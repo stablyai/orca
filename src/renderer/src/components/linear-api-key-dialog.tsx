@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import {
   createLinearApiKeyDialogState,
   resolveLinearApiKeyDialogState
@@ -126,6 +127,10 @@ export function LinearApiKeyDialog({
         overlayClassName={overlayClassName}
         className={cn('sm:max-w-lg', contentClassName)}
         onKeyDown={(event) => {
+          // Bubbled from the field, so this still carries the IME state of the composing input.
+          if (isImeOwnedKeyboardEvent(event)) {
+            return
+          }
           if (event.key === 'Enter' && apiKeyDraft.trim() && connectState !== 'connecting') {
             event.preventDefault()
             void handleConnect()

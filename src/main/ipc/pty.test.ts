@@ -4222,6 +4222,24 @@ describe('registerPtyHandlers', () => {
         }
       })
 
+      it('prepends the bundled CLI dir to PATH for packaged macOS spawns', async () => {
+        const resourcesPathDescriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
+        Object.defineProperty(process, 'resourcesPath', {
+          configurable: true,
+          value: '/tmp/orca-resources'
+        })
+        try {
+          const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
+          expect(env.PATH.split(delimiter)[0]).toBe(join('/tmp/orca-resources', 'bin'))
+        } finally {
+          if (resourcesPathDescriptor) {
+            Object.defineProperty(process, 'resourcesPath', resourcesPathDescriptor)
+          } else {
+            Reflect.deleteProperty(process, 'resourcesPath')
+          }
+        }
+      })
+
       it('injects the agent-hook receiver env on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({})
         expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')

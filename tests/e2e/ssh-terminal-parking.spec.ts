@@ -1,13 +1,29 @@
+import { execFileSync } from 'node:child_process'
 import type { TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady, getActiveTabId } from './helpers/store'
 import {
+  focusActiveTerminalInput,
   getTerminalContent,
   sendToTerminal,
   waitForActivePanePtyId,
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
+import {
+  attachTerminalImeBoundaryEvidence,
+  disposeTerminalImeBoundaryProbe,
+  installTerminalImeBoundaryProbe,
+  readTerminalImeBoundaryTrace
+} from './terminal-ime-boundary-probe'
+import {
+  createInlineTerminalImeByteReader,
+  createTerminalImeByteReader,
+  removeTerminalImeByteReader,
+  startTerminalImeByteReader,
+  waitForTerminalImeBytes,
+  type TerminalImeByteReader
+} from './terminal-ime-byte-reader'
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
 import {
   cleanupDockerSshRelayTarget,
@@ -18,6 +34,16 @@ import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connecti
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const PARKING_DELAY_MS = Number(process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS) || 500
+const TWO_SET_KOREAN_ID = 'com.apple.inputmethod.Korean.2SetKorean'
+
+function typeNativeTwoSetKorean(processId: number, keyCodes: readonly number[]): void {
+  execFileSync('osascript', [
+    '-e',
+    `tell application "System Events" to set frontmost of first application process whose unix id is ${processId} to true`,
+    '-e',
+    `tell application "System Events" to key code {${keyCodes.join(', ')}}`
+  ])
+}
 
 test.use({
   seedTestRepo: false,
@@ -109,6 +135,99 @@ test.describe('SSH terminal hidden view parking', () => {
         })
         .toContain(`${marker}_1:`)
     } finally {
+      cleanupDockerSshRelayTarget(target)
+    }
+  })
+})
+
+test.describe('SSH terminal native IME ownership @headful', () => {
+  test.use({ seedTestRepo: true })
+  test.skip(
+    !RUN_DOCKER_SSH ||
+      process.platform !== 'darwin' ||
+      process.env.ORCA_E2E_NATIVE_MACOS_KOREAN !== '1',
+    'Requires Docker SSH plus macOS 2-Set Korean and Accessibility access'
+  )
+
+  test('delivers physical Hangul and ordinary input to the bound remote PTY', async ({
+    electronApp,
+    orcaPage,
+    testRepoPath
+  }, testInfo: TestInfo) => {
+    test.setTimeout(240_000)
+    let target: DockerSshRelayTarget | null = null
+    let localReader: TerminalImeByteReader | null = null
+    let reader: TerminalImeByteReader | null = null
+    let ptyId: string | null = null
+    let completed = false
+    try {
+      target = startDockerSshRelayTarget(testInfo)
+      await waitForSessionReady(orcaPage)
+      const localWorktreeId = await waitForActiveWorktree(orcaPage)
+      await waitForActiveTerminalManager(orcaPage, 30_000)
+      const localPtyId = await waitForActivePanePtyId(orcaPage, 30_000)
+      localReader = createTerminalImeByteReader(testRepoPath, 1)
+      await startTerminalImeByteReader(orcaPage, localPtyId, localReader)
+      const remote = await connectDockerSshRelayTarget(orcaPage, target)
+      await expect
+        .poll(() => waitForActiveWorktree(orcaPage), { timeout: 30_000 })
+        .toBe(remote.worktreeId)
+      await waitForActiveTerminalManager(orcaPage, 60_000)
+      await expect(
+        orcaPage.evaluate(() => window.api.app.getKeyboardInputSourceId())
+      ).resolves.toBe(TWO_SET_KOREAN_ID)
+      ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      reader = createInlineTerminalImeByteReader(2)
+      await startTerminalImeByteReader(orcaPage, ptyId, reader)
+      await focusActiveTerminalInput(orcaPage)
+      await installTerminalImeBoundaryProbe(orcaPage)
+
+      typeNativeTwoSetKorean(electronApp.process().pid!, [5, 40, 1, 15, 46, 3, 36])
+      await expect
+        .poll(async () => (await readTerminalImeBoundaryTrace(orcaPage)).onData.join(''))
+        .toBe('한글\r')
+      await orcaPage.keyboard.type('ordinary')
+      await orcaPage.keyboard.press('Enter')
+
+      expect(await waitForTerminalImeBytes(orcaPage, reader, 30_000)).toEqual([
+        Buffer.from('한글\n').toString('hex'),
+        Buffer.from('ordinary\n').toString('hex')
+      ])
+      expect((await readTerminalImeBoundaryTrace(orcaPage)).onData.join('')).toBe(
+        '한글\rordinary\r'
+      )
+
+      await orcaPage.evaluate((worktreeId) => {
+        window.__store?.getState().setActiveWorktree(worktreeId)
+      }, localWorktreeId)
+      await expect.poll(() => waitForActiveWorktree(orcaPage)).toBe(localWorktreeId)
+      await waitForActiveTerminalManager(orcaPage, 30_000)
+      expect(await waitForActivePanePtyId(orcaPage, 30_000)).toBe(localPtyId)
+      await focusActiveTerminalInput(orcaPage)
+      await orcaPage.keyboard.type('local-control')
+      await orcaPage.keyboard.press('Enter')
+      expect(await waitForTerminalImeBytes(orcaPage, localReader)).toEqual([
+        Buffer.from('local-control\n').toString('hex')
+      ])
+      await orcaPage.evaluate((worktreeId) => {
+        window.__store?.getState().setActiveWorktree(worktreeId)
+      }, remote.worktreeId)
+      await expect.poll(() => waitForActiveWorktree(orcaPage)).toBe(remote.worktreeId)
+      completed = true
+    } finally {
+      await attachTerminalImeBoundaryEvidence(orcaPage, testInfo, 'native-macos-ssh').catch(
+        () => undefined
+      )
+      await disposeTerminalImeBoundaryProbe(orcaPage).catch(() => undefined)
+      if (!completed && ptyId) {
+        await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+      }
+      if (reader) {
+        removeTerminalImeByteReader(reader)
+      }
+      if (localReader) {
+        removeTerminalImeByteReader(localReader)
+      }
       cleanupDockerSshRelayTarget(target)
     }
   })

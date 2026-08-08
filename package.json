@@ -103,7 +103,7 @@
     "win-crash-survival-e2e": "node tests/tools/win-crash-survival-e2e/run.mjs",
     "test:e2e:ssh-codex-artifacts-repro": "node config/scripts/run-ssh-codex-artifacts-repro-e2e.mjs",
     "test:e2e:headful": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headful",
-    "test:e2e:terminal-ime-native": "node config/scripts/run-terminal-ibus-hangul-e2e.mjs",
+    "test:e2e:terminal-ime-native": "node config/scripts/run-terminal-linux-ime-e2e.mjs",
     "test:e2e:computer": "vitest run --config tests/e2e/vitest.config.ts",
     "bench:idle-cpu": "pnpm run ensure:electron-runtime && node config/scripts/run-idle-cpu-benchmark.mjs",
     "bench:macos-computer-helper-owner-loss": "node config/scripts/macos-computer-helper-owner-loss-benchmark.mjs",

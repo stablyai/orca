@@ -29,6 +29,12 @@ function listedTerminalWorktreeIds(worktree?: string): string[] {
 }
 
 describe('mock server terminal fixture routing', () => {
+  it('returns the production terminal.send acknowledgement contract', () => {
+    expect(sendMockRequest('terminal.send', { terminal: 'term-1', text: 'abc' }).result).toEqual({
+      send: { handle: 'term-1', accepted: true, bytesWritten: 3 }
+    })
+  })
+
   it('follows worktree creation and activation', () => {
     const worktreeResponse = sendMockRequest('worktree.ps')
     const initialWorktreeId = (

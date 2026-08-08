@@ -2,6 +2,7 @@ import { ChevronDown, Loader2, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
 import type { RemotePairingFailureKind } from '../../../../shared/remote-pairing-verification'
+import { ImeEnterGuardedForm } from '../ime-enter-guarded-form'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
@@ -57,7 +58,7 @@ export function RuntimeHostAccessForm({
   const canSubmit = name.trim() !== '' && parsed.ok && !loopbackBlocked && !busy
 
   return (
-    <form
+    <ImeEnterGuardedForm
       className="space-y-4 rounded-lg border border-border/50 bg-muted/20 p-4"
       onSubmit={(event) => {
         event.preventDefault()
@@ -336,6 +337,6 @@ export function RuntimeHostAccessForm({
             : translate('auto.components.settings.RuntimeHostAccessForm.addHost', 'Add host')}
         </Button>
       </div>
-    </form>
+    </ImeEnterGuardedForm>
   )
 }

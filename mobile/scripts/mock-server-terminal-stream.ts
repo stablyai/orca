@@ -113,13 +113,19 @@ export function handleMockTerminalRequest(
       return true
     }
 
-    case 'terminal.send':
+    case 'terminal.send': {
       // Input-routing repros (#8818) assert on the exact bytes reaching the host.
+      const text = String(request.params?.text ?? '')
       console.log(
-        `[SEND] terminal=${String(request.params?.terminal)} text=${JSON.stringify(request.params?.text)}`
+        `[SEND] terminal=${String(request.params?.terminal)} text=${JSON.stringify(text)}`
       )
-      respond(success(request.id, { send: { handle: 'term-1', ok: true } }))
+      respond(
+        success(request.id, {
+          send: { handle: 'term-1', accepted: true, bytesWritten: Buffer.byteLength(text) }
+        })
+      )
       return true
+    }
 
     case 'terminal.unsubscribe':
       clearTerminalStream(ws, String(request.params?.terminal ?? 'term-1'))

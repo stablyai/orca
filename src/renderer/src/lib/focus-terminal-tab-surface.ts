@@ -1,5 +1,3 @@
-import { refreshTerminalImeInputContext } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
-
 /**
  * Move keyboard focus into the xterm instance for a freshly-mounted terminal
  * tab. Handles the two-step race where React must first mount the new
@@ -15,8 +13,6 @@ let pendingFocusFrameIds: number[] = []
 
 type FocusTerminalTabSurfaceOptions = {
   onlyIfFocusUnclaimed?: boolean
-  onImeRefocusSkipped?: (activeElement: Element | null) => void
-  refreshImeContext?: boolean
 }
 
 function focusTerminalHelper(helper: HTMLElement, options: FocusTerminalTabSurfaceOptions): void {
@@ -27,13 +23,6 @@ function focusTerminalHelper(helper: HTMLElement, options: FocusTerminalTabSurfa
     }
   }
   helper.focus()
-  if (options.refreshImeContext) {
-    // Why: a CSS-hidden, long-lived xterm can retain a stale macOS native text
-    // input context even after DOM focus returns; blur/refocus rebuilds it.
-    refreshTerminalImeInputContext(helper, {
-      onRefocusSkipped: options.onImeRefocusSkipped
-    })
-  }
 }
 
 function cancelPendingFocusFrames(): void {

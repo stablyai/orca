@@ -15,7 +15,6 @@ import TerminalPane, { type TerminalPaneHandle } from '@/components/terminal-pan
 import { shouldDeferParkedPtyExitTabClose } from '@/components/terminal-pane/terminal-parked-tab-watchers'
 import { useTerminalTabColdParking } from '@/components/terminal-pane/use-terminal-tab-cold-parking'
 import { isTerminalPaneCloseChord } from '@/components/terminal-pane/terminal-shortcut-policy'
-import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
@@ -685,8 +684,7 @@ export function FloatingTerminalPanel({
       return
     }
     focusTerminalTabSurface(activeTerminalId, null, {
-      onImeRefocusSkipped: (active) => reportFloatingFocus(active),
-      refreshImeContext: true
+      onlyIfFocusUnclaimed: true
     })
   }, [activeTerminalId, open])
 
@@ -1639,16 +1637,14 @@ export function FloatingTerminalPanel({
       }
       if ((active === null || active === document.body) && activeTerminalId) {
         if (reclaim.helper.isConnected && panel?.contains(reclaim.helper)) {
-          // Why: TerminalPane owns exact-helper reclaim and IME refresh. Avoid
-          // racing it with a second floating-layer blur/refocus cycle.
+          // Why: TerminalPane owns exact-helper reclaim. Avoid racing it with
+          // a second floating-layer focus cycle.
           return
         }
         // Why: only a helper that genuinely remounted while backgrounded needs
         // tab/leaf recovery; the shared TerminalPane owner cannot reclaim it.
         focusTerminalTabSurface(activeTerminalId, reclaim.leafId, {
-          onlyIfFocusUnclaimed: true,
-          onImeRefocusSkipped: (active) => reportFloatingFocus(active),
-          refreshImeContext: true
+          onlyIfFocusUnclaimed: true
         })
       }
     }
@@ -1758,13 +1754,7 @@ export function FloatingTerminalPanel({
         commitUserBounds({ ...stagedBoundsRef.current, width: rect.width, height: rect.height })
       }}
       onFocusCapture={(event) => reportFloatingFocusFromTarget(event.target)}
-      onBlurCapture={(event) => {
-        // Why: keep terminal-first shortcut ownership latched during the
-        // synchronous macOS IME refresh blur; refocus or its skip callback settles it.
-        if (!isTerminalImeInputContextRefreshing(event.target)) {
-          reportFloatingFocusFromTarget(event.relatedTarget)
-        }
-      }}
+      onBlurCapture={(event) => reportFloatingFocusFromTarget(event.relatedTarget)}
       onKeyDownCapture={handleShortcutSurfaceKeyDown}
     >
       <div className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-black/14 bg-card dark:border-white/14">
