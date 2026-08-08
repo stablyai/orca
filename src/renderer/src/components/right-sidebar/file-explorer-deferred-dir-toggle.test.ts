@@ -32,6 +32,7 @@ function renderHandlers(toggleDir: (worktreeId: string, dirPath: string) => void
       toggleDir,
       loadDir: vi.fn().mockResolvedValue(true),
       statPath: vi.fn().mockResolvedValue({ isDirectory: true }),
+      authorizeExternalPath: vi.fn(),
       markPathAsDirectory: vi.fn(),
       setSelectedPath: vi.fn(),
       scrollRef: createRef<HTMLDivElement>()
