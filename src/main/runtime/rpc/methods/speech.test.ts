@@ -141,10 +141,44 @@ describe('speech RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRequest('speech.dictation.setup', { enabled: true, modelId: 'm1' })
+      makeRequest('speech.dictation.setup', {
+        enabled: true,
+        modelId: 'm1',
+        dictationCorrectionMode: 'preview'
+      })
     )
 
-    expect(runtime.configureMobileDictation).toHaveBeenCalledWith({ enabled: true, modelId: 'm1' })
+    expect(runtime.configureMobileDictation).toHaveBeenCalledWith({
+      enabled: true,
+      modelId: 'm1',
+      dictationCorrectionMode: 'preview'
+    })
     expect(response).toMatchObject({ ok: true, result: { enabled: true, selectedModelId: 'm1' } })
+  })
+
+  it('returns raw and corrected transcripts from dictation finish', async () => {
+    const result = {
+      dictationId: 'dict-1',
+      text: 'q w e n 3 a s r comma ready',
+      rawText: 'q w e n 3 a s r comma ready',
+      correctedText: 'Qwen3-ASR, ready',
+      dictationCorrectionMode: 'preview' as const
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      finishMobileDictation: vi.fn().mockResolvedValue(result)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('speech.dictation.finish', { dictationId: 'dict-1' })
+    )
+
+    expect(runtime.finishMobileDictation).toHaveBeenCalledWith({
+      dictationId: 'dict-1',
+      clientId: undefined,
+      connectionId: undefined
+    })
+    expect(response).toMatchObject({ ok: true, result })
   })
 })

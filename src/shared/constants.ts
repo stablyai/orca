@@ -399,6 +399,7 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     modelsDir: '',
     language: 'en',
     dictationMode: 'toggle' as const,
+    dictationCorrectionMode: 'off' as const,
     customVocabulary: [],
     terminalConfirmBeforeInsert: false,
     userModels: [],

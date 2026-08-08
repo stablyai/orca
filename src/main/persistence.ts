@@ -136,6 +136,7 @@ import {
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
 import { normalizeSpeechHotwords } from '../shared/speech-hotwords'
+import { normalizeDictationCorrectionMode } from '../shared/speech-transcript-correction'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
@@ -3473,6 +3474,9 @@ export class Store {
             voice: {
               ...getDefaultVoiceSettings(),
               ...parsed.settings?.voice,
+              dictationCorrectionMode: normalizeDictationCorrectionMode(
+                parsed.settings?.voice?.dictationCorrectionMode
+              ),
               customVocabulary: normalizeSpeechHotwords(parsed.settings?.voice?.customVocabulary)
             }
           },
@@ -5857,8 +5861,15 @@ export class Store {
       const rawVocabulary = Object.prototype.hasOwnProperty.call(updates.voice, 'customVocabulary')
         ? updates.voice.customVocabulary
         : currentVoice.customVocabulary
+      const rawCorrectionMode = Object.prototype.hasOwnProperty.call(
+        updates.voice,
+        'dictationCorrectionMode'
+      )
+        ? updates.voice.dictationCorrectionMode
+        : currentVoice.dictationCorrectionMode
       sanitizedUpdates.voice = {
         ...updates.voice,
+        dictationCorrectionMode: normalizeDictationCorrectionMode(rawCorrectionMode),
         customVocabulary: normalizeSpeechHotwords(rawVocabulary)
       }
     }

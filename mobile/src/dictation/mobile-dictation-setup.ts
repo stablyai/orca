@@ -78,7 +78,12 @@ export async function deleteDictationModel(
 
 export async function setDictationConfig(
   client: Pick<RpcClient, 'sendRequest'>,
-  params: { enabled?: boolean; modelId?: string; dictationMode?: 'toggle' | 'hold' }
+  params: {
+    enabled?: boolean
+    modelId?: string
+    dictationMode?: 'toggle' | 'hold'
+    dictationCorrectionMode?: 'off' | 'preview' | 'auto'
+  }
 ): Promise<MobileSpeechSetup> {
   const response = await client.sendRequest('speech.dictation.setup', params)
   if (!response.ok) {

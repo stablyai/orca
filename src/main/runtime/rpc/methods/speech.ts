@@ -45,7 +45,8 @@ const SpeechModelAction = z.object({
 const DictationSetup = z.object({
   enabled: z.boolean().optional(),
   modelId: OptionalString,
-  dictationMode: z.enum(['toggle', 'hold']).optional()
+  dictationMode: z.enum(['toggle', 'hold']).optional(),
+  dictationCorrectionMode: z.enum(['off', 'preview', 'auto']).optional()
 })
 
 export const SPEECH_METHODS: RpcMethod[] = [
@@ -71,7 +72,10 @@ export const SPEECH_METHODS: RpcMethod[] = [
       runtime.configureMobileDictation({
         ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
         ...(params.modelId !== undefined ? { modelId: params.modelId } : {}),
-        ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {})
+        ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {}),
+        ...(params.dictationCorrectionMode !== undefined
+          ? { dictationCorrectionMode: params.dictationCorrectionMode }
+          : {})
       })
   }),
   defineMethod({

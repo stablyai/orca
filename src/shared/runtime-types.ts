@@ -41,6 +41,7 @@ import type { RemoteServerUpdateSupport } from './remote-server-update'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
 import type { RasterImageDimensions } from './raster-image-dimensions'
+import type { DictationCorrectionMode } from './speech-types'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
@@ -818,6 +819,8 @@ export type RuntimeSpeechSetupState = {
   selectedModelId: string
   /** 'toggle' = press once to start/stop; 'hold' = dictate while held. */
   dictationMode: 'toggle' | 'hold'
+  /** Optional so updated mobile clients remain compatible with older runtimes. */
+  dictationCorrectionMode?: DictationCorrectionMode
   models: RuntimeSpeechModelSummary[]
 }
 

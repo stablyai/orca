@@ -8,7 +8,7 @@ import {
   TEXT_CONTROL_PASTE_MAX_BYTES,
   getTextControlPasteByteLength
 } from '@/lib/text-control-paste'
-import { insertText } from './dictation-insertion-target'
+import { captureInsertionTarget, insertText } from './dictation-insertion-target'
 
 type DocumentWithExecCommand = Document & {
   execCommand?: (commandId: string, showUi?: boolean, value?: string) => boolean
@@ -82,6 +82,32 @@ describe('dictation insertion target', () => {
     expect(inputEvents).toHaveLength(1)
     expect(inputEvents[0].inputType).toBe('insertText')
     expect(inputEvents[0].data ?? '').toBe('')
+  })
+
+  it('restores the captured textarea selection after a correction preview takes focus', async () => {
+    const textarea = appendTextarea()
+    textarea.value = 'hello world'
+    textarea.setSelectionRange(6, 11)
+    const target = captureInsertionTarget()
+    const previewButton = document.createElement('button')
+    document.body.appendChild(previewButton)
+    previewButton.focus()
+
+    expect(target?.kind).toBe('text')
+    insertText('Orca', target!, { restoreFocus: true })
+
+    await vi.waitFor(() => expect(textarea.value).toBe('hello Orca'))
+    expect(document.activeElement).toBe(textarea)
+    expect(textarea.selectionStart).toBe(10)
+    expect(textarea.selectionEnd).toBe(10)
+  })
+
+  it('ignores a detached contenteditable correction target', () => {
+    const editor = appendContentEditable()
+    const target = captureInsertionTarget()
+    editor.remove()
+
+    expect(() => insertText('Orca', target!, { restoreFocus: true })).not.toThrow()
   })
 
   it('chunks large contenteditable dictation through bounded insertText calls', async () => {

@@ -74,6 +74,35 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.voice.pane.search.correctionTitle',
+      'Transcript Correction'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.correctionDescription',
+      'Locally correct spoken punctuation, spacing, and custom vocabulary before insertion.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.correctionKeyword',
+        'correction'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.autocorrectKeyword',
+        'autocorrect'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.punctuationKeyword',
+        'punctuation'
+      )
+    ]
+  },
+  {
     title: translate('auto.components.settings.voice.pane.search.microphoneTitle', 'Microphone'),
     description: translate(
       'auto.components.settings.voice.pane.search.microphoneDescription',

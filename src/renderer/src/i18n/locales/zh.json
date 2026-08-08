@@ -7432,6 +7432,15 @@
           "cd9fe37556": "已授予麦克风权限",
           "6fa734ed95": "删除 {{value0}}"
         },
+        "VoiceDictationSettingsSection": {
+          "correctionLabel": "听写自动校正",
+          "correctionDescription": "在本地修正口述标点、空格和已保存词汇。预览模式会在插入前确认，自动模式会直接插入校正后的文本。",
+          "correction": {
+            "off": "关闭",
+            "preview": "预览",
+            "auto": "自动"
+          }
+        },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "删除 {{value0}}",
           "b814c618e2": "链接路径",
@@ -9081,7 +9090,14 @@
               "20574cbc72": "启用语音听写",
               "322d457a0d": "转录",
               "dcc7846641": "配置用于云语音转文本模型的 OpenAI API 密钥。",
-              "ebfd0b32e5": "OpenAI 转录"
+              "ebfd0b32e5": "OpenAI 转录",
+              "customVocabularyTitle": "自定义词汇",
+              "customVocabularyDescription": "通过姓名、技术术语和中英混合短语提高受支持本地语音模型的识别效果。",
+              "correctionTitle": "听写自动校正",
+              "correctionDescription": "在插入前本地修正口述标点、空格和自定义词汇。",
+              "correctionKeyword": "校正",
+              "autocorrectKeyword": "自动校正",
+              "punctuationKeyword": "标点"
             }
           }
         },
@@ -10112,6 +10128,11 @@
           "description": "用于语音听写的输入设备，系统默认会跟随操作系统的麦克风设置。",
           "accessHint": "允许麦克风访问以列出输入设备。",
           "allowAccess": "允许访问"
+        },
+        "VoiceVocabularySection": {
+          "label": "自定义词汇",
+          "description": "添加姓名、技术术语和中英混合短语。受支持的本地模型会使用这些词汇改善识别。",
+          "placeholder": "Orca\nQwen3-ASR\nPowerShell"
         }
       },
       "right": {
@@ -13325,6 +13346,15 @@
         },
         "DictationIndicator": {
           "335e1bc6cb": "停止听写"
+        },
+        "DictationCorrectionPreview": {
+          "title": "检查听写校正",
+          "description": "校正在本地完成。请选择校正后的文本，或保留原始听写内容。",
+          "corrected": "校正后",
+          "original": "原文",
+          "discard": "丢弃",
+          "useOriginal": "使用原文",
+          "insertCorrected": "插入校正文"
         }
       },
       "dashboard": {

@@ -7713,6 +7713,15 @@
           "1eac933202": "Opened macOS Privacy & Security. Enable dictation again after granting access.",
           "cd9fe37556": "Microphone permission granted"
         },
+        "VoiceDictationSettingsSection": {
+          "correctionLabel": "Transcript Correction",
+          "correctionDescription": "Locally fixes spoken punctuation, spacing, and saved vocabulary. Preview asks before inserting; Auto inserts the corrected text.",
+          "correction": {
+            "off": "Off",
+            "preview": "Preview",
+            "auto": "Auto"
+          }
+        },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
           "b814c618e2": "Linked paths",
@@ -9373,7 +9382,12 @@
               "micAirpods": "airpods",
               "micDefault": "system default",
               "customVocabularyTitle": "Custom Vocabulary",
-              "customVocabularyDescription": "Improve supported local speech models with names, technical terms, and mixed-language phrases."
+              "customVocabularyDescription": "Improve supported local speech models with names, technical terms, and mixed-language phrases.",
+              "correctionTitle": "Transcript Correction",
+              "correctionDescription": "Locally correct spoken punctuation, spacing, and custom vocabulary before insertion.",
+              "correctionKeyword": "correction",
+              "autocorrectKeyword": "autocorrect",
+              "punctuationKeyword": "punctuation"
             }
           }
         },
@@ -13739,6 +13753,15 @@
         },
         "DictationIndicator": {
           "335e1bc6cb": "Stop dictation"
+        },
+        "DictationCorrectionPreview": {
+          "title": "Review dictation correction",
+          "description": "Correction runs locally. Choose the corrected text or keep the original transcript.",
+          "corrected": "Corrected",
+          "original": "Original",
+          "discard": "Discard",
+          "useOriginal": "Use original",
+          "insertCorrected": "Insert corrected"
         }
       },
       "dashboard": {

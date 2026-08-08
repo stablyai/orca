@@ -66,12 +66,15 @@ export type UserModelConfig = {
 
 export type DictationMode = 'toggle' | 'hold'
 
+export type DictationCorrectionMode = 'off' | 'preview' | 'auto'
+
 export type VoiceSettings = {
   enabled: boolean
   sttModel: string
   modelsDir: string
   language: string
   dictationMode: DictationMode
+  dictationCorrectionMode: DictationCorrectionMode
   customVocabulary: string[]
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]

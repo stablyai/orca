@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { VoiceSettings } from '../../../../shared/speech-types'
 import { normalizeSpeechHotwords } from '../../../../shared/speech-hotwords'
 import { Label } from '../ui/label'
+import { Textarea } from '../ui/textarea'
 import { translate } from '@/i18n/i18n'
 
 const EMPTY_VOCABULARY: string[] = []
@@ -54,7 +55,7 @@ export function VoiceVocabularySection({
           )}
         </p>
       </div>
-      <textarea
+      <Textarea
         id="voice-custom-vocabulary"
         aria-describedby="voice-custom-vocabulary-description"
         value={draft}
@@ -66,7 +67,7 @@ export function VoiceVocabularySection({
           'auto.components.settings.VoiceVocabularySection.placeholder',
           'Orca\nQwen3-ASR\nPowerShell'
         )}
-        className="min-h-24 w-64 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+        className="min-h-24 w-64 resize-y"
       />
     </div>
   )

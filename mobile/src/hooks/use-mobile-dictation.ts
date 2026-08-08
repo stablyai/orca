@@ -10,6 +10,7 @@ import { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-au
 import { enqueueMobileDictationAudioChunk } from './mobile-dictation-audio-chunk'
 import { createMobileDictationKeepAwakeOwner } from './mobile-dictation-keep-awake'
 import { useMobileDictationForegroundKeepAwake } from './mobile-dictation-foreground-keep-awake'
+import { resolveMobileDictationFinishResult } from '../dictation/mobile-dictation-finish-result'
 import {
   DICTATION_FINISH_TIMEOUT_MS,
   createMobileDictationId,
@@ -25,7 +26,14 @@ import type {
 export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
-  const { client, enabled, onTranscript, onError } = options
+  const {
+    client,
+    enabled,
+    correctionMode = 'off',
+    onTranscript,
+    onTranscriptPreview,
+    onError
+  } = options
   const keepAwakeOwner = useMemo(createMobileDictationKeepAwakeOwner, [])
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -33,6 +41,8 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const clientRef = useRef(client)
   const enabledRef = useRef(enabled)
   const onTranscriptRef = useRef(onTranscript)
+  const onTranscriptPreviewRef = useRef(onTranscriptPreview)
+  const correctionModeRef = useRef(correctionMode)
   const onErrorRef = useRef(onError)
   const pendingChunksRef = useRef<Set<Promise<void>>>(new Set())
   const pendingAudioBudgetRef = useRef(new MobileDictationPendingAudioBudget())
@@ -46,8 +56,10 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     clientRef.current = client
     enabledRef.current = enabled
     onTranscriptRef.current = onTranscript
+    onTranscriptPreviewRef.current = onTranscriptPreview
+    correctionModeRef.current = correctionMode
     onErrorRef.current = onError
-  }, [client, enabled, onTranscript, onError])
+  }, [client, correctionMode, enabled, onError, onTranscript, onTranscriptPreview])
 
   const reportError = useCallback((err: unknown) => {
     const normalized = err instanceof Error ? err : new Error(String(err))
@@ -230,15 +242,19 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       ) {
         return
       }
-      const result = response.result as { text?: unknown }
-      const text = typeof result.text === 'string' ? result.text.trim() : ''
+      const transcript = resolveMobileDictationFinishResult(
+        response.result,
+        correctionModeRef.current
+      )
       activeIdRef.current = null
       finishingIdRef.current = null
       pendingChunksRef.current.clear()
       pendingAudioBudgetRef.current.reset()
       setStatus('idle')
-      if (text) {
-        onTranscriptRef.current(text)
+      if (transcript.preview && onTranscriptPreviewRef.current) {
+        onTranscriptPreviewRef.current(transcript.preview)
+      } else if (transcript.text) {
+        onTranscriptRef.current(transcript.text)
       } else {
         reportError(new Error('No speech detected.'))
       }

@@ -104,12 +104,16 @@ describe('rpc wrappers', () => {
   it('sets config', async () => {
     const setup: MobileSpeechSetup = { enabled: true, selectedModelId: 'm1', models: [] }
     const client = clientWith([ok(setup)])
-    await expect(setDictationConfig(client, { enabled: true, modelId: 'm1' })).resolves.toEqual(
-      setup
-    )
+    await expect(
+      setDictationConfig(client, {
+        enabled: true,
+        modelId: 'm1',
+        dictationCorrectionMode: 'preview'
+      })
+    ).resolves.toEqual(setup)
     expect(client.calls[0]).toEqual({
       method: 'speech.dictation.setup',
-      params: { enabled: true, modelId: 'm1' }
+      params: { enabled: true, modelId: 'm1', dictationCorrectionMode: 'preview' }
     })
   })
 

@@ -999,7 +999,8 @@ import type { RateLimitService } from '../rate-limits/service'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
-import type { VoiceSettings } from '../../shared/speech-types'
+import type { DictationCorrectionMode, VoiceSettings } from '../../shared/speech-types'
+import { correctSpeechTranscript } from '../../shared/speech-transcript-correction'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import { acquireSpeechHotwordsFile, type SpeechHotwordsFileLease } from '../speech/hotwords-file'
 import { getCatalogModel, isLocalSpeechModel, SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
@@ -3369,6 +3370,8 @@ export class OrcaRuntimeService {
     partialText: string
     finalTexts: string[]
     errors: string[]
+    correctionMode: DictationCorrectionMode
+    correctionVocabulary: string[]
   } | null = null
 
   constructor(
@@ -12820,6 +12823,7 @@ export class OrcaRuntimeService {
       enabled: voice.enabled === true,
       selectedModelId: voice.sttModel ?? '',
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
+      dictationCorrectionMode: voice.dictationCorrectionMode ?? 'off',
       models
     }
   }
@@ -12872,6 +12876,7 @@ export class OrcaRuntimeService {
     enabled?: boolean
     modelId?: string
     dictationMode?: 'toggle' | 'hold'
+    dictationCorrectionMode?: DictationCorrectionMode
   }): Promise<RuntimeSpeechSetupState> {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('voice_dictation_unavailable')
@@ -12887,7 +12892,10 @@ export class OrcaRuntimeService {
       ...current,
       ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
       ...(params.modelId !== undefined ? { sttModel: params.modelId } : {}),
-      ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {})
+      ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {}),
+      ...(params.dictationCorrectionMode !== undefined
+        ? { dictationCorrectionMode: params.dictationCorrectionMode }
+        : {})
     }
     this.store.updateSettings({ voice: nextVoice }, { notifyListeners: true })
     return this.listMobileSpeechModels()
@@ -12934,6 +12942,10 @@ export class OrcaRuntimeService {
       voice.customVocabulary,
       modelManager.getModelsDir()
     )
+    if (this.mobileDictation) {
+      void hotwordsFile?.release()
+      throw new Error('dictation_already_active')
+    }
     const owner = `mobile:${params.dictationId}`
     this.mobileDictation = {
       id: params.dictationId,
@@ -12944,7 +12956,9 @@ export class OrcaRuntimeService {
       state: 'starting',
       partialText: '',
       finalTexts: [],
-      errors: []
+      errors: [],
+      correctionMode: voice.dictationCorrectionMode ?? 'off',
+      correctionVocabulary: voice.customVocabulary ?? []
     }
 
     try {
@@ -13028,6 +13042,9 @@ export class OrcaRuntimeService {
   }): Promise<{
     dictationId: string
     text: string
+    rawText: string
+    correctedText: string
+    dictationCorrectionMode: DictationCorrectionMode
   }> {
     const session = this.mobileDictation
     if (!session || session.id !== params.dictationId) {
@@ -13045,8 +13062,16 @@ export class OrcaRuntimeService {
       if (session.errors.length > 0) {
         throw new Error(session.errors[0])
       }
-      const text = [...session.finalTexts, session.partialText].join(' ').trim()
-      return { dictationId: params.dictationId, text }
+      const rawText = [...session.finalTexts, session.partialText].join(' ').trim()
+      const correctedText = correctSpeechTranscript(rawText, session.correctionVocabulary)
+      const text = session.correctionMode === 'auto' ? correctedText : rawText
+      return {
+        dictationId: params.dictationId,
+        text,
+        rawText,
+        correctedText,
+        dictationCorrectionMode: session.correctionMode
+      }
     } finally {
       void session.hotwordsFile?.release()
       if (this.mobileDictation?.id === session.id) {

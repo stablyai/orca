@@ -51,8 +51,10 @@ describe('useMobileDictation source invariants', () => {
     expect(mirrorEffect).toContain('clientRef.current = client')
     expect(mirrorEffect).toContain('enabledRef.current = enabled')
     expect(mirrorEffect).toContain('onTranscriptRef.current = onTranscript')
+    expect(mirrorEffect).toContain('onTranscriptPreviewRef.current = onTranscriptPreview')
+    expect(mirrorEffect).toContain('correctionModeRef.current = correctionMode')
     expect(mirrorEffect).toContain('onErrorRef.current = onError')
-    expect(mirrorEffect).toContain('}, [client, enabled, onTranscript, onError])')
+    expect(mirrorEffect).toContain('client, correctionMode, enabled, onError')
   })
 
   it('reserves pending audio bytes before encoding microphone chunks', () => {
@@ -208,6 +210,15 @@ describe('useMobileDictation source invariants', () => {
     expect(stopBody.indexOf('} finally {')).toBeLessThan(
       stopBody.indexOf('void keepAwakeOwner.release')
     )
+  })
+
+  it('keeps raw mobile transcripts recoverable in preview mode', () => {
+    const stopBody = sliceBetween('const stop = useCallback(async () => {', 'const cancel =')
+
+    expect(stopBody).toContain('resolveMobileDictationFinishResult(')
+    expect(stopBody).toContain('correctionModeRef.current')
+    expect(stopBody).toContain('onTranscriptPreviewRef.current(transcript.preview)')
+    expect(stopBody).toContain('onTranscriptRef.current(transcript.text)')
   })
 
   it('reacquires the wake tag when Android returns to the foreground mid-dictation', () => {

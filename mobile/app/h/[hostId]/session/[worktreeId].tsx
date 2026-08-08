@@ -94,6 +94,7 @@ import { MOBILE_AI_VAULT_CAPABILITY } from '../../../../src/agent-history/agent-
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
 import { headlessActivationNeedsHostRenderer } from '../../../../src/worktree/worktree-activation-result'
 import { useMobileDictation } from '../../../../src/hooks/use-mobile-dictation'
+import { showMobileDictationCorrectionAlert } from '../../../../src/dictation/mobile-dictation-correction-alert'
 import {
   triggerMediumImpact,
   triggerSelection,
@@ -1016,6 +1017,9 @@ export default function SessionScreen() {
   const [showDictationSetup, setShowDictationSetup] = useState(false)
   // 'hold' = press-and-hold mic, 'toggle' = tap-to-start/stop; mirrors Settings ▸ Voice ▸ Dictation Mode.
   const [dictationMode, setDictationMode] = useState<'toggle' | 'hold'>('toggle')
+  const [dictationCorrectionMode, setDictationCorrectionMode] = useState<
+    'off' | 'preview' | 'auto'
+  >('off')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastOpacityRef = useRef(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1238,44 +1242,46 @@ export default function SessionScreen() {
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
   nativeChatSendError.bannerMountedRef.current = showNativeChat
 
+  const insertDictationTranscript = (text: string): void => {
+    const routeContext = dictationRouteContextRef.current
+    dictationRouteContextRef.current = null
+    // Why: dictation belongs to the visible composer — native chat consumes it locally, terminal mode keeps live-input routing.
+    if (showNativeChatRef.current) {
+      nativeChatController.setChatComposerText((current) => appendBufferedDictation(current, text))
+      showToast('Dictation inserted')
+      return
+    }
+    const route = routeDictationTranscript(text, routeContext?.liveInputEnabled ?? liveInputEnabled)
+    if (route.kind === 'live-insert') {
+      const insertHandle = routeContext?.handle ?? activeHandleRef.current
+      if (!insertHandle) {
+        return
+      }
+      void (async () => {
+        const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(insertHandle)
+        if (!flushedPendingInput) {
+          return
+        }
+        const sent = await sendLiveTerminalInput(insertHandle, route.text)
+        if (sent) {
+          showToast('Dictation inserted')
+        }
+      })()
+      return
+    }
+    setInput((current) => appendBufferedDictation(current, route.text))
+    showToast('Dictation inserted')
+  }
+
   const dictation = useMobileDictation({
     client,
     enabled: canSend,
-    onTranscript: (text) => {
-      // Why: dictation belongs to the visible composer — native chat consumes it locally, terminal mode keeps live-input routing.
-      if (showNativeChatRef.current) {
-        nativeChatController.setChatComposerText((current) =>
-          appendBufferedDictation(current, text)
-        )
-        showToast('Dictation inserted')
-        return
-      }
-      // Live mode inserts the transcript into its PTY as text (no Return); buffered mode appends to the command field.
-      const routeContext = dictationRouteContextRef.current
-      dictationRouteContextRef.current = null
-      const route = routeDictationTranscript(
-        text,
-        routeContext?.liveInputEnabled ?? liveInputEnabled
-      )
-      if (route.kind === 'live-insert') {
-        const insertHandle = routeContext?.handle ?? activeHandleRef.current
-        if (!insertHandle) {
-          return
-        }
-        void (async () => {
-          const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(insertHandle)
-          if (!flushedPendingInput) {
-            return
-          }
-          const sent = await sendLiveTerminalInput(insertHandle, route.text)
-          if (sent) {
-            showToast('Dictation inserted')
-          }
-        })()
-        return
-      }
-      setInput((current) => appendBufferedDictation(current, route.text))
-      showToast('Dictation inserted')
+    correctionMode: dictationCorrectionMode,
+    onTranscript: insertDictationTranscript,
+    onTranscriptPreview: (preview) => {
+      showMobileDictationCorrectionAlert(preview, insertDictationTranscript, () => {
+        dictationRouteContextRef.current = null
+      })
     },
     onError: (err) => {
       dictationRouteContextRef.current = null
@@ -1337,23 +1343,24 @@ export default function SessionScreen() {
     }
   }, [cancelDictation, dictation])
 
-  const refreshDictationMode = useCallback(async () => {
+  const refreshDictationPreferences = useCallback(async () => {
     if (!client) {
       return
     }
     try {
       const setup = await fetchDictationSetup(client)
       setDictationMode(setup.dictationMode)
+      setDictationCorrectionMode(setup.dictationCorrectionMode ?? 'off')
     } catch {
       // Non-fatal: fall back to the default toggle behavior.
     }
   }, [client])
 
-  // Re-read on focus so a Settings ▸ Voice dictation-mode change is reflected on return.
+  // Re-read on focus so Settings ▸ Voice dictation preferences are reflected on return.
   useFocusEffect(
     useCallback(() => {
-      void refreshDictationMode()
-    }, [refreshDictationMode])
+      void refreshDictationPreferences()
+    }, [refreshDictationPreferences])
   )
 
   useEffect(() => {

@@ -3,14 +3,22 @@
 import { Buffer } from 'buffer'
 
 import type { RpcClient } from '../transport/rpc-client'
+import type { DictationCorrectionMode } from '../../../src/shared/speech-types'
 
 export type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'
 
 export type UseMobileDictationOptions = {
   client: RpcClient | null
   enabled: boolean
+  correctionMode?: DictationCorrectionMode
   onTranscript: (text: string) => void
+  onTranscriptPreview?: (preview: MobileDictationTranscriptPreview) => void
   onError?: (error: Error) => void
+}
+
+export type MobileDictationTranscriptPreview = {
+  rawText: string
+  correctedText: string
 }
 
 export type UseMobileDictationResult = {

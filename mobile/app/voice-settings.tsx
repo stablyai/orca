@@ -17,6 +17,7 @@ import type { HostProfile } from '../src/transport/types'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { BottomDrawer } from '../src/components/BottomDrawer'
+import { VoiceDictationPreferences } from '../src/components/VoiceDictationPreferences'
 import { VoiceModelList } from '../src/components/VoiceModelList'
 import { useDictationSetupPoller } from '../src/dictation/use-dictation-setup-poller'
 import {
@@ -30,11 +31,6 @@ import {
 } from '../src/dictation/mobile-dictation-setup'
 
 const POLL_INTERVAL_MS = 1500
-
-const DICTATION_MODES = [
-  { value: 'toggle', label: 'Toggle' },
-  { value: 'hold', label: 'Hold' }
-] as const
 
 type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete' }
 
@@ -117,6 +113,23 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
       setSetup((prev) => (prev ? { ...prev, dictationMode } : prev))
       try {
         setSetup(await setDictationConfig(client, { dictationMode }))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not update')
+        void refreshSetup()
+      }
+    },
+    [client, refreshSetup]
+  )
+
+  const handleSelectCorrectionMode = useCallback(
+    async (dictationCorrectionMode: 'off' | 'preview' | 'auto') => {
+      if (!client) {
+        return
+      }
+      setError(null)
+      setSetup((prev) => (prev ? { ...prev, dictationCorrectionMode } : prev))
+      try {
+        setSetup(await setDictationConfig(client, { dictationCorrectionMode }))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not update')
         void refreshSetup()
@@ -234,33 +247,13 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
 
             <View style={styles.separator} />
 
-            <View
-              style={[styles.row, !enabled && styles.disabled]}
-              pointerEvents={enabled ? 'auto' : 'none'}
-            >
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Dictation Mode</Text>
-                <Text style={styles.rowSublabel}>
-                  Toggle: press once to start, again to stop. Hold: dictate while held.
-                </Text>
-              </View>
-              <View style={styles.segmented}>
-                {DICTATION_MODES.map((mode) => {
-                  const active = setup.dictationMode === mode.value
-                  return (
-                    <Pressable
-                      key={mode.value}
-                      onPress={() => void handleSelectMode(mode.value)}
-                      style={[styles.segment, active && styles.segmentActive]}
-                    >
-                      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
-                        {mode.label}
-                      </Text>
-                    </Pressable>
-                  )
-                })}
-              </View>
-            </View>
+            <VoiceDictationPreferences
+              enabled={enabled}
+              dictationMode={setup.dictationMode}
+              correctionMode={setup.dictationCorrectionMode ?? 'off'}
+              onSelectDictationMode={(mode) => void handleSelectMode(mode)}
+              onSelectCorrectionMode={(mode) => void handleSelectCorrectionMode(mode)}
+            />
           </View>
 
           <Text style={[styles.groupHeading, styles.inputGroupGap]}>SPEECH MODEL</Text>
@@ -392,20 +385,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
   },
-  segmented: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bgBase,
-    borderRadius: radii.button,
-    padding: 2
-  },
-  segment: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.button - 1
-  },
-  segmentActive: { backgroundColor: colors.bgRaised },
-  segmentText: { fontSize: typography.metaSize, color: colors.textSecondary, fontWeight: '600' },
-  segmentTextActive: { color: colors.textPrimary },
   error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md }
 })

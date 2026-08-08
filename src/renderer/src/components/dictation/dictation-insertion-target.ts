@@ -11,8 +11,13 @@ import {
 
 export type DictationInsertionTarget =
   | { kind: 'terminal'; tabId: string; paneId: number }
-  | { kind: 'text'; element: HTMLInputElement | HTMLTextAreaElement }
-  | { kind: 'contentEditable'; element: HTMLElement }
+  | {
+      kind: 'text'
+      element: HTMLInputElement | HTMLTextAreaElement
+      selectionStart?: number | null
+      selectionEnd?: number | null
+    }
+  | { kind: 'contentEditable'; element: HTMLElement; selectionRange?: Range | null }
 
 export function captureInsertionTarget(): DictationInsertionTarget | null {
   const activeElement = document.activeElement
@@ -33,17 +38,28 @@ export function captureInsertionTarget(): DictationInsertionTarget | null {
   }
 
   if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
-    return { kind: 'text', element: activeElement }
+    return {
+      kind: 'text',
+      element: activeElement,
+      selectionStart: activeElement.selectionStart,
+      selectionEnd: activeElement.selectionEnd
+    }
   }
 
   if (activeElement instanceof HTMLElement && activeElement.isContentEditable) {
-    return { kind: 'contentEditable', element: activeElement }
+    const selection = activeElement.ownerDocument.getSelection()
+    const selectionRange = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null
+    return { kind: 'contentEditable', element: activeElement, selectionRange }
   }
 
   return null
 }
 
-export function insertText(text: string, target: DictationInsertionTarget): void {
+export function insertText(
+  text: string,
+  target: DictationInsertionTarget,
+  options: { restoreFocus?: boolean } = {}
+): void {
   if (target.kind === 'terminal') {
     document.dispatchEvent(
       new CustomEvent('dictation:insertText', {
@@ -58,17 +74,52 @@ export function insertText(text: string, target: DictationInsertionTarget): void
     if (!element.isConnected) {
       return
     }
+    const restoreSelection = (): void => restoreTextSelection(target)
+    let canRestoreAfterAsyncBoundary = options.restoreFocus === true
+    if (canRestoreAfterAsyncBoundary) {
+      restoreSelection()
+    }
     void pasteTextIntoTextControl(element, text, {
       source: 'programmatic',
       inputType: 'insertText',
-      canContinue: (candidate) => candidate.ownerDocument.activeElement === candidate
+      canContinue: (candidate) => {
+        if (canRestoreAfterAsyncBoundary && candidate.ownerDocument.activeElement !== candidate) {
+          canRestoreAfterAsyncBoundary = false
+          restoreSelection()
+        }
+        return candidate.ownerDocument.activeElement === candidate
+      }
     }).catch(() => {})
     return
   }
 
   if (target.kind === 'contentEditable') {
-    void insertTextIntoContentEditableTarget(target.element, text).catch(() => {})
+    const restoreSelection = options.restoreFocus
+      ? () => restoreContentEditableSelection(target.element, target.selectionRange)
+      : undefined
+    restoreSelection?.()
+    void insertTextIntoContentEditableTarget(target.element, text, restoreSelection).catch(() => {})
   }
+}
+
+function restoreTextSelection(target: Extract<DictationInsertionTarget, { kind: 'text' }>): void {
+  target.element.focus()
+  if (typeof target.selectionStart === 'number' && typeof target.selectionEnd === 'number') {
+    target.element.setSelectionRange(target.selectionStart, target.selectionEnd)
+  }
+}
+
+function restoreContentEditableSelection(element: HTMLElement, range?: Range | null): void {
+  if (!element.isConnected) {
+    return
+  }
+  element.focus()
+  if (!range || !element.contains(range.commonAncestorContainer)) {
+    return
+  }
+  const selection = element.ownerDocument.getSelection()
+  selection?.removeAllRanges()
+  selection?.addRange(range)
 }
 
 function findClosestEditorElement(element: HTMLElement): HTMLElement | null {
@@ -77,13 +128,17 @@ function findClosestEditorElement(element: HTMLElement): HTMLElement | null {
 
 async function insertTextIntoContentEditableTarget(
   element: HTMLElement,
-  text: string
+  text: string,
+  restoreSelection?: () => void
 ): Promise<void> {
   const directByteLength = measureTextControlPasteByteLength(text, {
     stopAfterBytes: TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
   })
   if (directByteLength.byteLength === 0) {
     return
+  }
+  if (!isContentEditableDictationTargetCurrent(element) && restoreSelection) {
+    restoreSelection()
   }
   if (!isContentEditableDictationTargetCurrent(element)) {
     return
@@ -99,6 +154,9 @@ async function insertTextIntoContentEditableTarget(
   })
   if (maxByteLength.exceededLimit) {
     return
+  }
+  if (!isContentEditableDictationTargetCurrent(element) && restoreSelection) {
+    restoreSelection()
   }
 
   let textIndex = 0
