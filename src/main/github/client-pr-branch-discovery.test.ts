@@ -414,6 +414,78 @@ describe('getPRForBranch', () => {
     expect(pr?.number).toBe(5001)
   })
 
+  it('falls back to the branch list when REST misses a PR from a fork', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: { owner: 'innocarpe', repo: 'orca' }
+    })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '[]' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 12956,
+            title: 'Existing fork PR',
+            state: 'OPEN',
+            url: 'https://github.com/stablyai/orca/pull/12956',
+            statusCheckRollup: [],
+            updatedAt: '2026-08-08T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'fix/pr-branch-fork-lookup',
+            baseRefOid: 'base-oid',
+            headRefOid: 'head-oid'
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 12956,
+          title: 'Hydrated fork PR',
+          state: 'OPEN',
+          url: 'https://github.com/stablyai/orca/pull/12956',
+          statusCheckRollup: [],
+          updatedAt: '2026-08-08T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'fix/pr-branch-fork-lookup',
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'fix/pr-branch-fork-lookup')
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      [
+        'api',
+        'repos/stablyai/orca/pulls?head=innocarpe%3Afix%2Fpr-branch-fork-lookup&state=all&per_page=1'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining([
+        'pr',
+        'list',
+        '--repo',
+        'stablyai/orca',
+        '--head',
+        'fix/pr-branch-fork-lookup'
+      ]),
+      { cwd: '/repo-root' }
+    )
+    expect(pr).toMatchObject({
+      number: 12956,
+      title: 'Hydrated fork PR',
+      prRepo: { owner: 'stablyai', repo: 'orca' },
+      headRepo: { owner: 'innocarpe', repo: 'orca' }
+    })
+  })
+
   it('returns null for empty branch (e.g. during rebase with detached HEAD)', async () => {
     const pr = await getPRForBranch('/repo-root', '')
     expect(pr).toBeNull()
