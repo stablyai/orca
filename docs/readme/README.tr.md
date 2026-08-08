@@ -17,7 +17,7 @@
 
 <p align="center">
   <strong>100x geliştiriciler için Yapay Zekâ Orkestratörü.</strong><br/>
-  Codex, ClaudeCode, OpenCode veya Pi'yi yan yana çalıştırın — her biri kendi git çalışma ağacında (worktree), tek bir yerden takip edilsin.
+  Codex, Claude Code, OpenCode veya Pi'yi yan yana çalıştırın — her biri kendi git çalışma ağacında (worktree), tek bir yerden takip edilsin.
 </p>
 
 <h3 align="center"><a href="https://onorca.dev/download"><ins>Orca'yı İndir</ins></a></h3>
@@ -36,7 +36,7 @@
 
 Ajanlarınızı telefonunuzdan izleyin ve yönlendirin — bir ajan tamamlandığında bildirim alın ve her yerden takip istemleri gönderin.
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [Android APK 0.0.37](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.37/app-release.apk) · [Dökümanlar →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [Android APK 0.0.37](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.37/app-release.apk) · [Dokümanlar →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -50,7 +50,7 @@ Ajanlarınızı telefonunuzdan izleyin ve yönlendirin — bir ajan tamamlandı�
 
 Tek bir istemi beş farklı ajana yayınlayın; her biri kendi izole git çalışma ağacında (worktree) çalışsın — sonuçları karşılaştırın ve kazananı ana dala birleştirin.
 
-[Dökümanlar →](https://www.onorca.dev/docs/model/worktrees)
+[Dokümanlar →](https://www.onorca.dev/docs/model/worktrees)
 
 </td>
 <td width="50%">
@@ -64,7 +64,7 @@ Tek bir istemi beş farklı ajana yayınlayın; her biri kendi izole git çalı�
 
 WebGL işleme, sonsuz bölünme ve yeniden başlatmalarda kaybolmayan kaydırma geçmişine sahip Ghostty sınıfı terminaller.
 
-[Dökümanlar →](https://www.onorca.dev/docs/terminal)
+[Dokümanlar →](https://www.onorca.dev/docs/terminal)
 
 </td>
 <td width="50%">
@@ -78,7 +78,7 @@ WebGL işleme, sonsuz bölünme ve yeniden başlatmalarda kaybolmayan kaydırma 
 
 HTML, CSS ve kırpılmış ekran görüntüsünü doğrudan ajanın istemine göndermek için gerçek bir Chromium penceresindeki herhangi bir kullanıcı arayüzü öğesine tıklayın.
 
-[Dökümanlar →](https://www.onorca.dev/docs/browser/design-mode)
+[Dokümanlar →](https://www.onorca.dev/docs/browser/design-mode)
 
 </td>
 <td width="50%">
@@ -92,7 +92,7 @@ HTML, CSS ve kırpılmış ekran görüntüsünü doğrudan ajanın istemine gö
 
 PR'ları, sorunları ve proje panolarını uygulama içinde inceleyin — herhangi bir görevden çalışma ağacı açın ve bağlam değiştirmeden kod incelemesi yapın.
 
-[Dökümanlar →](https://www.onorca.dev/docs/review/linear)
+[Dokümanlar →](https://www.onorca.dev/docs/review/linear)
 
 </td>
 <td width="50%">
@@ -106,7 +106,7 @@ PR'ları, sorunları ve proje panolarını uygulama içinde inceleyin — herhan
 
 Ajanları tam dosya düzenleme, git ve terminallerle güçlü bir uzak sunucuda çalıştırın — otomatik yeniden bağlanma ve port yönlendirme dahildir.
 
-[Dökümanlar →](https://www.onorca.dev/docs/ssh)
+[Dokümanlar →](https://www.onorca.dev/docs/ssh)
 
 </td>
 <td width="50%">
@@ -120,7 +120,7 @@ Ajanları tam dosya düzenleme, git ve terminallerle güçlü bir uzak sunucuda 
 
 Herhangi bir fark (diff) satırına yorum bırakın ve bunları ajana geri gönderin — Orca'dan ayrılmadan inceleyin, düzenleyin ve işleyin (commit).
 
-[Dökümanlar →](https://www.onorca.dev/docs/review/annotate-ai-diff)
+[Dokümanlar →](https://www.onorca.dev/docs/review/annotate-ai-diff)
 
 </td>
 <td width="50%">
@@ -134,7 +134,7 @@ Herhangi bir fark (diff) satırına yorum bırakın ve bunları ajana geri gönd
 
 VS Code'un her yerde otomatik kaydetme özelliğine sahip düzenleyicisi — dosyaları veya görselleri doğrudan ajan istemine sürükleyin.
 
-[Dökümanlar →](https://www.onorca.dev/docs/editing/file-explorer)
+[Dokümanlar →](https://www.onorca.dev/docs/editing/file-explorer)
 
 </td>
 <td width="50%">
@@ -148,7 +148,7 @@ VS Code'un her yerde otomatik kaydetme özelliğine sahip düzenleyicisi — dos
 
 Ajanlar da Orca'yı yönlendirir — `orca worktree create`, `snapshot`, `click` ve `fill` komutları ile tüm iş akışlarınızı kodlayın.
 
-[Dökümanlar →](https://www.onorca.dev/docs/cli/overview)
+[Dokümanlar →](https://www.onorca.dev/docs/cli/overview)
 
 </td>
 <td width="50%">
@@ -243,7 +243,7 @@ Ajanlarınızı telefonunuzdan izlemek ve yönlendirmek için masaüstü uygulam
   <img src="../../docs/assets/wechat-qr-group7.jpg" alt="Orca topluluğu için WeChat grup 7 QR kodu" width="160" />
 
 - **Geri Bildirim &amp; Fikirler:** Hızlı yayınlar çıkarıyoruz. Eksik bir şey mi var? [Yeni bir özellik talep edin](https://github.com/stablyai/orca/issues).
-- **Gizlilik:** Orca'nın hangi anonim kullanım verilerini topladığını ve nasıl devre dışı bırakılacağını öğrenmek için [gizlilik &amp; telemetri dökümanlarına](https://www.onorca.dev/docs/telemetry) bakın.
+- **Gizlilik:** Orca'nın hangi anonim kullanım verilerini topladığını ve nasıl devre dışı bırakılacağını öğrenmek için [gizlilik &amp; telemetri dokümanlarına](https://www.onorca.dev/docs/telemetry) bakın.
 - **Destek Olun:** Günlük yayınlarımızı takip etmek için bu depoya bir [Yıldız (Star)](https://github.com/stablyai/orca) verin.
 
 ---

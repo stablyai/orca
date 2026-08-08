@@ -18,7 +18,7 @@
         "korean": "한국어",
         "japanese": "日本語",
         "spanish": "Español",
-        "turkish": "Turkish"
+        "turkish": "Türkçe"
       },
       "statusBar": {
         "claudeToggleDescription": "アクティブなワークスペースの Claude トークンとコストの使用状況を表示します。",
