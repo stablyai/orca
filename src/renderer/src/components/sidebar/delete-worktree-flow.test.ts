@@ -142,19 +142,6 @@ describe('runWorktreeBatchDelete', () => {
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', { worktreeId: 'wt-1' })
   })
 
-  it('uses the clicked workspace snapshot if a refresh temporarily drops the row', () => {
-    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
-    setWorktrees([{ id: 'wt-1', displayName: 'one' }])
-    const target = mocks.state.worktreeMap.get('wt-1') as unknown as NonNullable<
-      Parameters<typeof runWorktreeDelete>[1]
-    >
-    setWorktrees([])
-
-    runWorktreeDelete('wt-1', target)
-
-    expect(mocks.state.removeWorktree).toHaveBeenCalledWith('wt-1', false)
-  })
-
   it('treats duplicate selected ids as one delete target', () => {
     setWorktrees([{ id: 'wt-1' }])
 
@@ -312,6 +299,48 @@ describe('runWorktreeBatchDelete', () => {
       worktreeId: 'parent',
       allowSkipConfirm: false
     })
+  })
+
+  // Why: the context menu defers Delete past a menu-close animation, so the row can be dropped
+  // (and later re-added) between click and this call. Deleting it anyway would act on a workspace
+  // whose tabs and PTYs are already torn down, so the delete must fail closed AND say why.
+  it('reports a stale list instead of silently dropping a delete whose row vanished', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([])
+
+    runWorktreeDelete('wt-1')
+
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).not.toHaveBeenCalled()
+    expect(mocks.state.clearWorktreeDeleteState).not.toHaveBeenCalled()
+    expect(toast.info).toHaveBeenCalledWith(
+      'Workspace is no longer listed',
+      expect.objectContaining({
+        description: 'Refresh Space and try again if the workspace list looks stale.'
+      })
+    )
+  })
+
+  // Why: the delete-current-workspace shortcut (useIpcEvents) forwards whatever workspace is
+  // active, and a folder workspace is never in the worktree map — claiming it vanished would lie.
+  it('stays silent for a folder workspace, which this funnel does not route', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([])
+
+    runWorktreeDelete('folder:11111111-2222-3333-4444-555555555555')
+
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
+    expect(toast.info).not.toHaveBeenCalled()
+  })
+
+  it('does not report a stale list when the workspace is still present', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([{ id: 'wt-1', displayName: 'one' }])
+
+    runWorktreeDelete('wt-1')
+
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(mocks.state.removeWorktree).toHaveBeenCalledWith('wt-1', false)
   })
 
   it('opens project removal confirmation for a primary workspace', () => {

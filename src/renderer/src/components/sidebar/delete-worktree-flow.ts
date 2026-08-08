@@ -5,6 +5,10 @@ import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
+import {
+  showNoDeletableWorkspacesToast,
+  showWorkspaceNoLongerListedToast
+} from './stale-workspace-list-toast'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
@@ -12,6 +16,7 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { Worktree } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
@@ -209,15 +214,20 @@ export function runWorktreeDeleteWithToast(
  * Shared funnel for the standard (non-folder) delete decision tree (WorktreeContextMenu,
  * MemoryStatusSegment); branches on the `skipDeleteWorktreeConfirm` preference.
  *
- * A matching caller snapshot preserves delayed context-menu deletes across transient list refreshes;
- * without one, a missing record still fails closed.
+ * The missing-record guard is defense-in-depth: refuse to act if the record vanished between
+ * render and click (concurrent delete, state reset, or a runtime re-pair that drops live rows).
+ * Deleting from a caller-held copy would hit a workspace whose tabs and PTYs are already torn
+ * down, so report the miss like runWorktreeBatchDelete does instead of failing silently (#11646).
  */
-export function runWorktreeDelete(worktreeId: string, targetSnapshot?: Worktree): void {
+export function runWorktreeDelete(worktreeId: string): void {
   const state = useAppStore.getState()
-  const target =
-    getWorktreeMapFromState(state).get(worktreeId) ??
-    (targetSnapshot?.id === worktreeId ? targetSnapshot : null)
+  const target = getWorktreeMapFromState(state).get(worktreeId) ?? null
   if (!target) {
+    // Why: folder workspaces are never in the worktree map — their callers own that route, so a
+    // miss there is a routing gap, not a stale list, and must not claim the workspace is gone.
+    if (parseWorkspaceKey(worktreeId)?.type !== 'folder') {
+      showWorkspaceNoLongerListedToast()
+    }
     return
   }
   if (target.isMainWorktree) {
@@ -281,18 +291,7 @@ export function runWorktreeBatchDelete(
     .filter((worktree): worktree is Worktree => worktree != null && !worktree.isMainWorktree)
 
   if (targets.length === 0) {
-    toast.info(
-      translate(
-        'auto.components.sidebar.delete.worktree.flow.7243145cd6',
-        'No deletable workspaces selected'
-      ),
-      {
-        description: translate(
-          'auto.components.sidebar.delete.worktree.flow.b81b4e40ca',
-          'Refresh Space and try again if the workspace list looks stale.'
-        )
-      }
-    )
+    showNoDeletableWorkspacesToast()
     return false
   }
 

@@ -663,7 +663,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       // Why delegate to runWorktreeDelete: keeps the delete-vs-project-removal
       // decision tree (and its rationale) in one place shared with command
       // surfaces and the memory popover's inline Delete action.
-      runWorktreeDelete(worktree.id, worktree)
+      runWorktreeDelete(worktree.id)
       restoreSidebarPosition()
     }, 50)
   }, [
@@ -673,7 +673,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     isMultiContext,
     setActiveWorktree,
     setMenuOpenState,
-    worktree
+    worktree.id
   ])
 
   const handleOpenParent = useCallback(() => {
