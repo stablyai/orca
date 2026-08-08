@@ -227,33 +227,33 @@ export function assignNativeChatPendingOccurrence<T extends NativeChatPendingOcc
 }
 
 /**
- * Remove `removedIndex` and pull its later same-key siblings down one occurrence.
- * Only the removed send consumes no transcript turn, so renumbering from 1 would
- * also erase the elevation a pruned or capped-out predecessor still owns.
+ * Drop the selected entries and pull each survivor down by the same-key slots
+ * those drops vacated. A dropped send consumes no transcript turn, but a pruned
+ * or capped-out predecessor still owns the slot it earned — so renumbering from
+ * 1, or across keys, would retire a survivor against an already-consumed turn.
+ * Returns `pending` untouched when nothing was dropped.
  */
-export function withoutNativeChatPendingOccurrence<T extends NativeChatPendingOccurrence>(
-  pending: readonly T[],
-  removedIndex: number
+export function dropNativeChatPendingOccurrences<T extends NativeChatPendingOccurrence>(
+  pending: T[],
+  shouldDrop: (entry: T) => boolean
 ): T[] {
-  const removed = pending[removedIndex]
-  if (!removed) {
-    return [...pending]
-  }
-  const key = nativeChatPendingMatchKey(removed)
+  const vacatedByKey = new Map<string, number>()
   const next: T[] = []
-  for (const [index, entry] of pending.entries()) {
-    if (index === removedIndex) {
+  for (const entry of pending) {
+    const key = nativeChatPendingMatchKey(entry)
+    if (shouldDrop(entry)) {
+      vacatedByKey.set(key, (vacatedByKey.get(key) ?? 0) + 1)
       continue
     }
+    const vacated = vacatedByKey.get(key) ?? 0
     const occurrence = entry.matchingOccurrence
-    const shifts =
-      index > removedIndex &&
-      occurrence !== undefined &&
-      occurrence > 1 &&
-      nativeChatPendingMatchKey(entry) === key
-    next.push(shifts ? { ...entry, matchingOccurrence: occurrence - 1 } : entry)
+    next.push(
+      vacated > 0 && occurrence !== undefined
+        ? { ...entry, matchingOccurrence: Math.max(1, occurrence - vacated) }
+        : entry
+    )
   }
-  return next
+  return vacatedByKey.size === 0 ? pending : next
 }
 
 export function nativeChatPendingMatchingAfter(pending: NativeChatPendingOccurrence): number {

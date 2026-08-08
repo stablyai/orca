@@ -3,7 +3,7 @@ import {
   type NativeChatCommandMarker,
   type NativeChatPendingSend
 } from './native-chat-pending'
-import { nativeChatPendingMatchKey } from './native-chat-pending-occurrence'
+import { dropNativeChatPendingOccurrences } from './native-chat-pending-occurrence'
 
 export type NativeChatPendingConversation = {
   /** Provider session currently resolved for the pane; null while unknown. */
@@ -26,37 +26,17 @@ export function retainPendingSendsForConversation(
 ): NativeChatPendingSend[] {
   const clearedAt = latestClearSentAt(conversation.markers)
   const { sessionId } = conversation
-  // Why: a dropped echo's turn will never arrive, so each later sibling sharing
-  // its match key must give up exactly the slots those drops freed — counted per
-  // key, so an unrelated drop cannot erase elevation a landed turn already earned.
-  const droppedByKey = new Map<string, number>()
-  let changed = false
-  const next: NativeChatPendingSend[] = []
-  for (const entry of pending) {
-    const replacedSession =
-      sessionId !== null && entry.sessionId != null && entry.sessionId !== sessionId
-    if ((clearedAt !== null && entry.sentAt <= clearedAt) || replacedSession) {
-      const key = nativeChatPendingMatchKey(entry)
-      droppedByKey.set(key, (droppedByKey.get(key) ?? 0) + 1)
-      changed = true
-      continue
-    }
-    // Why: a reconnect can briefly drop provider-session metadata, and the
-    // session gate already holds the last identity — don't drop echoes on it. A
-    // fresh launch learns its id only after the first send, so the first id
-    // observed claims those echoes instead of dropping them.
-    let kept = entry
-    if (sessionId !== null && entry.sessionId == null) {
-      kept = { ...entry, sessionId }
-      changed = true
-    }
-    const shift = droppedByKey.get(nativeChatPendingMatchKey(kept)) ?? 0
-    const occurrence = kept.matchingOccurrence
-    if (shift > 0 && occurrence !== undefined) {
-      kept = { ...kept, matchingOccurrence: Math.max(1, occurrence - shift) }
-      changed = true
-    }
-    next.push(kept)
+  const retained = dropNativeChatPendingOccurrences(
+    pending,
+    (entry) =>
+      (clearedAt !== null && entry.sentAt <= clearedAt) ||
+      (sessionId !== null && entry.sessionId != null && entry.sessionId !== sessionId)
+  )
+  // Why: a reconnect can briefly drop provider-session metadata, and the session
+  // gate already holds the last identity — don't drop echoes on it. A fresh launch
+  // learns its id only after the first send, so the first id observed claims them.
+  if (sessionId === null || !retained.some((entry) => entry.sessionId == null)) {
+    return retained
   }
-  return changed ? next : pending
+  return retained.map((entry) => (entry.sessionId == null ? { ...entry, sessionId } : entry))
 }

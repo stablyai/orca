@@ -18,6 +18,9 @@ type EchoProps = {
 }
 
 function renderEchoProps(initialProps: EchoProps) {
+  // A fresh mock per render would model a caller React does not have: the only
+  // one passes a `useState` setter, whose identity React guarantees is stable.
+  const setWorkingInterrupted = vi.fn()
   return renderHook(
     (props: EchoProps) =>
       useNativeChatPendingEchoes({
@@ -25,7 +28,7 @@ function renderEchoProps(initialProps: EchoProps) {
         agent: 'claude',
         sessionId: props.sessionId,
         messages: props.messages,
-        setWorkingInterrupted: vi.fn()
+        setWorkingInterrupted
       }),
     { initialProps }
   )
