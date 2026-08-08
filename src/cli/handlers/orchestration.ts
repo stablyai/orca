@@ -13,6 +13,7 @@ import {
   clampOrchestrationAskTimeoutMs,
   resolveOrchestrationAskClientTimeoutMs
 } from '../../shared/orchestration-ask-timeout'
+import { withOrchestrationAskOutcome } from '../../shared/orchestration-ask-outcome'
 import { abbreviateOrchestrationTasks } from '../../shared/orchestration-task-summary'
 import { parsePositiveSafeIntegerText } from '../../shared/timer-delay'
 import type {
@@ -1137,9 +1138,12 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         orchestrationCapability: getOptionalStringFlag(flags, 'dispatch-capability')
       }
     )
+    // Why: engines need a first-class outcome/pending flag so exit 1 timeout is not
+    // misread as an internal error (#13184). Derived only from existing result fields.
+    const askResult = withOrchestrationAskOutcome(result.result)
     // Why: bypass printResult so --json emits a bare JSON object (no envelope) pipeable via `jq -r .answer`, unlike other verbs.
     if (json) {
-      console.log(JSON.stringify(result.result))
+      console.log(JSON.stringify(askResult))
     } else if (result.result.legacyCompatibility?.resumeRequired) {
       console.log(`Question ${result.result.messageId} committed.`)
       console.log(`Resume with: ${result.result.legacyCompatibility.resumeCommand}`)

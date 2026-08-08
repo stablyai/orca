@@ -200,7 +200,23 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'From an active Dispatch, a new question defaults to its owning Run mailbox.',
-      'Timeout leaves the question pending; resume with the original message ID.'
+      'Timeout leaves the question pending; resume with the original message ID via ' +
+        '`orca orchestration ask --resume <messageId> --json` (never re-ask with a new --question).',
+      'With --json, stdout is a bare object (no CLI envelope) including: answer, messageId, ' +
+        'threadId, timedOut, cancelled?, connectionLost?, timeoutMs?, answerMessageId?, ' +
+        'legacyCompatibility?, plus first-class outcome and pending (#13184).',
+      'outcome values: answered | timed_out_pending | connection_lost_pending | cancelled | ' +
+        'resume_required. pending=true means the question is still open and --resume is correct.',
+      'Exit codes: 0 answered; 1 timed_out_pending / connection_lost_pending / cancelled ' +
+        '(not an internal error when outcome is *_pending — read outcome/pending/messageId); ' +
+        '75 Windows two-step commit/resume (legacyCompatibility.resumeRequired + printed resume command).',
+      '--resume never creates a second question: it waits on the original messageId. Pass the same ' +
+        '--from / --dispatch-capability / --run as the original ask when the engine context requires them.',
+      '--options is only valid with --question, not --resume.'
+    ],
+    examples: [
+      'orca orchestration ask --question "Ship it?" --timeout-ms 60000 --json',
+      'orca orchestration ask --resume msg_abc123 --timeout-ms 600000 --json'
     ]
   },
   {
