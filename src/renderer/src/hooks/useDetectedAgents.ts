@@ -17,9 +17,7 @@ export type UseDetectedAgentsResult = {
 }
 
 export type AgentDetectionTarget =
-  /** `repoId` scopes local detection to that repository's execution runtime
-   *  (per-project Windows/WSL context). Omit it for the app-wide local host. */
-  | { kind: 'local'; repoId?: string }
+  | { kind: 'local' }
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'runtime'; environmentId: string }
 
@@ -67,7 +65,6 @@ export function useDetectedAgents(
       : target?.kind === 'runtime'
         ? target.environmentId
         : null
-  const localRepoId = target?.kind === 'local' ? (target.repoId ?? null) : null
   const remoteTargetKey =
     targetKind === 'ssh' && targetId
       ? `ssh:${targetId}`
@@ -160,15 +157,12 @@ export function useDetectedAgents(
         // retry once per mounted surface so the menu can pick that up.
         void state.ensureRuntimeDetectedAgents(targetId)
       }
-    } else if (localRepoId) {
-      // Why: the shared local snapshot may have been detected under another
-      // repository's Windows/WSL runtime; only the store knows whether that
-      // context still matches, so always ask and let it dedupe.
-      void state.ensureDetectedAgents({ repoId: localRepoId })
-    } else if (detectedIds === null) {
-      void state.ensureDetectedAgents()
+    } else {
+      if (detectedIds === null) {
+        void state.ensureDetectedAgents()
+      }
     }
-  }, [isUnknown, targetKind, targetId, localRepoId, remoteTargetKey, detectedIds])
+  }, [isUnknown, targetKind, targetId, remoteTargetKey, detectedIds])
 
   return { detectedIds, isLoading, detectionFailed, isRefreshing, refresh }
 }

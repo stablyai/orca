@@ -58,12 +58,21 @@ function openMenu(user: ReturnType<typeof userEvent.setup>) {
   return user.click(screen.getByRole('button', { name: 'Choose an agent for this workspace' }))
 }
 
+/** Every distinct host probed — a second host here means a stray extra probe. */
+function uniqueTargets(): unknown[] {
+  const seen = new Map<string, unknown>()
+  for (const target of detectedAgentsMock.targets) {
+    seen.set(JSON.stringify(target ?? null), target)
+  }
+  return [...seen.values()]
+}
+
 describe('GitHubIssueWorkspaceLaunchButton', () => {
   beforeEach(() => {
     detectedAgentsMock.detectedIds = ['claude', 'codex']
     detectedAgentsMock.detectionFailed = false
     detectedAgentsMock.targets = []
-    useAppStore.setState({ settings: { disabledTuiAgents: [] } } as never)
+    useAppStore.setState({ repos: [repo], settings: { disabledTuiAgents: [] } } as never)
   })
 
   afterEach(() => {
@@ -88,7 +97,7 @@ describe('GitHubIssueWorkspaceLaunchButton', () => {
 
     await openMenu(user)
 
-    expect(detectedAgentsMock.targets).toContainEqual({ kind: 'local', repoId: 'repo-1' })
+    expect(uniqueTargets()).toEqual([{ kind: 'local' }])
   })
 
   it('starts with the selected agent', async () => {
@@ -103,21 +112,55 @@ describe('GitHubIssueWorkspaceLaunchButton', () => {
   })
 
   it('detects on the repository owning SSH host, not the local machine', async () => {
+    const sshRepo = { ...repo, connectionId: 'ssh-host-1' }
+    useAppStore.setState({ repos: [sshRepo] } as never)
     const user = userEvent.setup()
-    renderButton({ repo: { ...repo, connectionId: 'ssh-host-1' } })
+    renderButton({ repo: sshRepo })
 
     await openMenu(user)
 
-    expect(detectedAgentsMock.targets).toContainEqual({ kind: 'ssh', connectionId: 'ssh-host-1' })
+    expect(uniqueTargets()).toEqual([{ kind: 'ssh', connectionId: 'ssh-host-1' }])
   })
 
   it('detects on the repository owning runtime host', async () => {
+    const runtimeRepo = { ...repo, executionHostId: 'runtime:env-9' }
+    useAppStore.setState({ repos: [runtimeRepo] } as never)
     const user = userEvent.setup()
-    renderButton({ repo: { ...repo, executionHostId: 'runtime:env-9' } })
+    renderButton({ repo: runtimeRepo })
 
     await openMenu(user)
 
-    expect(detectedAgentsMock.targets).toContainEqual({ kind: 'runtime', environmentId: 'env-9' })
+    expect(uniqueTargets()).toEqual([{ kind: 'runtime', environmentId: 'env-9' }])
+  })
+
+  // Why: a hostless repo in a paired session belongs to the focused runtime.
+  // Detecting locally there offers the client's agents, and the composer the
+  // menu opens then refuses to start them.
+  it('detects on the focused runtime for a repository with no explicit host', async () => {
+    useAppStore.setState({
+      repos: [repo],
+      settings: { disabledTuiAgents: [], activeRuntimeEnvironmentId: 'env-paired' }
+    } as never)
+    const user = userEvent.setup()
+    renderButton()
+
+    await openMenu(user)
+
+    expect(uniqueTargets()).toEqual([{ kind: 'runtime', environmentId: 'env-paired' }])
+  })
+
+  it('prefers the repository own SSH owner over the focused runtime', async () => {
+    const sshRepo = { ...repo, connectionId: 'ssh-host-1' }
+    useAppStore.setState({
+      repos: [sshRepo],
+      settings: { disabledTuiAgents: [], activeRuntimeEnvironmentId: 'env-paired' }
+    } as never)
+    const user = userEvent.setup()
+    renderButton({ repo: sshRepo })
+
+    await openMenu(user)
+
+    expect(uniqueTargets()).toEqual([{ kind: 'ssh', connectionId: 'ssh-host-1' }])
   })
 
   it('hides agents the user disabled in settings', async () => {

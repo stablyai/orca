@@ -12,7 +12,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
-import { getAgentDetectionTargetForRepo } from '@/hooks/useAgentDetectionTarget'
+import { useAgentDetectionTargetForRepo } from '@/hooks/useAgentDetectionTarget'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useAppStore } from '@/store'
 import {
@@ -35,7 +35,7 @@ function GitHubIssueLaunchAgentMenuItems({
   repo: Repo | null
   onStartWithAgent: (agent: TuiAgent) => void
 }): React.JSX.Element {
-  const target = getAgentDetectionTargetForRepo(repo)
+  const target = useAgentDetectionTargetForRepo(repo)
   const { detectedIds, detectionFailed } = useDetectedAgents(target)
   const disabledAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
