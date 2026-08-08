@@ -12,6 +12,7 @@ const MAX_RUNTIME_RPC_MESSAGE_BYTES = 1024 * 1024
 const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
 const MAX_RUNTIME_RPC_CONNECTIONS = 32
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 10_000
+const DEFAULT_MAX_PENDING_WRITE_BYTES = 8 * 1024 * 1024
 
 export type UnixSocketTransportOptions = {
   endpoint: string
@@ -21,6 +22,7 @@ export type UnixSocketTransportOptions = {
   // the client honours them, the client-side idle timer. Tests override this
   // to avoid waiting 10 s for a frame.
   keepaliveIntervalMs?: number
+  maxPendingWriteBytes?: number
 }
 
 type MessageHandler = (
@@ -33,14 +35,21 @@ export class UnixSocketTransport implements RpcTransport {
   private readonly endpoint: string
   private readonly kind: 'unix' | 'named-pipe'
   private readonly keepaliveIntervalMs: number
+  private readonly maxPendingWriteBytes: number
   private server: Server | null = null
   private messageHandler: MessageHandler | null = null
   private readonly activeSockets = new Set<Socket>()
 
-  constructor({ endpoint, kind, keepaliveIntervalMs }: UnixSocketTransportOptions) {
+  constructor({
+    endpoint,
+    kind,
+    keepaliveIntervalMs,
+    maxPendingWriteBytes
+  }: UnixSocketTransportOptions) {
     this.endpoint = endpoint
     this.kind = kind
     this.keepaliveIntervalMs = keepaliveIntervalMs ?? DEFAULT_KEEPALIVE_INTERVAL_MS
+    this.maxPendingWriteBytes = maxPendingWriteBytes ?? DEFAULT_MAX_PENDING_WRITE_BYTES
   }
 
   onMessage(handler: MessageHandler): void {
@@ -162,6 +171,7 @@ export class UnixSocketTransport implements RpcTransport {
   // handlers (e.g. orchestration.check --wait) arm it. See §3.1.
   private dispatchMessage(socket: Socket, rawMessage: string, inflight: Set<() => void>): void {
     let replied = false
+    let streaming = false
     let keepaliveTimer: NodeJS.Timeout | null = null
     // Why: each dispatch needs its own abort signal and keepalive timer
     // cleanup. Socket close runs every cleanup without touching sibling
@@ -185,14 +195,45 @@ export class UnixSocketTransport implements RpcTransport {
     const abortDispatch = (): void => cleanupDispatch(true)
     inflight.add(abortDispatch)
 
+    const writeFrame = (frame: string): boolean => {
+      if (socket.destroyed || !socket.writable) {
+        return false
+      }
+      if (socket.writableLength + Buffer.byteLength(frame) > this.maxPendingWriteBytes) {
+        replied = true
+        cleanupDispatch(true)
+        socket.destroy(new Error('Runtime stream output exceeded its backpressure limit.'))
+        return false
+      }
+      socket.write(frame)
+      return true
+    }
+
     const reply = (response: string): void => {
+      if (replied) {
+        return
+      }
+      if (!streaming) {
+        replied = true
+        cleanupDispatch(false)
+      }
+      writeFrame(`${response}\n`)
+    }
+
+    const startStreaming = (): void => {
+      if (!replied) {
+        streaming = true
+      }
+    }
+
+    const finishStreaming = (): void => {
       if (replied) {
         return
       }
       replied = true
       cleanupDispatch(false)
       if (!socket.destroyed && socket.writable) {
-        socket.write(`${response}\n`)
+        socket.end()
       }
     }
 
@@ -205,7 +246,7 @@ export class UnixSocketTransport implements RpcTransport {
           cleanupDispatch(socket.destroyed || !socket.writable)
           return
         }
-        socket.write('{"_keepalive":true}\n')
+        writeFrame('{"_keepalive":true}\n')
       }, this.keepaliveIntervalMs)
       // Why: don't hold the process open solely on the keepalive interval.
       if (typeof keepaliveTimer.unref === 'function') {
@@ -215,7 +256,9 @@ export class UnixSocketTransport implements RpcTransport {
 
     this.messageHandler?.(rawMessage, reply, {
       signal: abortController.signal,
-      startKeepalive
+      startKeepalive,
+      startStreaming,
+      finishStreaming
     })
   }
 }

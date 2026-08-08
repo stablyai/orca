@@ -177,6 +177,7 @@ ORCA terminal show --terminal <handle> --json
 ORCA terminal read --terminal <handle> --json
 ORCA terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
 ORCA terminal read --json
+ORCA terminal bridge --terminal <handle> --json
 ORCA terminal send --terminal <handle> --text "continue" --enter --json
 ORCA terminal send --text "echo hello" --enter --json
 ORCA terminal wait --terminal <handle> --for exit --timeout-ms 5000 --json
@@ -197,6 +198,7 @@ Terminal rules:
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
+- `terminal bridge --json` is a local-only NDJSON stream for external interactive tools. Stdout emits terminal events; stdin accepts `{"type":"input","data":"..."}`, `{"type":"resize","cols":80,"rows":24}` (cols 20–240, rows 8–120), and `{"type":"close"}`. Input and viewport updates are applied in frame order; resize frames claim coordinated viewport ownership until the bridge closes.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops. A receiving agent can run `orca orchestration check --unread --inject` to render its unread mail in agent-readable form; this checks the caller's inbox and does not remotely deliver input to another terminal.
 - Use `terminal create --worktree active --command "<agent>"` for a fresh agent in the current worktree. Use `worktree create --agent <agent>` only for a separate checkout (agent in the first terminal — do not also `terminal create` the same agent).

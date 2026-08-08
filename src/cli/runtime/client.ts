@@ -10,6 +10,7 @@ import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
 import { getCliStatus, resolveDesktopWindowStatus } from './status'
 import { sendRequest } from './transport'
+import { openLocalRuntimeStream, type LocalRuntimeStream } from './local-stream-transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 import { markEnvironmentUsed, resolveEnvironmentPairingOffer } from './environments'
 import {
@@ -64,6 +65,26 @@ export class RuntimeClient {
 
   get isRemote(): boolean {
     return this.remotePairing !== null
+  }
+
+  streamLocal<TResult>(
+    method: string,
+    params: unknown,
+    onEvent: (event: RuntimeRpcSuccess<TResult>) => void
+  ): LocalRuntimeStream {
+    if (this.remotePairing) {
+      throw new RuntimeClientError(
+        'method_not_supported',
+        'Local terminal bridge streaming is unavailable for paired remote runtimes.'
+      )
+    }
+    return openLocalRuntimeStream(
+      readMetadata(this.userDataPath),
+      method,
+      params,
+      this.requestTimeoutMs,
+      onEvent
+    )
   }
 
   async call<TResult>(
