@@ -10,6 +10,7 @@ import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult }
 import { RuntimeClientError } from '../runtime-client'
 import {
   getOptionalNullableNumberFlag,
+  getOptionalNullablePositiveIntegerFlag,
   getOptionalNumberFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -32,6 +33,7 @@ import {
   assertCreateParentFlagsCompatible,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
+import { resolveGitHubPullRequestCreateLink } from './worktree-github-pull-request-link'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
 
 type HookWarningResult = {
@@ -229,10 +231,12 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const repo = await getCreateRepoSelector(flags, cwdParentWorktree, client)
+    const pullRequestLink = await resolveGitHubPullRequestCreateLink(flags, repo, client)
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
-      repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
+      repo,
       name: getRequiredStringFlag(flags, 'name'),
-      baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+      ...pullRequestLink,
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
@@ -264,10 +268,12 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })
+    const linkedPR = getOptionalNullablePositiveIntegerFlag(flags, 'pull-request')
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.set', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
       displayName: getOptionalStringFlag(flags, 'display-name'),
       linkedIssue: getOptionalNullableNumberFlag(flags, 'issue'),
+      ...(linkedPR !== undefined ? { linkedPR } : {}),
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),

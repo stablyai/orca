@@ -112,11 +112,18 @@ ORCA worktree create --repo id:<repoId> --name related-task --parent-worktree ac
 ORCA worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
 ORCA worktree create --name child-task --agent codex --prompt "hi" --json
 ORCA worktree create --name independent-task --no-parent --json
+ORCA worktree create --repo id:<repoId> --name review-pr-42 --pull-request 42 --no-parent --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
+ORCA worktree set --worktree active --pull-request 42 --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
+
+PR review worktrees:
+
+- `worktree create --pull-request <number>` asks the runtime for the verified PR head, creates the checkout from that start point, and records `linkedPR`. Do not combine it with `--base-branch`.
+- `worktree set --pull-request <number>` updates metadata only; pass `--pull-request null` to clear the link.
 
 Selectors:
 
