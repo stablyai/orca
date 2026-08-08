@@ -56,6 +56,13 @@ export type DirectSshTerminalBindingState = {
 export type DirectSshTerminalBindingClearResult = {
   clearedCount: number
   patch: Partial<DirectSshTerminalBindingState> | null
+  /**
+   * Tab → relay session id to reattach after the next connect.
+   * Why: clear nulls tab.ptyId / ptyIdsByTabId so remounted panes would
+   * otherwise spawn a blank shell; lastKnown alone is not read by
+   * pty-connection — seed deferredSshSessionIdsByTabId with these ids.
+   */
+  deferredSessionIdsByTabId: Record<string, string>
 }
 
 export type DirectSshTerminalRetryResult = {

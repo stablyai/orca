@@ -77,6 +77,38 @@ describe('direct SSH terminal retry ledger', () => {
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].ptyId).toBeNull()
     expect(store.getState().ptyIdsByTabId[TAB_ID]).toEqual([])
     expect(store.getState().lastKnownRelayPtyIdByTabId[TAB_ID]).toBe(ptyId)
+    // Why (#11791): remount after reconnect must reattach, not spawn a blank shell.
+    expect(store.getState().deferredSshSessionIdsByTabId[TAB_ID]).toBe(ptyId)
+  })
+
+  it('seeds deferred reattach ids when a target disconnect clears bindings (#11791)', () => {
+    const ptyId = 'ssh:target@@pty-live'
+    const store = seedStore(ptyId)
+
+    expect(store.getState().clearDirectSshTargetPtyBindings('target')).toBe(1)
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].ptyId).toBeNull()
+    expect(store.getState().ptyIdsByTabId[TAB_ID]).toEqual([])
+    expect(store.getState().lastKnownRelayPtyIdByTabId[TAB_ID]).toBe(ptyId)
+    expect(store.getState().deferredSshSessionIdsByTabId[TAB_ID]).toBe(ptyId)
+  })
+
+  it('does not publish when disconnect cleanup only finds a foreign session id', () => {
+    const store = seedStore()
+    store.setState({
+      lastKnownRelayPtyIdByTabId: { [TAB_ID]: 'ssh:other@@pty-foreign' }
+    })
+    const before = store.getState()
+    let publications = 0
+    const unsubscribe = store.subscribe(() => {
+      publications += 1
+    })
+
+    expect(store.getState().clearDirectSshTargetPtyBindings('target')).toBe(0)
+    unsubscribe()
+
+    expect(publications).toBe(0)
+    expect(store.getState()).toBe(before)
   })
 
   it('preserves a healthy current-authority sibling in the same workspace', () => {

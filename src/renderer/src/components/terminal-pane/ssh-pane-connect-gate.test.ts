@@ -75,6 +75,19 @@ describe('resolveSshPaneConnectGate', () => {
     expect(gate.enterDeferredFlow).toBe(true)
   })
 
+  it('reattaches deferred tab sessions after reconnect even when already connected (#11791)', () => {
+    // Why: disconnect clears tab.ptyId and seeds deferredSshSessionIdsByTabId;
+    // remounts after reconnect see sshConnected=true, so tab-level fallback is
+    // off — deferred map must still force reattach instead of a blank spawn.
+    const gate = resolveSshPaneConnectGate({
+      ...BASE,
+      sshStatus: 'connected',
+      deferredTabSessionId: 'ssh:conn-1@@pty-7'
+    })
+    expect(gate.pendingSessionId).toBe('ssh:conn-1@@pty-7')
+    expect(gate.enterDeferredFlow).toBe(true)
+  })
+
   it('does not force a connect for runtime-owned targets', () => {
     // Why: their relay health is owned by the runtime layer; users cannot
     // connect to them directly, so a reconnect flow would strand the pane.

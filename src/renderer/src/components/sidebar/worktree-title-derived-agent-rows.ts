@@ -63,6 +63,7 @@ export function buildTitleDerivedAgentRows(args: {
       continue
     }
     const layout = terminalLayoutsByTabId[tab.id]
+    const allowLaunchAgentFallback = collectLeafIds(layout?.root ?? null).length === 1
     const paneTitles = runtimePaneTitlesByTabId[tab.id]
     const paneTitleEntries =
       paneTitles && Object.keys(paneTitles).length > 0
@@ -85,6 +86,7 @@ export function buildTitleDerivedAgentRows(args: {
           leafId,
           title,
           now: args.now,
+          allowLaunchAgentFallback,
           runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
         })
         if (!row || args.seenPaneKeys.has(row.paneKey)) {
@@ -105,6 +107,7 @@ export function buildTitleDerivedAgentRows(args: {
       leafId,
       title: tab.title,
       now: args.now,
+      allowLaunchAgentFallback,
       runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
     })
     if (!row || args.seenPaneKeys.has(row.paneKey)) {
@@ -126,8 +129,12 @@ function buildTitleDerivedAgentRow(args: {
   leafId: string
   title: string
   now: number
+  allowLaunchAgentFallback: boolean
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
+  if (!isTerminalLeafId(args.leafId)) {
+    return null
+  }
   const title = normalizeCompatibleAgentTitleForOwner(args.title, args.tab.launchAgent)
   const isClaudeAgentsTitle = isClaudeManagementTitle(title)
   // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
@@ -135,14 +142,38 @@ function buildTitleDerivedAgentRow(args: {
   // the management/list screen as active work.
   const status = isClaudeAgentsTitle ? 'idle' : classifyTitleActivity(title)
   const label = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
-  if (!status || !label) {
-    return null
-  }
-  if (!isTerminalLeafId(args.leafId)) {
-    return null
-  }
   const paneKey = makePaneKey(args.tab.id, args.leafId)
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
+  // Why (#11791): launchAgent bridges blank reconnect titles only for a sole leaf;
+  // tab-level launch metadata cannot identify one pane in a split.
+  if (!status || !label) {
+    if (!args.tab.launchAgent || !args.allowLaunchAgentFallback) {
+      return null
+    }
+    const agentType = args.tab.launchAgent
+    const rowLabel = formatAgentTypeLabel(agentType)
+    const entry: AgentStatusEntry = {
+      paneKey,
+      state: 'working',
+      prompt: rowLabel,
+      updatedAt: args.now,
+      stateStartedAt: args.now,
+      stateHistory: [],
+      agentType,
+      terminalTitle: title,
+      lastAssistantMessage: 'Idle',
+      ...(orchestration ? { orchestration } : {})
+    }
+    return {
+      paneKey,
+      entry,
+      tab: args.tab,
+      agentType,
+      rowSource: 'live',
+      state: 'idle',
+      startedAt: 0
+    }
+  }
   const titleAgentType = isClaudeAgentsTitle ? 'claude' : resolveTitleDerivedAgentType(title, label)
   // Why: a braille spinner proves activity, not identity, so the resolver drops
   // it. Hook-less agents over SSH (Codex, #8711) surface only spinner+cwd titles;

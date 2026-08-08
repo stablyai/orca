@@ -109,6 +109,35 @@ describe('clearDirectSshTerminalBindings', () => {
     })
   })
 
+  it('seeds deferred reattach ids from live and lastKnown session ids (#11791)', () => {
+    const state = makeState()
+    // Why: already-cleared wake-hint still has lastKnown — disconnect must still seed deferred.
+    state.tabsByWorktree['repo::/ssh-work'][1] = makeTab('ssh-unbound', null)
+    state.lastKnownRelayPtyIdByTabId['ssh-unbound'] = 'ssh-target@@pty-unbound'
+
+    const result = clearDirectSshTerminalBindings(
+      state,
+      new Set(['repo::/ssh-work', 'folder::ssh-work'])
+    )
+
+    expect(result.deferredSessionIdsByTabId).toEqual({
+      'ssh-live': 'ssh-target@@pty-1',
+      'ssh-unbound': 'ssh-target@@pty-unbound',
+      'folder-live': 'ssh-target@@pty-2'
+    })
+  })
+
+  it('prefers a tracked PTY over a different lastKnown session id', () => {
+    const state = makeState()
+    state.tabsByWorktree['repo::/ssh-work'][1] = makeTab('ssh-unbound', null)
+    state.ptyIdsByTabId['ssh-unbound'] = ['ssh-target@@pty-tracked']
+    state.lastKnownRelayPtyIdByTabId['ssh-unbound'] = 'ssh-target@@pty-last-known'
+
+    const result = clearDirectSshTerminalBindings(state, new Set(['repo::/ssh-work']))
+
+    expect(result.deferredSessionIdsByTabId['ssh-unbound']).toBe('ssh-target@@pty-tracked')
+  })
+
   it('re-arms reconnectable disconnects without erasing retry history', () => {
     const state = makeState()
     const authority = {
@@ -198,6 +227,13 @@ describe('clearDirectSshTerminalBindings', () => {
     expect(first.patch?.tabsByWorktree?.['repo::/ssh-work'][1]).toBe(
       state.tabsByWorktree['repo::/ssh-work'][1]
     )
-    expect(second).toEqual({ clearedCount: 0, patch: null })
+    // Why: second clear is a no-op for bindings, but still re-seeds deferred from lastKnown.
+    expect(second).toEqual({
+      clearedCount: 0,
+      patch: null,
+      deferredSessionIdsByTabId: {
+        'ssh-live': 'ssh-target@@pty-1'
+      }
+    })
   })
 })
