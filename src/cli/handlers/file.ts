@@ -1,7 +1,7 @@
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git-status-types'
 import type { RuntimeFileOpenResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
 import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
-import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
+import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
@@ -56,7 +56,7 @@ async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): 
  *
  * Backslash is a legal Linux filename character but a separator once the path
  * reads as UNC, so `a\b.ts` would relativize to a different file, `a/b.ts`.
- * Such a path has no UNC spelling; leave it to fail the match instead.
+ * Such a path has no Windows spelling; leave it to fail the match instead.
  */
 function toWorktreeRootPathFlavor(rootPath: string, cwd: string, path: string): string {
   // Why: WSL_DISTRO_NAME reaches this process only if interop forwards it, but the
@@ -71,7 +71,7 @@ function toWorktreeRootPathFlavor(rootPath: string, cwd: string, path: string): 
   ) {
     return path
   }
-  return `//wsl.localhost/${distro}${path}`
+  return toWindowsWslPath(path, distro)
 }
 
 async function resolveFilePath(
