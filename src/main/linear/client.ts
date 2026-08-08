@@ -6,6 +6,7 @@ import type { LinearClient } from '@linear/sdk'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { createIntegrationStateFileCache } from '../integration-state-file-cache'
 import { loadLinearSdk } from './linear-sdk'
 import {
   CredentialDecryptionError,
@@ -72,8 +73,10 @@ let cachedTokens = new Map<string, string>()
 const credentialErrors = new Map<string, string>()
 let cachedLegacyViewer: LinearViewer | null = null
 let legacyViewerLoadedFromDisk = false
-let cachedWorkspaceFile: LinearWorkspaceFile | null = null
-let workspaceFileLoadedFromDisk = false
+const workspaceFileCache = createIntegrationStateFileCache<LinearWorkspaceFile>({
+  filePath: () => getWorkspaceFilePath(),
+  readFromDisk: () => readWorkspaceFileFromDisk()
+})
 
 function getOrcaDir(): string {
   return join(homedir(), '.orca')
@@ -227,11 +230,7 @@ function readWorkspaceFileFromDisk(): LinearWorkspaceFile {
 }
 
 function getWorkspaceFile(): LinearWorkspaceFile {
-  if (!workspaceFileLoadedFromDisk || !cachedWorkspaceFile) {
-    cachedWorkspaceFile = readWorkspaceFileFromDisk()
-    workspaceFileLoadedFromDisk = true
-  }
-  return cachedWorkspaceFile
+  return workspaceFileCache.get()
 }
 
 function writeWorkspaceFile(file: LinearWorkspaceFile): void {
@@ -255,17 +254,17 @@ function writeWorkspaceFile(file: LinearWorkspaceFile): void {
         ? file.selectedWorkspaceId
         : activeWorkspaceId
 
-  cachedWorkspaceFile = {
+  const next: LinearWorkspaceFile = {
     version: 1,
     activeWorkspaceId,
     selectedWorkspaceId,
     workspaces: persistedWorkspaces
   }
-  workspaceFileLoadedFromDisk = true
-  writeFileSync(getWorkspaceFilePath(), JSON.stringify(cachedWorkspaceFile, null, 2), {
+  writeFileSync(getWorkspaceFilePath(), JSON.stringify(next, null, 2), {
     encoding: 'utf-8',
     mode: 0o600
   })
+  workspaceFileCache.invalidate()
 }
 
 function getLegacyWorkspace(): LinearWorkspace | null {
@@ -410,8 +409,6 @@ export function clearToken(workspaceId?: string): void {
     credentialErrors.clear()
     cachedLegacyViewer = null
     legacyViewerLoadedFromDisk = false
-    cachedWorkspaceFile = emptyWorkspaceFile()
-    workspaceFileLoadedFromDisk = true
     clearLegacyViewerOnDisk()
     writeWorkspaceFile(emptyWorkspaceFile())
     return

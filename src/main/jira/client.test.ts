@@ -702,3 +702,48 @@ describe('Jira client credential storage', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+describe('Jira site file cross-process visibility', () => {
+  it('picks up a site connected by another Orca process', async () => {
+    // Every Orca process on the machine shares ~/.orca. Loading before any site
+    // exists must not pin "disconnected" for the life of the process.
+    const jira = await loadClientModule()
+    expect(jira.getStatus()).toMatchObject({ connected: false, sites: [] })
+
+    writeJiraFiles('site-alpha', 'token-alpha')
+
+    expect(jira.getStatus()).toMatchObject({
+      connected: true,
+      activeSiteId: 'site-alpha',
+      sites: [{ id: 'site-alpha' }]
+    })
+  })
+
+  it('drops a site disconnected by another Orca process', async () => {
+    writeJiraFiles('site-alpha', 'token-alpha')
+    const jira = await loadClientModule()
+    expect(jira.getStatus()).toMatchObject({ connected: true })
+
+    writeFileSync(
+      join(tempHome, '.orca', 'jira-sites.json'),
+      JSON.stringify({ version: 1, activeSiteId: null, selectedSiteId: null, sites: [] }, null, 2),
+      { encoding: 'utf-8' }
+    )
+
+    expect(jira.getStatus()).toMatchObject({ connected: false, sites: [] })
+  })
+
+  it('follows the selected site changing underneath it', async () => {
+    const sites = [
+      { id: 'site-alpha', token: 'token-alpha' },
+      { id: 'site-beta', token: 'token-beta' }
+    ]
+    writeMultiSiteFiles(sites, 'site-alpha')
+    const jira = await loadClientModule()
+    expect(jira.getStatus()).toMatchObject({ selectedSiteId: 'site-alpha' })
+
+    writeMultiSiteFiles(sites, 'site-beta')
+
+    expect(jira.getStatus()).toMatchObject({ selectedSiteId: 'site-beta' })
+  })
+})

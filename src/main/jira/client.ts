@@ -11,6 +11,7 @@ import {
   credentialFileHasContent,
   readStoredCredentialToken
 } from '../integration-credential-file'
+import { createIntegrationStateFileCache } from '../integration-state-file-cache'
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 import { withSpan } from '../observability/tracer'
 import type {
@@ -116,8 +117,10 @@ export class JiraApiError extends Error {
   }
 }
 
-let cachedSiteFile: JiraSiteFile | null = null
-let siteFileLoaded = false
+const siteFileCache = createIntegrationStateFileCache<JiraSiteFile>({
+  filePath: () => getSiteFilePath(),
+  readFromDisk: () => readSiteFileFromDisk()
+})
 const cachedTokens = new Map<string, string>()
 // Why: decrypt failures are recorded per site so getStatus can explain
 // failing reads without re-touching the keychain on every status poll.
@@ -222,11 +225,7 @@ function readSiteFileFromDisk(): JiraSiteFile {
 }
 
 function getSiteFile(): JiraSiteFile {
-  if (!siteFileLoaded || !cachedSiteFile) {
-    cachedSiteFile = readSiteFileFromDisk()
-    siteFileLoaded = true
-  }
-  return cachedSiteFile
+  return siteFileCache.get()
 }
 
 function writeSiteFile(file: JiraSiteFile): void {
@@ -243,17 +242,12 @@ function writeSiteFile(file: JiraSiteFile): void {
         ? file.selectedSiteId
         : activeSiteId
 
-  cachedSiteFile = {
-    version: 1,
-    activeSiteId,
-    selectedSiteId,
-    sites
-  }
-  siteFileLoaded = true
-  writeFileSync(getSiteFilePath(), JSON.stringify(cachedSiteFile, null, 2), {
+  const next: JiraSiteFile = { version: 1, activeSiteId, selectedSiteId, sites }
+  writeFileSync(getSiteFilePath(), JSON.stringify(next, null, 2), {
     encoding: 'utf-8',
     mode: 0o600
   })
+  siteFileCache.invalidate()
 }
 
 function writeEncryptedToken(path: string, apiToken: string): void {
