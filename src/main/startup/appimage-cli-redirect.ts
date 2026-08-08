@@ -1,6 +1,7 @@
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { APPIMAGE_CLI_COMMAND_NAMES } from './appimage-cli-command-names'
 
 type RedirectResult =
   | {
@@ -25,68 +26,6 @@ type RedirectOptions = {
 const HELP_FLAGS = new Set(['--help', '-h', 'help'])
 const APPIMAGE_DESKTOP_FLAGS = new Set(['--no-sandbox'])
 const CLI_FLAGS_WITH_VALUES = new Set(['--environment', '--pairing-code'])
-// Why: the main tsconfig cannot import the CLI project, but AppImage direct
-// launches need a conservative allow-list before bypassing the GUI startup.
-const APPIMAGE_CLI_COMMAND_NAMES = [
-  'agent',
-  'automations',
-  'back',
-  'capture',
-  'check',
-  'clear',
-  'click',
-  'clipboard',
-  'computer',
-  'console',
-  'cookie',
-  'dblclick',
-  'dialog',
-  'download',
-  'drag',
-  'environment',
-  'eval',
-  'exec',
-  'file',
-  'fill',
-  'find',
-  'focus',
-  'forward',
-  'full-screenshot',
-  'geolocation',
-  'get',
-  'goto',
-  'highlight',
-  'hover',
-  'inserttext',
-  'intercept',
-  'is',
-  'keypress',
-  'mouse',
-  'network',
-  'open',
-  'orchestration',
-  'pdf',
-  'reload',
-  'repo',
-  'screenshot',
-  'scroll',
-  'scrollintoview',
-  'select',
-  'select-all',
-  'serve',
-  'set',
-  'snapshot',
-  'status',
-  'storage',
-  'tab',
-  'terminal',
-  'type',
-  'uncheck',
-  'upload',
-  'viewport',
-  'wait',
-  'worktree'
-]
 
 export function maybeRedirectAppImageCliLaunch(options: RedirectOptions = {}): RedirectResult {
   const argv = options.argv ?? process.argv
@@ -96,7 +35,7 @@ export function maybeRedirectAppImageCliLaunch(options: RedirectOptions = {}): R
   const resourcesPath = options.resourcesPath ?? process.resourcesPath
   const execPath = options.execPath ?? process.execPath
   const spawn = options.spawn ?? spawnSync
-  const cliArgs = getAppImageCliArgs(argv, env, {
+  const cliArgs = getAppImageCliArgs(argv, {
     platform,
     isPackaged,
     commandNames: options.commandNames ?? APPIMAGE_CLI_COMMAND_NAMES
@@ -132,7 +71,6 @@ export function maybeRedirectAppImageCliLaunch(options: RedirectOptions = {}): R
 
 export function getAppImageCliArgs(
   argv: string[],
-  env: NodeJS.ProcessEnv,
   options: {
     platform: NodeJS.Platform
     isPackaged: boolean
@@ -140,9 +78,6 @@ export function getAppImageCliArgs(
   }
 ): string[] | null {
   if (options.platform !== 'linux' || !options.isPackaged) {
-    return null
-  }
-  if (!env.APPIMAGE && !env.APPDIR) {
     return null
   }
 

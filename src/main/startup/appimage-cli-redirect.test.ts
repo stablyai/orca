@@ -7,17 +7,18 @@ import { getAppImageCliArgs, maybeRedirectAppImageCliLaunch } from './appimage-c
 const commandNames = ['serve', 'status', 'terminal']
 
 describe('AppImage CLI redirect', () => {
+  // Regression for #13004: electron-builder's AppRun sets APPDIR/APPIMAGE as shell locals it never
+  // exports, and .deb installs have no AppRun at all, so the exec'd process sees neither. The
+  // command-name allow-list already gates this launch, so the env check was a redundant condition
+  // that silently blocked every extracted-AppImage and .deb CLI launch (getAppImageCliArgs no
+  // longer takes an env argument at all).
   it('detects direct AppImage CLI commands', () => {
     expect(
-      getAppImageCliArgs(
-        ['orca-linux.AppImage', 'status', '--json'],
-        { APPIMAGE: '/opt/orca' },
-        {
-          platform: 'linux',
-          isPackaged: true,
-          commandNames
-        }
-      )
+      getAppImageCliArgs(['orca-linux.AppImage', 'status', '--json'], {
+        platform: 'linux',
+        isPackaged: true,
+        commandNames
+      })
     ).toEqual(['status', '--json'])
   })
 
@@ -25,9 +26,6 @@ describe('AppImage CLI redirect', () => {
     expect(
       getAppImageCliArgs(
         ['orca-linux.AppImage', '--pairing-code', 'abc123', '--json', 'terminal', 'list'],
-        {
-          APPIMAGE: '/opt/orca'
-        },
         {
           platform: 'linux',
           isPackaged: true,
@@ -39,45 +37,31 @@ describe('AppImage CLI redirect', () => {
 
   it('does not redirect normal desktop AppImage launches', () => {
     expect(
-      getAppImageCliArgs(
-        ['AppRun', '--no-sandbox', 'file:///tmp/example.txt'],
-        {
-          APPIMAGE: '/opt/orca'
-        },
-        {
-          platform: 'linux',
-          isPackaged: true,
-          commandNames
-        }
-      )
+      getAppImageCliArgs(['AppRun', '--no-sandbox', 'file:///tmp/example.txt'], {
+        platform: 'linux',
+        isPackaged: true,
+        commandNames
+      })
     ).toBeNull()
   })
 
   it('routes no-sandbox serve launches through the CLI', () => {
     expect(
-      getAppImageCliArgs(
-        ['AppRun', '--no-sandbox', 'serve', '--port', '6768'],
-        { APPIMAGE: '/opt/orca' },
-        {
-          platform: 'linux',
-          isPackaged: true,
-          commandNames
-        }
-      )
+      getAppImageCliArgs(['AppRun', '--no-sandbox', 'serve', '--port', '6768'], {
+        platform: 'linux',
+        isPackaged: true,
+        commandNames
+      })
     ).toEqual(['serve', '--port', '6768'])
   })
 
   it('removes no-sandbox before forwarding CLI help', () => {
     expect(
-      getAppImageCliArgs(
-        ['AppRun', '--no-sandbox', 'serve', '--help'],
-        { APPIMAGE: '/opt/orca' },
-        {
-          platform: 'linux',
-          isPackaged: true,
-          commandNames
-        }
-      )
+      getAppImageCliArgs(['AppRun', '--no-sandbox', 'serve', '--help'], {
+        platform: 'linux',
+        isPackaged: true,
+        commandNames
+      })
     ).toEqual(['serve', '--help'])
   })
 
