@@ -3314,7 +3314,9 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
       return state
     },
     disconnect: () => Promise.resolve(),
-    terminateSessions: () => Promise.resolve(),
+    // Why: Settings formats SshTerminateSessionsResult; undefined crashes toast (#12661 review).
+    terminateSessions: () =>
+      Promise.resolve({ remoteSessionsTerminated: 0, abandonedUnreachable: 0 }),
     resetRelay: () => Promise.resolve(),
     getState: async (args) => {
       if (!requireActiveEnvironmentOrNull()) {

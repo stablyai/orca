@@ -1,7 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { formatSshTerminateSessionsNotice } from '../../../../shared/ssh-terminate-sessions-result'
 import { terminateSshSessionsWithReconnect } from './ssh-session-termination'
 
 function recordSshInteraction(): void {
@@ -37,10 +36,25 @@ export async function disconnectSshTarget(targetId: string): Promise<void> {
 export async function terminateSshTargetSessions(targetId: string): Promise<void> {
   try {
     const result = await terminateSshSessionsWithReconnect(targetId)
-    const abandonedNotice = formatSshTerminateSessionsNotice(result)
-    if (abandonedNotice) {
-      // Why (#12661): offline expired-only terminate is local cleanup only — not a remote kill.
-      toast.warning(abandonedNotice)
+    // Why (#12661): offline expired-only terminate is local cleanup only — not a remote kill.
+    // Translate here (not in shared) so catalogs extract the notice like other SshPane toasts.
+    if (result.abandonedUnreachable === 1) {
+      toast.warning(
+        translate(
+          'auto.components.settings.SshPane.abandonedUnreachableOne',
+          '1 abandoned remote session was not killed — reconnect to terminate it.'
+        )
+      )
+      return
+    }
+    if (result.abandonedUnreachable > 1) {
+      toast.warning(
+        translate(
+          'auto.components.settings.SshPane.abandonedUnreachableMany',
+          '{{value0}} abandoned remote sessions were not killed — reconnect to terminate them.',
+          { value0: result.abandonedUnreachable }
+        )
+      )
       return
     }
     toast.success(
