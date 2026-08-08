@@ -8,9 +8,10 @@ import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 
 const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
-// Why: the renderer answers within a frame; this only bounds the wait for a host
-// that never will, so the input falls through instead of hanging on it.
-const FOCUS_ACK_TIMEOUT_MS = 64
+// Why: a mounted pane answers within a frame, so this is slack for a busy renderer
+// rather than an expected wait — silence past it means no pane is holding the guest.
+// Generous because overrunning it fails the command; the granted path never waits.
+const FOCUS_ACK_TIMEOUT_MS = 250
 
 // Why: borrows are matched by id across every proxy instance, so the counter cannot
 // live on one of them.
@@ -556,9 +557,10 @@ export class CdpWsProxy {
         this.pendingFocusBorrows.delete(borrowId)
         resolve(focused)
       }
-      // Why: no pane hosts this guest yet, so nobody will answer. Treat silence as the
-      // pre-handoff behaviour — forward the input — rather than dropping it.
-      timer = setTimeout(() => settle(true), FOCUS_ACK_TIMEOUT_MS)
+      // Why: the host renderer took the begin, so silence means no pane holds this
+      // guest — mounting, unmounting, or swapping the guest out. None of those can be
+      // focused, and forwarding regardless is the leak this path exists to close.
+      timer = setTimeout(() => settle(false), FOCUS_ACK_TIMEOUT_MS)
       this.pendingFocusBorrows.set(borrowId, settle)
     })
   }

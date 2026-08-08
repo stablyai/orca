@@ -118,9 +118,10 @@ describe('CdpWsProxy agent input focus borrow', () => {
     client.close()
   })
 
-  // Why: no pane hosts this guest, so nobody answers. Dropping the input there would
-  // break offscreen and not-yet-mounted guests that worked before the handoff existed.
-  it('forwards input when no pane answers the borrow', async () => {
+  // Why: the host renderer took the begin, so silence means no pane is holding this
+  // guest — it cannot have focus, and forwarding anyway puts the keystroke in the
+  // user's window. Only a guest with no host renderer at all keeps the old path.
+  it('fails input when no pane answers the borrow', async () => {
     mock.webContents.hostWebContents.send.mockImplementation(() => {})
     const client = await connect(endpoint)
 
@@ -130,8 +131,8 @@ describe('CdpWsProxy agent input focus borrow', () => {
       params: { type: 'keyDown', key: 'a' }
     })
 
-    expect(response.error).toBeUndefined()
-    expect(getSendCommandMethods(mock)).toContain('Input.dispatchKeyEvent')
+    expect((response.error as { message: string }).message).toContain('keyboard focus')
+    expect(getSendCommandMethods(mock)).not.toContain('Input.dispatchKeyEvent')
     client.close()
   })
 
