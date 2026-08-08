@@ -1618,25 +1618,8 @@ function Terminal(): React.JSX.Element | null {
     const targetGroupId =
       useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
       useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
-    if (targetGroupId) {
-      void openNewBrowserTabInActiveWorkspace(targetGroupId)
-      return
-    }
-    const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
-    const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-    if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-      void createWebRuntimeSessionBrowserTab({
-        worktreeId: activeWorktreeId,
-        environmentId: runtimeEnvironmentId,
-        url: defaultUrl
-      })
-      return
-    }
-    createBrowserTab(activeWorktreeId, defaultUrl, {
-      title: translate('auto.components.Terminal.37da0d736f', 'New Browser Tab'),
-      focusAddressBar: true
-    })
-  }, [activeWorktreeId, createBrowserTab, openNewBrowserTabInActiveWorkspace])
+    void openNewBrowserTabInActiveWorkspace(targetGroupId)
+  }, [activeWorktreeId, openNewBrowserTabInActiveWorkspace])
 
   const handleOpenEntry = useCallback(async (args: TabCreateEntryArgs) => {
     await openTabBarEntry(args)

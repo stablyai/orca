@@ -167,7 +167,8 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
     const anchor = render()
     click(anchor, { metaKey: true })
     expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true
+      activate: true,
+      browserRuntimeEnvironmentId: null
     })
     expect(openUrlMock).not.toHaveBeenCalled()
   })
@@ -229,7 +230,8 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
     expect(container.textContent).not.toContain('<sup>')
     click(anchor, { metaKey: true })
     expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true
+      activate: true,
+      browserRuntimeEnvironmentId: null
     })
     expect(openUrlMock).not.toHaveBeenCalled()
   })

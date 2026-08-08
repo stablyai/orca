@@ -5738,10 +5738,10 @@
           "612f7f6861": "Failed to create profile.",
           "8f22b7580d": "Profile \"{{value0}}\" created.",
           "8481ee0331": "New Browser Profile",
-          "c0f85056d9": "Browser profiles on this Orca server.",
-          "86b7c83fee": "This computer",
-          "6480776a03": "Browser profiles for the selected host.",
-          "5e19a692f7": "Host",
+          "c0f85056d9": "Manage this server's profiles and cookies. This does not control where browser tabs run.",
+          "86b7c83fee": "Manage local profiles and cookies. This does not control where browser tabs run.",
+          "6480776a03": "Manage this host's profiles and cookies. This does not control where browser tabs run.",
+          "5e19a692f7": "Profile & Cookie Host",
           "6f2584b39e": "Add Profile",
           "e4aaf8051b": "toolbar menu.",
           "cd47bc9622": "Select a default profile for new browser tabs. Import cookies and switch profiles per-tab via the",
@@ -8123,7 +8123,7 @@
             "82ba1c80ea": "localhost",
             "bea27bac4b": "links",
             "44d14df30d": "preview",
-            "5cb082b3e3": "Link Routing",
+            "5cb082b3e3": "Link Routing & Browser Tab Host",
             "95944898e0": "percentage",
             "483a0eb5e0": "new tab",
             "726f2a8556": "page zoom",
@@ -10033,7 +10033,11 @@
         },
         "BrowserLinkRoutingSetting": {
           "description": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses your system browser.",
-          "descriptionBase": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
+          "descriptionBase": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor.",
+          "6bc91cf705": "Browser tab host",
+          "dac59e11e7": "Choose where new browser tabs and links routed into Orca Browser run.",
+          "965d31f368": "This computer",
+          "50294199ff": "Workspace runtime"
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Hold Shift to open in your web browser",

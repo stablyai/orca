@@ -1,7 +1,8 @@
-import { useLayoutEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
 import type { BrowserViewportPresetId } from '../../../../shared/types'
@@ -12,6 +13,7 @@ import {
 import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
 import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
 import { translate } from '@/i18n/i18n'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
@@ -22,6 +24,9 @@ type BrowserToolbarMenuProps = {
   isActive: boolean
 }
 
+const EMPTY_BROWSER_SESSION_PROFILES: AppState['browserSessionProfiles'] = []
+const EMPTY_DETECTED_BROWSERS: AppState['detectedBrowsers'] = []
+
 export function BrowserToolbarMenu({
   currentProfileId,
   workspaceId,
@@ -30,14 +35,21 @@ export function BrowserToolbarMenu({
   onDestroyWebview,
   isActive
 }: BrowserToolbarMenuProps): React.JSX.Element {
-  const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
-  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
+  const browserSessionProfiles = useAppStore(
+    (s) => s.browserSessionProfilesByHostId[LOCAL_EXECUTION_HOST_ID]
+  )
+  const detectedBrowsers = useAppStore(
+    (s) => s.detectedBrowsersByHostId[LOCAL_EXECUTION_HOST_ID] ?? EMPTY_DETECTED_BROWSERS
+  )
   const switchBrowserTabProfile = useAppStore((s) => s.switchBrowserTabProfile)
   const createBrowserSessionProfile = useAppStore((s) => s.createBrowserSessionProfile)
+  const fetchBrowserSessionProfiles = useAppStore((s) => s.fetchBrowserSessionProfiles)
   const importCookiesFromBrowser = useAppStore((s) => s.importCookiesFromBrowser)
   const importCookiesToProfile = useAppStore((s) => s.importCookiesToProfile)
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
-  const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
+  const browserSessionImportState = useAppStore(
+    (s) => s.browserSessionImportStateByHostId[LOCAL_EXECUTION_HOST_ID] ?? null
+  )
   const setBrowserPageViewportPreset = useAppStore((s) => s.setBrowserPageViewportPreset)
   const browserCookieTourStepActive = useAppStore(
     (s) => s.activeContextualTourId === 'browser' && s.activeContextualTourStepIndex === 2
@@ -51,6 +63,12 @@ export function BrowserToolbarMenu({
     browserImportHintHidden
   })
   const shouldForceMenuOpen = browserCookieTourStepActive && isActive && !importHintVisible
+
+  useEffect(() => {
+    if (browserSessionProfiles === undefined) {
+      void fetchBrowserSessionProfiles(LOCAL_EXECUTION_HOST_ID)
+    }
+  }, [browserSessionProfiles, fetchBrowserSessionProfiles])
 
   const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void => {
     setBrowserPageViewportPreset(browserPageId, nextId)
@@ -92,12 +110,13 @@ export function BrowserToolbarMenu({
 
   const effectiveProfileId = currentProfileId ?? 'default'
 
-  const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
+  const localBrowserSessionProfiles = browserSessionProfiles ?? EMPTY_BROWSER_SESSION_PROFILES
+  const defaultProfile = localBrowserSessionProfiles.find((p) => p.id === 'default')
   // Why: Default profile always appears first in the list and cannot be deleted.
   // Non-default profiles follow in their natural order.
   const allProfiles = defaultProfile
-    ? [defaultProfile, ...browserSessionProfiles.filter((p) => p.id !== 'default')]
-    : browserSessionProfiles
+    ? [defaultProfile, ...localBrowserSessionProfiles.filter((p) => p.id !== 'default')]
+    : localBrowserSessionProfiles
 
   const handleSwitchProfile = (profileId: string | null): void => {
     const targetId = profileId ?? 'default'
@@ -112,7 +131,7 @@ export function BrowserToolbarMenu({
       return
     }
     const targetId = pendingSwitchProfileId ?? 'default'
-    const profile = browserSessionProfiles.find((p) => p.id === targetId)
+    const profile = localBrowserSessionProfiles.find((p) => p.id === targetId)
     // Why: Must destroy before store update. The webviewRegistry is keyed by
     // workspace ID (stable across switches). Without explicit destroy, the mount
     // effect would reclaim the old webview with the stale partition.
@@ -141,7 +160,8 @@ export function BrowserToolbarMenu({
       const profile = await createBrowserSessionProfile(
         'isolated',
         trimmed,
-        useNativeUserAgent ? { userAgentMode: 'native' } : undefined
+        useNativeUserAgent ? { userAgentMode: 'native' } : undefined,
+        LOCAL_EXECUTION_HOST_ID
       )
       if (!profile) {
         if (mountedRef.current) {
@@ -183,7 +203,12 @@ export function BrowserToolbarMenu({
     browserFamily: string,
     browserProfile?: string
   ): Promise<void> => {
-    const result = await importCookiesFromBrowser(effectiveProfileId, browserFamily, browserProfile)
+    const result = await importCookiesFromBrowser(
+      effectiveProfileId,
+      browserFamily,
+      browserProfile,
+      LOCAL_EXECUTION_HOST_ID
+    )
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       emitBrowserCookieImportToast(
@@ -213,7 +238,7 @@ export function BrowserToolbarMenu({
   }
 
   const handleImportFromFile = async (): Promise<void> => {
-    const result = await importCookiesToProfile(effectiveProfileId)
+    const result = await importCookiesToProfile(effectiveProfileId, LOCAL_EXECUTION_HOST_ID)
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
@@ -238,7 +263,7 @@ export function BrowserToolbarMenu({
         onSwitchProfile={handleSwitchProfile}
         onNewProfile={() => setNewProfileDialogOpen(true)}
         detectedBrowsers={detectedBrowsers}
-        onFetchDetectedBrowsers={() => void fetchDetectedBrowsers()}
+        onFetchDetectedBrowsers={() => void fetchDetectedBrowsers(LOCAL_EXECUTION_HOST_ID)}
         browserSessionImportState={browserSessionImportState}
         onImportFromBrowser={(browserFamily, browserProfile) =>
           void handleImportFromBrowser(browserFamily, browserProfile)

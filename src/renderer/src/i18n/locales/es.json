@@ -5537,10 +5537,10 @@
           "7b649a578a": "Creando…",
           "4399c77caa": "Predeterminado",
           "4af9a17947": "kagi",
-          "c0f85056d9": "Perfiles del navegador en este servidor de Orca.",
-          "86b7c83fee": "Este equipo",
-          "6480776a03": "Perfiles del navegador para el host seleccionado.",
-          "5e19a692f7": "Host"
+          "c0f85056d9": "Gestiona los perfiles y las cookies de este servidor. Esto no controla dónde se ejecutan las pestañas del navegador.",
+          "86b7c83fee": "Gestiona los perfiles y las cookies locales. Esto no controla dónde se ejecutan las pestañas del navegador.",
+          "6480776a03": "Gestiona los perfiles y las cookies de este host. Esto no controla dónde se ejecutan las pestañas del navegador.",
+          "5e19a692f7": "Host de perfiles y cookies"
         },
         "BrowserProfileRow": {
           "8e636cae25": "Perfil \"{{value0}}\" eliminado.",
@@ -7814,7 +7814,7 @@
             "82ba1c80ea": "localhost",
             "bea27bac4b": "enlaces",
             "44d14df30d": "vista previa",
-            "5cb082b3e3": "Enrutamiento de enlaces",
+            "5cb082b3e3": "Enrutamiento de enlaces y host de pestañas del navegador",
             "95944898e0": "porcentaje",
             "483a0eb5e0": "nueva pestaña",
             "726f2a8556": "ampliación de página",

@@ -5,6 +5,12 @@ import {
 } from '../../../shared/localhost-worktree-labels'
 import type { GlobalSettings } from '../../../shared/types'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import { parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getExecutionHostIdForWorktree,
+  type WorktreeRuntimeOwnerState
+} from './worktree-runtime-owner'
+import { resolveBrowserTabHost } from './browser-tab-host'
 
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null
@@ -29,10 +35,15 @@ type StoreAccessor = () => {
       | 'openLinksInAppModifierInverts'
       | 'activeRuntimeEnvironmentId'
       | 'localhostWorktreeLabelsEnabled'
+      | 'browserTabHost'
     >
   > | null
   setActiveWorktree: (worktreeId: string) => void
-  createBrowserTab: (worktreeId: string, url: string, opts: { activate: boolean }) => unknown
+  createBrowserTab: (
+    worktreeId: string,
+    url: string,
+    opts: { activate: boolean; browserRuntimeEnvironmentId?: string | null }
+  ) => unknown
   repos?: LocalhostLinkRepo[]
   projects?: LocalhostLinkProject[]
   worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
@@ -96,22 +107,33 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     return
   }
   const state = storeAccessor?.()
-  const remoteRuntimeActive = Boolean(state?.settings?.activeRuntimeEnvironmentId?.trim())
-  const sourceIsLocal = sourceOwner ? sourceOwner.kind === 'local' : !remoteRuntimeActive
   const openLinksInApp = state?.settings?.openLinksInApp === true
   const modifier = resolveModifierRouting(
     Boolean(modifierHeld),
     openLinksInApp,
     state?.settings?.openLinksInAppModifierInverts === true
   )
+  const modifierMayOpenInOrca =
+    !modifier.wantsOrca ||
+    sourceOwner?.kind === 'local' ||
+    (!sourceOwner && !state?.settings?.activeRuntimeEnvironmentId?.trim())
   const routeToOrca =
-    sourceIsLocal &&
     !forceSystemBrowser &&
     !modifier.wantsSystemBrowser &&
+    modifierMayOpenInOrca &&
     Boolean(worktreeId) &&
     (openLinksInApp || modifier.wantsOrca)
 
   if (routeToOrca && worktreeId && state) {
+    const browserOwner = resolveBrowserLinkOwner(state, worktreeId, sourceOwner)
+    if (browserOwner.kind === 'runtime') {
+      void openRuntimeBrowserLink(url, worktreeId, browserOwner.runtimeEnvironmentId)
+      return
+    }
+    if (browserOwner.kind === 'ssh' || browserOwner.kind === 'unknown') {
+      void window.api.shell.openUrl(url)
+      return
+    }
     // Why: http clicks from inside a worktree should not push a worktree-switch
     // history entry — the user isn't changing worktrees, they're opening a tab
     // in the one they're already in. activateAndRevealWorktree is reserved for
@@ -123,11 +145,17 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     }
     const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
     if (!localhostRoute) {
-      state.createBrowserTab(worktreeId, url, { activate: true })
+      state.createBrowserTab(worktreeId, url, {
+        activate: true,
+        browserRuntimeEnvironmentId: null
+      })
       return
     }
     void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
-      state.createBrowserTab(worktreeId, labeledUrl, { activate: true })
+      state.createBrowserTab(worktreeId, labeledUrl, {
+        activate: true,
+        browserRuntimeEnvironmentId: null
+      })
     })
     return
   }
@@ -140,6 +168,54 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
     void window.api.shell.openUrl(labeledUrl)
   })
+}
+
+/** Applies the explicit tab-host policy without inferring from whichever runtime is focused. */
+function resolveBrowserLinkOwner(
+  state: ReturnType<StoreAccessor>,
+  worktreeId: string,
+  sourceOwner?: HttpLinkSourceOwner
+): HttpLinkSourceOwner {
+  if (resolveBrowserTabHost(state.settings?.browserTabHost) !== 'workspace') {
+    return { kind: 'local' }
+  }
+  if (sourceOwner) {
+    return sourceOwner
+  }
+  const parsed = parseExecutionHostId(
+    getExecutionHostIdForWorktree(state as WorktreeRuntimeOwnerState, worktreeId)
+  )
+  if (parsed?.kind === 'runtime') {
+    return { kind: 'runtime', runtimeEnvironmentId: parsed.environmentId }
+  }
+  if (parsed?.kind === 'ssh') {
+    return { kind: 'ssh', connectionId: parsed.targetId }
+  }
+  return { kind: 'local' }
+}
+
+/** Preserves the system-browser escape hatch when runtime capability disappears mid-open. */
+async function openRuntimeBrowserLink(
+  url: string,
+  worktreeId: string,
+  runtimeEnvironmentId: string
+): Promise<void> {
+  try {
+    const { createWebRuntimeSessionBrowserTab } = await import('@/runtime/web-runtime-session')
+    const created = await createWebRuntimeSessionBrowserTab({
+      worktreeId,
+      environmentId: runtimeEnvironmentId,
+      url
+    })
+    if (created) {
+      return
+    }
+  } catch {
+    // Why: runtime capability can disappear mid-open; preserve the system-browser escape hatch.
+  }
+  if (typeof window !== 'undefined') {
+    void window.api.shell.openUrl(url)
+  }
 }
 
 function localhostLabelRouteForHttpLink(

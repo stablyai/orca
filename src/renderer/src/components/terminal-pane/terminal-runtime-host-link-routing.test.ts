@@ -5,6 +5,10 @@ import { handleOscLink } from './terminal-osc-link-routing'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 
+vi.mock('@/runtime/web-runtime-session', () => ({
+  createWebRuntimeSessionBrowserTab: vi.fn(() => Promise.resolve(false))
+}))
+
 const URL = 'http://example.com/'
 const COLS = 80
 const ROWS = 24
@@ -100,7 +104,11 @@ beforeEach(() => {
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
   vi.stubGlobal('window', { api: { shell: { openUrl: openUrlMock } } })
   registerHttpLinkStoreAccessor(() => ({
-    settings: { openLinksInApp: true, activeRuntimeEnvironmentId: null },
+    settings: {
+      openLinksInApp: true,
+      activeRuntimeEnvironmentId: null,
+      browserTabHost: 'workspace'
+    },
     setActiveWorktree: setActiveWorktreeMock,
     createBrowserTab: createBrowserTabMock
   }))
@@ -113,17 +121,19 @@ afterEach(() => {
 describe('terminal HTTP links on a runtime-hosted pane', () => {
   const baseDeps = { worktreeId: 'wt-1', worktreePath: '/tmp', startupCwd: '/tmp' }
 
-  it('sends an OSC 8 hyperlink to the system browser', () => {
+  it('sends an OSC 8 hyperlink to the system browser', async () => {
     expect(handleOscLink(URL, clickEvent(), { ...baseDeps, sourceOwner: runtimeSourceOwner })).toBe(
       true
     )
 
-    expect(openUrlMock).toHaveBeenCalledWith(URL)
+    await vi.waitFor(() => {
+      expect(openUrlMock).toHaveBeenCalledWith(URL)
+    })
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(setActiveWorktreeMock).not.toHaveBeenCalled()
   })
 
-  it('sends a WebLinksAddon click to the system browser', () => {
+  it('sends a WebLinksAddon click to the system browser', async () => {
     const { terminal } = makeTerminal()
 
     expect(
@@ -134,11 +144,13 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
       })
     ).toBe(true)
 
-    expect(openUrlMock).toHaveBeenCalledWith(URL)
+    await vi.waitFor(() => {
+      expect(openUrlMock).toHaveBeenCalledWith(URL)
+    })
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
-  it('sends a click-fallback activation to the system browser', () => {
+  it('sends a click-fallback activation to the system browser', async () => {
     const { terminal, registrations } = makeTerminal()
     const disposable = installHttpLinkClickFallback(terminal, {
       worktreeId: 'wt-1',
@@ -149,12 +161,14 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
       ([name, _listener, options]) => name === 'mouseup' && options === undefined
     )?.[1](clickEvent())
 
-    expect(openUrlMock).toHaveBeenCalledWith(URL)
+    await vi.waitFor(() => {
+      expect(openUrlMock).toHaveBeenCalledWith(URL)
+    })
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     disposable.dispose()
   })
 
-  it('never prompts for the in-app routing preference it could not honor', () => {
+  it('never prompts for the in-app routing preference it could not honor', async () => {
     const requestOpenLinksInAppPreference = vi.fn(() => Promise.resolve(true))
 
     handleOscLink(URL, clickEvent(), {
@@ -164,7 +178,9 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
     })
 
     expect(requestOpenLinksInAppPreference).not.toHaveBeenCalled()
-    expect(openUrlMock).toHaveBeenCalledWith(URL)
+    await vi.waitFor(() => {
+      expect(openUrlMock).toHaveBeenCalledWith(URL)
+    })
   })
 })
 
@@ -216,10 +232,25 @@ describe('terminal HTTP links on a direct SSH pane', () => {
 describe('terminal HTTP links on a local pane', () => {
   const baseDeps = { worktreeId: 'wt-1', worktreePath: '/tmp', startupCwd: '/tmp' }
 
+  beforeEach(() => {
+    registerHttpLinkStoreAccessor(() => ({
+      settings: {
+        openLinksInApp: true,
+        activeRuntimeEnvironmentId: null,
+        browserTabHost: 'local'
+      },
+      setActiveWorktree: setActiveWorktreeMock,
+      createBrowserTab: createBrowserTabMock
+    }))
+  })
+
   it('still opens an OSC 8 hyperlink in an Orca browser tab', () => {
     expect(handleOscLink(URL, clickEvent(), { ...baseDeps, runtimeEnvironmentId: null })).toBe(true)
 
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', URL, { activate: true })
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', URL, {
+      activate: true,
+      browserRuntimeEnvironmentId: null
+    })
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
@@ -231,7 +262,10 @@ describe('terminal HTTP links on a local pane', () => {
       ([name, _listener, options]) => name === 'mouseup' && options === undefined
     )?.[1](clickEvent())
 
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', URL, { activate: true })
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', URL, {
+      activate: true,
+      browserRuntimeEnvironmentId: null
+    })
     expect(openUrlMock).not.toHaveBeenCalled()
     disposable.dispose()
   })

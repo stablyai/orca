@@ -187,7 +187,8 @@ describe('handleOscLink', () => {
 
     expect(openUrlMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true
+      activate: true,
+      browserRuntimeEnvironmentId: null
     })
     expect(preventDefault).toHaveBeenCalled()
   })
@@ -298,7 +299,8 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
 
     expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true
+      activate: true,
+      browserRuntimeEnvironmentId: null
     })
     expect(openUrlMock).not.toHaveBeenCalled()
   })
@@ -2246,7 +2248,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(createBrowserTabMock).toHaveBeenCalledWith(
       'wt-1',
       'https://github.com/stablyai/orca-marketing-website/pull/82',
-      { activate: true }
+      { activate: true, browserRuntimeEnvironmentId: null }
     )
     expect(preventDefault).toHaveBeenCalled()
     expect(terminal.clearSelection).toHaveBeenCalled()

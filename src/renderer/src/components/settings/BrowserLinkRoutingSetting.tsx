@@ -1,7 +1,9 @@
 import type { GlobalSettings } from '../../../../shared/types'
-import { Label } from '../ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
+import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import { isBrowserTabHostLockedToWorkspace, resolveBrowserTabHost } from '@/lib/browser-tab-host'
 
 type BrowserLinkRoutingSettingProps = {
   settings: GlobalSettings
@@ -16,48 +18,91 @@ export function BrowserLinkRoutingSetting({
   isMac,
   updateSettings
 }: BrowserLinkRoutingSettingProps): React.JSX.Element {
+  const browserTabHostLockedToWorkspace = isBrowserTabHostLockedToWorkspace()
+  const linkRoutingTitle = translate(
+    'auto.components.settings.BrowserPane.d3eb69c0aa',
+    'Link Routing'
+  )
+  const browserTabHostTitle = translate(
+    'auto.components.settings.BrowserLinkRoutingSetting.6bc91cf705',
+    'Browser tab host'
+  )
+  const browserTabHostDescription = translate(
+    'auto.components.settings.BrowserLinkRoutingSetting.dac59e11e7',
+    'Choose where new browser tabs and links routed into Orca Browser run.'
+  )
+  const keywords = [
+    'browser',
+    'preview',
+    'links',
+    'host',
+    'local',
+    'remote',
+    'runtime',
+    'localhost',
+    'webview',
+    'markdown',
+    isMac ? 'cmd' : 'ctrl',
+    'file',
+    'editor'
+  ]
+
   return (
-    <SearchableSetting
-      title={translate('auto.components.settings.BrowserPane.d3eb69c0aa', 'Link Routing')}
-      description={linkRoutingDescription}
-      keywords={[
-        'browser',
-        'preview',
-        'links',
-        'localhost',
-        'webview',
-        'markdown',
-        isMac ? 'cmd' : 'ctrl',
-        'file',
-        'editor'
-      ]}
-      className="flex items-center justify-between gap-4 py-2"
-    >
-      <div className="space-y-0.5">
-        <Label>
-          {translate('auto.components.settings.BrowserPane.d3eb69c0aa', 'Link Routing')}
-        </Label>
-        <p className="text-xs text-muted-foreground">{linkRoutingDescription}</p>
-      </div>
-      <button
-        role="switch"
-        aria-checked={settings.openLinksInApp}
-        onClick={() =>
-          updateSettings({
-            openLinksInApp: !settings.openLinksInApp,
-            openLinksInAppPreferencePrompted: true
-          })
-        }
-        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-          settings.openLinksInApp ? 'bg-foreground' : 'bg-muted-foreground/30'
-        }`}
+    <div className="space-y-4">
+      <SearchableSetting
+        title={linkRoutingTitle}
+        description={linkRoutingDescription}
+        keywords={keywords}
       >
-        <span
-          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
-            settings.openLinksInApp ? 'translate-x-4' : 'translate-x-0.5'
-          }`}
+        <SettingsSwitchRow
+          label={linkRoutingTitle}
+          description={linkRoutingDescription}
+          checked={settings.openLinksInApp}
+          onChange={() =>
+            updateSettings({
+              openLinksInApp: !settings.openLinksInApp,
+              openLinksInAppPreferencePrompted: true
+            })
+          }
         />
-      </button>
-    </SearchableSetting>
+      </SearchableSetting>
+      <SearchableSetting
+        title={browserTabHostTitle}
+        description={browserTabHostDescription}
+        keywords={keywords}
+      >
+        <SettingsRow
+          label={browserTabHostTitle}
+          description={browserTabHostDescription}
+          control={
+            <Select
+              value={resolveBrowserTabHost(settings.browserTabHost)}
+              disabled={browserTabHostLockedToWorkspace}
+              onValueChange={(value) =>
+                updateSettings({ browserTabHost: value as 'local' | 'workspace' })
+              }
+            >
+              <SelectTrigger size="sm" className="max-w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="local">
+                  {translate(
+                    'auto.components.settings.BrowserLinkRoutingSetting.965d31f368',
+                    'This computer'
+                  )}
+                </SelectItem>
+                <SelectItem value="workspace">
+                  {translate(
+                    'auto.components.settings.BrowserLinkRoutingSetting.50294199ff',
+                    'Workspace runtime'
+                  )}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          }
+        />
+      </SearchableSetting>
+    </div>
   )
 }

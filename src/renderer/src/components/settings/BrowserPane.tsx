@@ -130,10 +130,13 @@ export function BrowserPane({
           label: host.label,
           detail:
             host.kind === 'local'
-              ? translate('auto.components.settings.BrowserPane.86b7c83fee', 'This computer')
+              ? translate(
+                  'auto.components.settings.BrowserPane.86b7c83fee',
+                  'Manage local profiles and cookies. This does not control where browser tabs run.'
+                )
               : translate(
                   'auto.components.settings.BrowserPane.c0f85056d9',
-                  'Browser profiles on this Orca server.'
+                  "Manage this server's profiles and cookies. This does not control where browser tabs run."
                 )
         })),
     [

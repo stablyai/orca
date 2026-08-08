@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import {
+  openTabBarEntry,
   openTabEntryWithOperations,
   TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
   type TabEntryOperations
@@ -32,8 +34,8 @@ describe('openTabEntryWithOperations', () => {
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     },
-    activeRuntimeEnvironmentId: null,
     allowAbsolutePaths: true,
+    browserTabTarget: { kind: 'local' } as const,
     localPlatform: 'posix' as const
   }
 
@@ -190,7 +192,7 @@ describe('openTabEntryWithOperations', () => {
     await openTabEntryWithOperations({
       ...baseArgs,
       query: 'https://example.com',
-      activeRuntimeEnvironmentId: 'runtime-1',
+      browserTabTarget: { kind: 'runtime', runtimeEnvironmentId: 'runtime-1' },
       operations
     })
 
@@ -203,18 +205,20 @@ describe('openTabEntryWithOperations', () => {
     expect(operations.createBrowserTab).not.toHaveBeenCalled()
   })
 
-  it('falls back to a local browser tab when paired runtime browser creation fails', async () => {
+  it('does not fall back locally when workspace browser creation fails', async () => {
     const operations = makeOperations({
       createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false),
       isWebRuntimeSessionActive: vi.fn().mockReturnValue(true)
     })
 
-    await openTabEntryWithOperations({
-      ...baseArgs,
-      query: 'https://example.com',
-      activeRuntimeEnvironmentId: 'runtime-1',
-      operations
-    })
+    await expect(
+      openTabEntryWithOperations({
+        ...baseArgs,
+        query: 'https://example.com',
+        browserTabTarget: { kind: 'runtime', runtimeEnvironmentId: 'runtime-1' },
+        operations
+      })
+    ).rejects.toThrow('Workspace runtime browser is unavailable.')
 
     expect(operations.createWebRuntimeSessionBrowserTab).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
@@ -222,12 +226,25 @@ describe('openTabEntryWithOperations', () => {
       url: 'https://example.com/',
       targetGroupId: 'group-1'
     })
-    expect(operations.createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true,
-      browserRuntimeEnvironmentId: null,
-      targetGroupId: 'group-1',
-      title: 'https://example.com/'
+    expect(operations.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('does not fall back locally when the selected workspace browser is disconnected', async () => {
+    const operations = makeOperations({
+      isWebRuntimeSessionActive: vi.fn().mockReturnValue(false)
     })
+
+    await expect(
+      openTabEntryWithOperations({
+        ...baseArgs,
+        query: 'https://example.com',
+        browserTabTarget: { kind: 'runtime', runtimeEnvironmentId: 'runtime-1' },
+        operations
+      })
+    ).rejects.toThrow('Workspace runtime browser is unavailable.')
+
+    expect(operations.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
+    expect(operations.createBrowserTab).not.toHaveBeenCalled()
   })
 
   it('authorizes and opens absolute local files in the target group', async () => {
@@ -362,5 +379,94 @@ describe('openTabEntryWithOperations', () => {
 
     expect(operations.statRuntimePath).not.toHaveBeenCalled()
     expect(operations.openFile).not.toHaveBeenCalled()
+  })
+
+  it('creates typed URLs locally by default while a paired runtime is active', async () => {
+    const operations = makeOperations({
+      isWebRuntimeSessionActive: vi.fn().mockReturnValue(true)
+    })
+
+    await openTabEntryWithOperations({
+      ...baseArgs,
+      query: 'https://example.com',
+      operations
+    })
+
+    expect(operations.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
+    expect(operations.createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true,
+      browserRuntimeEnvironmentId: null,
+      targetGroupId: 'group-1',
+      title: 'https://example.com/'
+    })
+  })
+
+  it('does not create typed URL tabs when workspace ownership is unavailable', async () => {
+    const operations = makeOperations()
+
+    await expect(
+      openTabEntryWithOperations({
+        ...baseArgs,
+        query: 'https://example.com',
+        browserTabTarget: { kind: 'unavailable' },
+        operations
+      })
+    ).rejects.toThrow('Workspace runtime browser is unavailable.')
+
+    expect(operations.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
+    expect(operations.createBrowserTab).not.toHaveBeenCalled()
+  })
+})
+
+describe('openTabBarEntry', () => {
+  const initialState = useAppStore.getInitialState()
+
+  afterEach(() => {
+    useAppStore.setState(initialState, true)
+  })
+
+  it('opens typed URLs locally for a disconnected direct SSH workspace', async () => {
+    const worktreeId = 'repo-ssh::/home/neil/repo'
+    const createBrowserTab = vi.fn()
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/home/neil/repo',
+          displayName: 'repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        'repo-ssh': [
+          {
+            id: worktreeId,
+            repoId: 'repo-ssh',
+            path: '/home/neil/repo'
+          } as never
+        ]
+      },
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        browserTabHost: 'workspace'
+      } as never,
+      createBrowserTab: createBrowserTab as never
+    })
+
+    await openTabBarEntry({
+      query: 'https://example.com',
+      fileList: readyFiles([]),
+      groupId: 'group-1',
+      worktreeId
+    })
+
+    expect(createBrowserTab).toHaveBeenCalledWith(worktreeId, 'https://example.com/', {
+      activate: true,
+      browserRuntimeEnvironmentId: null,
+      targetGroupId: 'group-1',
+      title: 'https://example.com/'
+    })
   })
 })

@@ -34,6 +34,7 @@ import type { RecentlyClosedTabPosition } from './recently-closed-tabs'
 import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
+  BrowserDetectedInfo,
   BrowserDetectProfilesResult,
   BrowserProfileClearDefaultCookiesResult,
   BrowserProfileCreateResult,
@@ -50,14 +51,13 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import {
-  getExecutionHostIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
 } from '@/lib/workspace-session-hydration-keys'
+import { resolveBrowserTabTarget } from '@/lib/browser-tab-host'
 import { buildValidWorktreeIdsForSessionHydration } from './degraded-repo-worktree-validity'
 
 type CreateBrowserTabOptions = {
@@ -90,6 +90,13 @@ type BrowserTabPageState = {
 type SetBrowserPageUrlOptions = {
   preserveLoadError?: boolean
 }
+
+type BrowserSessionImportState = {
+  profileId: string
+  status: 'idle' | 'importing' | 'success' | 'error'
+  summary: BrowserCookieImportSummary | null
+  error: string | null
+} | null
 
 type ClosedBrowserWorkspaceSnapshot = {
   workspace: BrowserWorkspace
@@ -134,7 +141,7 @@ export type BrowserSlice = {
     url: string,
     options?: CreateBrowserTabOptions
   ) => BrowserWorkspace
-  openNewBrowserTabInActiveWorkspace: (groupId: string) => Promise<void>
+  openNewBrowserTabInActiveWorkspace: (groupId?: string) => Promise<void>
   closeBrowserTab: (tabId: string) => void
   shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
@@ -187,33 +194,31 @@ export type BrowserSlice = {
   browserSessionProfilesByHostId: Partial<Record<ExecutionHostId, BrowserSessionProfile[]>>
   browserSessionHostIdOverride: ExecutionHostId | null
   setBrowserSessionHostId: (hostId: ExecutionHostId) => Promise<void>
-  browserSessionImportState: {
-    profileId: string
-    status: 'idle' | 'importing' | 'success' | 'error'
-    summary: BrowserCookieImportSummary | null
-    error: string | null
-  } | null
-  fetchBrowserSessionProfiles: () => Promise<void>
+  browserSessionImportState: BrowserSessionImportState
+  browserSessionImportStateByHostId: Partial<Record<ExecutionHostId, BrowserSessionImportState>>
+  fetchBrowserSessionProfiles: (hostId?: ExecutionHostId) => Promise<void>
   createBrowserSessionProfile: (
     scope: 'isolated' | 'imported',
     label: string,
-    options?: BrowserSessionProfileCreateOptions
+    options?: BrowserSessionProfileCreateOptions,
+    hostId?: ExecutionHostId
   ) => Promise<BrowserSessionProfile | null>
   deleteBrowserSessionProfile: (profileId: string) => Promise<boolean>
-  importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportResult>
-  clearBrowserSessionImportState: () => void
-  detectedBrowsers: {
-    family: string
-    label: string
-    profiles: { name: string; directory: string }[]
-    selectedProfile: string
-  }[]
+  importCookiesToProfile: (
+    profileId: string,
+    hostId?: ExecutionHostId
+  ) => Promise<BrowserCookieImportResult>
+  clearBrowserSessionImportState: (hostId?: ExecutionHostId) => void
+  detectedBrowsers: BrowserDetectedInfo[]
   detectedBrowsersLoaded: boolean
-  fetchDetectedBrowsers: () => Promise<void>
+  detectedBrowsersByHostId: Partial<Record<ExecutionHostId, BrowserDetectedInfo[]>>
+  detectedBrowsersLoadedByHostId: Partial<Record<ExecutionHostId, true>>
+  fetchDetectedBrowsers: (hostId?: ExecutionHostId) => Promise<void>
   importCookiesFromBrowser: (
     profileId: string,
     browserFamily: string,
-    browserProfile?: string
+    browserProfile?: string,
+    hostId?: ExecutionHostId
   ) => Promise<BrowserCookieImportResult>
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
@@ -258,6 +263,20 @@ function getBrowserSettingsRuntimeEnvironmentId(
 ): string | null {
   const parsed = parseExecutionHostId(getBrowserSettingsHostId(state))
   return parsed?.kind === 'runtime' ? parsed.environmentId : null
+}
+
+function getRequestedBrowserHostId(
+  state: Pick<AppState, 'browserSessionHostIdOverride' | 'settings'>,
+  hostId?: ExecutionHostId
+): ExecutionHostId {
+  return hostId ?? getBrowserSettingsHostId(state)
+}
+
+function getBrowserRuntimeTarget(hostId: ExecutionHostId): RuntimeClientTarget | null {
+  const parsed = parseExecutionHostId(hostId)
+  return parsed?.kind === 'runtime'
+    ? { kind: 'environment', environmentId: parsed.environmentId }
+    : null
 }
 
 function getBrowserWorktreeHostId(state: AppState, worktreeId: string): ExecutionHostId {
@@ -310,6 +329,32 @@ function profileListByHostUpdate(
   }
 }
 
+function detectedBrowserListByHostUpdate(
+  state: Pick<
+    AppState,
+    | 'browserSessionHostIdOverride'
+    | 'detectedBrowsersByHostId'
+    | 'detectedBrowsersLoadedByHostId'
+    | 'settings'
+  >,
+  hostId: ExecutionHostId,
+  browsers: BrowserDetectedInfo[]
+): Partial<BrowserSlice> {
+  return {
+    ...(getBrowserSettingsHostId(state) === hostId
+      ? { detectedBrowsers: browsers, detectedBrowsersLoaded: true }
+      : {}),
+    detectedBrowsersByHostId: {
+      ...state.detectedBrowsersByHostId,
+      [hostId]: browsers
+    },
+    detectedBrowsersLoadedByHostId: {
+      ...state.detectedBrowsersLoadedByHostId,
+      [hostId]: true
+    }
+  }
+}
+
 function getBrowserProfilesForHost(
   state: AppState,
   hostId: ExecutionHostId
@@ -330,9 +375,15 @@ function getDefaultBrowserProfileForHost(state: AppState, hostId: ExecutionHostI
 function browserImportStateForHostUpdate(
   state: AppState,
   hostId: ExecutionHostId,
-  browserSessionImportState: BrowserSlice['browserSessionImportState']
+  browserSessionImportState: BrowserSessionImportState
 ): Partial<BrowserSlice> {
-  return getBrowserSettingsHostId(state) === hostId ? { browserSessionImportState } : {}
+  return {
+    ...(getBrowserSettingsHostId(state) === hostId ? { browserSessionImportState } : {}),
+    browserSessionImportStateByHostId: {
+      ...state.browserSessionImportStateByHostId,
+      [hostId]: browserSessionImportState
+    }
+  }
 }
 
 function closeRemoteBrowserPageInOwningEnvironment(
@@ -528,9 +579,12 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   browserSessionProfilesByHostId: {},
   browserSessionHostIdOverride: null,
   browserSessionImportState: null,
+  browserSessionImportStateByHostId: {},
   browserUrlHistory: [],
   defaultBrowserSessionProfileId: null,
   defaultBrowserSessionProfileIdByHostId: {},
+  detectedBrowsersByHostId: {},
+  detectedBrowsersLoadedByHostId: {},
 
   setBrowserSessionHostId: async (hostId) => {
     const parsed = parseExecutionHostId(hostId)
@@ -542,9 +596,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       browserSessionHostIdOverride: nextHostId,
       browserSessionProfiles: s.browserSessionProfilesByHostId[nextHostId] ?? [],
       defaultBrowserSessionProfileId: s.defaultBrowserSessionProfileIdByHostId[nextHostId] ?? null,
-      browserSessionImportState: null,
-      detectedBrowsers: [],
-      detectedBrowsersLoaded: false
+      browserSessionImportState: s.browserSessionImportStateByHostId[nextHostId] ?? null,
+      detectedBrowsers: s.detectedBrowsersByHostId[nextHostId] ?? [],
+      detectedBrowsersLoaded: s.detectedBrowsersLoadedByHostId[nextHostId] === true
     }))
     await Promise.all([get().fetchBrowserSessionProfiles(), get().fetchDetectedBrowsers()])
   },
@@ -666,6 +720,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         activate: options?.activate ?? true
       })
     }
+    if (options?.activate ?? true) {
+      // Why: paired-host snapshots can land between the browser and unified-tab writes; reassert after both exist.
+      get().focusBrowserTabInWorktree(worktreeId, page.id, { surfacePane: true })
+    }
     return browserTab
   },
 
@@ -676,13 +734,23 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return
     }
     const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-    if (runtimeEnvironmentId) {
+    const route =
+      worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+        ? {
+            kind: 'resolved' as const,
+            route: { executionHostId: 'local' as const, runtimeEnvironmentId: null }
+          }
+        : resolveWorktreeOperationRouteResult(state, worktreeId)
+    const target = resolveBrowserTabTarget(state.settings?.browserTabHost, route)
+    if (target.kind === 'unavailable') {
+      return
+    }
+    if (target.kind === 'runtime') {
       const { createWebRuntimeSessionBrowserTab } = await import('@/runtime/web-runtime-session')
       try {
         const created = await createWebRuntimeSessionBrowserTab({
           worktreeId,
-          environmentId: runtimeEnvironmentId,
+          environmentId: target.runtimeEnvironmentId,
           url: defaultUrl,
           targetGroupId: groupId
         })
@@ -702,7 +770,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     get().createBrowserTab(worktreeId, defaultUrl, {
       title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
       focusAddressBar: true,
-      targetGroupId: groupId
+      targetGroupId: groupId,
+      browserRuntimeEnvironmentId: null
     })
     get().recordFeatureInteraction('browser-tab-created')
   },
@@ -1818,38 +1887,38 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
   },
 
-  fetchBrowserSessionProfiles: async () => {
-    const hostId = getBrowserSettingsHostId(get())
-    const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
-    if (runtimeEnvironmentId) {
+  fetchBrowserSessionProfiles: async (hostId) => {
+    const requestedHostId = getRequestedBrowserHostId(get(), hostId)
+    const runtimeTarget = getBrowserRuntimeTarget(requestedHostId)
+    if (runtimeTarget) {
       try {
         const result = await callRuntimeRpc<BrowserProfileListResult>(
-          { kind: 'environment', environmentId: runtimeEnvironmentId },
+          runtimeTarget,
           'browser.profileList',
           undefined,
           { timeoutMs: 15_000 }
         )
-        set((s) => profileListByHostUpdate(s, result.profiles, hostId))
+        set((s) => profileListByHostUpdate(s, result.profiles, requestedHostId))
       } catch {
-        set((s) => profileListByHostUpdate(s, [], hostId))
+        set((s) => profileListByHostUpdate(s, [], requestedHostId))
       }
       return
     }
     try {
       const profiles = (await window.api.browser.sessionListProfiles()) as BrowserSessionProfile[]
-      set((s) => profileListByHostUpdate(s, profiles, hostId))
+      set((s) => profileListByHostUpdate(s, profiles, requestedHostId))
     } catch {
       /* best-effort — stale profile list is preferable to a crash */
     }
   },
 
-  createBrowserSessionProfile: async (scope, label, options) => {
-    const hostId = getBrowserSettingsHostId(get())
-    const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
-    if (runtimeEnvironmentId) {
+  createBrowserSessionProfile: async (scope, label, options, hostId) => {
+    const requestedHostId = getRequestedBrowserHostId(get(), hostId)
+    const runtimeTarget = getBrowserRuntimeTarget(requestedHostId)
+    if (runtimeTarget) {
       try {
         const result = await callRuntimeRpc<BrowserProfileCreateResult>(
-          { kind: 'environment', environmentId: runtimeEnvironmentId },
+          runtimeTarget,
           'browser.profileCreate',
           { scope, label, ...options },
           { timeoutMs: 15_000 }
@@ -1859,8 +1928,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           set((s) => ({
             ...profileListByHostUpdate(
               s,
-              [...getBrowserProfilesForHost(s, hostId), profile],
-              hostId
+              [...getBrowserProfilesForHost(s, requestedHostId), profile],
+              requestedHostId
             )
           }))
         }
@@ -1877,7 +1946,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       })) as BrowserSessionProfile | null
       if (profile) {
         set((s) => ({
-          ...profileListByHostUpdate(s, [...getBrowserProfilesForHost(s, hostId), profile], hostId)
+          ...profileListByHostUpdate(
+            s,
+            [...getBrowserProfilesForHost(s, requestedHostId), profile],
+            requestedHostId
+          )
         }))
       }
       return profile
@@ -1950,15 +2023,15 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
   },
 
-  importCookiesToProfile: async (profileId) => {
-    const hostId = getBrowserSettingsHostId(get())
-    if (getBrowserSettingsRuntimeEnvironmentId(get())) {
+  importCookiesToProfile: async (profileId, hostId) => {
+    const requestedHostId = getRequestedBrowserHostId(get(), hostId)
+    if (getBrowserRuntimeTarget(requestedHostId)) {
       const reason = translate(
         'auto.store.slices.browser.remoteCookieImportUnavailable',
         'Manual cookie file import is unavailable while a remote runtime is active.'
       )
       set((state) =>
-        browserImportStateForHostUpdate(state, hostId, {
+        browserImportStateForHostUpdate(state, requestedHostId, {
           profileId,
           status: 'error',
           summary: null,
@@ -1968,7 +2041,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return { ok: false as const, reason }
     }
     set((state) =>
-      browserImportStateForHostUpdate(state, hostId, {
+      browserImportStateForHostUpdate(state, requestedHostId, {
         profileId,
         status: 'importing',
         summary: null,
@@ -1982,21 +2055,21 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       if (result.ok) {
         get().recordFeatureInteraction?.('cookie-import')
         set((state) =>
-          browserImportStateForHostUpdate(state, hostId, {
+          browserImportStateForHostUpdate(state, requestedHostId, {
             profileId,
             status: 'success',
             summary: result.summary,
             error: null
           })
         )
-        if (getBrowserSettingsHostId(get()) === hostId) {
+        if (getBrowserSettingsHostId(get()) === requestedHostId) {
           await get()
-            .fetchBrowserSessionProfiles()
+            .fetchBrowserSessionProfiles(requestedHostId)
             .catch(() => {})
         }
       } else {
         set((state) =>
-          browserImportStateForHostUpdate(state, hostId, {
+          browserImportStateForHostUpdate(state, requestedHostId, {
             profileId,
             status: result.reason === 'canceled' ? 'idle' : 'error',
             summary: null,
@@ -2008,7 +2081,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     } catch (err) {
       const reason = String((err as Error)?.message ?? err)
       set((state) =>
-        browserImportStateForHostUpdate(state, hostId, {
+        browserImportStateForHostUpdate(state, requestedHostId, {
           profileId,
           status: 'error',
           summary: null,
@@ -2019,65 +2092,49 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
   },
 
-  clearBrowserSessionImportState: () => {
-    set({ browserSessionImportState: null })
+  clearBrowserSessionImportState: (hostId) => {
+    const requestedHostId = getRequestedBrowserHostId(get(), hostId)
+    set((state) => browserImportStateForHostUpdate(state, requestedHostId, null))
   },
 
   detectedBrowsers: [],
   detectedBrowsersLoaded: false,
 
-  fetchDetectedBrowsers: async () => {
-    const hostId = getBrowserSettingsHostId(get())
-    const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
-    if (runtimeEnvironmentId) {
+  fetchDetectedBrowsers: async (hostId) => {
+    const requestedHostId = getRequestedBrowserHostId(get(), hostId)
+    if (get().detectedBrowsersLoadedByHostId[requestedHostId]) {
+      return
+    }
+    const runtimeTarget = getBrowserRuntimeTarget(requestedHostId)
+    if (runtimeTarget) {
       try {
         const result = await callRuntimeRpc<BrowserDetectProfilesResult>(
-          { kind: 'environment', environmentId: runtimeEnvironmentId },
+          runtimeTarget,
           'browser.profileDetectBrowsers',
           undefined,
           { timeoutMs: 15_000 }
         )
-        set((s) =>
-          getBrowserSettingsHostId(s) === hostId
-            ? { detectedBrowsers: result.browsers, detectedBrowsersLoaded: true }
-            : {}
-        )
+        set((s) => detectedBrowserListByHostUpdate(s, requestedHostId, result.browsers))
       } catch {
-        set((s) =>
-          getBrowserSettingsHostId(s) === hostId
-            ? { detectedBrowsers: [], detectedBrowsersLoaded: true }
-            : {}
-        )
+        set((s) => detectedBrowserListByHostUpdate(s, requestedHostId, []))
       }
       return
     }
-    if (get().detectedBrowsersLoaded) {
-      return
-    }
     try {
-      const browsers = (await window.api.browser.sessionDetectBrowsers()) as {
-        family: string
-        label: string
-        profiles: { name: string; directory: string }[]
-        selectedProfile: string
-      }[]
-      set((s) =>
-        getBrowserSettingsHostId(s) === hostId
-          ? { detectedBrowsers: browsers, detectedBrowsersLoaded: true }
-          : {}
-      )
+      const browsers = (await window.api.browser.sessionDetectBrowsers()) as BrowserDetectedInfo[]
+      set((s) => detectedBrowserListByHostUpdate(s, requestedHostId, browsers))
     } catch {
       /* best-effort — empty list is acceptable fallback */
-      set((s) => (getBrowserSettingsHostId(s) === hostId ? { detectedBrowsersLoaded: true } : {}))
+      set((s) => detectedBrowserListByHostUpdate(s, requestedHostId, []))
     }
   },
 
-  importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?) => {
-    const hostId = getBrowserSettingsHostId(get())
-    const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
-    if (runtimeEnvironmentId) {
+  importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?, hostId?) => {
+    const requestedHostId = getRequestedBrowserHostId(get(), hostId)
+    const runtimeTarget = getBrowserRuntimeTarget(requestedHostId)
+    if (runtimeTarget) {
       set((state) =>
-        browserImportStateForHostUpdate(state, hostId, {
+        browserImportStateForHostUpdate(state, requestedHostId, {
           profileId,
           status: 'importing',
           summary: null,
@@ -2086,28 +2143,28 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       )
       try {
         const result = await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
-          { kind: 'environment', environmentId: runtimeEnvironmentId },
+          runtimeTarget,
           'browser.profileImportFromBrowser',
           { profileId, browserFamily, browserProfile },
           { timeoutMs: 30_000 }
         )
         if (result.ok) {
           set((state) =>
-            browserImportStateForHostUpdate(state, hostId, {
+            browserImportStateForHostUpdate(state, requestedHostId, {
               profileId,
               status: 'success',
               summary: result.summary,
               error: null
             })
           )
-          if (getBrowserSettingsHostId(get()) === hostId) {
+          if (getBrowserSettingsHostId(get()) === requestedHostId) {
             await get()
-              .fetchBrowserSessionProfiles()
+              .fetchBrowserSessionProfiles(requestedHostId)
               .catch(() => {})
           }
         } else {
           set((state) =>
-            browserImportStateForHostUpdate(state, hostId, {
+            browserImportStateForHostUpdate(state, requestedHostId, {
               profileId,
               status: 'error',
               summary: null,
@@ -2119,7 +2176,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       } catch (err) {
         const reason = String((err as Error)?.message ?? err)
         set((state) =>
-          browserImportStateForHostUpdate(state, hostId, {
+          browserImportStateForHostUpdate(state, requestedHostId, {
             profileId,
             status: 'error',
             summary: null,
@@ -2130,7 +2187,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       }
     }
     set((state) =>
-      browserImportStateForHostUpdate(state, hostId, {
+      browserImportStateForHostUpdate(state, requestedHostId, {
         profileId,
         status: 'importing',
         summary: null,
@@ -2146,21 +2203,21 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       if (result.ok) {
         get().recordFeatureInteraction?.('cookie-import')
         set((state) =>
-          browserImportStateForHostUpdate(state, hostId, {
+          browserImportStateForHostUpdate(state, requestedHostId, {
             profileId,
             status: 'success',
             summary: result.summary,
             error: null
           })
         )
-        if (getBrowserSettingsHostId(get()) === hostId) {
+        if (getBrowserSettingsHostId(get()) === requestedHostId) {
           await get()
-            .fetchBrowserSessionProfiles()
+            .fetchBrowserSessionProfiles(requestedHostId)
             .catch(() => {})
         }
       } else {
         set((state) =>
-          browserImportStateForHostUpdate(state, hostId, {
+          browserImportStateForHostUpdate(state, requestedHostId, {
             profileId,
             status: 'error',
             summary: null,
@@ -2172,7 +2229,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     } catch (err) {
       const reason = String((err as Error)?.message ?? err)
       set((state) =>
-        browserImportStateForHostUpdate(state, hostId, {
+        browserImportStateForHostUpdate(state, requestedHostId, {
           profileId,
           status: 'error',
           summary: null,

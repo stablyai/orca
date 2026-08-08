@@ -87,13 +87,16 @@ export function BrowserSessionCookiesSection({
         <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2">
           <div className="min-w-0 space-y-0.5">
             <Label className="text-xs">
-              {translate('auto.components.settings.BrowserPane.5e19a692f7', 'Host')}
+              {translate(
+                'auto.components.settings.BrowserPane.5e19a692f7',
+                'Profile & Cookie Host'
+              )}
             </Label>
-            <p className="truncate text-[11px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {selectedHost?.detail ??
                 translate(
                   'auto.components.settings.BrowserPane.6480776a03',
-                  'Browser profiles for the selected host.'
+                  "Manage this host's profiles and cookies. This does not control where browser tabs run."
                 )}
             </p>
           </div>

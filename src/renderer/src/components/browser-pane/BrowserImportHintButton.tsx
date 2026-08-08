@@ -16,26 +16,36 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { isLinuxUserAgent, isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { getBrowserCookieImportSourceLabels } from '../../../../shared/browser-cookie-import-sources'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'
 import { translate } from '@/i18n/i18n'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 type BrowserImportHintButtonProps = {
   profileId: string | null
 }
+
+const EMPTY_DETECTED_BROWSERS: AppState['detectedBrowsers'] = []
 
 export function BrowserImportHintButton({
   profileId
 }: BrowserImportHintButtonProps): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const [importMenuOpen, setImportMenuOpen] = useState(false)
-  const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
+  const browserSessionImportState = useAppStore(
+    (s) => s.browserSessionImportStateByHostId[LOCAL_EXECUTION_HOST_ID] ?? null
+  )
   const browserImportHintHidden = useAppStore((s) => s.browserImportHintHidden)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
-  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
-  const detectedBrowsersLoaded = useAppStore((s) => s.detectedBrowsersLoaded)
+  const detectedBrowsers = useAppStore(
+    (s) => s.detectedBrowsersByHostId[LOCAL_EXECUTION_HOST_ID] ?? EMPTY_DETECTED_BROWSERS
+  )
+  const detectedBrowsersLoaded = useAppStore(
+    (s) => s.detectedBrowsersLoadedByHostId[LOCAL_EXECUTION_HOST_ID] === true
+  )
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
   const importCookiesFromBrowser = useAppStore((s) => s.importCookiesFromBrowser)
   const importCookiesToProfile = useAppStore((s) => s.importCookiesToProfile)
@@ -73,7 +83,7 @@ export function BrowserImportHintButton({
       if (nextOpen) {
         // Why: macOS treats other browsers' profile folders as app data. Only
         // probe them when the user opens the import hint.
-        void fetchDetectedBrowsers()
+        void fetchDetectedBrowsers(LOCAL_EXECUTION_HOST_ID)
       }
     },
     [fetchDetectedBrowsers]
@@ -86,7 +96,8 @@ export function BrowserImportHintButton({
       const result = await importCookiesFromBrowser(
         effectiveProfileId,
         browserFamily,
-        browserProfile
+        browserProfile,
+        LOCAL_EXECUTION_HOST_ID
       )
       if (result.ok) {
         const browser = detectedBrowsers.find((entry) => entry.family === browserFamily)
@@ -112,7 +123,7 @@ export function BrowserImportHintButton({
   const handleImportFromFile = useCallback(async (): Promise<void> => {
     setOpen(false)
     setImportMenuOpen(false)
-    const result = await importCookiesToProfile(effectiveProfileId)
+    const result = await importCookiesToProfile(effectiveProfileId, LOCAL_EXECUTION_HOST_ID)
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,

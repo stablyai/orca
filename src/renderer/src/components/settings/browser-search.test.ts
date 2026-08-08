@@ -21,11 +21,14 @@ describe('browser settings search copy', () => {
     expect(description).not.toMatch(/\{\{.+?\}\}/)
 
     const linkRoutingEntry = getBrowserPaneSearchEntries({ isMac: true }).find(
-      (entry) => entry.title === 'Link Routing'
+      (entry) => entry.title === 'Link Routing & Browser Tab Host'
     )
     expect(linkRoutingEntry?.description).toBe(getBrowserLinkRoutingDescription({ isMac: true }))
     expect(linkRoutingEntry?.keywords).toContain('cmd')
     expect(linkRoutingEntry?.keywords).not.toContain('ctrl')
+    expect(linkRoutingEntry?.keywords).toEqual(
+      expect.arrayContaining(['host', 'local', 'remote', 'runtime', 'workspace'])
+    )
 
     const defaultZoomEntry = getBrowserPaneSearchEntries({ isMac: true }).find(
       (entry) => entry.title === 'Default Zoom'
@@ -42,7 +45,7 @@ describe('browser settings search copy', () => {
     expect(description).not.toMatch(/\{\{.+?\}\}/)
 
     const linkRoutingEntry = getBrowserPaneSearchEntries({ isMac: false }).find(
-      (entry) => entry.title === 'Link Routing'
+      (entry) => entry.title === 'Link Routing & Browser Tab Host'
     )
     expect(linkRoutingEntry?.description).toBe(getBrowserLinkRoutingDescription({ isMac: false }))
     expect(linkRoutingEntry?.keywords).toContain('ctrl')
@@ -77,7 +80,7 @@ describe('browser link routing modifier copy', () => {
       'Default Home Page',
       'Default Search Engine',
       'Default Zoom',
-      'Link Routing',
+      'Link Routing & Browser Tab Host',
       'Hold Shift to open in Orca',
       'Localhost Worktree Labels',
       'Session & Cookies'

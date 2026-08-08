@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
 import {
   openHttpLink,
   registerHttpLinkStoreAccessor,
   resolveModifierRouting
 } from './http-link-routing'
+
+vi.mock('@/runtime/web-runtime-session', () => ({
+  createWebRuntimeSessionBrowserTab: vi.fn(() => Promise.resolve(false))
+}))
+
+const createWebRuntimeSessionBrowserTabMock = vi.mocked(createWebRuntimeSessionBrowserTab)
 
 describe('resolveModifierRouting', () => {
   it('is inert without the modifier regardless of settings', () => {
@@ -63,6 +70,7 @@ describe('modifier routing across link source owners', () => {
       openLinksInApp?: boolean
       openLinksInAppModifierInverts?: boolean
       activeRuntimeEnvironmentId?: string | null
+      browserTabHost?: 'local' | 'workspace'
     },
     setActiveWorktree: setActiveWorktreeMock,
     createBrowserTab: createBrowserTabMock
@@ -70,6 +78,7 @@ describe('modifier routing across link source owners', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
     registerHttpLinkStoreAccessor(() => storeState)
     vi.stubGlobal('window', { api: { shell: { openUrl: openUrlMock } } })
   })
@@ -88,17 +97,20 @@ describe('modifier routing across link source owners', () => {
     })
 
     expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true
+      activate: true,
+      browserRuntimeEnvironmentId: null
     })
   })
 
-  it('never lets a modifier pull a runtime-owned link into Orca', () => {
+  it('never lets a modifier pull a runtime-owned link into Orca', async () => {
+    createWebRuntimeSessionBrowserTabMock.mockResolvedValue(true)
     for (const inverts of [true, false]) {
       vi.clearAllMocks()
       storeState.settings = {
         openLinksInApp: false,
         openLinksInAppModifierInverts: inverts,
-        activeRuntimeEnvironmentId: null
+        activeRuntimeEnvironmentId: null,
+        browserTabHost: 'workspace'
       }
 
       openHttpLink('https://example.com/', {
@@ -107,8 +119,34 @@ describe('modifier routing across link source owners', () => {
         sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' }
       })
 
-      expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+      await vi.waitFor(() => {
+        expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+      })
       expect(createBrowserTabMock).not.toHaveBeenCalled()
+      expect(createWebRuntimeSessionBrowserTabMock).not.toHaveBeenCalled()
     }
+  })
+
+  it('falls back externally when the selected workspace runtime cannot create a tab', async () => {
+    storeState.settings = {
+      openLinksInApp: true,
+      activeRuntimeEnvironmentId: null,
+      browserTabHost: 'workspace'
+    }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' }
+    })
+
+    await vi.waitFor(() => {
+      expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    })
+    expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      environmentId: 'env-1',
+      url: 'https://example.com/'
+    })
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 })

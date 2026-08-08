@@ -141,7 +141,8 @@ export async function launchPairedWebClient(
 export async function launchPairedElectronClient(
   offer: RuntimeDesktopPairingOffer,
   testInfo: TestInfo,
-  name: string
+  name: string,
+  options: { waitForInitialWorkspaceSessionReady?: boolean } = {}
 ): Promise<PairedElectronClient> {
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-paired-desktop-'))
   const directSshProbePath = path.join(userDataDir, 'forbidden-local-ssh-connects.jsonl')
@@ -177,11 +178,13 @@ export async function launchPairedElectronClient(
     const page = await app.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
-    await page.waitForFunction(
-      () => window.__store?.getState().workspaceSessionReady === true,
-      null,
-      { timeout: 30_000 }
-    )
+    if (options.waitForInitialWorkspaceSessionReady !== false) {
+      await page.waitForFunction(
+        () => window.__store?.getState().workspaceSessionReady === true,
+        null,
+        { timeout: 30_000 }
+      )
+    }
     const canaryBlocked = await page.evaluate(async (targetId) => {
       try {
         await window.api.ssh.connect({ targetId })

@@ -126,7 +126,6 @@ import type { AppState } from '../store/types'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '../store/pinned-tab-close-guard'
 import {
   closeWebRuntimeSessionTab,
-  createWebRuntimeSessionBrowserTab,
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
@@ -2145,29 +2144,9 @@ export function useIpcEvents(): void {
         }
         const worktreeId = store.activeWorktreeId
         if (worktreeId) {
-          const environmentId = getWorktreeRuntimeEnvironmentId(worktreeId)
-          if (environmentId) {
-            if (!isWebRuntimeSessionActive(environmentId)) {
-              store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
-                title: translate('auto.hooks.useIpcEvents.f6300deb8b', 'New Browser Tab'),
-                focusAddressBar: true
-              })
-              return
-            }
-            void (async () => {
-              // Why: paired web tabs are host-owned; on RPC failure leave local state so the next host snapshot stays authoritative.
-              await createWebRuntimeSessionBrowserTab({
-                worktreeId,
-                environmentId,
-                url: store.browserDefaultUrl ?? 'about:blank'
-              })
-            })()
-            return
-          }
-          store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
-            title: translate('auto.hooks.useIpcEvents.f6300deb8b', 'New Browser Tab'),
-            focusAddressBar: true
-          })
+          const targetGroupId =
+            store.activeGroupIdByWorktree[worktreeId] ?? store.groupsByWorktree[worktreeId]?.[0]?.id
+          void store.openNewBrowserTabInActiveWorkspace(targetGroupId)
         }
       })
     )
