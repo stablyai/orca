@@ -758,10 +758,38 @@ is resolved.
 
 ## Installing Agent Skills Without A Desktop
 
-Orca's agent skills (CLI usage, orchestration, computer use, etc.) are normally
-installed from Orca Settings, which pre-fills an `npx skills add ... --global`
-command in a terminal for you to run. A headless host has no Settings UI, so
-use `orca skills install` instead:
+Orca's agent skills (CLI usage, orchestration, computer use, Linear, etc.) are
+normally installed from Orca Settings, which pre-fills an
+`npx skills add ... --global` command in a terminal for you to run. A headless
+`orca serve` host has no Settings UI, so use the CLI on that machine instead.
+
+### What ships with this Orca CLI
+
+`orca skills list` prints the version-matched guides bundled with **this** CLI
+binary (the same set `orca skills install` can place for agents):
+
+| Skill | Use when |
+| --- | --- |
+| `orca-cli` | Worktrees, terminals, browser tabs, artifacts from agents |
+| `orchestration` | Multi-agent task runs, dispatch, `worker_done` / ask |
+| `computer-use` | Desktop UI automation via `orca computer` |
+| `orca-linear` / `linear-tickets` | Linear issues from agents |
+| `orca-emulator` / `orca-emulator-android` | Device control from agents |
+| `orca-per-workspace-env` | Per-worktree env / recipe runtimes |
+
+Read a guide without installing it into an agent:
+
+```bash
+orca skills get orca-cli --full
+orca skills get orchestration --full
+orca skills get computer-use --full
+orca skills get orca-linear --full
+```
+
+Guides are version-matched to the CLI; after an Orca upgrade, re-read or
+re-install so agents do not keep an older guide.
+
+### Install on the serve host
 
 ```bash
 orca skills install                                      # list installable skills
@@ -797,6 +825,49 @@ orca skills install --skill orca-cli --agent universal
 If Orca detects no agent at all, `orca skills install` stops and asks for
 `--agent` rather than guessing.
 
+### Common serve installs
+
+```bash
+# Core CLI + multi-agent coordination (most orchestration hosts)
+orca skills install --skill orca-cli --skill orchestration --agent claude-code,codex
+
+# Linear issue workflows (needs Linear credentials on the host — see below)
+orca skills install --skill orca-linear --skill linear-tickets --agent claude-code,codex
+
+# Desktop automation on a Linux host that has accessibility permissions
+orca skills install --skill computer-use --agent claude-code,codex
+```
+
+After install, confirm agents can load the guide (exact paths depend on the
+agent; Claude Code and Codex use their usual skills directories):
+
+```bash
+orca skills get orchestration --full | head
+# From an agent session on this host: "load the orchestration skill" / skills list
+```
+
+### Integrations and secrets on a serve host
+
+Skills only document commands; credentials stay on the host, not in the skill
+markdown and not in the repo:
+
+| Integration | Typical host setup | Skill |
+| --- | --- | --- |
+| GitHub / `gh` | Install `gh`, run `gh auth login` (or set `GH_TOKEN` for non-interactive) as the same user that runs agents | `orca-cli`, `orchestration` |
+| Linear | Configure Linear in Orca (desktop once, or host env / secrets that the Linear skill documents); never commit API keys | `orca-linear`, `linear-tickets` |
+| Computer use | Linux accessibility / display permissions for the serve user; often needs a real or virtual display (`DISPLAY`, see Xvfb above) | `computer-use` |
+
+Prefer environment variables or a secret manager owned by the serve user. Do not
+put tokens in `orca-data.json` copies you share, in worktree files agents can
+read, or in journal logs. Restart agents (or the serve unit) after changing
+credentials so they pick up new env.
+
+SSH workspaces and remote clients use the **host's** installed skills and
+integrations: install and authenticate on the machine that runs `orca serve`,
+not only on the laptop that pairs.
+
+### Update and verify
+
 To refresh already-installed skills, `orca skills update` mirrors the same
 selection flags (`--skill`, `--all`, `--local`, `--dry-run`) and resolves to
 `npx skills update <names...>` with a matching scope flag — `--global`, or
@@ -812,12 +883,20 @@ orca skills update --skill orca-cli --dry-run             # print the npx comman
 generally, a 0 exit means the `skills` CLI ran without erroring, not that it
 wrote anything; read its output to confirm what changed.
 
+After an Orca package upgrade, re-run `orca skills update --all` (or re-install)
+so agent-side skill copies match this CLI's guides. `orca skills list` shows the
+CLI's current names; agent skill trees can lag until update runs.
+
 `--json` covers the skill listing and `--dry-run`. A real run streams the
 `skills` CLI's own non-JSON output and rejects `--json`.
 
-Both commands install onto the machine that runs them. In an Orca SSH workspace
-or the WSL bridge the `orca` shim forwards commands to the Orca host, so they
-refuse to run there and print the command to run on the machine you want.
+### Where the command runs
+
+Both install and update install onto the machine that runs them. In an Orca SSH
+workspace or the WSL bridge the `orca` shim forwards commands to the Orca host,
+so they refuse to run there and print the command to run on the machine you want.
+For `orca serve`, that is almost always the server itself (the same user as
+`ExecStart` / the agent shells).
 
 ## Troubleshooting
 
