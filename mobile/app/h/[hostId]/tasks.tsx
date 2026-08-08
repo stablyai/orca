@@ -45,6 +45,7 @@ import { StatusDot } from '../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../src/components/ActionSheetModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
+import { useBottomDrawerFollowUp } from '../../../src/components/bottom-drawer-follow-up'
 import { MobileMarkdown } from '../../../src/components/MobileMarkdown'
 import { MobileAgentIcon } from '../../../src/components/MobileAgentIcon'
 import { MobileWorkspaceNameInput } from '../../../src/components/MobileWorkspaceNameInput'
@@ -2297,6 +2298,9 @@ export default function MobileTasksScreen() {
   const [pendingGitHubProjectViewSelection, setPendingGitHubProjectViewSelection] =
     useState<GitHubProjectRef | null>(null)
   const [projectRowItem, setProjectRowItem] = useState<GitHubProjectRow | null>(null)
+  const taskDetail = useBottomDrawerFollowUp(setActionItem)
+  const projectRow = useBottomDrawerFollowUp(setProjectRowItem)
+  const repoPicker = useBottomDrawerFollowUp(setWorkspaceRepoPickerItem)
   const [projectRowDetail, setProjectRowDetail] = useState<DetailPayload | null>(null)
   const [projectRowDetailLoading, setProjectRowDetailLoading] = useState(false)
   const [projectRowDetailError, setProjectRowDetailError] = useState('')
@@ -10866,12 +10870,12 @@ export default function MobileTasksScreen() {
         options={workspaceRepoOptions}
         selected={workspaceRepos[0]?.id ?? ''}
         onSelect={(repoId) => {
-          if (workspaceRepoPickerItem) {
-            openWorkspaceCreate(workspaceRepoPickerItem, repoId)
+          const item = workspaceRepoPickerItem
+          if (item) {
+            repoPicker.closeThen(() => openWorkspaceCreate(item, repoId))
           }
-          setWorkspaceRepoPickerItem(null)
         }}
-        onClose={() => setWorkspaceRepoPickerItem(null)}
+        {...repoPicker.drawerProps}
         zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
       />
 
@@ -11622,10 +11626,7 @@ export default function MobileTasksScreen() {
         ) : null}
       </BottomDrawer>
 
-      <BottomDrawer
-        visible={taskUiReady && projectRowItem != null}
-        onClose={() => setProjectRowItem(null)}
-      >
+      <BottomDrawer visible={taskUiReady && projectRowItem != null} {...projectRow.drawerProps}>
         {projectRowItem ? (
           <View>
             <View style={styles.sheetHeader}>
@@ -12548,7 +12549,9 @@ export default function MobileTasksScreen() {
                 <Pressable
                   style={styles.actionRow}
                   disabled={creatingKey === `github-project:${projectRowItem.id}`}
-                  onPress={() => void createWorkspaceFromProjectRow(projectRowItem)}
+                  onPress={() =>
+                    projectRow.closeThen(() => void createWorkspaceFromProjectRow(projectRowItem))
+                  }
                 >
                   <Plus size={16} color={colors.textPrimary} />
                   <Text style={styles.actionText}>Create Workspace</Text>
@@ -12658,7 +12661,7 @@ export default function MobileTasksScreen() {
         ) : null}
       </BottomDrawer>
 
-      <BottomDrawer visible={taskUiReady && actionItem != null} onClose={() => setActionItem(null)}>
+      <BottomDrawer visible={taskUiReady && actionItem != null} {...taskDetail.drawerProps}>
         {actionItem ? (
           <View>
             <View style={styles.sheetHeader}>
@@ -13416,13 +13419,15 @@ export default function MobileTasksScreen() {
               <Pressable
                 style={styles.actionRow}
                 disabled={creatingKey === actionItem.key}
-                onPress={() => {
-                  if (actionItem.provider === 'linear' && workspaceRepos.length > 1) {
-                    setWorkspaceRepoPickerItem(actionItem)
-                    return
-                  }
-                  openWorkspaceCreate(actionItem)
-                }}
+                onPress={() =>
+                  taskDetail.closeThen(() => {
+                    if (actionItem.provider === 'linear' && workspaceRepos.length > 1) {
+                      setWorkspaceRepoPickerItem(actionItem)
+                      return
+                    }
+                    openWorkspaceCreate(actionItem)
+                  })
+                }
               >
                 <Plus size={16} color={colors.textPrimary} />
                 <Text style={styles.actionText}>
