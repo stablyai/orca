@@ -237,7 +237,7 @@ export function formatFlagHelp(flag: string): string {
       '--restore-window     Bring the target app/window forward before the operation',
     session: '--session <id>        Snapshot namespace for a related computer-use workflow',
     setup: '--setup run|skip|inherit Setup policy for repo-defined setup hooks',
-    terminal: '--terminal <handle>  Runtime-issued terminal handle',
+    terminal: '--terminal <selector> Runtime handle or stable pty:<ptyId>',
     text: '--text <text>          Text payload to send or type',
     'text-stdin': '--text-stdin          Read text payload from stdin',
     'task-id': '--task-id <id>        Task id to include in orchestration payload JSON',
