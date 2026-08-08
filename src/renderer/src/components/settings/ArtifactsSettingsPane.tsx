@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { ArrowRight, Files } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,17 @@ export function ArtifactsSettingsPane({
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }): React.JSX.Element {
   const openArtifactsPage = useAppStore((state) => state.openArtifactsPage)
+  const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
+  const connecting = useAppStore((state) => state.orcaProfileConnecting)
+  const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
+  const fetchAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
+  const signedIn = authStatus?.state === 'connected'
+
+  useEffect(() => {
+    if (!authStatus) {
+      void fetchAuthStatus()
+    }
+  }, [authStatus, fetchAuthStatus])
 
   return (
     <div className="divide-y divide-border">
@@ -25,6 +37,36 @@ export function ArtifactsSettingsPane({
         checked={settings.showArtifactsButton === true}
         onChange={() => void updateSettings({ showArtifactsButton: !settings.showArtifactsButton })}
       />
+      {!signedIn ? (
+        <section className="flex flex-wrap items-center gap-4 py-5">
+          <div className="min-w-0 flex-1 space-y-1">
+            <h3 className="text-sm font-medium">
+              {translate(
+                'auto.components.settings.artifacts.signInTitle',
+                'Sign in to share artifacts'
+              )}
+            </h3>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {translate(
+                'auto.components.settings.artifacts.signInDescription',
+                'Use your Orca account to upload artifacts and manage their public links.'
+              )}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            disabled={connecting || authStatus?.configured !== true}
+            onClick={() => void connect()}
+          >
+            {connecting
+              ? translate('auto.components.settings.artifacts.signingIn', 'Signing in…')
+              : authStatus?.state === 'reconnect-required'
+                ? translate('auto.components.settings.artifacts.signInAgain', 'Sign in again')
+                : translate('auto.components.settings.artifacts.signIn', 'Sign in to Orca')}
+          </Button>
+        </section>
+      ) : null}
       <section className="space-y-4 py-5">
         <div className="space-y-1">
           <h3 className="text-sm font-medium">

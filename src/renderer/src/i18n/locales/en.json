@@ -10389,7 +10389,10 @@
           "openArtifactsDescription": "View and delete links shared through your account.",
           "showButton": "Show Artifacts Button",
           "showButtonDescription": "Show the Artifacts shortcut in the sidebar.",
-          "openArtifactsDescriptionV2": "Preview, copy, and manage links shared through your account."
+          "openArtifactsDescriptionV2": "Preview, copy, and manage links shared through your account.",
+          "signInTitle": "Sign in to share artifacts",
+          "signInDescription": "Use your Orca account to upload artifacts and manage their public links.",
+          "signInAgain": "Sign in again"
         },
         "orcaAccount": {
           "connected": "Connected",
