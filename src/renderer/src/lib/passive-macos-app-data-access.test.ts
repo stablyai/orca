@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isMacAppDataPath, shouldPollActiveGitStatus } from './passive-macos-app-data-access'
+import {
+  hasInteractiveActiveGitStatusConsumer,
+  isMacAppDataPath,
+  shouldPollActiveGitStatus
+} from './passive-macos-app-data-access'
 import type { ActiveRightSidebarTab, OpenFile } from '@/store/slices/editor'
 
 const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
@@ -68,6 +72,29 @@ describe('shouldPollActiveGitStatus', () => {
     }
 
     expect(shouldPollActiveGitStatus(pollArgs({ openFiles: [openFile] }))).toBe(true)
+  })
+
+  it('does not treat open editor files as an interactive status consumer', () => {
+    const openFile: OpenFile = {
+      id: 'file-1',
+      worktreeId: 'wt-1',
+      filePath: '/Users/me/dev/repo/a.ts',
+      relativePath: 'a.ts',
+      language: 'typescript',
+      isDirty: false,
+      mode: 'edit'
+    }
+
+    expect(hasInteractiveActiveGitStatusConsumer(pollArgs({ openFiles: [openFile] }))).toBe(false)
+    expect(
+      hasInteractiveActiveGitStatusConsumer(
+        pollArgs({
+          openFiles: [openFile],
+          rightSidebarOpen: true,
+          rightSidebarTab: 'source-control'
+        })
+      )
+    ).toBe(true)
   })
 
   it('treats missing open files as no editor-visible worktree', () => {

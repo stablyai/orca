@@ -259,6 +259,26 @@ describe('useGitStatusPolling', () => {
     expect(globalThis.setInterval).not.toHaveBeenCalled()
   })
 
+  it('uses the slower cadence when an editor file is open without visible git UI', async () => {
+    const { gitStatus } = await usePollingOnce(
+      {
+        entries: [],
+        conflictOperation: 'unknown',
+        head: 'abc123',
+        branch: 'refs/heads/main'
+      },
+      {
+        stateOverrides: {
+          rightSidebarOpen: false,
+          openFiles: [{ id: '/repo/a.ts', worktreeId: worktree.id }]
+        }
+      }
+    )
+
+    expect(gitStatus).toHaveBeenCalledTimes(1)
+    expect(globalThis.setInterval).toHaveBeenCalledWith(expect.any(Function), 30_000)
+  })
+
   it('does not install the visible git status poll while disabled', async () => {
     const { state, gitStatus } = await usePollingOnce(
       {
