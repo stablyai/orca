@@ -9371,7 +9371,9 @@
               "micInput": "input",
               "micDevice": "device",
               "micAirpods": "airpods",
-              "micDefault": "system default"
+              "micDefault": "system default",
+              "transcriptionLanguageTitle": "Transcription Language",
+              "transcriptionLanguageDescription": "Spoken language sent to cloud speech-to-text transcription."
             }
           }
         },
@@ -10451,6 +10453,12 @@
           "openAutomationsDescription": "Create schedules and inspect recent runs.",
           "title": "Automations",
           "description": "Schedule agent work and choose whether Automations appears in the sidebar."
+        },
+        "VoiceTranscriptionLanguageSetting": {
+          "label": "Transcription Language",
+          "description": "Spoken language sent to cloud transcription. A fixed language improves accuracy over auto-detect.",
+          "cloudOnly": "Applies to cloud (OpenAI) speech models only. The selected local model has a fixed language.",
+          "autoDetect": "Auto-detect"
         }
       },
       "right": {

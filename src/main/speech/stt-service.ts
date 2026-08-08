@@ -52,7 +52,10 @@ export class SttService {
   // stale workers must not retain this service after error, exit, or teardown.
   private cleanupWorkerLifecycleListeners: (() => void) | null = null
 
-  constructor(modelManager: ModelManager) {
+  constructor(
+    modelManager: ModelManager,
+    private readonly readTranscriptionLanguage?: () => string | undefined
+  ) {
     this.modelManager = modelManager
   }
 
@@ -114,7 +117,11 @@ export class SttService {
         throw new Error(`Model not ready: ${modelState.status}`)
       }
 
-      this.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+      this.cloudSession = new OpenAiTranscriptionSession(
+        modelId,
+        readOpenAiSpeechApiKey,
+        this.readTranscriptionLanguage
+      )
       this.activeModelId = modelId
       this.activeHotwordsFilePath = undefined
       this.eventSink = sink

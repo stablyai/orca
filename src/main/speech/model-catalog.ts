@@ -143,6 +143,17 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'multilingual',
     sampleRate: 16000,
     streaming: false
+  },
+  {
+    id: 'openai-gpt-transcribe',
+    label: 'GPT Transcribe',
+    description:
+      'Newest cloud transcription with the highest accuracy. Requires an OpenAI API key.',
+    type: 'openai',
+    provider: 'openai',
+    language: 'multilingual',
+    sampleRate: 16000,
+    streaming: false
   }
 ]
 

@@ -71,6 +71,8 @@ export type VoiceSettings = {
   sttModel: string
   modelsDir: string
   language: string
+  /** ISO-639-1 hint for cloud transcription; ''/absent = auto-detect */
+  transcriptionLanguage?: string
   dictationMode: DictationMode
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]

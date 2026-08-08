@@ -2,7 +2,8 @@ import { resampleToRate } from './stt-audio-resample'
 
 export const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
   'openai-gpt-4o-mini-transcribe': 'gpt-4o-mini-transcribe',
-  'openai-gpt-4o-transcribe': 'gpt-4o-transcribe'
+  'openai-gpt-4o-transcribe': 'gpt-4o-transcribe',
+  'openai-gpt-transcribe': 'gpt-transcribe'
 }
 
 const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
@@ -14,6 +15,18 @@ type OpenAiTranscriptionResponse = {
   error?: {
     message?: unknown
   }
+}
+
+// Why: OpenAI rejects the whole request on a malformed language tag, so an
+// invalid stored value must degrade to auto-detect instead of breaking dictation.
+const ISO_639_1_LANGUAGE_RE = /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/
+
+export function normalizeTranscriptionLanguage(value: string | undefined): string | undefined {
+  const trimmed = value?.trim().toLowerCase()
+  if (!trimmed || !ISO_639_1_LANGUAGE_RE.test(trimmed)) {
+    return undefined
+  }
+  return trimmed
 }
 
 export function sanitizeOpenAiTranscriptionErrorMessage(message: string): string {
@@ -83,7 +96,8 @@ export class OpenAiTranscriptionSession {
 
   constructor(
     private readonly modelId: string,
-    private readonly readApiKey: () => string
+    private readonly readApiKey: () => string,
+    private readonly readLanguage?: () => string | undefined
   ) {}
 
   feedAudio(samples: Float32Array, sampleRate: number): void {
@@ -111,6 +125,11 @@ export class OpenAiTranscriptionSession {
     const form = new FormData()
     form.append('model', apiModel)
     form.append('response_format', 'json')
+    const language = normalizeTranscriptionLanguage(this.readLanguage?.())
+    if (language) {
+      // Why: an explicit input language improves accuracy and latency vs auto-detect.
+      form.append('language', language)
+    }
     // Why: OpenAI's transcription endpoint expects a multipart file object;
     // a named WAV blob avoids filesystem temp files and works in packaged apps.
     form.append('file', new Blob([new Uint8Array(wav)], { type: 'audio/wav' }), 'dictation.wav')

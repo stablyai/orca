@@ -100,6 +100,35 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
   },
   getOpenaiTranscriptionSearchEntry(),
   {
+    title: translate(
+      'auto.components.settings.voice.pane.search.transcriptionLanguageTitle',
+      'Transcription Language'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.transcriptionLanguageDescription',
+      'Spoken language sent to cloud speech-to-text transcription.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.322d457a0d',
+        'transcription'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.transcriptionLanguageKeyword',
+        'language'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.transcriptionPolishKeyword',
+        'polish'
+      )
+    ]
+  },
+  {
     title: translate('auto.components.settings.voice.pane.search.7e62cd7c41', 'Speech Model'),
     description: translate(
       'auto.components.settings.voice.pane.search.56defcd6c3',

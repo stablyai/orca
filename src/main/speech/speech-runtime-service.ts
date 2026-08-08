@@ -22,7 +22,12 @@ export function getSpeechModelManager(store: SpeechSettingsStore): ModelManager 
 
 export function getSpeechSttService(store: SpeechSettingsStore): SttService {
   if (!sttService) {
-    sttService = new SttService(getSpeechModelManager(store))
+    // Why: read at dictation time, not construction, so settings edits apply
+    // to the next session without restarting the app.
+    sttService = new SttService(
+      getSpeechModelManager(store),
+      () => store.getSettings().voice?.transcriptionLanguage
+    )
   }
   return sttService
 }

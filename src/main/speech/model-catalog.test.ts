@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getCatalogModel, SPEECH_MODEL_CATALOG } from './model-catalog'
+import { OPENAI_TRANSCRIPTION_MODEL_BY_ID } from './openai-transcription-client'
 
 describe('SPEECH_MODEL_CATALOG', () => {
   it('includes the Japanese Parakeet TDT-CTC model with a valid manifest', () => {
@@ -44,5 +45,20 @@ describe('SPEECH_MODEL_CATALOG', () => {
     expect(model?.sizeBytes).toBe(239_549_735)
     expect(model?.downloadFiles).toHaveLength(2)
     expect(model?.downloadFiles?.map(({ name }) => name)).toEqual(['model.int8.onnx', 'tokens.txt'])
+  })
+
+  it('registers GPT Transcribe as a cloud transcription model', () => {
+    const model = getCatalogModel('openai-gpt-transcribe')
+    expect(model).toBeDefined()
+    expect(model?.type).toBe('openai')
+    expect(model?.provider).toBe('openai')
+    expect(model?.language).toBe('multilingual')
+    expect(model?.streaming).toBe(false)
+  })
+
+  it('maps every cloud catalog model to an OpenAI API model id', () => {
+    for (const model of SPEECH_MODEL_CATALOG.filter((m) => m.provider === 'openai')) {
+      expect(OPENAI_TRANSCRIPTION_MODEL_BY_ID[model.id]).toBeTruthy()
+    }
   })
 })
