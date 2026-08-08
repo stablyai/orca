@@ -101,7 +101,7 @@ export const getTerminalKoreanWonSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'auto.components.settings.terminal.search.3595f8b54c',
-      'Controls whether pressing the Korean Won (₩) key sends a backquote (`) instead.'
+      'Controls whether pressing the Korean Won (₩) key sends a backquote (`) instead when a Korean input source is active.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),

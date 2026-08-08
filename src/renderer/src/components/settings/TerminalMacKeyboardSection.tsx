@@ -155,7 +155,7 @@ export function TerminalMacKeyboardSection({
         )}
         description={translate(
           'auto.components.settings.TerminalPane.f1f43e38f3',
-          'Controls whether pressing the Korean Won (₩) key sends a backquote (`) instead.'
+          'Controls whether pressing the Korean Won (₩) key sends a backquote (`) instead when a Korean input source is active.'
         )}
         keywords={[
           'terminal',
@@ -177,7 +177,7 @@ export function TerminalMacKeyboardSection({
           )}
           description={translate(
             'auto.components.settings.TerminalPane.7f535117e5',
-            'Pressing the Korean Won (₩) key sends a backquote (`) instead.'
+            'Pressing the Korean Won (₩) key sends a backquote (`) instead when a Korean input source is active.'
           )}
           checked={settings.terminalKoreanWonToBackquote ?? false}
           onChange={() =>

@@ -7576,8 +7576,8 @@
             "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
           },
           "fc01559dad": "Korean Won (₩) to Backquote (`)",
-          "f1f43e38f3": "Controls whether pressing the Korean Won (₩) key sends a backquote (`) instead.",
-          "7f535117e5": "Pressing the Korean Won (₩) key sends a backquote (`) instead."
+          "f1f43e38f3": "Controls whether pressing the Korean Won (₩) key sends a backquote (`) instead when a Korean input source is active.",
+          "7f535117e5": "Pressing the Korean Won (₩) key sends a backquote (`) instead when a Korean input source is active."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Preview {{value0}} theme",
@@ -9313,7 +9313,7 @@
               "keyword_editing": "editing"
             },
             "d6756003bf": "Korean Won (₩) to Backquote (`)",
-            "3595f8b54c": "Controls whether pressing the Korean Won (₩) key sends a backquote (`) instead."
+            "3595f8b54c": "Controls whether pressing the Korean Won (₩) key sends a backquote (`) instead when a Korean input source is active."
           },
           "windows": {
             "search": {
