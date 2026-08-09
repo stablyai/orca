@@ -51,6 +51,10 @@ import { registerKeybindingHandlers } from './keybindings'
 import { registerTelemetryHandlers } from './telemetry'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
+import {
+  pruneOrphanTerminalBackgrounds,
+  registerTerminalBackgroundHandlers
+} from './terminal-background'
 import { registerPluginHandlers } from './plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
@@ -199,6 +203,8 @@ export function registerCoreHandlers(
   registerBrowserHandlers()
   registerShellHandlers(store)
   registerPetHandlers()
+  registerTerminalBackgroundHandlers(store)
+  void pruneOrphanTerminalBackgrounds(store)
   registerSessionHandlers(store)
   registerUIHandlers(store)
   registerEmulatorFrameStreamHandlers()

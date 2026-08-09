@@ -186,6 +186,7 @@ import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../shared/source-control-group-order'
 import { normalizeAppIconId } from '../shared/app-icon'
+import { normalizeTerminalBackgroundImage } from '../shared/terminal-background-image'
 import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
 import {
   legacyTerminalScrollbackBytesToRows,
@@ -3441,6 +3442,9 @@ export class Store {
             terminalCustomThemes: normalizeTerminalCustomThemes(
               parsed.settings?.terminalCustomThemes
             ),
+            terminalBackgroundImage: normalizeTerminalBackgroundImage(
+              parsed.settings?.terminalBackgroundImage
+            ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
             mobilePairingCustomAddress,
             mobilePairingCustomAddresses,
@@ -5798,6 +5802,11 @@ export class Store {
     if ('terminalCustomThemes' in updates) {
       sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
         updates.terminalCustomThemes
+      )
+    }
+    if ('terminalBackgroundImage' in updates) {
+      sanitizedUpdates.terminalBackgroundImage = normalizeTerminalBackgroundImage(
+        updates.terminalBackgroundImage
       )
     }
     if ('terminalScrollbackRows' in updates) {

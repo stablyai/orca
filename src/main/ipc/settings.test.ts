@@ -375,6 +375,39 @@ describe('registerSettingsHandlers', () => {
     expect(agentAwakeService.setEnabled).not.toHaveBeenCalled()
   })
 
+  it('sanitizes terminalBackgroundImage through settings:set', () => {
+    store.getSettings.mockReturnValue({})
+    store.updateSettings.mockReturnValue({ terminalBackgroundImage: null })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => unknown
+
+    // References the renderer could not have gotten from main are dropped.
+    handler(settingsInvokeEvent, {
+      terminalBackgroundImage: {
+        id: '../evil',
+        fileName: '../../secrets.png',
+        mimeType: 'image/png'
+      }
+    })
+    const droppedUpdate = store.updateSettings.mock.calls[0][0] as Record<string, unknown>
+    expect(droppedUpdate.terminalBackgroundImage).toBeNull()
+
+    const validId = '01234567-89ab-4cde-8f01-23456789abcd'
+    const valid = {
+      id: validId,
+      fileName: `${validId}.png`,
+      mimeType: 'image/png',
+      label: 'sunset'
+    }
+    handler(settingsInvokeEvent, { terminalBackgroundImage: valid })
+    const acceptedUpdate = store.updateSettings.mock.calls[1][0] as Record<string, unknown>
+    expect(acceptedUpdate.terminalBackgroundImage).toEqual(valid)
+  })
+
   it('prepares local worktree roots when workspace directory changes', async () => {
     store.getSettings.mockReturnValue({ workspaceDir: '/old/workspaces', nestWorkspaces: false })
     store.updateSettings.mockReturnValue({ workspaceDir: '/new/workspaces', nestWorkspaces: false })

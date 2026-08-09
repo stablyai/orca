@@ -9012,7 +9012,9 @@
               "title": "테마 모드",
               "keyword_target": "대상",
               "keyword_editing": "편집"
-            }
+            },
+            "5c19a473d2": "배경 이미지",
+            "b40c4de821": "terminal 패널 뒤에 이미지를 표시합니다."
           },
           "windows": {
             "search": {
@@ -9655,6 +9657,19 @@
           "availability": "이용 가능:",
           "testFlight": "TestFlight",
           "androidApk": "Android APK"
+        },
+        "TerminalBackgroundImageSetting": {
+          "7de41b02c9": "배경 이미지를 설정하지 못했습니다.",
+          "5c19a473d2": "배경 이미지",
+          "b40c4de821": "terminal 패널 뒤에 이미지를 표시합니다.",
+          "19f2f04f3e": "배경 불투명도가 1 미만일 때 terminal 패널 뒤에 표시됩니다.",
+          "e0e4a53d38": "제거",
+          "a34c1e30d5": "변경…",
+          "4f6ab2c9e1": "이미지 선택…"
+        },
+        "TerminalBackgroundSection": {
+          "7c1f4a9e02": "배경",
+          "2d5b8c3f14": "terminal 배경 투명도 및 이미지."
         },
         "SkillUsageExampleDialog": {
           "copiedPrompt": "예시 프롬프트를 복사했습니다.",

@@ -10,6 +10,7 @@ import {
 import { assertRuntimeStatusCompatible } from '@/runtime/runtime-protocol-compat'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
+import { normalizeTerminalBackgroundImage } from '../../../../shared/terminal-background-image'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
@@ -69,6 +70,11 @@ function normalizeSettingsUpdates(
   if ('terminalCustomThemes' in updates) {
     sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
       updates.terminalCustomThemes
+    )
+  }
+  if ('terminalBackgroundImage' in updates) {
+    sanitizedUpdates.terminalBackgroundImage = normalizeTerminalBackgroundImage(
+      updates.terminalBackgroundImage
     )
   }
   if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {

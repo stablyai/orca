@@ -31,7 +31,7 @@ export const getManageSessionsSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
-export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
+export const getTerminalBackgroundSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.b36fd2416d', 'Background Opacity'),
     description: translate(
@@ -51,6 +51,26 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.terminal.search.7db59c4738', 'alpha')
     ]
   },
+  {
+    title: translate('auto.components.settings.terminal.search.5c19a473d2', 'Background Image'),
+    description: translate(
+      'auto.components.settings.terminal.search.b40c4de821',
+      'Show an image behind the terminal panes.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.f6dd9ff606',
+        'background'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.6f8a1d2e3b', 'image'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.7a9b2c3d4e', 'skin'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.8b0c3d4e5f', 'wallpaper'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.9c1d4e5f6a', 'picture')
+    ]
+  }
+])
+
+export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.72d0482137', 'Window Blur'),
     description: translate(

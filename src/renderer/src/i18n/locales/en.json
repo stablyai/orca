@@ -9327,6 +9327,8 @@
               "keyword_target": "target",
               "keyword_editing": "editing"
             },
+            "5c19a473d2": "Background Image",
+            "b40c4de821": "Show an image behind the terminal panes.",
             "d6756003bf": "Korean Won (₩) to Backquote (`)",
             "3595f8b54c": "Controls whether pressing the Korean Won (₩) key sends a backquote (`) instead when a Korean input source is active."
           },
@@ -9940,6 +9942,19 @@
           "availability": "Available on",
           "testFlight": "TestFlight",
           "androidApk": "Android APK"
+        },
+        "TerminalBackgroundImageSetting": {
+          "7de41b02c9": "Failed to set the background image.",
+          "5c19a473d2": "Background Image",
+          "b40c4de821": "Show an image behind the terminal panes.",
+          "19f2f04f3e": "Shown behind the terminal panes while Background Opacity is below 1.",
+          "e0e4a53d38": "Remove",
+          "a34c1e30d5": "Change…",
+          "4f6ab2c9e1": "Choose Image…"
+        },
+        "TerminalBackgroundSection": {
+          "7c1f4a9e02": "Background",
+          "2d5b8c3f14": "Terminal background transparency and image."
         },
         "SkillUsageExampleDialog": {
           "copiedPrompt": "Copied example prompt.",

@@ -30,6 +30,7 @@ import {
 import {
   getManageSessionsSearchEntries,
   getTerminalSetupScriptSearchEntries,
+  getTerminalBackgroundSearchEntries,
   getTerminalWindowSearchEntries
 } from './terminal-window-setup-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -60,6 +61,7 @@ export {
 } from './terminal-advanced-platform-search'
 export {
   getManageSessionsSearchEntries,
+  getTerminalBackgroundSearchEntries,
   getTerminalWindowSearchEntries,
   getTerminalSetupScriptSearchEntries
 } from './terminal-window-setup-search'
@@ -76,6 +78,7 @@ const getTerminalAppearanceSearchEntriesWithoutWarp = createLocalizedCatalog(
     ...getTerminalThemeTargetSearchEntries(),
     ...getTerminalDarkThemeSearchEntries(),
     ...getTerminalLightThemeSearchEntries(),
+    ...getTerminalBackgroundSearchEntries(),
     ...getTerminalWindowSearchEntries(),
     ...getTerminalGhosttyImportSearchEntries()
   ]

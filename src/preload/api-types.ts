@@ -296,6 +296,7 @@ import type {
 } from '../shared/pty-renderer-delivery-health'
 import type { TerminalViewAttributes } from '../shared/terminal-view-attributes'
 import type { PtyMainDeliveryDiagnostics } from '../shared/pty-delivery-diagnostics'
+import type { TerminalBackgroundImage } from '../shared/terminal-background-image'
 import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
@@ -2608,6 +2609,11 @@ export type PreloadApi = {
     importPetBundle: () => Promise<CustomPet | null>
     read: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<ArrayBuffer | null>
     delete: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<void>
+  }
+  terminalBackground: {
+    pick: () => Promise<TerminalBackgroundImage | null>
+    read: (id: string, fileName: string) => Promise<ArrayBuffer | null>
+    delete: (id: string, fileName: string) => Promise<void>
   }
   browser: BrowserApi
   emulator: EmulatorApi

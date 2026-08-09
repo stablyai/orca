@@ -9027,7 +9027,9 @@
               "title": "Modo del tema",
               "keyword_target": "destino",
               "keyword_editing": "edición"
-            }
+            },
+            "5c19a473d2": "Imagen de fondo",
+            "b40c4de821": "Muestra una imagen detrás de los paneles del terminal."
           },
           "windows": {
             "search": {
@@ -9655,6 +9657,19 @@
           "availability": "Disponible en",
           "testFlight": "TestFlight",
           "androidApk": "APK de Android"
+        },
+        "TerminalBackgroundImageSetting": {
+          "7de41b02c9": "No se pudo establecer la imagen de fondo.",
+          "5c19a473d2": "Imagen de fondo",
+          "b40c4de821": "Muestra una imagen detrás de los paneles del terminal.",
+          "19f2f04f3e": "Se muestra detrás de los paneles del terminal cuando la opacidad del fondo es inferior a 1.",
+          "e0e4a53d38": "Quitar",
+          "a34c1e30d5": "Cambiar…",
+          "4f6ab2c9e1": "Elegir imagen…"
+        },
+        "TerminalBackgroundSection": {
+          "7c1f4a9e02": "Fondo",
+          "2d5b8c3f14": "Transparencia e imagen de fondo del terminal."
         },
         "SkillUsageExampleDialog": {
           "copiedPrompt": "Prompt de ejemplo copiado.",

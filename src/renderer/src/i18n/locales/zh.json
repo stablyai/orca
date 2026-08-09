@@ -9024,7 +9024,9 @@
               "title": "主题模式",
               "keyword_target": "目标",
               "keyword_editing": "编辑"
-            }
+            },
+            "5c19a473d2": "背景图片",
+            "b40c4de821": "在终端窗格后面显示图片。"
           },
           "windows": {
             "search": {
@@ -9667,6 +9669,19 @@
           "availability": "可用平台：",
           "testFlight": "TestFlight",
           "androidApk": "Android APK"
+        },
+        "TerminalBackgroundImageSetting": {
+          "7de41b02c9": "无法设置背景图片。",
+          "5c19a473d2": "背景图片",
+          "b40c4de821": "在终端窗格后面显示图片。",
+          "19f2f04f3e": "当背景不透明度低于 1 时，显示在终端窗格后面。",
+          "e0e4a53d38": "移除",
+          "a34c1e30d5": "更改…",
+          "4f6ab2c9e1": "选择图片…"
+        },
+        "TerminalBackgroundSection": {
+          "7c1f4a9e02": "背景",
+          "2d5b8c3f14": "终端背景透明度和图片。"
         },
         "SkillUsageExampleDialog": {
           "copiedPrompt": "复制示例提示。",

@@ -39,6 +39,7 @@ import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentLaunchConfig, SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
+import type { TerminalBackgroundImage } from './terminal-background-image'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { ForkSyncMode } from './git-fork-sync'
@@ -2820,6 +2821,10 @@ export type GlobalSettings = {
   terminalPaneOpacityTransitionMs: number
   terminalDividerThicknessPx: number
   terminalBackgroundOpacity?: number
+  /** Image painted behind the terminal panes; visible when
+   *  terminalBackgroundOpacity < 1. Bytes live in userData/terminal-backgrounds,
+   *  settings hold only the main-minted reference. */
+  terminalBackgroundImage?: TerminalBackgroundImage | null
   terminalColorOverrides?: TerminalColorOverrides
   terminalPaddingX?: number
   terminalPaddingY?: number

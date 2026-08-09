@@ -18,6 +18,7 @@ import {
   getTerminalWarpImportSearchEntries,
   getTerminalYamlImportSearchEntries,
   getTerminalTypographySearchEntries,
+  getTerminalBackgroundSearchEntries,
   getTerminalWindowSearchEntries
 } from './terminal-search'
 import { Button } from '../ui/button'
@@ -26,6 +27,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
 import { TerminalThemeCatalogSection } from './TerminalThemeSections'
+import { TerminalBackgroundSection } from './TerminalBackgroundSection'
 import { TerminalWindowSection } from './TerminalWindowSection'
 import { TerminalCursorAppearanceSection } from './TerminalCursorAppearanceSection'
 import { TerminalPaneAppearanceSection } from './TerminalPaneAppearanceSection'
@@ -109,8 +111,10 @@ export function TerminalAppearanceSection({
   const cursorMatches = matchesSettingsSearch(searchQuery, getTerminalCursorSearchEntries())
   const paneMatches = matchesSettingsSearch(searchQuery, getTerminalPaneAppearanceSearchEntries())
   const windowMatches = matchesSettingsSearch(searchQuery, getTerminalWindowSearchEntries())
+  const backgroundMatches = matchesSettingsSearch(searchQuery, getTerminalBackgroundSearchEntries())
+  const showBackground = !isSearching || backgroundMatches
   const themeCatalogMatches = matchesSettingsSearch(searchQuery, themeCatalogSearchEntries)
-  const previewAdvancedMatches = cursorMatches || paneMatches || windowMatches
+  const previewAdvancedMatches = cursorMatches || paneMatches || windowMatches || backgroundMatches
   const showThemeCatalog = !isSearching || themeCatalogMatches || previewAdvancedMatches
   const primaryTypographyMatches = matchesSettingsSearch(
     searchQuery,
@@ -246,6 +250,10 @@ export function TerminalAppearanceSection({
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {showBackground ? (
+        <TerminalBackgroundSection settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showThemeCatalog ? (
