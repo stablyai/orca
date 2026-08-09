@@ -14,6 +14,7 @@ import type { NativeChatMessage } from '../../shared/native-chat-types'
 let tempDirs: string[] = []
 
 afterEach(() => {
+  vi.useRealTimers()
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -378,6 +379,5 @@ describe('subscribeOpenCodeNativeChatTranscript', () => {
     await vi.advanceTimersByTimeAsync(200)
     expect(onInitialSnapshot).not.toHaveBeenCalled()
     expect(onAppend).not.toHaveBeenCalled()
-    vi.useRealTimers()
   })
 })
