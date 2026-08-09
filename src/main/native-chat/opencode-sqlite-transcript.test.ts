@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -8,8 +8,10 @@ import {
   mapOpenCodeNativeChatMessage,
   openCodeMessageSignature,
   readOpenCodeNativeChatTranscriptTail,
-  resolveOpenCodeNativeChatDbPath
+  resolveOpenCodeNativeChatDbPath,
+  isRetryableOpenCodeSqliteError
 } from './opencode-sqlite-transcript'
+import SyncDatabase from '../sqlite/sync-database'
 
 let tempDirs: string[] = []
 
@@ -25,6 +27,10 @@ function createTempDb(): { db: DatabaseSync; path: string } {
   tempDirs.push(dir)
   const path = join(dir, 'opencode.db')
   return { db: new DatabaseSync(path), path }
+}
+
+function openSchemaCheckDatabase(path: string): SyncDatabase {
+  return new SyncDatabase(path, { readonly: true })
 }
 
 function applyOpenCodeSchema(db: DatabaseSync): void {
@@ -442,14 +448,40 @@ describe('canReadOpenCodeChatSession', () => {
     db.exec(
       'CREATE TABLE session (id TEXT PRIMARY KEY, time_created INTEGER, time_updated INTEGER)'
     )
-    expect(canReadOpenCodeChatSession(db)).toBe(false)
     db.close()
+    const unreadableDb = openSchemaCheckDatabase(path)
+    expect(canReadOpenCodeChatSession(unreadableDb)).toBe(false)
+    unreadableDb.close()
 
-    const { db: completeDb } = createTempDb()
+    const { db: completeDb, path: completePath } = createTempDb()
     applyOpenCodeSchema(completeDb)
-    expect(canReadOpenCodeChatSession(completeDb)).toBe(true)
     completeDb.close()
+    const readableDb = openSchemaCheckDatabase(completePath)
+    expect(canReadOpenCodeChatSession(readableDb)).toBe(true)
+    readableDb.close()
     expect(path.endsWith('opencode.db')).toBe(true)
+  })
+
+  it('requires the columns used by the reader before issuing transcript queries', () => {
+    const { db, path } = createTempDb()
+    db.exec(`
+      CREATE TABLE session (id TEXT PRIMARY KEY);
+      CREATE TABLE message (
+        id TEXT PRIMARY KEY,
+        session_id TEXT,
+        time_created INTEGER,
+        data TEXT
+      );
+      CREATE TABLE part (
+        message_id TEXT,
+        time_created INTEGER,
+        data TEXT
+      );
+    `)
+    db.close()
+    const unreadableDb = openSchemaCheckDatabase(path)
+    expect(canReadOpenCodeChatSession(unreadableDb)).toBe(false)
+    unreadableDb.close()
   })
 })
 
@@ -472,6 +504,44 @@ describe('readOpenCodeNativeChatTranscriptTail', () => {
     ])
     expect(result.hasMore).toBe(false)
     expect(result.beforeOffset).toBe(0)
+  })
+
+  it('reads a consistent WAL snapshot while a writer transaction is open', async () => {
+    const { db, path } = buildOpenCodeFixture()
+    db.close()
+    const writer = new DatabaseSync(path)
+    writer.exec('PRAGMA journal_mode = WAL')
+    writer.exec('BEGIN IMMEDIATE')
+    insertMessage(writer, {
+      id: 'msg_uncommitted',
+      sessionId: 'ses_1',
+      role: 'assistant',
+      timeCreated: 1_777_634_004_000
+    })
+    insertPart(writer, {
+      id: 'part_uncommitted',
+      messageId: 'msg_uncommitted',
+      sessionId: 'ses_1',
+      timeCreated: 1_777_634_004_000,
+      data: JSON.stringify({ type: 'text', text: 'not committed yet' })
+    })
+
+    const result = await readOpenCodeNativeChatTranscriptTail({
+      dbPath: path,
+      sessionId: 'ses_1',
+      limit: 40
+    })
+    writer.exec('ROLLBACK')
+    writer.close()
+    if ('error' in result) {
+      throw new Error(result.error)
+    }
+    expect(result.messages.map((message) => message.id)).toEqual([
+      'msg_1',
+      'msg_2',
+      'msg_3',
+      'msg_4'
+    ])
   })
 
   it('pages older history with beforeOffset without overlap', async () => {
@@ -621,6 +691,93 @@ describe('readOpenCodeNativeChatTranscriptTail', () => {
     expect(older.beforeOffset).toBe(0)
   })
 
+  it('orders equal-time messages and excludes parts from another session', async () => {
+    const { db, path } = createTempDb()
+    applyOpenCodeSchema(db)
+    insertSession(db, 'ses_ordered')
+    insertMessage(db, { id: 'msg_b', sessionId: 'ses_ordered', role: 'user', timeCreated: 5 })
+    insertPart(db, {
+      id: 'part_b',
+      messageId: 'msg_b',
+      sessionId: 'ses_ordered',
+      timeCreated: 5,
+      data: JSON.stringify({ type: 'text', text: 'B' })
+    })
+    insertMessage(db, { id: 'msg_a', sessionId: 'ses_ordered', role: 'assistant', timeCreated: 5 })
+    insertPart(db, {
+      id: 'part_a',
+      messageId: 'msg_a',
+      sessionId: 'ses_ordered',
+      timeCreated: 5,
+      data: JSON.stringify({ type: 'text', text: 'A' })
+    })
+    insertMessage(db, {
+      id: 'msg_wrong_session',
+      sessionId: 'ses_ordered',
+      role: 'user',
+      timeCreated: 6
+    })
+    insertPart(db, {
+      id: 'part_wrong_session',
+      messageId: 'msg_wrong_session',
+      sessionId: 'ses_other',
+      timeCreated: 6,
+      data: JSON.stringify({ type: 'text', text: 'must not leak' })
+    })
+    db.close()
+
+    const result = await readOpenCodeNativeChatTranscriptTail({
+      dbPath: path,
+      sessionId: 'ses_ordered',
+      limit: 40
+    })
+    if ('error' in result) {
+      throw new Error(result.error)
+    }
+    expect(result.messages.map((message) => message.id)).toEqual(['msg_a', 'msg_b'])
+  })
+
+  it('deduplicates repeated message ids from a degraded schema', async () => {
+    const { db, path } = createTempDb()
+    db.exec(`
+      CREATE TABLE session (id TEXT);
+      CREATE TABLE message (id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+      CREATE TABLE part (id TEXT, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+    `)
+    db.prepare('INSERT INTO session (id) VALUES (?)').run('ses_duplicate')
+    const messageData = JSON.stringify({ role: 'assistant' })
+    db.prepare('INSERT INTO message VALUES (?, ?, ?, ?)').run(
+      'duplicate',
+      'ses_duplicate',
+      1,
+      messageData
+    )
+    db.prepare('INSERT INTO message VALUES (?, ?, ?, ?)').run(
+      'duplicate',
+      'ses_duplicate',
+      2,
+      messageData
+    )
+    db.prepare('INSERT INTO part VALUES (?, ?, ?, ?, ?)').run(
+      'part_1',
+      'duplicate',
+      'ses_duplicate',
+      1,
+      JSON.stringify({ type: 'text', text: 'one' })
+    )
+    db.close()
+
+    const result = await readOpenCodeNativeChatTranscriptTail({
+      dbPath: path,
+      sessionId: 'ses_duplicate',
+      limit: 40
+    })
+    if ('error' in result) {
+      throw new Error(result.error)
+    }
+    expect(result.messages.map((message) => message.id)).toEqual(['duplicate'])
+  })
+
   it('returns notFound for a missing session and a missing DB file', async () => {
     const { db, path } = buildOpenCodeFixture()
     db.close()
@@ -649,5 +806,38 @@ describe('readOpenCodeNativeChatTranscriptTail', () => {
       limit: 40
     })
     expect(result).toEqual({ error: 'Transcript unavailable' })
+  })
+
+  it('normalizes a corrupt database into a safe transcript error', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-opencode-corrupt-'))
+    tempDirs.push(dir)
+    const path = join(dir, 'opencode.db')
+    writeFileSync(path, 'not a sqlite database')
+    await expect(
+      readOpenCodeNativeChatTranscriptTail({ dbPath: path, sessionId: 'ses_1', limit: 40 })
+    ).resolves.toEqual({ error: 'Transcript unavailable' })
+  })
+
+  it('returns a retryable result when a writer holds an exclusive lock', async () => {
+    const { db, path } = buildOpenCodeFixture()
+    db.close()
+    const writer = new DatabaseSync(path)
+    writer.exec('BEGIN EXCLUSIVE')
+    const result = await readOpenCodeNativeChatTranscriptTail({
+      dbPath: path,
+      sessionId: 'ses_1',
+      limit: 40
+    })
+    writer.exec('ROLLBACK')
+    writer.close()
+    expect(result).toMatchObject({ retryable: true, error: 'SQLite database is locked' })
+  })
+
+  it('recognizes busy and locked SQLite errors as retryable', () => {
+    expect(isRetryableOpenCodeSqliteError({ code: 'SQLITE_BUSY' })).toBe(true)
+    expect(isRetryableOpenCodeSqliteError(new Error('database is locked'))).toBe(true)
+    expect(isRetryableOpenCodeSqliteError(new Error('database disk image is malformed'))).toBe(
+      false
+    )
   })
 })

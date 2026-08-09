@@ -20,9 +20,9 @@ export type ReadTranscriptResult =
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
     }
-  // notFound marks a retry-worthy miss (transcript not flushed to disk yet,
-  // #8401) as opposed to a real parse/IO error callers surface immediately.
-  | { error: string; notFound?: true }
+  // notFound covers first-flush misses; retryable covers transient provider
+  // errors such as a short SQLite writer lock.
+  | { error: string; notFound?: true; retryable?: true }
 
 export type ReadTranscriptOptions = ResolveSessionFileOptions & {
   /** Resolve directly to this file, skipping path discovery (used by tests). */

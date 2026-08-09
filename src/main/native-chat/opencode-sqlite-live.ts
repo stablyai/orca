@@ -54,6 +54,11 @@ export async function reconcileOpenCodeNativeChat(args: ReconcileOpenCodeArgs): 
   })
 
   if ('error' in result) {
+    // A busy WAL is a transient writer/read race; keep the last good snapshot
+    // and let the next scheduled poll retry without flipping the UI to error.
+    if (result.retryable) {
+      return
+    }
     if (!result.notFound && !state.errorNotified) {
       state.errorNotified = true
       args.onInitialSnapshot([], false, 0, result.error)
@@ -108,9 +113,13 @@ export function subscribeOpenCodeNativeChatTranscript(args: {
   /** Test-only override for the reconcile cadence. */
   reconciliationIntervalMs?: number
 }): NativeChatTranscriptSubscription {
+  const requestedLimit =
+    typeof args.initialLimit === 'number' && !Number.isNaN(args.initialLimit)
+      ? Math.floor(args.initialLimit)
+      : 40
   const limitedWindow = Math.max(
     1,
-    Math.min(Math.floor(args.initialLimit ?? 40), OPENCODE_RECONCILE_WINDOW_MAX_CAP)
+    Math.min(requestedLimit, OPENCODE_RECONCILE_WINDOW_MAX_CAP)
   )
   let closed = false
   const state = createOpenCodeNativeChatState()
@@ -127,9 +136,16 @@ export function subscribeOpenCodeNativeChatTranscript(args: {
       sessionId: args.sessionId,
       windowLimit: limitedWindow,
       state,
-      onInitialSnapshot: (messages, hasMore, beforeOffset, error) =>
-        emitInitial(messages, hasMore, beforeOffset, error),
-      onAppend: (messages) => emitAppend(messages)
+      onInitialSnapshot: (messages, hasMore, beforeOffset, error) => {
+        if (!closed) {
+          emitInitial(messages, hasMore, beforeOffset, error)
+        }
+      },
+      onAppend: (messages) => {
+        if (!closed) {
+          emitAppend(messages)
+        }
+      }
     })
   }
 
