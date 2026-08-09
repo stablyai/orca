@@ -268,7 +268,6 @@ export default function MonacoEditor({
     editor: mountedEditor,
     worktreeId,
     filePath,
-    relativePath,
     enabled: settings?.enableInlineGitBlame !== false
   })
 

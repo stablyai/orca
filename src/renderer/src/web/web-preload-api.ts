@@ -2038,10 +2038,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       })
     },
     blame: async ({ worktreePath, filePath }) => {
-      const file = await resolveRuntimeFilePath(filePath, worktreePath)
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.blame', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        filePath: file.relativePath
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        filePath
       })
     },
     conflictOperation: async ({ worktreePath }) => {

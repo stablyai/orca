@@ -281,20 +281,16 @@ export class RuntimeGitCommands {
     })
   }
 
-  async getRuntimeGitBlame(
-    worktreeSelector: string,
-    filePath: string
-  ): Promise<GitBlameResult> {
+  async getRuntimeGitBlame(worktreeSelector: string, filePath: string): Promise<GitBlameResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.getBlame(target.worktree.path, relativePath)
+      return provider.getBlame(target.worktree.path, filePath)
     }
-    return getGitBlame(target.worktree.path, relativePath, localGitOptionsForTarget(target))
+    return getGitBlame(target.worktree.path, filePath, localGitOptionsForTarget(target))
   }
 
   async getRuntimeGitConflictOperation(worktreeSelector: string): Promise<GitConflictOperation> {

@@ -97,6 +97,7 @@ import {
   resolveAuthorizedPath,
   resolveRegisteredWorktreePath,
   validateGitRelativeFilePath,
+  isDescendantOrEqual,
   isENOENT,
   authorizeExternalPath
 } from './filesystem-auth'
@@ -1309,7 +1310,13 @@ export function registerFilesystemHandlers(
         return provider.getBlame(args.worktreePath, args.filePath)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const filePath =
+        resolve(args.filePath) === args.filePath
+          ? args.filePath
+          : validateGitRelativeFilePath(worktreePath, args.filePath)
+      if (!isDescendantOrEqual(filePath, worktreePath)) {
+        throw new Error('Access denied: git file path escapes the selected worktree')
+      }
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,

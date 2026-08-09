@@ -22,24 +22,17 @@ type UseGitBlameProps = {
   editor: editor.IStandaloneCodeEditor | null
   worktreeId?: string
   filePath: string
-  relativePath: string
   enabled: boolean
 }
 
-export function useGitBlame({
-  editor,
-  worktreeId,
-  filePath,
-  relativePath,
-  enabled
-}: UseGitBlameProps): void {
+export function useGitBlame({ editor, worktreeId, filePath, enabled }: UseGitBlameProps): void {
   const enabledRef = useRef(enabled)
   enabledRef.current = enabled
-  const cacheKey = worktreeId && relativePath ? `${worktreeId}:${relativePath}` : null
+  const cacheKey = worktreeId && filePath ? `${worktreeId}:${filePath}` : null
 
   useEffect(() => {
     const ed = editor
-    if (!ed || !enabledRef.current || !worktreeId || !cacheKey) {
+    if (!ed || !enabledRef.current || !worktreeId || !cacheKey || !filePath) {
       return
     }
     const state = useAppStore.getState()
@@ -65,9 +58,9 @@ export function useGitBlame({
         {
           range: {
             startLineNumber: position.lineNumber,
-            startColumn: Number.MAX_VALUE,
+            startColumn: 1,
             endLineNumber: position.lineNumber,
-            endColumn: Number.MAX_VALUE
+            endColumn: ed.getModel()?.getLineMaxColumn(position.lineNumber) ?? 1
           },
           options: {
             after: {
@@ -98,7 +91,7 @@ export function useGitBlame({
           worktreePath: worktree.path,
           connectionId: getConnectionIdForFile(worktreeId, filePath) ?? undefined
         },
-        relativePath
+        filePath
       )
     blameCache.set(cacheKey, promise)
     void promise
@@ -125,5 +118,5 @@ export function useGitBlame({
       disposeSub.dispose()
       decorations.clear()
     }
-  }, [cacheKey, editor, filePath, relativePath, worktreeId])
+  }, [cacheKey, editor, filePath, worktreeId])
 }
