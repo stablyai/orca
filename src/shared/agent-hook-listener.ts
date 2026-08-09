@@ -1777,6 +1777,43 @@ function extractOpenCodeToolFields(
       interactivePrompt: deriveInteractivePrompt('AskUserQuestion', toolInputSource)
     }
   }
+  if (eventName === 'PermissionRequest') {
+    // OpenCode wraps permission details in `permission` instead of the
+    // Claude-shaped `tool_name`/`tool_input` fields. Keep this optional path
+    // fail-closed when the provider omits a usable permission type.
+    const permission =
+      typeof hookPayload.permission === 'object' && hookPayload.permission !== null
+        ? (hookPayload.permission as Record<string, unknown>)
+        : undefined
+    const permissionName =
+      typeof hookPayload.permission === 'string' ? hookPayload.permission.trim() : undefined
+    const permissionToolName = permission
+      ? readFirstString(permission, ['tool', 'toolName', 'tool_name', 'type', 'name'])
+      : undefined
+    const toolName =
+      readFirstString(hookPayload, [
+        'toolName',
+        'tool_name',
+        'tool',
+        'name',
+        'permissionType',
+        'type'
+      ]) ?? permissionToolName ?? permissionName
+    const toolInputSource = hasOwnField(hookPayload, 'tool_input')
+      ? hookPayload.tool_input
+      : (permission ?? hookPayload.input ?? hookPayload.arguments)
+    const toolInput =
+      deriveToolInputPreview(toolName, toolInputSource) ??
+      deriveFallbackToolInputPreview(toolInputSource)
+    return toolUpdate(
+      {
+        toolName,
+        toolInput,
+        interactivePrompt: deriveInteractivePrompt(toolName, toolInputSource, eventName)
+      },
+      { hasToolInputField: toolInputSource !== undefined }
+    )
+  }
   return {}
 }
 
