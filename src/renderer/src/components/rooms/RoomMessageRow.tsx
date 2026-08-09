@@ -1,17 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type React from 'react'
-import {
-  Check,
-  Copy,
-  CornerUpLeft,
-  Paperclip,
-  Pencil,
-  Pin,
-  RotateCcw,
-  Trash2,
-  X
-} from 'lucide-react'
-import { toast } from 'sonner'
+import { Check, Copy, CornerUpLeft, Pencil, Pin, RotateCcw, Trash2, X } from 'lucide-react'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -19,31 +8,12 @@ import { roomRpc } from '@/runtime/runtime-rooms-client'
 import { cn } from '@/lib/utils'
 import type { RoomMessage } from '../../../../shared/rooms'
 import type { RoomData } from './use-room-data'
-import { downloadRoomAttachment } from './room-attachment-transfer'
 import { showRoomActionError } from './room-action-error'
+import { RoomMessageAttachments } from './RoomAttachments'
 import { RoomAuthorAvatar } from './RoomAuthorAvatar'
 import { RoomCompletedActivityTimeline } from './RoomActivityTimeline'
 import { completedRoomActivity } from './room-activity-timeline'
 import { AgentSubagentTurnLink } from '../agent-subagents/AgentSubagentContext'
-
-function downloadAttachment(
-  data: RoomData,
-  message: RoomMessage,
-  attachment: RoomMessage['attachments'][number]
-): void {
-  const toastId = toast.loading(
-    translate('rooms.attachment.downloading', 'Downloading {{fileName}}…', {
-      fileName: attachment.fileName
-    })
-  )
-  void downloadRoomAttachment(data.target, message.roomId, attachment).then(
-    (path) =>
-      path
-        ? toast.success(translate('rooms.attachment.saved', 'Attachment saved'), { id: toastId })
-        : toast.dismiss(toastId),
-    (error) => toast.error(error instanceof Error ? error.message : String(error), { id: toastId })
-  )
-}
 
 export function RoomMessageRow({
   data,
@@ -170,21 +140,7 @@ export function RoomMessageRow({
               />
             </div>
           )}
-          {message.attachments.length > 0 ? (
-            <div className="mt-1 flex flex-wrap justify-end gap-1.5">
-              {message.attachments.map((attachment) => (
-                <button
-                  key={attachment.id}
-                  type="button"
-                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-                  onClick={() => downloadAttachment(data, message, attachment)}
-                >
-                  <Paperclip className="size-3" />
-                  {attachment.fileName}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          <RoomMessageAttachments data={data} message={message} align="end" />
           {failedDelivery ? (
             <button
               type="button"
@@ -300,21 +256,7 @@ export function RoomMessageRow({
           allowFileUriLinks
         />
       )}
-      {message.attachments.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {message.attachments.map((attachment) => (
-            <button
-              key={attachment.id}
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-              onClick={() => downloadAttachment(data, message, attachment)}
-            >
-              <Paperclip className="size-3" />
-              {attachment.fileName}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <RoomMessageAttachments data={data} message={message} />
       {failedDelivery ? (
         <button
           type="button"

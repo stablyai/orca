@@ -9,6 +9,10 @@ import type {
 export type UiWindowApi = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   readSelectionClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
+  readClipboardImage: () => Promise<{
+    content: ArrayBuffer
+    mimeType: 'image/png'
+  } | null>
   saveClipboardImageAsTempFile: (args?: {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null

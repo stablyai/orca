@@ -106,6 +106,16 @@ export function installNativeFileDropHandlers(): void {
       if (event.dataTransfer?.types.includes(ORCA_INTERNAL_FILE_DRAG_TYPE)) {
         return
       }
+      if (
+        event
+          .composedPath()
+          .some(
+            (entry) =>
+              entry instanceof HTMLElement && entry.dataset.roomAttachmentDropTarget === 'true'
+          )
+      ) {
+        return
+      }
       event.preventDefault()
       event.stopPropagation()
       const files = event.dataTransfer?.files
