@@ -99,7 +99,11 @@ export function isClaudeAgent(title: string): boolean {
   if (containsBrailleSpinner(title)) {
     // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
     // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
-    return !isCursorAgentTitle(title) && !lower.includes('openclaude')
+    return (
+      !isCursorAgentTitle(title) &&
+      !lower.includes('openclaude') &&
+      !titleHasAgentName(title, 'bullet')
+    )
   }
   // Why: permission/action-required Claude titles can omit the usual prefixes.
   // Token-match so cwd/worktree titles like "claude-scratch" do not become
@@ -184,6 +188,9 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }
+  if (titleHasAgentName(title, 'bullet')) {
+    return 'Bullet'
+  }
   // Why: `cursor` is ordinary editor vocabulary, not identity. Match Cursor's closed
   // title set (mirrors @cursor routing), before `isClaudeAgent` claims the braille frame.
   if (isCursorAgentTitle(title)) {
@@ -222,6 +229,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   OpenCode: 'opencode',
   'MiMo Code': 'mimo-code',
   Aider: 'aider',
+  Bullet: 'bullet',
   Cursor: 'cursor',
   Droid: 'droid',
   Hermes: 'hermes',

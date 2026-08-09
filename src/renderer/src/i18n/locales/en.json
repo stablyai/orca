@@ -422,7 +422,8 @@
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
-          "mimo_code_label": "MiMo Code"
+          "mimo_code_label": "MiMo Code",
+          "bullet_label": "Bullet"
         },
         "skill": {
           "cli": {
