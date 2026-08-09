@@ -31,6 +31,7 @@ vi.mock('react-native-gesture-handler', () => {
 })
 
 vi.mock('lucide-react-native', () => ({
+  AlertTriangle: 'AlertTriangle',
   ArrowDown: 'ArrowDown',
   ChevronsDownUp: 'ChevronsDownUp',
   ChevronsUpDown: 'ChevronsUpDown',
@@ -71,6 +72,8 @@ type Overrides = {
   onClearSendError?: () => void
   inputLockReason?: 'disconnected' | 'waiting' | null
   onSend?: (text: string) => Promise<boolean>
+  deliveryFailed?: boolean
+  onShowTerminal?: () => void
 }
 
 function suppressRendererWarning(): () => void {
@@ -168,6 +171,22 @@ describe('MobileNativeChatView', () => {
 
     expect(banners()).toHaveLength(1)
     expect(bannerText()).toContain('Permission reply failed')
+  })
+
+  it('shows persistent delivery recovery with a terminal action', async () => {
+    const onShowTerminal = vi.fn()
+    await render({ deliveryFailed: true, onShowTerminal })
+
+    expect(bannerText()).toContain('Message wasn’t sent')
+    expect(bannerText()).toContain('Your message is still in the composer.')
+    const action = renderer!.root.find(
+      (node) =>
+        node.type === 'Pressable' &&
+        node.findAll((child) => child.type === 'Text' && child.props.children === 'Show terminal')
+          .length > 0
+    )
+    act(() => action.props.onPress())
+    expect(onShowTerminal).toHaveBeenCalledOnce()
   })
 
   it('does not duplicate the route banner when the composer rejects', async () => {

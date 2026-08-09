@@ -9,7 +9,8 @@ export type NativeChatSendLifecycle = {
 export function useNativeChatSendLifecycle(
   terminalTabId: string,
   targetPtyId: string | null,
-  onPendingSendCanceled?: (pendingId: string) => void
+  onPendingSendCanceled?: (pendingId: string) => void,
+  onPendingSendSubmitted?: (pendingId: string) => void
 ): NativeChatSendLifecycle {
   const pendingSendHandlesRef = useRef(
     new Map<
@@ -30,24 +31,37 @@ export function useNativeChatSendLifecycle(
     }
     pendingSendHandlesRef.current.clear()
   }, [onPendingSendCanceled])
-  const trackPendingSend = useCallback((handle: NativeChatSendHandle, pendingId?: string) => {
-    const entry = {
-      cleanupTimer: null as ReturnType<typeof setTimeout> | null,
-      ...(pendingId ? { pendingId } : {})
-    }
-    pendingSendHandlesRef.current.set(handle, entry)
-    if (handle.settled) {
-      void handle.settled.then(() => {
-        if (pendingSendHandlesRef.current.get(handle) === entry) {
-          pendingSendHandlesRef.current.delete(handle)
-        }
-      })
-      return
-    }
-    entry.cleanupTimer = setTimeout(() => {
-      pendingSendHandlesRef.current.delete(handle)
-    }, handle.settleAfterMs)
-  }, [])
+  const trackPendingSend = useCallback(
+    (handle: NativeChatSendHandle, pendingId?: string) => {
+      const entry = {
+        cleanupTimer: null as ReturnType<typeof setTimeout> | null,
+        ...(pendingId ? { pendingId } : {})
+      }
+      pendingSendHandlesRef.current.set(handle, entry)
+      if (pendingId && handle.submission) {
+        void handle.submission.then((submitted) => {
+          if (submitted) {
+            onPendingSendSubmitted?.(pendingId)
+          }
+        })
+      }
+      if (handle.settled) {
+        void handle.settled.then(() => {
+          if (pendingId && !handle.submission && handle.submitted?.() !== false) {
+            onPendingSendSubmitted?.(pendingId)
+          }
+          if (pendingSendHandlesRef.current.get(handle) === entry) {
+            pendingSendHandlesRef.current.delete(handle)
+          }
+        })
+        return
+      }
+      entry.cleanupTimer = setTimeout(() => {
+        pendingSendHandlesRef.current.delete(handle)
+      }, handle.settleAfterMs)
+    },
+    [onPendingSendSubmitted]
+  )
 
   // Why: delayed Enter/image writes belong to the exact PTY target. A pane
   // swap or unmount must cancel them before that PTY can close or be reused.

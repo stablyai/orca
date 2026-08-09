@@ -5,6 +5,7 @@
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
+import type { NativeChatDeliveryCheck } from './native-chat-prompt-delivery'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
   advancedNativeChatUserContentCounts,
@@ -38,6 +39,8 @@ export type NativeChatPendingSend = {
   matchingOccurrence?: number
   /** Shared time boundary when that message boundary is unavailable. */
   matchingAfterTimestamp?: number
+  /** Bounded confirmation state for recovering sends that never became a transcript turn. */
+  deliveryCheck?: NativeChatDeliveryCheck
 }
 
 export type NativeChatPendingSendScope = {

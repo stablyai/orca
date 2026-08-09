@@ -98,7 +98,8 @@ export function useMobileNativeChatController(args: {
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
-    holdUnconfirmedSend
+    holdUnconfirmedSend,
+    deliveryFailed
   } = useMobileNativeChatDrafts({
     hostId,
     worktreeId,
@@ -111,7 +112,8 @@ export function useMobileNativeChatController(args: {
     // a null is indistinguishable from a host retraction, and peeking at the
     // terminal view would permanently decline the prefill.
     chatActive: showNativeChat,
-    transcriptLoading: nativeChatSession.transcriptLoading
+    transcriptLoading: nativeChatSession.transcriptLoading,
+    promptSubmissions: activeSessionTab?.agentStatus?.promptSubmissions
   })
 
   const nativeChatStatus = activeChatResolution ? activeSessionTab?.agentStatus : null
@@ -260,6 +262,8 @@ export function useMobileNativeChatController(args: {
     setChatComposerText,
     chatPending,
     chatImagePreviewsByMessageId,
+    nativeChatDeliveryFailed: deliveryFailed,
+    showNativeChatTerminal: handleAgentPicker,
     nativeChatSession,
     nativeChatAgentWorking,
     nativeChatStreamingText,

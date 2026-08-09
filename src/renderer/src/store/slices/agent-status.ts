@@ -5,6 +5,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   AGENT_STATE_HISTORY_MAX,
   agentSubagentsEqual,
+  type AgentPromptSubmissionOccurrence,
   type AgentStateHistoryEntry,
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext,
@@ -46,6 +47,7 @@ import {
   transferAgentPaneAuthorityAlias
 } from './agent-pane-authority'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
+import { appendAgentPromptSubmission } from './agent-prompt-submission-history'
 
 /** Snapshot of a finished/vanished agent status entry, kept so the dashboard and sidebar hover
  *  keep showing the completion until the user clicks the worktree. `worktreeId` is stamped at
@@ -155,6 +157,7 @@ export type AgentStatusSlice = {
     payload: ParsedAgentStatusPayload & {
       orchestration?: AgentStatusOrchestrationContext
       promptInteractionKey?: string
+      promptSubmission?: AgentPromptSubmissionOccurrence
       restoredUnconfirmed?: boolean
     },
     terminalTitle?: string,
@@ -1903,6 +1906,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : undefined) ??
           matchedRegistryLaunchConfig ??
           matchedSleepingLaunchConfig
+        const promptSubmissions = appendAgentPromptSubmission(
+          existing?.promptSubmissions,
+          payload.promptSubmission
+        )
         const entry: AgentStatusEntry = {
           state: payload.state,
           prompt: payload.prompt,
@@ -1942,6 +1949,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : payload.subagents,
           ...(providerSession ? { providerSession } : {}),
           ...(promptInteractionKey ? { promptInteractionKey } : {}),
+          ...(promptSubmissions ? { promptSubmissions } : {}),
           ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
           // Why: `interrupted` is done-only; parseAgentStatusPayload already clamps it for non-done states, so write it through directly.
           interrupted: payload.interrupted,

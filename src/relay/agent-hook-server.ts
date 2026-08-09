@@ -317,6 +317,7 @@ export class RelayAgentHookServer {
       hasExplicitPrompt: event.hasExplicitPrompt,
       promptInteractionKey: event.promptInteractionKey,
       hookEventName: event.hookEventName,
+      submittedPromptDigest: event.submittedPromptDigest,
       providerPromptId: event.providerPromptId,
       compactTrigger: event.compactTrigger,
       toolUseId: event.toolUseId,
@@ -403,9 +404,10 @@ export class RelayAgentHookServer {
       }
       const subagentsChanged =
         JSON.stringify(event.payload.subagents) !== JSON.stringify(original.payload.subagents)
-      const next = subagentsChanged ? event : original
+      const refresh = { ...event, submittedPromptDigest: undefined }
+      const next = subagentsChanged ? refresh : original
       if (subagentsChanged) {
-        this.applyEvent(event, source, env, version)
+        this.applyEvent(refresh, source, env, version)
       }
       this.scheduleCodexSubagentPoll(source, body, next, env, version)
     }, CODEX_SUBAGENT_POLL_MS)

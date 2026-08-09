@@ -8101,6 +8101,58 @@ describe('AgentHookServer ingestRemote', () => {
     )
   })
 
+  it('stamps monotonic live prompt submissions and ignores replay or malformed digests', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(5_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+      const digest = (value: string): string =>
+        `sha256:${createHash('sha256').update(value).digest('hex')}`
+      const submit = (
+        paneKey: string,
+        source: 'codex' | 'claude',
+        prompt: string,
+        options: { digest?: string; replay?: boolean } = {}
+      ): void => {
+        server.ingestRemote(
+          {
+            paneKey,
+            source,
+            hookEventName: 'UserPromptSubmit',
+            hasExplicitPrompt: true,
+            submittedPromptDigest: options.digest ?? digest(prompt),
+            isReplay: options.replay,
+            payload: { state: 'working', prompt, agentType: source }
+          },
+          'conn-1'
+        )
+      }
+
+      submit(PANE, 'codex', 'first')
+      submit(GOOD_PANE, 'claude', 'second')
+      submit(PANE, 'codex', 'replayed', { replay: true })
+      submit(PANE, 'codex', 'malformed', { digest: 'sha256:not-a-digest' })
+      submit(PANE, 'codex', 'third')
+
+      const occurrences = listener.mock.calls
+        .map(([event]) => event.promptSubmission)
+        .filter(Boolean)
+      expect(occurrences).toHaveLength(3)
+      expect(occurrences.map((occurrence) => occurrence.sequence)).toEqual([1, 2, 3])
+      expect(new Set(occurrences.map((occurrence) => occurrence.streamId)).size).toBe(1)
+      expect(occurrences.map((occurrence) => occurrence.receivedAt)).toEqual([5_000, 5_001, 5_004])
+      expect(occurrences.map((occurrence) => occurrence.digest)).toEqual([
+        digest('first'),
+        digest('second'),
+        digest('third')
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves active pane identity when a nested remote hook reports another agent', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

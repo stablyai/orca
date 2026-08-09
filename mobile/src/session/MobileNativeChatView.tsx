@@ -23,6 +23,7 @@ import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-
 import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
+import { MobileNativeChatDeliveryRecoveryNotice } from './MobileNativeChatDeliveryRecoveryNotice'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
@@ -85,6 +86,8 @@ type Props = {
   sendErrorMessage?: string | null
   /** Clears `sendErrorMessage` once a later send is accepted. */
   onClearSendError?: () => void
+  deliveryFailed?: boolean
+  onShowTerminal?: () => void
   filePaths?: string[]
   onNeedFiles?: (query: string) => void
   /** Model/session-option pickers for the composer action row (desktop parity). */
@@ -143,6 +146,8 @@ export function MobileNativeChatView({
   inputLockReason,
   sendErrorMessage,
   onClearSendError,
+  deliveryFailed,
+  onShowTerminal,
   filePaths,
   onNeedFiles,
   sessionOptions,
@@ -429,6 +434,7 @@ export function MobileNativeChatView({
           <Text style={styles.sendErrorText}>{sendErrorMessage}</Text>
         </View>
       ) : null}
+      {deliveryFailed && <MobileNativeChatDeliveryRecoveryNotice onShowTerminal={onShowTerminal} />}
       <MobileNativeChatComposer
         value={composerText}
         onChangeText={onComposerTextChange}

@@ -4960,6 +4960,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
     terminalHandle?: string
     launchToken?: string
     providerSession?: { key: 'session_id'; id: string }
+    promptSubmission?: {
+      streamId: string
+      sequence: number
+      digest: string
+      receivedAt: number
+    }
     orchestration?: {
       taskId?: string
       dispatchId?: string
@@ -6081,6 +6087,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
           state: 'working' as const,
           prompt: 'p',
           agentType: 'claude',
+          promptSubmission: {
+            streamId: 'stream-1',
+            sequence: 7,
+            digest: `sha256:${'a'.repeat(64)}`,
+            receivedAt: 1_700_000_000_000
+          },
           receivedAt: 1_700_000_000_000,
           stateStartedAt: 1_699_999_999_000
         }
@@ -6163,7 +6175,17 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(setAgentStatus).toHaveBeenCalledTimes(1)
     expect(setAgentStatus).toHaveBeenCalledWith(
       FUTURE_PANE_KEY,
-      expect.objectContaining({ state: 'working', prompt: 'p', agentType: 'claude' }),
+      expect.objectContaining({
+        state: 'working',
+        prompt: 'p',
+        agentType: 'claude',
+        promptSubmission: {
+          streamId: 'stream-1',
+          sequence: 7,
+          digest: `sha256:${'a'.repeat(64)}`,
+          receivedAt: 1_700_000_000_000
+        }
+      }),
       'Future Tab',
       { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
       expectWorktreeRouting('wt-1'),

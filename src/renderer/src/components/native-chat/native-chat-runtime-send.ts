@@ -65,6 +65,10 @@ export type NativeChatSendHandle = {
   settleAfterMs: number
   /** Actual completion, which can outlive the nominal schedule if the renderer stalls. */
   settled?: Promise<void>
+  /** Resolves at the submit write, before later hook events can race its baseline. */
+  submission?: Promise<boolean>
+  /** True only after the submit write fired; canceled queued sends remain false. */
+  submitted?: () => boolean
 }
 
 type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>

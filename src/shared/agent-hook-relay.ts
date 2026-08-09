@@ -84,6 +84,8 @@ export type AgentHookRelayEnvelope = {
   promptInteractionKey?: string
   /** Hook discriminator preserved for main-process transition rules. */
   hookEventName?: string
+  /** Full raw prompt digest for live delivery acknowledgement. */
+  submittedPromptDigest?: string
   /** Claude's provider-owned user-prompt UUID. */
   providerPromptId?: string
   /** Active Claude compact generation, keyed by provider prompt identity. */

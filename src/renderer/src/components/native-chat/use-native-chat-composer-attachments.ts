@@ -1,4 +1,11 @@
-import { useCallback, useRef, useState, type RefObject } from 'react'
+import {
+  useCallback,
+  useRef,
+  useState,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction
+} from 'react'
 import { translate } from '@/i18n/i18n'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
 import {
@@ -14,7 +21,7 @@ export type UseNativeChatComposerAttachmentsArgs = {
   caret: number
   resolveTarget: () => NativeChatResolvedTarget | null
   textareaRef: RefObject<HTMLTextAreaElement | null>
-  setCaret: (caret: number) => void
+  setCaret: Dispatch<SetStateAction<number>>
   setDraft: (updater: (previous: string) => string) => void
   setNotice: (notice: string | null) => void
 }
@@ -30,6 +37,7 @@ export function useNativeChatComposerAttachments({
 }: UseNativeChatComposerAttachmentsArgs): {
   imageAttachments: NativeChatComposerImageAttachment[]
   appendImageAttachments: (paths: string[]) => void
+  restoreFailedMessage: (text: string, imagePaths?: string[]) => boolean
   attachResolvedPaths: (paths: string[]) => void
   clearImageAttachments: () => void
   removeImageAttachment: (id: string) => void
@@ -78,6 +86,22 @@ export function useNativeChatComposerAttachments({
       ])
     },
     [updateImageAttachments]
+  )
+
+  const restoreFailedMessage = useCallback(
+    (text: string, imagePaths?: string[]): boolean => {
+      setDraft((current) => {
+        if (current === text || text.length === 0) {
+          return current
+        }
+        const prefix = current.length === 0 ? text : `${text}\n\n`
+        setCaret((position) => position + prefix.length)
+        return `${prefix}${current}`
+      })
+      appendImageAttachments(imagePaths ?? [])
+      return true
+    },
+    [appendImageAttachments, setCaret, setDraft]
   )
 
   const insertFileReferences = useCallback(
@@ -134,6 +158,7 @@ export function useNativeChatComposerAttachments({
   return {
     imageAttachments,
     appendImageAttachments,
+    restoreFailedMessage,
     attachResolvedPaths,
     clearImageAttachments: () => updateImageAttachments(() => []),
     removeImageAttachment: (id) =>

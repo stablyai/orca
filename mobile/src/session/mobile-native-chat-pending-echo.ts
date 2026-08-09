@@ -1,3 +1,5 @@
+import type { AgentPromptSubmissionOccurrence } from '../../../src/shared/agent-status-types'
+
 export type MobileNativeChatPendingMessage = {
   id: string
   text: string
@@ -13,6 +15,8 @@ export type MobileNativeChatSendOrigin = {
   normalizedText: string
   baselineOccurrences: number
   baselineTailMessageId: string | null
+  /** Latest hook occurrence observed before dispatch starts. */
+  promptSubmissionBaseline?: AgentPromptSubmissionOccurrence
 }
 
 type PendingByKey = Record<string, MobileNativeChatPendingMessage[]>

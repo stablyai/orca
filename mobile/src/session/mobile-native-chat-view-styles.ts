@@ -39,6 +39,54 @@ export const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   },
+  deliveryRecovery: {
+    gap: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgRaised
+  },
+  deliveryRecoveryHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm
+  },
+  deliveryRecoveryIcon: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: colors.bgPanel
+  },
+  deliveryRecoveryCopy: {
+    flex: 1,
+    gap: 2
+  },
+  deliveryRecoveryTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    fontWeight: '700'
+  },
+  deliveryRecoveryDescription: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    lineHeight: 16
+  },
+  deliveryRecoveryButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceBright
+  },
+  deliveryRecoveryButtonText: {
+    color: colors.bgBase,
+    fontSize: typography.metaSize,
+    fontWeight: '700'
+  },
   chromeToggle: {
     flexDirection: 'row',
     alignItems: 'center',

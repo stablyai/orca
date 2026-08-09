@@ -20,19 +20,13 @@ import {
 } from './native-chat-working-suppression'
 import {
   applyCommandMarkerBoundaries,
-  appendPendingSendCache,
   commandMarkersAsMessages,
   appendCommandMarkerCache,
   launchPromptAsMessage,
   pendingSendsAsMessages,
-  nextNativeChatPendingSendId,
-  prunePendingSends,
   readCommandMarkerCache,
-  readPendingSendCache,
   shouldPruneLaunchPrompt,
-  writePendingSendCache,
-  type NativeChatCommandMarker,
-  type NativeChatPendingSend
+  type NativeChatCommandMarker
 } from './native-chat-pending'
 import {
   deriveNativeChatStreamingText,
@@ -53,6 +47,8 @@ import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owne
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import type { NativeChatViewProps } from './native-chat-view-types'
+import { NativeChatDeliveryRecoveryNotice } from './NativeChatDeliveryRecoveryNotice'
+import { useNativeChatPendingDelivery } from './use-native-chat-pending-delivery'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
@@ -161,6 +157,9 @@ function NativeChatResolvedView({
   const hookWorkingEpoch = useAppStore(
     (s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
   )
+  const promptSubmissions = useAppStore(
+    (s) => s.agentStatusByPaneKey[paneKey]?.promptSubmissions ?? EMPTY_PROMPT_SUBMISSIONS
+  )
   const canSend = useNativeChatCanSend(targetPtyId)
   // Reuse the verified composer send path for interactive cards and composer
   // stop (Stop sends ESC, the agent-TUI interrupt key).
@@ -198,10 +197,24 @@ function NativeChatResolvedView({
     () => ({ paneKey, agent, sessionId }),
     [paneKey, agent, sessionId]
   )
-  const pendingScope = useMemo(() => ({ paneKey, agent }), [paneKey, agent])
-  const [pending, setPending] = useState<NativeChatPendingSend[]>(() =>
-    readPendingSendCache(pendingScope)
-  )
+  const restoreFailedMessage = useCallback((text: string, imagePaths?: string[]) => {
+    composerRef.current?.restoreFailedMessage(text, imagePaths)
+  }, [])
+  const {
+    pending,
+    deliveryFailed,
+    clearPending,
+    onOptimisticSend,
+    onOptimisticSendCanceled,
+    markDeliverySubmitted
+  } = useNativeChatPendingDelivery({
+    paneKey,
+    agent,
+    messages: session.messages,
+    promptSubmissions,
+    restoreMessage: restoreFailedMessage,
+    setWorkingInterrupted
+  })
   // Slash commands aren't chat turns, so they get a small local "Ran /clear"
   // system line instead of a user bubble. Capped + cached per conversation.
   const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>(() =>
@@ -211,55 +224,18 @@ function NativeChatResolvedView({
   // often learns its provider session id after the first send; clearing pending
   // on that transition briefly flashes the empty state before the transcript
   // user turn lands.
-  useEffect(() => {
-    setPending(readPendingSendCache(pendingScope))
-    setWorkingInterrupted(false)
-  }, [pendingScope])
   // Command markers are session-scoped because slash commands like /clear are
   // local feedback for a specific transcript boundary.
   useEffect(() => {
     setCommandMarkers(readCommandMarkerCache(commandMarkerScope))
     setWorkingInterrupted(false)
   }, [commandMarkerScope])
-  // Prune echoes whose real user turn is now in the transcript.
-  useEffect(() => {
-    setPending((prev) =>
-      writePendingSendCache(pendingScope, prunePendingSends(prev, session.messages))
-    )
-  }, [session.messages, pendingScope])
   useEffect(() => {
     if (!paneLaunchPrompt || !shouldPruneLaunchPrompt(paneLaunchPrompt, session.messages)) {
       return
     }
     clearNativeChatLaunchPrompt(terminalTabId)
   }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
-  const onOptimisticSend = useCallback(
-    (text: string, imagePaths?: string[]) => {
-      setWorkingInterrupted(false)
-      const sentAt = Date.now()
-      const boundary = session.messages.at(-1)
-      const entry: NativeChatPendingSend = {
-        id: nextNativeChatPendingSendId(sentAt),
-        text,
-        sentAt,
-        afterMessageId: boundary?.id ?? null,
-        afterMessageTimestamp: boundary?.timestamp ?? null,
-        ...(imagePaths ? { imagePaths } : {})
-      }
-      setPending(appendPendingSendCache(pendingScope, entry))
-      return entry.id
-    },
-    [pendingScope, session.messages]
-  )
-  const onOptimisticSendCanceled = useCallback(
-    (pendingId: string) => {
-      // Why: detach/interrupt cancels the delayed Enter, so its optimistic echo
-      // must not come back from the pane cache as a prompt that was delivered.
-      const next = readPendingSendCache(pendingScope).filter((entry) => entry.id !== pendingId)
-      setPending(writePendingSendCache(pendingScope, next))
-    },
-    [pendingScope]
-  )
   const onSlashCommand = useCallback(
     (command: string) => {
       setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command))
@@ -357,9 +333,9 @@ function NativeChatResolvedView({
     // Why: Stop after a submitted turn drops the delayed-write handle once it
     // settles, so cancelPendingSends no longer sees the optimistic id. Clear
     // the echo cache here so a cancelled prompt cannot stick as a ghost bubble.
-    setPending(writePendingSendCache(pendingScope, []))
+    clearPending()
     interactiveSend.cancel()
-  }, [interactiveSend, pendingScope])
+  }, [clearPending, interactiveSend])
   const nativeChatFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
@@ -438,24 +414,32 @@ function NativeChatResolvedView({
           the pty, the composer shows its guarded state instead of racing the
           mobile driver (R8). */}
       {questionActive ? null : (
-        <NativeChatComposer
-          ref={composerRef}
-          terminalTabId={terminalTabId}
-          paneKey={paneKey}
-          targetPtyId={targetPtyId}
-          agent={agent}
-          canSend={canSend}
-          isWorking={isWorking}
-          onStop={stopAgent}
-          onOptimisticSend={onOptimisticSend}
-          onOptimisticSendCanceled={onOptimisticSendCanceled}
-          onSlashCommand={onSlashCommand}
-          onSwitchToTerminal={onSwitchToTerminal}
-          readTerminalScreen={readTerminalScreen}
-          {...launchDraftSignal}
-        />
+        <>
+          {deliveryFailed ? (
+            <NativeChatDeliveryRecoveryNotice onShowTerminal={onSwitchToTerminal} />
+          ) : null}
+          <NativeChatComposer
+            ref={composerRef}
+            terminalTabId={terminalTabId}
+            paneKey={paneKey}
+            targetPtyId={targetPtyId}
+            agent={agent}
+            canSend={canSend}
+            isWorking={isWorking}
+            onStop={stopAgent}
+            onOptimisticSend={onOptimisticSend}
+            onOptimisticSendCanceled={onOptimisticSendCanceled}
+            onOptimisticSendSubmitted={markDeliverySubmitted}
+            onSlashCommand={onSlashCommand}
+            onSwitchToTerminal={onSwitchToTerminal}
+            readTerminalScreen={readTerminalScreen}
+            {...launchDraftSignal}
+          />
+        </>
       )}
       {contextMenu.menu}
     </div>
   )
 }
+
+const EMPTY_PROMPT_SUBMISSIONS = [] as const

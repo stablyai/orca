@@ -19,6 +19,8 @@ export type MobileNativeChatController = {
   setChatComposerText: Dispatch<SetStateAction<string>>
   chatPending: MobileNativeChatPendingMessage[]
   chatImagePreviewsByMessageId: Record<string, string[]>
+  nativeChatDeliveryFailed: boolean
+  showNativeChatTerminal: () => void
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   nativeChatAgentWorking: boolean
   nativeChatStreamingText?: string

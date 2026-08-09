@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -65,6 +66,9 @@ describe('RelayAgentHookServer', () => {
       expect(envelope.connectionId).toBeNull()
       expect(envelope.payload.state).toBe('working')
       expect(envelope.payload.prompt).toBe('hi')
+      expect(envelope.submittedPromptDigest).toBe(
+        `sha256:${createHash('sha256').update('hi').digest('hex')}`
+      )
       expect(envelope.claudeRunningNonAgentTask).toBe(false)
       // Why: the relay forwards body env/version so Orca's warn-once
       // protocol diagnostics and remote-location marker survive the wire.

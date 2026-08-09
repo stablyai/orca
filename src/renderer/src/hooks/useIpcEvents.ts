@@ -3225,11 +3225,14 @@ export function useIpcEvents(): void {
       const statusPayloadWithTurnBoundary = data.promptInteractionKey
         ? { ...statusPayload, promptInteractionKey: data.promptInteractionKey }
         : statusPayload
+      const statusPayloadWithPromptSubmission = data.promptSubmission
+        ? { ...statusPayloadWithTurnBoundary, promptSubmission: data.promptSubmission }
+        : statusPayloadWithTurnBoundary
       // Why: hydrated-unconfirmed provenance is envelope data the payload whitelist above drops; re-thread it or freshness gates confirm restored rows.
       const statusPayloadWithProvenance =
         data.restoredUnconfirmed === true
-          ? { ...statusPayloadWithTurnBoundary, restoredUnconfirmed: true }
-          : statusPayloadWithTurnBoundary
+          ? { ...statusPayloadWithPromptSubmission, restoredUnconfirmed: true }
+          : statusPayloadWithPromptSubmission
       const identity = resolveAgentStatusIdentity({
         existing: existingStatus
           ? {

@@ -1,13 +1,12 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
-import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import {
   sendNativeChatMessage,
   sendNativeChatMessageWithImageAttachments,
-  submitNativeChatPrompt
+  submitNativeChatPrompt,
+  type NativeChatSendHandle
 } from './native-chat-runtime-send'
-import type { NativeChatSendHandle } from './native-chat-runtime-send'
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
@@ -21,10 +20,7 @@ import { readNativeChatDraftCache } from './native-chat-draft-cache'
 import { useNativeChatDraft } from './use-native-chat-draft'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
 import { NativeChatComposerField } from './NativeChatComposerField'
-import {
-  nativeChatComposerTargetIsRemote,
-  type NativeChatResolvedTarget
-} from './native-chat-composer-target'
+import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
@@ -37,6 +33,7 @@ import { useNativeChatSessionOptionCommand } from './use-native-chat-session-opt
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
 import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
+import { useNativeChatComposerTarget } from './use-native-chat-composer-target'
 import type {
   NativeChatComposerHandle,
   NativeChatComposerProps
@@ -73,6 +70,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       onStop,
       onOptimisticSend,
       onOptimisticSendCanceled,
+      onOptimisticSendSubmitted,
       onSlashCommand,
       onSwitchToTerminal,
       readTerminalScreen,
@@ -106,7 +104,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
       terminalTabId,
       targetPtyId,
-      onOptimisticSendCanceled
+      onOptimisticSendCanceled,
+      onOptimisticSendSubmitted
     )
     const dictationState = useAppStore((store) => store.dictationState)
     const voiceSettings = useAppStore((store) => store.settings?.voice)
@@ -149,34 +148,30 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       handleDraftOrCaretChange
     } = picker
 
-    // Resolve the live ptyId for this chat leaf; runtime owner settings route
-    // local vs remote (SSH) sends.
-    const resolveTarget = useCallback((): NativeChatResolvedTarget | null => {
-      if (!targetPtyId) {
-        return null
-      }
-      return { ptyId: targetPtyId, settings: getSettingsForAgentTabRuntimeOwner(terminalTabId) }
-    }, [targetPtyId, terminalTabId])
+    const { resolveTarget, hasPty, disabled, syncCaret } = useNativeChatComposerTarget(
+      terminalTabId,
+      targetPtyId,
+      canSend,
+      setCaret
+    )
 
-    const [hasPty, disabled] = [targetPtyId !== null, targetPtyId === null || !canSend]
-
-    const syncCaret = useCallback((el: HTMLTextAreaElement) => {
-      setCaret(el.selectionStart ?? el.value.length)
-    }, [])
-
-    const { imageAttachments, attachResolvedPaths, clearImageAttachments, removeImageAttachment } =
-      useNativeChatComposerAttachments({
-        attachmentScopeKey: paneKey,
-        caret,
-        resolveTarget,
-        textareaRef,
-        setCaret,
-        setDraft,
-        setNotice
-      })
-    const sendButtonDisabled = isWorking
-      ? !hasPty || !onStop
-      : disabled || (draft.trim() === '' && imageAttachments.length === 0)
+    const {
+      imageAttachments,
+      attachResolvedPaths,
+      clearImageAttachments,
+      removeImageAttachment,
+      restoreFailedMessage
+    } = useNativeChatComposerAttachments({
+      attachmentScopeKey: paneKey,
+      caret,
+      resolveTarget,
+      textareaRef,
+      setCaret,
+      setDraft,
+      setNotice
+    })
+    const composerEmpty = draft.trim() === '' && imageAttachments.length === 0
+    const sendButtonDisabled = isWorking ? !hasPty || !onStop : disabled || composerEmpty
 
     const { insertTypedText, focus } = useNativeChatTypedInsertion({
       textareaRef,
@@ -208,8 +203,14 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
 
     useImperativeHandle(
       ref,
-      () => ({ focus, insertTypedText, handlePasteEvent: handlePaste, pasteFromClipboard }),
-      [focus, insertTypedText, handlePaste, pasteFromClipboard]
+      () => ({
+        focus,
+        insertTypedText,
+        handlePasteEvent: handlePaste,
+        pasteFromClipboard,
+        restoreFailedMessage
+      }),
+      [focus, insertTypedText, handlePaste, pasteFromClipboard, restoreFailedMessage]
     )
 
     const { pickAttachment } = useNativeChatFileAttachmentActions(attachExternalPaths)

@@ -105,7 +105,8 @@ vi.mock('./use-native-chat-composer-attachments', () => ({
     imageAttachments: [],
     attachResolvedPaths: vi.fn(),
     clearImageAttachments: vi.fn(),
-    removeImageAttachment: vi.fn()
+    removeImageAttachment: vi.fn(),
+    restoreFailedMessage: vi.fn(() => true)
   })
 }))
 vi.mock('./use-native-chat-composer-paste', () => ({

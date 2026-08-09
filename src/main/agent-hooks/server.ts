@@ -56,6 +56,7 @@ import {
 } from '../../shared/claude-statusline-rate-limits'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  type AgentPromptSubmissionOccurrence,
   type AgentStatusClearIpcPayload,
   type AgentStatusIpcPayload,
   type AgentType,
@@ -90,6 +91,7 @@ export type { AgentHookSource }
 type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   receivedAt: number
   stateStartedAt: number
+  promptSubmission?: AgentPromptSubmissionOccurrence
   /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */
   restoredUnconfirmed?: true
   /** User-hidden resume identity retained solely for destructive liveness checks. */
@@ -103,7 +105,12 @@ type NormalizedLocalHook = {
 
 type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
-  'claudeRunningNonAgentTask' | 'launchToken' | 'promptInteractionKey' | 'restoredUnconfirmed'
+  | 'claudeRunningNonAgentTask'
+  | 'launchToken'
+  | 'promptInteractionKey'
+  | 'promptSubmission'
+  | 'restoredUnconfirmed'
+  | 'submittedPromptDigest'
 > & {
   launchTokenHash?: string
 }
@@ -169,6 +176,11 @@ const LAST_STATUS_FILE_VERSION = 2
 const STATUS_PERSIST_DEBOUNCE_MS = 250
 const TOOL_PROGRESS_HOOK_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure'])
 const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
+const SUBMITTED_PROMPT_DIGEST_RE = /^sha256:[a-f0-9]{64}$/
+
+function normalizeSubmittedPromptDigest(value: unknown): string | undefined {
+  return typeof value === 'string' && SUBMITTED_PROMPT_DIGEST_RE.test(value) ? value : undefined
+}
 
 // Why: bound file growth from PTYs that never re-attach; 7 days is the "still relevant?" horizon beyond which entries shouldn't resurrect on hydrate.
 const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
@@ -408,6 +420,7 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
+    ...(entry.promptSubmission ? { promptSubmission: entry.promptSubmission } : {}),
     ...(entry.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     ...entry.payload
   }
@@ -631,6 +644,8 @@ export class AgentHookServer {
   private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
   private promptSentHashSalt = randomBytes(16).toString('hex')
+  private promptSubmissionStreamId = randomUUID()
+  private promptSubmissionSequence = 0
   private closedAgentStatusTabIds = new Set<string>()
   private closedAgentStatusPaneKeys = new Set<string>()
   private connectionTimestampWatermarkById = new Map<string, number>()
@@ -1058,10 +1073,25 @@ export class AgentHookServer {
       previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
         ? previous.stateStartedAt
         : now
+    const submittedPromptDigest = normalizeSubmittedPromptDigest(payload.submittedPromptDigest)
+    const promptSubmission =
+      payload.isReplay !== true &&
+      payload.hookEventName === 'UserPromptSubmit' &&
+      payload.hasExplicitPrompt === true &&
+      (payload.source === 'codex' || payload.source === 'claude') &&
+      submittedPromptDigest
+        ? {
+            streamId: this.promptSubmissionStreamId,
+            sequence: ++this.promptSubmissionSequence,
+            digest: submittedPromptDigest,
+            receivedAt: now
+          }
+        : undefined
     return {
       ...payload,
       receivedAt: now,
-      stateStartedAt
+      stateStartedAt,
+      ...(promptSubmission ? { promptSubmission } : {})
     }
   }
 
@@ -1338,7 +1368,9 @@ export class AgentHookServer {
       }
       const subagentsChanged =
         JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
-      const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
+      const next = subagentsChanged
+        ? this.applyNormalizedStatus({ ...normalized, submittedPromptDigest: undefined })
+        : original
       this.scheduleCodexSubagentPoll(source, body, next)
     }, CODEX_SUBAGENT_POLL_MS)
     this.codexSubagentPollTimers.set(original.paneKey, timer)
@@ -1871,6 +1903,7 @@ export class AgentHookServer {
       hasExplicitPrompt?: boolean
       promptInteractionKey?: string
       hookEventName?: string
+      submittedPromptDigest?: string
       source?: unknown
       providerPromptId?: unknown
       compactTrigger?: unknown
@@ -1936,6 +1969,7 @@ export class AgentHookServer {
         ? envelope.hookEventName.trim()
         : undefined
     const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
+    const submittedPromptDigest = normalizeSubmittedPromptDigest(envelope.submittedPromptDigest)
     const providerPromptId =
       source === 'claude' ? normalizeClaudePromptId(envelope.providerPromptId) : undefined
     const compactTrigger =
@@ -2049,6 +2083,7 @@ export class AgentHookServer {
       hasExplicitPrompt: envelope.hasExplicitPrompt === true ? true : undefined,
       promptInteractionKey,
       hookEventName,
+      submittedPromptDigest,
       providerPromptId,
       compactTrigger,
       toolUseId,
@@ -2780,6 +2815,8 @@ export class AgentHookServer {
         promptInteractionKey: _promptInteractionKey,
         // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
         restoredUnconfirmed: _restoredUnconfirmed,
+        promptSubmission: _promptSubmission,
+        submittedPromptDigest: _submittedPromptDigest,
         launchToken,
         ...persistedPayload
       } = payload as EnrichedAgentHookEventPayload

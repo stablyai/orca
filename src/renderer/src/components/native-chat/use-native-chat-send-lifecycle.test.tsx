@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useNativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 
 function handle(settleAfterMs = 500) {
-  return { cancel: vi.fn<() => void>(), settleAfterMs }
+  return { cancel: vi.fn<() => void>(), settleAfterMs, submitted: () => true }
 }
 
 describe('useNativeChatSendLifecycle', () => {
@@ -91,5 +91,30 @@ describe('useNativeChatSendLifecycle', () => {
     await act(async () => {
       resolveSettled()
     })
+  })
+
+  it('arms delivery recovery at submission before the send settles', async () => {
+    let resolveSubmission!: (submitted: boolean) => void
+    let resolveSettled!: () => void
+    const pending = {
+      ...handle(),
+      submission: new Promise<boolean>((resolve) => {
+        resolveSubmission = resolve
+      }),
+      settled: new Promise<void>((resolve) => {
+        resolveSettled = resolve
+      })
+    }
+    const onPendingSendSubmitted = vi.fn()
+    const { result } = renderHook(() =>
+      useNativeChatSendLifecycle('tab-1', 'pty-1', undefined, onPendingSendSubmitted)
+    )
+
+    act(() => result.current.trackPendingSend(pending, 'pending-1'))
+    expect(onPendingSendSubmitted).not.toHaveBeenCalled()
+    await act(async () => resolveSubmission(true))
+    expect(onPendingSendSubmitted).toHaveBeenCalledWith('pending-1')
+    await act(async () => resolveSettled())
+    expect(onPendingSendSubmitted).toHaveBeenCalledOnce()
   })
 })

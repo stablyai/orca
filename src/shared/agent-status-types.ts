@@ -86,6 +86,20 @@ export type AgentSubagentSnapshot = {
   startedAt: number
 }
 
+/** Exact, transient evidence that a pane accepted a user prompt through a provider hook. */
+export type AgentPromptSubmissionOccurrence = {
+  /** Identifies one main-process hook-server lifetime. */
+  streamId: string
+  /** Monotonic within `streamId`; globally ordered across panes in that stream. */
+  sequence: number
+  /** SHA-256 of the full raw prompt before status-preview normalization. */
+  digest: string
+  /** Main-process receive time for restart-safe ordering. */
+  receivedAt: number
+}
+
+export const AGENT_PROMPT_SUBMISSION_HISTORY_MAX = 8
+
 export type AgentStatusEntry = {
   state: AgentStatusState
   /** The user's most recent prompt. Cached across the turn — later tool-use events
@@ -139,6 +153,8 @@ export type AgentStatusEntry = {
   providerSession?: AgentProviderSessionMetadata
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** Recent live prompt-submit occurrences for native-chat delivery acknowledgement. */
+  promptSubmissions?: AgentPromptSubmissionOccurrence[]
   /** True for a nonterminal state hydrated from last-status.json with no live hook since:
    *  the transition may have been missed while no receiver was up, so freshness gates
    *  treat the row as stale immediately. Cleared by any accepted live event. */
@@ -237,6 +253,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** Present only on a live accepted UserPromptSubmit event, never restored from disk. */
+  promptSubmission?: AgentPromptSubmissionOccurrence
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
 }

@@ -19,6 +19,8 @@ export type NativeChatComposerProps = {
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
   /** Remove an optimistic echo when its delayed submit is canceled. */
   onOptimisticSendCanceled?: (pendingId: string) => void
+  /** Arm delivery confirmation once this pending send's Enter write fires. */
+  onOptimisticSendSubmitted?: (pendingId: string) => void
   /** Record a dispatched slash command that does not create a chat turn. */
   onSlashCommand?: (command: string) => void
   /** Picker-only agent commands continue in the hosted TUI after dispatch. */
@@ -42,4 +44,6 @@ export type NativeChatComposerHandle = {
   }) => void
   /** Pastes clipboard content when no DOM paste event is available. */
   pasteFromClipboard: () => void
+  /** Restore a failed send without discarding newer composer edits. */
+  restoreFailedMessage: (text: string, imagePaths?: string[]) => boolean
 }

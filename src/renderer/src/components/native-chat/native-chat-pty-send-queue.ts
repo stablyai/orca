@@ -10,8 +10,11 @@ export type NativeChatPtySendQueueHandle = {
   cancel: () => void
   settleAfterMs: number
   settled: Promise<void>
+  /** Resolves at the exact submit write, or false when canceled first. */
+  submission: Promise<boolean>
   bodyStarted: () => boolean
   finished: () => boolean
+  submitted: () => boolean
 }
 
 export type EnqueueNativeChatPtySendOptions = {
@@ -95,6 +98,10 @@ export function enqueueNativeChatPtySend(
   let bodyStarted = false
   let finished = false
   let submitted = false
+  let resolveSubmission!: (submitted: boolean) => void
+  const submission = new Promise<boolean>((resolve) => {
+    resolveSubmission = resolve
+  })
   const timers: ReturnType<typeof setTimeout>[] = []
   let release: (() => void) | null = null
 
@@ -119,6 +126,7 @@ export function enqueueNativeChatPtySend(
 
   const markSubmitted = (): void => {
     submitted = true
+    resolveSubmission(true)
     finishEntry()
   }
 
@@ -165,6 +173,7 @@ export function enqueueNativeChatPtySend(
         return
       }
       cancelled = true
+      resolveSubmission(false)
       for (const timer of timers) {
         clearTimeout(timer)
       }
@@ -182,8 +191,10 @@ export function enqueueNativeChatPtySend(
     },
     settleAfterMs,
     settled,
+    submission,
     bodyStarted: () => bodyStarted,
-    finished: () => finished
+    finished: () => finished,
+    submitted: () => submitted
   }
   state.handles.add(handle)
   return handle

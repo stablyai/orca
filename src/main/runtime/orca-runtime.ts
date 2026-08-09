@@ -41,6 +41,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   isFreshNonDoneAgentStatus,
   pickParsedAgentStatusPayload,
+  type AgentPromptSubmissionOccurrence,
   type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload,
   type AgentStatusOrchestrationContext,
@@ -3308,6 +3309,9 @@ export class OrcaRuntimeService {
   private terminalSideEffectLocalConsumerAvailable = false
   private terminalSideEffectConsumerAvailable = false
   private readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
+  private readonly getAgentPromptSubmissionsForPaneFn:
+    | ((paneKey: string) => readonly AgentPromptSubmissionOccurrence[])
+    | null
   private readonly getAgentProviderSessionSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   private readonly getAgentProviderSessionRowsForPaneFn:
     | ((paneKey: string) => AgentStatusIpcPayload[])
@@ -3382,6 +3386,9 @@ export class OrcaRuntimeService {
       // terminal output. worktree.ps reads this at query time so mobile shows the
       // same inline agent rows the desktop sidebar does — same source, 1:1.
       getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+      getAgentPromptSubmissionsForPane?: (
+        paneKey: string
+      ) => readonly AgentPromptSubmissionOccurrence[]
       /** Same rows, but including the resume-identity-only ones `getAgentStatusSnapshot`
        *  filters out so they can't read as running agents. Mobile native chat needs
        *  them: for an agent that publishes identity separately (Pi), that row is the
@@ -3425,6 +3432,7 @@ export class OrcaRuntimeService {
       this.agentDetector = new AgentDetector(stats)
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
+    this.getAgentPromptSubmissionsForPaneFn = deps?.getAgentPromptSubmissionsForPane ?? null
     this.getAgentProviderSessionSnapshotFn =
       deps?.getAgentProviderSessionSnapshot ?? deps?.getAgentStatusSnapshot ?? null
     this.getAgentProviderSessionRowsForPaneFn = deps?.getAgentProviderSessionRowsForPane ?? null
@@ -30375,6 +30383,7 @@ export class OrcaRuntimeService {
       const paneKey = isTerminalLeafId(tab.leafId)
         ? makePaneKey(tab.parentTabId, tab.leafId)
         : `${tab.parentTabId}:${legacyPaneId ?? tab.leafId}`
+      const promptSubmissions = this.getAgentPromptSubmissionsForPaneFn?.(paneKey) ?? []
       const mobileStatusPty = livePty ?? pty
       // Why: headless hooks live only in main's retained rows; reuse this lookup
       // for both title ownership and status publication so the two cannot diverge.
@@ -30443,7 +30452,8 @@ export class OrcaRuntimeService {
         ? normalizeCompatibleAgentStatusEntryForOwner(
             {
               ...tab.agentStatus,
-              ...(hookProviderSession ? { providerSession: hookProviderSession } : {})
+              ...(hookProviderSession ? { providerSession: hookProviderSession } : {}),
+              ...(promptSubmissions.length > 0 ? { promptSubmissions: [...promptSubmissions] } : {})
             },
             ownerAgent
           )
@@ -30475,6 +30485,9 @@ export class OrcaRuntimeService {
                 agentType: normalizedTabAgentStatus.agentType,
                 ...(normalizedTabAgentStatus.providerSession
                   ? { providerSession: normalizedTabAgentStatus.providerSession }
+                  : {}),
+                ...(promptSubmissions.length > 0
+                  ? { promptSubmissions: [...promptSubmissions] }
                   : {})
               }
             }
@@ -30571,6 +30584,7 @@ export class OrcaRuntimeService {
     getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
     const paneKey = this.getMobileTerminalPaneKey(tab)
+    const promptSubmissions = this.getAgentPromptSubmissionsForPaneFn?.(paneKey) ?? []
     // Why: neither the OSC-retained row nor a title-derived status can carry a
     // provider session — only the hook payload does, and headless serve has no
     // renderer to publish `tab.agentStatus`. Without it mobile native chat has no
@@ -30650,7 +30664,8 @@ export class OrcaRuntimeService {
               : {}),
             tabId: tab.parentTabId,
             terminalTitle,
-            ...providerSession
+            ...providerSession,
+            ...(promptSubmissions.length > 0 ? { promptSubmissions: [...promptSubmissions] } : {})
           },
           ownerAgent
         )
@@ -30682,7 +30697,8 @@ export class OrcaRuntimeService {
         tabId: tab.parentTabId,
         terminalTitle,
         stateHistory: [],
-        ...providerSession
+        ...providerSession,
+        ...(promptSubmissions.length > 0 ? { promptSubmissions: [...promptSubmissions] } : {})
       }
     }
   }

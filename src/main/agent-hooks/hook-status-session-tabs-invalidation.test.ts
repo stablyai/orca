@@ -29,6 +29,44 @@ describe('createHookStatusSessionTabsInvalidator', () => {
     expect(changed(working())).toBe(false)
   })
 
+  it('invalidates and retains a transient prompt acknowledgement through later pings', () => {
+    const changed = createHookStatusSessionTabsInvalidator()
+    changed(working())
+    const promptSubmission = {
+      streamId: 'stream-1',
+      sequence: 1,
+      digest: `sha256:${'a'.repeat(64)}`,
+      receivedAt: 100
+    }
+
+    expect(changed({ ...working(), promptSubmission })).toBe(true)
+    expect(changed(working())).toBe(false)
+    expect(changed.getPromptSubmissions('tab:leaf')).toEqual([promptSubmission])
+
+    changed.forgetPane('tab:leaf')
+    expect(changed.getPromptSubmissions('tab:leaf')).toEqual([])
+  })
+
+  it('bounds prompt acknowledgement history per pane', () => {
+    const changed = createHookStatusSessionTabsInvalidator()
+
+    for (let sequence = 1; sequence <= 10; sequence += 1) {
+      changed({
+        ...working(),
+        promptSubmission: {
+          streamId: 'stream-1',
+          sequence,
+          digest: `sha256:${sequence.toString(16).padStart(64, '0')}`,
+          receivedAt: sequence
+        }
+      })
+    }
+
+    expect(changed.getPromptSubmissions('tab:leaf').map(({ sequence }) => sequence)).toEqual([
+      3, 4, 5, 6, 7, 8, 9, 10
+    ])
+  })
+
   it.each([
     ['state', { state: 'waiting' as const }],
     ['prompt', { prompt: 'ship it' }],

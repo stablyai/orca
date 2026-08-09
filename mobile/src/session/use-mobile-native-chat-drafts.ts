@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { AgentPromptSubmissionOccurrence } from '../../../src/shared/agent-status-types'
 import {
   countImageSourceTurnsAfter,
   countUserTextOccurrences,
@@ -11,7 +12,6 @@ import {
   type UnconfirmedSend
 } from './mobile-native-chat-draft-reconcile'
 import {
-  appendMobileNativeChatPending,
   combineMobileNativeChatPending,
   mergeWaitingSessionPending,
   removeWaitingSessionPending,
@@ -21,6 +21,7 @@ import {
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
+import { useMobileNativeChatDeliveryRecovery } from './use-mobile-native-chat-delivery-recovery'
 
 export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
@@ -47,6 +48,7 @@ export function useMobileNativeChatDrafts(args: {
    *  transcript still belongs to the previously active tab), so it cannot be
    *  trusted to decline or retire the seed. */
   transcriptLoading?: boolean
+  promptSubmissions?: readonly AgentPromptSubmissionOccurrence[]
 }): {
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
@@ -70,6 +72,7 @@ export function useMobileNativeChatDrafts(args: {
     text: string,
     onUnconfirmed: () => void
   ) => void
+  deliveryFailed: boolean
 } {
   const {
     hostId,
@@ -80,7 +83,8 @@ export function useMobileNativeChatDrafts(args: {
     launchDraft,
     launchDraftCreatedAt,
     chatActive = true,
-    transcriptLoading
+    transcriptLoading,
+    promptSubmissions = []
   } = args
   const draftKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
   const pendingKey = draftKey && sessionId ? `${draftKey}\0${sessionId}` : null
@@ -94,7 +98,6 @@ export function useMobileNativeChatDrafts(args: {
   const [imagePreviewsBySession, setImagePreviewsBySession] = useState<
     Record<string, Record<string, string[]>>
   >({})
-  const pendingCounterRef = useRef(0)
   const messagesRef = useRef(messages)
   messagesRef.current = messages
   const activeDraftKeyRef = useRef(draftKey)
@@ -102,6 +105,17 @@ export function useMobileNativeChatDrafts(args: {
   const activePendingKeyRef = useRef(pendingKey)
   activePendingKeyRef.current = pendingKey
   const mountedRef = useRef(false)
+
+  const { deliveryFailed, acceptSend, readPromptSubmissionBaseline } =
+    useMobileNativeChatDeliveryRecovery({
+      draftKey,
+      pendingKey,
+      messages,
+      promptSubmissions,
+      setDrafts,
+      setPendingBySession,
+      setPendingWaitingForSession
+    })
 
   const { readSeededLaunchDraft, readSeededLaunchDraftSeed } = useMobileNativeChatLaunchDraftSeed({
     draftKey,
@@ -134,15 +148,17 @@ export function useMobileNativeChatDrafts(args: {
       }
       const normalizedText = text.trim()
       const currentMessages = messagesRef.current
+      const promptSubmissionBaseline = readPromptSubmissionBaseline()
       return {
         draftKey,
         pendingKey,
         normalizedText,
         baselineOccurrences: countUserTextOccurrences(currentMessages, normalizedText),
-        baselineTailMessageId: currentMessages[currentMessages.length - 1]?.id ?? null
+        baselineTailMessageId: currentMessages.at(-1)?.id ?? null,
+        ...(promptSubmissionBaseline ? { promptSubmissionBaseline } : {})
       }
     },
-    [draftKey, pendingKey]
+    [draftKey, pendingKey, readPromptSubmissionBaseline]
   )
 
   // Why: over relay the send RPC can take seconds (or lose only its ack), and a
@@ -162,27 +178,6 @@ export function useMobileNativeChatDrafts(args: {
       (previous[origin.draftKey] ?? '') === '' ? { ...previous, [origin.draftKey]: text } : previous
     )
   }, [])
-
-  const acceptSend = useCallback(
-    (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => {
-      if (!origin.pendingKey && !images?.length) {
-        return
-      }
-      pendingCounterRef.current += 1
-      const id = `pending-${pendingCounterRef.current}`
-      const key = origin.pendingKey
-      if (key) {
-        setPendingBySession((previous) =>
-          appendMobileNativeChatPending(previous, key, id, origin, text, images)
-        )
-      } else {
-        setPendingWaitingForSession((previous) =>
-          appendMobileNativeChatPending(previous, origin.draftKey, id, origin, text, images)
-        )
-      }
-    },
-    []
-  )
 
   // Why: a relay drop mid-send loses only the ack in the common case — the
   // desktop already delivered the message. Hold the send instead of claiming
@@ -345,6 +340,7 @@ export function useMobileNativeChatDrafts(args: {
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
-    holdUnconfirmedSend
+    holdUnconfirmedSend,
+    deliveryFailed
   }
 }

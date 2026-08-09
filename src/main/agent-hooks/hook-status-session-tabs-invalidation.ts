@@ -1,28 +1,58 @@
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener'
-import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
+import {
+  AGENT_PROMPT_SUBMISSION_HISTORY_MAX,
+  type AgentPromptSubmissionOccurrence,
+  type ParsedAgentStatusPayload
+} from '../../shared/agent-status-types'
 
-type KnownStatus = { connectionId: string | null; payload: ParsedAgentStatusPayload }
+type KnownStatus = {
+  connectionId: string | null
+  payload: ParsedAgentStatusPayload
+  promptSubmissions?: AgentPromptSubmissionOccurrence[]
+}
+
+type HookSessionTabsStatusEvent = AgentHookEventPayload & {
+  promptSubmission?: AgentPromptSubmissionOccurrence
+}
 
 /** Reports whether a hook status event changed anything the `session.tabs`
  *  projection publishes, so a repeated same-state ping costs no snapshot rebuild.
  *  Mirrors `retainAgentRowSnapshot`'s change set so both carriers invalidate alike. */
 export function createHookStatusSessionTabsInvalidator(): {
-  (event: AgentHookEventPayload): boolean
+  (event: HookSessionTabsStatusEvent): boolean
   forgetPane: (paneKey: string) => void
   forgetConnection: (connectionId: string) => string[]
+  getPromptSubmissions: (paneKey: string) => readonly AgentPromptSubmissionOccurrence[]
 } {
   const known = new Map<string, KnownStatus>()
-  const invalidator = (event: AgentHookEventPayload): boolean => {
+  const invalidator = (event: HookSessionTabsStatusEvent): boolean => {
     // Why: resume-identity rows carry transport placeholders, not status; the
     // provider-session invalidator owns their republish.
     if (event.providerSessionOnly === true) {
       return false
     }
-    const previous = known.get(event.paneKey)?.payload
+    const previousStatus = known.get(event.paneKey)
+    const previous = previousStatus?.payload
     const next = event.payload
-    known.set(event.paneKey, { connectionId: event.connectionId, payload: next })
+    const occurrence = event.promptSubmission
+    const promptSubmissions = occurrence
+      ? [
+          ...(previousStatus?.promptSubmissions ?? []).filter(
+            (candidate) =>
+              candidate.streamId !== occurrence.streamId ||
+              candidate.sequence !== occurrence.sequence
+          ),
+          occurrence
+        ].slice(-AGENT_PROMPT_SUBMISSION_HISTORY_MAX)
+      : previousStatus?.promptSubmissions
+    known.set(event.paneKey, {
+      connectionId: event.connectionId,
+      payload: next,
+      ...(promptSubmissions ? { promptSubmissions } : {})
+    })
     return (
       !previous ||
+      occurrence !== undefined ||
       previous.state !== next.state ||
       previous.prompt !== next.prompt ||
       (previous.agentType ?? null) !== (next.agentType ?? null) ||
@@ -48,5 +78,8 @@ export function createHookStatusSessionTabsInvalidator(): {
     }
     return forgotten
   }
+  invalidator.getPromptSubmissions = (
+    paneKey: string
+  ): readonly AgentPromptSubmissionOccurrence[] => known.get(paneKey)?.promptSubmissions ?? []
   return invalidator
 }

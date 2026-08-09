@@ -4,7 +4,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type {
+  AgentPromptSubmissionOccurrence,
+  AgentStatusIpcPayload
+} from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
 
 vi.mock('electron', () => ({
@@ -58,10 +61,12 @@ function hookRow(overrides: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpc
 }
 
 async function createRuntimeWithHookRows(
-  rows: AgentStatusIpcPayload[]
+  rows: AgentStatusIpcPayload[],
+  promptSubmissions: readonly AgentPromptSubmissionOccurrence[] = []
 ): Promise<OrcaRuntimeService> {
   const runtime = new OrcaRuntimeService(null, undefined, {
-    getAgentStatusSnapshot: () => rows
+    getAgentStatusSnapshot: () => rows,
+    getAgentPromptSubmissionsForPane: () => promptSubmissions
   })
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
@@ -128,6 +133,23 @@ describe('headless hook agent-status projection (#11761)', () => {
         providerSession: PROVIDER_SESSION
       })
     )
+  })
+
+  it('carries transient prompt acknowledgements after the hook row has advanced', async () => {
+    const promptSubmission = {
+      streamId: 'stream-1',
+      sequence: 4,
+      digest: `sha256:${'a'.repeat(64)}`,
+      receivedAt: Date.now()
+    }
+    const runtime = await createRuntimeWithHookRows([hookRow()], [promptSubmission])
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+
+    expect(tab?.type === 'terminal' && tab.agentStatus?.promptSubmissions).toEqual([
+      promptSubmission
+    ])
   })
 
   it('publishes no hook transport identity to clients', async () => {

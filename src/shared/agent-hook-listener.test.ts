@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: this fixture keeps cross-agent hook normalization and cache behavior together so regressions in shared listener state are visible. */
 import { EventEmitter } from 'node:events'
+import { createHash } from 'node:crypto'
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -151,6 +152,37 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.prompt).toBe('hello')
     expect(event!.payload.agentType).toBe('claude')
   })
+
+  it.each(['claude', 'codex'] as const)(
+    'hashes the full raw %s prompt only on UserPromptSubmit',
+    (source) => {
+      const prompt = `  ${'multiline prompt '.repeat(20)}\nemoji: 🐋\n${'tail'.repeat(80)}  `
+      const submitted = normalizeHookPayload(
+        state,
+        source,
+        {
+          paneKey: PANE_KEY,
+          payload: { hook_event_name: 'UserPromptSubmit', prompt }
+        },
+        'production'
+      )
+      const tool = normalizeHookPayload(
+        state,
+        source,
+        {
+          paneKey: PANE_KEY,
+          payload: { hook_event_name: 'PreToolUse', tool_name: 'Read' }
+        },
+        'production'
+      )
+
+      expect(submitted?.payload.prompt.length).toBe(200)
+      expect(submitted?.submittedPromptDigest).toBe(
+        `sha256:${createHash('sha256').update(prompt).digest('hex')}`
+      )
+      expect(tool?.submittedPromptDigest).toBeUndefined()
+    }
+  )
 
   it('normalizes Gemini BeforeTool to working with tool fields', () => {
     const event = normalizeHookPayload(
