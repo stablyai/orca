@@ -6,6 +6,7 @@ import {
   type SyntheticAgentTitleProfile
 } from './synthetic-agent-title'
 import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
 type TitleProfileMatch = {
   profile: SyntheticAgentTitleProfile
@@ -36,18 +37,8 @@ function getProfileForTitleLabel(label: string | null): TitleLabelProfileMatch |
  * Resolves the synthetic title profile matching a given terminal title.
  */
 function getProfileForTitle(title: string): TitleProfileMatch | null {
-  // Multiplexers/session wrappers prefix dynamic titles with ` | `, so inspect
-  // each suffix to preserve the inner compatible agent identity.
-  const candidates = [title]
-  let wrapperSeparatorIndex = title.indexOf(' | ')
-  while (wrapperSeparatorIndex >= 0) {
-    const wrappedPaneTitle = title.slice(wrapperSeparatorIndex + 3).trim()
-    if (wrappedPaneTitle && !candidates.includes(wrappedPaneTitle)) {
-      candidates.push(wrappedPaneTitle)
-    }
-    wrapperSeparatorIndex = title.indexOf(' | ', wrapperSeparatorIndex + 3)
-  }
-
+  // Why each segment: a wrapper prefix must not hide the inner compatible agent identity.
+  const candidates = getWrapperTitleSegments(title)
   let fallback: TitleProfileMatch | null = null
   for (const candidate of candidates) {
     const labelProfile = getProfileForTitleLabel(getAgentLabel(candidate))

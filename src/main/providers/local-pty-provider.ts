@@ -66,6 +66,7 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
+import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import {
   createPtySlaveEchoProbe,
@@ -1075,6 +1076,13 @@ export class LocalPtyProvider implements IPtyProvider {
     return ptyProcesses.has(id)
   }
   write(id: string, data: string): void {
+    // Cooked PTYs echo private DSR/OSC replies; CPR/DA remain immediate (#13137, #7329).
+    if (extractOnlyCookedEchoSafeQueryReplies(data)) {
+      const ingress = startupIngressByPty.get(id)
+      if (ingress?.answerLiveQueryReply(data)) {
+        return
+      }
+    }
     ptyProcesses.get(id)?.write(data)
   }
   resize(id: string, cols: number, rows: number): void {
