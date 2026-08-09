@@ -198,6 +198,8 @@ export type WorktreeSlice = {
       automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
       linkedWorkItem?: WorkspaceLinkedItem | null
       linkedTaskSourceContext?: TaskSourceContext | null
+      linkedJiraIssue?: CreateWorktreeArgs['linkedJiraIssue']
+      linkedJiraIssueSourceContext?: CreateWorktreeArgs['linkedJiraIssueSourceContext']
     }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */

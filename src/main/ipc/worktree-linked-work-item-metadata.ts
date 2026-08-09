@@ -1,4 +1,5 @@
 import type { Worktree, WorktreeMeta } from '../../shared/types'
+import { resolveJiraIssueLink, resolveJiraIssueSourceContext } from '../../shared/jira-issue-link'
 
 type LinkedWorkItemMetadata = Pick<
   Worktree,
@@ -9,6 +10,8 @@ type LinkedWorkItemMetadata = Pick<
   | 'linkedGiteaPR'
   | 'linkedWorkItem'
   | 'linkedTaskSourceContext'
+  | 'linkedJiraIssue'
+  | 'linkedJiraIssueSourceContext'
 >
 
 export function getLinkedWorkItemMetadata(meta: WorktreeMeta | undefined): LinkedWorkItemMetadata {
@@ -19,6 +22,8 @@ export function getLinkedWorkItemMetadata(meta: WorktreeMeta | undefined): Linke
     linkedAzureDevOpsPR: meta?.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: meta?.linkedGiteaPR ?? null,
     linkedWorkItem: meta?.linkedWorkItem ?? null,
-    linkedTaskSourceContext: meta?.linkedTaskSourceContext ?? null
+    linkedTaskSourceContext: meta?.linkedTaskSourceContext ?? null,
+    linkedJiraIssue: resolveJiraIssueLink(meta ?? {}),
+    linkedJiraIssueSourceContext: resolveJiraIssueSourceContext(meta ?? {})
   }
 }

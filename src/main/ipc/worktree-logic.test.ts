@@ -513,6 +513,8 @@ describe('mergeWorktree', () => {
       linkedGiteaPR: null,
       linkedWorkItem: null,
       linkedTaskSourceContext: null,
+      linkedJiraIssue: null,
+      linkedJiraIssueSourceContext: null,
       mobileDiffReview: undefined,
       projectId: 'github:stablyai/orca',
       hostId: 'ssh:openclaw-2',

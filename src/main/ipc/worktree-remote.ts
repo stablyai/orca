@@ -1827,6 +1827,10 @@ export async function createRemoteWorktree(
     ...(args.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
       : {}),
+    ...(args.linkedJiraIssue !== undefined ? { linkedJiraIssue: args.linkedJiraIssue } : {}),
+    ...(args.linkedJiraIssueSourceContext !== undefined
+      ? { linkedJiraIssueSourceContext: args.linkedJiraIssueSourceContext }
+      : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
   }
   const { worktree } = timing.timeSync('persist_metadata', () => {
@@ -2434,6 +2438,10 @@ export async function createLocalWorktree(
     ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
     ...(args.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
+      : {}),
+    ...(args.linkedJiraIssue !== undefined ? { linkedJiraIssue: args.linkedJiraIssue } : {}),
+    ...(args.linkedJiraIssueSourceContext !== undefined
+      ? { linkedJiraIssueSourceContext: args.linkedJiraIssueSourceContext }
       : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
   }

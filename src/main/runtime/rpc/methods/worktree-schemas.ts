@@ -14,6 +14,10 @@ import {
 import { TaskSourceContextSchema } from '../../../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
+import {
+  assertJiraIssueSourceContextMatch,
+  WorktreeJiraIssueLinkFields
+} from './worktree-jira-issue-link-schema'
 
 const OptionalTuiAgent = z
   .unknown()
@@ -119,6 +123,7 @@ export const WorktreeCreate = z
     linkedGiteaPR: TriStateLinkedIssue,
     linkedWorkItem: WorkspaceLinkedItemSchema.nullable().optional(),
     linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
+    ...WorktreeJiraIssueLinkFields,
     comment: OptionalString,
     displayName: OptionalString,
     telemetrySource: z
@@ -192,6 +197,7 @@ export const WorktreeCreate = z
   })
   .superRefine((params, ctx) => {
     assertLinkedWorkItemSourceContextMatch(params, ctx)
+    assertJiraIssueSourceContextMatch(params, ctx)
     if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -240,6 +246,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedGiteaPR: TriStateLinkedIssue,
   linkedWorkItem: WorkspaceLinkedItemSchema.nullable().optional(),
   linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
+  ...WorktreeJiraIssueLinkFields,
   isArchived: OptionalBoolean,
   isUnread: OptionalBoolean,
   isPinned: OptionalBoolean,
@@ -266,6 +273,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {
   assertLinkedWorkItemSourceContextMatch(params, ctx)
+  assertJiraIssueSourceContextMatch(params, ctx)
   if (params.parentWorktree && params.noParent === true) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

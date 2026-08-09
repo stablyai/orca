@@ -5842,6 +5842,141 @@ describe('worktree remote runtime mutations', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('forwards dedicated Jira metadata through remote worktree creation', async () => {
+    const store = createTestStore()
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: {
+        worktree: makeWorktree({
+          id: 'repo1::/path/jira-link',
+          repoId: 'repo1',
+          path: '/path/jira-link'
+        })
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const linkedJiraIssue = {
+      key: 'ORCA-123',
+      title: 'Link Jira',
+      url: 'https://company.atlassian.net/browse/ORCA-123'
+    }
+    const linkedJiraIssueSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'project-1',
+      hostId: 'runtime:env-1' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      }
+    }
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'jira-link']
+    args[25] = { linkedJiraIssue, linkedJiraIssueSourceContext }
+
+    await createWorktree(...args)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'worktree.create',
+        params: expect.objectContaining({ linkedJiraIssue, linkedJiraIssueSourceContext })
+      })
+    )
+  })
+
+  it('fails before remote creation when dedicated Jira metadata is unsupported', async () => {
+    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+    if (oldRuntimeStatus.ok) {
+      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
+        (capability) => capability !== 'worktree.jira-issue-link.v1'
+      )
+    }
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
+    )
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'jira-link']
+    args[25] = {
+      linkedJiraIssue: {
+        key: 'ORCA-123',
+        title: 'Link Jira',
+        url: 'https://company.atlassian.net/browse/ORCA-123'
+      }
+    }
+
+    await expect(createWorktree(...args)).rejects.toThrow('Update the remote runtime to link Jira')
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the legacy Jira payload when the host lacks the dedicated capability', async () => {
+    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+    if (oldRuntimeStatus.ok) {
+      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
+        (capability) => capability !== 'worktree.jira-issue-link.v1'
+      )
+    }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: {
+        worktree: makeWorktree({
+          id: 'repo1::/path/jira-link',
+          repoId: 'repo1',
+          path: '/path/jira-link'
+        })
+      },
+      _meta: { runtimeId: 'runtime-old' }
+    })
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
+    )
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const linkedWorkItem = {
+      provider: 'jira' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'ORCA-123 Link Jira',
+      url: 'https://company.atlassian.net/browse/ORCA-123',
+      jiraIdentifier: 'ORCA-123'
+    }
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'jira-link']
+    args[25] = {
+      linkedWorkItem,
+      linkedJiraIssue: {
+        key: 'ORCA-123',
+        title: 'Link Jira',
+        url: 'https://company.atlassian.net/browse/ORCA-123'
+      }
+    }
+
+    await createWorktree(...args)
+
+    const params = runtimeEnvironmentCall.mock.calls
+      .map(
+        (call) => call[0] as RuntimeEnvironmentCallRequest & { params?: Record<string, unknown> }
+      )
+      .find((call) => call.method === 'worktree.create')?.params
+    expect(params).toMatchObject({ linkedWorkItem })
+    expect(params).not.toHaveProperty('linkedJiraIssue')
+  })
+
   it('passes startup commands through remote runtime worktree creation', async () => {
     const store = createTestStore()
     const wt = makeWorktree({
@@ -6364,6 +6499,40 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
+  })
+
+  it('fails before a remote Jira metadata update when the host lacks the dedicated capability', async () => {
+    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+    if (oldRuntimeStatus.ok) {
+      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
+        (capability) => capability !== 'worktree.jira-issue-link.v1'
+      )
+    }
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
+    )
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    await expect(
+      store.getState().updateWorktreeMeta(wt.id, {
+        linkedJiraIssue: {
+          key: 'ORCA-123',
+          title: 'Link Jira',
+          url: 'https://company.atlassian.net/browse/ORCA-123'
+        }
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: 'Update the remote runtime to change this workspace’s linked Jira issue'
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'worktree.set' })
+    )
   })
 
   it('force-deletes a preserved HUB-owned SSH branch through its HUB', async () => {

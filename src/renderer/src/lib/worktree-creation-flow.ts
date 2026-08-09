@@ -26,6 +26,7 @@ import {
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/worktree-creation-agent-seeds'
 import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
+import { jiraIssueLinkFromLegacyWorkItem } from '../../../shared/jira-issue-link'
 import {
   buildWorktreeCreationStartupOpt,
   getInitialWorktreeCreationPhase,
@@ -106,6 +107,9 @@ async function executeWorktreeCreation(
   let result: CreateWorktreeResult
   try {
     const backendStartup = resolveBackendDraftStartup(preparedRequest)
+    // Dual-write while the legacy shape is still supported: old clients and hosts read Jira
+    // only from linkedWorkItem, and dropping it here would blank their card for new links.
+    const linkedJiraIssue = jiraIssueLinkFromLegacyWorkItem(preparedRequest.linkedWorkItem)
     result = await useAppStore
       .getState()
       .createWorktree(
@@ -140,6 +144,10 @@ async function executeWorktreeCreation(
             : {}),
           ...(preparedRequest.linkedTaskSourceContext !== undefined
             ? { linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext }
+            : {}),
+          ...(linkedJiraIssue ? { linkedJiraIssue } : {}),
+          ...(linkedJiraIssue && preparedRequest.linkedTaskSourceContext
+            ? { linkedJiraIssueSourceContext: preparedRequest.linkedTaskSourceContext }
             : {})
         }
       )

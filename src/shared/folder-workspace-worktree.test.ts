@@ -114,6 +114,12 @@ describe('folderWorkspaceToWorktree', () => {
       jiraIdentifier: 'ORCA-123'
     })
     expect(worktree.linkedTaskSourceContext).toEqual(linkedTaskSourceContext)
+    expect(worktree.linkedJiraIssue).toEqual({
+      key: 'ORCA-123',
+      title: 'Link Jira',
+      url: 'https://company.atlassian.net/browse/ORCA-123'
+    })
+    expect(worktree.linkedJiraIssueSourceContext).toEqual(linkedTaskSourceContext)
   })
 
   it('projects first-message rename state for folder workspace cards', () => {

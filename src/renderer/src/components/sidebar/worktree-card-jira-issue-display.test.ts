@@ -5,9 +5,33 @@ import {
 } from './worktree-card-jira-issue-display'
 
 describe('getWorktreeCardJiraIssueDisplay', () => {
+  it('prefers dedicated Jira issue metadata over a linked review item', () => {
+    expect(
+      getWorktreeCardJiraIssueDisplay({
+        linkedJiraIssue: {
+          key: 'KAN-2',
+          title: 'Dedicated Jira metadata',
+          url: 'https://company.atlassian.net/browse/KAN-2'
+        },
+        linkedWorkItem: {
+          provider: 'gitlab',
+          type: 'mr',
+          number: 42,
+          title: 'Preserved review',
+          url: 'https://gitlab.example.com/group/repo/-/merge_requests/42'
+        }
+      })
+    ).toEqual({
+      identifier: 'KAN-2',
+      title: 'Dedicated Jira metadata',
+      url: 'https://company.atlassian.net/browse/KAN-2'
+    })
+  })
+
   it('projects persisted Jira linked-item metadata for the workspace card', () => {
     expect(
       getWorktreeCardJiraIssueDisplay({
+        linkedJiraIssue: undefined,
         linkedWorkItem: {
           provider: 'jira',
           type: 'issue',
@@ -27,6 +51,7 @@ describe('getWorktreeCardJiraIssueDisplay', () => {
   it('does not infer Jira from another provider', () => {
     expect(
       getWorktreeCardJiraIssueDisplay({
+        linkedJiraIssue: undefined,
         linkedWorkItem: {
           provider: 'linear',
           type: 'issue',
@@ -41,6 +66,7 @@ describe('getWorktreeCardJiraIssueDisplay', () => {
 
   it('shows persisted Jira metadata only when the Jira display property is enabled', () => {
     const worktree = {
+      linkedJiraIssue: undefined,
       linkedWorkItem: {
         provider: 'jira' as const,
         type: 'issue' as const,

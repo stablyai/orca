@@ -198,6 +198,7 @@ import type {
   LinearCustomViewModel,
   JiraConnectArgs,
   JiraCreateIssueArgs,
+  JiraIssueLink,
   JiraIssueFilter,
   JiraIssueUpdate,
   JiraSiteSelection,
@@ -237,6 +238,7 @@ import type {
   CodexRateLimitAccountsState
 } from '../../shared/types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
+import { resolveJiraIssueLink, resolveJiraIssueSourceContext } from '../../shared/jira-issue-link'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -2186,6 +2188,8 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     linkedGiteaPR: meta.linkedGiteaPR ?? null,
     linkedWorkItem: meta.linkedWorkItem ?? null,
     linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
+    linkedJiraIssue: resolveJiraIssueLink(meta),
+    linkedJiraIssueSourceContext: resolveJiraIssueSourceContext(meta),
     isArchived: meta.isArchived ?? false,
     isUnread: meta.isUnread ?? false,
     isPinned: meta.isPinned ?? false,
@@ -21728,6 +21732,8 @@ export class OrcaRuntimeService {
     linkedGiteaPR?: number | null
     linkedWorkItem?: WorkspaceLinkedItem | null
     linkedTaskSourceContext?: TaskSourceContext | null
+    linkedJiraIssue?: JiraIssueLink | null
+    linkedJiraIssueSourceContext?: TaskSourceContext | null
     comment?: string
     displayName?: string
     telemetrySource?: WorkspaceCreateTelemetrySource
@@ -21838,6 +21844,10 @@ export class OrcaRuntimeService {
         ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
         ...(args.linkedTaskSourceContext !== undefined
           ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
+          : {}),
+        ...(args.linkedJiraIssue !== undefined ? { linkedJiraIssue: args.linkedJiraIssue } : {}),
+        ...(args.linkedJiraIssueSourceContext !== undefined
+          ? { linkedJiraIssueSourceContext: args.linkedJiraIssueSourceContext }
           : {}),
         ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
         ...(args.comment !== undefined ? { comment: args.comment } : {}),
@@ -22435,6 +22445,10 @@ export class OrcaRuntimeService {
       ...(args.linkedTaskSourceContext !== undefined
         ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
         : {}),
+      ...(args.linkedJiraIssue !== undefined ? { linkedJiraIssue: args.linkedJiraIssue } : {}),
+      ...(args.linkedJiraIssueSourceContext !== undefined
+        ? { linkedJiraIssueSourceContext: args.linkedJiraIssueSourceContext }
+        : {}),
       ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
       ...(args.pendingFirstAgentMessageRename === true && effectiveCreatedWithAgent
         ? { pendingFirstAgentMessageRename: true }
@@ -22835,6 +22849,8 @@ export class OrcaRuntimeService {
       linkedGiteaPR?: number | null
       linkedWorkItem?: WorkspaceLinkedItem | null
       linkedTaskSourceContext?: TaskSourceContext | null
+      linkedJiraIssue?: JiraIssueLink | null
+      linkedJiraIssueSourceContext?: TaskSourceContext | null
       comment?: string
       displayName?: string
       workspaceStatus?: string
@@ -22897,6 +22913,10 @@ export class OrcaRuntimeService {
         ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
         ...(args.linkedTaskSourceContext !== undefined
           ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
+          : {}),
+        ...(args.linkedJiraIssue !== undefined ? { linkedJiraIssue: args.linkedJiraIssue } : {}),
+        ...(args.linkedJiraIssueSourceContext !== undefined
+          ? { linkedJiraIssueSourceContext: args.linkedJiraIssueSourceContext }
           : {}),
         ...(args.pushTarget ? { pushTarget: args.pushTarget } : {}),
         ...(args.workspaceStatus ? { workspaceStatus: args.workspaceStatus as never } : {}),

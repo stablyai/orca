@@ -11,6 +11,12 @@ import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-im
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
 import { TaskSourceContextSchema } from '../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../shared/workspace-linked-item-schema'
+import {
+  isJiraIssueLinkSourceContextMatch,
+  resolveJiraIssueLink,
+  resolveJiraIssueSourceContext
+} from '../../shared/jira-issue-link'
+import { JiraIssueLinkSchema } from '../../shared/jira-issue-link-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../shared/workspace-linked-item-source-context'
 import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
 import { projectResolvedWorktreeLineage } from '../../shared/resolved-worktree-lineage'
@@ -250,6 +256,7 @@ import {
 
 const NullableWorkspaceLinkedItemSchema = WorkspaceLinkedItemSchema.nullable()
 const NullableTaskSourceContextSchema = TaskSourceContextSchema.nullable()
+const NullableJiraIssueLinkSchema = JiraIssueLinkSchema.nullable()
 const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 const WORKTREE_LIST_ALL_CONCURRENCY = 8
 
@@ -257,6 +264,8 @@ function normalizeLinkedWorkItemFields<
   T extends {
     linkedWorkItem?: unknown
     linkedTaskSourceContext?: unknown
+    linkedJiraIssue?: unknown
+    linkedJiraIssueSourceContext?: unknown
   }
 >(input: T): T {
   const linkedWorkItem =
@@ -267,6 +276,14 @@ function normalizeLinkedWorkItemFields<
     input.linkedTaskSourceContext === undefined
       ? undefined
       : NullableTaskSourceContextSchema.parse(input.linkedTaskSourceContext)
+  const linkedJiraIssue =
+    input.linkedJiraIssue === undefined
+      ? undefined
+      : NullableJiraIssueLinkSchema.parse(input.linkedJiraIssue)
+  const linkedJiraIssueSourceContext =
+    input.linkedJiraIssueSourceContext === undefined
+      ? undefined
+      : NullableTaskSourceContextSchema.parse(input.linkedJiraIssueSourceContext)
   if (
     linkedWorkItem &&
     linkedTaskSourceContext &&
@@ -274,10 +291,19 @@ function normalizeLinkedWorkItemFields<
   ) {
     throw new Error('Linked work item and source context identities must match')
   }
+  if (
+    linkedJiraIssue &&
+    linkedJiraIssueSourceContext &&
+    !isJiraIssueLinkSourceContextMatch(linkedJiraIssue, linkedJiraIssueSourceContext)
+  ) {
+    throw new Error('Linked Jira issue and source context identities must match')
+  }
   return {
     ...input,
     ...(linkedWorkItem !== undefined ? { linkedWorkItem } : {}),
-    ...(linkedTaskSourceContext !== undefined ? { linkedTaskSourceContext } : {})
+    ...(linkedTaskSourceContext !== undefined ? { linkedTaskSourceContext } : {}),
+    ...(linkedJiraIssue !== undefined ? { linkedJiraIssue } : {}),
+    ...(linkedJiraIssueSourceContext !== undefined ? { linkedJiraIssueSourceContext } : {})
   }
 }
 
@@ -925,6 +951,8 @@ function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta
     linkedGiteaPR: meta.linkedGiteaPR ?? null,
     linkedWorkItem: meta.linkedWorkItem ?? null,
     linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
+    linkedJiraIssue: resolveJiraIssueLink(meta),
+    linkedJiraIssueSourceContext: resolveJiraIssueSourceContext(meta),
     isArchived: meta.isArchived ?? false,
     isUnread: meta.isUnread ?? false,
     isPinned: meta.isPinned ?? false,
@@ -1050,6 +1078,10 @@ function createFolderWorkspace(
     ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
     ...(args.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
+      : {}),
+    ...(args.linkedJiraIssue !== undefined ? { linkedJiraIssue: args.linkedJiraIssue } : {}),
+    ...(args.linkedJiraIssueSourceContext !== undefined
+      ? { linkedJiraIssueSourceContext: args.linkedJiraIssueSourceContext }
       : {})
   })
   return { worktree: mergeFolderWorkspace(repo, worktreeId, meta) }

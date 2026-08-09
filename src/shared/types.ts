@@ -338,6 +338,9 @@ export type FolderWorkspace = {
   connectionId?: string | null
   /** Renderer-owned host stamp for host-qualified folder catalogs. */
   executionHostId?: ExecutionHostId | null
+  /** Project-group folders stay on the legacy single-slot model on purpose: they hold one linked
+   *  task and have no review-item slot for a Jira issue to coexist with, so the dedicated
+   *  `linkedJiraIssue` pair earns nothing here. `folderWorkspaceToWorktree` projects it on read. */
   linkedTask: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   comment: string
@@ -365,6 +368,12 @@ export type WorkspaceLinkedItem = {
   linearIdentifier?: string
   jiraIdentifier?: string
   repoId?: string
+}
+
+export type JiraIssueLink = {
+  key: string
+  title: string
+  url: string
 }
 
 export type FolderWorkspaceLinkedTask = WorkspaceLinkedItem
@@ -516,6 +525,8 @@ export type Worktree = {
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
+  linkedJiraIssue?: JiraIssueLink | null
+  linkedJiraIssueSourceContext?: TaskSourceContext | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -641,6 +652,8 @@ export type WorktreeMeta = {
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
+  linkedJiraIssue?: JiraIssueLink | null
+  linkedJiraIssueSourceContext?: TaskSourceContext | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -2265,6 +2278,8 @@ export type CreateWorktreeArgs = {
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
+  linkedJiraIssue?: JiraIssueLink | null
+  linkedJiraIssueSourceContext?: TaskSourceContext | null
   pushTarget?: GitPushTarget
   workspaceStatus?: WorkspaceStatus
   manualOrder?: number

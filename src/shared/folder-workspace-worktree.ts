@@ -1,6 +1,7 @@
 import type { FolderWorkspace, Worktree } from './types'
 import { folderWorkspaceKey } from './workspace-scope'
 import { toSshExecutionHostId } from './execution-host'
+import { resolveJiraIssueLink, resolveJiraIssueSourceContext } from './jira-issue-link'
 
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
   const linkedTask = folderWorkspace.linkedTask
@@ -22,6 +23,12 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     linkedGiteaPR: null,
     linkedWorkItem: linkedTask,
     linkedTaskSourceContext: folderWorkspace.linkedTaskSourceContext ?? null,
+    // Read-only projection: FolderWorkspace stores Jira in linkedTask alone (see its type).
+    linkedJiraIssue: resolveJiraIssueLink({ linkedWorkItem: linkedTask }),
+    linkedJiraIssueSourceContext: resolveJiraIssueSourceContext({
+      linkedWorkItem: linkedTask,
+      linkedTaskSourceContext: folderWorkspace.linkedTaskSourceContext
+    }),
     isArchived: folderWorkspace.isArchived,
     isUnread: folderWorkspace.isUnread,
     isPinned: folderWorkspace.isPinned,

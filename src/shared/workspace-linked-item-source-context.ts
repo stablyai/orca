@@ -41,11 +41,12 @@ export function isWorkspaceLinkedItemSourceContextMatch(
   }
   const identity = context.providerIdentity
   const itemUrl = parseJiraIssueUrl(item.url)
+  // Kept in lockstep with isJiraIssueLinkSourceContextMatch: dual-read resolves the
+  // same context through both, so a siteId gate here only would make them disagree.
   if (
     item.type !== 'issue' ||
     item.number !== 0 ||
     identity?.provider !== 'jira' ||
-    !identity.siteId ||
     !identity.siteUrl ||
     !identity.projectKey ||
     !item.jiraIdentifier ||

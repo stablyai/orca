@@ -102,6 +102,55 @@ describe('worktree RPC schemas', () => {
     ).not.toThrow()
   })
 
+  it('normalizes dedicated Jira issue metadata and rejects source identity mismatches', () => {
+    const linkedJiraIssue = {
+      key: ' orca-123 ',
+      title: ' Link Jira ',
+      url: 'HTTPS://COMPANY.ATLASSIAN.NET/browse/orca-123?focusedCommentId=1'
+    }
+    const linkedJiraIssueSourceContext = {
+      kind: 'task-source',
+      provider: 'jira',
+      projectId: ' project-1 ',
+      hostId: 'runtime:env-1',
+      providerIdentity: {
+        provider: 'jira',
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      }
+    }
+    const parsed = WorktreeCreate.parse({
+      repo: 'repo-1',
+      name: 'jira-link',
+      linkedJiraIssue,
+      linkedJiraIssueSourceContext
+    })
+
+    expect(parsed.linkedJiraIssue).toEqual({
+      key: 'ORCA-123',
+      title: 'Link Jira',
+      url: 'https://company.atlassian.net/browse/ORCA-123'
+    })
+    expect(parsed.linkedJiraIssueSourceContext).toMatchObject({
+      provider: 'jira',
+      projectId: 'project-1'
+    })
+    expect(
+      WorktreeSet.safeParse({
+        worktree: 'id:wt-1',
+        linkedJiraIssue,
+        linkedJiraIssueSourceContext: {
+          ...linkedJiraIssueSourceContext,
+          providerIdentity: {
+            ...linkedJiraIssueSourceContext.providerIdentity,
+            siteUrl: 'https://other.atlassian.net'
+          }
+        }
+      }).success
+    ).toBe(false)
+  })
+
   it('keeps a blanked display name on remote hosts instead of dropping the clear', () => {
     // Blanking sends displayName:'' meaning "fall back to the branch/folder name".
     // Coercing it to undefined made updateManagedWorktreeMeta's omitUndefinedProperties
