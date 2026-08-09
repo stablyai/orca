@@ -36,6 +36,10 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.less': 'less',
   '.html': 'html',
   '.htm': 'html',
+  // Why: Handlebars/Ember `.hbs` templates — Monaco ships a built-in
+  // 'handlebars' language (the same embed used inside Glimmer `<template>`).
+  '.hbs': 'handlebars',
+  '.handlebars': 'handlebars',
   '.xml': 'xml',
   '.svg': 'xml',
   '.py': 'python',
@@ -85,6 +89,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.vue': 'vue',
   '.svelte': 'svelte',
   '.astro': 'astro',
+  '.gjs': 'glimmer-js',
+  '.gts': 'glimmer-ts',
   '.sv': 'systemverilog',
   '.svh': 'systemverilog',
   '.v': 'verilog',

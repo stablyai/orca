@@ -14,6 +14,18 @@ describe('detectLanguage', () => {
     expect(detectLanguage('src/routes/index.astro')).toBe('astro')
   })
 
+  it('maps Glimmer files to distinct js/ts language ids (case-insensitive)', () => {
+    expect(detectLanguage('app/components/hello.gjs')).toBe('glimmer-js')
+    expect(detectLanguage('app/components/hello.gts')).toBe('glimmer-ts')
+    expect(detectLanguage('C:\\app\\components\\HELLO.GTS')).toBe('glimmer-ts')
+  })
+
+  it('maps Handlebars/Ember templates to the built-in handlebars language id', () => {
+    expect(detectLanguage('app/templates/application.hbs')).toBe('handlebars')
+    expect(detectLanguage('src/page.handlebars')).toBe('handlebars')
+    expect(detectLanguage('C:\\app\\templates\\INDEX.HBS')).toBe('handlebars')
+  })
+
   it('maps Nim files to the nim language id', () => {
     expect(detectLanguage('src/main.nim')).toBe('nim')
     expect(detectLanguage('tasks/build.nims')).toBe('nim')
