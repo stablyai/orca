@@ -11,7 +11,6 @@ import type {
   ProjectHostSetupUpdateResult
 } from '../../shared/project-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { RepoKind } from '../../shared/repo-types'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import {
   formatProjectHostSetupCreateResult,
@@ -28,6 +27,7 @@ import {
   resolveHostFlagTarget
 } from '../execution-host-flag'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import { getOptionalRepoKind } from '../repo-kind-flag'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 
@@ -77,17 +77,6 @@ function getRequiredHostId(flags: Map<string, string | boolean>): ExecutionHostI
     throw new RuntimeClientError('invalid_argument', 'Missing required --host')
   }
   return host.id
-}
-
-function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
-  const kind = getOptionalStringFlag(flags, 'kind')
-  if (kind === undefined) {
-    return undefined
-  }
-  if (kind === 'git' || kind === 'folder') {
-    return kind
-  }
-  throw new RuntimeClientError('invalid_argument', '--kind must be git or folder')
 }
 
 export const PROJECT_HANDLERS: Record<string, CommandHandler> = {

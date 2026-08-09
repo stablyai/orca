@@ -549,6 +549,73 @@ describe('orca cli worktree awareness', () => {
     }
   )
 
+  it('sends repo.add kind folder so non-git paths register as folder projects', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_repo_add', {
+        repo: {
+          id: 'repo-1',
+          path: '/srv/orca/notes',
+          displayName: 'notes',
+          kind: 'folder'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'repo',
+        'add',
+        '--path',
+        '/srv/orca/notes',
+        '--kind',
+        'folder',
+        '--pairing-code',
+        'remote-runtime',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('repo.add', {
+      path: '/srv/orca/notes',
+      kind: 'folder'
+    })
+  })
+
+  it.each([
+    ['an unsupported value', ['--kind', 'worktree']],
+    ['a bare flag with no value', ['--kind']],
+    ['an empty value', ['--kind=']]
+  ])('rejects repo.add %s before calling the runtime', async (_label, kindArgs) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'repo',
+        'add',
+        '--path',
+        '/srv/orca/notes',
+        ...kindArgs,
+        '--pairing-code',
+        'remote-runtime',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      '--kind must be git or folder'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   // Why: STA-4792 defect 2. `--host runtime:<id>` used to leave the client local, so a Windows
   // destination fell into resolve(cwd, ...) and became a literal directory next to the caller.
   // Routing makes the client remote, which is what sends the path through untouched.
