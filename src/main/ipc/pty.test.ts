@@ -180,7 +180,7 @@ vi.mock('../pi/titlebar-extension-service', () => ({
 }))
 
 vi.mock('../pwsh', () => ({
-  isPwshAvailable: isPwshAvailableMock
+  isPwshAvailableAsync: isPwshAvailableMock
 }))
 
 vi.mock('../telemetry/client', () => ({
@@ -761,7 +761,7 @@ describe('registerPtyHandlers', () => {
     terminalHandle: 'term_recovered'
   }
 
-  function registerAgentClaimController(): {
+  function registerAgentClaimController(runtimeOverrides: Record<string, unknown> = {}): {
     spawn: (args: Record<string, unknown>) => Promise<unknown>
     write: (ptyId: string, data: string) => boolean
     resize: (ptyId: string, cols: number, rows: number) => boolean
@@ -783,7 +783,8 @@ describe('registerPtyHandlers', () => {
       }),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_recovered'),
       registerPreAllocatedHandleForPty: vi.fn(),
-      registerPty: vi.fn()
+      registerPty: vi.fn(),
+      ...runtimeOverrides
     }
     registerPtyHandlers(mainWindow as never, runtime as never)
     if (!controller) {
@@ -926,6 +927,29 @@ describe('registerPtyHandlers', () => {
       clearPtyOwnershipForConnection('ssh-attach')
       clearProviderPtyState(ownedSshPtyId)
     }
+  })
+
+  it('synchronizes subscriber-driven attach to the daemon snapshot sequence', async () => {
+    const daemonPtyId = 'repo-1::/tmp/wt@@sequence-handoff'
+    const providerSequence = { value: 204, generation: 'continued' as const }
+    const localProvider = createAgentClaimProvider({})
+    localProvider.attach.mockResolvedValueOnce({ providerSequence })
+    setLocalPtyProvider(localProvider as never)
+    const getPtyOutputSequence = vi.fn(() => 0)
+    const synchronizePtyOutputSequenceFromProvider = vi.fn()
+    const controller = registerAgentClaimController({
+      getPtyOutputSequence,
+      synchronizePtyOutputSequenceFromProvider
+    })
+
+    await expect(controller.attach(daemonPtyId)).resolves.toBe(true)
+
+    expect(getPtyOutputSequence).toHaveBeenCalledWith(daemonPtyId)
+    expect(synchronizePtyOutputSequenceFromProvider).toHaveBeenCalledWith(
+      daemonPtyId,
+      providerSequence,
+      0
+    )
   })
 
   it('does not dispatch a runtime PTY spawn after its client disconnects', async () => {
@@ -4219,6 +4243,24 @@ describe('registerPtyHandlers', () => {
             configurable: true,
             value: originalPlatform
           })
+        }
+      })
+
+      it('prepends the bundled CLI dir to PATH for packaged macOS spawns', async () => {
+        const resourcesPathDescriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
+        Object.defineProperty(process, 'resourcesPath', {
+          configurable: true,
+          value: '/tmp/orca-resources'
+        })
+        try {
+          const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
+          expect(env.PATH.split(delimiter)[0]).toBe(join('/tmp/orca-resources', 'bin'))
+        } finally {
+          if (resourcesPathDescriptor) {
+            Object.defineProperty(process, 'resourcesPath', resourcesPathDescriptor)
+          } else {
+            Reflect.deleteProperty(process, 'resourcesPath')
+          }
         }
       })
 
@@ -17080,6 +17122,33 @@ describe('registerPtyHandlers', () => {
     expect(recordCodexPaneAccountMock.mock.calls).toEqual([
       ['pty-fresh', { selectionKey: 'host', accountId: 'account-a', homeRoute: 'real-home' }]
     ])
+  })
+
+  it('refreshes the WSL hook relay for the distro a reattached pane already owns', async () => {
+    // Why here and not only in the helper's unit test: nothing else catches pty.ts dropping the
+    // reattach call — the manager owns the hooks/platform gating this spy stands in for.
+    const ensureForDistro = vi
+      .spyOn(wslHookRelayManager, 'ensureForDistro')
+      .mockImplementation(() => {})
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({ id: 'pty-wsl', isReattach: true, wslDistro: 'Ubuntu-24.04' })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    registerPtyHandlers(mainWindow as never)
+
+    try {
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, sessionId: 'pty-wsl' })
+      expect(ensureForDistro).toHaveBeenCalledWith('Ubuntu-24.04')
+    } finally {
+      ensureForDistro.mockRestore()
+    }
   })
 
   posixOnlyIt(

@@ -219,4 +219,17 @@ describe('getOpenTabMatchRelevance', () => {
     )
     expect(secondary).toBeLessThan(workspace)
   })
+
+  it('ranks search-only type aliases as secondary-tier hits', () => {
+    const typeAlias = getOpenTabMatchRelevance(
+      makeOpenTab({
+        typeAliasMatch: { text: 'terminal tab', range: { start: 0, end: 8 } }
+      })
+    )
+    const titlePrefix = getOpenTabMatchRelevance(makeOpenTab({ titleRange: { start: 0, end: 4 } }))
+    const ambient = getOpenTabMatchRelevance(makeOpenTab({ worktreeRange: { start: 0, end: 4 } }))
+    expect(typeAlias).toBeLessThan(NO_MATCH_RELEVANCE)
+    expect(titlePrefix).toBeLessThan(typeAlias)
+    expect(typeAlias).toBeLessThan(ambient)
+  })
 })

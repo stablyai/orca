@@ -3736,6 +3736,11 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
         result.settings.prBotAuthorOverrides
       )
     }
+    // Read-only mirror: the host owns this capability and `syncRuntimeBackedSettings` never
+    // sends it back, so web shows what the host enforces instead of a local value it ignores.
+    if (typeof result.settings.artifactSharingEnabled === 'boolean') {
+      runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled
+    }
     const next = mergeSettings(local, runtimeSettings)
     writeStoredSettings(next)
     return next

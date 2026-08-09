@@ -4,7 +4,9 @@ import React, { act } from 'react'
 import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraIssue } from '../../../../shared/types'
-import SmartWorkspaceNameField from './SmartWorkspaceNameField'
+import SmartWorkspaceNameField, {
+  type SmartWorkspaceNameSelection
+} from './SmartWorkspaceNameField'
 
 const jiraMock = vi.hoisted(() => ({
   retry: vi.fn(),
@@ -31,6 +33,7 @@ const jiraMock = vi.hoisted(() => ({
     errorKind: 'disconnected' | 'site-not-connected' | 'read-failed' | 'update-runtime' | null
   }
 }))
+const shellMock = vi.hoisted(() => ({ openUrl: vi.fn() }))
 const popoverMock = vi.hoisted(() => ({ contentMounted: true }))
 const jiraSearchMock = vi.hoisted(() => vi.fn(async (): Promise<JiraIssue[]> => []))
 const jiraConnectionMock = vi.hoisted(() => ({
@@ -40,6 +43,7 @@ const jiraConnectionMock = vi.hoisted(() => ({
     sites: []
   }
 }))
+const originalWindowApi = window.api
 
 vi.mock('./use-jira-url-source', () => ({
   useJiraUrlSource: () => ({
@@ -161,7 +165,9 @@ function renderField(
     onPlainEnter?: () => void
     onOpenJiraSettings?: () => void
     onValueChange?: (value: string) => void
+    onClearSelectedSource?: () => void
     value?: string
+    selectedSource?: SmartWorkspaceNameSelection | null
   } = {}
 ) {
   return render(
@@ -174,8 +180,8 @@ function renderField(
       onGitHubItemSelect={vi.fn()}
       onBranchSelect={vi.fn()}
       onLinearIssueSelect={vi.fn()}
-      selectedSource={null}
-      onClearSelectedSource={vi.fn()}
+      selectedSource={overrides.selectedSource ?? null}
+      onClearSelectedSource={overrides.onClearSelectedSource ?? vi.fn()}
       jiraSourceContext={
         overrides.jiraSourceContext
           ? ({
@@ -199,6 +205,10 @@ function renderField(
 describe('SmartWorkspaceNameField Jira accessibility', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { shell: shellMock }
+    })
     jiraSearchMock.mockResolvedValue([])
     Object.assign(jiraMock.state, {
       intent: true,
@@ -218,6 +228,14 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
 
   afterEach(() => {
     cleanup()
+    if (originalWindowApi === undefined) {
+      Reflect.deleteProperty(window, 'api')
+    } else {
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: originalWindowApi
+      })
+    }
   })
 
   it('associates loading status with the busy input and blocks plain Enter', () => {
@@ -234,6 +252,33 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
     act(() => {
       fireEvent.keyDown(input, { key: 'Enter' })
     })
+    expect(onPlainEnter).not.toHaveBeenCalled()
+  })
+
+  it('keeps selected-source actions out of Tab order with keyboard fallbacks', () => {
+    const onClearSelectedSource = vi.fn()
+    const onPlainEnter = vi.fn()
+    renderField({
+      onClearSelectedSource,
+      onPlainEnter,
+      selectedSource: {
+        kind: 'github-issue',
+        label: 'Issue #123',
+        url: 'https://github.com/orca/ide/issues/123'
+      }
+    })
+
+    expect(screen.getByRole('button', { name: 'Open link in browser' }).tabIndex).toBe(-1)
+    expect(screen.getByRole('button', { name: 'Clear selected source' }).tabIndex).toBe(-1)
+
+    const pill = document.querySelector<HTMLElement>('[data-workspace-source-pill="true"]')
+    expect(pill?.getAttribute('aria-keyshortcuts')).toBe('Alt+Enter Backspace Delete')
+
+    fireEvent.keyDown(pill as HTMLElement, { key: 'Backspace' })
+    expect(onClearSelectedSource).toHaveBeenCalledOnce()
+
+    fireEvent.keyDown(pill as HTMLElement, { key: 'Enter', altKey: true })
+    expect(shellMock.openUrl).toHaveBeenCalledWith('https://github.com/orca/ide/issues/123')
     expect(onPlainEnter).not.toHaveBeenCalled()
   })
 

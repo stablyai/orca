@@ -11,6 +11,7 @@ import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
+import { toHostReadableTranscriptPath, wslCodexSessionsDirs } from './host-readable-transcript-path'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
 // run in the main process against the runtime's own home directory; over SSH
@@ -27,6 +28,7 @@ function claudeProjectsDir(): string {
 // first (that's where this main process's Codex sessions actually live), then
 // fall back to CODEX_HOME/~/.codex so a non-Orca Codex transcript still resolves.
 // Duplicates are filtered so a managed-home symlink to ~/.codex isn't scanned twice.
+// WSL roots are a separate lazy tier — see resolveCodexSessionFile.
 function codexSessionsDirs(): string[] {
   const candidates = [
     join(getOrcaManagedCodexHomePath(), 'sessions'),
@@ -85,12 +87,15 @@ export async function resolveSessionFilePath(
     return null
   }
   // Why: the hook's transcript_path is the exact file the agent is writing, so it
-  // beats reconstructing a path from the session id. Guard with existsSync so a
-  // stale/remote path falls through to the id-based search rather than returning
-  // a non-existent file.
+  // beats reconstructing a path from the session id. Route it through the host
+  // readability check so a WSL guest path becomes an openable UNC on Windows;
+  // stale/missing paths fall through to the id-based search.
   const hookPath = options.transcriptPath?.trim()
-  if (hookPath && extname(hookPath) === '.jsonl' && existsSync(hookPath)) {
-    return hookPath
+  if (hookPath && extname(hookPath) === '.jsonl') {
+    const hostReadable = await toHostReadableTranscriptPath(hookPath)
+    if (hostReadable) {
+      return hostReadable
+    }
   }
 
   const trimmedId = sessionId.trim()
@@ -102,7 +107,14 @@ export async function resolveSessionFilePath(
     return resolveClaudeSessionFile(trimmedId, options.claudeProjectsDir ?? claudeProjectsDir())
   }
   if (transcriptAgent === 'codex') {
-    return resolveCodexSessionFile(trimmedId, options.codexSessionsDirs ?? codexSessionsDirs())
+    const overrideDirs = options.codexSessionsDirs
+    return resolveCodexSessionFile(
+      trimmedId,
+      overrideDirs ?? codexSessionsDirs(),
+      // Why: enumerating WSL homes spawns wsl.exe per distro, which boots ones the
+      // user left stopped. Only pay that after this host's own Codex roots miss.
+      overrideDirs ? undefined : wslCodexSessionsDirs
+    )
   }
   if (transcriptAgent === 'grok') {
     return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir())
@@ -127,11 +139,29 @@ async function resolveClaudeSessionFile(
 
 async function resolveCodexSessionFile(
   sessionId: string,
-  sessionsDirs: string[]
+  sessionsDirs: string[],
+  loadFallbackDirs?: () => Promise<string[]>
 ): Promise<string | null> {
   // Codex rollout file names embed the session id (rollout-<ts>-<id>.jsonl), so
   // match the id as a suffix of the file's base name rather than an exact name.
   // Search each candidate root (managed home first) and stop at the first match.
+  const hit = await findCodexRolloutInDirs(sessionId, sessionsDirs)
+  if (hit) {
+    return hit
+  }
+  if (!loadFallbackDirs) {
+    return null
+  }
+  // Why: a WSL-hosted session's rollout only exists inside the distro, so fall
+  // back to each distro's Codex homes when the host's own roots came up empty (#10326).
+  const fallbackDirs = (await loadFallbackDirs()).filter((dir) => !sessionsDirs.includes(dir))
+  return findCodexRolloutInDirs(sessionId, fallbackDirs)
+}
+
+async function findCodexRolloutInDirs(
+  sessionId: string,
+  sessionsDirs: string[]
+): Promise<string | null> {
   for (const sessionsDir of sessionsDirs) {
     if (!existsSync(sessionsDir)) {
       continue

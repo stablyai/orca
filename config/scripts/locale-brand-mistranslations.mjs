@@ -56,6 +56,10 @@ export const BRAND_MISTRANSLATIONS = {
     Goose: ['鹅'],
     Pi: ['圆周率'],
     Droid: ['机器人'],
+    Kimi: ['基米'],
+    // Why: zh-only — 登月计划 is the literal "moon landing programme", not Kimi's vendor. ja and
+    // ko render this keyword their own way, so it must not go in the cross-locale preserve set.
+    moonshot: ['登月计划'],
     'GitHub Copilot': ['GitHub 副驾驶', '副驾驶'],
     Bitbucket: ['位桶'],
     Linear: ['线性', '线形'],

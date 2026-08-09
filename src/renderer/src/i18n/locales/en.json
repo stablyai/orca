@@ -110,7 +110,7 @@
       "port": "Port",
       "pr": "PR"
     },
-    "renderCapOverflow": "{{value0}} more - keep typing or add a filter to narrow",
+    "renderCapOverflow": "{{value0}} more — scroll or keep typing to narrow",
     "filter": {
       "emptyTitle": "No results match the active filter",
       "emptySubtitle": "Clear the filter above, or widen it to more hosts and projects.",
@@ -370,6 +370,15 @@
             "runtimeHostUnreachable": "Can't reach Orca server",
             "tryAgain": "Try again"
           }
+        },
+        "terminal": {
+          "quick": {
+            "command": {
+              "hosts": {
+                "5b7d781d67": "Failed to save quick command"
+              }
+            }
+          }
         }
       }
     },
@@ -410,6 +419,7 @@
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
+          "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code"
         },
         "skill": {
@@ -881,7 +891,11 @@
         "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
         "pluginsTitle": "Plugins",
         "pluginsDescription": "Install and manage experimental Orca plugins.",
-        "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
+        "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
+        "artifactsTitle": "Artifacts",
+        "artifactsDescription": "Share HTML and Markdown files with your team and manage their public links.",
+        "automationsTitle": "Automations",
+        "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -2806,7 +2820,8 @@
             "c2f0b72b8d": "Insert",
             "925f49f210": "Expand Pane",
             "df766809e0": "Collapse Pane",
-            "cff67afad1": "Copy Context"
+            "cff67afad1": "Copy Context",
+            "15dd899676": "Add to {{value0}}…"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
@@ -2947,6 +2962,10 @@
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
             "reconnectButton": "Reconnect"
+          },
+          "TerminalQuickCommandsSubmenu": {
+            "3ccc7981bb": "Host unavailable",
+            "54f29b7c0d": "Loading host…"
           }
         }
       },
@@ -3166,6 +3185,14 @@
           },
           "TerminalTabLeadingIcon": {
             "7ab2964bea": "Unread agent completion"
+          },
+          "TabBarQuickCommandAddActions": {
+            "45a2f36d51": "Command",
+            "b856c833ae": "Command on {{value0}}"
+          },
+          "TabBarQuickCommandHostLoadStatus": {
+            "82e294f3ca": "Host unavailable",
+            "7c129b08ff": "Loading host…"
           }
         }
       },
@@ -3279,6 +3306,7 @@
             "runtime_reconnecting": "Reconnecting",
             "runtime_last_close_reason": "Closed: {{value0}}",
             "runtime_reconnect_attempt": "Attempt {{value0}}",
+            "runtime_workspace_window_closed": "Workspace window closed",
             "connectedHostCount_one": "{{count}} host",
             "connectedHostCount_other": "{{count}} hosts",
             "connecting": "Connecting…",
@@ -4426,7 +4454,8 @@
           "196c1b5362": "Open GitLab tasks",
           "0ccba862b8": "Open GitHub tasks",
           "fee535205b": "Tasks",
-          "d599269755": "Hide from sidebar"
+          "d599269755": "Hide from sidebar",
+          "artifacts": "Artifacts"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -6146,7 +6175,10 @@
           "5567191a6e": "Browse",
           "0e9fc0eadc": "Workspace Directory",
           "e2955d9ccb": "Configure where new workspaces are created.",
-          "7511097c5d": "Workspace"
+          "7511097c5d": "Workspace",
+          "31e300af1c": "Ask Before Deleting Artifacts",
+          "fb29a73a17": "Show a confirmation dialog before deleting a shared artifact and breaking its public link.",
+          "bf46474e33": "Show a confirmation before deleting a shared artifact. Anyone holding its public link loses access."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Apply Changes",
@@ -6669,7 +6701,13 @@
           "38d61927e6": "No quick commands saved.",
           "44923dd982": "destructive",
           "ec1ed99e70": "Delete",
-          "d1d0976320": "None"
+          "d1d0976320": "None",
+          "89f7e57fcc": "Saved on",
+          "d59bd333c3": "Update this Orca server to manage its quick commands.",
+          "f2bf411640": "Could not load commands from this host.",
+          "7ecfee5b8e": "Retry",
+          "601d6af51f": "Loading commands…",
+          "923ba89646": "Could not refresh commands from this host. Showing the last loaded commands."
         },
         "RecentTabOrderControl": {
           "3b17c81ede": "Tab strip order",
@@ -6860,7 +6898,9 @@
           "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
           "hostStateDisconnected": "Disconnected",
           "hostStateUnknown": "Unknown",
-          "nestedHostLabel": "{{value0}} via {{value1}}"
+          "nestedHostLabel": "{{value0}} via {{value1}}",
+          "hostStateWorkspaceWindowClosed": "Workspace window closed",
+          "hostWorkspaceWindowClosedHelp": "The server is reachable but its Orca window is closed. Open Orca on {{value0}} to use this setup."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
@@ -9546,7 +9586,9 @@
           "hostOverride": "Host override",
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
-          "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+          "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration.",
+          "hostCollectionProjectScopes": "Host collection + project scopes",
+          "terminalQuickCommandHostCollections": "Commands are saved on the selected Orca host, then scoped globally or to a project setup. Commands from this device also remain available in remote workspaces."
         },
         "RepositoryForkSyncSection": {
           "defaultBranch": "default branch",
@@ -10367,6 +10409,77 @@
           "body": "The terminal daemon was started by an Orca install that no longer exists, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.",
           "openManageSessions": "Open Manage Sessions",
           "title": "macOS permission grants aren’t reaching terminals"
+        },
+        "artifacts": {
+          "enable": "Enable Artifacts",
+          "enableDescription": "Add Artifacts to the sidebar so you can open and delete shared files.",
+          "account": "Orca account",
+          "connected": "Connected",
+          "signInRequired": "Sign in is required to upload and manage artifacts.",
+          "signingIn": "Signing in…",
+          "signIn": "Sign in to Orca",
+          "title": "Artifacts",
+          "description": "Share HTML and Markdown files with your team and manage their public links.",
+          "howToTitle": "How to use Artifacts",
+          "howToDescription": "Ask your agent to share an HTML or Markdown file. Orca handles the upload with your account.",
+          "shareStepTitle": "Ask your agent to share it",
+          "shareStepDescription": "For example: “Share this HTML mock as an artifact.”",
+          "linkStepTitle": "Share the public link",
+          "linkStepDescription": "Your agent returns a link that anyone with the URL can view.",
+          "manageStepTitle": "Manage it in Orca",
+          "manageStepDescription": "Open Artifacts from the sidebar to revisit or delete links owned by your account.",
+          "openArtifacts": "Open Artifacts",
+          "openArtifactsDescription": "View and delete links shared through your account.",
+          "showButton": "Show Artifacts Button",
+          "showButtonDescription": "Show the Artifacts shortcut in the sidebar.",
+          "openArtifactsDescriptionV2": "Preview, copy, and manage links shared through your account.",
+          "signInTitle": "Sign in to share artifacts",
+          "signInDescription": "Use your Orca account to upload artifacts and manage their public links.",
+          "signInAgain": "Sign in again",
+          "enableStepTitle": "Allow publishing first",
+          "enableStepWebDescription": "Open Settings → Artifacts in the Orca desktop app on the host device and turn publishing on. Until then every share fails with artifact_sharing_disabled.",
+          "enableStepDescription": "Turn on “Allow publishing public artifact links” above. Until then every share fails with artifact_sharing_disabled.",
+          "allowPublishing": "Allow publishing public artifact links",
+          "allowPublishingWebDescription": "Desktop only. This capability is granted on the device running Orca — open Settings → Artifacts there to change it. Shown read-only here so it matches what that device enforces.",
+          "allowPublishingDescription": "Off by default. When on, anything running on this device — your agents and the orca CLI — can upload HTML and Markdown files to your Orca account and mint links anyone with the URL can open. Turning it off does not delete existing links — remove those from Artifacts.",
+          "howToDescriptionDisabled": "Publishing is off, so nothing on this device can create a public link yet. Allow it first, then ask your agent to share an HTML or Markdown file.",
+          "allowPublishingSearchDescription": "Let agents and the orca CLI upload files to your Orca account and mint public links."
+        },
+        "orcaAccount": {
+          "connected": "Connected",
+          "reconnectRequired": "Your session expired. Sign in again to use cloud features.",
+          "unavailable": "Orca sign-in is unavailable in this build.",
+          "signedOut": "Sign in to use Artifacts and Orca Relay.",
+          "checking": "Checking account status…",
+          "account": "Orca account",
+          "signOut": "Sign out",
+          "signingIn": "Signing in…",
+          "signInAgain": "Sign in again",
+          "signIn": "Sign in to Orca",
+          "title": "Orca Account",
+          "description": "Share work instantly and reach your desktop from Orca Mobile wherever you are.",
+          "searchDescription": "Sign in or out of the account used by Artifacts and Orca Relay.",
+          "benefitsTitle": "Included with your account",
+          "artifactsTitle": "Artifact sharing",
+          "artifactsDescription": "Publish HTML and Markdown files, then manage every shared link from Orca.",
+          "relayTitle": "Orca Relay",
+          "relayDescription": "Connect Orca Mobile to this desktop across cellular or any Wi-Fi."
+        },
+        "automations": {
+          "showButton": "Show Automations Button",
+          "showButtonDescription": "Show the Automations shortcut in the sidebar.",
+          "howItWorksTitle": "How Automations work",
+          "howItWorksDescription": "Schedule agent work once, then let Orca create each run and keep its results together.",
+          "defineStepTitle": "Describe the work",
+          "defineStepDescription": "Choose a project, agent, prompt, and schedule.",
+          "runStepTitle": "Orca starts each run",
+          "runStepDescription": "The selected agent gets a fresh workspace when the schedule is due.",
+          "reviewStepTitle": "Review the results",
+          "reviewStepDescription": "Inspect recent runs and continue the work whenever you need to.",
+          "openAutomations": "Open Automations",
+          "openAutomationsDescription": "Create schedules and inspect recent runs.",
+          "title": "Automations",
+          "description": "Schedule agent work and choose whether Automations appears in the sidebar."
         }
       },
       "right": {
@@ -14357,7 +14470,16 @@
       "confirmation": {
         "dialog": {
           "8490e5d36a": "Confirm",
-          "56f5c60e0c": "Cancel"
+          "56f5c60e0c": "Cancel",
+          "92bac3217e": "Don't ask again"
+        },
+        "skip": {
+          "saved": "We'll skip this confirmation next time.",
+          "savedDescription": "You can change this in Settings.",
+          "openSettings": "Open Settings",
+          "preference": {
+            "0b0cb6e3f9": "Could not save the confirmation preference."
+          }
         }
       },
       "jira": {
@@ -14633,7 +14755,7 @@
           "signout": {
             "confirm": {
               "title": "Sign out of Orca?",
-              "description": "You'll be signed out of Orca on this device. Your local projects and worktrees won't be affected.",
+              "description": "Artifacts and Orca Relay will be unavailable until you sign in again. Your local projects and worktrees won't be affected.",
               "cancel": "Cancel",
               "action": "Sign out"
             }
@@ -14817,6 +14939,66 @@
         "streamConnectionUnreachable": "Cannot reach the remote server.",
         "streamRestartFailed": "Failed to restart remote browser stream.",
         "streamCapabilityUnsupported": "The selected runtime does not support remote browser streaming."
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "signInAgain": "Sign in to Orca again to load artifacts.",
+          "loadFailed": "Could not load artifacts.",
+          "deleteTitle": "Delete artifact?",
+          "deleteDescription": "“{{name}}” will no longer be available at its public link.",
+          "delete": "Delete",
+          "deleteFailed": "Could not delete the artifact.",
+          "closeArtifacts": "Close artifacts",
+          "closeTooltip": "Close · Esc",
+          "title": "Artifacts",
+          "refresh": "Refresh",
+          "signInHeading": "Sign in to Orca",
+          "signInCopy": "Sign in to view and manage artifacts shared through your account.",
+          "signingIn": "Signing in…",
+          "signIn": "Sign in to Orca",
+          "empty": "No shared artifacts",
+          "emptyCopy": "Ask your agent to share an HTML or Markdown file, and it will appear here.",
+          "openArtifact": "Open artifact",
+          "deleteArtifact": "Delete artifact",
+          "moreAvailable": "More artifacts are available",
+          "moreAvailableCopy": "Load the next page to continue.",
+          "loadMoreFailed": "Could not load more artifacts.",
+          "publishingOff": "Publishing is turned off",
+          "publishingOffCopy": "Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then ask your agent to share an HTML or Markdown file.",
+          "openArtifactsSettings": "Open Settings → Artifacts",
+          "loadedCountMore": "{{count}} loaded · more available",
+          "loadedCount": "{{count}} shared",
+          "retry": "Retry",
+          "reconnectHeading": "Sign in to Orca again",
+          "reconnectCopy": "Sign in again to view and manage the artifacts shared through your account.",
+          "signInAgainAction": "Sign in again",
+          "unconfiguredCopy": "Orca account sign-in is not configured on this machine yet.",
+          "openAccountSettings": "Open account settings"
+        },
+        "copySuccess": "Artifact link copied",
+        "copyFailed": "Could not copy artifact link",
+        "copyLink": "Copy link",
+        "openInBrowser": "Open in browser",
+        "preview": "Artifact preview",
+        "previewUnavailable": "Preview unavailable",
+        "previewUnavailableDescription": "Open this artifact in your browser to view it.",
+        "actions": "Artifact actions",
+        "ArtifactCollection": {
+          "loadMore": "Load more"
+        },
+        "ArtifactDetailHeader": {
+          "publicLink": "Anyone with this link can view it"
+        },
+        "ArtifactListPane": {
+          "search": "Search artifacts",
+          "listLabel": "Shared artifacts",
+          "noMatches": "No matches"
+        },
+        "updatedAt": "Updated {{when}}",
+        "updatedRecently": "recently",
+        "expiryUnknown": "Expiry unknown",
+        "expired": "Link expired",
+        "expires": "Link expires {{when}}"
       }
     },
     "i18n": {

@@ -97,6 +97,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'yarn',
   'Kagi',
   'kagi',
+  'kimi',
   'Bitbucket',
   'bitbucket',
   'GNOME',

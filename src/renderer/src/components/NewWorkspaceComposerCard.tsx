@@ -918,7 +918,7 @@ export default function NewWorkspaceComposerCard({
             variant="ghost"
             size="sm"
             onClick={onToggleAdvanced}
-            className="-ml-2 text-xs"
+            className="-ml-2 text-xs focus-visible:ring-inset"
           >
             {translate('auto.components.NewWorkspaceComposerCard.f0470c7383', 'Advanced')}
             <ChevronDown
@@ -934,6 +934,7 @@ export default function NewWorkspaceComposerCard({
             advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
           )}
           aria-hidden={!advancedOpen}
+          inert={!advancedOpen}
         >
           <div className="min-h-0">
             {/* Why: px-1 gives the Note textarea's 3px outset focus ring breathing room so the overflow-hidden drawer doesn't clip it. */}

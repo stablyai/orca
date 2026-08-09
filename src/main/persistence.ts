@@ -5779,6 +5779,10 @@ export class Store {
     if ('showMenuBarIcon' in updates) {
       sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
     }
+    // Why: the artifact publish capability must be an exact boolean on disk; no truthy value grants it.
+    if ('artifactSharingEnabled' in updates) {
+      sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
+    }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
