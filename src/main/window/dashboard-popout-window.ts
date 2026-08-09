@@ -1,10 +1,18 @@
-import { app, BrowserWindow, nativeTheme, type WebContents } from 'electron'
+import { BrowserWindow, nativeTheme, type WebContents } from 'electron'
 import { join } from 'node:path'
-import { is } from '@electron-toolkit/utils'
 import type { Store } from '../persistence'
-import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
-import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import {
+  POPOUT_DEFAULT_HEIGHT,
+  POPOUT_DEFAULT_WIDTH,
+  POPOUT_MIN_HEIGHT,
+  POPOUT_MIN_WIDTH,
+  installPopoutBoundsPersistence,
+  installPopoutWindowSecurity,
+  loadPopoutHtml,
+  resolveRestoredPopoutBounds,
+  showPopoutWhenReady
+} from './popout-window-chrome'
 import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
 import { nativeZoomCommandMatchesKeybindings } from '../../shared/window-shortcut-policy'
 import {
@@ -14,10 +22,6 @@ import {
   type KeybindingOverrides
 } from '../../shared/keybindings'
 
-const MIN_WIDTH = 480
-const MIN_HEIGHT = 360
-const DEFAULT_WIDTH = 960
-const DEFAULT_HEIGHT = 720
 const DEFAULT_VIEW = 'board'
 const DASHBOARD_POPOUT_PARTITION = 'orca-dashboard-popout'
 
@@ -98,38 +102,6 @@ function broadcastPopoutOpenChanged(open: boolean): void {
   }
 }
 
-function loadDashboardPopout(window: BrowserWindow, view: string): void {
-  const search = `view=${encodeURIComponent(view)}`
-  // Why: mirror loadMainWindow's dev/prod branch — the dev server serves the
-  // second HTML entry, prod loads the emitted file.
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}/popout.html?${search}`)
-  } else {
-    void window.loadFile(join(__dirname, '../renderer/popout.html'), { search })
-  }
-}
-
-function resolveRestoredBounds(store: Store | null): {
-  x: number
-  y: number
-  width: number
-  height: number
-} | null {
-  const raw = store?.getUI().dashboardPopoutBounds ?? null
-  if (
-    raw &&
-    raw.width >= MIN_WIDTH &&
-    raw.height >= MIN_HEIGHT &&
-    rectHasVisibleAreaOnAnyDisplay(raw, MIN_WIDTH / 2, MIN_HEIGHT / 2)
-  ) {
-    return raw
-  }
-  if (raw) {
-    console.warn('[dashboard-popout] Discarding off-screen/near-min popout bounds:', raw)
-  }
-  return null
-}
-
 /**
  * Open the pop-out dashboard window, or focus it if already open. The window is
  * a standalone top-level BrowserWindow with a native frame that reuses the same
@@ -154,14 +126,17 @@ export function createOrFocusDashboardPopout(
 
   const initialView = view ?? DEFAULT_VIEW
 
-  const savedBounds = resolveRestoredBounds(store)
+  const savedBounds = resolveRestoredPopoutBounds(
+    store?.getUI().dashboardPopoutBounds ?? null,
+    'dashboard-popout'
+  )
 
   const window = new BrowserWindow({
-    width: savedBounds?.width ?? DEFAULT_WIDTH,
-    height: savedBounds?.height ?? DEFAULT_HEIGHT,
+    width: savedBounds?.width ?? POPOUT_DEFAULT_WIDTH,
+    height: savedBounds?.height ?? POPOUT_DEFAULT_HEIGHT,
     ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
-    minWidth: MIN_WIDTH,
-    minHeight: MIN_HEIGHT,
+    minWidth: POPOUT_MIN_WIDTH,
+    minHeight: POPOUT_MIN_HEIGHT,
     title: 'Orca Agent Dashboard',
     show: false,
     autoHideMenuBar: true,
@@ -181,114 +156,98 @@ export function createOrFocusDashboardPopout(
       webviewTag: false
     }
   })
-  installPrivilegedWindowNavigationPolicy(window.webContents)
-  // Why: isolated sessions do not inherit the main session's deny-by-default permission policy.
-  window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) =>
-    callback(false)
-  )
-  window.webContents.session.setPermissionCheckHandler(() => false)
+
+  // Why: if wiring the window's security/zoom/persistence/load setup throws
+  // partway through, the already-constructed native window must not be
+  // leaked, and the module-level singleton/broadcast below must not fire for
+  // a dead window.
+  let unsubscribeUIChanged: (() => void) | undefined
+  let openBroadcasted = false
+  try {
+    installPopoutWindowSecurity(window.webContents)
+
+    // Why: uiZoomLevel is the app-wide UI zoom; without this the pop-out always
+    // renders at 100% while the main window honors the persisted level.
+    window.webContents.on('dom-ready', () => {
+      if (!window.isDestroyed()) {
+        window.webContents.setZoomLevel(store?.getUI().uiZoomLevel ?? 0)
+      }
+    })
+    // Follow app-zoom changes made while the pop-out is open (main-window zoom,
+    // settings control, mobile ui.set). Compare against the last followed value,
+    // not the live webContents level, so a window-local zoom via the menu/chords
+    // is not snapped back until the app-wide level actually changes.
+    let lastFollowedZoomLevel = store?.getUI().uiZoomLevel ?? 0
+    unsubscribeUIChanged = store?.onUIChanged((ui) => {
+      const level = ui.uiZoomLevel ?? 0
+      if (level === lastFollowedZoomLevel) {
+        return
+      }
+      lastFollowedZoomLevel = level
+      if (!window.isDestroyed()) {
+        window.webContents.setZoomLevel(level)
+      }
+    })
+    // Why: the pop-out has no renderer-side shortcut plumbing; resolve only the
+    // zoom chords here and let every other key fall through untouched.
+    window.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') {
+        return
+      }
+      const direction = resolveZoomShortcut(input, options.getKeybindings?.())
+      if (direction) {
+        event.preventDefault()
+        zoomDashboardPopout(window, direction)
+      }
+    })
+
+    window.webContents.on('zoom-changed', (event, direction) => {
+      // Why: Electron reports Ctrl/Cmd+wheel zoom outside the keyboard input path.
+      if (
+        (direction === 'in' || direction === 'out') &&
+        nativeZoomCommandMatchesKeybindings(
+          direction,
+          process.platform,
+          options.getKeybindings?.(),
+          {
+            context: 'app'
+          }
+        )
+      ) {
+        event.preventDefault()
+        zoomDashboardPopout(window, direction)
+      }
+    })
+
+    showPopoutWhenReady(window)
+
+    installPopoutBoundsPersistence(window, (bounds) => {
+      store?.updateUI({ dashboardPopoutBounds: bounds })
+    })
+
+    window.on('closed', () => {
+      unsubscribeUIChanged?.()
+      if (dashboardPopoutWindow === window) {
+        dashboardPopoutWindow = null
+        if (openBroadcasted) {
+          broadcastPopoutOpenChanged(false)
+        }
+      }
+    })
+
+    loadPopoutHtml(window, `view=${encodeURIComponent(initialView)}`)
+  } catch (err) {
+    unsubscribeUIChanged?.()
+    if (!window.isDestroyed()) {
+      window.destroy()
+    }
+    throw err
+  }
+
   dashboardPopoutWindow = window
+  openBroadcasted = true
   broadcastPopoutOpenChanged(true)
 
-  // Why: uiZoomLevel is the app-wide UI zoom; without this the pop-out always
-  // renders at 100% while the main window honors the persisted level.
-  window.webContents.on('dom-ready', () => {
-    if (!window.isDestroyed()) {
-      window.webContents.setZoomLevel(store?.getUI().uiZoomLevel ?? 0)
-    }
-  })
-  // Follow app-zoom changes made while the pop-out is open (main-window zoom,
-  // settings control, mobile ui.set). Compare against the last followed value,
-  // not the live webContents level, so a window-local zoom via the menu/chords
-  // is not snapped back until the app-wide level actually changes.
-  let lastFollowedZoomLevel = store?.getUI().uiZoomLevel ?? 0
-  const unsubscribeUIChanged = store?.onUIChanged((ui) => {
-    const level = ui.uiZoomLevel ?? 0
-    if (level === lastFollowedZoomLevel) {
-      return
-    }
-    lastFollowedZoomLevel = level
-    if (!window.isDestroyed()) {
-      window.webContents.setZoomLevel(level)
-    }
-  })
-
-  // Why: the pop-out has no renderer-side shortcut plumbing; resolve only the
-  // zoom chords here and let every other key fall through untouched.
-  window.webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown') {
-      return
-    }
-    const direction = resolveZoomShortcut(input, options.getKeybindings?.())
-    if (direction) {
-      event.preventDefault()
-      zoomDashboardPopout(window, direction)
-    }
-  })
-
-  window.webContents.on('zoom-changed', (event, direction) => {
-    // Why: Electron reports Ctrl/Cmd+wheel zoom outside the keyboard input path.
-    if (
-      (direction === 'in' || direction === 'out') &&
-      nativeZoomCommandMatchesKeybindings(direction, process.platform, options.getKeybindings?.(), {
-        context: 'app'
-      })
-    ) {
-      event.preventDefault()
-      zoomDashboardPopout(window, direction)
-    }
-  })
-
-  window.once('ready-to-show', () => {
-    if (!window.isDestroyed()) {
-      window.show()
-    }
-  })
-
-  // Bounds persistence — mirrors the main window's debounced/frozen approach so
-  // teardown-time resize/move events can't clobber the remembered size with
-  // near-minimum bounds.
-  let boundsTimer: ReturnType<typeof setTimeout> | null = null
-  let windowClosing = false
-  const saveBounds = (): void => {
-    if (boundsTimer) {
-      clearTimeout(boundsTimer)
-    }
-    boundsTimer = setTimeout(() => {
-      boundsTimer = null
-      if (windowClosing || window.isDestroyed() || window.isMinimized() || window.isFullScreen()) {
-        return
-      }
-      const bounds = window.getBounds()
-      if (bounds.width < MIN_WIDTH || bounds.height < MIN_HEIGHT) {
-        return
-      }
-      store?.updateUI({ dashboardPopoutBounds: bounds })
-    }, 500)
-  }
-  window.on('resize', saveBounds)
-  window.on('move', saveBounds)
-
-  const freezeBounds = (): void => {
-    windowClosing = true
-    if (boundsTimer) {
-      clearTimeout(boundsTimer)
-      boundsTimer = null
-    }
-  }
-  window.on('close', freezeBounds)
-  app.on('before-quit', freezeBounds)
-
-  window.on('closed', () => {
-    app.removeListener('before-quit', freezeBounds)
-    unsubscribeUIChanged?.()
-    if (dashboardPopoutWindow === window) {
-      dashboardPopoutWindow = null
-    }
-    broadcastPopoutOpenChanged(false)
-  })
-
-  loadDashboardPopout(window, initialView)
   return window
 }
 

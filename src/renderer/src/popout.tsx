@@ -3,6 +3,7 @@ import './assets/main.css'
 import { StrictMode, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopoutRoot'
+import { DetachedTerminalPaneRoot } from './components/detached-terminal-pane/DetachedTerminalPaneRoot'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
   installRendererCrashDiagnostics,
@@ -12,6 +13,8 @@ import { applyDocumentTheme } from './lib/document-theme'
 import { buildAppFontFamily } from './lib/app-font-family'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
+import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
+import { TooltipProvider } from './components/ui/tooltip'
 import { useAppStore } from './store'
 import type { GlobalSettings } from '../../shared/types'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
@@ -50,9 +53,13 @@ if (!rootElement) {
   throw new Error('Pop-out root element not found.')
 }
 
-// The main process loads popout.html with ?view=<name> so a single entry can
-// host different dashboard layouts (kanban, etc.).
-const requestedView = new URLSearchParams(window.location.search).get('view')
+// The main process loads popout.html with ?view=<name> for dashboard layouts,
+// or ?detachedPane=<tabId> for a detached terminal tab (see loadPopoutHtml in
+// popout-window-chrome.ts) — a single entry hosts both so the manager doesn't
+// need per-pane-kind build/window wiring.
+const searchParams = new URLSearchParams(window.location.search)
+const requestedView = searchParams.get('view')
+const detachedPaneTabId = searchParams.get('detachedPane')
 
 function PopoutSettingsSync(): null {
   const settings = useAppStore((state) => state.settings)
@@ -99,6 +106,30 @@ function PopoutSettingsSync(): null {
 
 function PopoutRoot(): React.JSX.Element {
   useTranslation()
+
+  if (detachedPaneTabId) {
+    return (
+      <RecoverableRenderErrorBoundary
+        boundaryId="detached-terminal-pane.root"
+        surface="detached-terminal-pane"
+        title={translate(
+          'detachedTerminalPane.recoverableError.title',
+          'Orca terminal hit an error.'
+        )}
+        description={translate(
+          'detachedTerminalPane.recoverableError.description',
+          'The detached terminal could not finish rendering. Retry to remount it, or reopen it.'
+        )}
+      >
+        <TooltipProvider delayDuration={400}>
+          <LinkRoutingPreferenceDialogProvider>
+            <DetachedTerminalPaneRoot paneId={detachedPaneTabId} />
+          </LinkRoutingPreferenceDialogProvider>
+        </TooltipProvider>
+      </RecoverableRenderErrorBoundary>
+    )
+  }
+
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="dashboard-popout.root"

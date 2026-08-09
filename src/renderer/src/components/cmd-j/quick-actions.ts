@@ -1,4 +1,12 @@
-import { FileText, FolderPlus, Globe, Play, SquareTerminal, Trash2 } from 'lucide-react'
+import {
+  ExternalLink,
+  FileText,
+  FolderPlus,
+  Globe,
+  Play,
+  SquareTerminal,
+  Trash2
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CmdJQuickActionAvailability, CmdJQuickActionContext } from './quick-action-context'
 import {
@@ -111,6 +119,25 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
     ],
     isAvailable: workspaceActionAvailability,
     run: (ctx) => runWorkspaceAction(ctx, ctx.openNewTerminalTab)
+  },
+  {
+    id: 'new-detached-window',
+    kind: 'action',
+    title: translate('auto.components.cmd.j.quick.actions.b0047b5abe', 'New Detached Window'),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.7f2ee585c7',
+      'Open a terminal in a detached window.'
+    ),
+    icon: ExternalLink,
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.b58929770d', 'new detached window'),
+      translate('auto.components.cmd.j.quick.actions.verbs.4a1e515bfb', 'detached window'),
+      translate('auto.components.cmd.j.quick.actions.verbs.37eddf0a3d', 'detach'),
+      translate('auto.components.cmd.j.quick.actions.verbs.05ac8dcf45', 'pop out'),
+      translate('auto.components.cmd.j.quick.actions.verbs.f1fa60eaa6', 'popout terminal')
+    ],
+    isAvailable: workspaceActionAvailability,
+    run: (ctx) => runWorkspaceAction(ctx, ctx.openNewDetachedTerminalWindow)
   },
   {
     id: CREATE_WORKSPACE_QUICK_ACTION_ID,

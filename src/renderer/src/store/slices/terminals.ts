@@ -84,6 +84,7 @@ import {
   disposeParkedTerminalWatchersForPtyIds,
   retireParkedTerminalTab
 } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import { captureTerminalTabForWindowDetach } from '@/components/terminal-pane/terminal-tab-window-detach'
 import {
   clearCommittedPtyShutdownSettlements,
   hasCommittedPtyShutdownSettlement,
@@ -668,6 +669,8 @@ export type TerminalSlice = {
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
+  /** Create a terminal tab and immediately pop it into a detached OS window once its PTY is live; never leaves a visible tab behind on success or timeout. */
+  openNewDetachedTerminalWindow: (groupId: string) => Promise<void>
   closeTab: (
     tabId: string,
     opts?: {
@@ -1068,7 +1071,19 @@ function targetScopedWorkspaceHydrationPatch(
   }
 }
 
-export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> = (set, get) => ({
+/** Tab IDs currently being moved to a detached window — suppress from the tab
+ *  bar while the PTY allocates so the user never sees a brief flicker of the
+ *  tab appearing and disappearing in the main window. */
+export const detachingTabIds = new Set<string>()
+/** How long openNewDetachedTerminalWindow waits for the new tab's PTY before giving up and closing the never-visible tab. */
+const DETACHED_WINDOW_PTY_ALLOCATION_TIMEOUT_MS = 5_000
+
+export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> = (
+  set,
+  get,
+  // Why: subscribe through the creator's store api instead of importing useAppStore from '@/store' — that import would re-enter store creation during this slice's module eval (see the parked-watcher-registry note above).
+  api
+) => ({
   tabsByWorktree: {},
   activeTabId: null,
   activeTabIdByWorktree: {},
@@ -1576,6 +1591,65 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // Why: Cmd+J shares the titlebar-button creation path, so append the new terminal after mixed editor/browser tabs, not first.
     get().setTabBarOrder(worktreeId, [...base.filter((id) => id !== terminal.id), terminal.id])
     focusTerminalTabSurface(terminal.id)
+  },
+
+  openNewDetachedTerminalWindow: async (groupId) => {
+    const worktreeId = get().activeWorktreeId
+    if (!worktreeId) {
+      return
+    }
+    const tab = get().createTab(worktreeId, groupId)
+    detachingTabIds.add(tab.id)
+    // Why: createTab returns with ptyIdsByTabId[tab.id] still empty — the PTY id
+    // arrives asynchronously via updateTabPtyId. Wait for it before building the
+    // detach seed, but bound the wait so a failed spawn can't wedge the flow.
+    const ptyAllocated = await new Promise<boolean>((resolve) => {
+      const finish = (allocated: boolean): void => {
+        clearTimeout(timeout)
+        unsubscribe()
+        resolve(allocated)
+      }
+      const timeout = setTimeout(() => finish(false), DETACHED_WINDOW_PTY_ALLOCATION_TIMEOUT_MS)
+      const unsubscribe = api.subscribe((state) => {
+        if ((state.ptyIdsByTabId[tab.id] ?? []).length > 0) {
+          finish(true)
+        }
+      })
+      // Why: re-check after subscribing so a PTY bound between createTab and the
+      // subscribe call can't slip past the listener.
+      if ((get().ptyIdsByTabId[tab.id] ?? []).length > 0) {
+        finish(true)
+      }
+    })
+    if (!ptyAllocated) {
+      detachingTabIds.delete(tab.id)
+      // Why: no PTY within the timeout means nothing useful to detach; close the
+      // never-visible tab so the attempt leaves no trace for the user.
+      get().closeTab(tab.id)
+      return
+    }
+    const seed = captureTerminalTabForWindowDetach(get(), worktreeId, tab.id)
+    if (!seed) {
+      detachingTabIds.delete(tab.id)
+      // Why: graceful degradation — without a seed the tab simply stays in the main window.
+      console.error('[new-detached-window] could not build a detach seed for tab', tab.id)
+      return
+    }
+    try {
+      await window.api.pane.detach(tab.id, seed)
+    } catch (error) {
+      detachingTabIds.delete(tab.id)
+      // Why: graceful degradation — a failed detach leaves the tab in the main window.
+      console.error('[new-detached-window] failed to detach tab to a new window', error)
+      return
+    }
+    // Why: the detached window now owns the PTYs, so close the main-window tab
+    // without killing them and without feeding the Cmd+Shift+T reopen stack.
+    detachingTabIds.delete(tab.id)
+    get().closeTab(tab.id, {
+      localPtyTeardownOwnedExternally: true,
+      captureRecentlyClosed: false
+    })
   },
 
   closeTab: (tabId, opts) => {

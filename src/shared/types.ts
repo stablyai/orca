@@ -1094,6 +1094,30 @@ export type TerminalPaneLayoutNode =
       ratio?: number
     }
 
+type DetachedTerminalTabSeedRecord = {
+  tab: TerminalTab
+  layout: TerminalLayoutSnapshot
+  ptyId: string | null
+  worktreeId: string
+  /** Source `TabGroup.id` — reintegration re-inserts into this group when it
+   *  still exists, so a split-pane group layout survives a round trip. */
+  groupId: string
+  /** Repo metadata so the popout store can resolve terminal worktree routes
+   *  (prevents "Workspace identity is ambiguous" on detach). Includes
+   *  executionHostId/connectionId so the repo-indexed route resolver can match. */
+  repo: Pick<
+    Repo,
+    'id' | 'path' | 'displayName' | 'badgeColor' | 'addedAt' | 'connectionId' | 'executionHostId'
+  >
+}
+
+/** Handoff payload from the main window to a detached-terminal-tab pop-out
+ *  window so it can seed its own store before mounting the terminal pane. */
+export type DetachedTerminalTabSeed = DetachedTerminalTabSeedRecord & {
+  /** Additional selected tabs captured in their requested order. */
+  additionalTabs?: DetachedTerminalTabSeedRecord[]
+}
+
 export type TerminalLayoutSnapshot = {
   root: TerminalPaneLayoutNode | null
   activeLeafId: string | null
@@ -3506,6 +3530,9 @@ export type PersistedUIState = {
   /** Saved bounds for the pop-out dashboard window so it restores to its last
    *  position/size. Independent of the main window's bounds. */
   dashboardPopoutBounds?: { x: number; y: number; width: number; height: number } | null
+  /** Saved bounds per-detached-pane-id so each popped-out pane restores its
+   *  own position/size, not shared with other panes or the dashboard popout. */
+  detachablePaneBounds?: Record<string, { x: number; y: number; width: number; height: number }>
   /** One-shot flag: 'recent' once meant the smart sort (v1→v2 rename), migrated to 'smart' once so the new last-activity 'recent' isn't re-clobbered. */
   _sortBySmartMigrated?: boolean
   /** LEGACY inline-agents flag, stamped unconditionally every load so it can't gate migration; kept only for rollback forward-compat (real gate: _inlineAgentsDefaultedForAllUsers). */

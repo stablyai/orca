@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
@@ -7,6 +7,7 @@ import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TerminalTab } from '../../../../shared/types'
+import type { TabSplitDirection } from '../../store/slices/tabs'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { useAppStore } from '../../store'
 import {
@@ -23,6 +24,7 @@ import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-widt
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
+import { useSortableTabRename } from './useSortableTabRename'
 import {
   hasUnreadAgentCompletionForTerminalTab,
   isTerminalTabActivityLive,
@@ -39,11 +41,21 @@ type SortableTabProps = {
   isActive: boolean
   isPinned: boolean
   isExpanded: boolean
-  onActivate: (tabId: string) => void
+  onActivate: (tabId: string, event?: PointerEvent) => void
   onClose: (tabId: string) => void
+  isSelected?: boolean
+  isMultiSelect?: boolean
+  allSelectedPinned?: boolean
+  onTogglePinSelected?: () => void
+  onCloseSelected?: () => void
+  onDetachSelectedToWindow?: () => void
+  onMoveSelectedToSplit?: (direction: TabSplitDirection) => void
+  hasDetachableSelected?: boolean
+  onContextMenuRequest?: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onCloseToLeft: (tabId: string) => void
+  onDetachToWindow?: (tabId: string) => void
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
@@ -76,6 +88,7 @@ export default function SortableTab({
   onCloseOthers,
   onCloseToRight,
   onCloseToLeft,
+  onDetachToWindow,
   onSetCustomTitle,
   onSetTabColor,
   onTogglePin,
@@ -85,7 +98,16 @@ export default function SortableTab({
   includeTopTabBorder = true,
   canToggleViewMode = false,
   isChatView = false,
-  onToggleViewMode
+  onToggleViewMode,
+  isSelected = false,
+  isMultiSelect = false,
+  allSelectedPinned = false,
+  onTogglePinSelected,
+  onCloseSelected,
+  onDetachSelectedToWindow,
+  onMoveSelectedToSplit,
+  hasDetachableSelected = true,
+  onContextMenuRequest
 }: SortableTabProps): React.JSX.Element {
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
   const hasUnreadActivity = useAppStore(
@@ -100,12 +122,18 @@ export default function SortableTab({
       agentStatusByPaneKey: s.agentStatusByPaneKey,
       agentStatusEpoch: s.agentStatusEpoch,
       runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
-      ptyIdsByTabId: s.ptyIdsByTabId,
       terminalLayout: s.terminalLayoutsByTabId?.[tab.id]
     })
   )
-  const renamingTabId = useAppStore((s) => s.renamingTabId)
-  const setRenamingTabId = useAppStore((s) => s.setRenamingTabId)
+  const {
+    isEditing,
+    renameValue,
+    setRenameValue,
+    handleRenameOpen,
+    commitRename,
+    cancelRename,
+    setRenameInputElement
+  } = useSortableTabRename({ tab, onSetCustomTitle })
 
   // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
   const shellForIcon = tab.shellOverride
@@ -123,65 +151,11 @@ export default function SortableTab({
     data: { ...dragData, agent: tabAgent }
   })
 
-  // Why: no transform/transition/opacity so tabs stay anchored during drag, only the insertion bar moves (see TabBar.tsx).
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
-  const [isEditing, setIsEditing] = useState(false)
   // Why: a live working/needs-input state is newer than a prior-turn unread, so it owns the icon until the turn ends.
   const showUnreadActivity =
     hasUnreadActivity && !isEditing && !isTerminalTabActivityLive(activityStatus)
-  const [renameValue, setRenameValue] = useState('')
-  const renameFocusFrameRef = useRef<number | null>(null)
-  // Why: onBlur fires during Input unmount; mark rename resolved so it can't re-commit and overwrite discarded edits.
-  const committedOrCancelledRef = useRef(false)
-
-  const handleRenameOpen = useCallback(() => {
-    committedOrCancelledRef.current = false
-    // Why: snapshot title once; don't refresh if tab.title changes mid-edit (e.g. OSC) so the user's edits aren't overwritten.
-    setRenameValue(tab.customTitle ?? tab.title)
-    setIsEditing(true)
-  }, [tab.customTitle, tab.title])
-
-  const commitRename = useCallback(() => {
-    if (committedOrCancelledRef.current) {
-      return
-    }
-    committedOrCancelledRef.current = true
-    const trimmed = renameValue.trim()
-    onSetCustomTitle(tab.id, trimmed.length > 0 ? trimmed : null)
-    setIsEditing(false)
-  }, [renameValue, onSetCustomTitle, tab.id])
-
-  const cancelRename = useCallback(() => {
-    committedOrCancelledRef.current = true
-    setIsEditing(false)
-  }, [])
-
-  const setRenameInputElement = useCallback((input: HTMLInputElement | null) => {
-    if (renameFocusFrameRef.current !== null) {
-      cancelAnimationFrame(renameFocusFrameRef.current)
-      renameFocusFrameRef.current = null
-    }
-    if (!input) {
-      return
-    }
-    // Why: defer past Radix menu teardown/focus restore; key off input mount so title updates don't re-select edited text.
-    renameFocusFrameRef.current = requestAnimationFrame(() => {
-      renameFocusFrameRef.current = null
-      input.focus()
-      input.select()
-    })
-  }, [])
-
-  // Why: the tab.rename shortcut routes through store renamingTabId; open the editor and clear it so it fires once.
-  useEffect(() => {
-    if (renamingTabId !== tab.id) {
-      return
-    }
-    handleRenameOpen()
-    setRenamingTabId(null)
-  }, [renamingTabId, tab.id, handleRenameOpen, setRenamingTabId])
-
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
@@ -200,9 +174,12 @@ export default function SortableTab({
 
   // Why: while editing, drop drag listeners so typing can't start a drag; attributes stay spread to keep dnd-kit a11y.
   const dragListeners = isEditing ? undefined : listeners
-  const handleActivate = useCallback(() => {
-    onActivate(tab.id)
-  }, [onActivate, tab.id])
+  const handleActivate = useCallback(
+    (e?: PointerEvent) => {
+      onActivate(tab.id, e)
+    },
+    [onActivate, tab.id]
+  )
   // Why: defer activation to pointer-up so a drag doesn't switch tabs or steal focus mid-gesture (tab-strip-pointer-activation).
   const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
     onActivate: handleActivate,
@@ -220,11 +197,12 @@ export default function SortableTab({
       data-pinned={isPinned ? 'true' : 'false'}
       // Why: DOM attribute lets E2E assert real selection state; a store-only check would miss render breaks (PR #1186 shipped in #1193).
       data-active={isActive ? 'true' : 'false'}
+      data-selected={isSelected || isActive ? 'true' : 'false'}
       data-agent-activity-status={activityStatus}
       {...attributes}
       {...dragListeners}
       // Why: subtle amber wash flags unread activity at a glance, layered over the active highlight so it still reads selected.
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive, isSelected)} ${isSelected && !isActive ? 'border-b-2 border-foreground/50' : ''}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -405,6 +383,7 @@ export default function SortableTab({
         className={TAB_CONTAINER_WIDTH_CLASSES}
         onContextMenuCapture={(event) => {
           event.preventDefault()
+          onContextMenuRequest?.(tab.id)
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
           setMenuPoint({ x: event.clientX, y: event.clientY })
           setMenuOpen(true)
@@ -430,12 +409,20 @@ export default function SortableTab({
         onCloseOthers={onCloseOthers}
         onCloseToRight={onCloseToRight}
         onCloseToLeft={onCloseToLeft}
+        onDetachToWindow={onDetachToWindow}
         onRenameOpen={handleRenameOpen}
         onSetTabColor={onSetTabColor}
         onTogglePin={onTogglePin}
         canToggleViewMode={canToggleViewMode}
         isChatView={isChatView}
         onToggleViewMode={onToggleViewMode}
+        isMultiSelect={isMultiSelect}
+        allSelectedPinned={allSelectedPinned}
+        onTogglePinSelected={onTogglePinSelected}
+        onCloseSelected={onCloseSelected}
+        onDetachSelectedToWindow={onDetachSelectedToWindow}
+        onMoveSelectedToSplit={onMoveSelectedToSplit}
+        hasDetachableSelected={hasDetachableSelected}
       />
     </>
   )

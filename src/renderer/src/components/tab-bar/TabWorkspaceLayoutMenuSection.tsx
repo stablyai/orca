@@ -42,32 +42,46 @@ function paneColumnDirectionLabel(direction: TabSplitDirection): string {
 export function TabWorkspaceLayoutMenuSection({
   unifiedTabId,
   groupId,
-  trailingSeparator = false
+  trailingSeparator = false,
+  isMultiSelect = false,
+  onMoveSelectedToSplit
 }: {
   unifiedTabId: string
   groupId: string
   trailingSeparator?: boolean
+  isMultiSelect?: boolean
+  onMoveSelectedToSplit?: (direction: TabSplitDirection) => void
 }): React.JSX.Element | null {
   if (!canMoveTabToNewPaneColumn(unifiedTabId, groupId)) {
     return null
   }
 
+  const label = isMultiSelect
+    ? translate(
+        'auto.components.tab.bar.TabWorkspaceLayoutMenuSection.moveTabsToPaneColumn',
+        'Move Tabs to Split'
+      )
+    : translate(
+        'auto.components.tab.bar.TabWorkspaceLayoutMenuSection.moveToPaneColumn',
+        'Move Tab to Split'
+      )
   return (
     <>
       <DropdownMenuSub>
         <DropdownMenuSubTrigger className="[&>svg:last-child]:size-3.5">
           <Columns2 className="size-3.5 shrink-0" />
-          {translate(
-            'auto.components.tab.bar.TabWorkspaceLayoutMenuSection.moveToPaneColumn',
-            'Move Tab to Split'
-          )}
+          {label}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className={TAB_CONTEXT_SUBMENU_CONTENT_CLASS}>
           {PANE_COLUMN_DIRECTIONS.map((direction) => (
             <DropdownMenuItem
               key={direction}
               onSelect={() => {
-                moveTabToNewPaneColumn({ unifiedTabId, groupId, direction })
+                if (isMultiSelect && onMoveSelectedToSplit) {
+                  onMoveSelectedToSplit(direction)
+                } else {
+                  moveTabToNewPaneColumn({ unifiedTabId, groupId, direction })
+                }
               }}
             >
               {paneColumnDirectionIcon(direction)}

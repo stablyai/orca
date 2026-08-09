@@ -2903,7 +2903,10 @@
             "2186a8407c": "아래로 분할",
             "96354ed249": "위로 분할",
             "911542656f": "탭 고정",
-            "c5aaee8c39": "탭 고정 해제"
+            "c5aaee8c39": "탭 고정 해제",
+            "8184cea86c": "탭 고정 해제",
+            "9b98341009": "탭 고정",
+            "fa56fb767a": "탭 닫기"
           },
           "EditorFileTab": {
             "3da7445c84": "파일 이름 바꾸기 {{value0}}"
@@ -2921,7 +2924,10 @@
             "1d04b1630b": "아래로 분할",
             "6b3efb106e": "위로 분할",
             "fdd29eb669": "탭 고정",
-            "8e9d603a09": "탭 고정 해제"
+            "8e9d603a09": "탭 고정 해제",
+            "01149d9510": "탭 고정 해제",
+            "4abb1f6983": "탭 고정",
+            "df968bc22f": "탭 닫기"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent 설정…",
@@ -2963,7 +2969,12 @@
             "60f958ec75": "탭 고정",
             "417722e9c2": "탭 고정 해제",
             "splitTerminalRight": "터미널을 오른쪽으로 분할",
-            "splitTerminalDown": "터미널을 아래로 분할"
+            "splitTerminalDown": "터미널을 아래로 분할",
+            "1a9723c5d0": "탭 고정 해제",
+            "ebaea2fd14": "탭 고정",
+            "74366d8a40": "탭 닫기",
+            "detachTabsToWindow": "탭을 새 창으로 분리",
+            "detachToWindow": "새 창으로 분리"
           },
           "TabBar": {
             "b1a132357f": "새 탭",
@@ -2973,6 +2984,7 @@
             "aea43b5748": "기존 에뮬레이터 탭을 엽니다.",
             "b426bb2615": "모바일 에뮬레이터로 이동",
             "4833fb2cbe": "새 브라우저 탭",
+            "f960fd4b5e": "새 분리 창",
             "d364f3c8d4": "새로운 Terminal",
             "7c1313d237": "새로운 Terminal:",
             "d1afac112b": "WSL",
@@ -3057,7 +3069,11 @@
                   "1baeb07c17": "iOS 시뮬레이터",
                   "8a580f88cf": "iPhone",
                   "7ecdc5ef08": "iPad",
-                  "14965cc123": "모바일"
+                  "14965cc123": "모바일",
+                  "5f0a17a4fc": "분리 창",
+                  "b8900ea0d8": "분리",
+                  "db021b066c": "꺼내기",
+                  "0a69fa0013": "팝아웃"
                 }
               }
             }
@@ -3067,7 +3083,8 @@
             "left": "왼쪽",
             "down": "아래",
             "up": "위",
-            "moveToPaneColumn": "탭을 분할로 이동"
+            "moveToPaneColumn": "탭을 분할로 이동",
+            "moveTabsToPaneColumn": "탭을 분할로 이동"
           },
           "EditorFileTabCloseButton": {
             "4655cf570e": "탭 닫기",
@@ -13423,6 +13440,8 @@
               "25349b66fc": "새 Markdown 파일",
               "784812ca24": "활성 워크스페이스에서 브라우저 탭을 엽니다.",
               "892bfa9339": "새 브라우저 탭",
+              "b0047b5abe": "새 분리 창",
+              "7f2ee585c7": "분리된 창에서 터미널을 엽니다.",
               "verbs": {
                 "newBrowser": "새 브라우저",
                 "newBrowserTab": "새 브라우저 탭",
@@ -13445,7 +13464,12 @@
                 "removeWorktree": "작업 트리 제거",
                 "trashWorktree": "워크트리 휴지통으로 이동",
                 "addQuickCommand": "빠른 명령 추가",
-                "newQuickCommand": "새로운 빠른 명령"
+                "newQuickCommand": "새로운 빠른 명령",
+                "b58929770d": "새 분리 창",
+                "4a1e515bfb": "분리 창",
+                "37eddf0a3d": "분리",
+                "05ac8dcf45": "꺼내기",
+                "f1fa60eaa6": "팝아웃 터미널"
               }
             }
           },
@@ -14796,5 +14820,17 @@
         "unknown": "Restart Orca to try again."
       }
     }
+  },
+  "detachedTerminalPane": {
+    "seedMissing": "이 터미널은 더 이상 이 창에서 사용할 수 없습니다.",
+    "reintegrate": "메인 창으로 돌아가기",
+    "recoverableError": {
+      "title": "Orca 터미널에 오류가 발생했습니다.",
+      "description": "분리된 터미널 렌더링을 완료할 수 없습니다. 다시 시도하여 다시 마운트하거나 다시 열어보세요."
+    },
+    "tabs": "Detached terminals"
+  },
+  "detachToWindow": {
+    "error": "탭을 새 창으로 분리할 수 없습니다"
   }
 }

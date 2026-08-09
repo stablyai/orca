@@ -264,6 +264,53 @@ const interactiveOutputCharsByPty = new Map<string, number>()
 const activeRendererPtys = new Set<string>()
 const visibleRendererPtys = new Set<string>()
 const rendererVisibilityKnownPtys = new Set<string>()
+// Why: detached pane windows own their PTY data delivery — when a PTY is in a popout
+// window, output and input must route to that window's WebContents, not mainWindow.
+const detachedPtyToRenderer = new Map<string, WebContents>()
+const detachedPaneRenderers = new Set<WebContents>()
+
+/** Register PTY IDs as owned by a detached pane window's renderer.
+ *  After this, PTY data/output routes to that WebContents instead of mainWindow. */
+export function registerDetachedPanePtys(ptyIds: string[], webContents: WebContents): void {
+  detachedPaneRenderers.add(webContents)
+  for (const id of ptyIds) {
+    detachedPtyToRenderer.set(id, webContents)
+  }
+}
+
+/** Revert detached PTYs back to the main-window renderer and clean up the
+ *  pane renderer registration (or leave it if other PTYs still reference it). */
+export function unregisterDetachedPanePtys(ptyIds: string[]): void {
+  for (const id of ptyIds) {
+    detachedPtyToRenderer.delete(id)
+  }
+  // Lazy cleanup: dereference any pane renderer with no remaining PTYs.
+  const referenced = new Set(detachedPtyToRenderer.values())
+  for (const wc of detachedPaneRenderers) {
+    if (!referenced.has(wc)) {
+      detachedPaneRenderers.delete(wc)
+    }
+  }
+}
+
+/** Whether a live detached WebContents target exists for a specific PTY id.
+ *  Used to gate main-window-destroy teardowns: when a detached pane window
+ *  is still alive, delivery state must remain intact so output keeps flowing. */
+export function hasLiveDetachedTarget(id: string): boolean {
+  const target = detachedPtyToRenderer.get(id)
+  return target !== undefined && !target.isDestroyed()
+}
+
+/** Whether ANY live detached WebContents target exists across all PTYs.
+ *  Used in global teardown paths where a per-PTY id is not available. */
+export function anyLiveDetachedTarget(): boolean {
+  for (const target of detachedPtyToRenderer.values()) {
+    if (!target.isDestroyed()) {
+      return true
+    }
+  }
+  return false
+}
 let invalidatePendingPtyDrainPriority = (_id?: string, _schedule?: boolean): void => {}
 let invalidatePendingPtyDrainPolicy = (_id?: string, _schedule?: boolean): void => {}
 const pendingHiddenRendererResizeOutputPtys = new Set<string>()
@@ -1091,6 +1138,7 @@ function finishPtyShutdown(
   if (connectionId) {
     store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
   }
+  detachedPtyToRenderer.delete(id)
   ptyOwnership.delete(id)
   markClaudePtyExited(id)
   return incarnationId
@@ -3016,6 +3064,10 @@ export function registerPtyHandlers(
     return writtenOff
   }
 
+  function getPtyRendererTarget(id: string): WebContents {
+    return detachedPtyToRenderer.get(id) ?? mainWindow.webContents
+  }
+
   function sendPtyDataToRenderer(
     id: string,
     payload: PtyDataPayload,
@@ -3037,8 +3089,9 @@ export function registerPtyHandlers(
     }
     rendererInFlightTotalChars += charCount
     recordPtyRendererDeliveryPressure(id)
+    const target = getPtyRendererTarget(id)
     try {
-      mainWindow.webContents.send('pty:data', payload)
+      target.send('pty:data', payload)
     } catch (error) {
       const current = rendererDeliveryAccountingByPty.get(id)
       if (current) {
@@ -3125,10 +3178,15 @@ export function registerPtyHandlers(
     reason: PtyModelRestoreReason,
     markerSeq: number | undefined
   ): void {
-    if (mainWindow.isDestroyed()) {
+    const target = getPtyRendererTarget(id)
+    if (detachedPtyToRenderer.has(id)) {
+      if (target.isDestroyed()) {
+        return
+      }
+    } else if (mainWindow.isDestroyed()) {
       return
     }
-    mainWindow.webContents.send('pty:modelRestoreNeeded', {
+    target.send('pty:modelRestoreNeeded', {
       id,
       reason,
       ...(typeof markerSeq === 'number' ? { markerSeq } : {})
@@ -3344,7 +3402,7 @@ export function registerPtyHandlers(
 
   function flushPendingData(): void {
     flushTimer = null
-    if (mainWindow.isDestroyed()) {
+    if (mainWindow.isDestroyed() && !anyLiveDetachedTarget()) {
       // Why release now: bookkeeping is being wiped, so no future drain can resume these producers — local shells would wedge.
       producerFlowControl.releaseAll()
       clearDeliveryResyncProbe()
@@ -3521,7 +3579,7 @@ export function registerPtyHandlers(
   }
 
   function preparePtyExitForRenderer(payload: { id: string; code: number }): (() => void) | null {
-    if (mainWindow.isDestroyed()) {
+    if (mainWindow.isDestroyed() && !detachedPtyToRenderer.has(payload.id)) {
       sshOutputIntake?.transferPtyProjections(payload.id, 'renderer-destroyed')
       return () => {}
     }
@@ -3582,7 +3640,7 @@ export function registerPtyHandlers(
   }
 
   function finalizePtyExitForRenderer(payload: { id: string; code: number }): void {
-    if (mainWindow.isDestroyed()) {
+    if (mainWindow.isDestroyed() && !detachedPtyToRenderer.has(payload.id)) {
       rendererCreditBeforeExitByPty.delete(payload.id)
       return
     }
@@ -3610,7 +3668,7 @@ export function registerPtyHandlers(
         schedulePendingDataAfterCreditReport(true)
       }
     }
-    mainWindow.webContents.send('pty:exit', {
+    getPtyRendererTarget(payload.id).send('pty:exit', {
       ...payload,
       ...(reversibleStopOwnersByPtyId.has(payload.id) ? { preserveRendererBinding: true } : {})
     })
@@ -3631,8 +3689,15 @@ export function registerPtyHandlers(
   }
 
   function sendPtySpawnedToRenderer(id: string): void {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('pty:spawned', { id })
+    const target = getPtyRendererTarget(id)
+    // Was the PTY moved to a detached pane renderer? Route there.
+    // Otherwise, use original main-window path with its existing guard.
+    if (detachedPtyToRenderer.has(id)) {
+      if (!target.isDestroyed()) {
+        target.send('pty:spawned', { id })
+      }
+    } else if (!mainWindow.isDestroyed()) {
+      target.send('pty:spawned', { id })
     }
   }
 
@@ -3650,7 +3715,7 @@ export function registerPtyHandlers(
     const preservesSeq = !payload.transformed && rawLength === payload.data.length
     const startSeq = typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
     const projectionId = projection?.identity.projectionSemanticsId
-    if (mainWindow.isDestroyed()) {
+    if (mainWindow.isDestroyed() && !hasLiveDetachedTarget(payload.id)) {
       if (projectionId) {
         sshOutputIntake?.transferProjections([projectionId], 'renderer-destroyed')
       }
@@ -4055,7 +4120,7 @@ export function registerPtyHandlers(
       if (opts) {
         payload.opts = opts
       }
-      mainWindow.webContents.send('pty:serializeBuffer:request', payload)
+      getPtyRendererTarget(ptyId).send('pty:serializeBuffer:request', payload)
     })
   }
 
@@ -5536,7 +5601,7 @@ export function registerPtyHandlers(
     },
     clearBuffer: async (ptyId) => {
       // Why: desktop xterm and daemon/SSH providers hold separate buffers; clear both so mobile resubscribe can't resurrect cleared history.
-      mainWindow.webContents.send('pty:clearBuffer:request', { ptyId })
+      getPtyRendererTarget(ptyId).send('pty:clearBuffer:request', { ptyId })
       try {
         await getProviderForPty(ptyId).clearBuffer(ptyId)
       } catch {
@@ -6853,13 +6918,23 @@ export function registerPtyHandlers(
     (value as { cols: number }).cols > 0 &&
     (value as { rows: number }).rows > 0
 
-  const isPtyWriteEventFromMainWindow = (
+  const isPtyWriteEventAuthorized = (
     event: IpcMainEvent | IpcMainInvokeEvent,
-    mainWebContents: WebContents
-  ): boolean =>
-    event.sender === mainWebContents &&
-    !mainWindow.isDestroyed() &&
-    !(typeof mainWebContents.isDestroyed === 'function' && mainWebContents.isDestroyed())
+    ptyId: string
+  ): boolean => {
+    if (
+      event.sender === mainWindow.webContents &&
+      !mainWindow.isDestroyed() &&
+      !(
+        typeof mainWindow.webContents.isDestroyed === 'function' &&
+        mainWindow.webContents.isDestroyed()
+      )
+    ) {
+      return true
+    }
+    const owningRenderer = detachedPtyToRenderer.get(ptyId)
+    return owningRenderer !== undefined && event.sender === owningRenderer
+  }
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
@@ -6911,7 +6986,7 @@ export function registerPtyHandlers(
   const hostViewportClaimTails = new Map<string, Promise<boolean>>()
 
   ipcMain.on('pty:write', (event, args: unknown) => {
-    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents) || !isPtyWritePayload(args)) {
+    if (!isPtyWritePayload(args) || !isPtyWriteEventAuthorized(event, args.id)) {
       return
     }
     const claimTail = hostViewportClaimTails.get(args.id)
@@ -6922,7 +6997,7 @@ export function registerPtyHandlers(
     writePtyInput(args)
   })
   ipcMain.handle('pty:writeAccepted', (event, args: unknown): boolean | Promise<boolean> => {
-    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents) || !isPtyWritePayload(args)) {
+    if (!isPtyWritePayload(args) || !isPtyWriteEventAuthorized(event, args.id)) {
       return false
     }
     const claimTail = hostViewportClaimTails.get(args.id)
@@ -6933,11 +7008,10 @@ export function registerPtyHandlers(
 
   ipcMain.removeAllListeners('pty:claimViewport')
   ipcMain.on('pty:claimViewport', (event, args: unknown) => {
-    if (
-      !isPtyWriteEventFromMainWindow(event, mainWindow.webContents) ||
-      !runtime ||
-      !isPtyViewportClaimPayload(args)
-    ) {
+    if (!isPtyViewportClaimPayload(args) || !isPtyWriteEventAuthorized(event, args.id)) {
+      return
+    }
+    if (!runtime) {
       return
     }
     const prior = hostViewportClaimTails.get(args.id)
@@ -7108,12 +7182,15 @@ export function registerPtyHandlers(
   ipcMain.removeAllListeners('pty:rendererDispatcherReady')
   ipcMain.on('pty:rendererDispatcherReady', (event) => {
     // Why: the reconcile below destructively clears delivery accounting, so a straggler handshake from a dying window must not reset the new window.
-    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents)) {
+    if (event.sender !== mainWindow.webContents && !detachedPaneRenderers.has(event.sender)) {
       return
     }
-    // Why: a handshake while the gate is already open means a page load whose lifecycle reset was missed; clear the dead page's stale accounting so it can't permanently gate survivors.
-    if (rendererPtyDispatcherReady) {
-      resetRendererDeliveryAccountingForLifecycleReset()
+    // Why: only the main window's handshake should reset delivery accounting — a
+    // detached pane renderer handshake must not clear the main window's state.
+    if (event.sender === mainWindow.webContents) {
+      if (rendererPtyDispatcherReady) {
+        resetRendererDeliveryAccountingForLifecycleReset()
+      }
     }
     // Why: real handshake landed — cancel the self-heal watchdog so it can't later force-open the gate.
     clearDispatcherReadyWatchdog()

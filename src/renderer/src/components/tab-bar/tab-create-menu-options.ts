@@ -6,6 +6,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
   | 'new-browser'
+  | 'new-detached-window'
   | 'new-markdown'
   | 'new-simulator'
   | 'new-terminal'
@@ -22,6 +23,7 @@ export type TabCreateMenuOption = {
 
 export type TabCreateMenuOptionsContext = {
   hasNewBrowser: boolean
+  hasNewDetachedWindow: boolean
   hasNewMarkdown: boolean
   hasOpenMarkdown: boolean
   hasSimulator: boolean
@@ -110,6 +112,21 @@ export function buildTabCreateMenuOptions(
         translate('auto.components.tab.bar.tab.create.menu.options.6d0e6a4b7a', 'new browser'),
         translate('auto.components.tab.bar.tab.create.menu.options.c87ad57785', 'browser tab'),
         translate('auto.components.tab.bar.tab.create.menu.options.cce7ef1d2c', 'web')
+      ]
+    })
+  }
+
+  if (context.hasNewDetachedWindow) {
+    const label = translate('auto.components.tab.bar.TabBar.f960fd4b5e', 'New Detached Window')
+    options.push({
+      id: 'new-detached-window',
+      kind: 'new-detached-window',
+      label,
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.5f0a17a4fc', 'detached window'),
+        translate('auto.components.tab.bar.tab.create.menu.options.b8900ea0d8', 'detach'),
+        translate('auto.components.tab.bar.tab.create.menu.options.db021b066c', 'pop out'),
+        translate('auto.components.tab.bar.tab.create.menu.options.0a69fa0013', 'popout')
       ]
     })
   }

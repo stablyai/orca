@@ -3009,7 +3009,10 @@
             "2186a8407c": "Split Down",
             "96354ed249": "Split Up",
             "911542656f": "Pin Tab",
-            "c5aaee8c39": "Unpin Tab"
+            "c5aaee8c39": "Unpin Tab",
+            "8184cea86c": "Unpin Tabs",
+            "9b98341009": "Pin Tabs",
+            "fa56fb767a": "Close Tabs"
           },
           "EditorFileTab": {
             "3da7445c84": "Rename file {{value0}}"
@@ -3027,7 +3030,10 @@
             "1d04b1630b": "Split Down",
             "6b3efb106e": "Split Up",
             "fdd29eb669": "Pin Tab",
-            "8e9d603a09": "Unpin Tab"
+            "8e9d603a09": "Unpin Tab",
+            "01149d9510": "Unpin Tabs",
+            "4abb1f6983": "Pin Tabs",
+            "df968bc22f": "Close Tabs"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
@@ -3069,7 +3075,12 @@
             "60f958ec75": "Pin Tab",
             "417722e9c2": "Unpin Tab",
             "splitTerminalRight": "Split terminal right",
-            "splitTerminalDown": "Split terminal down"
+            "splitTerminalDown": "Split terminal down",
+            "1a9723c5d0": "Unpin Tabs",
+            "ebaea2fd14": "Pin Tabs",
+            "74366d8a40": "Close Tabs",
+            "detachTabsToWindow": "Detach Tabs to Window",
+            "detachToWindow": "Detach to Window"
           },
           "TabBar": {
             "b1a132357f": "New tab",
@@ -3079,6 +3090,7 @@
             "aea43b5748": "Open the existing emulator tab.",
             "b426bb2615": "Go to Mobile Emulator",
             "4833fb2cbe": "New Browser Tab",
+            "f960fd4b5e": "New Detached Window",
             "d364f3c8d4": "New Terminal",
             "7c1313d237": "New Terminal:",
             "d1afac112b": "WSL",
@@ -3163,7 +3175,11 @@
                   "1baeb07c17": "ios simulator",
                   "8a580f88cf": "iphone",
                   "7ecdc5ef08": "ipad",
-                  "14965cc123": "mobile"
+                  "14965cc123": "mobile",
+                  "5f0a17a4fc": "detached window",
+                  "b8900ea0d8": "detach",
+                  "db021b066c": "pop out",
+                  "0a69fa0013": "popout"
                 }
               }
             }
@@ -3173,7 +3189,8 @@
             "left": "Left",
             "down": "Down",
             "up": "Up",
-            "moveToPaneColumn": "Move Tab to Split"
+            "moveToPaneColumn": "Move Tab to Split",
+            "moveTabsToPaneColumn": "Move Tabs to Split"
           },
           "EditorFileTabCloseButton": {
             "4655cf570e": "Close tab",
@@ -13860,6 +13877,8 @@
               "25349b66fc": "New Markdown File",
               "784812ca24": "Open a browser tab in the active workspace.",
               "892bfa9339": "New Browser Tab",
+              "b0047b5abe": "New Detached Window",
+              "7f2ee585c7": "Open a terminal in a detached window.",
               "verbs": {
                 "newBrowser": "new browser",
                 "newBrowserTab": "new browser tab",
@@ -13882,7 +13901,12 @@
                 "removeWorktree": "remove worktree",
                 "trashWorktree": "trash worktree",
                 "addQuickCommand": "add quick command",
-                "newQuickCommand": "new quick command"
+                "newQuickCommand": "new quick command",
+                "b58929770d": "new detached window",
+                "4a1e515bfb": "detached window",
+                "37eddf0a3d": "detach",
+                "05ac8dcf45": "pop out",
+                "f1fa60eaa6": "popout terminal"
               }
             }
           },
@@ -15335,5 +15359,17 @@
       "settingsInstruction": "Change the model, dictation mode, or shortcut anytime in",
       "settingsLink": "Settings → Voice"
     }
+  },
+  "detachedTerminalPane": {
+    "seedMissing": "This terminal is no longer available in this window.",
+    "reintegrate": "Return to main window",
+    "recoverableError": {
+      "title": "Orca terminal hit an error.",
+      "description": "The detached terminal could not finish rendering. Retry to remount it, or reopen it."
+    },
+    "tabs": "Detached terminals"
+  },
+  "detachToWindow": {
+    "error": "Could not detach tab to a new window"
   }
 }

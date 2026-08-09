@@ -378,12 +378,10 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
 
 ## Agent Guidance
 
-- Workers with a valid live preamble must send `worker_done` exactly once from their own terminal with an explicit `--outcome succeeded` or `--outcome failed`:
-  `orca orchestration send --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id <task_id> --dispatch-id <dispatch_id> --outcome succeeded --files-modified "path/a" --report-path "<optional>" --json`
+- Workers with a valid live preamble must send `worker_done` exactly once from their own terminal with an explicit `--outcome succeeded` or `--outcome failed`: `orca orchestration send --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id <task_id> --dispatch-id <dispatch_id> --outcome succeeded --files-modified "path/a" --report-path "<optional>" --json`
 - A failed outcome is still a terminal report, but Orca records both the Dispatch and Task as failed. Never encode failure only in the subject/body.
 - After sending `worker_done`, end your turn and idle at the agent prompt. The coordinator may reuse or release this terminal after it processes your report; do not start more work, poll, or attempt to close the terminal yourself. If it reuses you, it re-engages you with a fresh preamble + TASK block delivered as new terminal input.
-- For long tasks, send heartbeat/status only when the preamble asks for it, including both IDs:
-  `orca orchestration send --type heartbeat --subject "alive" --payload '{"taskId":"<task_id>","dispatchId":"<dispatch_id>","phase":"implementing"}' --json`
+- For long tasks, send heartbeat/status only when the preamble asks for it, including both IDs: `orca orchestration send --type heartbeat --subject "alive" --payload '{"taskId":"<task_id>","dispatchId":"<dispatch_id>","phase":"implementing"}' --json`
 - If blocked before completion, use `ask`; use `escalation` only when ownership is valid and the coordinator must intervene.
 - Treat preambles inherited through terminal history or full handoffs as stale unless the current prompt explicitly keeps that coordinator in the loop.
 - Coordinators must account for every settled worker terminal before waiting again or ending the turn: immediately reuse the exact worker for a new Dispatch, explicitly retain it at the user's request with `worker-retain`, or run `worker-release`. Do not leave a completed worker live merely to inspect output; released workers remain readable through `worker-read`.

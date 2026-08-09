@@ -55,6 +55,7 @@ vi.mock('lucide-react', () => ({
   ArrowRight: () => null,
   ArrowUp: () => null,
   Columns2: () => null,
+  ExternalLink: () => null,
   ListX: () => null,
   MessageSquare: () => null,
   PanelBottomClose: () => null,
@@ -281,5 +282,68 @@ describe('SortableTabContextMenu', () => {
 
     expect(container.textContent).not.toContain('Move Tab to Split')
     expect(container.textContent).toContain('Split terminal right')
+  })
+})
+describe('SortableTabContextMenu multi-select', () => {
+  it('renders multi-select menu items and hides single-tab actions when isMultiSelect is true', () => {
+    const onTogglePinSelected = vi.fn()
+    const onCloseSelected = vi.fn()
+    const onDetachSelectedToWindow = vi.fn()
+    const onMoveSelectedToSplit = vi.fn()
+
+    const { container } = renderMenu({
+      isMultiSelect: true,
+      allSelectedPinned: false,
+      onTogglePinSelected,
+      onCloseSelected,
+      onDetachSelectedToWindow,
+      onMoveSelectedToSplit,
+      hasDetachableSelected: true
+    })
+
+    expect(container.textContent).toContain('Move Tabs to Split')
+    expect(container.textContent).toContain('Pin Tabs')
+    expect(container.textContent).toContain('Close Tabs')
+    expect(container.textContent).toContain('Detach Tabs to Window')
+
+    expect(container.textContent).not.toContain('Change Title')
+    expect(container.textContent).not.toContain('Tab Color')
+    expect(container.textContent).not.toContain('Split terminal')
+
+    act(() => getButton(container, 'Pin Tabs').click())
+    expect(onTogglePinSelected).toHaveBeenCalled()
+
+    act(() => getButton(container, 'Close Tabs').click())
+    expect(onCloseSelected).toHaveBeenCalled()
+
+    act(() => getButton(container, 'Detach Tabs to Window').click())
+    expect(onDetachSelectedToWindow).toHaveBeenCalled()
+
+    act(() => getButton(container, 'Right').click())
+    expect(onMoveSelectedToSplit).toHaveBeenCalledWith('right')
+  })
+
+  it('renders Unpin Tabs when all selected tabs are pinned', () => {
+    const onTogglePinSelected = vi.fn()
+    const { container } = renderMenu({
+      isMultiSelect: true,
+      allSelectedPinned: true,
+      onTogglePinSelected
+    })
+
+    expect(container.textContent).toContain('Unpin Tabs')
+    act(() => getButton(container, 'Unpin Tabs').click())
+    expect(onTogglePinSelected).toHaveBeenCalled()
+  })
+
+  it('renders Detach Tabs to Window as disabled when hasDetachableSelected is false', () => {
+    const { container } = renderMenu({
+      isMultiSelect: true,
+      onDetachSelectedToWindow: vi.fn(),
+      hasDetachableSelected: false
+    })
+
+    const button = getButton(container, 'Detach Tabs to Window')
+    expect(button.getAttribute('disabled')).not.toBeNull()
   })
 })

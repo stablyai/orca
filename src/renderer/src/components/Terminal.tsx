@@ -177,6 +177,7 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
+import { useDetachTerminalTabToWindow } from './terminal-pane/use-detach-terminal-tab-to-window'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
@@ -1690,6 +1691,8 @@ function Terminal(): React.JSX.Element | null {
     closeTerminalTab(tabId)
   }, [])
 
+  const detachTerminalTabToWindow = useDetachTerminalTabToWindow(renderedActiveWorktreeId ?? '')
+
   const handleCloseBrowserTab = useCallback(
     (tabId: string) => {
       const state = useAppStore.getState()
@@ -2382,6 +2385,7 @@ function Terminal(): React.JSX.Element | null {
             onCloseOthers={handleCloseOthers}
             onCloseToRight={handleCloseTabsToRight}
             onCloseToLeft={handleCloseTabsToLeft}
+            onDetachToWindow={detachTerminalTabToWindow}
             onNewTerminalTab={() => handleNewTab()}
             onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}

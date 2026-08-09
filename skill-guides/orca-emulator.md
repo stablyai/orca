@@ -93,7 +93,7 @@ Use `--json` for agent-friendly output. Commands are workspace-scoped by default
 | List available / running   | `ORCA emulator list [--worktree <sel>]`     | Shows Orca-managed + raw serve-sim streams. Use output for explicit --device/--emulator. |
 | Attach / make active       | `ORCA emulator attach "iPhone 16 Pro" [--worktree <sel>] [--focus]` | Starts helper if needed (serve-sim --detach). Sets active for unqualified commands. --focus optional (does not auto-steal UI focus by default). |
 | Single tap                 | `ORCA emulator tap <x> <y> [--device <id>]` | Normalized 0..1 coords. **Preferred over gesture for simple taps.** |
-| Multi-step gesture         | `ORCA emulator gesture '<json>'`            | See gestures reference (begin/move/end). Use tap for singles. |
+| Multi-step gesture         | `ORCA emulator gesture '<json>'` (POSIX shells and PowerShell — single quotes pass the JSON's double quotes through literally) or `ORCA emulator gesture "<json with \" escaped as \\\">"` (cmd.exe only, which has no single-quote form) | See gestures reference (begin/move/end). Use tap for singles. |
 | Type text                  | `ORCA emulator type "text" [--device <id>]` | US ASCII only. Supports stdin/file via exec if needed. |
 | Hardware button            | `ORCA emulator button home [--device <id>]` | home, swipe_home, app_switcher, lock, siri, side_button. |
 | Rotate device              | `ORCA emulator rotate landscape_left`       | Remembers orientation for subsequent gestures. |

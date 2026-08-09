@@ -249,6 +249,7 @@ import type {
   Project,
   ProjectUpdateArgs,
   Repo,
+  DetachedTerminalTabSeed,
   ProjectGroup,
   ProjectHostSetup,
   ProjectHostSetupCreateArgs,
@@ -2536,6 +2537,18 @@ export type PreloadApi = {
     ackAgent: (paneKey: string) => Promise<void>
     spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
     sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>
+  }
+  pane: {
+    detach: (paneId: string, seed: DetachedTerminalTabSeed) => Promise<void>
+    reintegrate: (paneId: string) => Promise<void>
+    removeTab: (paneId: string, tabId: string) => Promise<void>
+    getDetachedState: (
+      paneId: string
+    ) => Promise<'attached' | 'transferring' | 'detached' | 'reintegrating' | 'parked' | null>
+    getDetachedTabSeed: (paneId: string) => Promise<DetachedTerminalTabSeed | null>
+    onReturned: (
+      callback: (payload: { paneId: string; seed: DetachedTerminalTabSeed | null }) => void
+    ) => () => void
   }
   terminalPreview: {
     connect: (

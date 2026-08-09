@@ -21,7 +21,7 @@ export function useTabStripPointerActivation({
   onActivate,
   disabled = false
 }: {
-  onActivate: () => void
+  onActivate: (event?: PointerEvent) => void
   disabled?: boolean
 }): {
   onPointerDown: (
@@ -46,10 +46,15 @@ export function useTabStripPointerActivation({
       // Why: start the dnd-kit gesture immediately on pointerdown; only the
       // activation decision is deferred to release.
       dragListener?.(event)
-
       cleanupRef.current?.()
+
       const startX = event.clientX
       const startY = event.clientY
+      const pressModifiers = {
+        shiftKey: event.shiftKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey
+      }
       const releaseTabStripPointerGesture = beginTabStripPointerGesture()
 
       const cleanup = (): void => {
@@ -68,7 +73,12 @@ export function useTabStripPointerActivation({
         // Why: packaged Chromium can deliver a stale first pointermove after
         // focus; the final release position is the click/drag authority.
         if (!wasDrag) {
-          onActivateRef.current()
+          onActivateRef.current({
+            ...upEvent,
+            shiftKey: upEvent.shiftKey || pressModifiers.shiftKey,
+            ctrlKey: upEvent.ctrlKey || pressModifiers.ctrlKey,
+            metaKey: upEvent.metaKey || pressModifiers.metaKey
+          } as PointerEvent)
         }
       }
       const onPointerCancel = (): void => {

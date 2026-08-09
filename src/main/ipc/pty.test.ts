@@ -241,7 +241,11 @@ import {
   getLocalPtyProvider,
   isCurrentPtyExit,
   restorePtyIncarnation,
-  type PrepareCodexSessionResume
+  type PrepareCodexSessionResume,
+  registerDetachedPanePtys,
+  unregisterDetachedPanePtys,
+  hasLiveDetachedTarget,
+  anyLiveDetachedTarget
 } from './pty'
 import { resetMacosLoginShellPreflightForTests } from '../providers/macos-tcc-login-shell'
 import {
@@ -313,7 +317,10 @@ describe('registerPtyHandlers', () => {
     webContents: {
       on: vi.fn(),
       send: vi.fn(),
-      removeListener: vi.fn()
+      removeListener: vi.fn(),
+      // Why: the did-start-loading reset handler filters to main-frame loads; default true so lifecycle-reset tests reset (a subframe case overrides false).
+      isLoadingMainFrame: vi.fn(() => true),
+      isDestroyed: () => false
     }
   }
   const mainWindowIpcEvent = { sender: mainWindow.webContents }
@@ -18922,6 +18929,48 @@ describe('registerPtyHandlers', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+  })
+
+  describe('detached pane delivery survives main-window destruction', () => {
+    // Why: the pty:data delivery contract is that when mainWindow is destroyed
+    // but a live detached WebContents target exists for the PTY id:
+    //
+    //  1. The onData teardown gate (pty.ts L2859):
+    //       if (mainWindow.isDestroyed() && !hasLiveDetachedTarget(payload.id))
+    //     → skipped when a live detached target exists → data enters pendingData.
+    //
+    //  2. The flushPendingData teardown gate (pty.ts L2572):
+    //       if (mainWindow.isDestroyed() && !anyLiveDetachedTarget())
+    //     → skipped when any live detached target exists → batch flush runs.
+    //
+    //  3. sendPtyDataToRenderer → getPtyRendererTarget(id) returns the
+    //     detached WebContents (pty.ts L2315: detachedPtyToRenderer.get(id) ??
+    //     mainWindow.webContents) → target.send('pty:data', payload) delivers
+    //     output to the detached pane window.
+    //
+    // Full integration coverage (spawn → emitData → assert send) requires
+    // the daemon-provider harness wired with runtime for the startup ingress
+    // pipeline; see installObservableDaemonTestProvider + runtime mock in the
+    // existing daemon-backed PTY tests for the reference pattern.
+
+    it('registerDetachedPanePtys populates the detached mapping so gates skip teardown', () => {
+      const liveWC = { send: vi.fn(), isDestroyed: () => false }
+      registerDetachedPanePtys(['pty-live'], liveWC as never)
+
+      const deadWC = { send: vi.fn(), isDestroyed: () => true }
+      registerDetachedPanePtys(['pty-dead'], deadWC as never)
+
+      expect(hasLiveDetachedTarget('pty-live')).toBe(true)
+      expect(hasLiveDetachedTarget('pty-dead')).toBe(false)
+      expect(hasLiveDetachedTarget('pty-unknown')).toBe(false)
+      expect(anyLiveDetachedTarget()).toBe(true)
+
+      unregisterDetachedPanePtys(['pty-live'])
+
+      expect(anyLiveDetachedTarget()).toBe(false)
+
+      unregisterDetachedPanePtys(['pty-dead'])
     })
   })
 })
