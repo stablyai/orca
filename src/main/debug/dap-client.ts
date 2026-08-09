@@ -41,6 +41,9 @@ type PendingRequest = {
   reject: (err: Error) => void
 }
 
+/** Acknowledges a reverse request. `success: false` surfaces `message` as the adapter-visible error. */
+export type ReverseRequestResponder = (body?: unknown, success?: boolean, message?: string) => void
+
 /**
  * Thin DAP transport client: sends `request`s over an adapter process's
  * stdin, correlates responses off `stdout` by `request_seq`, and re-emits
@@ -108,7 +111,44 @@ export class DapClient extends EventEmitter {
     }
     if (msg.type === 'event') {
       this.emit('event', msg)
+      return
     }
+    if (msg.type === 'request') {
+      this.handleReverseRequest(msg)
+    }
+  }
+
+  /**
+   * Adapter -> client requests (`startDebugging`, `runInTerminal`, ...). A
+   * command with no `reverseRequest` listener is auto-acknowledged with an
+   * empty success response — every DAP request needs a reply, and an
+   * unhandled reverse request would otherwise leave the adapter's internal
+   * state machine waiting forever.
+   */
+  private handleReverseRequest(msg: DapRequestMessage): void {
+    let responded = false
+    const respond: ReverseRequestResponder = (body, success = true, message) => {
+      if (responded || this.closed) {
+        return
+      }
+      responded = true
+      this.nextSeq += 1
+      const response: DapResponseMessage = {
+        seq: this.nextSeq,
+        type: 'response',
+        request_seq: msg.seq,
+        success,
+        command: msg.command,
+        message,
+        body
+      }
+      this.stdin.write(encodeDapMessage(response))
+    }
+    if (this.listenerCount('reverseRequest') === 0) {
+      respond(undefined, true)
+      return
+    }
+    this.emit('reverseRequest', msg, respond)
   }
 
   private handleClose(): void {

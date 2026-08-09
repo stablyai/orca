@@ -87,6 +87,47 @@ describe('DapClient', () => {
     await expect(pending).rejects.toThrow(/closed/)
     await expect(client.request('launch')).rejects.toThrow(/closed/)
   })
+
+  it('auto-acknowledges a reverse request with no listener so the adapter is never left hanging', async () => {
+    const { client, stdin, stdout } = makeHarness()
+    const acked = new Promise<DapResponseMessage>((resolve) => {
+      const decoder = new DapMessageDecoder()
+      decoder.on('message', (msg) => resolve(msg as DapResponseMessage))
+      stdin.on('data', (chunk: Buffer) => decoder.push(chunk))
+    })
+    stdout.write(
+      encodeDapMessage({ seq: 7, type: 'request', command: 'runInTerminal', arguments: {} })
+    )
+    const response = await acked
+    expect(response).toMatchObject({ type: 'response', request_seq: 7, success: true })
+    client.close()
+  })
+
+  it('emits reverseRequest and lets a listener control the acknowledgement', async () => {
+    const { client, stdin, stdout } = makeHarness()
+    const seen: unknown[] = []
+    client.on('reverseRequest', (msg, respond) => {
+      seen.push(msg)
+      respond({ ok: true }, true)
+    })
+    const acked = new Promise<DapResponseMessage>((resolve) => {
+      const decoder = new DapMessageDecoder()
+      decoder.on('message', (msg) => resolve(msg as DapResponseMessage))
+      stdin.on('data', (chunk: Buffer) => decoder.push(chunk))
+    })
+    stdout.write(
+      encodeDapMessage({
+        seq: 9,
+        type: 'request',
+        command: 'startDebugging',
+        arguments: { request: 'launch', configuration: {} }
+      })
+    )
+    const response = await acked
+    expect(seen).toHaveLength(1)
+    expect(response).toMatchObject({ request_seq: 9, success: true, body: { ok: true } })
+    client.close()
+  })
 })
 
 async function waitForRequests(sink: unknown[], count = 1): Promise<void> {

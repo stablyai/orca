@@ -59,11 +59,25 @@ const bundledPluginResources = {
   from: 'resources/plugins/launch',
   to: 'plugins/launch'
 }
+// Why: vscode-js-debug is downloaded by `pnpm run ensure:debug-adapters`
+// (config/scripts/vendor-js-debug-adapter.mjs) rather than checked in — same
+// extraResources treatment as the other vendored/build-produced trees below,
+// so the Node/Chrome debug adapter reads real files at process.resourcesPath
+// instead of paths hidden inside app.asar.
+const debugAdapterResources = {
+  from: 'resources/debug-adapters',
+  to: 'debug-adapters'
+}
 // Why: the main bundle, packaged CLI, SSH paths, and speech worker all execute
 // from package directories where pnpm's symlink farm is absent. Copy the exact
 // runtime dependency closure to Resources/node_modules so bare require() calls
 // do not fall through to a developer checkout's node_modules.
-const commonExtraResources = [relayExtraResource, bundledPluginResources, skillFreshnessResources]
+const commonExtraResources = [
+  relayExtraResource,
+  bundledPluginResources,
+  debugAdapterResources,
+  skillFreshnessResources
+]
 const macSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-darwin-${arch}',
   to: 'node_modules/sherpa-onnx-darwin-${arch}'
@@ -129,6 +143,9 @@ module.exports = {
     // Why: bundled plugins ship via extraResources to resources/plugins/launch;
     // packing the source tree into app.asar would duplicate those exact bytes.
     '!resources/plugins/launch/**',
+    // Why: vscode-js-debug ships via extraResources to resources/debug-adapters;
+    // it is also gitignored (downloaded, not checked in) so this is defensive.
+    '!resources/debug-adapters/**',
     // Why: the Windows CLI shim ships via extraResources to resources/bin/orca.cmd
     // (beside the native resources/bin/orca.exe). Packing the source tree into
     // app.asar too lets asarUnpack:['resources/**'] extract a second copy at

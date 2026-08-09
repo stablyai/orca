@@ -32,6 +32,7 @@ export type LaunchRequest = {
 export class DebugSessionStateMachine extends EventEmitter {
   private readonly client: DapTransport
   private stateValue: DebugSessionState = 'initializing'
+  private pendingLaunchError: Error | null = null
 
   constructor(client: DapTransport) {
     super()
@@ -51,14 +52,30 @@ export class DebugSessionStateMachine extends EventEmitter {
     return capabilities
   }
 
+  /**
+   * Sends `launch`/`attach` but does not wait for its response before
+   * transitioning — per the DAP spec, an adapter may defer that response
+   * until it has received `configurationDone` (vscode-js-debug among them,
+   * confirmed against the real adapter), so blocking here would deadlock
+   * against exactly the adapters this state machine needs to drive. A
+   * rejection is instead surfaced via `configurationDone()` if it has
+   * already arrived by then, or as an `error` event otherwise.
+   */
   async launch(request: LaunchRequest): Promise<void> {
     this.assertState('launching', request.request)
-    await this.client.request(request.request, request.args)
+    this.pendingLaunchError = null
+    this.client.request(request.request, request.args).catch((err: unknown) => {
+      this.pendingLaunchError = err instanceof Error ? err : new Error(String(err))
+      this.emit('error', this.pendingLaunchError)
+    })
     this.setState('configuring')
   }
 
   async configurationDone(): Promise<void> {
     this.assertState('configuring', 'configurationDone')
+    if (this.pendingLaunchError) {
+      throw this.pendingLaunchError
+    }
     await this.client.request('configurationDone')
     this.setState('running')
   }
