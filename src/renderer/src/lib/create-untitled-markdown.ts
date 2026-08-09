@@ -1,11 +1,9 @@
 import type { GlobalSettings } from '../../../shared/types'
 import {
-  createRuntimePath,
-  deleteRuntimePath,
-  runtimePathExists,
-  writeRuntimeFile
-} from '../runtime/runtime-file-client'
-import { detectLanguage } from './language-detect'
+  createUntitledEditorFile,
+  requireOperationAssertion,
+  type UntitledEditorFileInfo
+} from './create-untitled-editor-file'
 import {
   applyMarkdownTemplatePlaceholders,
   getMarkdownTemplateTitleForFileName,
@@ -14,19 +12,9 @@ import {
   type MarkdownDocumentTemplate
 } from './markdown-document-templates'
 import { requestMarkdownTemplateSelection } from './markdown-template-picker-request'
-import { joinPath } from './path'
 import type { EditorFileOperationProvenance } from './editor-file-operation-owner'
 
-export type UntitledMarkdownFileInfo = {
-  filePath: string
-  relativePath: string
-  worktreeId: string
-  language: string
-  isUntitled: true
-  deleteUntouchedOnClose?: boolean
-  mode: 'edit'
-  operationProvenance?: EditorFileOperationProvenance
-}
+export type UntitledMarkdownFileInfo = UntitledEditorFileInfo
 
 type CreateUntitledMarkdownOptions = {
   template?: MarkdownDocumentTemplate
@@ -52,9 +40,6 @@ export async function createUntitledMarkdownFile(
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
   options: CreateUntitledMarkdownOptions = {}
 ): Promise<UntitledMarkdownFileInfo> {
-  const baseName = 'untitled'
-  const ext = '.md'
-  const MAX_ATTEMPTS = 100
   const context = {
     settings,
     worktreeId,
@@ -64,75 +49,30 @@ export async function createUntitledMarkdownFile(
     expectedSshTargetId: options.expectedSshTargetId,
     expectedSshConnectionGeneration: options.expectedSshConnectionGeneration
   }
-  const assertCurrent = (): void => {
-    if (options.operationProvenance) {
-      requireOperationAssertion(options.assertOperationCurrent)()
-    }
-  }
   const templateContent = options.template
     ? await readMarkdownDocumentTemplateContent(context, options.template)
     : null
 
-  // Why: createFile uses the 'wx' flag, so pathExists is only a hint. Another
-  // create can still win the race after our last probe, especially when the
-  // user fires the shortcut repeatedly or two split groups create files at
-  // nearly the same time. Retrying EEXIST keeps "New Markdown" advancing to
-  // the next untitled-N name instead of surfacing a spurious error toast.
-  //
-  // Why: existence probing must go through the same runtime/SSH-aware file
-  // surface as creation; the shell probe only sees the client filesystem.
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-    const fileName = attempt === 1 ? `${baseName}${ext}` : `${baseName}-${attempt}${ext}`
-    const filePath = joinPath(worktreePath, fileName)
-
-    assertCurrent()
-    if (await runtimePathExists(context, filePath)) {
-      continue
-    }
-
-    try {
-      assertCurrent()
-      await createRuntimePath(context, filePath, 'file')
-      if (templateContent !== null) {
-        try {
-          assertCurrent()
-          await writeRuntimeFile(
-            context,
-            filePath,
+  return createUntitledEditorFile(worktreePath, worktreeId, connectionId, settings, {
+    ext: '.md',
+    fileKind: 'markdown file',
+    // Why: placeholders interpolate the resolved name, which the collision loop
+    // may bump to untitled-3.md, so the content cannot be built up front.
+    initialContent:
+      templateContent === null
+        ? undefined
+        : (fileName) =>
             applyMarkdownTemplatePlaceholders(templateContent, {
               title: getMarkdownTemplateTitleForFileName(fileName),
               filename: fileName,
               now: options.now
-            })
-          )
-        } catch (error) {
-          assertCurrent()
-          await deleteRuntimePath(context, filePath).catch(() => undefined)
-          throw error
-        }
-      }
-
-      return {
-        filePath,
-        relativePath: fileName,
-        worktreeId,
-        language: detectLanguage(fileName),
-        isUntitled: true,
-        deleteUntouchedOnClose: templateContent === null ? undefined : false,
-        operationProvenance: options.operationProvenance,
-        mode: 'edit'
-      }
-    } catch (err) {
-      const isEexist =
-        err instanceof Error && (err.message.includes('EEXIST') || err.message.includes('exists'))
-      if (isEexist && attempt < MAX_ATTEMPTS) {
-        continue
-      }
-      throw err
-    }
-  }
-
-  throw new Error(`Unable to create untitled markdown file after ${MAX_ATTEMPTS} attempts.`)
+            }),
+    operationProvenance: options.operationProvenance,
+    expectedSshTargetId: options.expectedSshTargetId,
+    expectedSshConnectionGeneration: options.expectedSshConnectionGeneration,
+    expectedExecutionHostId: options.expectedExecutionHostId,
+    assertOperationCurrent: options.assertOperationCurrent
+  })
 }
 
 export async function createUntitledMarkdownFileWithTemplateSelection(
@@ -173,11 +113,4 @@ export async function createUntitledMarkdownFileWithTemplateSelection(
     expectedExecutionHostId,
     assertOperationCurrent
   })
-}
-
-function requireOperationAssertion(assertCurrent: (() => void) | undefined): () => void {
-  if (!assertCurrent) {
-    throw new Error("Couldn't verify which host owns this file. Reopen the file and try again.")
-  }
-  return assertCurrent
 }
