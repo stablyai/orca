@@ -68,6 +68,20 @@ describe('getTerminalPaneSearchEntries', () => {
     )
   })
 
+  it('includes the Korean Won mapping setting only on macOS', () => {
+    const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
+    const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    const entriesLinux = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+
+    expect(entriesMac.some((entry) => entry.title === 'Korean Won (₩) to Backquote (`)')).toBe(true)
+    expect(entriesWindows.some((entry) => entry.title === 'Korean Won (₩) to Backquote (`)')).toBe(
+      false
+    )
+    expect(entriesLinux.some((entry) => entry.title === 'Korean Won (₩) to Backquote (`)')).toBe(
+      false
+    )
+  })
+
   it('includes the Manage Sessions entry on all platforms', () => {
     const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
     const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })

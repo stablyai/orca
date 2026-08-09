@@ -2324,6 +2324,31 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('surfaces an actionable error when a Codex backfill timeout drops to the shell', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-codex-backfill-timeout'
+    })
+    transportFactoryQueue.push(transport)
+    const deps = createDeps({
+      tabId: 'tab-codex-backfill-timeout',
+      startup: { command: 'codex', launchAgent: 'codex' }
+    })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+    capturedDataCallback.current?.('timed out waiting for state db back')
+    capturedDataCallback.current?.('fill\r\n')
+
+    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
+      1,
+      expect.stringContaining('Orca attempts background recovery for managed local and WSL homes')
+    )
+  })
+
   it('drops keystrokes while the replay guard is engaged, then forwards once it releases', async () => {
     // Regression (cold-restore reattach lockout): a stuck replay guard dropped every keystroke ("can't type after reconnecting"); engaged guard suppresses input, released forwards it.
     const { connectPanePty } = await import('./pty-connection')
@@ -8334,6 +8359,124 @@ describe('connectPanePty', () => {
     } finally {
       globalThis.setTimeout = originalSetTimeout
     }
+  })
+
+  // Regression (#12320): a cold restore after reboot typed PowerShell single quotes into
+  // cmd.exe tabs, so the agent CLI rejected the resume argv ("unexpected argument").
+  async function runWindowsColdRestoreResume(args: {
+    terminalWindowsShell: string
+    tabShellOverride?: string
+  }): Promise<string | undefined> {
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    const pendingTimeouts: (() => void)[] = []
+    const originalSetTimeout = globalThis.setTimeout
+    globalThis.setTimeout = vi.fn((fn: () => void) => {
+      pendingTimeouts.push(fn)
+      return 999 as unknown as ReturnType<typeof setTimeout>
+    }) as unknown as typeof setTimeout
+
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const paneKey = makePaneKey('tab-1', LEAF_2)
+      let activePtyId: string | null = 'restored-session'
+      const transport = createMockTransport('restored-session')
+      transport.getPtyId.mockImplementation(() => activePtyId)
+      transport.disconnect.mockImplementation(() => {
+        activePtyId = null
+      })
+      transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
+        if (opts.sessionId) {
+          activePtyId = opts.sessionId
+          return {
+            id: opts.sessionId,
+            isReattach: true,
+            snapshot: undefined,
+            replay: undefined,
+            coldRestore: undefined
+          }
+        }
+        activePtyId = 'fresh-resume-pty'
+        const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+          | ((ptyId: string) => void)
+          | undefined
+        onPtySpawn?.('fresh-resume-pty')
+        return 'fresh-resume-pty'
+      })
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'tab-1',
+              ptyId: 'restored-session',
+              ...(args.tabShellOverride ? { shellOverride: args.tabShellOverride } : {})
+            }
+          ]
+        },
+        settings: {
+          ...mockStoreState.settings,
+          agentCmdOverrides: {},
+          terminalWindowsShell: args.terminalWindowsShell
+        },
+        sleepingAgentSessionsByPaneKey: {
+          [paneKey]: {
+            paneKey,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            agent: 'codex',
+            providerSession: { key: 'session_id', id: 'codex-session-1' },
+            prompt: 'finish the task',
+            state: 'done',
+            origin: 'worktree-sleep',
+            capturedAt: 1,
+            updatedAt: 1
+          }
+        }
+      } as StoreState
+      const deps = createDeps({
+        restoredLeafId: LEAF_2,
+        restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
+      })
+      vi.mocked(window.api.pty.declarePendingPaneSerializer)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(2)
+
+      connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+      await flushAsyncTicks(20)
+      for (const fn of pendingTimeouts) {
+        fn()
+      }
+      await flushAsyncTicks(10)
+
+      return (transport.connect.mock.calls.at(-1)?.[0] as { command?: string } | undefined)?.command
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+      restoreNavigator()
+    }
+  }
+
+  it('quotes a cold-restore resume command for a cmd.exe Windows tab', async () => {
+    await expect(runWindowsColdRestoreResume({ terminalWindowsShell: 'cmd.exe' })).resolves.toBe(
+      'codex "--dangerously-bypass-approvals-and-sandbox" "resume" "codex-session-1"'
+    )
+  })
+
+  it('prefers the tab shell override over the global Windows shell on cold restore', async () => {
+    await expect(
+      runWindowsColdRestoreResume({
+        terminalWindowsShell: 'powershell.exe',
+        tabShellOverride: 'cmd.exe'
+      })
+    ).resolves.toBe('codex "--dangerously-bypass-approvals-and-sandbox" "resume" "codex-session-1"')
+  })
+
+  it('keeps PowerShell quoting for a cold-restore resume on a PowerShell Windows tab', async () => {
+    await expect(
+      runWindowsColdRestoreResume({ terminalWindowsShell: 'powershell.exe' })
+    ).resolves.toBe("codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'")
   })
 
   it('keeps a contentless reattach when the sleeping record represents a live session', async () => {
@@ -17784,6 +17927,51 @@ describe('connectPanePty', () => {
       // The full coalesce fallback still drains it so the frame is never lost.
       vi.advanceTimersByTime(1000)
       expect(pane.terminal.write).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+      restoreNavigator()
+    }
+  })
+
+  it('clears the synchronized latch when ConPTY splits the frame end marker', async () => {
+    // Why: issue #8754 — a split \x1b[?2026l left the foreground latch armed, so every later
+    // chunk was held as frame body and the visible pane froze until the tab was blurred.
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(6)
+
+      vi.useFakeTimers()
+      const repaintBody = 'codex spinner '.repeat(200)
+      capturedDataCallback.current?.(`\x1b[?2026h${repaintBody}`)
+      vi.advanceTimersByTime(300)
+      pane.terminal.write.mockClear()
+
+      // ConPTY splits the closing marker across two chunks.
+      capturedDataCallback.current?.(`${repaintBody}\x1b[?25l\x1b[13;14H\x1b[?25h\x1b[?202`)
+      capturedDataCallback.current?.('6l')
+      vi.advanceTimersByTime(1100)
+      expect(pane.terminal.write).toHaveBeenCalled()
+      pane.terminal.write.mockClear()
+
+      // The frame is closed, so ordinary output must paint instead of being held as frame body.
+      capturedDataCallback.current?.('command finished\r\n')
+      vi.advanceTimersByTime(20)
+      expect(pane.terminal.write).toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
       restoreNavigator()

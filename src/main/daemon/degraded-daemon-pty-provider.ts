@@ -86,7 +86,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.ownerRecovery.spawn(opts)
 
   // Why refuse the fallback route (unknown ids resolve to it): see attachDaemonOwnedSession.
-  attach = (id: string): Promise<void> =>
+  attach = (id: string): ReturnType<IPtyProvider['attach']> =>
     attachDaemonOwnedSession(this.providerFor(id), this.fallback, id)
 
   hasPty(id: string): boolean {

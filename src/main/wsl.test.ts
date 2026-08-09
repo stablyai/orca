@@ -23,6 +23,7 @@ import {
   hasCachedWslAvailability,
   hasCachedWslDistros,
   isWslAvailable,
+  isWslAvailableAsync,
   listWslDistros,
   listWslDistrosAsync,
   parseWslPath,
@@ -494,6 +495,114 @@ describe('WSL availability cache', () => {
       expect(isWslAvailable()).toBe(true)
       expect(execFileSyncMock).toHaveBeenCalledTimes(1)
     })
+  })
+
+  // Why: the renderer's capability read reaches this over IPC; a blocking spawn there
+  // stalls every PTY message and window IPC for as long as wsl.exe takes to answer.
+  it('probes availability for IPC callers without blocking the main thread', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(null, '', '')
+    })
+
+    await withPlatformAsync('win32', async () => {
+      await expect(isWslAvailableAsync()).resolves.toBe(true)
+      expect(execFileMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['--status'],
+        expect.objectContaining({ timeout: 5000, windowsHide: true }),
+        expect.any(Function)
+      )
+      expect(execFileSyncMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('shares one wsl.exe spawn between concurrent async probes', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      setTimeout(() => callback(null, '', ''), 0)
+    })
+
+    await withPlatformAsync('win32', async () => {
+      const results = await Promise.all([isWslAvailableAsync(), isWslAvailableAsync()])
+      expect(results).toEqual([true, true])
+      expect(execFileMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not let an older async failure overwrite a newer sync success', async () => {
+    let finishAsyncProbe: ((error: Error | null) => void) | null = null
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      finishAsyncProbe = (error) => callback(error, '', '')
+    })
+    execFileSyncMock.mockReturnValue('')
+
+    await withPlatformAsync('win32', async () => {
+      const staleProbe = isWslAvailableAsync()
+      expect(isWslAvailable()).toBe(true)
+
+      finishAsyncProbe?.(Object.assign(new Error('older failure'), { code: 1 }))
+
+      await expect(staleProbe).resolves.toBe(true)
+      expect(getCachedWslAvailability()).toBe(true)
+    })
+  })
+
+  it('does not restore a failure after distro discovery disproves it mid-probe', async () => {
+    const callbacks = new Map<string, (error: Error | null, stdout: string) => void>()
+    execFileMock.mockImplementation((_command, args, _options, callback) => {
+      callbacks.set(args.join(' '), callback)
+    })
+
+    await withPlatformAsync('win32', async () => {
+      const staleAvailability = isWslAvailableAsync()
+      const distroProbe = listWslDistrosAsync()
+      callbacks.get('--list --quiet')?.(null, 'Ubuntu\n')
+      await expect(distroProbe).resolves.toEqual(['Ubuntu'])
+
+      callbacks.get('--status')?.(Object.assign(new Error('older failure'), { code: 1 }), '')
+      await expect(staleAvailability).resolves.toBe(false)
+      expect(getCachedWslAvailability()).toBeNull()
+
+      const retry = isWslAvailableAsync()
+      callbacks.get('--status')?.(null, '')
+      await expect(retry).resolves.toBe(true)
+    })
+  })
+
+  it('shares the failure backoff between the async and sync probes', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(Object.assign(new Error('not installed'), { code: 'ENOENT' }), '', '')
+    })
+
+    await withPlatformAsync('win32', async () => {
+      await expect(isWslAvailableAsync()).resolves.toBe(false)
+      expect(isWslAvailable()).toBe(false)
+      expect(execFileSyncMock).not.toHaveBeenCalled()
+    })
+  })
+
+  // Why: wsl.exe ships in System32 on every modern Windows, so a host without WSL answers
+  // with a non-zero exit, not ENOENT — and execFile reports that as a numeric `code`, not the
+  // `status` execFileSync uses. Misreading it as retryable would shrink the shared cache window
+  // to 45s and make the sync callers pay their blocking spawn ~13x more often.
+  it('treats a non-zero async exit as definitive, so the sync probe keeps the long window', async () => {
+    vi.useFakeTimers()
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(Object.assign(new Error('wsl.exe exited 1'), { code: 1 }), '', '')
+    })
+    execFileSyncMock.mockReturnValue('')
+
+    try {
+      await withPlatformAsync('win32', async () => {
+        await expect(isWslAvailableAsync()).resolves.toBe(false)
+        vi.advanceTimersByTime(45_000)
+        expect(isWslAvailable()).toBe(false)
+        expect(execFileSyncMock).not.toHaveBeenCalled()
+        vi.advanceTimersByTime(10 * 60_000)
+        expect(isWslAvailable()).toBe(true)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   // Why: the resolver reads the cached getter, not the probe. Reporting the last

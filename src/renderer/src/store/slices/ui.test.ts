@@ -1,7 +1,11 @@
 /* eslint-disable max-lines */
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultUIState, getWorktreeCardModeProperties } from '../../../../shared/constants'
+import {
+  getDefaultSettings,
+  getDefaultUIState,
+  getWorktreeCardModeProperties
+} from '../../../../shared/constants'
 import type {
   GitHubWorkItem,
   JiraIssue,
@@ -1661,6 +1665,21 @@ describe('createUISlice hydratePersistedUI', () => {
           githubItemsQuery: 42,
           linearPreset: 'completed',
           linearQuery: 'label:bug',
+          linearIssueView: {
+            viewMode: 'board',
+            groupBy: 'nonsense',
+            orderBy: 'updated',
+            displayProperties: ['updated', 'bogus', 'state'],
+            teamPropertyTouched: 'yes',
+            filtersByWorkspaceId: {
+              'workspace-1': {
+                stateIds: ['state-b', 'state-a'],
+                priorities: [2],
+                assignee: null,
+                labelIds: []
+              }
+            }
+          },
           jiraPreset: 'reported',
           jiraQuery: 99
         } as unknown as PersistedUIState['taskResumeState']
@@ -1671,7 +1690,63 @@ describe('createUISlice hydratePersistedUI', () => {
       githubMode: 'project',
       linearPreset: 'completed',
       linearQuery: 'label:bug',
+      linearIssueView: {
+        viewMode: 'board',
+        groupBy: 'none',
+        orderBy: 'updated',
+        displayProperties: ['state', 'updated'],
+        teamPropertyTouched: false,
+        filtersByWorkspaceId: {
+          'workspace-1': {
+            stateIds: ['state-a', 'state-b'],
+            priorities: [2],
+            assignee: null,
+            labelIds: []
+          }
+        }
+      },
       jiraPreset: 'reported'
+    })
+  })
+
+  it('drops a corrupt persisted Linear view without losing the rest of the resume state', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        taskResumeState: {
+          linearQuery: 'label:bug',
+          linearIssueView: 'board'
+        } as unknown as PersistedUIState['taskResumeState']
+      })
+    )
+
+    expect(store.getState().taskResumeState).toEqual({ linearQuery: 'label:bug' })
+  })
+
+  it('drops a corrupt persisted Linear filter without losing the other workspace filters', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        taskResumeState: {
+          linearIssueView: {
+            filtersByWorkspaceId: {
+              'workspace-1': { stateIds: 'not-an-array' },
+              'workspace-2': {
+                stateIds: [],
+                priorities: [1],
+                assignee: null,
+                labelIds: []
+              }
+            }
+          }
+        } as unknown as PersistedUIState['taskResumeState']
+      })
+    )
+
+    expect(store.getState().taskResumeState?.linearIssueView?.filtersByWorkspaceId).toEqual({
+      'workspace-2': { stateIds: [], priorities: [1], assignee: null, labelIds: [] }
     })
   })
 
@@ -3445,6 +3520,31 @@ describe('createUISlice space navigation', () => {
     store.getState().closeSpacePage()
 
     expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('returns to the originating view after closing Artifacts', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openArtifactsPage()
+
+    expect(store.getState().activeView).toBe('artifacts')
+    expect(store.getState().previousViewBeforeArtifacts).toBe('tasks')
+
+    store.getState().closeArtifactsPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('opens and restores Artifacts when its sidebar shortcut is hidden', () => {
+    const store = createUIStore()
+    store.setState({ settings: { ...getDefaultSettings('/tmp'), showArtifactsButton: false } })
+
+    store.getState().openArtifactsPage()
+    expect(store.getState().activeView).toBe('artifacts')
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'artifacts' }), 'startup')
+    expect(store.getState().activeView).toBe('artifacts')
   })
 })
 

@@ -156,6 +156,33 @@ describe('startup ordering', () => {
     expect(startIndex).toBeGreaterThan(attachIndex)
   })
 
+  it('wires bounded teardown state to reporting but not recovery or close behavior', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const scopeStart = source.indexOf('function getExpectedTeardownScope(')
+    const scopeEnd = source.indexOf('function markRecoveryReloadInFlight(', scopeStart)
+    const scope = source.slice(scopeStart, scopeEnd)
+    const windowStart = source.indexOf('const window = createMainWindow(store, {')
+    const windowEnd = source.indexOf('onRendererRecoveryExhausted:', windowStart)
+    const windowOptions = source.slice(windowStart, windowEnd)
+    const recorderStart = source.indexOf('function recordProcessGoneCrash(')
+    const recorderEnd = source.indexOf('function shutdownWatchersOnce(', recorderStart)
+    const recorder = source.slice(recorderStart, recorderEnd)
+
+    expect(scopeStart).toBeGreaterThanOrEqual(0)
+    expect(scopeEnd).toBeGreaterThan(scopeStart)
+    expect(scope).toContain('resolveExpectedTeardownScope({')
+    expect(scope).toContain('includeSystemSessionEnd')
+    expect(windowStart).toBeGreaterThanOrEqual(0)
+    expect(windowEnd).toBeGreaterThan(windowStart)
+    expect(windowOptions).toContain('getIsQuitting: () => isQuitting')
+    expect(windowOptions).toContain(
+      'expectedTeardown: getExpectedTeardownScope(webContentsId, false)'
+    )
+    expect(recorderStart).toBeGreaterThanOrEqual(0)
+    expect(recorderEnd).toBeGreaterThan(recorderStart)
+    expect(recorder).toContain('expectedTeardown: getExpectedTeardownScope(webContentsId)')
+  })
+
   it('attaches renderer services before starting the TCC prompt watcher', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const attachIndex = source.indexOf('attachMainWindowServices(')

@@ -82,6 +82,8 @@ import { copyTerminalSelection } from './terminal-selection-copy'
 import { parseOsc7 } from './parse-osc7'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
+import { resolveTerminalKoreanWonInput } from './terminal-korean-won-input'
+import { isKoreanInputSourceActive } from '@/lib/keyboard-layout/korean-input-source'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
@@ -115,6 +117,7 @@ import {
   type ReconcilableBinding
 } from './terminal-dead-session-reconcile'
 import { getConnectionId } from '@/lib/connection-context'
+import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { canReleaseReplayedScrollbackFromStore } from './replayed-scrollback-store-release'
@@ -724,6 +727,9 @@ export function useTerminalPaneLifecycle({
     queuedInitialCwdRef.current = initialCwdResolution.queuedInitialCwd
     const startupCwd = initialCwdResolution.startupCwd
     const terminalHomePath = resolveTerminalHomePathFromEnv(startup?.env)
+    const wslDistro = getConnectionId(worktreeId)
+      ? null
+      : resolvePaneWslDistro(useAppStore.getState(), worktreeId, worktreePath)
     const getPaneLinkCwd = (paneId: number): string =>
       resolvePaneLinkCwd(paneCwdRef.current, paneId, startupCwd)
     const getHttpLinkSourceOwnerForPane = (paneId: number) =>
@@ -736,6 +742,7 @@ export function useTerminalPaneLifecycle({
       startupCwd,
       getPaneLinkCwd,
       terminalHomePath,
+      wslDistro,
       managerRef,
       linkProviderDisposablesRef,
       pathExistsCache,
@@ -1014,6 +1021,21 @@ export function useTerminalPaneLifecycle({
             return false
           }
 
+          // Why: the gate refreshes on focus AND keyboard activity (Caps Lock /
+          // 한영 switches change the input source while the window keeps focus).
+          const koreanWonInput = resolveTerminalKoreanWonInput(e, {
+            enabled: settingsRef.current?.terminalKoreanWonToBackquote === true,
+            isMac,
+            isKoreanKeyboard: isKoreanInputSourceActive()
+          })
+          if (koreanWonInput) {
+            if (koreanWonInput.type === 'input') {
+              // Why: translated character, not a shortcut — keep it on xterm's onData path so PTY input guards still run.
+              pane.terminal.input(koreanWonInput.data)
+            }
+            return false
+          }
+
           if (e.type === 'keydown') {
             const shouldSyncCurrentTerminal = (): boolean =>
               managerRef.current
@@ -1040,7 +1062,8 @@ export function useTerminalPaneLifecycle({
 
           const shouldBypass = shouldBypassXtermKeyboardEvent(e, {
             isMac,
-            hasSelection: pane.terminal.hasSelection()
+            hasSelection: pane.terminal.hasSelection(),
+            kittyKeyboardFlags: paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
           })
           observeLinuxCandidateEvent()
           return !shouldBypass

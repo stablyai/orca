@@ -239,8 +239,14 @@
           "34a03a6565": "{{value0}}을(를) 최신 상태로 유지하세요",
           "fa9299a66f": "새 워크트리는 최신이지만 로컬 {{value0}}은(는) {{value1}} {{value2}} 뒤처져 있습니다. AI diff가 최근 commits을 놓칠 수 있습니다.",
           "14bc053a47": "로컬 {{value0}}이(가) 새로 고쳐지지 않았습니다.",
+          "localBaseRefRefreshFailedForWorktree": "\"{{value1}}\"의 로컬 {{value0}}이(가) 새로 고쳐지지 않았습니다.",
           "4a18052018": "로컬 {{value0}}이(가) {{value1}} 뒤에 있습니다.",
-          "903b51c2ed": "{{value0}}에서 워크스페이스를 만들었지만 {{value2}} 때문에 Orca가 로컬 {{value1}}을(를) fast-forward할 수 없습니다.",
+          "903b51c2ed": "{{value0}}에서 워크스페이스를 만들었지만 Orca가 로컬 {{value1}}을(를) fast-forward할 수 없습니다. {{value2}}",
+          "localBaseRefRefreshFailedDescriptionNamed": "워크스페이스 \"{{value0}}\"을(를) {{value1}}에서 만들었지만 Orca가 로컬 {{value2}}을(를) fast-forward할 수 없습니다. {{value3}}",
+          "localBaseRefRefreshFailedDetailDirtyNamed": "{{value0}} 워크트리(로컬 {{value1}}이(가) 체크아웃된 위치)에 커밋되지 않은 변경이 있습니다. 커밋, stash 또는 삭제한 다음 로컬 {{value1}}을(를) 수동으로 업데이트하세요.",
+          "localBaseRefRefreshFailedDetailDirty": "로컬 {{value0}}이(가) 체크아웃된 워크트리에 커밋되지 않은 변경이 있습니다. 커밋, stash 또는 삭제한 다음 로컬 {{value0}}을(를) 수동으로 업데이트하세요.",
+          "localBaseRefRefreshFailedDetailNotFastForward": "로컬 {{value0}}이(가) 없거나 원격 베이스에서 깨끗하게 fast-forward할 수 없습니다. 수동으로 업데이트하기 전에 로컬 전용 커밋이 있는지 확인하세요.",
+          "localBaseRefRefreshFailedDetailError": "로컬 {{value0}}을(를) 업데이트하는 중 Git이 오류를 반환했습니다. 잠긴 refs나 비정상적인 워크트리 상태가 있는지 확인한 다음 로컬 {{value0}}을(를) 수동으로 업데이트하세요.",
           "0216895fb5": "브랜치를 삭제하지 못했습니다.",
           "19db0085fb": "로컬 브랜치가 삭제되었습니다.",
           "2b0afc7f14": "로컬 {{value0}}을(를) 최신 상태로 유지할 수 없습니다.",
@@ -1976,8 +1982,6 @@
         "556e7232ca": "현재",
         "684e8d7bc2": "최근 워크트리와 열린 탭을 불러오는 중입니다.",
         "ff908adfe9": "점프 타겟 로드 중",
-        "1ebe225fee": "워크트리, 설정, 탭 및 작업 검색...",
-        "4e4ff044d5": "작업 트리, 설정, 탭 및 작업 검색",
         "4ee378034d": "다음으로 이동...",
         "f7fda8d562": "워크트리를 만들거나 Orca에서 탭을 열어 시작하세요.",
         "1628fd7dfa": "활성 워크트리, 설정, 작업 또는 열린 탭이 없습니다.",
@@ -2005,7 +2009,10 @@
         "projectsGroupsHeader": "프로젝트 및 그룹",
         "projectBadge": "프로젝트",
         "repoGroupBadge": "리포지토리 그룹",
-        "pluginCommandFailed": "플러그인 명령을 실행할 수 없습니다."
+        "pluginCommandFailed": "플러그인 명령을 실행할 수 없습니다.",
+        "27f10cca63": "채팅, 터미널, 워크트리, 설정 및 작업 검색...",
+        "2770f02910": "채팅, 터미널, 워크트리, 설정 및 작업 검색",
+        "recentChatsTerminalsHeader": "최근 채팅 및 터미널"
       },
       "github": {
         "pr": {
@@ -2981,7 +2988,12 @@
             "25dc1cd653": "파일 열기",
             "7cdf8ee0c8": "URL 열기",
             "b27864279e": "agent 실행",
-            "39676a184c": "모든 파일, URL, agent를 엽니다..."
+            "0e5b7a3f16": "열린 탭, 파일, URL, agent 검색…",
+            "8f0a1c4d92": "탭으로 전환",
+            "2c38630a01": "워크스페이스가 더 이상 존재하지 않습니다",
+            "4f0d9a71c2": "탭이 더 이상 존재하지 않습니다",
+            "d7d496a451": "브라우저 페이지가 더 이상 존재하지 않습니다",
+            "7726ce9970": "모바일 에뮬레이터 탭이 더 이상 존재하지 않습니다"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "명령",
@@ -3015,7 +3027,7 @@
                 "classifier": {
                   "42e6262ae9": "사용할 수 있는 작업이 없습니다.",
                   "097a982ee0": "파일 로드 중...",
-                  "5a9c83c04b": "모든 파일, URL, agent를 엽니다...",
+                  "c41f8d20b7": "열린 탭, 파일, URL, agent 검색…",
                   "90eb94dc48": "http:// 또는 https:// URL을 입력하세요.",
                   "5553b283ce": "URL 또는 파일 경로를 입력하세요.",
                   "queryTooLarge": "검색 텍스트가 너무 큽니다.",
@@ -11165,7 +11177,9 @@
             "openSupportedWorkspace": "세션을 재개하기 전에 워크스페이스를 여세요.",
             "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스를 여세요.",
             "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 재개하려면 같은 호스트의 워크스페이스를 여세요.",
-            "prepareSessionResumeFailed": "Could not prepare this session for resume."
+            "prepareSessionResumeFailed": "Could not prepare this session for resume.",
+            "sessionDeleted": "세션이 삭제되었습니다",
+            "sessionDeleteFailed": "세션을 삭제하지 못했습니다"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "세션 스캔 중",
@@ -11297,7 +11311,17 @@
             "jumpToWorktree": "작업 트리로 이동",
             "recoverableBadge": "저장 안 됨",
             "subagentCountSingular": "서브에이전트 1개",
-            "subagentCountPlural": "서브에이전트 {{value0}}개"
+            "subagentCountPlural": "서브에이전트 {{value0}}개",
+            "delete": "삭제",
+            "deleteReasonNonLocalHost": "이 기기에 있는 세션만 삭제할 수 있습니다.",
+            "deleteReasonSyntheticPath": "이 세션은 Orca에서 삭제할 수 없습니다.",
+            "deleteReasonUnsupportedAgent": "{{value0}} 세션은 Orca에서 삭제할 수 없습니다.",
+            "deleteReasonSessionLive": "이 세션은 아직 실행 중입니다 — 삭제하려면 완료될 때까지 기다리세요."
+          },
+          "AiVaultSessionDeleteDialog": {
+            "title": "이 세션을 삭제할까요?",
+            "description": "\"{{value0}}\"이(가) 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
+            "confirm": "삭제"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "파일 찾기",

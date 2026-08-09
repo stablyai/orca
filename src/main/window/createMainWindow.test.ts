@@ -74,6 +74,11 @@ import {
 } from './createMainWindow'
 import { ipcMain } from 'electron'
 import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-gone-classification'
+import {
+  resetExpectedTeardownStateForTest,
+  resolveExpectedTeardownScope,
+  WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS
+} from '../crash-reporting/expected-teardown-state'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const original = process.platform
@@ -102,6 +107,7 @@ describe('createMainWindow', () => {
     vi.mocked(ipcMain.removeListener).mockReset()
     vi.mocked(ipcMain.handle).mockReset()
     vi.mocked(ipcMain.removeHandler).mockReset()
+    resetExpectedTeardownStateForTest()
     vi.useRealTimers()
   })
 
@@ -1003,6 +1009,56 @@ describe('createMainWindow', () => {
     }
 
     expect(webContents.send).not.toHaveBeenCalledWith('ui:jumpToTabIndex', expect.anything())
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:jumpToWorktreeIndex', expect.anything())
+  })
+
+  // Held-key repeats are contained in main whether or not the floating panel has focus: every
+  // renderer index path skips e.repeat, so yielding one would leak a raw digit to xterm.
+  it('contains indexed-switch repeats without dispatching them', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    const isDarwin = process.platform === 'darwin'
+    const input = isDarwin
+      ? { type: 'keyDown', code: 'Digit3', key: '3', meta: true, control: false, alt: false }
+      : { type: 'keyDown', code: 'Digit3', key: '3', meta: false, control: true, alt: false }
+    const preventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault } as never,
+      { ...input, isAutoRepeat: true } as never
+    )
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).not.toHaveBeenCalledWith('ui:jumpToWorktreeIndex', expect.anything())
   })
 
@@ -3143,6 +3199,40 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
+  it('still preserves PTYs and reloads after Windows session-end', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+    const onBeforeRecoveryReload = vi.fn()
+
+    withPlatform('win32', () => {
+      createMainWindow(null, {
+        onBeforeRecoveryReload,
+        shouldRecoverRenderer: (details) =>
+          shouldRecoverRendererAfterProcessGone({
+            reason: details.reason,
+            expectedTeardown: resolveExpectedTeardownScope({
+              isQuitting: false,
+              isQuittingForUpdate: false,
+              isExpectedRendererReload: false,
+              includeSystemSessionEnd: false
+            })
+          })
+      })
+    })
+    windowHandlers['session-end']?.({} as never)
+    windowHandlers['render-process-gone']?.(
+      {} as never,
+      { reason: 'killed', exitCode: 1 } as Electron.RenderProcessGoneDetails
+    )
+    vi.runAllTimers()
+
+    expect(onBeforeRecoveryReload).toHaveBeenCalledWith(143)
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+    consoleError.mockRestore()
+  })
+
   it('does not reload after renderer loss when recovery is disabled', () => {
     vi.useFakeTimers()
 
@@ -3728,6 +3818,60 @@ describe('createMainWindow', () => {
 
     afterEach(() => {
       setPlatform(originalPlatform)
+    })
+
+    it('marks production teardown state on irrevocable Windows session end', () => {
+      setPlatform('win32')
+      resetExpectedTeardownStateForTest(() => 1_000)
+      const { windowHandlers } = setupCloseWindow()
+
+      createMainWindow(null)
+      windowHandlers['session-end']?.({} as never)
+
+      expect(
+        resolveExpectedTeardownScope({
+          isQuitting: false,
+          isQuittingForUpdate: false,
+          isExpectedRendererReload: false
+        })
+      ).toBe('app-shutdown')
+    })
+
+    it.each(['darwin', 'linux'] as const)(
+      'does not mark session teardown state on %s',
+      (platform) => {
+        setPlatform(platform)
+        const { windowHandlers } = setupCloseWindow()
+
+        createMainWindow(null)
+
+        expect(windowHandlers['session-end']).toBeUndefined()
+        expect(
+          resolveExpectedTeardownScope({
+            isQuitting: false,
+            isQuittingForUpdate: false,
+            isExpectedRendererReload: false
+          })
+        ).toBe('none')
+      }
+    )
+
+    it('still minimizes to tray after the session-end reporting window expires', () => {
+      setPlatform('win32')
+      let now = 1_000
+      resetExpectedTeardownStateForTest(() => now)
+      const { windowHandlers, webContents, instance } = setupCloseWindow()
+      const store = makeStore(true, true)
+
+      createMainWindow(store as never)
+      windowHandlers['session-end']?.({} as never)
+      now += WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS
+      const preventDefault = vi.fn()
+      windowHandlers.close({ preventDefault } as never)
+
+      expect(preventDefault).toHaveBeenCalledOnce()
+      expect(instance.hide).toHaveBeenCalledOnce()
+      expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', expect.anything())
     })
 
     it('hides to the tray instead of closing when the setting is on', () => {

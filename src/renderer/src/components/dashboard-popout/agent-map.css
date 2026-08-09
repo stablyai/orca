@@ -205,10 +205,6 @@
   vector-effect: non-scaling-stroke;
 }
 
-.agent-map-lineage-link.is-subagent {
-  stroke-dasharray: none;
-}
-
 .agent-map-agent-hit {
   fill: transparent;
   stroke: transparent;

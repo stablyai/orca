@@ -105,8 +105,8 @@ export function getTabEntryOptions(
         classification: {
           kind: 'empty',
           message: translate(
-            'auto.components.tab.bar.tab.create.entry.classifier.5a9c83c04b',
-            'Open any file, URL, agent, ...'
+            'auto.components.tab.bar.tab.create.entry.classifier.c41f8d20b7',
+            'Search open tabs, files, URLs, agents…'
           )
         }
       }

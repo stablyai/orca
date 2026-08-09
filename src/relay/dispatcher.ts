@@ -801,7 +801,11 @@ export class RelayDispatcher {
         reject(new Error(`Request "${method}" timed out after ${timeoutMs}ms`))
       }, timeoutMs)
       this.pendingRelayRequests.set(id, { resolve, reject, timer })
-      this.enqueueFrame(client, msg, 'control')
+      if (!this.enqueueFrame(client, msg, 'control', () => {}, undefined, 'reject')) {
+        clearTimeout(timer)
+        this.pendingRelayRequests.delete(id)
+        reject(new Error(`Request "${method}" exceeded the relay control transport capacity`))
+      }
     })
   }
 

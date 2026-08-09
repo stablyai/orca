@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import type { ExecutionHostId } from './execution-host'
+import type { LinearIssueViewResumeState } from './linear-issue-view-resume-state'
 import type {
   RemovedSshTargetTombstone,
   SshPtyConsumerRecovery,
@@ -2902,6 +2903,10 @@ export type GlobalSettings = {
   showTasksButton: boolean
   /** Only toggles the sidebar shortcut; Automations stay reachable from Settings/View menu. */
   showAutomationsButton?: boolean
+  /** Deprecated: Artifacts are always available. Use showArtifactsButton for sidebar visibility. */
+  artifactsEnabled?: boolean
+  /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
+  showArtifactsButton?: boolean
   /** Only toggles the sidebar shortcut; Orca Mobile stays reachable from Settings. */
   showMobileButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
@@ -3048,6 +3053,8 @@ export type GlobalSettings = {
   terminalMacOptionAsAltMigrated: boolean
   /** Whether macOS terminal input maps the physical JIS Yen (¥) key to backslash, per common terminal expectation. */
   terminalJISYenToBackslash: boolean
+  /** Whether terminal input maps the physical Korean Won (₩) key to backquote, so markdown code fences and shell backquotes type directly. */
+  terminalKoreanWonToBackquote: boolean
   experimentalMobile: boolean
   /** Why: iOS Simulator is default-on for capable macOS hosts; this is the durable off switch (hides UI, blocks CLI attach). */
   mobileEmulatorEnabled?: boolean
@@ -3333,6 +3340,8 @@ export type TaskResumeState = {
     workspaceId: LinearConcreteWorkspaceId
     model?: LinearCustomViewModel
   }
+  /** Issue-list layout, grouping, ordering, columns, and per-workspace attribute filters. */
+  linearIssueView?: LinearIssueViewResumeState
   jiraPreset?: 'assigned' | 'reported' | 'all' | 'done'
   jiraQuery?: string
 }
@@ -3370,6 +3379,7 @@ export type TopLevelView =
   | 'automations'
   | 'space'
   | 'skills'
+  | 'artifacts'
   | 'mobile'
 
 export type PersistedUIState = {

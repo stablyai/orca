@@ -261,8 +261,11 @@ import {
   buildLinearIssueListReadArgs,
   buildLinearIssueListRequestSignature,
   isLinearIssueSearchActive,
+  shouldClearTeamDerivedFacets,
   shouldForceLinearIssueListRead,
-  teamDerivedFacetsForPrimaryTeamChange
+  teamDerivedFacetsForPrimaryTeamChange,
+  type LinearIssueListFilterRead,
+  type LinearPrimaryTeamObservation
 } from '@/components/task-page-linear-issue-request'
 import {
   resolveLinearIssueEmptyKind,
@@ -276,10 +279,19 @@ import {
   readLinkedLinearIssuesWithLimit
 } from '@/components/task-page-linear-in-orca-issues'
 import {
-  emptyLinearIssueAttributeFilter,
   linearIssueAttributeFilterSignature,
   type LinearIssueAttributeFilter
 } from '../../../shared/linear-issue-attribute-filter'
+import {
+  DEFAULT_LINEAR_GROUP_BY,
+  DEFAULT_LINEAR_ORDER_BY,
+  DEFAULT_LINEAR_VIEW_MODE,
+  LINEAR_DISPLAY_PROPERTIES,
+  resolveLinearIssueViewResumeState,
+  selectLinearWorkspaceIssueFilter,
+  serializeLinearIssueViewResumeState,
+  setLinearWorkspaceIssueFilter
+} from '../../../shared/linear-issue-view-resume-state'
 import {
   isNewIssueDraftContentful,
   resolveNewIssueOpenSeed,
@@ -431,6 +443,7 @@ import {
   type LinearOrderBy,
   type LinearViewMode
 } from '@/components/task-page-localized-options'
+import { useGitHubTaskSearchCommit } from '@/components/use-github-task-search-commit'
 
 function isGitLabMRFilter(value: GitLabTaskFilter | GitLabIssueFilter): value is GitLabTaskFilter {
   return value === 'opened' || value === 'merged' || value === 'closed' || value === 'all'
@@ -663,15 +676,6 @@ function mergeLinearCollectionResults<T>(
     ...(results.some((result) => result.hasMore) ? { hasMore: true } : {})
   }
 }
-
-const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
-  'state',
-  'priority',
-  'assignee',
-  'team',
-  'labels',
-  'updated'
-]
 
 function getLinearStatusSectionState(section: LinearGroupSection): LinearIssue['state'] | null {
   if (!section.key.startsWith('status:')) {
@@ -3763,6 +3767,7 @@ export default function TaskPage(): React.JSX.Element {
   const taskResumeAppliedRef = useRef(false)
   const githubSearchPersistReadyRef = useRef(false)
   const linearSearchPersistReadyRef = useRef(false)
+  const linearViewPersistReadyRef = useRef(false)
   const jiraSearchPersistReadyRef = useRef(false)
   const [taskResumeApplied, setTaskResumeApplied] = useState(false)
 
@@ -4449,20 +4454,29 @@ export default function TaskPage(): React.JSX.Element {
   const [linearError, setLinearError] = useState<string | null>(null)
   const [linearSearchInput, setLinearSearchInput] = useState('')
   const [appliedLinearSearch, setAppliedLinearSearch] = useState('')
-  const [linearAttributeFilter, setLinearAttributeFilter] = useState<LinearIssueAttributeFilter>(
-    () => emptyLinearIssueAttributeFilter()
+  const [linearIssueFiltersByWorkspaceId, setLinearIssueFiltersByWorkspaceId] = useState<
+    Record<string, LinearIssueAttributeFilter>
+  >(() => ({}))
+  const linearAttributeFilterWorkspaceId =
+    selectedLinearWorkspaceId && selectedLinearWorkspaceId !== 'all'
+      ? selectedLinearWorkspaceId
+      : null
+  const linearAttributeFilter = useMemo(
+    () =>
+      selectLinearWorkspaceIssueFilter(
+        linearIssueFiltersByWorkspaceId,
+        linearAttributeFilterWorkspaceId
+      ),
+    [linearAttributeFilterWorkspaceId, linearIssueFiltersByWorkspaceId]
   )
-  const linearAttributeFilterSignatureRef = useRef(
-    linearIssueAttributeFilterSignature(emptyLinearIssueAttributeFilter())
-  )
-  const linearPrimaryTeamIdRef = useRef<string | null>(null)
-  const previousLinearWorkspaceIdForFiltersRef = useRef<string | null | undefined>(undefined)
-  const [linearViewMode, setLinearViewMode] = useState<LinearViewMode>('list')
-  const [linearGroupBy, setLinearGroupBy] = useState<LinearGroupBy>('none')
-  const [linearOrderBy, setLinearOrderBy] = useState<LinearOrderBy>('priority')
+  const linearAttributeFilterReadRef = useRef<LinearIssueListFilterRead | null>(null)
+  const linearPrimaryTeamRef = useRef<LinearPrimaryTeamObservation | null>(null)
+  const [linearViewMode, setLinearViewMode] = useState<LinearViewMode>(DEFAULT_LINEAR_VIEW_MODE)
+  const [linearGroupBy, setLinearGroupBy] = useState<LinearGroupBy>(DEFAULT_LINEAR_GROUP_BY)
+  const [linearOrderBy, setLinearOrderBy] = useState<LinearOrderBy>(DEFAULT_LINEAR_ORDER_BY)
   const [linearDisplayProperties, setLinearDisplayProperties] = useState<
     ReadonlySet<LinearDisplayProperty>
-  >(() => new Set(DEFAULT_LINEAR_DISPLAY_PROPERTIES))
+  >(() => new Set(LINEAR_DISPLAY_PROPERTIES))
   const [linearTeamPropertyTouched, setLinearTeamPropertyTouched] = useState(false)
   const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
   const [linearProjectSearchInput, setLinearProjectSearchInput] = useState('')
@@ -4739,6 +4753,14 @@ export default function TaskPage(): React.JSX.Element {
     setLinearMode(taskResumeState?.linearMode ?? 'issues')
     setLinearSearchInput(linearQuery)
     setAppliedLinearSearch(linearQuery)
+
+    const linearIssueView = resolveLinearIssueViewResumeState(taskResumeState?.linearIssueView)
+    setLinearViewMode(linearIssueView.viewMode)
+    setLinearGroupBy(linearIssueView.groupBy)
+    setLinearOrderBy(linearIssueView.orderBy)
+    setLinearDisplayProperties(new Set(linearIssueView.displayProperties))
+    setLinearTeamPropertyTouched(linearIssueView.teamPropertyTouched)
+    setLinearIssueFiltersByWorkspaceId(linearIssueView.filtersByWorkspaceId)
 
     const jiraPreset = taskResumeState?.jiraPreset ?? 'assigned'
     const jiraQuery = taskResumeState?.jiraQuery ?? ''
@@ -5246,41 +5268,50 @@ export default function TaskPage(): React.JSX.Element {
     [linearTeamOptions, linearTeamSelection]
   )
 
-  const applyLinearAttributeFilter = useCallback((next: LinearIssueAttributeFilter) => {
-    // Why: batch filter + limit/page reset so the fetch effect never issues an old expanded-limit request for the new filter.
-    setLinearAttributeFilter(next)
-    setLinearIssueLimit(LINEAR_ITEM_LIMIT)
-    setLinearIssuePage(0)
-    setLinearIssueLoadingTargetPage(null)
-  }, [])
+  const applyLinearAttributeFilter = useCallback(
+    (next: LinearIssueAttributeFilter) => {
+      if (linearAttributeFilterWorkspaceId) {
+        setLinearIssueFiltersByWorkspaceId((previous) =>
+          setLinearWorkspaceIssueFilter(previous, linearAttributeFilterWorkspaceId, next)
+        )
+      }
+      setLinearIssueLimit(LINEAR_ITEM_LIMIT)
+      setLinearIssuePage(0)
+      setLinearIssueLoadingTargetPage(null)
+    },
+    [linearAttributeFilterWorkspaceId]
+  )
 
   useEffect(() => {
-    const workspaceId = selectedLinearWorkspaceId ?? null
-    const previous = previousLinearWorkspaceIdForFiltersRef.current
-    previousLinearWorkspaceIdForFiltersRef.current = workspaceId
-    if (previous === undefined || previous === workspaceId) {
+    const nextTeamId = availableTeams.length > 0 ? (linearAttributePrimaryTeam?.id ?? null) : null
+    if (!nextTeamId) {
       return
     }
-    applyLinearAttributeFilter(emptyLinearIssueAttributeFilter())
-  }, [applyLinearAttributeFilter, selectedLinearWorkspaceId])
-
-  useEffect(() => {
-    const nextId = linearAttributePrimaryTeam?.id ?? null
-    const previousId = linearPrimaryTeamIdRef.current
-    linearPrimaryTeamIdRef.current = nextId
-    if (previousId === null || previousId === nextId) {
+    const previous = linearPrimaryTeamRef.current
+    const next: LinearPrimaryTeamObservation = {
+      workspaceId: linearAttributeFilterWorkspaceId,
+      teamId: nextTeamId
+    }
+    linearPrimaryTeamRef.current = next
+    if (!shouldClearTeamDerivedFacets({ previous, next })) {
       return
     }
     // Why: team-scoped facets; clearing them is a filter change, so reset limit/page via applyLinearAttributeFilter (R6), not a bare set.
-    const next = teamDerivedFacetsForPrimaryTeamChange(linearAttributeFilter)
+    const cleared = teamDerivedFacetsForPrimaryTeamChange(linearAttributeFilter)
     if (
       linearIssueAttributeFilterSignature(linearAttributeFilter) ===
-      linearIssueAttributeFilterSignature(next)
+      linearIssueAttributeFilterSignature(cleared)
     ) {
       return
     }
-    applyLinearAttributeFilter(next)
-  }, [applyLinearAttributeFilter, linearAttributeFilter, linearAttributePrimaryTeam?.id])
+    applyLinearAttributeFilter(cleared)
+  }, [
+    applyLinearAttributeFilter,
+    availableTeams.length,
+    linearAttributeFilter,
+    linearAttributeFilterWorkspaceId,
+    linearAttributePrimaryTeam?.id
+  ])
 
   const linearSearchActive = isLinearIssueSearchActive(linearSearchInput, appliedLinearSearch)
   const showLinearAttributeFilters =
@@ -6533,19 +6564,21 @@ export default function TaskPage(): React.JSX.Element {
     ]
   )
 
-  useEffect(() => {
-    if (!taskResumeApplied) {
-      return
-    }
-    const timeout = window.setTimeout(() => {
-      const scoped = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
+  const commitTaskSearch = useCallback(
+    (value: string): void => {
+      const scoped = scopeGitHubTaskSearch(value, activeGithubTaskKind)
       if (scoped !== appliedTaskSearch) {
         setTasksFiltering(true)
       }
       setAppliedTaskSearch(scoped)
-    }, TASK_SEARCH_DEBOUNCE_MS)
-    return () => window.clearTimeout(timeout)
-  }, [activeGithubTaskKind, appliedTaskSearch, taskSearchInput, taskResumeApplied])
+    },
+    [activeGithubTaskKind, appliedTaskSearch]
+  )
+  useGitHubTaskSearchCommit({
+    enabled: taskResumeApplied,
+    onCommit: commitTaskSearch,
+    value: taskSearchInput
+  })
 
   useEffect(() => {
     if (!taskResumeApplied) {
@@ -7140,17 +7173,11 @@ export default function TaskPage(): React.JSX.Element {
     setTaskRefreshNonce((current) => current + 1)
   }, [activeGithubTaskKind, setTaskResumeState, taskSearchInput])
 
-  const handleTaskSearchChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>): void => {
-      const next = event.target.value
-      const scoped = scopeGitHubTaskSearch(next, activeGithubTaskKind)
-      setTaskSearchInput(next)
-      setActiveTaskPreset(null)
-      // Why: visible rows are keyed by appliedTaskSearch, not the draft input; hide stale rows once the draft changes the query.
-      setTasksFiltering(scoped !== appliedTaskSearch)
-    },
-    [activeGithubTaskKind, appliedTaskSearch]
-  )
+  const handleTaskSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>): void => {
+    const next = event.target.value
+    setTaskSearchInput(next)
+    setActiveTaskPreset(null)
+  }, [])
 
   const handleSetDefaultTaskPreset = useCallback(
     (presetId: TaskViewPresetId): void => {
@@ -7815,6 +7842,15 @@ export default function TaskPage(): React.JSX.Element {
         return
       }
 
+      // Why: open menus/popovers/selects own Esc; capture-phase leave would steal it from Radix.
+      if (
+        document.querySelector(
+          '[data-slot="dropdown-menu-content"], [data-slot="popover-content"], [data-slot="select-content"], [role="menu"]'
+        )
+      ) {
+        return
+      }
+
       // Why: Esc first blurs a focused input so it doesn't accidentally close the whole page; only closes once focus is outside an input.
       if (
         target instanceof HTMLInputElement ||
@@ -7892,6 +7928,35 @@ export default function TaskPage(): React.JSX.Element {
   }, [appliedLinearSearch, setTaskResumeState, taskResumeApplied])
 
   useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    if (!linearViewPersistReadyRef.current) {
+      linearViewPersistReadyRef.current = true
+      return
+    }
+    setTaskResumeState({
+      linearIssueView: serializeLinearIssueViewResumeState({
+        viewMode: linearViewMode,
+        groupBy: linearGroupBy,
+        orderBy: linearOrderBy,
+        displayProperties: linearDisplayProperties,
+        teamPropertyTouched: linearTeamPropertyTouched,
+        filtersByWorkspaceId: linearIssueFiltersByWorkspaceId
+      })
+    })
+  }, [
+    linearDisplayProperties,
+    linearGroupBy,
+    linearIssueFiltersByWorkspaceId,
+    linearOrderBy,
+    linearTeamPropertyTouched,
+    linearViewMode,
+    setTaskResumeState,
+    taskResumeApplied
+  ])
+
+  useEffect(() => {
     setLinearIssueLimit(LINEAR_ITEM_LIMIT)
     setLinearIssuePage(0)
     setLinearIssueLoadingTargetPage(null)
@@ -7949,12 +8014,15 @@ export default function TaskPage(): React.JSX.Element {
       )
     }
 
-    const nextFilterSignature = linearIssueAttributeFilterSignature(linearAttributeFilter)
-    const previousFilterSignature = linearAttributeFilterSignatureRef.current
-    linearAttributeFilterSignatureRef.current = nextFilterSignature
+    const nextFilterRead: LinearIssueListFilterRead = {
+      workspaceId: linearAttributeFilterWorkspaceId,
+      signature: linearIssueAttributeFilterSignature(linearAttributeFilter)
+    }
+    const previousFilterRead = linearAttributeFilterReadRef.current
+    linearAttributeFilterReadRef.current = nextFilterRead
     const filterForce = shouldForceLinearIssueListRead({
-      previousFilterSignature,
-      nextFilterSignature,
+      previousFilterRead,
+      nextFilterRead,
       refreshForced: false
     })
 
@@ -9457,11 +9525,11 @@ export default function TaskPage(): React.JSX.Element {
                           <LinearIssueAttributeFilterDropdowns
                             value={linearAttributeFilter}
                             onChange={applyLinearAttributeFilter}
-                            workspaceId={selectedLinearWorkspaceId ?? null}
-                            isAllWorkspaces={selectedLinearWorkspaceId === 'all'}
+                            workspaceId={linearAttributeFilterWorkspaceId}
                             primaryTeam={linearAttributePrimaryTeam}
                             selectedTeamIds={[...linearTeamSelection]}
                             availableTeams={linearTeamOptions}
+                            teamsSettled={availableTeams.length > 0}
                             settings={linearTaskSourceContext ?? settings}
                           />
                         ) : null}

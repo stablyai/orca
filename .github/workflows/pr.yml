@@ -259,6 +259,29 @@ jobs:
       - name: Old/new client and server terminal journey
         run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
 
+  managed_hook_node18:
+    name: managed hooks on Node 18
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Build relay companions
+        run: pnpm run build:relay
+
+      - name: Setup Node 18 runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: '18'
+
+      - name: Smoke managed-hook companions
+        run: node config/scripts/smoke-managed-hook-runtime-node18.mjs
+
   package:
     name: package
     runs-on: ubuntu-latest
@@ -423,6 +446,7 @@ jobs:
       - git_compatibility
       - shell_contracts
       - test
+      - managed_hook_node18
       - package
       - package_windows
     runs-on: ubuntu-latest
@@ -444,6 +468,7 @@ jobs:
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
           TEST: ${{ needs.test.result }}
+          MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
           PACKAGE: ${{ needs.package.result }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
         run: |
@@ -454,6 +479,7 @@ jobs:
             "$GIT_COMPATIBILITY" \
             "$SHELL_CONTRACTS" \
             "$TEST" \
+            "$MANAGED_HOOK_NODE18" \
             "$PACKAGE" \
             "$PACKAGE_WINDOWS"; do
             if [ "$result" != "success" ]; then

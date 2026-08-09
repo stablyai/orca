@@ -58,6 +58,7 @@ import {
 } from '../../shared/command-token-scanner'
 import { agentHookServer } from '../agent-hooks/server'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import { ensureWslHookRelayForReattach } from '../agent-hooks/wsl-hook-relay-reattach'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 import {
@@ -65,7 +66,7 @@ import {
   isPiCompatibleAgentType,
   type PiAgentKind
 } from '../../shared/pi-agent-kind'
-import { isPwshAvailable } from '../pwsh'
+import { isPwshAvailableAsync } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { isPtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
@@ -199,6 +200,7 @@ import {
 } from '../codex/codex-pane-account-registry'
 import { resolveCodexPaneLaunchAccount } from '../codex/codex-pane-launch-account'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { ensureCodexStateDbBackfillRecoveryStarted } from '../codex/codex-state-db-backfill-recovery'
 import {
   environmentCodexHomeOverrideContextsEqual,
   getCustomCodexHomeOverrideForLaunch,
@@ -453,6 +455,33 @@ function parseValidPaneKey(paneKey: unknown): ReturnType<typeof parsePaneKey> {
 
 function isValidPaneKey(paneKey: unknown): paneKey is string {
   return parseValidPaneKey(paneKey) !== null
+}
+
+const AGENT_LAUNCH_TOKEN_MAX_LENGTH = 128
+
+function admitRendererAgentLaunchAuthority(args: {
+  launchToken: unknown
+  spawnEnv: Record<string, string> | undefined
+  launchAgent: unknown
+  launchConfig: SleepingAgentLaunchConfig | undefined
+  isReattach: boolean
+  hasStablePaneOwner: boolean
+  incarnationId: unknown
+}): { launchToken: string; launchAgent: TuiAgent } | null {
+  if (
+    args.isReattach ||
+    args.hasStablePaneOwner ||
+    !args.launchConfig ||
+    !isTuiAgent(args.launchAgent) ||
+    !isPtyIncarnationId(args.incarnationId) ||
+    typeof args.launchToken !== 'string' ||
+    args.launchToken.length === 0 ||
+    args.launchToken.length > AGENT_LAUNCH_TOKEN_MAX_LENGTH ||
+    args.spawnEnv?.ORCA_AGENT_LAUNCH_TOKEN !== args.launchToken
+  ) {
+    return null
+  }
+  return { launchToken: args.launchToken, launchAgent: args.launchAgent }
 }
 
 function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
@@ -1072,6 +1101,7 @@ function finishPtyShutdown(
 
 export type BuildPtyHostEnvOptions = {
   isPackaged: boolean
+  resourcesPath?: string
   userDataPath: string
   selectedCodexHomePath: string | null
   skipCodexHomeEnv?: boolean
@@ -1201,6 +1231,18 @@ export type PrepareCodexSessionResume = (args: {
   launchEnv?: NodeJS.ProcessEnv
   workspacePath?: string
 }) => Promise<CodexSessionResumePreparation | null>
+
+export type CodexHomePtySpawnedLifecycleArgs = {
+  id: string
+  codexHomePath: string | null
+  reattached?: boolean
+  launchEnv?: NodeJS.ProcessEnv
+  startedAt?: Date
+  startedSequence?: number
+}
+
+let ptyLifecycleSequence = 0
+
 type PrepareClaudeAuth = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -1771,6 +1813,16 @@ export function buildPtyHostEnv(
         .filter((entry) => entry.length > 0 && entry !== shimDir)
       baseEnv.PATH = [shimDir, ...inheritedEntries].join(delimiter)
     }
+  } else if (
+    opts.resourcesPath &&
+    (process.platform === 'darwin' || process.platform === 'win32')
+  ) {
+    // Why: global CLI registration is optional, but agents in Orca-managed PTYs must always reach this app's bundled CLI.
+    const bundledCliBin = join(opts.resourcesPath, 'bin')
+    const inheritedPath = readInheritedPath(baseEnv)
+    baseEnv[resolvePathEnvKey(baseEnv, process.platform)] = inheritedPath
+      ? `${bundledCliBin}${delimiter}${inheritedPath}`
+      : bundledCliBin
   }
 
   // Why: PATH shims keep GitHub attribution scoped to Orca's own PTYs without rewriting user git config.
@@ -2242,6 +2294,8 @@ export function registerPtyHandlers(
     awaitLocalPtyProviderStartup?: () => Promise<void>
     // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
+    onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
+    onPtyExit?: (id: string, exitSequence: number) => void
   }
 ): void {
   // Why: a re-registration means a new window owns delivery — cancel the prior closure's watchdog and neutralize its bridged reset so mark-hidden below can't arm a timer against the dead closure.
@@ -2305,7 +2359,7 @@ export function registerPtyHandlers(
         getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined,
-      pwshAvailable: () => isPwshAvailable(),
+      pwshAvailable: () => isPwshAvailableAsync(),
       buildSpawnEnv: (id, baseEnv, ctx) => {
         const codexSelectionTarget: CodexAccountSelectionTarget =
           ctx?.isWsl === true
@@ -2323,6 +2377,7 @@ export function registerPtyHandlers(
         const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
         const env = buildPtyHostEnv(id, baseEnv, {
           isPackaged: app.isPackaged,
+          resourcesPath: process.resourcesPath,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
           skipCodexHomeEnv,
@@ -3562,6 +3617,7 @@ export function registerPtyHandlers(
   }
 
   function sendPtyExitToRenderer(payload: { id: string; code: number }): void {
+    options?.onPtyExit?.(payload.id, ++ptyLifecycleSequence)
     const release = preparePtyExitForRenderer(payload)
     if (!release) {
       return
@@ -4289,6 +4345,8 @@ export function registerPtyHandlers(
     },
     adoptStablePane,
     spawn: async (args) => {
+      const codexHomeLaunchStartedAt = !args.connectionId ? new Date() : undefined
+      const codexHomeLaunchStartedSequence = !args.connectionId ? ++ptyLifecycleSequence : undefined
       const preAdoptedStablePane = args.adoptedStablePane ?? null
       const startupPromise = getLocalPtyStartupPromise(args.connectionId)
       if (startupPromise) {
@@ -4299,7 +4357,7 @@ export function registerPtyHandlers(
         if (!handle) {
           throw new Error('terminal_pane_owner_unknown')
         }
-        return {
+        const result = {
           id: preAdoptedStablePane.result.id,
           ...(preAdoptedStablePane.result.incarnationId
             ? { incarnationId: preAdoptedStablePane.result.incarnationId }
@@ -4313,6 +4371,20 @@ export function registerPtyHandlers(
             leafId: preAdoptedStablePane.owner.leafId
           }
         }
+        ensureWslHookRelayForReattach(
+          { isReattach: true, wslDistro: preAdoptedStablePane.result.wslDistro },
+          args.connectionId
+        )
+        if (!args.connectionId) {
+          options?.onCodexHomePtySpawned?.({
+            id: result.id,
+            codexHomePath: null,
+            reattached: true,
+            startedAt: codexHomeLaunchStartedAt,
+            startedSequence: codexHomeLaunchStartedSequence
+          })
+        }
+        return result
       }
       if (!preAdoptedStablePane) {
         await assertFolderWorkspacePtyPathUsable(args.worktreeId)
@@ -4495,6 +4567,9 @@ export function registerPtyHandlers(
         })
         selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
       }
+      if (args.launchAgent === 'codex' && selectedCodexHomePath) {
+        await ensureCodexStateDbBackfillRecoveryStarted(selectedCodexHomePath)
+      }
       const codexResumeHomeSelected = Boolean(
         codexResumeHome && codexHomePathsEqual(selectedCodexHomePath, codexResumeHome.codexHomePath)
       )
@@ -4516,6 +4591,7 @@ export function registerPtyHandlers(
         }
         env = buildPtyHostEnv(sessionId, env ?? {}, {
           isPackaged: app.isPackaged,
+          resourcesPath: process.resourcesPath,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
           skipCodexHomeEnv,
@@ -4878,6 +4954,7 @@ export function registerPtyHandlers(
               sequenceBeforeProviderSpawn
             )
           }
+          ensureWslHookRelayForReattach(result, args.connectionId)
           runtime?.preparePtyExecutionContext?.(
             result.id,
             args.connectionId
@@ -4972,6 +5049,16 @@ export function registerPtyHandlers(
             leafId: owner.surface.leafId,
             ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
           })
+          if (!args.connectionId) {
+            options?.onCodexHomePtySpawned?.({
+              id: result.id,
+              codexHomePath: selectedCodexHomePath,
+              reattached: true,
+              startedAt: codexHomeLaunchStartedAt,
+              startedSequence: codexHomeLaunchStartedSequence,
+              ...(env ? { launchEnv: env } : {})
+            })
+          }
           return {
             id: result.id,
             ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
@@ -5136,6 +5223,15 @@ export function registerPtyHandlers(
         }
         // Why: runtime-owned/background spawns bypass mounted-pane state, so inventory consumers need an explicit signal.
         sendPtySpawnedToRenderer(result.id)
+        if (!args.connectionId) {
+          options?.onCodexHomePtySpawned?.({
+            id: result.id,
+            codexHomePath: selectedCodexHomePath,
+            startedAt: codexHomeLaunchStartedAt,
+            startedSequence: codexHomeLaunchStartedSequence,
+            ...(result.isReattach === true ? { reattached: true } : env ? { launchEnv: env } : {})
+          })
+        }
         const response = {
           id: result.id,
           ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
@@ -5230,7 +5326,15 @@ export function registerPtyHandlers(
         return false
       }
       try {
-        await provider.attach(ptyId)
+        const sequenceBeforeProviderAttach = runtime?.getPtyOutputSequence?.(ptyId) ?? 0
+        const attachResult = await provider.attach(ptyId)
+        if (attachResult?.providerSequence) {
+          runtime?.synchronizePtyOutputSequenceFromProvider?.(
+            ptyId,
+            attachResult.providerSequence,
+            sequenceBeforeProviderAttach
+          )
+        }
         return true
       } catch {
         return false
@@ -5595,6 +5699,7 @@ export function registerPtyHandlers(
         commandDelivery?: 'renderer' | 'provider'
         launchConfig?: SleepingAgentLaunchConfig
         resumeProviderSession?: AgentProviderSessionMetadata
+        launchToken?: unknown
         launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
         connectionId?: string | null
@@ -5619,6 +5724,8 @@ export function registerPtyHandlers(
         }
       }
     ) => {
+      const codexHomeLaunchStartedAt = !args.connectionId ? new Date() : undefined
+      const codexHomeLaunchStartedSequence = !args.connectionId ? ++ptyLifecycleSequence : undefined
       const spawnTiming = createPtySpawnTiming()
       const startupPromise = getLocalPtyStartupPromise(args.connectionId)
       if (startupPromise) {
@@ -5956,6 +6063,9 @@ export function registerPtyHandlers(
           })
           selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
         }
+        if (args.launchAgent === 'codex' && selectedCodexHomePath) {
+          await ensureCodexStateDbBackfillRecoveryStarted(selectedCodexHomePath)
+        }
         const codexResumeHomeSelected = Boolean(
           codexResumeHome &&
           codexHomePathsEqual(selectedCodexHomePath, codexResumeHome.codexHomePath)
@@ -5987,6 +6097,7 @@ export function registerPtyHandlers(
           try {
             buildPtyHostEnv(sessionIdForEnv, env, {
               isPackaged: app.isPackaged,
+              resourcesPath: process.resourcesPath,
               userDataPath: app.getPath('userData'),
               selectedCodexHomePath,
               skipCodexHomeEnv,
@@ -6218,6 +6329,7 @@ export function registerPtyHandlers(
               sequenceBeforeProviderSpawn
             )
           }
+          ensureWslHookRelayForReattach(result, args.connectionId)
           runtime?.preparePtyExecutionContext?.(
             result.id,
             args.connectionId
@@ -6482,6 +6594,15 @@ export function registerPtyHandlers(
           args.worktreeId.length > 0 &&
           args.worktreeId.length <= 512
         ) {
+          const agentLaunchAuthority = admitRendererAgentLaunchAuthority({
+            launchToken: args.launchToken,
+            spawnEnv,
+            launchAgent: args.launchAgent,
+            launchConfig: effectiveLaunchConfig,
+            isReattach: result.isReattach === true,
+            hasStablePaneOwner: stablePaneOwner !== null,
+            incarnationId: result.incarnationId
+          })
           runtime?.registerPty(
             result.id,
             args.worktreeId,
@@ -6494,7 +6615,8 @@ export function registerPtyHandlers(
               ? {
                   tabId: args.tabId,
                   leafId: metadataLeafId,
-                  ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
+                  ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
+                  ...(agentLaunchAuthority ? { agentLaunchAuthority } : {})
                 }
               : undefined,
             !args.connectionId
@@ -6594,6 +6716,19 @@ export function registerPtyHandlers(
         }
         // Why: renderer tab state cannot reliably infer background and reattached PTYs in the daemon inventory.
         sendPtySpawnedToRenderer(result.id)
+        if (!args.connectionId) {
+          options?.onCodexHomePtySpawned?.({
+            id: result.id,
+            codexHomePath: selectedCodexHomePath,
+            startedAt: codexHomeLaunchStartedAt,
+            startedSequence: codexHomeLaunchStartedSequence,
+            ...(result.isReattach === true
+              ? { reattached: true }
+              : baseEnv
+                ? { launchEnv: baseEnv }
+                : {})
+          })
+        }
         return resolvePaneSpawnReservation(paneSpawnReservationKey, paneSpawnReservation, response)
       } catch (err) {
         if (pendingRegistrationPtyId) {
@@ -7380,7 +7515,11 @@ export function registerHeadlessPtyRuntime(
   getSettings?: () => GlobalSettings,
   prepareClaudeAuth?: PrepareClaudeAuth,
   store?: Store,
-  prepareCodexSessionResume?: PrepareCodexSessionResume
+  prepareCodexSessionResume?: PrepareCodexSessionResume,
+  lifecycle?: {
+    onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
+    onPtyExit?: (id: string, exitSequence: number) => void
+  }
 ): void {
   // Why: headless `orca serve` has no renderer window but still needs the same PTY handlers so remote clients can drive terminals.
   const headlessWindow = {
@@ -7398,7 +7537,7 @@ export function registerHeadlessPtyRuntime(
     getSettings,
     prepareClaudeAuth,
     store,
-    { prepareCodexSessionResume }
+    { prepareCodexSessionResume, ...lifecycle }
   )
 }
 
