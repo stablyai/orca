@@ -106,6 +106,7 @@ export function EditorPanelShell({
           hasEditorToggle={model.hasEditorToggle}
           availableEditorToggleModes={model.availableEditorToggleModes}
           effectiveToggleValue={model.effectiveToggleValue}
+          canShowRichMarkdownFollowLinks={model.canShowRichMarkdownFollowLinks}
           canOpenPreviewToSide={model.canOpenPreviewToSide}
           canShowMarkdownPreview={model.canShowMarkdownPreview}
           canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}

@@ -32,6 +32,10 @@ import {
   getSelectedHtmlSuperscriptLinkStatus
 } from './rich-markdown-selected-link-actions'
 import type { RichMarkdownEditorProps } from './rich-markdown-editor-props'
+import {
+  useCommittedRichMarkdownFollowLinksRef,
+  useRichMarkdownFollowLinks
+} from './rich-markdown-follow-links-state'
 
 export default function RichMarkdownEditor({
   fileId,
@@ -56,6 +60,8 @@ export default function RichMarkdownEditor({
   headerSlot
 }: RichMarkdownEditorProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const followLinks = useRichMarkdownFollowLinks()
+  const followLinksOnClickRef = useCommittedRichMarkdownFollowLinksRef(followLinks?.active ?? false)
   const settings = useAppStore((s) => s.settings)
   const richMarkdownSpellcheckEnabled = settings?.richMarkdownSpellcheckEnabled ?? true
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
@@ -202,6 +208,7 @@ export default function RichMarkdownEditor({
     richMarkdownSpellcheckEnabled,
     settings,
     activateMarkdownLink,
+    followLinksOnClickRef,
     rootRef,
     editorRef,
     lastCommittedMarkdownRef,
@@ -352,6 +359,7 @@ export default function RichMarkdownEditor({
     <RichMarkdownEditorSurface
       editor={editor}
       editorFontZoomLevel={editorFontZoomLevel}
+      followLinks={followLinks ?? undefined}
       rootElement={rootRef.current}
       rootRef={setRootElement}
       scrollContainerRef={scrollContainerRef}

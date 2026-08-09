@@ -20,6 +20,7 @@ import type { MarkdownReviewNote } from '@/lib/markdown-review-notes'
 import type { RichMarkdownAnnotationTarget } from './rich-markdown-review-annotations'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import type { DiffComment } from '../../../../shared/types'
+import type { RichMarkdownFollowLinksState } from './rich-markdown-follow-links-state'
 
 function shouldFocusEmptyEditorFromSurfaceClick(
   event: React.MouseEvent<HTMLDivElement>,
@@ -38,6 +39,7 @@ function shouldFocusEmptyEditorFromSurfaceClick(
 type RichMarkdownEditorSurfaceProps = {
   editor: Editor | null
   editorFontZoomLevel: number
+  followLinks?: RichMarkdownFollowLinksState
   rootElement: HTMLDivElement | null
   rootRef: (node: HTMLDivElement | null) => void
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
@@ -126,6 +128,7 @@ type RichMarkdownEditorSurfaceProps = {
 export function RichMarkdownEditorSurface({
   editor,
   editorFontZoomLevel,
+  followLinks,
   rootElement,
   rootRef,
   scrollContainerRef,
@@ -195,6 +198,7 @@ export function RichMarkdownEditorSurface({
         className={`rich-markdown-editor-shell ${
           reviewRailExpanded ? 'has-rich-markdown-review-notes' : ''
         }`.trim()}
+        data-follow-links={followLinks?.active ? 'true' : undefined}
         style={{ '--editor-font-zoom-level': editorFontZoomLevel } as React.CSSProperties}
       >
         <RichMarkdownToolbar

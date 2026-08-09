@@ -13054,6 +13054,9 @@
           "deleteRow": "行を削除",
           "deleteColumn": "列を削除"
         },
+        "RichMarkdownFollowLinksHeaderButton": {
+          "followLinksOnClick": "Follow links on click"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "保存",
           "949711deb4": "キャンセル",

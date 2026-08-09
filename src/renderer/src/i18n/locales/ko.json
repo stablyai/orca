@@ -13054,6 +13054,9 @@
           "deleteRow": "행 삭제",
           "deleteColumn": "열 삭제"
         },
+        "RichMarkdownFollowLinksHeaderButton": {
+          "followLinksOnClick": "Follow links on click"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "저장",
           "949711deb4": "취소",

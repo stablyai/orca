@@ -148,6 +148,17 @@ export function getEditorPanelRenderModel({
         fileContents[activeFile.id]?.isBinary !== true &&
         !fileContents[activeFile.id]?.loadError &&
         activeFile.conflict?.conflictStatus !== 'unresolved'))
+  const activeFileContent = activeFile.mode === 'edit' ? fileContents[activeFile.id] : undefined
+  const canShowRichMarkdownFollowLinks =
+    viewerLanguage === 'markdown' &&
+    activeFile.mode === 'edit' &&
+    activeFile.conflict?.kind !== 'conflict-placeholder' &&
+    activeFile.conflict?.conflictStatus !== 'unresolved' &&
+    activeFileContent !== undefined &&
+    activeFileContent.isBinary !== true &&
+    !activeFileContent.loadError &&
+    !isChangesMode &&
+    inlineMarkdownRenderMode === 'rich-editor'
   return {
     isSingleDiff,
     isDiffSurface: isSingleDiff || isChangesMode,
@@ -171,6 +182,7 @@ export function getEditorPanelRenderModel({
     hasEditorToggle: availableEditorToggleModes.length > 1,
     effectiveToggleValue,
     isMarkdownTableOfContentsDisabled: hasViewModeToggle && mdViewMode === 'source',
+    canShowRichMarkdownFollowLinks,
     shouldShowMarkdownExportAction,
     canExportMarkdownToPdf,
     canShowMarkdownTableOfContents:

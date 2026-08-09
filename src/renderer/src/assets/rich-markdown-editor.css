@@ -1157,6 +1157,12 @@
   cursor: pointer;
 }
 
+.rich-markdown-editor-shell[data-follow-links='true']
+  .rich-markdown-editor
+  a:not(.rich-markdown-html-superscript-link):not(:has(img)) {
+  cursor: pointer;
+}
+
 .dark .rich-markdown-editor a {
   color: #58a6ff;
 }

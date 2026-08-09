@@ -4623,6 +4623,95 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
+  it('reuses one preview while following an in-worktree markdown chain', async () => {
+    const store = createEditorTabsStore()
+    pathExistsMock.mockResolvedValue(true)
+    store.getState().openFile({
+      filePath: '/repo/docs/start.md',
+      relativePath: 'docs/start.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+
+    await store.getState().activateMarkdownLink('./middle.md', {
+      sourceFilePath: '/repo/docs/start.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    await store.getState().activateMarkdownLink('./finish.md', {
+      sourceFilePath: '/repo/docs/middle.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/start.md',
+        isPreview: undefined
+      }),
+      expect.objectContaining({
+        filePath: '/repo/docs/finish.md',
+        isPreview: true
+      })
+    ])
+    expect(
+      store.getState().unifiedTabsByWorktree['wt-1'].filter((tab) => tab.contentType === 'editor')
+    ).toHaveLength(2)
+  })
+
+  it('keeps an async markdown-link open in the group where navigation started', async () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/repo/docs/start.md',
+      relativePath: 'docs/start.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    const sourceTab = store
+      .getState()
+      .unifiedTabsByWorktree['wt-1'].find((tab) => tab.contentType === 'editor')
+    if (!sourceTab) {
+      throw new Error('expected source editor tab')
+    }
+    const secondGroupId = store.getState().createEmptySplitGroup('wt-1', sourceTab.groupId, 'right')
+    if (!secondGroupId) {
+      throw new Error('expected second split group')
+    }
+    store.setState({
+      activeGroupIdByWorktree: { 'wt-1': sourceTab.groupId }
+    })
+
+    let resolveStat!: (value: { size: number; isDirectory: boolean; mtime: number }) => void
+    fsStatMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveStat = resolve
+        })
+    )
+    const opening = store.getState().activateMarkdownLink('./finish.md', {
+      sourceFilePath: '/repo/docs/start.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(fsStatMock).toHaveBeenCalledOnce()
+    store.setState({
+      activeGroupIdByWorktree: { 'wt-1': secondGroupId }
+    })
+    resolveStat({ size: 1, isDirectory: false, mtime: 1 })
+    await opening
+
+    const finishFile = store
+      .getState()
+      .openFiles.find((file) => file.filePath === '/repo/docs/finish.md')
+    const finishTab = store
+      .getState()
+      .unifiedTabsByWorktree['wt-1'].find((tab) => tab.entityId === finishFile?.id)
+    expect(finishTab?.groupId).toBe(sourceTab.groupId)
+  })
+
   it('opens remote-owned markdown links through the source file runtime owner', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)

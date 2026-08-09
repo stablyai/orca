@@ -50,6 +50,7 @@ export type EditorConfigParams = {
   richMarkdownSpellcheckEnabled: boolean
   settings: RichMarkdownRuntimeSettings
   activateMarkdownLink: ActivateMarkdownLink
+  followLinksOnClickRef: MutableRefObject<boolean>
   rootRef: MutableRefObject<HTMLDivElement | null>
   editorRef: MutableRefObject<Editor | null>
   lastCommittedMarkdownRef: MutableRefObject<string>
@@ -104,6 +105,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     richMarkdownSpellcheckEnabled,
     settings,
     activateMarkdownLink,
+    followLinksOnClickRef,
     rootRef,
     editorRef,
     lastCommittedMarkdownRef,
@@ -182,6 +184,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
           editorRef,
           event,
           filePath,
+          followLinksOnClickRef,
           htmlSuperscriptLinkContext,
           isMac,
           markdownCommentsRef,

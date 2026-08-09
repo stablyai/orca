@@ -17,6 +17,7 @@ import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 import { useDiffNavigation } from './diff-navigation-context'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { RichMarkdownFollowLinksHeaderButton } from './RichMarkdownFollowLinksHeaderButton'
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
@@ -29,6 +30,7 @@ type EditorPanelHeaderProps = {
   hasEditorToggle: boolean
   availableEditorToggleModes: readonly EditorToggleValue[]
   effectiveToggleValue: EditorToggleValue
+  canShowRichMarkdownFollowLinks: boolean
   canOpenPreviewToSide: boolean
   canShowMarkdownPreview: boolean
   canShowMarkdownTableOfContents: boolean
@@ -63,6 +65,7 @@ export function EditorPanelHeader({
   hasEditorToggle,
   availableEditorToggleModes,
   effectiveToggleValue,
+  canShowRichMarkdownFollowLinks,
   canOpenPreviewToSide,
   canShowMarkdownPreview,
   canShowMarkdownTableOfContents,
@@ -275,6 +278,7 @@ export function EditorPanelHeader({
           }
         />
       )}
+      {canShowRichMarkdownFollowLinks && <RichMarkdownFollowLinksHeaderButton />}
       {canShowMarkdownTableOfContents && (
         <TooltipProvider delayDuration={300}>
           <Tooltip>

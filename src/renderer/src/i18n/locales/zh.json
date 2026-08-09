@@ -13074,6 +13074,9 @@
           "deleteRow": "删除行",
           "deleteColumn": "删除列"
         },
+        "RichMarkdownFollowLinksHeaderButton": {
+          "followLinksOnClick": "Follow links on click"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "保存",
           "949711deb4": "取消",

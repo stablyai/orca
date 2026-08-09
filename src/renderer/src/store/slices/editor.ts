@@ -4805,6 +4805,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   activateMarkdownLink: async (rawHref, ctx) => {
     const initialState = get()
+    const targetGroupId = initialState.activeGroupIdByWorktree?.[ctx.worktreeId]
     let inferredRuntimeEnvironmentId: string | null | undefined
     if (!ctx.sourceOwner && ctx.runtimeEnvironmentId === undefined) {
       const inferredRuntimeOwners = new Set(
@@ -4907,7 +4908,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         },
         {
           preview: true,
-          targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
+          targetGroupId,
           recordReplacedPreview: true
         }
       )
@@ -4951,7 +4952,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       },
       {
         preview: true,
-        targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
+        targetGroupId,
         recordReplacedPreview: true
       }
     )

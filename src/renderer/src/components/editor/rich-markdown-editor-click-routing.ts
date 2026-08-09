@@ -17,6 +17,10 @@ import {
   classifyHtmlSuperscriptLinkAction,
   type RichMarkdownHtmlSuperscriptLinkContext
 } from './rich-markdown-html-superscript-link-context'
+import {
+  getRichMarkdownLinkClickIntent,
+  isRichMarkdownLinkOpenModifier
+} from './rich-markdown-link-click-intent'
 
 export type ActivateMarkdownLink = (
   href: string,
@@ -36,6 +40,7 @@ type RichMarkdownEditorClickRoutingOptions = {
   editorRef: MutableRefObject<Editor | null>
   event: MouseEvent
   filePath: string
+  followLinksOnClickRef: MutableRefObject<boolean>
   isMac: boolean
   htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
   markdownCommentsRef: MutableRefObject<DiffComment[]>
@@ -56,6 +61,7 @@ export function handleRichMarkdownEditorClick({
   editorRef,
   event,
   filePath,
+  followLinksOnClickRef,
   isMac,
   htmlSuperscriptLinkContext,
   markdownCommentsRef,
@@ -73,24 +79,16 @@ export function handleRichMarkdownEditorClick({
   const editor = editorRef.current
   const sourceSnapshot = htmlSuperscriptLinkContext.getSnapshot()
   const sourceOwner = sourceSnapshot.sourceOwner
-  const modKey = isMac ? event.metaKey : event.ctrlKey
+  const modifierHeld = isRichMarkdownLinkOpenModifier(event, isMac)
   if (!editor) {
     return false
   }
-  if (!modKey) {
-    const selectedComment = getRichMarkdownCommentAtPos(
-      editor,
-      markdownCommentsRef.current,
-      markdownSourceLineOffsetRef.current,
-      pos
-    )
-    if (selectedComment) {
-      scrollRichMarkdownReviewNoteCardIntoView(selectedComment.id)
-    }
-    return false
-  }
+  const activeEditor = editor
   const clickedNode = view.state.doc.nodeAt(pos)
   if (clickedNode?.type.name === 'image') {
+    if (!modifierHeld) {
+      return handleSelectionClick()
+    }
     return activateMarkdownImageClick({
       activateMarkdownLink,
       filePath,
@@ -102,45 +100,74 @@ export function handleRichMarkdownEditorClick({
     })
   }
   if (clickedNode?.type.name === 'markdownDocLink') {
+    if (!modifierHeld) {
+      return handleSelectionClick()
+    }
     onOpenDocLinkRef.current?.(clickedNode.attrs.target as string)
     return true
   }
-  const href =
-    clickedNode?.type.name === 'richMarkdownHtmlSuperscriptLink'
-      ? String(clickedNode.attrs.href ?? '')
-      : getClickedLinkHref(view, pos)
-  if (
-    clickedNode?.type.name === 'richMarkdownHtmlSuperscriptLink' &&
-    !classifyHtmlSuperscriptLinkAction(href, sourceSnapshot)
-  ) {
-    return true
+  if (clickedNode?.type.name === 'richMarkdownHtmlSuperscriptLink') {
+    if (!modifierHeld) {
+      return handleSelectionClick()
+    }
+    const href = String(clickedNode.attrs.href ?? '')
+    if (!classifyHtmlSuperscriptLinkAction(href, sourceSnapshot)) {
+      return true
+    }
+    const intent = getRichMarkdownLinkClickIntent(event, isMac, false)
+    return intent === 'select' ? handleSelectionClick() : activateStandardLink(href, intent)
   }
+  const href = getClickedLinkHref(view, pos, event)
   if (!href) {
+    return handleSelectionClick()
+  }
+  const intent = getRichMarkdownLinkClickIntent(event, isMac, followLinksOnClickRef.current)
+  if (intent === 'select') {
+    return handleSelectionClick()
+  }
+
+  return activateStandardLink(href, intent)
+
+  function handleSelectionClick(): false {
+    if (!modifierHeld) {
+      const selectedComment = getRichMarkdownCommentAtPos(
+        activeEditor,
+        markdownCommentsRef.current,
+        markdownSourceLineOffsetRef.current,
+        pos
+      )
+      if (selectedComment) {
+        scrollRichMarkdownReviewNoteCardIntoView(selectedComment.id)
+      }
+    }
     return false
   }
-  if (href.startsWith('#')) {
-    scrollToAnchorInEditor(rootRef.current, href.slice(1))
-    return true
-  }
-  if (event.shiftKey) {
-    openMarkdownLinkInClientOs({
-      href,
-      filePath,
+
+  function activateStandardLink(href: string, intent: 'activate' | 'open-in-client-os'): true {
+    if (href.startsWith('#')) {
+      scrollToAnchorInEditor(rootRef.current, href.slice(1))
+      return true
+    }
+    if (intent === 'open-in-client-os') {
+      openMarkdownLinkInClientOs({
+        href,
+        filePath,
+        runtimeEnvironmentId,
+        sourceOwner,
+        settings,
+        worktreeRoot
+      })
+      return true
+    }
+    void activateMarkdownLink(href, {
+      sourceFilePath: filePath,
+      worktreeId,
+      worktreeRoot,
       runtimeEnvironmentId,
-      sourceOwner,
-      settings,
-      worktreeRoot
+      sourceOwner
     })
     return true
   }
-  void activateMarkdownLink(href, {
-    sourceFilePath: filePath,
-    worktreeId,
-    worktreeRoot,
-    runtimeEnvironmentId,
-    sourceOwner
-  })
-  return true
 }
 
 function activateMarkdownImageClick({
@@ -173,7 +200,13 @@ function activateMarkdownImageClick({
   return true
 }
 
-function getClickedLinkHref(view: EditorView, pos: number): string {
+function getClickedLinkHref(view: EditorView, pos: number, event: MouseEvent): string {
+  if (event.target instanceof Element) {
+    const href = event.target.closest('a[href]')?.getAttribute('href') ?? ''
+    if (href) {
+      return href
+    }
+  }
   const linkMark = view.state.doc
     .resolve(pos)
     .marks()

@@ -1,84 +1,276 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
+
 import type { MutableRefObject } from 'react'
+import type { Editor } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
-import { handleRichMarkdownEditorClick } from './rich-markdown-editor-click-routing'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import { createRichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 
-const openHttpLinkMock = vi.hoisted(() => vi.fn())
+const getCommentAtPosition = vi.hoisted(() => vi.fn())
+const openHttpLink = vi.hoisted(() => vi.fn())
 
-vi.mock('@/lib/http-link-routing', () => ({
-  openHttpLink: openHttpLinkMock
+vi.mock('./rich-markdown-review-annotations', () => ({
+  getRichMarkdownCommentAtPos: getCommentAtPosition
 }))
+vi.mock('@/lib/http-link-routing', () => ({ openHttpLink }))
 
-beforeEach(() => {
-  openHttpLinkMock.mockReset()
-})
+import {
+  handleRichMarkdownEditorClick,
+  type ActivateMarkdownLink
+} from './rich-markdown-editor-click-routing'
 
-// Why: the preview deliberately routes differently; this pins the editor side so a
-// future "make them consistent" change cannot land silently.
-function clickExternalLinkWithShift(sourceOwner: HttpLinkSourceOwner, isMac = true): boolean {
-  const href = 'https://example.com/docs'
-  const view = {
+type ClickNode = {
+  attrs: Record<string, unknown>
+  type: { name: string }
+}
+
+const baseEvent = {
+  button: 0,
+  ctrlKey: false,
+  metaKey: false,
+  shiftKey: false
+} as MouseEvent
+
+function ref<T>(current: T): MutableRefObject<T> {
+  return { current }
+}
+
+function editorView(node: ClickNode | null, href?: string): EditorView {
+  return {
     state: {
       doc: {
-        nodeAt: () => null,
+        nodeAt: () => node,
         resolve: () => ({
-          marks: () => [{ type: { name: 'link' }, attrs: { href } }]
+          marks: () =>
+            href
+              ? [
+                  {
+                    attrs: { href },
+                    type: { name: 'link' }
+                  }
+                ]
+              : []
         })
       }
     }
   } as unknown as EditorView
-
-  return handleRichMarkdownEditorClick({
-    activateMarkdownLink: vi.fn(),
-    editorRef: { current: {} } as unknown as MutableRefObject<unknown>,
-    event: { metaKey: isMac, ctrlKey: !isMac, shiftKey: true } as MouseEvent,
-    filePath: '/repo/docs/README.md',
-    isMac,
-    htmlSuperscriptLinkContext: {
-      getSnapshot: () => ({ sourceOwner })
-    },
-    markdownCommentsRef: { current: [] },
-    markdownSourceLineOffsetRef: { current: 0 },
-    onOpenDocLinkRef: { current: undefined },
-    pos: 1,
-    rootRef: { current: null },
-    scrollRichMarkdownReviewNoteCardIntoView: vi.fn(),
-    settings: {} as never,
-    view,
-    worktreeId: 'wt-1',
-    worktreeRoot: '/repo'
-  } as never)
 }
 
-describe('rich markdown editor Shift+modifier click on external links', () => {
-  // Why: intentionally NOT the preview's behavior — this path hands the link to the
-  // client OS, so it must keep forcing the system browser even when inverting is on.
-  it('forces the system browser rather than following the invert setting', () => {
-    expect(clickExternalLinkWithShift({ kind: 'local' })).toBe(true)
-    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/docs', {
-      forceSystemBrowser: true,
-      sourceOwner: { kind: 'local' }
+function routeClick({
+  activateMarkdownLink = vi.fn(),
+  event = baseEvent,
+  followLinksOnClick = false,
+  href,
+  isMac = false,
+  node = null,
+  onOpenDocLink = vi.fn(),
+  sourceOwner = { kind: 'ssh', connectionId: 'ssh-1' }
+}: {
+  activateMarkdownLink?: ActivateMarkdownLink
+  event?: MouseEvent
+  followLinksOnClick?: boolean
+  href?: string
+  isMac?: boolean
+  node?: ClickNode | null
+  onOpenDocLink?: (target: string) => void
+  sourceOwner?: HttpLinkSourceOwner
+}): boolean {
+  return handleRichMarkdownEditorClick({
+    activateMarkdownLink,
+    editorRef: ref({} as Editor),
+    event,
+    filePath: '/repo/docs/start.md',
+    followLinksOnClickRef: ref(followLinksOnClick),
+    htmlSuperscriptLinkContext: createRichMarkdownHtmlSuperscriptLinkContext({
+      sourceFilePath: '/repo/docs/start.md',
+      worktreeId: 'worktree-1',
+      worktreeRoot: '/repo',
+      sourceOwner
+    }),
+    isMac,
+    markdownCommentsRef: ref([]),
+    markdownSourceLineOffsetRef: ref(0),
+    onOpenDocLinkRef: ref(onOpenDocLink),
+    pos: 1,
+    rootRef: ref(null),
+    runtimeEnvironmentId: null,
+    scrollRichMarkdownReviewNoteCardIntoView: vi.fn(),
+    settings: { activeRuntimeEnvironmentId: null },
+    view: editorView(node, href),
+    worktreeId: 'worktree-1',
+    worktreeRoot: '/repo'
+  })
+}
+
+describe('handleRichMarkdownEditorClick Follow links routing', () => {
+  beforeEach(() => {
+    getCommentAtPosition.mockReset()
+    getCommentAtPosition.mockReturnValue(null)
+    openHttpLink.mockReset()
+  })
+
+  it('keeps a plain standard-link click editable when Follow links is off', () => {
+    const activateMarkdownLink = vi.fn()
+
+    expect(routeClick({ activateMarkdownLink, href: './next.md' })).toBe(false)
+    expect(activateMarkdownLink).not.toHaveBeenCalled()
+  })
+
+  it('activates a plain standard link with its SSH owner when Follow links is on', () => {
+    const activateMarkdownLink = vi.fn()
+
+    expect(
+      routeClick({
+        activateMarkdownLink,
+        followLinksOnClick: true,
+        href: './next.md'
+      })
+    ).toBe(true)
+    expect(activateMarkdownLink).toHaveBeenCalledWith('./next.md', {
+      sourceFilePath: '/repo/docs/start.md',
+      worktreeId: 'worktree-1',
+      worktreeRoot: '/repo',
+      runtimeEnvironmentId: null,
+      sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' }
     })
   })
 
-  // Why: AGENTS.md — Shift+Ctrl is the chord off macOS, and modKey reads a
-  // different event field there.
-  it('uses the Ctrl chord off macOS', () => {
-    expect(clickExternalLinkWithShift({ kind: 'local' }, false)).toBe(true)
-    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/docs', {
+  it('uses the clicked anchor when the document position is at a mark boundary', () => {
+    const activateMarkdownLink = vi.fn()
+    const anchor = document.createElement('a')
+    anchor.setAttribute('href', './next.md')
+
+    expect(
+      routeClick({
+        activateMarkdownLink,
+        event: { ...baseEvent, target: anchor } as MouseEvent,
+        followLinksOnClick: true
+      })
+    ).toBe(true)
+    expect(activateMarkdownLink).toHaveBeenCalledWith('./next.md', expect.any(Object))
+  })
+
+  it.each([
+    { name: 'Cmd on macOS', isMac: true, event: { ...baseEvent, metaKey: true } as MouseEvent },
+    {
+      name: 'Ctrl on Linux and Windows',
+      isMac: false,
+      event: { ...baseEvent, ctrlKey: true } as MouseEvent
+    }
+  ])('activates a standard link with $name', ({ event, isMac }) => {
+    const activateMarkdownLink = vi.fn()
+
+    expect(routeClick({ activateMarkdownLink, event, href: './next.md', isMac })).toBe(true)
+    expect(activateMarkdownLink).toHaveBeenCalledWith('./next.md', expect.any(Object))
+  })
+
+  it('keeps modifier activation for images and document links', () => {
+    const activateMarkdownLink = vi.fn()
+    const onOpenDocLink = vi.fn()
+    const event = { ...baseEvent, ctrlKey: true } as MouseEvent
+
+    expect(
+      routeClick({
+        activateMarkdownLink,
+        event,
+        node: { type: { name: 'image' }, attrs: { src: './image.png' } }
+      })
+    ).toBe(true)
+    expect(activateMarkdownLink).toHaveBeenCalledWith('./image.png', expect.any(Object))
+
+    expect(
+      routeClick({
+        event,
+        node: { type: { name: 'markdownDocLink' }, attrs: { target: 'wiki-note' } },
+        onOpenDocLink
+      })
+    ).toBe(true)
+    expect(onOpenDocLink).toHaveBeenCalledWith('wiki-note')
+  })
+
+  it.each([
+    {
+      event: { ...baseEvent, metaKey: true, shiftKey: true } as MouseEvent,
+      isMac: true,
+      name: 'Cmd+Shift on macOS',
+      sourceOwner: { kind: 'local' } as HttpLinkSourceOwner
+    },
+    {
+      event: { ...baseEvent, ctrlKey: true, shiftKey: true } as MouseEvent,
+      isMac: false,
+      name: 'Ctrl+Shift on Linux and Windows',
+      sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' } as HttpLinkSourceOwner
+    }
+  ])('keeps $name as the client-OS escape for standard links', ({ event, isMac, sourceOwner }) => {
+    expect(
+      routeClick({
+        event,
+        href: 'https://example.com',
+        isMac,
+        sourceOwner
+      })
+    ).toBe(true)
+    expect(openHttpLink).toHaveBeenCalledWith('https://example.com/', {
       forceSystemBrowser: true,
-      sourceOwner: { kind: 'local' }
+      sourceOwner
     })
   })
 
-  it('forwards a non-local source owner untouched', () => {
-    const sourceOwner = { kind: 'ssh', connectionId: 'conn-1' } as HttpLinkSourceOwner
+  it.each([
+    { name: 'image', attrs: { src: './image.png' } },
+    { name: 'markdownDocLink', attrs: { target: 'wiki-note' } },
+    {
+      name: 'richMarkdownHtmlSuperscriptLink',
+      attrs: { href: 'https://example.com/citation' }
+    }
+  ])('keeps plain $name clicks modifier-only', ({ name, attrs }) => {
+    const activateMarkdownLink = vi.fn()
+    const onOpenDocLink = vi.fn()
 
-    expect(clickExternalLinkWithShift(sourceOwner)).toBe(true)
-    expect(openHttpLinkMock).toHaveBeenCalledWith(
-      'https://example.com/docs',
-      expect.objectContaining({ forceSystemBrowser: true, sourceOwner })
-    )
+    expect(
+      routeClick({
+        activateMarkdownLink,
+        followLinksOnClick: true,
+        node: { type: { name }, attrs },
+        onOpenDocLink
+      })
+    ).toBe(false)
+    expect(activateMarkdownLink).not.toHaveBeenCalled()
+    expect(onOpenDocLink).not.toHaveBeenCalled()
+  })
+
+  it('preserves review-note selection for a plain non-link click', () => {
+    const scrollIntoView = vi.fn()
+    getCommentAtPosition.mockReturnValue({ id: 'comment-1' })
+
+    const handled = handleRichMarkdownEditorClick({
+      activateMarkdownLink: vi.fn(),
+      editorRef: ref({} as Editor),
+      event: baseEvent,
+      filePath: '/repo/docs/start.md',
+      followLinksOnClickRef: ref(true),
+      htmlSuperscriptLinkContext: createRichMarkdownHtmlSuperscriptLinkContext({
+        sourceFilePath: '/repo/docs/start.md',
+        worktreeId: 'worktree-1',
+        worktreeRoot: '/repo',
+        sourceOwner: { kind: 'local' }
+      }),
+      isMac: false,
+      markdownCommentsRef: ref([]),
+      markdownSourceLineOffsetRef: ref(0),
+      onOpenDocLinkRef: ref(undefined),
+      pos: 1,
+      rootRef: ref(null),
+      runtimeEnvironmentId: null,
+      scrollRichMarkdownReviewNoteCardIntoView: scrollIntoView,
+      settings: { activeRuntimeEnvironmentId: null },
+      view: editorView(null),
+      worktreeId: 'worktree-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(handled).toBe(false)
+    expect(scrollIntoView).toHaveBeenCalledWith('comment-1')
   })
 })

@@ -13054,6 +13054,9 @@
           "deleteRow": "Eliminar fila",
           "deleteColumn": "Eliminar columna"
         },
+        "RichMarkdownFollowLinksHeaderButton": {
+          "followLinksOnClick": "Follow links on click"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "Guardar",
           "949711deb4": "Cancelar",

@@ -45,6 +45,7 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
     richMarkdownSpellcheckEnabled: true,
     settings: { activeRuntimeEnvironmentId: null },
     activateMarkdownLink: vi.fn(),
+    followLinksOnClickRef: ref(false),
     rootRef: ref<HTMLDivElement | null>(null),
     editorRef: ref<Editor | null>(null),
     lastCommittedMarkdownRef: ref(''),

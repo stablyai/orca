@@ -13475,6 +13475,9 @@
           "6bbf827ef5": "Heading 5",
           "d1bbf9a835": "Collapsible section"
         },
+        "RichMarkdownFollowLinksHeaderButton": {
+          "followLinksOnClick": "Follow links on click"
+        },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "Save",
           "949711deb4": "Cancel",

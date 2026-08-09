@@ -73,6 +73,7 @@ describe('EditorPanelHeader', () => {
         hasEditorToggle={false}
         availableEditorToggleModes={[]}
         effectiveToggleValue="edit"
+        canShowRichMarkdownFollowLinks={false}
         canOpenPreviewToSide={false}
         canShowMarkdownPreview={false}
         canShowMarkdownTableOfContents={false}

@@ -130,6 +130,70 @@ describe('getEditorPanelRenderModel read-only raw rendering (AI Vault View Log)'
   })
 })
 
+describe('getEditorPanelRenderModel rich Markdown link navigation affordance', () => {
+  it('shows the control only while an editable Markdown file uses the rich editor', () => {
+    expect(renderModel({}).canShowRichMarkdownFollowLinks).toBe(true)
+    expect(
+      renderModel({
+        markdownViewMode: { '/repo/README.md': 'source' }
+      }).canShowRichMarkdownFollowLinks
+    ).toBe(false)
+    expect(renderModel({ isChangesMode: true }).canShowRichMarkdownFollowLinks).toBe(false)
+    expect(
+      renderModel({
+        editorDrafts: { '/repo/README.md': '[example]: https://example.com' }
+      }).canShowRichMarkdownFollowLinks
+    ).toBe(false)
+  })
+
+  it('hides the control when the rich editor cannot mount', () => {
+    expect(
+      renderModel({
+        fileContents: {},
+        editorDrafts: { '/repo/README.md': '# Draft' }
+      }).canShowRichMarkdownFollowLinks
+    ).toBe(false)
+    expect(
+      renderModel({
+        fileContents: { '/repo/README.md': textContent({ loadError: 'missing' }) }
+      }).canShowRichMarkdownFollowLinks
+    ).toBe(false)
+    expect(
+      renderModel({
+        fileContents: { '/repo/README.md': textContent({ isBinary: true }) }
+      }).canShowRichMarkdownFollowLinks
+    ).toBe(false)
+    expect(
+      renderModel({
+        activeFile: markdownFile({
+          conflict: {
+            kind: 'conflict-editable',
+            conflictKind: 'both_modified',
+            conflictStatus: 'unresolved',
+            conflictStatusSource: 'git'
+          }
+        })
+      }).canShowRichMarkdownFollowLinks
+    ).toBe(false)
+  })
+
+  it('does not expose Markdown navigation on other rich viewers', () => {
+    const mermaid = markdownFile({
+      id: '/repo/diagram.mmd',
+      filePath: '/repo/diagram.mmd',
+      relativePath: 'diagram.mmd',
+      language: 'mermaid'
+    })
+
+    expect(
+      renderModel({
+        activeFile: mermaid,
+        fileContents: { [mermaid.id]: textContent({ content: 'graph TD' }) }
+      }).canShowRichMarkdownFollowLinks
+    ).toBe(false)
+  })
+})
+
 describe('getEditorPanelRenderModel markdown export affordance', () => {
   it('enables export for rendered markdown edit tabs', () => {
     expect(renderModel({}).canExportMarkdownToPdf).toBe(true)
