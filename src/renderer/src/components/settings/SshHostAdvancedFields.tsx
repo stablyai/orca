@@ -117,62 +117,102 @@ export function SshHostAdvancedFields({
             <div className="min-w-0 flex-1 space-y-0.5">
               <Label className="text-xs font-medium">
                 {translate(
-                  'auto.components.settings.SshTargetForm.71fc546097',
-                  'Keep terminals alive until reset'
+                  'settings.ssh.zmxTerminalPersistence.title',
+                  'Use zmx for durable terminals'
                 )}
               </Label>
               <p className="text-muted-foreground">
                 {translate(
-                  'auto.components.settings.SshTargetForm.b574994adc',
-                  'Use End Remote Terminals or Reset Relay when you want to stop them.'
+                  'settings.ssh.zmxTerminalPersistence.description',
+                  'After Reset Relay, new terminals use zmx and survive later relay resets. Existing terminals are not migrated. Requires zmx on the remote macOS or Linux host.'
                 )}
               </p>
             </div>
             <SettingsSwitch
-              checked={form.relayKeepAliveUntilReset}
+              checked={form.zmxTerminalPersistence}
               disabled={disabled}
               onChange={() =>
                 onFormChange((f) => ({
                   ...f,
-                  relayKeepAliveUntilReset: !f.relayKeepAliveUntilReset
+                  zmxTerminalPersistence: !f.zmxTerminalPersistence
                 }))
               }
               ariaLabel={translate(
-                'auto.components.settings.SshTargetForm.71fc546097',
-                'Keep terminals alive until reset'
+                'settings.ssh.zmxTerminalPersistence.title',
+                'Use zmx for durable terminals'
               )}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="add-ssh-relay-grace-period" className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.SshTargetForm.55c56cf2c7',
-                'Timeout after disconnect (seconds)'
-              )}
-            </Label>
-            <Input
-              id="add-ssh-relay-grace-period"
-              type={form.relayKeepAliveUntilReset ? 'text' : 'number'}
-              value={
-                form.relayKeepAliveUntilReset
-                  ? translate('auto.components.settings.SshTargetForm.7c13f58c91', 'Until reset')
-                  : form.relayGracePeriodSeconds
-              }
-              disabled={disabled || form.relayKeepAliveUntilReset}
-              onChange={(e) =>
-                onFormChange((f) => ({ ...f, relayGracePeriodSeconds: e.target.value }))
-              }
-              placeholder={String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS)}
-              min={MIN_SSH_RELAY_GRACE_PERIOD_SECONDS}
-              max={MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.settings.SshTargetForm.1b19b00e93',
-                'Bounded timeouts must be between 60 seconds and 7 days.'
-              )}
-            </p>
-          </div>
+          {!form.zmxTerminalPersistence && (
+            <>
+              <div className="flex items-start justify-between gap-4 py-1 text-xs">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <Label className="text-xs font-medium">
+                    {translate(
+                      'auto.components.settings.SshTargetForm.71fc546097',
+                      'Keep terminals alive until reset'
+                    )}
+                  </Label>
+                  <p className="text-muted-foreground">
+                    {translate(
+                      'auto.components.settings.SshTargetForm.b574994adc',
+                      'Use End Remote Terminals or Reset Relay when you want to stop them.'
+                    )}
+                  </p>
+                </div>
+                <SettingsSwitch
+                  checked={form.relayKeepAliveUntilReset}
+                  disabled={disabled}
+                  onChange={() =>
+                    onFormChange((f) => ({
+                      ...f,
+                      relayKeepAliveUntilReset: !f.relayKeepAliveUntilReset
+                    }))
+                  }
+                  ariaLabel={translate(
+                    'auto.components.settings.SshTargetForm.71fc546097',
+                    'Keep terminals alive until reset'
+                  )}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="add-ssh-relay-grace-period"
+                  className="text-xs text-muted-foreground"
+                >
+                  {translate(
+                    'auto.components.settings.SshTargetForm.55c56cf2c7',
+                    'Timeout after disconnect (seconds)'
+                  )}
+                </Label>
+                <Input
+                  id="add-ssh-relay-grace-period"
+                  type={form.relayKeepAliveUntilReset ? 'text' : 'number'}
+                  value={
+                    form.relayKeepAliveUntilReset
+                      ? translate(
+                          'auto.components.settings.SshTargetForm.7c13f58c91',
+                          'Until reset'
+                        )
+                      : form.relayGracePeriodSeconds
+                  }
+                  disabled={disabled || form.relayKeepAliveUntilReset}
+                  onChange={(e) =>
+                    onFormChange((f) => ({ ...f, relayGracePeriodSeconds: e.target.value }))
+                  }
+                  placeholder={String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS)}
+                  min={MIN_SSH_RELAY_GRACE_PERIOD_SECONDS}
+                  max={MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.1b19b00e93',
+                    'Bounded timeouts must be between 60 seconds and 7 days.'
+                  )}
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </CollapsibleContent>
     </Collapsible>

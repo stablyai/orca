@@ -6,6 +6,10 @@ import {
   type SshConfigHostResolution,
   type SshTarget
 } from '../../../../shared/ssh-types'
+import {
+  DEFAULT_SSH_TERMINAL_PERSISTENCE_BACKEND,
+  resolveSshTerminalPersistenceBackend
+} from '../../../../shared/ssh-terminal-persistence'
 
 export type EditingTarget = {
   label: string
@@ -18,6 +22,7 @@ export type EditingTarget = {
   proxyCommand: string
   jumpHost: string
   systemSshConnectionReuse: boolean
+  zmxTerminalPersistence: boolean
   relayGracePeriodSeconds: string
   relayKeepAliveUntilReset: boolean
 }
@@ -33,6 +38,7 @@ export const EMPTY_FORM: EditingTarget = {
   proxyCommand: '',
   jumpHost: '',
   systemSshConnectionReuse: true,
+  zmxTerminalPersistence: DEFAULT_SSH_TERMINAL_PERSISTENCE_BACKEND === 'zmx',
   relayGracePeriodSeconds: String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS),
   relayKeepAliveUntilReset: DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS === 0
 }
@@ -52,6 +58,8 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
     systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
+    zmxTerminalPersistence:
+      resolveSshTerminalPersistenceBackend(target.terminalPersistenceBackend) === 'zmx',
     relayGracePeriodSeconds: String(
       target.relayGracePeriodSeconds === 0
         ? DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS
@@ -165,7 +173,8 @@ export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
   return (
     form.proxyCommand.trim().length > 0 ||
     form.jumpHost.trim().length > 0 ||
-    !form.systemSshConnectionReuse
+    !form.systemSshConnectionReuse ||
+    form.zmxTerminalPersistence !== (DEFAULT_SSH_TERMINAL_PERSISTENCE_BACKEND === 'zmx')
   )
 }
 
@@ -181,6 +190,7 @@ export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTa
     current.proxyCommand !== baseline.proxyCommand ||
     current.jumpHost !== baseline.jumpHost ||
     current.systemSshConnectionReuse !== baseline.systemSshConnectionReuse ||
+    current.zmxTerminalPersistence !== baseline.zmxTerminalPersistence ||
     current.relayGracePeriodSeconds !== baseline.relayGracePeriodSeconds ||
     current.relayKeepAliveUntilReset !== baseline.relayKeepAliveUntilReset
   )
@@ -192,6 +202,9 @@ export function parseRelayGracePeriodSeconds(draft: EditingTarget): number {
 
 export function isRelayGracePeriodValid(draft: EditingTarget, graceSeconds: number): boolean {
   return (
+    // Why: the grace controls are unmounted while zmx persistence is enabled;
+    // saving must never fail on a field the user cannot see or fix.
+    draft.zmxTerminalPersistence ||
     draft.relayKeepAliveUntilReset ||
     (!Number.isNaN(graceSeconds) &&
       graceSeconds >= MIN_SSH_RELAY_GRACE_PERIOD_SECONDS &&

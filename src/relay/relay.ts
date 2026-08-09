@@ -78,6 +78,11 @@ import { registerRelayPluginHostCallHandlers } from './plugin-host-call-handler'
 import { DispatcherClientWriter } from './dispatcher-client-writer'
 import { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 import { RelayPtySourcePublication } from './relay-pty-source-publication'
+import {
+  isSshTerminalPersistenceBackend,
+  type SshTerminalPersistenceBackend
+} from '../shared/ssh-terminal-persistence'
+import { zmxPtyNamespaceForRelaySocketName } from '../shared/zmx-pty-namespace'
 
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
@@ -135,6 +140,8 @@ function parseArgs(argv: string[]): {
   endpointDir?: string
   logFile?: string
   credentialFile?: string
+  ptyBackend: SshTerminalPersistenceBackend
+  zmxPath?: string
 } {
   let graceTimeMs = DEFAULT_GRACE_MS
   let connectMode = false
@@ -144,6 +151,8 @@ function parseArgs(argv: string[]): {
   let endpointDir: string | undefined
   let logFile: string | undefined
   let credentialFile: string | undefined
+  let ptyBackend: SshTerminalPersistenceBackend = 'relay'
+  let zmxPath: string | undefined
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {
       const parsed = Number.parseInt(argv[i + 1], 10)
@@ -170,6 +179,12 @@ function parseArgs(argv: string[]): {
     } else if (argv[i] === '--credential-file' && argv[i + 1]) {
       credentialFile = argv[i + 1]
       i++
+    } else if (argv[i] === '--pty-backend' && isSshTerminalPersistenceBackend(argv[i + 1])) {
+      ptyBackend = argv[i + 1] as SshTerminalPersistenceBackend
+      i++
+    } else if (argv[i] === '--zmx-path' && argv[i + 1]) {
+      zmxPath = argv[i + 1]
+      i++
     }
   }
   if (!sockPath) {
@@ -183,8 +198,14 @@ function parseArgs(argv: string[]): {
     sockPath,
     endpointDir,
     logFile,
-    credentialFile
+    credentialFile,
+    ptyBackend,
+    zmxPath
   }
+}
+
+function zmxNamespaceForRelaySocket(sockPath: string): string {
+  return zmxPtyNamespaceForRelaySocketName(sockPath.split(/[\\/]/).pop() ?? sockPath)
 }
 
 function readEndpointCredential(credentialFile: string | undefined): string | undefined {
@@ -533,7 +554,9 @@ async function main(): Promise<void> {
     sockPath,
     endpointDir,
     logFile,
-    credentialFile
+    credentialFile,
+    ptyBackend,
+    zmxPath
   } = parseArgs(process.argv)
   const endpointCredential = readEndpointCredential(credentialFile)
 
@@ -690,7 +713,21 @@ async function main(): Promise<void> {
     return { resolvedPath: expandTilde(inputPath) }
   })
 
-  const ptyHandler = new PtyHandler(dispatcher, graceTimeMs)
+  if (ptyBackend === 'zmx' && (!zmxPath || process.platform === 'win32')) {
+    throw new Error('zmx terminal persistence requires zmx on a macOS or Linux SSH host')
+  }
+  const ptyHandler = new PtyHandler(
+    dispatcher,
+    graceTimeMs,
+    ptyBackend === 'zmx'
+      ? {
+          zmx: {
+            executablePath: zmxPath!,
+            namespace: zmxNamespaceForRelaySocket(sockPath)
+          }
+        }
+      : {}
+  )
   const ptyConsumerSessionAdapter = new SshPtyConsumerSessionAdapter(
     dispatcher,
     launchVersion,
@@ -908,7 +945,8 @@ async function main(): Promise<void> {
     stdoutAlive,
     memory: process.memoryUsage(),
     ptys: {
-      active: ptyHandler.activePtyCount
+      active: ptyHandler.activePtyCount,
+      backend: ptyBackend
     },
     ptySourceCredit: {
       enabled: true,

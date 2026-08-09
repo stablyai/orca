@@ -261,6 +261,46 @@ describe('PtyHandler negotiated source publication', () => {
       .filter((frame): frame is Notification => frame?.method === 'pty.exit')
   }
 
+  it('withholds unactivated PTY output from a flow-controlled owner', async () => {
+    const subscriberWrites: Buffer[] = []
+    const subscriberClientId = dispatcher.attachClient(
+      (data, settle) => {
+        subscriberWrites.push(Buffer.from(data))
+        settle({ ok: true })
+        return true
+      },
+      { supportsWriteCallback: true },
+      endpointIdentity
+    )
+    // Why: admission is explicit (#12673); an unadmitted client receives nothing,
+    // so the pre-attach spawner must hold a legacy (non-flow-controlled) grant.
+    dispatcher.feedClient(
+      subscriberClientId,
+      requestFrame(21, 'pty.openClient', {
+        protocolVersion: 1,
+        clientInstanceId: 'legacy-spawner',
+        requestedRole: 'subscriber'
+      })
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    dispatcher.feedClient(subscriberClientId, requestFrame(2, 'pty.spawn', {}))
+    await vi.advanceTimersByTimeAsync(0)
+
+    dataCallback!('prompt')
+    await vi.advanceTimersByTimeAsync(8)
+
+    expect(sourceDataFrames()).toHaveLength(0)
+    expect(
+      subscriberWrites
+        .map(notification)
+        .filter((frame): frame is Notification => frame?.method === 'pty.data')
+    ).toEqual([
+      expect.objectContaining({
+        params: expect.objectContaining({ data: 'prompt' })
+      })
+    ])
+  })
+
   it('never re-delivers the exit to subscribers when a cancel retires the record', async () => {
     await spawn({})
     const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!

@@ -1,5 +1,7 @@
 // ─── SSH Connection Types ───────────────────────────────────────────
 
+import type { SshTerminalPersistenceBackend } from './ssh-terminal-persistence'
+
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
 export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 7 * 24 * 60 * 60
 export const LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
@@ -42,6 +44,8 @@ export type SshTarget = {
   /** Grace period in seconds before relay shuts down after disconnect.
    *  0 disables expiry. Default: 0 (until reset). Max: 604800 (7 days). */
   relayGracePeriodSeconds?: number
+  /** Durable PTY owner for terminals on this target. Undefined uses the default backend. */
+  terminalPersistenceBackend?: SshTerminalPersistenceBackend
   /** Set to true after a successful connection that triggered a credential
    *  prompt (passphrase or password). Persisted so startup reconnect can
    *  partition targets into eager (no passphrase) vs deferred (passphrase)

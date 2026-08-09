@@ -27,6 +27,7 @@ import type {
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
+import { resolveSshTerminalPersistenceBackend } from '../../shared/ssh-terminal-persistence'
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
 import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
@@ -322,6 +323,12 @@ async function abandonCancelledConnectAttempt(
 
 function relayGracePeriodForTarget(target: SshTarget | null | undefined): number | undefined {
   return target?.relayGracePeriodSeconds
+}
+
+function terminalPersistenceBackendForTarget(
+  target: SshTarget | null | undefined
+): SshTarget['terminalPersistenceBackend'] {
+  return resolveSshTerminalPersistenceBackend(target?.terminalPersistenceBackend)
 }
 
 // Why: tabs must share one connect, while a disconnect must invalidate that
@@ -750,7 +757,11 @@ function createSshConnectionCallbacks(): SshConnectionCallbacks {
         const target = sshStore?.getTarget(targetId)
         const conn = connectionManager?.getConnection(targetId)
         if (conn) {
-          void session.reconnect(conn, relayGracePeriodForTarget(target))
+          void session.reconnect(
+            conn,
+            relayGracePeriodForTarget(target),
+            terminalPersistenceBackendForTarget(target)
+          )
         }
       }
     }
@@ -840,7 +851,11 @@ function configureRelaySessionCallbacks(session: SshRelaySession): void {
             // flaps back to 'connected' can't redeploy forever on an uncharged budget.
             state.attempts += 1
           }
-          void s.reconnect(liveConn, relayGracePeriodForTarget(t))
+          void s.reconnect(
+            liveConn,
+            relayGracePeriodForTarget(t),
+            terminalPersistenceBackendForTarget(t)
+          )
           return
         }
         if (status === undefined || TRANSPORT_TERMINAL_STATUSES.has(status)) {
@@ -1231,7 +1246,11 @@ export function registerSshHandlers(
         reconnectAttempt: 0
       })
 
-      await session.establish(conn, relayGracePeriodForTarget(target))
+      await session.establish(
+        conn,
+        relayGracePeriodForTarget(target),
+        terminalPersistenceBackendForTarget(target)
+      )
       if (!ownsSession()) {
         throw createCancelledConnectAttemptError()
       }
@@ -1370,21 +1389,33 @@ export function registerSshHandlers(
       assertSshConnectsNotFenced()
       conn = await connectionManager!.connect(target)
     }
+    const configuredPtyBackend = resolveSshTerminalPersistenceBackend(
+      target.terminalPersistenceBackend
+    )
+    const preserveZmxSessions = configuredPtyBackend === 'zmx'
+    let stoppedPtyBackend = configuredPtyBackend
     try {
-      await forceStopRelayForTarget(conn, targetId)
-    } finally {
-      const ptyIds = new Set(getPtyIdsForConnection(targetId))
-      for (const lease of persistedStore!.getSshRemotePtyLeases(targetId)) {
-        if (lease.state !== 'terminated' && lease.state !== 'expired') {
-          ptyIds.add(lease.ptyId)
-          persistedStore!.markSshRemotePtyLease(targetId, lease.ptyId, 'expired')
-        }
+      const detectedBackend = await (preserveZmxSessions
+        ? forceStopRelayForTarget(conn, targetId, { preserveZmxSessions: true })
+        : forceStopRelayForTarget(conn, targetId))
+      if (detectedBackend === 'relay' || detectedBackend === 'zmx') {
+        stoppedPtyBackend = detectedBackend
       }
-      // Why: reset force-kills the remote relay, so every local PTY handle it owned is stale even if the reset command failed after SIGTERM.
-      for (const ptyId of ptyIds) {
-        const appPtyId = toAppSshPtyId(targetId, ptyId)
-        clearProviderPtyState(appPtyId)
-        deletePtyOwnership(appPtyId)
+    } finally {
+      if (!preserveZmxSessions || stoppedPtyBackend !== 'zmx') {
+        const ptyIds = new Set(getPtyIdsForConnection(targetId))
+        for (const lease of persistedStore!.getSshRemotePtyLeases(targetId)) {
+          if (lease.state !== 'terminated' && lease.state !== 'expired') {
+            ptyIds.add(lease.ptyId)
+            persistedStore!.markSshRemotePtyLease(targetId, lease.ptyId, 'expired')
+          }
+        }
+        // Why: relay-owned PTYs die with reset, so their local handles cannot be recovered.
+        for (const ptyId of ptyIds) {
+          const appPtyId = toAppSshPtyId(targetId, ptyId)
+          clearProviderPtyState(appPtyId)
+          deletePtyOwnership(appPtyId)
+        }
       }
       // Why: reset's connect() may trip onCredentialRequest; clear so a later non-prompting doConnect doesn't persist lastRequiredPassphrase=true.
       credentialRequestedForTarget.delete(targetId)

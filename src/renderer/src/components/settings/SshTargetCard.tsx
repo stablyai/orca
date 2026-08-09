@@ -15,6 +15,7 @@ import {
   type SshConnectionStatus,
   type SshTarget
 } from '../../../../shared/ssh-types'
+import { resolveSshTerminalPersistenceBackend } from '../../../../shared/ssh-terminal-persistence'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
@@ -66,6 +67,9 @@ function formatGraceDuration(seconds: number): string {
 }
 
 function formatTerminalPersistence(target: SshTarget): string {
+  if (resolveSshTerminalPersistenceBackend(target.terminalPersistenceBackend) === 'zmx') {
+    return translate('settings.ssh.zmxTerminalPersistence.summary', 'durable terminals: zmx')
+  }
   const graceSeconds = target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
   if (graceSeconds === 0) {
     return translate('auto.components.settings.SshTargetCard.8ce71262f4', 'terminals until reset')

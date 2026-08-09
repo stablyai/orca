@@ -110,6 +110,8 @@ export type PtyTransport = {
     cols?: number
     rows?: number
     sessionId?: string
+    /** Reattach probes must not inherit commands or provider-resume metadata. */
+    startupIntent?: 'reattach'
     /** Hidden-at-spawn declaration (terminal-query-authority.md): no visible
      *  view will consume this PTY's bytes, so main marks it hidden BEFORE the
      *  first byte and the gate + model responder own spawn-time queries.

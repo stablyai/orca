@@ -96,6 +96,7 @@ import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import { normalizePersistedMobileClientTabSelections } from './runtime/client-session-tab-selection-persistence'
 import { sanitizeWorkspaceSessionTerminalRetirements } from './runtime/mobile-session-terminal-persistence-retirement'
+import { inferFolderWorkspacePathConnection } from './project-groups/folder-workspace-path-status'
 import {
   removeRepoFromHostWorkspaceSessions,
   removeRepoFromWorkspaceSession
@@ -108,6 +109,7 @@ import {
   type SshRemotePtyLease,
   type SshTarget
 } from '../shared/ssh-types'
+import { isSshTerminalPersistenceBackend } from '../shared/ssh-terminal-persistence'
 import { isFolderRepo } from '../shared/repo-kind'
 import {
   getRepoExecutionHostId,
@@ -1186,11 +1188,13 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   const currentGracePeriodSeconds = target.relayGracePeriodSeconds
   const legacyGracePeriodSeconds = target.remoteWorkspaceSyncGracePeriodSeconds
   const systemSshConnectionReuse = target.systemSshConnectionReuse
+  const terminalPersistenceBackend = target.terminalPersistenceBackend
   // Why: remote sync now follows the SSH relay lifecycle, so retired per-target sync/grace fields are dropped at disk load.
   delete target.remoteWorkspaceSyncEnabled
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
   delete target.systemSshConnectionReuse
+  delete target.terminalPersistenceBackend
   delete target.experimentalPtySourceCreditV1
   // Why: prefer the synced grace over stale relayGracePeriodSeconds so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
@@ -1210,6 +1214,9 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   }
   if (systemSshConnectionReuse === false) {
     normalized.systemSshConnectionReuse = false
+  }
+  if (isSshTerminalPersistenceBackend(terminalPersistenceBackend)) {
+    normalized.terminalPersistenceBackend = terminalPersistenceBackend
   }
   return normalized
 }
@@ -6362,7 +6369,11 @@ export class Store {
     deferSnapshotFiles = false
   ): void {
     const prior = this.state.workspaceSession
-    session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
+    session = sanitizeWorkspaceSessionTerminalRetirements(session, prior, {
+      // Why: direct-SSH workspaces persist durable membership in their ssh:
+      // partition; the local fence would rebase them onto a frozen snapshot.
+      worktreeMembershipDelegated: (worktreeId) => this.isDirectSshOwnedWorkspaceKey(worktreeId)
+    })
     session = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
     )
@@ -6701,6 +6712,31 @@ export class Store {
     return this.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
   }
 
+  /** Whether a workspace key's terminal membership is owned by an ssh: partition. */
+  private isDirectSshOwnedWorkspaceKey(worktreeId: string): boolean {
+    const scope = parseWorkspaceKey(worktreeId)
+    if (scope?.type === 'folder') {
+      const workspace = this.state.folderWorkspaces?.find(
+        (entry) => entry.id === scope.folderWorkspaceId
+      )
+      if (!workspace) {
+        return false
+      }
+      const connection = inferFolderWorkspacePathConnection({
+        folderPath: workspace.folderPath,
+        projectGroupId: workspace.projectGroupId,
+        connectionId: workspace.connectionId ?? null,
+        projectGroups: this.state.projectGroups ?? [],
+        repos: this.state.repos
+      })
+      // Why: ambiguous scopes may include SSH children; fencing them risks
+      // rebasing durable membership onto a frozen snapshot.
+      return connection.kind !== 'local'
+    }
+    const rawWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+    return Boolean(this.getConnectionIdForWorktree(rawWorktreeId))
+  }
+
   // Why: sync-flush the pty binding before pty:spawn returns to close the spawn/persist SIGKILL race (Issue #217).
   persistPtyBinding(
     args: {
@@ -6889,6 +6925,9 @@ export class Store {
     }
     if (!Object.hasOwn(normalized, 'systemSshConnectionReuse')) {
       delete target.systemSshConnectionReuse
+    }
+    if (!Object.hasOwn(normalized, 'terminalPersistenceBackend')) {
+      delete target.terminalPersistenceBackend
     }
     this.scheduleSave()
     return { ...target }
@@ -7371,6 +7410,22 @@ export class Store {
         )
         if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {
           layout.ptyIdsByLeafId = nextBindings
+          changed = true
+        }
+      }
+      // Why: a lingering relay-session mapping is durable-terminal evidence too;
+      // keeping it would let restore re-materialize a tab whose session is gone.
+      for (const [tabId, sessionPtyId] of Object.entries(session.remoteSessionIdsByTabId ?? {})) {
+        if (
+          leases.some((lease) =>
+            this.sshRemotePtyLeaseMayReferenceBinding(lease, {
+              ptyId: sessionPtyId,
+              targetId,
+              tabId
+            })
+          )
+        ) {
+          delete session.remoteSessionIdsByTabId![tabId]
           changed = true
         }
       }

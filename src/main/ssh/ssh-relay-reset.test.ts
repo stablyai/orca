@@ -131,6 +131,75 @@ describe('forceStopRelayForTarget', () => {
     expect(command).toContain('lsof -t -a -U "$sock"')
     expect(command).toContain('pgrep -f "$sock_name"')
     expect(command).toContain('rm -f "$sock"')
+    expect(command).toContain('zmx_bin=$(command -v zmx')
+  })
+
+  it('leaves zmx sessions untouched when the durable backend remains enabled', async () => {
+    const conn = {} as SshConnection
+
+    await forceStopRelayForTarget(conn, 'ssh-1', { preserveZmxSessions: true })
+
+    const command = vi.mocked(execCommand).mock.calls[0]?.[1] ?? ''
+    expect(command).not.toContain('zmx_bin=$(command -v zmx')
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'detects the zmx marker beside the versioned relay socket',
+    async () => {
+      const conn = {} as SshConnection
+      await forceStopRelayForTarget(conn, 'ssh-1', { preserveZmxSessions: true })
+      const script = vi.mocked(execCommand).mock.lastCall?.[1] ?? ''
+
+      // Why: '/tmp' keeps the versioned socket path under the AF_UNIX 104-char limit.
+      const home = mkdtempSync('/tmp/orca-')
+      const binDir = join(home, 'bin')
+      const versionedDir = join(home, '.orca-remote', 'relay-9.9.9')
+      const socketPath = join(versionedDir, relaySocketNameForInstanceId('ssh-1'))
+      const markerPath = `${socketPath}.pty-backend`
+      mkdirSync(binDir)
+      mkdirSync(versionedDir, { recursive: true })
+      // Why: the launcher writes the marker next to the versioned socket; the
+      // reset script must read it there or preserve-mode resets expire zmx leases.
+      writeFileSync(markerPath, 'zmx')
+      writeExecutable(join(binDir, 'lsof'), 'exit 1')
+      writeExecutable(join(binDir, 'pgrep'), 'exit 1')
+      writeExecutable(join(binDir, 'sleep'), 'exit 0')
+
+      const server = createServer()
+      try {
+        await listenOnSocket(server, socketPath)
+        const stdout = execFileSync('/bin/sh', ['-c', 'kill() { :; }\neval "$RESET_SCRIPT"'], {
+          env: {
+            ...process.env,
+            HOME: home,
+            PATH: `${binDir}${delimiter}${process.env.PATH ?? ''}`,
+            RESET_SCRIPT: script
+          }
+        }).toString()
+
+        expect(stdout).toContain('__ORCA_PTY_BACKEND__=zmx')
+        expect(existsSync(markerPath)).toBe(false)
+      } finally {
+        await closeServer(server)
+        rmSync(home, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('reports the backend owned by the stopped relay', async () => {
+    const conn = {} as SshConnection
+    vi.mocked(execCommand).mockResolvedValue('__ORCA_PTY_BACKEND__=zmx\n')
+
+    await expect(forceStopRelayForTarget(conn, 'ssh-1')).resolves.toBe('zmx')
+  })
+
+  it('uses the login shell fallback and propagates zmx cleanup failures', async () => {
+    const command = await capturedResetScript()
+
+    expect(command).toContain('"$shell_bin" -lc \'command -v zmx\'')
+    expect(command).toContain('sessions=$(ZMX_DIR="$zmx_dir" "$zmx_bin" list --short) || exit 1')
+    expect(command).toContain('"$zmx_bin" kill "$session" || exit 1')
+    expect(command).toContain('rm -f "$zmx_metadata_dir"/pty-*.json')
   })
 
   it.skipIf(process.platform === 'win32')(

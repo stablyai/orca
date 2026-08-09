@@ -804,7 +804,13 @@ describe('SshRelaySession', () => {
 
     await session.establish(mockConn, 600)
 
-    expect(deployAndLaunchRelay).toHaveBeenCalledWith(mockConn, undefined, 600, 'target-1')
+    expect(deployAndLaunchRelay).toHaveBeenCalledWith(
+      mockConn,
+      undefined,
+      600,
+      'target-1',
+      undefined
+    )
   })
 
   it('restores the configured relay grace after establish', async () => {

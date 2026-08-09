@@ -63,6 +63,16 @@
         "title": "Show Menu Bar Icon",
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar."
       }
+    },
+    "ssh": {
+      "zmxTerminalPersistence": {
+        "title": "Use zmx for durable terminals",
+        "description": "After Reset Relay, new terminals use zmx and survive later relay resets. Existing terminals are not migrated. Requires zmx on the remote macOS or Linux host.",
+        "summary": "durable terminals: zmx"
+      },
+      "resetRelay": {
+        "zmxDescription": "This force-stops the remote relay and port forwards. Terminals already running under zmx remain available for the next connection; terminals still owned by the current relay will end."
+      }
     }
   },
   "menu": {

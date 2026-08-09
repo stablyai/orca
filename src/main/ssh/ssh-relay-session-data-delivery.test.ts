@@ -615,7 +615,13 @@ describe('SshRelaySession data delivery', () => {
     expect(openConsumerSessionMock.mock.calls[0][1]).toMatchObject({
       outputFlowControl: { requestedWindowSu: 256 * 1024 }
     })
-    expect(deployAndLaunchRelay).toHaveBeenCalledWith(mockConn, undefined, undefined, 'target-1')
+    expect(deployAndLaunchRelay).toHaveBeenCalledWith(
+      mockConn,
+      undefined,
+      undefined,
+      'target-1',
+      undefined
+    )
     expect(notifyWithSettlementMock).toHaveBeenCalledWith('pty.ackData', batch, settled)
   })
 
@@ -628,20 +634,9 @@ describe('SshRelaySession data delivery', () => {
 
     expect(openConsumerSessionMock.mock.calls[0][1]).toHaveProperty('outputFlowControl')
     expect(openConsumerSessionMock.mock.calls[1][1]).toHaveProperty('outputFlowControl')
-    expect(deployAndLaunchRelay).toHaveBeenNthCalledWith(
-      1,
-      mockConn,
-      undefined,
-      undefined,
-      'target-1'
-    )
-    expect(deployAndLaunchRelay).toHaveBeenNthCalledWith(
-      2,
-      mockConn,
-      undefined,
-      undefined,
-      'target-1'
-    )
+    const deployArgs = [mockConn, undefined, undefined, 'target-1', undefined] as const
+    expect(deployAndLaunchRelay).toHaveBeenNthCalledWith(1, ...deployArgs)
+    expect(deployAndLaunchRelay).toHaveBeenNthCalledWith(2, ...deployArgs)
   })
 
   it('reattaches V1 from an exact checkpoint and quarantines live data until recoveryComplete', async () => {

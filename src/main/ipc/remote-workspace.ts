@@ -405,11 +405,10 @@ export function registerRemoteWorkspaceHandlers(
 
   ipcMain.handle(
     'remoteWorkspace:setForConnectedTargets',
-    async (_event, args: { session?: WorkspaceSessionState; hydratedTargetIds?: unknown }) => {
+    async (_event, args: { session: WorkspaceSessionState; hydratedTargetIds?: unknown }) => {
       const hydratedTargetIds = getExplicitHydratedTargetIds(args.hydratedTargetIds)
-      if (!hydratedTargetIds) {
-        // Why: an omitted hydration set used to broadcast one session to every
-        // SSH target, overwriting unrelated remote workspace snapshots.
+      if (!hydratedTargetIds || !args.session) {
+        // Why: either omission can replace a target snapshot with unrelated or incomplete state.
         return []
       }
       const targets =
@@ -419,12 +418,11 @@ export function registerRemoteWorkspaceHandlers(
             (target) => hydratedTargetIds.has(target.id) && getActiveMultiplexer(target.id)
           ) ?? []
 
-      const workspaceSession = args.session ?? store.getWorkspaceSession()
       const results = await Promise.all(
         targets.map(async (target) => {
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
-          const session = exportSessionForTarget(store, target.id, workspaceSession)
+          const session = exportSessionForTarget(store, target.id, args.session)
           const result = await queueRemoteWorkspacePatch(target.id, () =>
             patchRemoteWorkspaceSession(target, session)
           )

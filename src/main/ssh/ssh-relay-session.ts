@@ -4,8 +4,10 @@
 import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
+import type { SshTerminalPersistenceBackend } from '../../shared/ssh-terminal-persistence'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
+import { RelayPtyBackendMismatchError } from './ssh-relay-pty-backend'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { SshPtyProvider } from '../providers/ssh-pty-provider'
 import type { SshPtyAttachResult } from '../providers/ssh-pty-session-reattach'
@@ -471,7 +473,11 @@ export class SshRelaySession {
   }
 
   // Why: single entry point for relay setup (initial connect + app-restart reconnect) so no path forgets a registration step.
-  async establish(conn: SshConnection, graceTimeSeconds?: number): Promise<void> {
+  async establish(
+    conn: SshConnection,
+    graceTimeSeconds?: number,
+    terminalPersistenceBackend?: SshTerminalPersistenceBackend
+  ): Promise<void> {
     if (this._state !== 'idle') {
       throw new Error(`Cannot establish relay session in state: ${this._state}`)
     }
@@ -489,7 +495,13 @@ export class SshRelaySession {
         sockPath,
         credentialFile,
         hostPlatform
-      } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      } = await deployAndLaunchRelay(
+        conn,
+        undefined,
+        graceTimeSeconds,
+        this.targetId,
+        terminalPersistenceBackend
+      )
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
@@ -589,9 +601,14 @@ export class SshRelaySession {
         )
         this._state = 'idle'
       }
-      // Why: terminal on first connect — a deployed binary against a still-running legacy daemon, or a
-      // claim another connection holds. Notify the callback but still rethrow.
-      if (isRelayVersionMismatchError(err) || isSshOwnerAdmissionBlockedError(err)) {
+      // Why: terminal on first connect — a deployed binary against a still-running legacy daemon, a
+      // claim another connection holds, or a PTY backend mismatch only Reset Relay can reconcile.
+      // Notify the callback but still rethrow.
+      if (
+        isRelayVersionMismatchError(err) ||
+        isSshOwnerAdmissionBlockedError(err) ||
+        err instanceof RelayPtyBackendMismatchError
+      ) {
         console.warn(
           `[ssh-relay-session] Terminal relay error on initial connect for ${this.targetId}: ${err.message}`
         )
@@ -602,7 +619,11 @@ export class SshRelaySession {
   }
 
   // Why: network-blip reconnect; AbortController-guarded so overlapping attempts from fast flaps cancel the stale one.
-  async reconnect(conn: SshConnection, graceTimeSeconds?: number): Promise<void> {
+  async reconnect(
+    conn: SshConnection,
+    graceTimeSeconds?: number,
+    terminalPersistenceBackend?: SshTerminalPersistenceBackend
+  ): Promise<void> {
     // Why: reconnect only from 'ready'/'reconnecting' — from 'deploying' it would tear down a mux establish() is still using; 'idle' has no session yet.
     if (this._state !== 'ready' && this._state !== 'reconnecting') {
       return
@@ -633,7 +654,13 @@ export class SshRelaySession {
         sockPath,
         credentialFile,
         hostPlatform
-      } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      } = await deployAndLaunchRelay(
+        conn,
+        undefined,
+        graceTimeSeconds,
+        this.targetId,
+        terminalPersistenceBackend
+      )
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
@@ -741,9 +768,14 @@ export class SshRelaySession {
             : 'connection_lost'
         )
       }
-      // Why terminal: neither a version mismatch nor a blocked owner claim is reconcilable by backoff
-      // retry, so fire the typed callback and drop out of 'reconnecting'.
-      if (isRelayVersionMismatchError(err) || isSshOwnerAdmissionBlockedError(err)) {
+      // Why terminal: a version mismatch, a blocked owner claim, and a PTY backend mismatch are all
+      // deterministic — backoff retry cannot reconcile them, so fire the typed callback and drop
+      // out of 'reconnecting'.
+      if (
+        isRelayVersionMismatchError(err) ||
+        isSshOwnerAdmissionBlockedError(err) ||
+        err instanceof RelayPtyBackendMismatchError
+      ) {
         console.warn(
           `[ssh-relay-session] Terminal relay error for ${this.targetId}: ${err.message}`
         )

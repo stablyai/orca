@@ -59,6 +59,7 @@ import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/na
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
+import { directSshWorkspaceAwaitsHydration } from './direct-ssh-workspace-hydration'
 
 /** Telemetry threaded from the launch site to `pty:spawn`; main fires `agent_started`
  *  only after the spawn succeeds. See telemetry-plan.md§Agent launch semantics. */
@@ -333,14 +334,19 @@ export function activateAndRevealWorktree(
   resumeSleepingAgentSessionsForWorktree(worktreeId)
 
   // 4. Ensure a focusable surface exists for externally-created worktrees
-  const primaryTabId = ensureWorktreeHasInitialTerminal(
-    useAppStore.getState(),
-    worktreeId,
-    opts?.startup,
-    opts?.setup,
-    opts?.issueCommand,
-    opts?.defaultTabs
-  )
+  const activeState = useAppStore.getState()
+  const deferInitialTerminal =
+    !hasActivationWork && directSshWorkspaceAwaitsHydration(activeState, worktreeId)
+  const primaryTabId = deferInitialTerminal
+    ? null
+    : ensureWorktreeHasInitialTerminal(
+        activeState,
+        worktreeId,
+        opts?.startup,
+        opts?.setup,
+        opts?.issueCommand,
+        opts?.defaultTabs
+      )
   if (primaryTabId && opts?.initialCwd) {
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
   }

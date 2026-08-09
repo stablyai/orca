@@ -174,9 +174,19 @@ export function hasHostAuthoritativeTerminalMembership(
   )
 }
 
+export type TerminalMembershipRebaseOptions = {
+  /** Worktrees whose terminal membership is owned by another host partition
+   *  (direct-SSH worktrees persist durably in their `ssh:` partition, which
+   *  carries its own fence). The local fence must not rebase them: its frozen
+   *  snapshot predates the durable source and would permanently re-empty
+   *  membership the renderer restored from that partition. */
+  worktreeMembershipDelegated?: (worktreeId: string) => boolean
+}
+
 export function rebaseWorkspaceSessionTerminalMembership(
   incoming: WorkspaceSessionState,
-  prior: WorkspaceSessionState | undefined
+  prior: WorkspaceSessionState | undefined,
+  options?: TerminalMembershipRebaseOptions
 ): WorkspaceSessionState {
   if (!prior?.terminalTopologyRevisionByRepoId) {
     return incoming
@@ -208,6 +218,9 @@ export function rebaseWorkspaceSessionTerminalMembership(
     const priorRevision = prior.terminalTopologyRevisionByRepoId[repoId] ?? 0
     const incomingRevision = incoming.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
     if (revision <= 0 || incomingRevision > priorRevision) {
+      continue
+    }
+    if (options?.worktreeMembershipDelegated?.(worktreeId)) {
       continue
     }
     rebasedMembership = true

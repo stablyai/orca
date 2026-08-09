@@ -1482,6 +1482,31 @@ describe('Store', () => {
     expect(onDisk).not.toHaveProperty('relayGracePeriodSeconds')
   })
 
+  it('persists explicit terminal backend selections', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-zmx',
+      label: 'Durable host',
+      host: 'durable.example.com',
+      port: 22,
+      username: 'dev',
+      terminalPersistenceBackend: 'zmx'
+    })
+
+    expect(store.getSshTarget('ssh-zmx')?.terminalPersistenceBackend).toBe('zmx')
+    expect(store.updateSshTarget('ssh-zmx', { terminalPersistenceBackend: 'relay' })).toMatchObject(
+      {
+        terminalPersistenceBackend: 'relay'
+      }
+    )
+
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    expect(
+      persisted.sshTargets?.find((target) => target.id === 'ssh-zmx')?.terminalPersistenceBackend
+    ).toBe('relay')
+  })
+
   it('persists the SSH target source field through add, update, and disk round-trip', async () => {
     const store = await createStore()
     store.addSshTarget({
@@ -10668,6 +10693,144 @@ describe('Store', () => {
     ])
     expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
     expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
+  })
+
+  it('does not fence SSH folder workspace terminal membership onto a frozen local snapshot', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Remote group',
+      parentPath: '/srv/projects',
+      connectionId: 'ssh-1',
+      createdFrom: 'manual'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Remote folder',
+      folderPath: '/srv/projects/app'
+    })
+    const workspaceKey = `folder:${workspace.id}`
+    const folderTab = {
+      id: 'folder-tab',
+      worktreeId: workspaceKey,
+      title: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1,
+      ptyId: 'ssh:ssh-1@@pty-7'
+    }
+    // Freeze the folder workspace's membership at empty, as retirement would.
+    store.setWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { [workspaceKey]: [] },
+      terminalLayoutsByTabId: {},
+      terminalTopologyRevisionByRepoId: { [workspaceKey]: 5 }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { [workspaceKey]: [folderTab] },
+      terminalLayoutsByTabId: {}
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree[workspaceKey]?.map((tab) => tab.id)).toEqual(['folder-tab'])
+  })
+
+  it('delegates ambiguous folder-workspace scopes so possibly-SSH membership is never fenced away', async () => {
+    const store = await createStore()
+    // Mixed connections under one folder scope -> 'ambiguous' classification.
+    store.addRepo(makeRepo({ id: 'local-repo', path: '/srv/projects/local-app' }))
+    store.addRepo(
+      makeRepo({ id: 'remote-repo', path: '/srv/projects/remote-app', connectionId: 'ssh-1' })
+    )
+    const group = store.createProjectGroup({
+      name: 'Mixed group',
+      parentPath: '/srv/projects',
+      createdFrom: 'manual'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Mixed folder',
+      folderPath: '/srv/projects'
+    })
+    const workspaceKey = `folder:${workspace.id}`
+    const folderTab = {
+      id: 'folder-tab',
+      worktreeId: workspaceKey,
+      title: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1,
+      ptyId: 'ssh:ssh-1@@pty-3'
+    }
+    store.setWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { [workspaceKey]: [] },
+      terminalLayoutsByTabId: {},
+      terminalTopologyRevisionByRepoId: { [workspaceKey]: 3 }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: { [workspaceKey]: [folderTab] },
+      terminalLayoutsByTabId: {}
+    })
+
+    // Why: fencing an ambiguous (possibly SSH) scope risks rebasing durable
+    // membership onto a frozen snapshot; delegation is the documented bias.
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree[workspaceKey]?.map((tab) => tab.id)).toEqual(['folder-tab'])
+  })
+
+  it('clears relay-session tab mappings when marking an SSH remote PTY lease expired', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {},
+      // Why: the mapping alone is durable-terminal evidence; restore would
+      // re-materialize the tab for a session that no longer exists.
+      remoteSessionIdsByTabId: { tab1: 'ssh:ssh-1@@remote-pty', other: 'ssh:ssh-1@@pty-live' }
+    })
+
+    store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'expired')
+
+    const session = store.getWorkspaceSession()
+    expect(session.remoteSessionIdsByTabId?.tab1).toBeUndefined()
+    expect(session.remoteSessionIdsByTabId?.other).toBe('ssh:ssh-1@@pty-live')
   })
 
   it('removes SSH remote PTY leases when callers pass scoped app ids', async () => {

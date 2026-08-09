@@ -220,6 +220,36 @@ describe('getEditingTargetForSshTarget', () => {
     expect(draft.systemSshConnectionReuse).toBe(false)
   })
 
+  it('preserves zmx terminal persistence while editing', () => {
+    const draft = getEditingTargetForSshTarget({
+      id: 'ssh-1',
+      label: 'Durable server',
+      host: 'durable.example.com',
+      port: 22,
+      username: 'deploy',
+      terminalPersistenceBackend: 'zmx'
+    })
+
+    expect(draft.zmxTerminalPersistence).toBe(true)
+    expect(hasAdvancedConnectionValues(draft)).toBe(true)
+  })
+
+  it('defaults SSH targets to relay so zmx stays opt-in', () => {
+    expect(EMPTY_FORM.zmxTerminalPersistence).toBe(false)
+
+    const draft = getEditingTargetForSshTarget({
+      id: 'ssh-1',
+      label: 'Relay server',
+      host: 'relay.example.com',
+      port: 22,
+      username: 'deploy',
+      terminalPersistenceBackend: 'relay'
+    })
+
+    expect(draft.zmxTerminalPersistence).toBe(false)
+    expect(hasAdvancedConnectionValues(draft)).toBe(false)
+  })
+
   it('uses the default persistence for targets without an explicit grace period', () => {
     const draft = getEditingTargetForSshTarget({
       id: 'ssh-1',

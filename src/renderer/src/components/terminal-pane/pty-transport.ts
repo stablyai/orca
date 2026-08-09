@@ -783,6 +783,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         options.sessionId && !isPreHandlerPtyStateDiscarded(options.sessionId)
           ? options.sessionId
           : undefined
+      const isStartupFreeReattach =
+        options.startupIntent === 'reattach' && admittedSessionId !== undefined
 
       // Why: reconnect may reuse a session id whose prior exit was consumed; re-admit exits without clearing bytes already buffered for the live session.
       if (admittedSessionId) {
@@ -802,22 +804,22 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ...((options.envToDelete ?? envToDelete)
             ? { envToDelete: options.envToDelete ?? envToDelete }
             : {}),
-          command: options.command ?? command,
-          ...((options.launchConfig ?? launchConfig)
+          ...(isStartupFreeReattach ? {} : { command: options.command ?? command }),
+          ...(!isStartupFreeReattach && (options.launchConfig ?? launchConfig)
             ? { launchConfig: options.launchConfig ?? launchConfig }
             : {}),
-          ...((options.resumeProviderSession ?? resumeProviderSession)
+          ...(!isStartupFreeReattach && (options.resumeProviderSession ?? resumeProviderSession)
             ? {
                 resumeProviderSession: options.resumeProviderSession ?? resumeProviderSession
               }
             : {}),
-          ...((options.launchToken ?? launchToken)
+          ...(!isStartupFreeReattach && (options.launchToken ?? launchToken)
             ? { launchToken: options.launchToken ?? launchToken }
             : {}),
-          ...((options.launchAgent ?? launchAgent)
+          ...(!isStartupFreeReattach && (options.launchAgent ?? launchAgent)
             ? { launchAgent: options.launchAgent ?? launchAgent }
             : {}),
-          ...((options.startupCommandDelivery ?? startupCommandDelivery)
+          ...(!isStartupFreeReattach && (options.startupCommandDelivery ?? startupCommandDelivery)
             ? { startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery }
             : {}),
           ...(connectionId ? { connectionId } : {}),
@@ -930,6 +932,20 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         // Why: re-spawning a Kill-All'd session throws TerminalKilledError; swallow it (pane still shows "Process exited"), don't toast (src/main/daemon/daemon-pty-adapter.ts).
         if (msg.includes('was explicitly killed')) {
           return undefined
+        }
+        if (isStartupFreeReattach) {
+          if (
+            connectionId &&
+            msg.includes('No PTY provider for connection') &&
+            isRuntimeOwnedSshTargetId(connectionId)
+          ) {
+            return undefined
+          }
+          const reattachError =
+            connectionId && msg.includes('No PTY provider for connection')
+              ? 'SSH connection is not active. Use the reconnect dialog or Settings to connect.'
+              : msg
+          throw new Error(reattachError)
         }
         // Why: on cold start the SSH provider isn't registered yet, so pty:spawn throws a raw IPC error; replace with a friendly message.
         if (connectionId && msg.includes('No PTY provider for connection')) {

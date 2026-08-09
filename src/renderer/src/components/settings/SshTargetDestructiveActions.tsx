@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
+import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
+import { resolveSshTerminalPersistenceBackend } from '../../../../shared/ssh-terminal-persistence'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { SshDestructiveActionDialog } from './SshDestructiveActionDialog'
 import {
@@ -10,7 +11,7 @@ import {
 } from './ssh-target-action-state'
 import { translate } from '@/i18n/i18n'
 
-type PendingTargetAction = { id: string; label: string }
+type PendingTargetAction = Pick<SshTarget, 'id' | 'label' | 'terminalPersistenceBackend'>
 
 type SshTargetDestructiveActionsRenderProps = {
   busyActionForTarget: (targetId: string) => SshTargetBusyAction | undefined
@@ -190,10 +191,18 @@ export function SshTargetDestructiveActions({
           'auto.components.settings.SshTargetDestructiveActions.570a7a0574',
           'Reset Remote Relay?'
         )}
-        description={translate(
-          'auto.components.settings.SshTargetDestructiveActions.26be00392d',
-          'This force-stops the remote relay for this SSH target. Active remote terminals and port forwards for this target will end.'
-        )}
+        description={
+          resolveSshTerminalPersistenceBackend(dialogPendingReset?.terminalPersistenceBackend) ===
+          'zmx'
+            ? translate(
+                'settings.ssh.resetRelay.zmxDescription',
+                'This force-stops the remote relay and port forwards. Terminals already running under zmx remain available for the next connection; terminals still owned by the current relay will end.'
+              )
+            : translate(
+                'auto.components.settings.SshTargetDestructiveActions.26be00392d',
+                'This force-stops the remote relay for this SSH target. Active remote terminals and port forwards for this target will end.'
+              )
+        }
         targetLabel={dialogPendingReset?.label}
         actionLabel="Reset Relay"
         busyLabel="Resetting"

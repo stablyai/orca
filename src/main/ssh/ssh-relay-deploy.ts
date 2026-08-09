@@ -90,6 +90,13 @@ import {
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from '../../shared/ssh-types'
+import type { SshTerminalPersistenceBackend } from '../../shared/ssh-terminal-persistence'
+import {
+  assertRelayPtyBackend,
+  relayPtyBackendLaunchArgs,
+  RelayPtyBackendMismatchError
+} from './ssh-relay-pty-backend'
+import { resolveRemoteZmxPath } from './ssh-remote-zmx-resolution'
 
 export type RelayDeployResult = {
   transport: MultiplexerTransport
@@ -132,7 +139,8 @@ export async function deployAndLaunchRelay(
   conn: SshConnection,
   onProgress?: (status: string) => void,
   graceTimeSeconds?: number,
-  relayInstanceId?: string
+  relayInstanceId?: string,
+  terminalPersistenceBackend?: SshTerminalPersistenceBackend
 ): Promise<RelayDeployResult> {
   let timeoutHandle: ReturnType<typeof setTimeout>
   const deployAbortController = new AbortController()
@@ -142,6 +150,7 @@ export async function deployAndLaunchRelay(
     onProgress,
     graceTimeSeconds,
     relayInstanceId,
+    terminalPersistenceBackend,
     deployAbortController.signal
   ).then(
     (result) => ({ status: 'fulfilled' as const, result }),
@@ -328,6 +337,7 @@ async function deployAndLaunchRelayInner(
   onProgress?: (status: string) => void,
   graceTimeSeconds?: number,
   relayInstanceId?: string,
+  terminalPersistenceBackend?: SshTerminalPersistenceBackend,
   deploySignal?: AbortSignal
 ): Promise<RelayDeployResult> {
   while (true) {
@@ -338,6 +348,7 @@ async function deployAndLaunchRelayInner(
         onProgress,
         graceTimeSeconds,
         relayInstanceId,
+        terminalPersistenceBackend,
         deploySignal
       )
     } catch (err) {
@@ -355,6 +366,7 @@ async function deployAndLaunchRelayAttempt(
   onProgress?: (status: string) => void,
   graceTimeSeconds?: number,
   relayInstanceId?: string,
+  terminalPersistenceBackend?: SshTerminalPersistenceBackend,
   deploySignal?: AbortSignal
 ): Promise<RelayDeployResult> {
   onProgress?.('Detecting remote platform...')
@@ -549,6 +561,7 @@ async function deployAndLaunchRelayAttempt(
 
   let launched: Awaited<ReturnType<typeof launchRelay>>
   let launchLivenessObserved = false
+  let failedLaunchFenceCanRelease = false
   try {
     deploySignal?.throwIfAborted()
     onProgress?.('Starting relay...')
@@ -560,16 +573,22 @@ async function deployAndLaunchRelayAttempt(
       nodePath,
       graceTimeSeconds,
       relayInstanceId,
+      terminalPersistenceBackend,
       deploySignal
     )
     launchLivenessObserved = true
+  } catch (error) {
+    // Why: backend mismatch is detected before launch, so retaining either fence only wedges Reset Relay behind a stale owner.
+    failedLaunchFenceCanRelease = error instanceof RelayPtyBackendMismatchError
+    throw error
   } finally {
+    const releaseLaunchFence = launchLivenessObserved || failedLaunchFenceCanRelease
     // Why: older clients understand only the install lock; if launch never goes live, keep it so their GC can't race a caller waiting behind this owner.
-    if (ownsInstallLock && launchLivenessObserved) {
+    if (ownsInstallLock && releaseLaunchFence) {
       await abandonInstall(conn, remoteRelayDir, hostPlatform)
     }
     // The detached start may outlive a timed-out SSH command; keep the fence on failed launch until stale recovery proves the handoff ended.
-    if (launchGcClaimToken && launchLivenessObserved) {
+    if (launchGcClaimToken && releaseLaunchFence) {
       await releaseRelayGcClaimWithRetry(conn, remoteRelayDir, launchGcClaimToken, hostPlatform)
     }
   }
@@ -1359,6 +1378,7 @@ async function launchRelay(
   nodePath: string,
   graceTimeSeconds?: number,
   relayInstanceId?: string,
+  terminalPersistenceBackend?: SshTerminalPersistenceBackend,
   signal?: AbortSignal
 ): Promise<{
   transport: MultiplexerTransport
@@ -1380,8 +1400,19 @@ async function launchRelay(
   // Why: remoteRelayDir is shared across Orca targets for one account; hashing the target ID into the socket name stops cross-target attach.
   const sockName = relaySocketNameForInstanceId(relayInstanceId)
   const sockFile = relayEndpointForHost(hostPlatform, remoteDir, sockName)
+  const ptyBackendFile = `${sockFile}.pty-backend`
+  const requestedPtyBackend = terminalPersistenceBackend ?? 'relay'
   const endpointDir = relayHookEndpointDirForHost(hostPlatform, remoteDir, sockFile)
   const credentialFile = joinRemotePath(hostPlatform, remoteDir, `${sockName}.credential`)
+
+  if (requestedPtyBackend === 'zmx' && isWindowsRemoteHost(hostPlatform)) {
+    // Why: deterministic — backoff retries cannot fix the host OS; the terminal
+    // classification releases the deploy fences and surfaces actionable copy.
+    throw new RelayPtyBackendMismatchError(
+      'zmx terminal persistence is available only on macOS and Linux SSH hosts',
+      'zmx'
+    )
+  }
 
   if (isWindowsRemoteHost(hostPlatform)) {
     const activePipeMarkerPath = windowsActivePipeMarkerPath(hostPlatform, remoteDir, sockName)
@@ -1417,13 +1448,19 @@ async function launchRelay(
 
   // Why: after a restart the relay may still be alive in its grace period; --connect to its socket preserves PTY state and scrollback.
   try {
+    // Why: a dead relay's marker may sit in an older versioned install dir;
+    // scan siblings of the resolved install dir (not $HOME, which can differ
+    // from the resolved remote home) for this socket's marker.
+    const relayBaseDir = remoteDir.slice(0, remoteDir.lastIndexOf('/'))
+    const deadMarkerScan = `b=relay; for m in ${shellEscape(relayBaseDir)}/relay-*/${shellEscape(sockName)}.pty-backend ${shellEscape(ptyBackendFile)}; do [ -f "$m" ] && IFS= read -r b < "$m" && break; done; printf '%s' "$b"`
     const probeOutput = await execCommand(
       conn,
-      `test -S ${shellEscape(sockFile)} && echo ALIVE || echo DEAD`,
+      `test -S ${shellEscape(sockFile)} && { printf 'ALIVE:'; cat ${shellEscape(ptyBackendFile)} 2>/dev/null || printf 'relay'; } || { printf 'DEAD:'; ${deadMarkerScan}; }`,
       { signal }
     )
     console.warn(`[ssh-relay] Socket probe result: "${probeOutput.trim()}"`)
-    if (probeOutput.trim() === 'ALIVE') {
+    assertRelayPtyBackend(probeOutput, requestedPtyBackend)
+    if (probeOutput.trim().startsWith('ALIVE')) {
       console.log('[ssh-relay] Existing relay socket found, attempting reconnect...')
       try {
         const channel = await conn.exec(
@@ -1451,6 +1488,9 @@ async function launchRelay(
       }
     }
   } catch (err) {
+    if (err instanceof RelayPtyBackendMismatchError) {
+      throw err
+    }
     if (isUnconfirmedSshCommandTermination(err)) {
       throw err
     }
@@ -1465,7 +1505,12 @@ async function launchRelay(
     signal
   })
   // Why: --log-file lets the relay rotate relay.log in-process; the shell redirect stays to capture pre-JS boot/crash output.
-  const launchCmd = `cd ${escapedDir} && chmod 600 ${shellEscape(credentialFile)} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)} --log-file ${shellEscape(logFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
+  let ptyBackendArgs = ''
+  if (requestedPtyBackend === 'zmx') {
+    const zmxPath = await resolveRemoteZmxPath(conn, signal)
+    ptyBackendArgs = relayPtyBackendLaunchArgs('zmx', zmxPath, shellEscape)
+  }
+  const launchCmd = `cd ${escapedDir} && chmod 600 ${shellEscape(credentialFile)} && printf '%s' ${shellEscape(requestedPtyBackend)} > ${shellEscape(ptyBackendFile)} && chmod 600 ${shellEscape(ptyBackendFile)} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)} --log-file ${shellEscape(logFile)}${ptyBackendArgs} > ${shellEscape(logFile)} 2>&1 </dev/null &`
   const launchChannel = await conn.exec(launchCmd, { signal })
   launchChannel.on('data', () => {})
   launchChannel.on('error', () => {})

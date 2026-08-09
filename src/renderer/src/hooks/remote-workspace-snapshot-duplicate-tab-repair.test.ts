@@ -194,9 +194,14 @@ describe('direct-SSH snapshot apply, tab id owned by two worktrees', () => {
     await applySnapshot(store, snapshot(2, NEW_PATH, ['tab-1', 'tab-2'], 'tab-1'))
     store.getState().setActiveWorktree(NEW_ID)
 
-    // The remote deselects; importRemoteWorkspaceSession nulls an activeTabId it
-    // cannot find among the imported tabs, which is what arms the repair effect.
+    // A remote deselection no longer overrides a valid local selection. Force
+    // the transient null state directly to keep exercising the repair loop.
     await applySnapshot(store, snapshot(3, NEW_PATH, ['tab-1', 'tab-2'], null))
+    expect(store.getState().activeTabId).toBe('tab-1')
+    store.setState((state) => ({
+      activeTabId: null,
+      activeTabIdByWorktree: { ...state.activeTabIdByWorktree, [NEW_ID]: null }
+    }))
 
     // Why assert the precondition and not its removal: the fix stops the owner
     // resolver being fooled by the duplicate, it does not remove the duplicate.

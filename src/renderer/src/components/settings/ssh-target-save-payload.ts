@@ -38,8 +38,8 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     }
   }
 
-  const graceSeconds = parseRelayGracePeriodSeconds(form)
-  if (!isRelayGracePeriodValid(form, graceSeconds)) {
+  const parsedGraceSeconds = parseRelayGracePeriodSeconds(form)
+  if (!isRelayGracePeriodValid(form, parsedGraceSeconds)) {
     return {
       ok: false,
       error: translate(
@@ -50,10 +50,15 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     }
   }
 
+  // Why: zmx hides the grace controls, so a stale unparsable draft falls back
+  // to keep-alive instead of persisting NaN.
+  const graceSeconds = Number.isNaN(parsedGraceSeconds) ? 0 : parsedGraceSeconds
   const identityFile = form.identityFile.trim() || undefined
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
+  // Why: persist only the non-default opt-in; updates clears via explicit undefined.
+  const terminalPersistenceBackend = form.zmxTerminalPersistence ? ('zmx' as const) : undefined
 
   const target: Omit<SshTarget, 'id'> = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost),
@@ -66,7 +71,8 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
-    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {})
+    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
+    ...(terminalPersistenceBackend ? { terminalPersistenceBackend } : {})
   }
 
   return {
@@ -82,6 +88,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
         proxyCommand,
         jumpHost,
         systemSshConnectionReuse,
+        terminalPersistenceBackend,
         source: 'manual'
       }
     }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { SshRelaySession } from './ssh-relay-session'
+import { RelayPtyBackendMismatchError } from './ssh-relay-pty-backend'
 import type { SshConnection } from './ssh-connection'
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../../shared/ssh-types'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
@@ -210,6 +211,27 @@ describe('SshRelaySession relay loss during setup', () => {
     expect(onReady).not.toHaveBeenCalled()
     expect(onRelayLost).toHaveBeenCalledTimes(1)
     expect(unregisterSshFilesystemProvider).toHaveBeenCalledWith('target-1')
+  })
+
+  it('treats a PTY backend mismatch as terminal instead of burning relay-loss backoff', async () => {
+    const { session, onRelayLost } = createSession()
+    const onTerminalRelayError = vi.fn()
+    session.setOnTerminalRelayError(onTerminalRelayError)
+
+    await session.establish({} as SshConnection)
+    expect(session.getState()).toBe('ready')
+
+    const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
+    vi.mocked(deployAndLaunchRelay).mockRejectedValueOnce(
+      new RelayPtyBackendMismatchError(
+        'The active relay uses zmx terminal persistence. Reset Relay to apply relay.'
+      )
+    )
+    await session.reconnect({} as SshConnection)
+
+    expect(onTerminalRelayError).toHaveBeenCalledTimes(1)
+    expect(onRelayLost).not.toHaveBeenCalled()
+    expect(session.getState()).toBe('idle')
   })
 
   it('routes a mux that dies during provider registration into relay-loss recovery', async () => {

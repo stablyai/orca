@@ -157,15 +157,14 @@ export class RelayPtySourcePublication {
       this.counters.opened++
     }
     const activationSnapshot = this.session.sourceDeliverySnapshot(identity)
-    const activationCheckpointSourceEndSu =
-      recoveryCheckpointSourceEndSu ?? activationSnapshot.sentEndSu
+    const checkpointEndSu = recoveryCheckpointSourceEndSu ?? activationSnapshot.sentEndSu
     const activationRecoveryEndSu = recoveryEndSu ?? activationSnapshot.receivedEndSu
     const record: RelayPtySourceDeliveryRecord = {
       clientId: context.clientId,
       identity,
       sourceActivation: createPtySourceReceivingActivation(
         identity,
-        activationCheckpointSourceEndSu,
+        checkpointEndSu,
         activationRecoveryEndSu
       ),
       displayEnd,
@@ -203,8 +202,7 @@ export class RelayPtySourcePublication {
       : undefined
   }
 
-  waitForPendingSend = (id: string, timeoutMs = 5_000): Promise<boolean> =>
-    this.sender.waitForPendingSend(id, timeoutMs)
+  waitForPendingSend = (id: string, timeout = 5_000) => this.sender.waitForPendingSend(id, timeout)
 
   publish(id: string, output: RelayPtySourceOutput, interactive: boolean): boolean {
     const record = this.deliveries.get(id)

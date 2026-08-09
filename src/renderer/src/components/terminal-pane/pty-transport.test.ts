@@ -590,6 +590,50 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('omits inherited startup metadata for an explicit reattach intent', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({
+      command: 'codex resume provider-session',
+      launchConfig: { agentArgs: '--model gpt-5', agentEnv: {} },
+      resumeProviderSession: { key: 'session_id', id: 'provider-session' },
+      launchToken: 'launch-token',
+      launchAgent: 'codex'
+    })
+
+    await transport.connect({
+      url: '',
+      callbacks: {},
+      sessionId: 'session-1',
+      startupIntent: 'reattach'
+    })
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'session-1' }))
+    const spawnOptions = spawn.mock.calls[0]?.[0]
+    expect(spawnOptions).not.toHaveProperty('command')
+    expect(spawnOptions).not.toHaveProperty('launchConfig')
+    expect(spawnOptions).not.toHaveProperty('resumeProviderSession')
+    expect(spawnOptions).not.toHaveProperty('launchToken')
+    expect(spawnOptions).not.toHaveProperty('launchAgent')
+    transport.disconnect()
+  })
+
+  it('rejects transient explicit reattach failures for retry classification', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockRejectedValueOnce(new Error('Relay channel kept dropping'))
+    const transport = createIpcPtyTransport({ connectionId: 'ssh-1' })
+
+    await expect(
+      transport.connect({
+        url: '',
+        callbacks: {},
+        sessionId: 'session-1',
+        startupIntent: 'reattach'
+      })
+    ).rejects.toThrow('Relay channel kept dropping')
+  })
+
   it('mints a fresh id instead of reopening a discarded same-id session', async () => {
     const { discardPreHandlerPtyState, clearPreHandlerPtyState } =
       await import('./pty-pre-handler-buffer')

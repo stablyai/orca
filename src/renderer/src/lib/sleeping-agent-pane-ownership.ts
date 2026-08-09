@@ -7,6 +7,7 @@ import type {
 } from '../../../shared/types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -103,6 +104,14 @@ function stablePaneHasLivePty(
   return layout?.root?.type === 'leaf' && layout.root.leafId === leafId
 }
 
+function stablePaneHasSshPty(tab: TerminalTab, leafId: string, state: AppStoreState): boolean {
+  const layout = state.terminalLayoutsByTabId[tab.id]
+  const leafPtyId = layout?.ptyIdsByLeafId?.[leafId]
+  const ptyId =
+    leafPtyId ?? (layout?.root?.type === 'leaf' && layout.root.leafId === leafId ? tab.ptyId : null)
+  return Boolean(ptyId && parseAppSshPtyId(ptyId))
+}
+
 function paneWillConnectOnActivation(
   worktreeId: string,
   tabId: string,
@@ -138,6 +147,7 @@ export function recordPaneIsOwnedByPreservedPane(
     if (isPassiveCompletedHibernationEvidence(record)) {
       return true
     }
+    // Why: SSH attach proves expiry and cold-resumes in place; speculative tabs can duplicate durable PTYs.
     // Why: a pane with a live PTY owns its running session regardless of which
     // pane reconnects on activation; forking it would duplicate the session.
     if (
@@ -146,7 +156,8 @@ export function recordPaneIsOwnedByPreservedPane(
         stable.leafId,
         state.ptyIdsByTabId,
         state.terminalLayoutsByTabId[tabId]
-      )
+      ) ||
+      stablePaneHasSshPty(tab, stable.leafId, state)
     ) {
       return true
     }

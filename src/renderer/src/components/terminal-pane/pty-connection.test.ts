@@ -20973,8 +20973,14 @@ describe('connectPanePty', () => {
     ).window.api
     expect(api.ssh.connect).toHaveBeenCalledWith({ targetId: 'conn-1' })
     expect(transport.connect).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'leaf-session' })
+      expect.objectContaining({ sessionId: 'leaf-session', startupIntent: 'reattach' })
     )
+    const reattachOptions = transport.connect.mock.calls[0]?.[0]
+    expect(reattachOptions).not.toHaveProperty('command')
+    expect(reattachOptions).not.toHaveProperty('launchConfig')
+    expect(reattachOptions).not.toHaveProperty('resumeProviderSession')
+    expect(reattachOptions).not.toHaveProperty('launchToken')
+    expect(reattachOptions).not.toHaveProperty('launchAgent')
     expect(mockStoreState.removeDeferredSshSessionId).toHaveBeenCalledWith('tab-1')
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'leaf-session')
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'leaf-session')
@@ -21660,14 +21666,27 @@ describe('connectPanePty', () => {
       return 'fresh-ssh-pty'
     })
     transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
 
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
       repos: [{ id: 'repo1', connectionId: 'conn-1' }],
       deferredSshReconnectTargets: ['conn-1'],
-      deferredSshSessionIdsByTabId: { 'tab-1': 'expired-session' }
-    }
+      deferredSshSessionIdsByTabId: { 'tab-1': 'expired-session' },
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: 'finish the task',
+          agentType: 'codex',
+          paneKey,
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'codex-session-1' }
+        }
+      }
+    } as StoreState
 
     const pane = createPane(1)
     const manager = createManager(1)
@@ -21679,10 +21698,63 @@ describe('connectPanePty', () => {
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
     expect(toastInfo).not.toHaveBeenCalled()
     expect(transport.connect).toHaveBeenCalledTimes(2)
+    expect(transport.connect.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ sessionId: 'expired-session', startupIntent: 'reattach' })
+    )
+    expect(transport.connect.mock.calls[0]?.[0]).not.toHaveProperty('command')
+    expect(transport.connect.mock.calls[0]?.[0]).not.toHaveProperty('resumeProviderSession')
+    expect(transport.connect.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        resumeProviderSession: { key: 'session_id', id: 'codex-session-1' }
+      })
+    )
     expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'expired-session')
     expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'expired-session')
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'fresh-ssh-pty')
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-ssh-pty')
+  })
+
+  it('retains a deferred SSH session after a transient relay reattach failure', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockRejectedValueOnce(new Error('Relay channel kept dropping'))
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': 'saved-session' },
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: 'finish the task',
+          agentType: 'codex',
+          paneKey,
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'codex-session-1' }
+        }
+      }
+    } as StoreState
+
+    const deps = createDeps()
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'saved-session', startupIntent: 'reattach' })
+    )
+    expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
+    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    expect(transport.sendInput).not.toHaveBeenCalled()
+    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(1, 'Relay channel kept dropping')
   })
 
   it('clears the pending serializer when disposed before deferred SSH expiry resolves', async () => {

@@ -1274,8 +1274,11 @@ function App(): React.JSX.Element {
           (targetId) => state.remoteWorkspaceSyncStatusByTargetId[targetId]?.phase !== 'conflict'
         )
         if (hydratedTargetIds.length > 0) {
+          const session = buildWorkspaceSessionPayload(state)
           void localWrite
-            .then(() => window.api.remoteWorkspace?.setForConnectedTargets({ hydratedTargetIds }))
+            .then(() =>
+              window.api.remoteWorkspace?.setForConnectedTargets({ session, hydratedTargetIds })
+            )
             .then((results) => {
               for (const { targetId, result } of results ?? []) {
                 applyRemoteWorkspacePatchStatus(targetId, result)

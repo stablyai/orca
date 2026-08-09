@@ -17,6 +17,11 @@ import {
   indexWorkspaceRuntimeHostOwnership,
   type WorkspaceRuntimeOwnerProjection
 } from './workspace-runtime-host-ownership'
+import {
+  collectDirectSshLegacyTabWorktreeIds,
+  enrichDirectSshLegacyTabRecords,
+  repairUnifiedTabMembershipFromLegacyTabs
+} from './unified-tab-membership-repair'
 
 export type HostPersistenceState = {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
@@ -117,6 +122,9 @@ function buildRuntimeHostIdByWorkspaceSessionKey(
   const owners: Record<string, ExecutionHostId> = {}
   const ambiguous = new Set<string>()
   for (const [hostId, slice] of nonLocalEntries(slices)) {
+    if (parseExecutionHostId(hostId)?.kind !== 'runtime') {
+      continue
+    }
     for (const worktreeId of collectWorkspaceSessionKeysFromHostSession(slice)) {
       if (owners[worktreeId] && owners[worktreeId] !== hostId) {
         ambiguous.add(worktreeId)
@@ -278,23 +286,22 @@ export function persistWorkspaceSessionByHostSync(
   }
 }
 
-/** Collect the distinct runtime hosts owning any persisted repo. */
-export function listKnownRuntimeHostIds(
+/** Collect the distinct runtime and direct-SSH hosts owning any persisted repo. */
+function listKnownRemoteHostIds(
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
 ): ExecutionHostId[] {
   const hostIds = new Set<ExecutionHostId>()
   for (const repo of repos) {
     const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-    if (parsed?.kind === 'runtime') {
+    if (parsed?.kind === 'runtime' || parsed?.kind === 'ssh') {
       hostIds.add(parsed.id)
     }
   }
   return [...hostIds]
 }
 
-/** Boot-time hydration: fetch the local partition plus one partition per known
- *  runtime host (from loaded repos and saved runtime ids), then merge them into
- *  the unified session the hydrators expect.
+/** Boot-time hydration: fetch the local partition plus known runtime and direct
+ *  SSH partitions, then merge them into the unified session the hydrators expect.
  *
  *  Fail-soft: a partition whose fetch rejects is skipped — boot proceeds with
  *  the rest. Corrupt partitions never reach here; persistence zod-validates
@@ -318,12 +325,12 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   }
   // Why: startup can know saved runtime session hosts before their repo
   // catalogs hydrate, so include those partitions in the first read.
-  const runtimeHostIds = new Set<ExecutionHostId>([
-    ...listKnownRuntimeHostIds(repos),
+  const hostIds = new Set<ExecutionHostId>([
+    ...listKnownRemoteHostIds(repos),
     ...additionalRuntimeHostIds
   ])
   await Promise.all(
-    [...runtimeHostIds].map(async (hostId) => {
+    [...hostIds].map(async (hostId) => {
       try {
         slices[hostId] = await api.get(hostId)
       } catch (err) {
@@ -331,8 +338,13 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
       }
     })
   )
+  enrichDirectSshLegacyTabRecords(slices)
   return {
-    session: mergeWorkspaceSessionsFromHosts(slices),
+    // Why: direct-SSH partitions persist tabs in legacy format only; re-materialize
+    // PTY-bound durable tabs into the unified maps hydration renders from.
+    session: repairUnifiedTabMembershipFromLegacyTabs(mergeWorkspaceSessionsFromHosts(slices), {
+      worktreeIds: collectDirectSshLegacyTabWorktreeIds(slices)
+    }),
     runtimeHostIdByWorkspaceSessionKey: buildRuntimeHostIdByWorkspaceSessionKey(slices)
   }
 }
