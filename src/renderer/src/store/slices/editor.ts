@@ -93,6 +93,7 @@ import {
 } from '@/lib/workspace-session-hydration-keys'
 import { buildValidWorktreeIdsForSessionHydration } from './degraded-repo-worktree-validity'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
+import { createUntitledEditorFile } from '@/lib/create-untitled-editor-file'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { translate } from '@/i18n/i18n'
 import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
@@ -494,6 +495,7 @@ export type EditorSlice = {
     }
   ) => string
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  openNewUntitledFileInActiveWorkspace: (groupId: string) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,
@@ -2018,6 +2020,55 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       get().recordFeatureInteraction('markdown-file-created')
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
+    }
+  },
+
+  openNewUntitledFileInActiveWorkspace: async (groupId) => {
+    const state = get()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      return
+    }
+    const worktree = state.getKnownWorktreeById(worktreeId)
+    if (!worktree) {
+      return
+    }
+    try {
+      const operationProvenance = captureEditorFileOperationProvenance(
+        state,
+        worktreeId,
+        undefined,
+        false
+      )
+      const operationContext = getEditorFileOperationContext(
+        state,
+        { worktreeId, operationProvenance },
+        worktree.path
+      )
+      // Why: extensionless, so the language stays plaintext until a rename remaps it.
+      const fileInfo = await createUntitledEditorFile(
+        worktree.path,
+        worktreeId,
+        operationContext.connectionId,
+        operationContext.settings,
+        {
+          ext: '',
+          operationProvenance,
+          expectedSshTargetId: operationContext.expectedSshTargetId,
+          expectedSshConnectionGeneration: operationContext.expectedSshConnectionGeneration,
+          expectedExecutionHostId: operationContext.expectedExecutionHostId,
+          assertOperationCurrent: () =>
+            assertEditorFileOperationCurrent(get(), worktreeId, operationProvenance)
+        }
+      )
+      get().openFile(fileInfo, { preview: false, targetGroupId: groupId })
+    } catch (err) {
+      toast.error(
+        extractIpcErrorMessage(
+          err,
+          translate('auto.store.slices.editor.985bc00bf0', 'Failed to create untitled file.')
+        )
+      )
     }
   },
 

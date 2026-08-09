@@ -249,7 +249,8 @@
           "51f15c37d3": "Cannot open directory: {{value0}}",
           "f2e00db373": "File not found: {{value0}}",
           "checkRunDetailsUnavailable": "No details are available for this check.",
-          "checkRunDetailsLoadFailed": "Failed to load check details."
+          "checkRunDetailsLoadFailed": "Failed to load check details.",
+          "985bc00bf0": "Failed to create untitled file."
         },
         "github": {
           "f129c42773": "GitHub did not return the new comment.",
