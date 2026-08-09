@@ -6,8 +6,10 @@ import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const prefetchKoreanInputSource = vi.fn()
+const stopKoreanInputSourcePrefetch = vi.fn()
 vi.mock('@/lib/keyboard-layout/korean-input-source', () => ({
   prefetchKoreanInputSource: (...args: unknown[]) => prefetchKoreanInputSource(...args),
+  stopKoreanInputSourcePrefetch: (...args: unknown[]) => stopKoreanInputSourcePrefetch(...args),
   isKoreanInputSourceActive: () => false,
   isKoreanInputSourceId: () => false
 }))
@@ -51,6 +53,7 @@ function deps(koreanWonToBackquoteEnabled: boolean): KeyboardHandlersDeps {
 
 beforeEach(() => {
   prefetchKoreanInputSource.mockClear()
+  stopKoreanInputSourcePrefetch.mockClear()
   vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
   )
@@ -71,5 +74,13 @@ describe('Korean input-source prefetch gate', () => {
   it('probes once the setting is on', () => {
     renderHook(() => useTerminalKeyboardShortcuts(deps(true)))
     expect(prefetchKoreanInputSource).toHaveBeenCalled()
+  })
+
+  // The probe's listeners are global and its attach is idempotent, so without an explicit
+  // disposer they outlive the setting being switched off and keep spawning the refresh.
+  it('detaches the probe when the setting is switched off', () => {
+    renderHook(() => useTerminalKeyboardShortcuts(deps(false)))
+    expect(stopKoreanInputSourcePrefetch).toHaveBeenCalled()
+    expect(prefetchKoreanInputSource).not.toHaveBeenCalled()
   })
 })

@@ -35,7 +35,10 @@ import {
   getLayoutBaseCharacterForCode,
   prefetchLayoutBaseCharacters
 } from '@/lib/keyboard-layout/layout-base-character'
-import { prefetchKoreanInputSource } from '@/lib/keyboard-layout/korean-input-source'
+import {
+  prefetchKoreanInputSource,
+  stopKoreanInputSourcePrefetch
+} from '@/lib/keyboard-layout/korean-input-source'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
 import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
@@ -283,8 +286,12 @@ export function useTerminalKeyboardShortcuts({
       // Why: the Korean Won rewrite gate reads the active input source ID through the async IPC.
       // Gated on the setting because each refresh shells out to `defaults export | plutil | plutil`
       // and the default is off, so an ungated prefetch costs every macOS user four processes.
+      // Synced in the effect body, not its cleanup: cleanup also runs on tab switches and on any
+      // dep-identity change, so disposing there would reattach and re-probe constantly.
       if (koreanWonToBackquoteEnabled) {
         prefetchKoreanInputSource()
+      } else {
+        stopKoreanInputSourcePrefetch()
       }
     }
 
