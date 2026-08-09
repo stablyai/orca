@@ -15,7 +15,8 @@
     "format:check": "oxfmt --check .",
     "mock-server": "npx tsx scripts/mock-server.ts",
     "repro:workspace-picker-lag": "npx tsx scripts/repro-workspace-picker-lag.ts",
-    "start:emulator": "node scripts/start-emulator.mjs"
+    "start:emulator": "node scripts/start-emulator.mjs",
+    "start:emulator:android": "npx tsx scripts/start-android-emulator.ts"
   },
   "dependencies": {
     "@noble/hashes": "1.8.0",
