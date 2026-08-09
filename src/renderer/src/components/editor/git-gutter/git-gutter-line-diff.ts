@@ -5,15 +5,16 @@ export type GitGutterHunk =
   /** Lines were removed directly after `afterLine`. 0 means removed above line 1. */
   | { kind: 'deleted'; afterLine: number }
 
-// Why: Myers' trace is O(d^2) memory. Past this the file was rewritten wholesale, where
+// Why: each snapshot is O(min(a+b, cap)), and there are up to `cap` of them, so trace memory
+// is O(cap²) regardless of file size. Past this the file was rewritten wholesale, where
 // per-line marks are noise anyway — bail instead of painting the whole gutter.
 export const GIT_GUTTER_MAX_EDIT_DISTANCE = 2000
 
 type EditOp = { type: 'delete'; aIndex: number } | { type: 'insert'; bIndex: number }
 
-/** Matches Monaco's `model.getLinesContent()` so both sides of the diff line up. */
+/** Matches Monaco's `createLineStartsFast` (LF, CRLF, and lone-CR line breaks) so both sides line up. */
 export function splitGitGutterLines(text: string): string[] {
-  return text.split(/\r?\n/)
+  return text.split(/\r\n|\r|\n/)
 }
 
 function backtrack(
@@ -27,11 +28,13 @@ function backtrack(
   let y = bLength
 
   for (let d = trace.length - 1; d > 0; d -= 1) {
-    const v = trace[d - 1]!
+    // Why: round d only writes V[k] of parity d, so trace[d-1] still holds the (d-1)-path
+    // endpoint the backtracker reads — this index and the push position below must move together.
+    const v = trace[d - 1]
     const k = x - y
-    const takeRight = k === -d || (k !== d && v[offset + k - 1]! < v[offset + k + 1]!)
-    const previousK = takeRight ? k + 1 : k - 1
-    const previousX = v[offset + previousK]!
+    const cameFromInsert = k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1])
+    const previousK = cameFromInsert ? k + 1 : k - 1
+    const previousX = v[offset + previousK]
     const previousY = previousX - previousK
 
     while (x > previousX && y > previousY) {
@@ -56,14 +59,17 @@ function computeEditScript(a: readonly string[], b: readonly string[]): EditOp[]
   const aLength = a.length
   const bLength = b.length
   const max = Math.min(aLength + bLength, GIT_GUTTER_MAX_EDIT_DISTANCE)
-  const offset = aLength + bLength
-  const v = new Int32Array(2 * (aLength + bLength) + 1)
+  // Why: only k in [-max, max] is ever touched (plus one slot of headroom for the k+1 probe at
+  // k=-max), so size the trace by the edit-distance cap, not by file length — sizing by file
+  // length made an 8000-line full rewrite allocate hundreds of MB on the bail path.
+  const offset = max + 1
+  const v = new Int32Array(2 * offset + 1)
   const trace: Int32Array[] = []
 
   for (let d = 0; d <= max; d += 1) {
     for (let k = -d; k <= d; k += 2) {
-      const takeRight = k === -d || (k !== d && v[offset + k - 1]! < v[offset + k + 1]!)
-      let x = takeRight ? v[offset + k + 1]! : v[offset + k - 1]! + 1
+      const cameFromInsert = k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1])
+      let x = cameFromInsert ? v[offset + k + 1] : v[offset + k - 1] + 1
       let y = x - k
       while (x < aLength && y < bLength && a[x] === b[y]) {
         x += 1
@@ -85,7 +91,7 @@ function toHunks(ops: readonly EditOp[]): GitGutterHunk[] {
   const hunks: GitGutterHunk[] = []
   let aIndex = 0
   let bIndex = 0
-  let groupStartLine = 0
+  let linesBeforeGroup = 0
   let inserted = 0
   let deleted = 0
 
@@ -94,12 +100,12 @@ function toHunks(ops: readonly EditOp[]): GitGutterHunk[] {
       return
     }
     if (inserted === 0) {
-      hunks.push({ kind: 'deleted', afterLine: groupStartLine })
+      hunks.push({ kind: 'deleted', afterLine: linesBeforeGroup })
     } else {
       hunks.push({
         kind: deleted === 0 ? 'added' : 'modified',
-        startLine: groupStartLine + 1,
-        endLine: groupStartLine + inserted
+        startLine: linesBeforeGroup + 1,
+        endLine: linesBeforeGroup + inserted
       })
     }
     inserted = 0
@@ -114,7 +120,7 @@ function toHunks(ops: readonly EditOp[]): GitGutterHunk[] {
       bIndex += skipped
     }
     if (inserted === 0 && deleted === 0) {
-      groupStartLine = bIndex
+      linesBeforeGroup = bIndex
     }
     if (op.type === 'delete') {
       aIndex += 1
@@ -129,8 +135,8 @@ function toHunks(ops: readonly EditOp[]): GitGutterHunk[] {
   return hunks
 }
 
-// Why: `''.split(/\r?\n/)` yields `['']`, Monaco's own encoding of a zero-byte file — it
-// carries no real content, so treat it as zero lines rather than one line to diff against.
+// Why: splitting '' yields `['']`, Monaco's own encoding of a zero-byte file — it carries no
+// real content, so treat it as zero lines rather than one line to diff against.
 function withoutPhantomEmptyLine(lines: readonly string[]): readonly string[] {
   return lines.length === 1 && lines[0] === '' ? [] : lines
 }
