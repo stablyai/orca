@@ -90,7 +90,6 @@ export function FolderSourceControlToolbar({
   branches,
   branchSwitching,
   onSwitchBranch,
-  upstreamName,
   onStageAll,
   stageAllBusy,
   onCreatePr,
@@ -107,7 +106,6 @@ export function FolderSourceControlToolbar({
   branches: RuntimeGitLocalBranches | null
   branchSwitching: boolean
   onSwitchBranch: (branch: string) => void
-  upstreamName?: string | null
   onStageAll: () => void
   stageAllBusy: boolean
   onCreatePr: () => void
@@ -128,7 +126,6 @@ export function FolderSourceControlToolbar({
         disabled={branchSwitching || !branches}
         onSwitch={onSwitchBranch}
       />
-      {upstreamName ? <span className="min-w-0 truncate">{upstreamName}</span> : null}
       <button
         type="button"
         className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-border bg-background px-1.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -140,7 +137,7 @@ export function FolderSourceControlToolbar({
       </button>
       <button
         type="button"
-        className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-border bg-background px-1.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+        className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-transparent bg-foreground px-1.5 text-[11px] text-background hover:bg-foreground/90"
         onClick={onCreatePr}
       >
         <GitPullRequestArrow className="size-3" />

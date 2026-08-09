@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
+import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import type { SourceControlViewMode, Worktree } from '../../../../shared/types'
 import { GitHistoryPanel } from './GitHistoryPanel'
 import {
@@ -15,6 +16,7 @@ import { useFolderSourceControlCommitHistory } from './folder-source-control-com
 import { useShowVisibleEditorTab } from './folder-source-control-editor-tabs'
 import { useFolderSourceControlOpenActions } from './folder-source-control-open-actions'
 import { SourceControlDiscardDialog } from './source-control-discard-dialog'
+import { SourceControlBranchContextRow } from './source-control-branch-context-row'
 import type { FolderGitTarget } from './folder-source-control-repos'
 import type { RepoStatusState } from './folder-source-control-rows'
 import { useFolderSourceControlData } from './use-folder-source-control-data'
@@ -123,6 +125,10 @@ export function FolderSourceControlDetails({
   const currentBaseRef =
     data.baseRefOverride ??
     (data.branchCompare.status === 'ready' ? data.branchCompare.result.summary.baseRef : undefined)
+  const headDisplay = useMemo(
+    () => getWorktreeGitIdentityDisplay({ branch: data.status?.branch, head: data.status?.head }),
+    [data.status?.branch, data.status?.head]
+  )
 
   return (
     <div className="border-b border-border pb-2">
@@ -131,9 +137,6 @@ export function FolderSourceControlDetails({
         branches={data.branches}
         branchSwitching={data.branchSwitching}
         onSwitchBranch={(branch) => void data.switchBranch(branch)}
-        upstreamName={
-          data.status?.upstreamStatus?.hasUpstream ? data.status.upstreamStatus.upstreamName : null
-        }
         onStageAll={mutations.stageAll}
         stageAllBusy={mutations.stageAllBusy}
         onCreatePr={mutations.handleCreatePrClick}
@@ -145,6 +148,14 @@ export function FolderSourceControlDetails({
         onRefreshBranchCompare={() => void data.loadDetails()}
         branchCompareReady={data.branchCompare.status === 'ready'}
         reviewCopy={data.reviewCopy}
+      />
+      <SourceControlBranchContextRow
+        summary={data.branchCompare.status === 'ready' ? data.branchCompare.result.summary : null}
+        compareBaseRef={currentBaseRef ?? null}
+        headDisplay={headDisplay}
+        upstreamStatus={data.status?.upstreamStatus ?? data.upstream ?? undefined}
+        onChangeBaseRef={() => setBaseRefDialogOpen(true)}
+        onRetry={() => void data.loadDetails()}
       />
       {data.branchSwitchError ? (
         <div className="mx-3 mb-1 text-[11px] text-destructive">{data.branchSwitchError}</div>
