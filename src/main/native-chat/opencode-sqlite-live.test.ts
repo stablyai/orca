@@ -285,7 +285,7 @@ describe('reconcileOpenCodeNativeChat', () => {
       sessionId: 'ses_new',
       windowLimit: 40,
       state,
-      onInitialSnapshot: (messages, hasMore, beforeOffset, error) => {
+      onInitialSnapshot: (messages, _hasMore, _beforeOffset, error) => {
         if (error) {
           errors.push(error)
           return
@@ -315,7 +315,7 @@ describe('reconcileOpenCodeNativeChat', () => {
       sessionId: 'ses_new',
       windowLimit: 40,
       state,
-      onInitialSnapshot: (messages, hasMore, beforeOffset, error) => {
+      onInitialSnapshot: (messages, _hasMore, _beforeOffset, error) => {
         if (error) {
           errors.push(error)
           return

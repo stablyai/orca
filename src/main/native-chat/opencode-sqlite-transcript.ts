@@ -8,7 +8,6 @@
 // `message` + `part` rows to NativeChatMessages and pages the conversation by a
 // stable ordinal window (read query-only, schema-guarded, malformed-tolerant).
 
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type {
   NativeChatBlock,
@@ -16,15 +15,13 @@ import type {
   NativeChatRole
 } from '../../shared/native-chat-types'
 import { resolveOpenCodeDataDirectory } from '../opencode/opencode-data-directory'
-import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
-import SyncDatabase from '../sqlite/sync-database'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
 import { toolResultOutput } from './transcript-record-blocks'
-import {
-  readMappedOpenCodeTail,
-  type OpenCodeMessageRow,
-  type OpenCodePartRow
-} from './opencode-sqlite-paging'
+import { readOpenCodeNativeChatTranscript } from './opencode-sqlite-read'
+import type { OpenCodeReadResult } from './opencode-sqlite-read'
+import type { OpenCodeMessageRow, OpenCodePartRow } from './opencode-sqlite-paging'
+
+export { canReadOpenCodeChatSession, isRetryableOpenCodeSqliteError } from './opencode-sqlite-read'
 
 // Why: a heavy OpenCode session holds ~10K parts with multi-hundred-KB tool
 // blobs (25-150 KB is common). Text/reasoning are the visible message body and
@@ -36,44 +33,6 @@ const OPENCODE_TOOL_OUTPUT_CHAR_CAP = 100_000
 
 export function resolveOpenCodeNativeChatDbPath(openCodeDbPath?: string): string {
   return openCodeDbPath ?? join(resolveOpenCodeDataDirectory(), 'opencode.db')
-}
-
-function openReadonlyDatabase(dbPath: string): SyncDatabase {
-  const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
-  db.pragma('query_only = ON')
-  return db
-}
-
-/** Schema guards mirroring session-scanner-opencode-sqlite.ts: require the
- *  tables and columns the chat read actually touches, and bail out cleanly on
- *  older generations rather than throwing. */
-export function canReadOpenCodeChatSession(db: SyncDatabase): boolean {
-  return (
-    tableExists(db, 'session') &&
-    tableExists(db, 'message') &&
-    tableExists(db, 'part') &&
-    columnExists(db, 'message', 'id') &&
-    columnExists(db, 'message', 'session_id') &&
-    columnExists(db, 'message', 'time_created') &&
-    columnExists(db, 'message', 'data') &&
-    columnExists(db, 'part', 'message_id') &&
-    columnExists(db, 'part', 'time_created') &&
-    columnExists(db, 'part', 'data')
-  )
-}
-
-function openCodeSessionRowExists(db: SyncDatabase, sessionId: string): boolean {
-  const row = db.prepare('SELECT 1 AS found FROM session WHERE id = ? LIMIT 1').get(sessionId) as
-    | { found?: number }
-    | undefined
-  return row?.found === 1
-}
-
-function countSessionMessages(db: SyncDatabase, sessionId: string): number {
-  const row = db
-    .prepare('SELECT COUNT(*) AS n FROM message m WHERE m.session_id = ?')
-    .get(sessionId) as { n?: number } | undefined
-  return typeof row?.n === 'number' ? row.n : 0
 }
 
 export function clipOpenCodeText(text: string, cap: number): string {
@@ -219,55 +178,6 @@ export async function readOpenCodeNativeChatTranscriptTail(args: {
   sessionId: string
   limit: number
   beforeOffset?: number
-}): Promise<
-  | {
-      messages: NativeChatMessage[]
-      hasMore: boolean
-      beforeOffset: number
-    }
-  | { error: string; notFound?: true }
-> {
-  const { dbPath, sessionId } = args
-  const limit = Number.isInteger(args.limit) && args.limit > 0 ? args.limit : 40
-  let db: SyncDatabase | null = null
-  try {
-    // Why: SyncDatabase's fileMustExist guard throws a plain Error (no ENOENT
-    // code), so the miss must be detected before opening: a just-launched
-    // OpenCode session can legitimately not have a DB file yet, and that miss
-    // is retry-worthy like a JSONL first-flush.
-    if (!existsSync(dbPath)) {
-      return { error: `SQLite database does not exist: ${dbPath}`, notFound: true }
-    }
-    db = openReadonlyDatabase(dbPath)
-    if (!canReadOpenCodeChatSession(db)) {
-      return { error: 'Transcript unavailable' }
-    }
-    if (!openCodeSessionRowExists(db, sessionId)) {
-      // Why: a brand-new session can report its id before OpenCode flushes the
-      // first message; keep this retry-worthy like a JSONL first-flush miss.
-      return { error: 'Transcript unavailable', notFound: true }
-    }
-    const count = countSessionMessages(db, sessionId)
-    const windowEnd = Math.max(
-      0,
-      Math.min(args.beforeOffset === undefined ? count : args.beforeOffset, count)
-    )
-    if (windowEnd <= 0) {
-      return { messages: [], hasMore: false, beforeOffset: 0 }
-    }
-    return readMappedOpenCodeTail({
-      db,
-      sessionId,
-      windowEnd,
-      limit,
-      mapMessage: mapOpenCodeNativeChatMessage
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
-      ? { error: message, notFound: true }
-      : { error: message }
-  } finally {
-    db?.close()
-  }
+}): Promise<OpenCodeReadResult> {
+  return readOpenCodeNativeChatTranscript(args, mapOpenCodeNativeChatMessage)
 }

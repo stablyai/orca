@@ -216,7 +216,7 @@ export async function readNativeChatTranscriptTail(
       hasMore: boolean
       beforeOffset: number
     }
-  | { error: string; notFound?: true }
+  | { error: string; notFound?: true; retryable?: true }
 > {
   const decode = nativeChatLineDecoderForAgent(args.agent)
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
