@@ -2169,6 +2169,44 @@ html.native-shell .app-layout {
   opacity: 0.92;
 }
 
+/* Why: git gutter marks share the lines-decorations lane with conflict markers, so they use the
+   same 4px-wide geometry. Colors come from the shared --git-decoration-* tokens, which are
+   already defined for both themes. */
+.monaco-editor .orca-git-gutter {
+  width: 3px !important;
+  margin-left: 3px;
+  border-radius: 999px;
+}
+
+.monaco-editor .orca-git-gutter-added {
+  background: var(--git-decoration-added);
+}
+
+.monaco-editor .orca-git-gutter-modified {
+  background: var(--git-decoration-modified);
+}
+
+/* Why: a deletion has no line of its own — render a wedge on the boundary instead of a bar. */
+.monaco-editor .orca-git-gutter-deleted {
+  position: relative;
+  background: transparent;
+}
+
+.monaco-editor .orca-git-gutter-deleted::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  border-left: 4px solid var(--git-decoration-deleted);
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+}
+
+.monaco-editor .orca-git-gutter-deleted-top::before {
+  top: -3px;
+  bottom: auto;
+}
+
 /* Why: Monaco's find-widget button tooltips (Close, Find in Selection, etc.)
    render inside a `.context-view` wrapper → `.workbench-hover-container` →
    `.workbench-hover.compact`, positioned above the target button. The wrapper's
