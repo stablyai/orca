@@ -190,6 +190,38 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
   })
 
+  it('builds the notification id from a completion snapshot, not the pinned working row', () => {
+    // Why: a Claude pane held at `working` by background work keeps one stateStartedAt for
+    // every turn in the run, so reading the id from the stored row collapses consecutive
+    // banners onto one id and each new banner closes the previous one (#13245).
+    const pinnedWorkingStartedAt = Date.now() - 60_000
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      state: 'working',
+      stateStartedAt: pinnedWorkingStartedAt
+    })
+    const turnCompletedAt = Date.now()
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'codex-hook-notify',
+        agentType: 'codex',
+        stateStartedAt: turnCompletedAt
+      }
+    })
+
+    expect(getLastNotificationDispatchArg()?.notificationId).toBe(
+      buildAgentNotificationId({
+        worktreeId: 'wt-primary',
+        paneKey,
+        stateStartedAt: turnCompletedAt
+      })
+    )
+  })
+
   it('uses a live pane key when inactive worktree tab membership is not hydrated', () => {
     mockState.tabsByWorktree = {}
 

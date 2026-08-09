@@ -156,8 +156,12 @@ export type ClaudeLeadTurnState = {
   waitingAgentId?: string
   /** Tool call that owns the wait; late completions from parallel sibling tools must not dismiss its card. */
   waitingToolUseId?: string
+  /** End time of the lead turn this record closed while the background inventory kept the pane
+   *  gated to 'working'. Held here so the pane's later all-clear 'done' can carry the same value
+   *  and consumers can pair the two halves of one turn (#13245). Cleared by the next lead event. */
+  turnCompletedAt?: number
   /** Lead state a child-induced wait displaced, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */
-  stateBeforeWait?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
+  stateBeforeWait?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted' | 'turnCompletedAt'>
 }
 
 type CodexLeadTurnState = {
@@ -2802,7 +2806,11 @@ function buildClaudeCachedLeadStatusPayload(
       interrupted: lead?.interrupted
     }),
     updateToolSnapshot: false,
-    interrupted: lead?.interrupted
+    interrupted: lead?.interrupted,
+    // Why: the child lifecycle that drains the last background work IS this turn's all-clear;
+    // carrying the lead's stamp lets a consumer see it is the tail of a turn it already
+    // announced rather than a second completion (#13245).
+    turnCompletedAt: lead?.turnCompletedAt
   })
 }
 
@@ -2969,7 +2977,8 @@ function normalizeClaudeEvent(
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       stateName: resolveClaudePaneState(state, paneKey, restored),
       updateToolSnapshot: true,
-      interrupted: restored.interrupted
+      interrupted: restored.interrupted,
+      turnCompletedAt: restored.turnCompletedAt
     })
   }
 
@@ -3001,17 +3010,16 @@ function normalizeClaudeEvent(
         ? previousLead.stateBeforeWait
         : {
             state: previousLead.state,
-            ...(previousLead.interrupted ? { interrupted: true as const } : {})
+            ...(previousLead.interrupted ? { interrupted: true as const } : {}),
+            // Why: a background child's permission pause displaces an already-finished lead turn;
+            // keep its end time so the eventual all-clear still pairs with the completion that
+            // was announced for that turn instead of announcing a second one (#13245).
+            ...(previousLead.turnCompletedAt !== undefined
+              ? { turnCompletedAt: previousLead.turnCompletedAt }
+              : {})
           }
       : undefined
   const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
-  state.claudeLeadStateByPaneKey.set(paneKey, {
-    state: reportedStateName,
-    ...(interrupted ? { interrupted } : {}),
-    ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
-    ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
-    ...(stateBeforeWait ? { stateBeforeWait } : {})
-  })
 
   if (interrupted && eventAgentId === undefined) {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
@@ -3035,11 +3043,33 @@ function normalizeClaudeEvent(
     // Why: a legacy or partial Stop confirms the lead boundary, not a child restored from disk; keep the child-only gate eligible for reconciliation.
     state.claudeUnconfirmedRestoredStatusPaneKeys.add(paneKey)
   }
+  // Why: the lead already ended the turn — the pane only stays 'working' because the background
+  // inventory is still registered, which is exactly the case where 'stateStartedAt' is pinned and
+  // cannot tell two turns apart. Stamp this turn's own end time so a completion consumer gets one
+  // identity per turn, and so the later all-clear can be recognized as the same turn (#13245).
+  const turnCompletedAt =
+    eventAgentId === undefined &&
+    isTurnBoundary &&
+    reportedStateName === 'done' &&
+    effectiveState === 'working' &&
+    interrupted !== true
+      ? Date.now()
+      : undefined
+
+  state.claudeLeadStateByPaneKey.set(paneKey, {
+    state: reportedStateName,
+    ...(interrupted ? { interrupted } : {}),
+    ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),
+    ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
+    ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
+    ...(stateBeforeWait ? { stateBeforeWait } : {})
+  })
 
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     stateName: effectiveState,
     updateToolSnapshot: true,
-    interrupted
+    interrupted,
+    turnCompletedAt
   })
 }
 
@@ -3054,6 +3084,7 @@ function buildClaudeStatusPayload(
     updateToolSnapshot: boolean
     interrupted?: boolean
     sessionBoundary?: boolean
+    turnCompletedAt?: number
   }
 ): ParsedAgentStatusPayload | null {
   // Why: child-driven refreshes are roster bookkeeping, not lead tool activity; read the cached snapshot without merging so they can't clear a live AskUserQuestion card or clobber the tool preview.
@@ -3078,6 +3109,7 @@ function buildClaudeStatusPayload(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     interrupted: options.interrupted,
     sessionBoundary: options.sessionBoundary,
+    turnCompletedAt: options.turnCompletedAt,
     subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey))
   })
 }

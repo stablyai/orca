@@ -7,7 +7,8 @@ import {
   normalizeInteractivePromptField,
   normalizeOptionalField,
   normalizeOptionalMultilineField,
-  normalizePromptField
+  normalizePromptField,
+  normalizeTurnCompletedAtField
 } from './agent-status-field-normalization'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
@@ -184,6 +185,17 @@ export type AgentStatusPayload = {
    *  completions (notifications, automation runs, unread badges, finished timestamps)
    *  must ignore it. Only meaningful on `done`. */
   sessionBoundary?: boolean
+  /** Wall-clock ms at which the lead turn actually ended, stamped when Claude's background
+   *  inventory (subagents/background shells/session crons) gates the pane up to `working`
+   *  even though the lead Stop/StopFailure already finished the turn (#13245).
+   *
+   *  Why it exists: the pane's `stateStartedAt` is pinned for as long as the reported state
+   *  does not change, and this situation is precisely "the pane never leaves `working`", so
+   *  `stateStartedAt` cannot identify which turn ended. This field is the turn's own end
+   *  time. It rides the gated `working` row AND that turn's later all-clear `done`, so a
+   *  consumer that announced the first can recognize the second by equality. Never written
+   *  to the stored status entry — it identifies an event, not pane state. */
+  turnCompletedAt?: number
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
 }
@@ -217,6 +229,7 @@ export function pickParsedAgentStatusPayload(
       : {}),
     ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
+    ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {})
   }
 }
@@ -417,6 +430,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
+    turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
     subagents: normalizeSubagentsField(obj.subagents)
   }
 }

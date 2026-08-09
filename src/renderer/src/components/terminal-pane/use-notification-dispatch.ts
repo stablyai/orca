@@ -120,8 +120,16 @@ export function dispatchTerminalNotification(
   ) {
     return
   }
+  // Why: the stored row's stateStartedAt is pinned while its state does not change, so a pane
+  // that stays `working` across several finished turns (Claude background inventory) would build
+  // the same notification id every time and main would close the previous banner as a repaint.
+  // A completion snapshot carries that turn's own end time, so it is the authority here (#13245).
   const agentNotificationStateStartedAt =
-    freshStoredAgentStatus?.stateStartedAt ?? eventAgentStatusSnapshot?.stateStartedAt
+    (eventAgentStatusSnapshot?.state === 'done'
+      ? eventAgentStatusSnapshot.stateStartedAt
+      : undefined) ??
+    freshStoredAgentStatus?.stateStartedAt ??
+    eventAgentStatusSnapshot?.stateStartedAt
   // Why: main-process hook IPC can update inactive/unmounted worktrees before
   // the renderer's live-PTY map catches up. A fresh accepted hook snapshot is
   // authoritative for agent completion; title/BEL-only paths still need PTY liveness.

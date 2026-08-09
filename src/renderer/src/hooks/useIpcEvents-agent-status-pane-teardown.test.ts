@@ -94,6 +94,74 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
   })
 
+  it('carries turnCompletedAt through to the completion coordinator', async () => {
+    const setAgentStatus = vi.fn()
+    const observeAgentHookCompletionForNotification = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Claude' }]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    vi.doMock('./agent-hook-completion-notifications', () => ({
+      observeAgentHookCompletionForNotification,
+      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      tabId: 'tab-future',
+      worktreeId: 'wt-1',
+      state: 'working',
+      prompt: 'run the build',
+      agentType: 'claude',
+      turnCompletedAt: 1_700_000_000_400,
+      receivedAt: 1_700_000_000_500,
+      stateStartedAt: 1_700_000_000_100
+    })
+
+    // Why: this rebuild is a field whitelist, so an omitted field never reaches the
+    // coordinator and the turn-complete-while-background edge is lost on the live IPC path.
+    expect(observeAgentHookCompletionForNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ turnCompletedAt: 1_700_000_000_400 })
+      })
+    )
+  })
+
   it('keeps auto-approved Codex done statuses on the completion path', async () => {
     const setAgentStatus = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()

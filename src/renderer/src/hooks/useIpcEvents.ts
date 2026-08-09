@@ -3182,6 +3182,9 @@ export function useIpcEvents(): void {
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted,
         sessionBoundary: data.sessionBoundary,
+        // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so the
+        // completion coordinator never sees the turn's end time if omitted (#13245).
+        turnCompletedAt: data.turnCompletedAt,
         // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so subagent child rows vanish if omitted.
         subagents: data.subagents
       })

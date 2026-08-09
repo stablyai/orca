@@ -98,6 +98,48 @@ describe('shared agent-hook-listener', () => {
       expect(finalStop?.payload.subagents).toBeUndefined()
     })
 
+    it('stamps the turn end time on a Stop gated up by background work, and on its all-clear', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
+      claudeEvent({ hook_event_name: 'SubagentStart', agent_id: 'a1' })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
+      })
+      expect(stop?.payload.state).toBe('working')
+      expect(stop?.payload.turnCompletedAt).toEqual(expect.any(Number))
+
+      // Why: the child lifecycle that drains the last background work IS this turn's all-clear,
+      // so it must repeat the same end time — that pairing is what lets a consumer tell the tail
+      // of an announced turn from a new completion (#13245).
+      const allClear = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      expect(allClear?.payload.state).toBe('done')
+      expect(allClear?.payload.turnCompletedAt).toBe(stop?.payload.turnCompletedAt)
+    })
+
+    it('does not stamp a turn end time on a Stop that already resolves to done', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'ship it' })
+      const stop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+      expect(stop?.payload.state).toBe('done')
+      expect(stop?.payload.turnCompletedAt).toBeUndefined()
+    })
+
+    it('drops the previous turn end time once the next turn starts', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'run the build' })
+      const gated = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }]
+      })
+      expect(gated?.payload.turnCompletedAt).toEqual(expect.any(Number))
+
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'now lint' })
+      const nextStop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'shell-1', type: 'shell', status: 'completed' }]
+      })
+      expect(nextStop?.payload.state).toBe('done')
+      expect(nextStop?.payload.turnCompletedAt).toBeUndefined()
+    })
+
     it('emits a status refresh with the lead state on subagent lifecycle events', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'kick off reviewers' })
       claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
@@ -632,10 +674,18 @@ describe('shared agent-hook-listener', () => {
       // Why: the lead already finished; the answer resumes the child, so the
       // emitted state is gated up to working only while that child still runs.
       expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
-      expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)).toEqual({ state: 'done' })
+      // Why: the restored record also keeps the end time stamped on the gated Stop, so the
+      // drained all-clear below is recognizable as this same turn's tail (#13245).
+      expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)).toEqual({
+        state: 'done',
+        turnCompletedAt: expect.any(Number)
+      })
 
       const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
       expect(drained?.payload.state).toBe('done')
+      expect(drained?.payload.turnCompletedAt).toBe(
+        state.claudeLeadStateByPaneKey.get(PANE_KEY)?.turnCompletedAt
+      )
     })
 
     it('falls back to working when no lead record exists', () => {

@@ -31,6 +31,13 @@ type LastCompletionIdentity = {
   source: CompletionIdentitySource
   identity: string
   agentIdentity: string | null
+  /** End time of the Claude lead turn already announced from a pane that stayed `working` for
+   *  its background inventory (#13245); absent for every other completion. That turn's all-clear
+   *  `done` arrives carrying the same value and must not raise a second banner. Held here —
+   *  not in a coordinator-local flag — so the suppression is keyed by turn (a turn whose
+   *  all-clear never arrives cannot swallow the next turn) and survives the live remount this
+   *  map already outlives. */
+  lastTurnCompletedAtNotified?: number | null
 }
 
 // Why: worktree switches remount a pane while the PTY/hook stream stays live, so stale completion replays must outlive one coordinator.
@@ -57,6 +64,11 @@ const POLL_TIER_INTERVAL_MS: Record<PollCadenceTier, number> = {
   idle: IDLE_POLL_INTERVAL_MS,
   hidden: HIDDEN_POLL_INTERVAL_MS,
   'no-evidence': NO_EVIDENCE_POLL_INTERVAL_MS
+}
+
+/** Narrow an optional turn end time to one that can identify a turn; NaN and Infinity cannot. */
+function isFiniteTurnCompletedAt(value: number | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function isCompletionHookState(state: ParsedAgentStatusPayload['state']): boolean {
@@ -169,15 +181,27 @@ export function createAgentCompletionCoordinator(
     return `${source}:${currentTurn}:${processSession}`
   }
 
+  /** Dedupe key for one completion: the state, the agent, and the timestamp that names the turn. */
+  function completionIdentityFor(
+    state: string,
+    agentType: string | undefined,
+    timestamp: number
+  ): string {
+    return [state, agentType ?? '', String(Math.trunc(timestamp))].join(':')
+  }
+
   function hookCompletionIdentity(payload: AgentCompletionStatusSnapshot): string | null {
-    if (typeof payload.stateStartedAt !== 'number' || !Number.isFinite(payload.stateStartedAt)) {
+    // Why: `stateStartedAt` is pinned for as long as the reported state does not change, so on a
+    // pane held at `working` by Claude's background inventory every turn in the run would share
+    // one identity and only the first would notify. The turn's own end time is the per-turn
+    // identity there; everywhere else stateStartedAt still is (#13245).
+    const timestamp = isFiniteTurnCompletedAt(payload.turnCompletedAt)
+      ? payload.turnCompletedAt
+      : payload.stateStartedAt
+    if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
       return null
     }
-    return [
-      payload.state,
-      payload.agentType ?? '',
-      String(Math.trunc(payload.stateStartedAt))
-    ].join(':')
+    return completionIdentityFor(payload.state, payload.agentType, timestamp)
   }
 
   function hookCompletionAgentIdentity(payload: AgentCompletionStatusSnapshot): string | null {
@@ -269,6 +293,9 @@ export function createAgentCompletionCoordinator(
       terminalIdleConfirmed?: boolean
       agentStatus?: AgentCompletionStatusSnapshot
       completionIdentity?: LastCompletionIdentity | null
+      /** Announce only. The pane is legitimately still `working` (Claude background
+       *  inventory), so the synthetic `done` must not run pane lifecycle side effects. */
+      notifyWithoutLifecycle?: boolean
     } = {}
   ): void {
     if (source !== 'hook' && pendingHookDoneTimer !== null) {
@@ -298,10 +325,21 @@ export function createAgentCompletionCoordinator(
     if (optionsOverride.completionIdentity) {
       lastCompletionIdentityByPaneKey.set(options.paneKey, optionsOverride.completionIdentity)
     }
-    if (source === 'hook' && optionsOverride.agentStatus) {
+    if (
+      source === 'hook' &&
+      optionsOverride.agentStatus &&
+      optionsOverride.notifyWithoutLifecycle !== true
+    ) {
       options.dispatchHookLifecycle?.(optionsOverride.agentStatus)
     }
-    if (optionsOverride.quietedHookDone === true || source === 'process-exit') {
+    if (
+      optionsOverride.quietedHookDone === true ||
+      source === 'process-exit' ||
+      // Why: this completion has no matching store row to read the finished turn from — the pane
+      // row stays `working` — so its own `done` snapshot must ride along or the banner reads the
+      // previous turn. Scoped to that one path so every other agent's dispatch shape is unchanged.
+      optionsOverride.notifyWithoutLifecycle === true
+    ) {
       // Why: confirmed process death is independent completion evidence; keep its provenance so stale hook rows can't veto it later.
       options.dispatchCompletion(title, {
         source,
@@ -778,6 +816,56 @@ export function createAgentCompletionCoordinator(
     }
   }
 
+  /** True when this pane already announced the turn that ended at this timestamp. */
+  function turnCompletedAtAlreadyNotified(turnCompletedAt: number | undefined): boolean {
+    if (!isFiniteTurnCompletedAt(turnCompletedAt)) {
+      return false
+    }
+    return (
+      lastCompletionIdentityByPaneKey.get(options.paneKey)?.lastTurnCompletedAtNotified ===
+      turnCompletedAt
+    )
+  }
+
+  /** Claude's lead Stop already ended this turn; the pane only reports `working` because its
+   *  background subagents/shells/crons are still registered. Mint the completion edge now —
+   *  deferring it means silence for the whole background lifetime, and for a background shell
+   *  the edge never arrives at all (#13245). Banner only: the pane really is still working, so
+   *  pane lifecycle keeps following the reported `working` state. */
+  function observeTurnCompletedWhileBackgroundWorking(
+    payload: AgentCompletionStatusSnapshot,
+    turnCompletedAt: number
+  ): void {
+    if (
+      workingStatusObserved &&
+      !requiresFreshWorking &&
+      !turnCompletedAtAlreadyNotified(turnCompletedAt)
+    ) {
+      clearPendingHookDone()
+      clearPendingCodexAttention()
+      const completionPayload: AgentCompletionStatusSnapshot = {
+        ...payload,
+        state: 'done',
+        // Why: the turn's real end time, not an offset fabricated from the pinned working
+        // stateStartedAt — the notification id is built from this, so consecutive turns in one
+        // working-run must not collapse onto a single banner.
+        stateStartedAt: turnCompletedAt
+      }
+      lastCompletionIdentity = {
+        source: 'hook',
+        identity: completionIdentityFor('done', payload.agentType, turnCompletedAt),
+        agentIdentity: hookCompletionAgentIdentity(payload),
+        lastTurnCompletedAtNotified: turnCompletedAt
+      }
+      dispatchCompletion('hook', payload.agentType ?? options.paneKey, {
+        agentStatus: completionPayload,
+        completionIdentity: lastCompletionIdentity,
+        notifyWithoutLifecycle: true
+      })
+    }
+    options.dispatchHookLifecycle?.(payload)
+  }
+
   function observeHookStatus(payload: AgentCompletionStatusSnapshot): void {
     recordPaneActivity()
     if (options.shouldSuppressHookCompletion?.(payload)) {
@@ -792,6 +880,10 @@ export function createAgentCompletionCoordinator(
       establishAgentEvidence()
     }
     if (payload.state === 'working') {
+      if (isFiniteTurnCompletedAt(payload.turnCompletedAt)) {
+        observeTurnCompletedWhileBackgroundWorking(payload, payload.turnCompletedAt)
+        return
+      }
       clearPendingHookDone()
       // Why: resumed work cancels the debounced attention so a self-resolving pause never notifies.
       clearPendingCodexAttention()
@@ -822,6 +914,21 @@ export function createAgentCompletionCoordinator(
       clearPendingCodexAttention()
       if (isRecognizedAgentType(payload.agentType)) {
         establishAgentEvidence()
+      }
+      if (turnCompletedAtAlreadyNotified(payload.turnCompletedAt)) {
+        // Why: this `done` is the all-clear tail of a turn whose completion was already
+        // announced from the gated Stop; drain it for pane lifecycle only (#13245).
+        clearPendingHookDone()
+        const allClearIdentity = hookCompletionIdentity(payload)
+        if (allClearIdentity) {
+          lastCompletionIdentity = {
+            source: 'hook',
+            identity: allClearIdentity,
+            agentIdentity: hookCompletionAgentIdentity(payload)
+          }
+        }
+        options.dispatchHookLifecycle?.(payload)
+        return
       }
       const hookIdentity = hookCompletionIdentity(payload)
       if (
