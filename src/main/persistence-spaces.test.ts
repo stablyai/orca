@@ -97,7 +97,7 @@ describe('Space persistence', () => {
       'space-a',
       'space-b'
     ])
-    expect(store.getRepos().map((entry) => entry.spaceId)).toEqual([null, 'space-a'])
+    expect(store.getRepos().map((entry) => entry.spaceId)).toEqual([undefined, 'space-a'])
     expect(store.getUI()).toMatchObject({
       activeSpaceId: DEFAULT_SPACE_ID,
       lastWorkspaceKeyBySpaceId: { 'space-a': 'folder:folder-1' }
@@ -158,7 +158,7 @@ describe('Space persistence', () => {
 
     expect(store.moveProjectToSpace('shared', 'space-a', 'ssh:server')?.spaceId).toBe('space-a')
     expect(store.getRepos().map((entry) => entry.spaceId ?? null)).toEqual([null, 'space-a'])
-    expect(store.moveProjectToSpace('shared', 'space-gone', 'ssh:server')?.spaceId).toBeNull()
+    expect(store.moveProjectToSpace('shared', 'space-gone', 'ssh:server')?.spaceId).toBeUndefined()
     expect(store.moveProjectToSpace('missing', 'space-a', 'local')).toBeNull()
   })
 

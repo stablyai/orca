@@ -9,9 +9,11 @@ import type {
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   DEFAULT_SPACE_ID,
+  clearRepoSpaceMembership,
   createSpaceWorkspaceSelectionKey,
   createDefaultSpace,
   getSpaceById,
+  isDefaultSpaceId,
   isRepoInSpace,
   normalizeActiveSpaceId,
   normalizeLastWorkspaceKeyBySpaceId,
@@ -216,7 +218,22 @@ export const createSpacesSlice: StateCreator<AppState, [], [], SpacesSlice> = (s
       return (await mutate(() => spacesApi()?.delete?.({ spaceId }))) !== null
     },
 
-    moveProjectToSpace: async (projectId, spaceId, hostId) =>
-      (await mutate(() => spacesApi()?.moveProject?.({ projectId, spaceId, hostId }))) !== null
+    moveProjectToSpace: async (projectId, spaceId, hostId) => {
+      const moved = await mutate(() => spacesApi()?.moveProject?.({ projectId, spaceId, hostId }))
+      if (!moved) {
+        return false
+      }
+      const storedSpaceId = isDefaultSpaceId(spaceId) ? null : spaceId
+      set((state) => ({
+        repos: state.repos.map((repo) =>
+          repo.id === projectId && getRepoExecutionHostId(repo) === hostId
+            ? storedSpaceId
+              ? { ...repo, spaceId: storedSpaceId }
+              : clearRepoSpaceMembership(repo)
+            : repo
+        )
+      }))
+      return true
+    }
   }
 }

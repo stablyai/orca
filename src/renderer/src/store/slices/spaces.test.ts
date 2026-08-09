@@ -218,4 +218,35 @@ describe('spaces slice', () => {
     expect(consoleError).toHaveBeenCalled()
     consoleError.mockRestore()
   })
+
+  it('updates only the addressed host project after moving it', async () => {
+    const store = createTestAppStore()
+    store.setState({
+      repos: [
+        makeRepo('shared', null),
+        { ...makeRepo('shared', null), executionHostId: 'ssh:server' }
+      ]
+    })
+    spacesApi.moveProject.mockResolvedValue(true)
+    spacesApi.list.mockResolvedValue([createDefaultSpace(), makeSpace(CUSTOM_SPACE_ID)])
+
+    await store.getState().moveProjectToSpace('shared', CUSTOM_SPACE_ID, 'ssh:server')
+
+    expect(store.getState().repos).toEqual([
+      makeRepo('shared', null),
+      { ...makeRepo('shared', CUSTOM_SPACE_ID), executionHostId: 'ssh:server' }
+    ])
+  })
+
+  it('keeps Default membership absent after moving a project back', async () => {
+    const store = createTestAppStore()
+    store.setState({ repos: [makeRepo('repo-1', CUSTOM_SPACE_ID)] })
+    spacesApi.moveProject.mockResolvedValue(true)
+    spacesApi.list.mockResolvedValue([createDefaultSpace(), makeSpace(CUSTOM_SPACE_ID)])
+
+    await store.getState().moveProjectToSpace('repo-1', DEFAULT_SPACE_ID, 'local')
+
+    expect(store.getState().repos[0]?.spaceId).toBeUndefined()
+    expect(store.getState().repos[0]).not.toHaveProperty('spaceId')
+  })
 })

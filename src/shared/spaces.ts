@@ -153,11 +153,20 @@ export function isRepoInSpace(
   return resolveSpaceId(repo.spaceId) === resolveSpaceId(spaceId)
 }
 
+export function clearRepoSpaceMembership<T extends Repo>(repo: T): T {
+  if (repo.spaceId === undefined) {
+    return repo
+  }
+  const next = { ...repo }
+  delete next.spaceId
+  return next
+}
+
 /** A repo pointing at a deleted Space would show in no Space at all; send it back to Default. */
 export function clearMissingSpaceMemberships(repos: Repo[], spaces: readonly Space[]): Repo[] {
   const spaceIds = new Set(spaces.map((space) => space.id))
   return repos.map((repo) =>
-    repo.spaceId && !spaceIds.has(repo.spaceId) ? { ...repo, spaceId: null } : repo
+    repo.spaceId && !spaceIds.has(repo.spaceId) ? clearRepoSpaceMembership(repo) : repo
   )
 }
 

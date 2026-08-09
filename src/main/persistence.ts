@@ -230,6 +230,7 @@ import {
 import {
   DEFAULT_SPACE_ID,
   clearMissingSpaceMemberships,
+  clearRepoSpaceMembership,
   createSpace,
   normalizeActiveSpaceId,
   normalizeLastWorkspaceKeyBySpaceId,
@@ -4479,7 +4480,7 @@ export class Store {
     }
     this.state.spaces = remaining
     this.state.repos = this.state.repos.map((repo) =>
-      repo.spaceId === spaceId ? { ...repo, spaceId: null } : repo
+      repo.spaceId === spaceId ? clearRepoSpaceMembership(repo) : repo
     )
     if (this.state.ui) {
       this.state.ui.lastWorkspaceKeyBySpaceId = normalizeLastWorkspaceKeyBySpaceId(
@@ -4503,7 +4504,12 @@ export class Store {
     if (!repo) {
       return null
     }
-    repo.spaceId = this.normalizeStoredSpaceId(spaceId)
+    const storedSpaceId = this.normalizeStoredSpaceId(spaceId)
+    if (storedSpaceId) {
+      repo.spaceId = storedSpaceId
+    } else {
+      delete repo.spaceId
+    }
     this.scheduleSave()
     return this.hydrateRepo(repo)
   }

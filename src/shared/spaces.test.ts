@@ -123,7 +123,7 @@ describe('Space membership', () => {
 
     expect(result[0]).toBe(valid)
     expect(result[1]).toBe(unassigned)
-    expect(result[2]?.spaceId).toBeNull()
+    expect(result[2]?.spaceId).toBeUndefined()
   })
 })
 
