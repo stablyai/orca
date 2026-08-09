@@ -41,16 +41,16 @@ export function ArtifactsSettingsPane({
             key: 'enable',
             title: translate(
               'auto.components.settings.artifacts.enableStepTitle',
-              'Allow publishing first'
+              'Enable artifact sharing'
             ),
             description: isWebClient
               ? translate(
                   'auto.components.settings.artifacts.enableStepWebDescription',
-                  'Open Settings → Artifacts in the Orca desktop app on the host device and turn publishing on. Until then every share fails with artifact_sharing_disabled.'
+                  'Open Settings → Artifacts in the Orca desktop app on the host device and enable publishing.'
                 )
               : translate(
                   'auto.components.settings.artifacts.enableStepDescription',
-                  'Turn on “Allow publishing public artifact links” above. Until then every share fails with artifact_sharing_disabled.'
+                  'Turn on “Allow publishing public artifact links” above.'
                 )
           }
         ]),
@@ -58,19 +58,19 @@ export function ArtifactsSettingsPane({
       key: 'share',
       title: translate(
         'auto.components.settings.artifacts.shareStepTitle',
-        'Share it from Orca or your agent'
+        'Choose a file to share'
       ),
       description: translate(
         'auto.components.settings.artifacts.shareStepDescription',
-        'Use Share as artifact in the browser or Markdown toolbar, or ask: “Share this HTML mock as an artifact.”'
+        'Open an HTML or Markdown file and select Share as artifact, or ask an agent to share it.'
       )
     },
     {
       key: 'link',
-      title: translate('auto.components.settings.artifacts.linkStepTitle', 'Share the public link'),
+      title: translate('auto.components.settings.artifacts.linkStepTitle', 'Copy the public link'),
       description: translate(
         'auto.components.settings.artifacts.linkStepDescription',
-        'Orca creates a link that anyone with the URL can view.'
+        'After publishing, copy the link and send it to your team.'
       )
     },
     {
@@ -78,7 +78,7 @@ export function ArtifactsSettingsPane({
       title: translate('auto.components.settings.artifacts.manageStepTitle', 'Manage it in Orca'),
       description: translate(
         'auto.components.settings.artifacts.manageStepDescription',
-        'Open Artifacts from the sidebar to revisit or delete links owned by your account.'
+        'Open Artifacts from the sidebar to preview or remove links.'
       )
     }
   ]
@@ -94,11 +94,11 @@ export function ArtifactsSettingsPane({
           isWebClient
             ? translate(
                 'auto.components.settings.artifacts.allowPublishingWebDescription',
-                'Desktop only. This capability is granted on the device running Orca — open Settings → Artifacts there to change it. Shown read-only here so it matches what that device enforces.'
+                'Desktop only. Open Settings → Artifacts on the host device to change this setting.'
               )
             : translate(
                 'auto.components.settings.artifacts.allowPublishingDescription',
-                'Off by default. When on, anything running on this device — your agents and the orca CLI — can upload HTML and Markdown files to your Orca account and mint links anyone with the URL can open. Turning it off does not delete existing links — remove those from Artifacts.'
+                'Publish HTML and Markdown files as links anyone with the URL can open. Existing links remain until you delete them from Artifacts.'
               )
         }
         checked={sharingEnabled}
@@ -153,11 +153,11 @@ export function ArtifactsSettingsPane({
             {sharingEnabled
               ? translate(
                   'auto.components.settings.artifacts.howToDescription',
-                  'Share an open HTML or Markdown file from its toolbar, or ask your agent. Orca uploads it with your account.'
+                  'Publish HTML or Markdown files as public links, then share them with your team.'
                 )
               : translate(
                   'auto.components.settings.artifacts.howToDescriptionDisabled',
-                  'Publishing is off, so nothing on this device can create a public link yet. Allow it first, then share from an open HTML or Markdown file or ask your agent.'
+                  'Enable artifact sharing above to publish HTML or Markdown files as public links.'
                 )}
           </p>
         </div>
