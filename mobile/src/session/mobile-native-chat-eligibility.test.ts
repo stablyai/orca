@@ -115,6 +115,24 @@ describe('resolveMobileNativeChat', () => {
     )
   })
 
+  // Why: like omp, OpenCode reports only a session id, so mobile can only show
+  // its chat when the serving host holds the OpenCode SQLite DB.
+  it('admits opencode only when its transcript is readable by the serving host', () => {
+    const tab = { type: 'terminal', launchAgent: 'opencode' }
+    expect(resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable(null))).toMatchObject({
+      agent: 'opencode'
+    })
+    expect(
+      resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable('runtime-ssh-environment'))
+    ).toMatchObject({ agent: 'opencode' })
+    expect(
+      resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable('model-a-ssh'))
+    ).toBeNull()
+    expect(canShowMobileNativeChat(tab, isMobileNativeChatTranscriptReadable('model-a-ssh'))).toBe(
+      false
+    )
+  })
+
   it('returns null for a plain shell (no agent)', () => {
     expect(resolveMobileNativeChat({ type: 'terminal' })).toBeNull()
   })
