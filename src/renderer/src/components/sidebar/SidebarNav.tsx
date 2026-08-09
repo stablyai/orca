@@ -77,7 +77,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const activityActive = activeView === 'activity'
   const mobileActive = activeView === 'mobile'
   const artifactsActive = activeView === 'artifacts'
-  const activityUnreadCount = useActivityUnreadCount(showAgentsButton, 'sidebar-badge')
+  const activityUnreadCount = useActivityUnreadCount(showAgentsButton)
   const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
   const hideAutomationsButton = React.useCallback(() => {
     void updateSettings({ showAutomationsButton: false })

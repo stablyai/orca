@@ -13,15 +13,10 @@ import {
 
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
-import {
-  agentTypeToIconAgent,
-  formatAgentTypeLabel,
-  isExplicitAgentStatusFresh
-} from '@/lib/agent-status'
+import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { Button } from '@/components/ui/button'
@@ -61,75 +56,20 @@ import {
   type ActivityPortalReadinessLatch,
   type ActivityPortalReadinessStatus
 } from './activity-portal-readiness-oscillation'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStateHistoryEntry,
-  type AgentStatusEntry,
-  type AgentStatusState,
-  type AgentType,
-  type MigrationUnsupportedPtyEntry
-} from '../../../../shared/agent-status-types'
+import type { Repo } from '../../../../shared/types'
+import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
-import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
-import {
-  getActivityThreadTaskTitle,
-  getActivityThreadWorkspaceTitle,
-  resolveActivityThreadStatusPreview
-} from '@/lib/activity-thread-display'
+import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import type { ActivityEvent, AgentPaneThread } from './activity-events'
+import { buildActivityEvents, buildAgentPaneThreads } from './agent-pane-threads'
 
 type ThreadReadFilter = 'all' | 'unread'
 type ActivityGroupBy = 'status' | 'project' | 'worktree' | 'agent'
-type ActivityEventState = Extract<AgentStatusState, 'done' | 'blocked' | 'waiting'>
-type ActivityLiveAgentState = Extract<AgentStatusState, 'working' | 'blocked' | 'waiting'>
 type ActivityStatusGroupId = 'working' | 'blocked' | 'waiting' | 'done' | 'interrupted'
-
-type ActivityEvent = {
-  id: string
-  state: ActivityEventState
-  timestamp: number
-  worktree: Worktree
-  repo: Repo | null
-  entry: AgentStatusEntry
-  tab: TerminalTab
-  agentType: AgentType
-  agentAlive: boolean
-  migrationUnsupportedPtyId?: string
-  unread: boolean
-}
-
-type ActivityLiveAgentSnapshot = {
-  state: ActivityLiveAgentState
-  timestamp: number
-  worktree: Worktree
-  repo: Repo | null
-  entry: AgentStatusEntry
-  tab: TerminalTab
-  agentType: AgentType
-}
-
-// Why: keyed per agent pane (tab + leaf id), not per workspace, so the list shows one row per agent; paneKey is `${tabId}:${leafId}`.
-type AgentPaneThread = {
-  paneKey: string
-  paneTitle: string
-  worktree: Worktree
-  repo: Repo | null
-  tab: TerminalTab
-  agentType: AgentType
-  currentAgentState: ActivityLiveAgentState | null
-  currentAgentEntry: AgentStatusEntry | null
-  responsePreview: string
-  latestTimestamp: number
-  latestEvent: ActivityEvent | null
-  events: ActivityEvent[]
-  migrationUnsupportedPtyId?: string
-  unread: boolean
-}
 
 type ActivityThreadGroup = {
   key: string
@@ -161,7 +101,17 @@ const ACTIVITY_STATUS_GROUP_ORDER: ActivityStatusGroupId[] = [
   'done',
   'interrupted'
 ]
-const STANDALONE_ACTIVITY_WORKTREE_REPO_ID = '__activity_standalone__'
+const ACTIVITY_READ_FILTER_STORAGE_KEY = 'orca.activity.read-filter'
+
+function readStoredActivityReadFilter(): ThreadReadFilter {
+  try {
+    return window.localStorage.getItem(ACTIVITY_READ_FILTER_STORAGE_KEY) === 'unread'
+      ? 'unread'
+      : 'all'
+  } catch {
+    return 'all'
+  }
+}
 
 const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
@@ -445,411 +395,6 @@ function agentMeta(event: ActivityEvent): string {
     return event.entry.interrupted ? `${agent} interrupted` : `${agent} completed`
   }
   return event.state === 'waiting' ? `${agent} waiting` : `${agent} blocked`
-}
-
-// Why: rows need a stable task identity across follow-up turns; the live turn prompt ("yes", "ok proceed") must not replace the task title.
-function paneTitleForEntry(
-  entry: AgentStatusEntry,
-  tab: TerminalTab,
-  generatedTitlesEnabled: boolean
-): string {
-  return getActivityThreadTaskTitle({ entry, tab, generatedTitlesEnabled })
-}
-
-function paneTitleForEvent(event: ActivityEvent, generatedTitlesEnabled: boolean): string {
-  return paneTitleForEntry(event.entry, event.tab, generatedTitlesEnabled)
-}
-
-function statusPreviewForEntry(
-  entry: AgentStatusEntry,
-  agentState?: AgentStatusState | null,
-  previousPreview?: string
-): string {
-  return resolveActivityThreadStatusPreview(entry, agentState, previousPreview)
-}
-
-function isActivityEventState(state: AgentStatusState): state is ActivityEventState {
-  return state === 'done' || state === 'blocked' || state === 'waiting'
-}
-
-function isActivityLiveAgentState(state: AgentStatusState): state is ActivityLiveAgentState {
-  return state === 'working' || state === 'blocked' || state === 'waiting'
-}
-
-function freshActivityLiveAgentState(
-  entry: AgentStatusEntry,
-  now: number
-): ActivityLiveAgentState | null {
-  if (!isActivityLiveAgentState(entry.state)) {
-    return null
-  }
-  return isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS) ? entry.state : null
-}
-
-function standaloneActivityWorktree(worktreeId: string): Worktree {
-  const displayName =
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? 'Floating terminal' : 'Standalone terminal'
-  return {
-    id: worktreeId,
-    repoId: STANDALONE_ACTIVITY_WORKTREE_REPO_ID,
-    path: '',
-    head: '',
-    branch: displayName,
-    isBare: false,
-    isMainWorktree: false,
-    displayName,
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0
-  }
-}
-
-// Why: per-pane cap guarantees each agent appears in the left list even when one pane has a long history.
-const EVENTS_PER_PANE_CAP = 5
-
-function historyEntrySnapshot(
-  entry: AgentStatusEntry,
-  history: AgentStateHistoryEntry
-): AgentStatusEntry {
-  return {
-    ...entry,
-    state: history.state,
-    prompt: history.prompt,
-    updatedAt: history.startedAt,
-    stateStartedAt: history.startedAt,
-    stateHistory: [],
-    toolName: undefined,
-    toolInput: undefined,
-    lastAssistantMessage: undefined,
-    interrupted: history.interrupted
-  }
-}
-
-function appendActivityEvent(args: {
-  events: ActivityEvent[]
-  seenEventIds: Set<string>
-  state: ActivityEventState
-  timestamp: number
-  worktree: Worktree
-  repo: Repo | null
-  entry: AgentStatusEntry
-  tab: TerminalTab
-  agentType: AgentType
-  agentAlive: boolean
-  acknowledgedAt: number
-  migrationUnsupportedPtyId?: string
-}): void {
-  const id = `agent:${args.entry.paneKey}:${args.state}:${args.timestamp}`
-  if (args.seenEventIds.has(id)) {
-    return
-  }
-  args.seenEventIds.add(id)
-  args.events.push({
-    id,
-    state: args.state,
-    timestamp: args.timestamp,
-    worktree: args.worktree,
-    repo: args.repo,
-    entry: args.entry,
-    tab: args.tab,
-    agentType: args.agentType,
-    agentAlive: args.agentAlive,
-    migrationUnsupportedPtyId: args.migrationUnsupportedPtyId,
-    unread: args.acknowledgedAt < args.timestamp
-  })
-}
-
-function appendActivityEventsForEntry(args: {
-  events: ActivityEvent[]
-  seenEventIds: Set<string>
-  entry: AgentStatusEntry
-  worktree: Worktree
-  repo: Repo | null
-  tab: TerminalTab
-  agentType: AgentType
-  agentAlive: boolean
-  acknowledgedAt: number
-  migrationUnsupportedPtyId?: string
-}): void {
-  // Why: Activity is append-only; when a pane continues (done→working), stateHistory is the only record of the previous done/blocking event.
-  for (const history of args.entry.stateHistory) {
-    if (!isActivityEventState(history.state)) {
-      continue
-    }
-    appendActivityEvent({
-      ...args,
-      state: history.state,
-      timestamp: history.startedAt,
-      entry: historyEntrySnapshot(args.entry, history)
-    })
-  }
-
-  // Why: SessionStart creates an idle row, not an "Agent finished" activity event (STA-3386).
-  if (!isActivityEventState(args.entry.state) || args.entry.sessionBoundary === true) {
-    return
-  }
-  appendActivityEvent({
-    ...args,
-    state: args.entry.state,
-    timestamp: args.entry.stateStartedAt
-  })
-}
-
-export function buildActivityEvents(args: {
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
-  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
-  tabsByWorktree: Record<string, TerminalTab[]>
-  worktreeMap: Map<string, Worktree>
-  repoMap: Map<string, Repo>
-  acknowledgedAgentsByPaneKey: Record<string, number>
-  now: number
-}): {
-  events: ActivityEvent[]
-  liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
-} {
-  const events: ActivityEvent[] = []
-  const seenEventIds = new Set<string>()
-  const tabContext = new Map<string, { worktree: Worktree; tab: TerminalTab }>()
-  const liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot> = {}
-
-  for (const [worktreeId, tabs] of Object.entries(args.tabsByWorktree)) {
-    const worktree = args.worktreeMap.get(worktreeId) ?? standaloneActivityWorktree(worktreeId)
-    for (const tab of tabs) {
-      tabContext.set(tab.id, { worktree, tab })
-    }
-  }
-
-  for (const [paneKey, entry] of Object.entries(args.agentStatusByPaneKey)) {
-    const parsed = parsePaneKey(paneKey)
-    if (!parsed) {
-      continue
-    }
-    const context = tabContext.get(parsed.tabId)
-    if (!context) {
-      continue
-    }
-    const ackAt = args.acknowledgedAgentsByPaneKey[paneKey] ?? 0
-    // Why: live status is separate from history; a fresh working turn updates the thread without counting as an unread done/blocked/waiting event.
-    const liveState = freshActivityLiveAgentState(entry, args.now)
-    if (liveState) {
-      liveAgentByPaneKey[paneKey] = {
-        state: liveState,
-        timestamp: entry.stateStartedAt,
-        worktree: context.worktree,
-        repo: args.repoMap.get(context.worktree.repoId) ?? null,
-        entry,
-        tab: context.tab,
-        agentType: entry.agentType ?? 'unknown'
-      }
-    }
-    appendActivityEventsForEntry({
-      events,
-      seenEventIds,
-      worktree: context.worktree,
-      repo: args.repoMap.get(context.worktree.repoId) ?? null,
-      entry,
-      tab: context.tab,
-      agentType: entry.agentType ?? 'unknown',
-      agentAlive: true,
-      acknowledgedAt: ackAt
-    })
-  }
-
-  for (const unsupported of Object.values(args.migrationUnsupportedByPtyId ?? {})) {
-    const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
-    if (!entry) {
-      continue
-    }
-    const parsed = parsePaneKey(entry.paneKey)
-    if (!parsed) {
-      continue
-    }
-    const context = tabContext.get(parsed.tabId)
-    if (!context) {
-      continue
-    }
-    const ackAt = args.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0
-    liveAgentByPaneKey[entry.paneKey] = {
-      state: 'blocked',
-      timestamp: entry.stateStartedAt,
-      worktree: context.worktree,
-      repo: args.repoMap.get(context.worktree.repoId) ?? null,
-      entry,
-      tab: context.tab,
-      agentType: entry.agentType ?? 'unknown'
-    }
-    appendActivityEventsForEntry({
-      events,
-      seenEventIds,
-      worktree: context.worktree,
-      repo: args.repoMap.get(context.worktree.repoId) ?? null,
-      entry,
-      tab: context.tab,
-      agentType: entry.agentType ?? 'unknown',
-      agentAlive: false,
-      acknowledgedAt: ackAt,
-      migrationUnsupportedPtyId: unsupported.ptyId
-    })
-  }
-
-  for (const [paneKey, retained] of Object.entries(args.retainedAgentsByPaneKey)) {
-    if (!parsePaneKey(paneKey)) {
-      continue
-    }
-    const worktree =
-      args.worktreeMap.get(retained.worktreeId) ??
-      (args.tabsByWorktree[retained.worktreeId]
-        ? standaloneActivityWorktree(retained.worktreeId)
-        : null)
-    if (!worktree) {
-      continue
-    }
-    const ackAt = args.acknowledgedAgentsByPaneKey[paneKey] ?? 0
-    appendActivityEventsForEntry({
-      events,
-      seenEventIds,
-      worktree,
-      repo: args.repoMap.get(worktree.repoId) ?? null,
-      entry: retained.entry,
-      tab: retained.tab,
-      agentType: retained.agentType,
-      agentAlive: false,
-      acknowledgedAt: ackAt
-    })
-  }
-
-  const sorted = events.sort((a, b) => b.timestamp - a.timestamp)
-  const perPaneCount = new Map<string, number>()
-  const includedEventIds = new Set<string>()
-  const capped: ActivityEvent[] = []
-  // Why: reserve each pane's newest event before the global 80-event cap so the validator's >16 panes × ≥5 events can't push a pane out of the window and hide it.
-  for (const event of sorted) {
-    const paneKey = event.entry.paneKey
-    if (perPaneCount.has(paneKey)) {
-      continue
-    }
-    if (capped.length >= 80) {
-      break
-    }
-    perPaneCount.set(paneKey, 1)
-    includedEventIds.add(event.id)
-    capped.push(event)
-  }
-  for (const event of sorted) {
-    if (includedEventIds.has(event.id)) {
-      continue
-    }
-    if (capped.length >= 80) {
-      break
-    }
-    const paneKey = event.entry.paneKey
-    const count = perPaneCount.get(paneKey) ?? 0
-    if (count >= EVENTS_PER_PANE_CAP) {
-      continue
-    }
-    perPaneCount.set(paneKey, count + 1)
-    includedEventIds.add(event.id)
-    capped.push(event)
-  }
-  return { events: capped.sort((a, b) => b.timestamp - a.timestamp), liveAgentByPaneKey }
-}
-
-export function buildAgentPaneThreads(args: {
-  events: ActivityEvent[]
-  liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
-  generatedTitlesEnabled?: boolean
-}): AgentPaneThread[] {
-  const generatedTitlesEnabled = args.generatedTitlesEnabled === true
-  const byPaneKey = new Map<string, AgentPaneThread>()
-  for (const event of args.events) {
-    const paneKey = event.entry.paneKey
-    const existing = byPaneKey.get(paneKey)
-    if (!existing) {
-      byPaneKey.set(paneKey, {
-        paneKey,
-        paneTitle: paneTitleForEvent(event, generatedTitlesEnabled),
-        worktree: event.worktree,
-        repo: event.repo,
-        tab: event.tab,
-        agentType: event.agentType,
-        currentAgentState: null,
-        currentAgentEntry: null,
-        responsePreview: statusPreviewForEntry(event.entry, event.state),
-        latestTimestamp: event.timestamp,
-        latestEvent: event,
-        events: [event],
-        migrationUnsupportedPtyId: event.migrationUnsupportedPtyId,
-        unread: event.unread
-      })
-      continue
-    }
-    existing.events.push(event)
-    existing.unread = existing.unread || event.unread
-    existing.migrationUnsupportedPtyId =
-      existing.migrationUnsupportedPtyId ?? event.migrationUnsupportedPtyId
-    if (!existing.latestEvent || event.timestamp > existing.latestEvent.timestamp) {
-      existing.latestEvent = event
-      existing.paneTitle = paneTitleForEvent(event, generatedTitlesEnabled)
-      existing.agentType = event.agentType
-      existing.tab = event.tab
-      existing.responsePreview = statusPreviewForEntry(
-        event.entry,
-        event.state,
-        existing.responsePreview
-      )
-      existing.latestTimestamp = event.timestamp
-    }
-  }
-
-  for (const [paneKey, liveAgent] of Object.entries(args.liveAgentByPaneKey)) {
-    const existing = byPaneKey.get(paneKey)
-    if (!existing) {
-      byPaneKey.set(paneKey, {
-        paneKey,
-        paneTitle: paneTitleForEntry(liveAgent.entry, liveAgent.tab, generatedTitlesEnabled),
-        worktree: liveAgent.worktree,
-        repo: liveAgent.repo,
-        tab: liveAgent.tab,
-        agentType: liveAgent.agentType,
-        currentAgentState: liveAgent.state,
-        currentAgentEntry: liveAgent.entry,
-        responsePreview: statusPreviewForEntry(liveAgent.entry, liveAgent.state),
-        latestTimestamp: liveAgent.timestamp,
-        latestEvent: null,
-        events: [],
-        unread: false
-      })
-      continue
-    }
-    // Why: row title/time/target must follow the active turn (not historical events) so a running agent never shows the previous prompt as primary.
-    existing.paneTitle = paneTitleForEntry(liveAgent.entry, liveAgent.tab, generatedTitlesEnabled)
-    existing.worktree = liveAgent.worktree
-    existing.repo = liveAgent.repo
-    existing.tab = liveAgent.tab
-    existing.agentType = liveAgent.agentType
-    existing.currentAgentState = liveAgent.state
-    existing.currentAgentEntry = liveAgent.entry
-    existing.responsePreview = statusPreviewForEntry(
-      liveAgent.entry,
-      liveAgent.state,
-      existing.responsePreview
-    )
-    existing.latestTimestamp = liveAgent.timestamp
-  }
-
-  return Array.from(byPaneKey.values())
-    .map((thread) => ({
-      ...thread,
-      events: [...thread.events].sort((a, b) => b.timestamp - a.timestamp)
-    }))
-    .sort((a, b) => b.latestTimestamp - a.latestTimestamp)
 }
 
 function EventTime({ timestamp }: { timestamp: number }): React.JSX.Element {
@@ -1403,7 +948,8 @@ function ThreadRow({
 }
 
 export default function ActivityPrototypePage(): React.JSX.Element {
-  const [readFilter, setReadFilter] = useState<ThreadReadFilter>('all')
+  // Why: the unread-only toggle is a sticky viewing mode, not a per-visit query — restore it across page opens.
+  const [readFilter, setReadFilter] = useState<ThreadReadFilter>(readStoredActivityReadFilter)
   const [groupBy, setGroupBy] = useState<ActivityGroupBy>('status')
   const [query, setQuery] = useState('')
   const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
@@ -1738,6 +1284,15 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     activateAndRevealWorktree(thread.worktree.id)
   }
 
+  const updateReadFilter = (next: ThreadReadFilter): void => {
+    setReadFilter(next)
+    try {
+      window.localStorage.setItem(ACTIVITY_READ_FILTER_STORAGE_KEY, next)
+    } catch {
+      // Best-effort; the filter falls back to 'all' next mount if storage is unavailable.
+    }
+  }
+
   const hasUnreadThreads = allThreads.some((thread) => thread.unread)
 
   const markAllThreadsRead = (): void => {
@@ -1817,7 +1372,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                 <TooltipTrigger asChild>
                   <Toggle
                     pressed={readFilter === 'unread'}
-                    onPressedChange={(pressed) => setReadFilter(pressed ? 'unread' : 'all')}
+                    onPressedChange={(pressed) => updateReadFilter(pressed ? 'unread' : 'all')}
                     variant="outline"
                     size="sm"
                     className={cn(
