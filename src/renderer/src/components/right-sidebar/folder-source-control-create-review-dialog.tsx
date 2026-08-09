@@ -5,6 +5,7 @@ import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
+import type { LocalizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { CreateHostedReviewComposer } from './CreateHostedReviewComposer'
 import type { FolderGitTarget } from './folder-source-control-repos'
@@ -19,6 +20,8 @@ export function FolderSourceControlCreateReviewDialog({
   branch,
   baseRef,
   upstream,
+  reviewCopy,
+  hasUncommittedChanges,
   onCreated
 }: {
   open: boolean
@@ -28,6 +31,8 @@ export function FolderSourceControlCreateReviewDialog({
   branch: string | null | undefined
   baseRef: string | undefined
   upstream: GitUpstreamStatus | null | undefined
+  reviewCopy: LocalizedHostedReviewCopy
+  hasUncommittedChanges: boolean
   onCreated?: () => void
 }): React.JSX.Element {
   const getHostedReviewCreationEligibility = useAppStore(
@@ -61,7 +66,7 @@ export function FolderSourceControlCreateReviewDialog({
       connectionId: target.connectionId ?? null,
       branch: branch ?? '',
       base: baseRef,
-      hasUncommittedChanges: false,
+      hasUncommittedChanges,
       hasUpstream: upstream?.hasUpstream,
       ahead: upstream?.ahead,
       behind: upstream?.behind
@@ -103,10 +108,19 @@ export function FolderSourceControlCreateReviewDialog({
     return () => {
       stale = true
     }
-  }, [baseRef, branch, getHostedReviewCreationEligibility, open, target, upstream, worktreePath])
+  }, [
+    baseRef,
+    branch,
+    getHostedReviewCreationEligibility,
+    hasUncommittedChanges,
+    open,
+    target,
+    upstream,
+    worktreePath
+  ])
 
   const handleCreate = useCallback(async () => {
-    if (!eligibility || !branch || creating) {
+    if (!eligibility || !branch || creating || !base.trim() || !title.trim()) {
       return
     }
     setCreating(true)
@@ -152,7 +166,7 @@ export function FolderSourceControlCreateReviewDialog({
 
   const copy = eligibility
     ? localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(eligibility.provider))
-    : null
+    : reviewCopy
 
   return (
     <Dialog
@@ -166,17 +180,9 @@ export function FolderSourceControlCreateReviewDialog({
       <DialogContent className="flex max-h-[min(85vh,36rem)] max-w-xl flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-sm">
-            {copy
-              ? translate(
-                  'auto.components.right.sidebar.SourceControl.e1970d327d',
-                  'New {{value0}}',
-                  { value0: copy.reviewLabel }
-                )
-              : translate(
-                  'auto.components.right.sidebar.SourceControl.e1970d327d',
-                  'New {{value0}}',
-                  { value0: '' }
-                )}
+            {translate('auto.components.right.sidebar.SourceControl.e1970d327d', 'New {{value0}}', {
+              value0: copy.reviewLabel
+            })}
           </DialogTitle>
         </DialogHeader>
         <div className="min-h-0 overflow-y-auto scrollbar-sleek">
@@ -185,7 +191,7 @@ export function FolderSourceControlCreateReviewDialog({
               {translate(
                 'auto.components.right.sidebar.source.control.primary.action.h3i4j5k607',
                 'Checking whether this branch can create a {{value0}}…',
-                { value0: copy?.reviewLabel ?? '' }
+                { value0: copy.reviewLabel }
               )}
             </div>
           ) : loadError ? (
@@ -217,7 +223,7 @@ export function FolderSourceControlCreateReviewDialog({
               createError={createError}
               isCreating={creating}
               primaryAction={{
-                disabled: false,
+                disabled: base.trim().length === 0 || title.trim().length === 0,
                 title: translate(
                   'auto.components.right.sidebar.source.control.primary.action.e7ffa46946',
                   'Create {{value0}}',

@@ -59,6 +59,8 @@ export default function FolderSourceControl(): React.JSX.Element | null {
   settingsRef.current = settings
   const worktreesByRepoRef = useRef(worktreesByRepo)
   worktreesByRepoRef.current = worktreesByRepo
+  const statusRefreshAbortRef = useRef<AbortController | null>(null)
+  const statusRefreshPromiseRef = useRef<Promise<void> | null>(null)
   const [repoStatuses, setRepoStatuses] = useState<Record<string, RepoStatusState>>({})
   const [scannedRepos, setScannedRepos] = useState<NestedRepoCandidate[]>([])
   const [scanning, setScanning] = useState(false)
@@ -181,17 +183,40 @@ export default function FolderSourceControl(): React.JSX.Element | null {
     [targets]
   )
 
+  const runRefreshStatuses = useCallback(
+    (force = false): Promise<void> => {
+      if (statusRefreshPromiseRef.current) {
+        if (!force) {
+          return statusRefreshPromiseRef.current
+        }
+        statusRefreshAbortRef.current?.abort()
+      }
+      const controller = new AbortController()
+      const promise = refreshStatuses(controller.signal)
+      let tracked: Promise<void>
+      tracked = promise.finally(() => {
+        if (statusRefreshPromiseRef.current === tracked) {
+          statusRefreshPromiseRef.current = null
+          statusRefreshAbortRef.current = null
+        }
+      })
+      statusRefreshPromiseRef.current = tracked
+      statusRefreshAbortRef.current = controller
+      return tracked
+    },
+    [refreshStatuses]
+  )
+
   useEffect(() => {
-    const controller = new AbortController()
-    void refreshStatuses(controller.signal)
+    void runRefreshStatuses()
     const interval = window.setInterval(() => {
-      void refreshStatuses()
+      void runRefreshStatuses()
     }, FOLDER_STATUS_POLL_MS)
     return () => {
-      controller.abort()
+      statusRefreshAbortRef.current?.abort()
       window.clearInterval(interval)
     }
-  }, [refreshStatuses])
+  }, [runRefreshStatuses])
 
   const toggleExpanded = useCallback((key: string) => {
     setExpandedRepoKeys((current) => {
@@ -245,7 +270,7 @@ export default function FolderSourceControl(): React.JSX.Element | null {
                     worktree={worktree}
                     statusState={repoStatuses[target.key]}
                     settings={settings}
-                    onBranchChanged={() => void refreshStatuses()}
+                    onBranchChanged={() => void runRefreshStatuses(true)}
                   />
                 </div>
               ) : null}

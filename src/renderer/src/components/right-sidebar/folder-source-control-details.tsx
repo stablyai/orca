@@ -1,7 +1,11 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
-import type { SourceControlViewMode, Worktree } from '../../../../shared/types'
+import type {
+  GitBranchCompareSummary,
+  SourceControlViewMode,
+  Worktree
+} from '../../../../shared/types'
 import { GitHistoryPanel } from './GitHistoryPanel'
 import {
   CreateReviewBlockedNotice,
@@ -129,6 +133,24 @@ export function FolderSourceControlDetails({
     () => getWorktreeGitIdentityDisplay({ branch: data.status?.branch, head: data.status?.head }),
     [data.status?.branch, data.status?.head]
   )
+  const branchCompareSummary = useMemo<GitBranchCompareSummary | null>(() => {
+    if (data.branchCompare.status === 'ready') {
+      return data.branchCompare.result.summary
+    }
+    if (data.branchCompare.status === 'error' && currentBaseRef) {
+      return {
+        baseRef: currentBaseRef,
+        baseOid: null,
+        compareRef: data.status?.branch ?? '',
+        headOid: data.status?.head ?? null,
+        mergeBase: null,
+        changedFiles: 0,
+        status: 'error',
+        errorMessage: data.branchCompare.error
+      }
+    }
+    return null
+  }, [currentBaseRef, data.branchCompare, data.status?.branch, data.status?.head])
 
   return (
     <div className="border-b border-border pb-2">
@@ -146,11 +168,11 @@ export function FolderSourceControlDetails({
         onToggleViewMode={() => setViewMode((current) => (current === 'list' ? 'tree' : 'list'))}
         onChangeBaseRef={() => setBaseRefDialogOpen(true)}
         onRefreshBranchCompare={() => void data.loadDetails()}
-        branchCompareReady={data.branchCompare.status === 'ready'}
+        branchCompareRefreshing={data.branchCompare.status === 'loading'}
         reviewCopy={data.reviewCopy}
       />
       <SourceControlBranchContextRow
-        summary={data.branchCompare.status === 'ready' ? data.branchCompare.result.summary : null}
+        summary={branchCompareSummary}
         compareBaseRef={currentBaseRef ?? null}
         headDisplay={headDisplay}
         upstreamStatus={data.status?.upstreamStatus ?? data.upstream ?? undefined}
@@ -226,6 +248,12 @@ export function FolderSourceControlDetails({
         branch={data.status?.branch}
         baseRef={currentBaseRef}
         upstream={data.status?.upstreamStatus ?? data.upstream}
+        reviewCopy={data.reviewCopy}
+        hasUncommittedChanges={(statusState?.status?.entries.length ?? 0) > 0}
+        onCreated={() => {
+          onBranchChanged?.()
+          void data.loadDetails()
+        }}
       />
       <SourceControlDiscardDialog
         pendingDiscard={mutations.pendingDiscard}

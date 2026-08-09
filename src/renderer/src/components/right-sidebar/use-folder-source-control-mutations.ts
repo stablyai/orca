@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { translate } from '@/i18n/i18n'
 import {
   bulkStageRuntimeGitPaths,
   commitRuntimeGit,
@@ -114,16 +115,9 @@ export function useFolderSourceControlMutations({
     [context, loadDetails, onBranchChanged, runOperation]
   )
 
-  const discardEntry = useCallback(
-    (entry: GitStatusEntry) => {
-      void runOperation(async () => {
-        await discardRuntimeGitPath(context, entry.path)
-        onBranchChanged?.()
-        await loadDetails()
-      })
-    },
-    [context, loadDetails, onBranchChanged, runOperation]
-  )
+  const discardEntry = useCallback((entry: GitStatusEntry) => {
+    setPendingDiscard({ kind: 'entry', entry })
+  }, [])
 
   const stageAllArea = useCallback(
     (area: 'unstaged' | 'untracked') => {
@@ -158,6 +152,12 @@ export function useFolderSourceControlMutations({
     }
     setPendingDiscard(null)
     if (pending.kind === 'entry') {
+      const entry = pending.entry
+      void runOperation(async () => {
+        await discardRuntimeGitPath(context, entry.path)
+        onBranchChanged?.()
+        await loadDetails()
+      })
       return
     }
     const area = pending.area
@@ -165,7 +165,7 @@ export function useFolderSourceControlMutations({
       return
     }
     void runOperation(() => discardAllArea(area))
-  }, [discardAllArea, pendingDiscard, runOperation])
+  }, [context, discardAllArea, loadDetails, onBranchChanged, pendingDiscard, runOperation])
 
   const handleCommit = useCallback(async () => {
     const message = commitMessage.trim()
@@ -177,7 +177,13 @@ export function useFolderSourceControlMutations({
     try {
       const result = await commitRuntimeGit(context, message)
       if (!result.success) {
-        setCommitError(result.error ?? 'Commit failed')
+        setCommitError(
+          result.error ??
+            translate(
+              'auto.components.right.sidebar.use.folder.source.control.mutations.ef03028f27',
+              'Commit failed'
+            )
+        )
         return
       }
       setCommitMessage('')

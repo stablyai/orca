@@ -156,7 +156,13 @@ export function useFolderSourceControlData({
       if (isCurrent()) {
         setHistory({
           status: 'error',
-          error: error instanceof Error ? error.message : 'Failed to load commits'
+          error:
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.right.sidebar.use.folder.source.control.data.8734e34338',
+                  'Failed to load commits'
+                )
         })
       }
     }

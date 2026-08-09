@@ -99,7 +99,7 @@ export function FolderSourceControlToolbar({
   onToggleViewMode,
   onChangeBaseRef,
   onRefreshBranchCompare,
-  branchCompareReady,
+  branchCompareRefreshing,
   reviewCopy
 }: {
   branch: string | null | undefined
@@ -115,7 +115,7 @@ export function FolderSourceControlToolbar({
   onToggleViewMode: () => void
   onChangeBaseRef: () => void
   onRefreshBranchCompare: () => void
-  branchCompareReady: boolean
+  branchCompareRefreshing: boolean
   reviewCopy: LocalizedHostedReviewCopy
 }): React.JSX.Element {
   return (
@@ -163,7 +163,7 @@ export function FolderSourceControlToolbar({
         type="button"
         className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
         onClick={onRefreshBranchCompare}
-        disabled={!branchCompareReady}
+        disabled={branchCompareRefreshing}
         aria-label={translate(
           'auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2',
           'Refresh commits'
@@ -177,7 +177,7 @@ export function FolderSourceControlToolbar({
         onToggleViewMode={onToggleViewMode}
         onChangeBaseRef={onChangeBaseRef}
         onRefreshBranchCompare={onRefreshBranchCompare}
-        branchCompareRefreshDisabled={!branchCompareReady}
+        branchCompareRefreshDisabled={branchCompareRefreshing}
         diffCommentCount={0}
         onExpandNotes={() => {}}
       />
