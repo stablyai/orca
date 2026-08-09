@@ -36,6 +36,7 @@ import {
   useWorktreeMap
 } from '@/store/selectors'
 import WorktreeCard, { type ActiveSurfaceVariant } from './WorktreeCard'
+import { getFolderSupervisionLabels } from './folder-supervision-labels'
 import { WorktreeSidebarDropIndicator } from './WorktreeSidebarDropIndicator'
 import {
   getProjectGroupHeaderSectionEndByGroupId,
@@ -1386,6 +1387,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const cyclicLineageIds = useMemo(
     () => getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap),
     [worktreeLineageById, worktreeMap]
+  )
+  const folderSupervisionLabels = useMemo(
+    () =>
+      getFolderSupervisionLabels({
+        worktrees,
+        folderWorkspaces,
+        workspaceLineageByChildKey
+      }),
+    [folderWorkspaces, workspaceLineageByChildKey, worktrees]
   )
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
   // Why: cross-group hovers hit-test a group the session never captured, so hold
@@ -4888,6 +4898,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         ? getLineageToggleHandler(lineageToggleGroupKey)
                         : undefined
                     }
+                    supervisionWorkspaceLabel={folderSupervisionLabels.get(itemRow.worktree.id)}
                   />
                 </div>
               )

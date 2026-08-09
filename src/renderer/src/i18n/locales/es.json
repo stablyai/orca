@@ -4473,6 +4473,7 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} está desconectado",
           "runtimeHostProject": "Proyecto en servidor de Orca",
           "runtimeHostProjectNamed": "Proyecto en {{hostName}}",
+          "supervisedInFolderWorkspace": "Supervisado en {{value0}}",
           "automationCreated": "Creado por automatización",
           "branchIdentity": "Rama",
           "branchFolderPathIdentity": "Rama o ruta de carpeta",

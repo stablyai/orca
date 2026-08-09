@@ -147,6 +147,7 @@ type WorktreeCardProps = {
   nativeDragEnabled?: boolean
   affiliateListMode?: boolean
   statusPrDisplay?: WorktreeCardPrDisplay | null
+  supervisionWorkspaceLabel?: string
 }
 
 const EMPTY_WORKSPACE_PORTS = []
@@ -239,7 +240,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onLineageToggle,
   isLineageDropTarget = false,
   affiliateListMode = false,
-  statusPrDisplay = null
+  statusPrDisplay = null,
+  supervisionWorkspaceLabel
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
@@ -1373,7 +1375,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
     <div className="ml-auto flex shrink-0 items-center gap-1 pr-1.5">{detailsAndPorts}</div>
   ) : null
   const hasSecondaryCardContent =
-    hasMetaRow || !!remoteBranchConflict || showInlineAgentList || showLineageChildChip
+    hasMetaRow ||
+    !!supervisionWorkspaceLabel ||
+    !!remoteBranchConflict ||
+    showInlineAgentList ||
+    showLineageChildChip
   const titleOnlyCard = !hasSecondaryCardContent
 
   const parentCardContent = (
@@ -1727,6 +1733,22 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
           </div>
         )}
+
+        {supervisionWorkspaceLabel ? (
+          <div
+            className="flex min-w-0 items-center gap-1 text-[11px] leading-none text-muted-foreground"
+            data-worktree-supervision-link=""
+          >
+            <Workflow className="size-3 shrink-0" />
+            <span className="truncate" title={supervisionWorkspaceLabel}>
+              {translate(
+                'auto.components.sidebar.WorktreeCard.supervisedInFolderWorkspace',
+                'Supervised in {{value0}}',
+                { value0: supervisionWorkspaceLabel }
+              )}
+            </span>
+          </div>
+        ) : null}
 
         {remoteBranchConflict && (
           <div className="mt-0.5 flex items-start gap-1.5 rounded border border-amber-500/25 bg-amber-500/5 px-1.5 py-1 text-[10.5px] leading-snug text-amber-700 dark:text-amber-300">

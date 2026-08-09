@@ -4454,6 +4454,7 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} が切断されました",
           "runtimeHostProject": "Orca サーバー上のプロジェクト",
           "runtimeHostProjectNamed": "{{hostName}} 上のプロジェクト",
+          "supervisedInFolderWorkspace": "{{value0}} で監督",
           "automationCreated": "自動化により作成",
           "branchIdentity": "ブランチ",
           "branchFolderPathIdentity": "ブランチまたはフォルダパス",

@@ -139,4 +139,24 @@ describe('WorktreeCard lineage indicators', () => {
     },
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )
+
+  it(
+    'shows the folder supervision link on the repo card',
+    async () => {
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+
+      const markup = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeRepo()}
+          isActive={false}
+          supervisionWorkspaceLabel="Story Korean"
+        />
+      )
+
+      expect(markup).toContain('data-worktree-supervision-link=""')
+      expect(markup).toContain('Supervised in Story Korean')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
 })
