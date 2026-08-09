@@ -1,13 +1,10 @@
 import { useState } from 'react'
-import { Loader2, Share2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { ArrowRight, Loader2, Share2 } from 'lucide-react'
 import type { ArtifactPublishResult, ArtifactWriteRequest } from '../../../../shared/artifacts'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
-import { isWebClientLocation } from '@/lib/web-client-location'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { publishArtifactFromSurface } from './artifact-publish-flow'
@@ -25,16 +22,15 @@ export function ArtifactPublishButton({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [publishing, setPublishing] = useState(false)
-  const [updatingCapability, setUpdatingCapability] = useState(false)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const connecting = useAppStore((state) => state.orcaProfileConnecting)
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
+  const openSettingsPage = useAppStore((state) => state.openSettingsPage)
+  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const settings = useAppStore((state) => state.settings)
-  const updateSettings = useAppStore((state) => state.updateSettingsOrThrow)
   const signedIn = authStatus?.state === 'connected'
   const sharingEnabled = settings?.artifactSharingEnabled === true
-  const isWebClient = isWebClientLocation()
-  const busy = publishing || connecting || updatingCapability
+  const busy = publishing || connecting
   const blocked = disabled || busy
 
   const publish = async (): Promise<void> => {
@@ -53,24 +49,10 @@ export function ArtifactPublishButton({
     }
   }
 
-  const togglePublishing = async (): Promise<void> => {
-    if (!settings || busy) {
-      return
-    }
-    setUpdatingCapability(true)
-    try {
-      await updateSettings({ artifactSharingEnabled: !sharingEnabled })
-    } catch (error) {
-      console.error('Failed to update artifact publishing:', error)
-      toast.error(
-        translate(
-          'auto.components.artifacts.ArtifactPublishButton.capabilityUpdateFailed',
-          'Could not update artifact sharing'
-        )
-      )
-    } finally {
-      setUpdatingCapability(false)
-    }
+  const openArtifactsSettings = (): void => {
+    setOpen(false)
+    openSettingsTarget({ pane: 'artifacts', repoId: null })
+    openSettingsPage()
   }
 
   const label = translate(
@@ -157,41 +139,37 @@ export function ArtifactPublishButton({
             </div>
           ) : null}
 
-          <div
-            className={cn(
-              'flex items-center justify-between gap-3',
-              !signedIn && 'border-t border-border/60 pt-3'
-            )}
-          >
-            <div className="min-w-0 space-y-0.5">
-              <p className="text-xs font-medium">
+          {!sharingEnabled ? (
+            <div className={cn('space-y-2', !signedIn && 'border-t border-border/60 pt-3')}>
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium">
+                  {translate(
+                    'auto.components.artifacts.ArtifactPublishButton.publishingOffTitle',
+                    'Artifact sharing is off'
+                  )}
+                </p>
+                <p className="text-[11px] leading-4 text-muted-foreground">
+                  {translate(
+                    'auto.components.artifacts.ArtifactPublishButton.publishingOffDescription',
+                    'Learn about public links and enable sharing in Settings.'
+                  )}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={openArtifactsSettings}
+              >
                 {translate(
-                  'auto.components.artifacts.ArtifactPublishButton.publishingTitle',
-                  'Public artifact links'
+                  'auto.components.artifacts.ArtifactPublishButton.openSettings',
+                  'Open Artifacts settings'
                 )}
-              </p>
-              <p className="text-[11px] leading-4 text-muted-foreground">
-                {isWebClient && !sharingEnabled
-                  ? translate(
-                      'auto.components.artifacts.ArtifactPublishButton.publishingWebDescription',
-                      'Enable this from the Orca desktop app on the host device.'
-                    )
-                  : translate(
-                      'auto.components.artifacts.ArtifactPublishButton.publishingDescription',
-                      'Allow this device to publish HTML and Markdown files.'
-                    )}
-              </p>
+                <ArrowRight />
+              </Button>
             </div>
-            <SettingsSwitch
-              checked={sharingEnabled}
-              disabled={!settings || updatingCapability || isWebClient}
-              onChange={() => void togglePublishing()}
-              ariaLabel={translate(
-                'auto.components.artifacts.ArtifactPublishButton.publishingToggle',
-                'Allow public artifact links'
-              )}
-            />
-          </div>
+          ) : null}
 
           <Button
             type="button"

@@ -8,9 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
-  isWebClient: false,
+  openSettingsPage: vi.fn(),
+  openSettingsTarget: vi.fn(),
   publish: vi.fn(),
-  updateSettings: vi.fn(),
   state: {
     orcaProfileAuthStatus: { configured: true, state: 'connected' } as Record<string, unknown>,
     orcaProfileConnecting: false,
@@ -23,7 +23,8 @@ vi.mock('@/store', () => ({
     selector({
       ...mocks.state,
       connectCurrentOrcaProfile: mocks.connect,
-      updateSettingsOrThrow: mocks.updateSettings
+      openSettingsPage: mocks.openSettingsPage,
+      openSettingsTarget: mocks.openSettingsTarget
     })
 }))
 
@@ -43,10 +44,6 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-vi.mock('@/lib/web-client-location', () => ({
-  isWebClientLocation: () => mocks.isWebClient
-}))
-
 vi.mock('./artifact-publish-flow', () => ({
   publishArtifactFromSurface: mocks.publish
 }))
@@ -56,12 +53,10 @@ import { ArtifactPublishButton } from './ArtifactPublishButton'
 describe('ArtifactPublishButton', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.isWebClient = false
     mocks.publish.mockResolvedValue({
       change: 'created',
       item: { shareUrl: 'https://example.com' }
     })
-    mocks.updateSettings.mockResolvedValue(undefined)
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'connected' }
     mocks.state.orcaProfileConnecting = false
     mocks.state.settings = { artifactSharingEnabled: true }
@@ -93,26 +88,23 @@ describe('ArtifactPublishButton', () => {
     expect(mocks.publish).not.toHaveBeenCalled()
   })
 
-  it('offers the device publishing toggle before confirmation', async () => {
+  it('routes disabled publishing to Artifacts settings', async () => {
     const user = userEvent.setup()
     mocks.state.settings = { artifactSharingEnabled: false }
     render(<ArtifactPublishButton createRequest={vi.fn()} />)
 
     expect(screen.getByRole('button', { name: 'Share public link' })).toBeDisabled()
-    await user.click(screen.getByRole('switch', { name: 'Allow public artifact links' }))
+    await user.click(screen.getByRole('button', { name: 'Open Artifacts settings' }))
 
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ artifactSharingEnabled: true })
+    expect(mocks.openSettingsTarget).toHaveBeenCalledWith({ pane: 'artifacts', repoId: null })
+    expect(mocks.openSettingsPage).toHaveBeenCalledOnce()
     expect(mocks.publish).not.toHaveBeenCalled()
   })
 
-  it('keeps the host-owned publishing toggle read-only in web clients', () => {
-    mocks.isWebClient = true
-    mocks.state.settings = { artifactSharingEnabled: false }
+  it('hides the settings prompt once publishing is enabled', () => {
     render(<ArtifactPublishButton createRequest={vi.fn()} />)
 
-    expect(screen.getByRole('switch', { name: 'Allow public artifact links' })).toBeDisabled()
-    expect(
-      screen.getByText('Enable this from the Orca desktop app on the host device.')
-    ).toBeInTheDocument()
+    expect(screen.queryByText('Artifact sharing is off')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Open Artifacts settings' })).toBeNull()
   })
 })
