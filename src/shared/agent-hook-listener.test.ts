@@ -117,6 +117,8 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/omp')).toBe('omp')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/mimo-code')).toBe('mimo-code')
+    // Why: Trae resume path is registered before a full managed installer ships.
+    expect(resolveHookSource('/hook/trae')).toBe('trae')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -780,6 +782,53 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(next?.payload.prompt).toBe('')
+  })
+
+  // Why: Trae has no full event schema yet; session_id posts must still stamp resume identity
+  // with an intentional done placeholder (CodeRabbit on #11278).
+  it('routes Trae session_id posts to a done placeholder with providerSession', () => {
+    expect(resolveHookSource('/hook/trae')).toBe('trae')
+
+    const event = normalizeHookPayload(
+      state,
+      'trae',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        payload: {
+          hook_event_name: 'session_report',
+          session_id: 'trae-session-1'
+        }
+      },
+      'production'
+    )
+
+    expect(event).not.toBeNull()
+    expect(event!.connectionId).toBeNull()
+    expect(event!.providerSession).toEqual({ key: 'session_id', id: 'trae-session-1' })
+    // Why: not providerSessionOnly (Pi-only path); normal status envelope with done placeholder.
+    expect(event!.providerSessionOnly).toBeUndefined()
+    expect(event!.payload).toMatchObject({
+      state: 'done',
+      prompt: '',
+      agentType: 'trae'
+    })
+  })
+
+  it('extracts Trae providerSession from sessionId camelCase', () => {
+    const event = normalizeHookPayload(
+      state,
+      'trae',
+      {
+        paneKey: PANE_KEY,
+        payload: { sessionId: 'trae-camel-id' }
+      },
+      'production'
+    )
+    expect(event?.providerSession).toEqual({ key: 'session_id', id: 'trae-camel-id' })
+    expect(event?.payload.agentType).toBe('trae')
+    expect(event?.payload.state).toBe('done')
   })
 
   it('normalizes Command Code hooks and reads turn text from the transcript', () => {

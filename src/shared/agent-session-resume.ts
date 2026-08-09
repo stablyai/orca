@@ -13,7 +13,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'droid',
   'grok',
   'devin',
-  'omp'
+  'omp',
+  'trae'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -228,6 +229,11 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
+    // Why: Trae hooks (when installed) report the CLI resume id; same shape as grok/devin.
+    case 'trae': {
+      const id = readSessionId(payload, ['session_id', 'sessionId'])
+      return id ? { key: 'session_id', id } : null
+    }
     case 'amp':
     case 'cursor':
     case 'command-code':
@@ -270,5 +276,7 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id'
         ? ['omp', '--resume', ompResumeFilePath?.trim() || id]
         : null
+    case 'trae':
+      return providerSession.key === 'session_id' ? ['traecli', '--resume', id] : null
   }
 }

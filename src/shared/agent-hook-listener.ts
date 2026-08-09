@@ -2442,6 +2442,9 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'devin':
       // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
       return eventName === 'UserPromptSubmit'
+    case 'trae':
+      // Why: Trae hook installer is a follow-up; treat no event as a new-turn boundary until the schema is known.
+      return false
   }
 }
 
@@ -2533,6 +2536,9 @@ function extractToolFields(
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
       return extractClaudeToolFields(eventName, hookPayload)
+    case 'trae':
+      // Why: no Trae tool schema yet; empty snapshot keeps exhaustive routing safe.
+      return {}
   }
 }
 
@@ -4314,6 +4320,11 @@ export function normalizeHookPayload(
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'trae':
+      // Why: managed Trae event schema is a follow-up; emit a done placeholder so session_id
+      // posts can still attach providerSession on the normal status path (not Pi-only).
+      payload = normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: 'trae' })
+      break
   }
 
   // Why: connectionId is null here; ingestRemote stamps it from mux identity on receive. See docs/design/agent-status-over-ssh.md §5.
@@ -4385,7 +4396,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/copilot': 'copilot',
   '/hook/hermes': 'hermes',
   '/hook/devin': 'devin',
-  '/hook/kimi': 'kimi'
+  '/hook/kimi': 'kimi',
+  '/hook/trae': 'trae'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {
