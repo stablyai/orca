@@ -238,39 +238,21 @@ describe('renderer breadcrumb IPC routing', () => {
 
   // Why: park-churn notices are per-tab but the ring is process-wide, so many
   // tabs churning at once would otherwise evict the pre-crash trail.
-  it('coalesces park-verdict churn notices by trigger across tabs', () => {
+  it('coalesces park-verdict churn notices by name across tabs', () => {
     emitRendererBreadcrumb({
       name: 'terminal_park_verdict_churn',
-      data: { tabId: 'tab-1', trigger: 'window', flips: 12, elapsedMs: 8 }
+      data: { tabId: 'tab-1', flips: 12, elapsedMs: 8 }
     })
     emitRendererBreadcrumb({
       name: 'terminal_park_verdict_churn',
-      data: { tabId: 'tab-2', trigger: 'window', flips: 12, elapsedMs: 9 }
+      data: { tabId: 'tab-2', flips: 12, elapsedMs: 9 }
     })
 
     expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
     expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(2)
     for (const call of recordCoalescedCrashBreadcrumbMock.mock.calls) {
-      expect(call[0]).toMatchObject({ coalesceKey: 'terminal_park_verdict_churn:window' })
+      expect(call[0]).toMatchObject({ coalesceKey: 'terminal_park_verdict_churn' })
     }
-  })
-
-  // Why: `burst` means damping engaged a commit short of React #185 while
-  // `window` is slow benign churn. A shared key would drop the near-crash
-  // signal into the slow-churn slot.
-  it('keeps burst and window park-verdict churn triggers in separate slots', () => {
-    emitRendererBreadcrumb({
-      name: 'terminal_park_verdict_churn',
-      data: { tabId: 'tab-1', trigger: 'burst', flips: 3, elapsedMs: 4 }
-    })
-    emitRendererBreadcrumb({
-      name: 'terminal_park_verdict_churn',
-      data: { tabId: 'tab-1', trigger: 'window', flips: 12, elapsedMs: 900 }
-    })
-
-    expect(
-      recordCoalescedCrashBreadcrumbMock.mock.calls.map((call) => call[0].coalesceKey)
-    ).toEqual(['terminal_park_verdict_churn:burst', 'terminal_park_verdict_churn:window'])
   })
 
   // Why: every hidden pane is 0x0, so one post-reload reattach wave exhausts

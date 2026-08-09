@@ -16,8 +16,10 @@ const mocks = vi.hoisted(() => ({
   },
   exemptTabIds: new Set<string>(),
   exemptSelectCalls: 0,
-  /** Toggled to churn the park verdict the way the crash cluster does. */
-  watcherCoverage: true
+  planRevision: 0,
+  failWatcherSync: false,
+  watcherSyncParkedTabIds: [] as string[][],
+  ownershipLossListener: null as null | ((event: { worktreeId: string; tabId: string }) => void)
 }))
 
 vi.mock('../../store', () => ({
@@ -41,9 +43,60 @@ vi.mock('./terminal-eviction-exempt-tabs', () => ({
 }))
 
 vi.mock('./terminal-parked-tab-watchers', () => ({
-  canWatcherCoverParkedTerminalTab: () => mocks.watcherCoverage,
   disposeParkedTerminalWatchersForWorktree: vi.fn(),
-  syncParkedTerminalTabWatchers: vi.fn()
+  planParkedTerminalTabWatcherCoverage: (worktreeId: string, tab: TerminalTab) => ({
+    status: 'covered',
+    materialKey: `${worktreeId}:${tab.id}:${tab.ptyId}:${mocks.planRevision}`,
+    worktreeId,
+    tabId: tab.id,
+    tabPtyId: tab.ptyId,
+    generation: tab.generation ?? null,
+    panes: [
+      {
+        leafId: '11111111-1111-4111-8111-111111111111',
+        ptyId: tab.ptyId
+      }
+    ]
+  }),
+  subscribeParkedTerminalWatcherOwnershipLoss: (
+    listener: (event: { worktreeId: string; tabId: string }) => void
+  ) => {
+    mocks.ownershipLossListener = listener
+    return () => {
+      if (mocks.ownershipLossListener === listener) {
+        mocks.ownershipLossListener = null
+      }
+    }
+  },
+  syncParkedTerminalTabWatchersWithAcknowledgements: (args: {
+    parkedTabIds: ReadonlySet<string>
+    forcedTabIds: ReadonlySet<string>
+    coveragePlansByTabId: ReadonlyMap<
+      string,
+      { materialKey: string; panes: readonly { ptyId: string | null }[] }
+    >
+  }) => {
+    mocks.watcherSyncParkedTabIds.push([...args.parkedTabIds].sort())
+    return [...args.parkedTabIds].map((tabId) => {
+      const plan = args.coveragePlansByTabId.get(tabId)
+      const watchedPtyIds = (plan?.panes ?? []).flatMap((pane) =>
+        pane.ptyId === null ? [] : [pane.ptyId]
+      )
+      if (args.forcedTabIds.has(tabId)) {
+        return { status: 'forced', tabId, materialKey: plan?.materialKey ?? null, watchedPtyIds }
+      }
+      return mocks.failWatcherSync
+        ? {
+            status: 'failed',
+            tabId,
+            materialKey: plan?.materialKey ?? null,
+            reason: 'watcher-coverage-incomplete',
+            expectedPtyIds: watchedPtyIds,
+            watchedPtyIds: []
+          }
+        : { status: 'covering', tabId, materialKey: plan?.materialKey ?? '', watchedPtyIds }
+    })
+  }
 }))
 
 vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
@@ -54,10 +107,6 @@ import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
   TERMINAL_TAB_HOT_RETAIN_MS
 } from './terminal-hidden-view-parking'
-import {
-  TERMINAL_TAB_PARK_FLIP_BURST_LIMIT,
-  TERMINAL_TAB_PARK_FLIP_WINDOW_MS
-} from './terminal-park-verdict-flip-telemetry'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 const WORKTREE_ID = 'wt-1'
@@ -89,7 +138,10 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     vi.useRealTimers()
     mocks.exemptTabIds = new Set()
     mocks.exemptSelectCalls = 0
-    mocks.watcherCoverage = true
+    mocks.planRevision = 0
+    mocks.failWatcherSync = false
+    mocks.watcherSyncParkedTabIds = []
+    mocks.ownershipLossListener = null
     mocks.storeState.terminalLayoutsByTabId = {}
     mocks.storeState.sleepingAgentSessionsByPaneKey = {}
     mocks.storeState.runtimeStatusByEnvironmentId = new Map()
@@ -122,12 +174,57 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     }
   })
 
-  // Why: the flip-damping pin removes the tab from the parked set, and every
-  // hysteresis deadline of a long-hidden tab is already past — so the pin
-  // deadline is the only wakeup that can ever re-park it. Without scheduling
-  // it, damping silently becomes a permanent unpark: the pane (~4-5MB) stays
-  // mounted for the life of the window, which is the renderer-OOM cluster.
-  it('re-parks a damped tab once the pin expires with no other store change', () => {
+  it('retries a rejected handoff only after the material plan changes', () => {
+    mocks.failWatcherSync = true
+    const { result, rerender } = renderHook(
+      (args: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(args),
+      { initialProps: hookArgs(false) }
+    )
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+    expect(result.current.size).toBe(0)
+
+    mocks.failWatcherSync = false
+    act(() => {
+      rerender(hookArgs(false))
+    })
+    expect(result.current.size).toBe(0)
+
+    mocks.planRevision += 1
+    act(() => {
+      rerender(hookArgs(false))
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+  })
+
+  it('reveals an activation-deferred tab when its watcher handoff fails', () => {
+    mocks.failWatcherSync = true
+    const onHandoffFailed = vi.fn()
+    const args = {
+      ...hookArgs(false),
+      activationDeferredMountTabIds: new Set(['tab-2']),
+      onActivationDeferredWatcherHandoffFailed: onHandoffFailed
+    }
+
+    const { result } = renderHook(() => useTerminalTabColdParking(args))
+
+    expect(result.current.has('tab-2')).toBe(false)
+    expect(onHandoffFailed).toHaveBeenCalledWith('tab-2')
+  })
+
+  it('starts an activation-deferred watcher in the first effect flush', () => {
+    renderHook(() =>
+      useTerminalTabColdParking({
+        ...hookArgs(false),
+        activationDeferredMountTabIds: new Set(['tab-2'])
+      })
+    )
+
+    expect(mocks.watcherSyncParkedTabIds[0]).toEqual(['tab-2'])
+  })
+
+  it('remounts after established watcher ownership is lost', () => {
     const { result, rerender } = renderHook(
       (args: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(args),
       { initialProps: hookArgs(false) }
@@ -137,23 +234,16 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     })
     expect(result.current).toEqual(new Set(['tab-2']))
 
-    // Churn the coverage veto at render cadence — no clock advance, so every
-    // flip lands inside the burst window and damping engages.
-    for (let flip = 0; flip <= TERMINAL_TAB_PARK_FLIP_BURST_LIMIT + 1; flip += 1) {
-      mocks.watcherCoverage = flip % 2 === 1
-      act(() => {
-        rerender(hookArgs(false))
-      })
-    }
-    mocks.watcherCoverage = true
     act(() => {
-      rerender(hookArgs(false))
+      mocks.ownershipLossListener?.({ worktreeId: WORKTREE_ID, tabId: 'tab-2' })
     })
     expect(result.current.size).toBe(0)
 
-    act(() => {
-      vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_WINDOW_MS)
-    })
+    act(() => rerender(hookArgs(false)))
+    expect(result.current.size).toBe(0)
+
+    mocks.planRevision += 1
+    act(() => rerender(hookArgs(false)))
     expect(result.current).toEqual(new Set(['tab-2']))
   })
 

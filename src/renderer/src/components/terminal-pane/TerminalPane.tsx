@@ -244,6 +244,7 @@ import { refreshTerminalImeInputContext } from './terminal-ime-input-context-ref
 
 type TerminalPaneProps = {
   tabId: string
+  terminalGeneration?: number
   worktreeId: string
   cwd?: string
   isActive: boolean
@@ -299,6 +300,7 @@ function formatClipboardImagePasteError(error: unknown): string {
 function TerminalPane(
   {
     tabId,
+    terminalGeneration,
     worktreeId,
     cwd,
     isActive,
@@ -1365,6 +1367,7 @@ function TerminalPane(
 
   useTerminalPaneLifecycle({
     tabId,
+    terminalGeneration,
     worktreeId,
     cwd,
     startup,

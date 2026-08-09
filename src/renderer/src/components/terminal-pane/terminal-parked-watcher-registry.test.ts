@@ -75,9 +75,14 @@ describe('terminal parked watcher registry removal', () => {
       paneIdByPtyId: new Map([[FLOATING_PTY_ID, 1]]),
       disposersByPtyId: new Map([[FLOATING_PTY_ID, floatingDispose]])
     })
-    capturedPanesByTabId.set(TAB_ID, { worktreeId: 'removed-worktree', panes: [] })
+    capturedPanesByTabId.set(TAB_ID, {
+      worktreeId: 'removed-worktree',
+      generation: null,
+      panes: []
+    })
     capturedPanesByTabId.set(FLOATING_TAB_ID, {
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      generation: null,
       panes: []
     })
 

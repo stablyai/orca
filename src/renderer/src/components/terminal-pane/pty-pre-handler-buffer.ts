@@ -176,8 +176,13 @@ export function drainPreHandlerPtyExit(ptyId: string, handler: (code: number) =>
   }
 }
 
-export function clearPreHandlerPtyState(ptyId: string): void {
+export function clearPreHandlerPtyData(ptyId: string): void {
   preHandlerPtyData.delete(ptyId)
+  warnedLostHandlerPtyIds.delete(ptyId)
+}
+
+export function clearPreHandlerPtyState(ptyId: string): void {
+  clearPreHandlerPtyData(ptyId)
   preHandlerPtyExit.delete(ptyId)
   consumedPreHandlerPtyExits.delete(ptyId)
   const discardTimer = discardedPreHandlerPtyStates.get(ptyId)
@@ -185,5 +190,4 @@ export function clearPreHandlerPtyState(ptyId: string): void {
     clearTimeout(discardTimer)
   }
   discardedPreHandlerPtyStates.delete(ptyId)
-  warnedLostHandlerPtyIds.delete(ptyId)
 }

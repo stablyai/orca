@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearTerminalProviderSnapshotCapabilities,
   collectTerminalProviderSnapshotPtyIds,
+  getTerminalProviderSnapshotCapabilityRevision,
+  getTerminalProviderSnapshotCapabilityState,
   refreshTerminalProviderSnapshotCapabilities,
+  subscribeTerminalProviderSnapshotCapabilityRevision,
   synchronizeTerminalProviderSnapshotCapabilities,
   terminalProviderHasAuthoritativeSnapshot
 } from './terminal-provider-snapshot-capability'
@@ -43,6 +46,24 @@ describe('terminal provider snapshot capabilities', () => {
     expect(resolve).toHaveBeenCalledWith(['current', 'legacy'])
     expect(terminalProviderHasAuthoritativeSnapshot('current')).toBe(true)
     expect(terminalProviderHasAuthoritativeSnapshot('legacy')).toBe(false)
+    expect(getTerminalProviderSnapshotCapabilityState('current')).toBe('authoritative')
+    expect(getTerminalProviderSnapshotCapabilityState('legacy')).toBe('unavailable')
+    expect(getTerminalProviderSnapshotCapabilityState('unresolved')).toBe('pending')
+  })
+
+  it('publishes one semantic revision for a resolved batch', async () => {
+    const listener = vi.fn()
+    const unsubscribe = subscribeTerminalProviderSnapshotCapabilityRevision(listener)
+    const before = getTerminalProviderSnapshotCapabilityRevision()
+
+    await synchronizeTerminalProviderSnapshotCapabilities(['pty-1', 'pty-2'], async (ids) =>
+      ids.map((id) => ({ id, authoritative: true }))
+    )
+    await synchronizeTerminalProviderSnapshotCapabilities(['pty-1', 'pty-2'], async () => [])
+
+    expect(getTerminalProviderSnapshotCapabilityRevision()).toBe(before + 1)
+    expect(listener).toHaveBeenCalledOnce()
+    unsubscribe()
   })
 
   it('refreshes a pre-provider false after startup services become ready', async () => {

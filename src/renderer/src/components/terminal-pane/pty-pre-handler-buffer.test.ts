@@ -3,6 +3,7 @@ import {
   bufferPreHandlerPtyData,
   bufferPreHandlerPtyExit,
   clearConsumedPreHandlerPtyExit,
+  clearPreHandlerPtyData,
   clearPreHandlerPtyState,
   consumePreHandlerPtyState,
   drainPreHandlerPtyData,
@@ -123,6 +124,20 @@ describe('pre-handler PTY buffer', () => {
     expect(hasPreHandlerPtyExit(EXIT_PTY_ID)).toBe(true)
     drainPreHandlerPtyExit(EXIT_PTY_ID, vi.fn())
     expect(hasPreHandlerPtyExit(EXIT_PTY_ID)).toBe(false)
+  })
+
+  it('clears adopted data without discarding a buffered exit', () => {
+    bufferPreHandlerPtyData(EXIT_PTY_ID, 'final output')
+    bufferPreHandlerPtyExit(EXIT_PTY_ID, 7)
+
+    clearPreHandlerPtyData(EXIT_PTY_ID)
+
+    const data = vi.fn()
+    const exit = vi.fn()
+    drainPreHandlerPtyData(EXIT_PTY_ID, data)
+    drainPreHandlerPtyExit(EXIT_PTY_ID, exit)
+    expect(data).not.toHaveBeenCalled()
+    expect(exit).toHaveBeenCalledWith(7)
   })
 
   it('discards delayed data and exit until an explicit reconnect', () => {

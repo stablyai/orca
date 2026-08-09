@@ -223,6 +223,7 @@ async function formatTerminalUrlTooltip(
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
+  terminalGeneration?: number
   cwd?: string
   startup?: {
     command: string
@@ -588,6 +589,7 @@ export function retireMountedTerminalPaneSurface(args: {
 export function useTerminalPaneLifecycle({
   tabId,
   worktreeId,
+  terminalGeneration,
   cwd,
   startup,
   setupSplit,
@@ -1751,6 +1753,7 @@ export function useTerminalPaneLifecycle({
       captureParkedTerminalPaneCandidates(
         tabId,
         worktreeId,
+        terminalGeneration,
         manager.getPanes().map((capturedPane) => ({
           ptyId: paneTransports.get(capturedPane.id)?.getPtyId() ?? null,
           paneId: capturedPane.id,
@@ -1794,7 +1797,7 @@ export function useTerminalPaneLifecycle({
       setTabCanExpandPane(tabId, false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId, cwd])
+  }, [tabId, cwd, terminalGeneration])
 
   // Why: mobile wake fanout — pane self-selects by worktreeId and fires its own armed --resume while staying hidden (no reveal/focus change).
   useEffect(() => {

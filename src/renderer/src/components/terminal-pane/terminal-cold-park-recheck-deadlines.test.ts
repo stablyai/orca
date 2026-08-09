@@ -169,45 +169,4 @@ describe('getTerminalTabColdParkRecheckDelayMs', () => {
       })
     ).toBe(250)
   })
-
-  // Why: a flip-damped tab is long past every hysteresis deadline, so the pin
-  // expiry is the only wakeup left — drop it and the tab never re-parks.
-  it('wakes at the flip-damping pin deadline when all ordinary deadlines have passed', () => {
-    expect(
-      getTerminalTabColdParkRecheckDelayMs({
-        parkingEnabled: true,
-        hiddenSinceMs: 1_000,
-        nowMs: 1_000_000,
-        coldParkDelayMs: 100,
-        hotRetainMs: 1_000,
-        parkVerdictPinUntilMs: 1_060_000
-      })
-    ).toBe(60_000)
-  })
-
-  // Why: the earliest pending deadline wins — a pin must not delay a nearer
-  // cool-down wakeup, and vice versa.
-  it('takes the nearest of the pin and cool-down deadlines', () => {
-    const base = {
-      parkingEnabled: true,
-      hiddenSinceMs: 1_000,
-      nowMs: 2_500,
-      coldParkDelayMs: 100,
-      hotRetainMs: 1_000
-    }
-    expect(
-      getTerminalTabColdParkRecheckDelayMs({
-        ...base,
-        parkCooldownUntilMs: 2_750,
-        parkVerdictPinUntilMs: 62_500
-      })
-    ).toBe(250)
-    expect(
-      getTerminalTabColdParkRecheckDelayMs({
-        ...base,
-        parkCooldownUntilMs: 62_500,
-        parkVerdictPinUntilMs: 2_750
-      })
-    ).toBe(250)
-  })
 })

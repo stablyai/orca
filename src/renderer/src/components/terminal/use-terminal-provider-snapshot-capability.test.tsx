@@ -54,6 +54,14 @@ describe('useTerminalProviderSnapshotCapability', () => {
     hook.unmount()
   })
 
+  it('publishes a render revision when capability authority resolves', async () => {
+    resolveCapabilities.mockResolvedValue([{ id: 'ssh:target@@pty-1', authoritative: true }])
+    const hook = renderHook(() => useTerminalProviderSnapshotCapability(true))
+    const initialRevision = hook.result.current
+
+    await waitFor(() => expect(hook.result.current).toBeGreaterThan(initialRevision))
+  })
+
   it('cancels an unknown-capability retry when the hook unmounts', async () => {
     vi.useFakeTimers()
     resolveCapabilities.mockResolvedValue([{ id: 'ssh:target@@pty-1', authoritative: null }])

@@ -38,6 +38,7 @@ function replaySwapCascade(args: {
     })
     // Most permissive readiness the page can hand in, so no swap is withheld.
     const swap = resolveActivityPortalSwap({
+      displayedPaneKey,
       selectedThread: args.selectedThread,
       selectedHasLiveTab: true,
       visibleThread,
@@ -74,7 +75,7 @@ describe('resolveActivityPortalSwap cascade', () => {
           `${label}: ${kinds.join(',')}`
         ).toBeLessThanOrEqual(1)
         // And the cascade settles: no write at all once displayedPaneKey caught up.
-        expect(kinds.at(-1), `${label}: ${kinds.join(',')}`).toBe('settle-visible')
+        expect(kinds.at(-1), `${label}: ${kinds.join(',')}`).toBe('none')
       }
     }
   })

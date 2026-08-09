@@ -184,6 +184,26 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     ])
   })
 
+  it('attempts every live fact before rethrowing the first callback error', () => {
+    const events: string[] = []
+    const firstError = new Error('bell failed')
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        onBell: () => {
+          events.push('bell')
+          throw firstError
+        },
+        onAgentBecameWorking: () => events.push('working')
+      }
+    })
+
+    expect(() =>
+      _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }, { kind: 'agent-working' }]))
+    ).toThrow(firstError)
+    expect(events).toEqual(['bell', 'working'])
+  })
+
   it('routes command-finished and pr-link facts to the registered consumer', () => {
     const events: unknown[][] = []
     registerTerminalSideEffectFactConsumer({
@@ -493,6 +513,41 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     })
 
     expect(later).toEqual([])
+  })
+
+  it('removes a consumer whose handoff drain throws and buffers for its replacement', () => {
+    const dispose = registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: createCallbackRecorder().callbacks
+    })
+    dispose()
+    _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }], { seq: 1 }))
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'agent-working' }, { kind: 'agent-exited' }], { seq: 2 })
+    )
+    const firstError = new Error('buffered bell failed')
+    const failedEvents: string[] = []
+
+    expect(() =>
+      registerTerminalSideEffectFactConsumer({
+        ptyId: PTY_ID,
+        callbacks: {
+          onBell: () => {
+            failedEvents.push('bell')
+            throw firstError
+          },
+          onAgentBecameWorking: () => failedEvents.push('working'),
+          onAgentExited: () => failedEvents.push('exited')
+        }
+      })
+    ).toThrow(firstError)
+    expect(failedEvents).toEqual(['bell', 'working', 'exited'])
+
+    _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }], { seq: 3 }))
+    expect(failedEvents).toEqual(['bell', 'working', 'exited'])
+    const replacement = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks: replacement.callbacks })
+    expect(replacement.events).toEqual([['bell']])
   })
 
   it('does not buffer replay batches across a handoff', () => {

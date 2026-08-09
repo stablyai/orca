@@ -115,15 +115,29 @@ import {
   shouldDeferParkedPtyExitTabClose,
   syncParkedTerminalTabWatchers
 } from './terminal-parked-tab-watchers'
+import {
+  subscribeParkedTerminalWatcherOwnershipLoss,
+  type ParkedTerminalWatcherOwnershipLossEvent
+} from './terminal-parked-watcher-registry'
 
 const ptyWrite = vi.fn()
 const originalWindow = (globalThis as { window?: unknown }).window
+const ownershipLossUnsubscribers: (() => void)[] = []
+
+function observeOwnershipLoss(): ReturnType<
+  typeof vi.fn<(event: ParkedTerminalWatcherOwnershipLossEvent) => void>
+> {
+  const listener = vi.fn<(event: ParkedTerminalWatcherOwnershipLossEvent) => void>()
+  ownershipLossUnsubscribers.push(subscribeParkedTerminalWatcherOwnershipLoss(listener))
+  return listener
+}
 
 function capturePanes(
   panes: { ptyId: string | null; paneId: number; leafId: string; drivesTabTitle: boolean }[],
   args?: { tabId?: string; worktreeId?: string }
 ): void {
-  captureParkedTerminalPaneCandidates(args?.tabId ?? TAB_ID, args?.worktreeId ?? WORKTREE_ID, panes)
+  const { tabId = TAB_ID, worktreeId = WORKTREE_ID } = args ?? {}
+  captureParkedTerminalPaneCandidates(tabId, worktreeId, null, panes)
 }
 
 function syncParked(args?: {
@@ -145,7 +159,7 @@ function syncParked(args?: {
 describe('terminal-parked-tab-watchers', () => {
   beforeEach(async () => {
     mockStoreState = {
-      tabsByWorktree: {},
+      tabsByWorktree: { [WORKTREE_ID]: [{ id: TAB_ID, ptyId: PTY_ID }] },
       terminalLayoutsByTabId: {},
       runtimePaneTitlesByTabId: {},
       settings: null,
@@ -169,6 +183,9 @@ describe('terminal-parked-tab-watchers', () => {
     pruneParkedTerminalWatchers(new Set())
     startedWatchers.length = 0
     exitSubscriptions.length = 0
+    for (const unsubscribe of ownershipLossUnsubscribers.splice(0)) {
+      unsubscribe()
+    }
     vi.clearAllMocks()
     clearTerminalProviderSnapshotCapabilities()
     ;(globalThis as { window?: unknown }).window = originalWindow
@@ -386,14 +403,22 @@ describe('terminal-parked-tab-watchers', () => {
   })
 
   it('retains the buffered exit and empty registry entry when pinned close is cancelled', () => {
+    const ownershipLoss = observeOwnershipLoss()
     capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
     syncParked()
 
     exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0, { hadPrimary: false })
     const options = closeTerminalTab.mock.calls[0]?.[1] as CloseTerminalTabOptions
+    expect(ownershipLoss).not.toHaveBeenCalled()
     options.onCancel?.()
     syncParked({ parkedTabIds: [] })
 
+    expect(ownershipLoss).toHaveBeenCalledOnce()
+    expect(ownershipLoss).toHaveBeenCalledWith({
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      reason: 'close-cancelled'
+    })
     expect(consumePreHandlerPtyState).not.toHaveBeenCalled()
     expect(startParkedTerminalByteWatcher).toHaveBeenCalledTimes(1)
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
@@ -417,6 +442,7 @@ describe('terminal-parked-tab-watchers', () => {
   })
 
   it('does not queue a second close when a retained primary handled the parked exit', () => {
+    const ownershipLoss = observeOwnershipLoss()
     capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
     syncParked()
 
@@ -424,6 +450,22 @@ describe('terminal-parked-tab-watchers', () => {
 
     expect(closeTerminalTab).not.toHaveBeenCalled()
     expect(startedWatchers[0].dispose).toHaveBeenCalledTimes(1)
+    expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
+    expect(ownershipLoss).toHaveBeenCalledWith({
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      reason: 'primary-exit-unowned'
+    })
+  })
+
+  it('does not report intentional shutdown suspension as ownership loss', () => {
+    const ownershipLoss = observeOwnershipLoss()
+    capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+    syncParked()
+
+    disposeParkedTerminalWatchersForPtyIds([PTY_ID])
+
+    expect(ownershipLoss).not.toHaveBeenCalled()
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
   })
 

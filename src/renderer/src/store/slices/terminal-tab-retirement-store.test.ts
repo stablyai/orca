@@ -100,7 +100,7 @@ describe('terminal tab retirement store boundary', () => {
       paneIdByPtyId: new Map([['pty-primary', 1]]),
       disposersByPtyId: new Map([['pty-primary', dispose]])
     })
-    capturedPanesByTabId.set('tab-1', { worktreeId: 'wt-1', panes: [] })
+    capturedPanesByTabId.set('tab-1', { worktreeId: 'wt-1', generation: null, panes: [] })
 
     store.getState().closeTab('tab-1')
     await vi.waitFor(() => expect(mockKill).toHaveBeenCalledTimes(5))

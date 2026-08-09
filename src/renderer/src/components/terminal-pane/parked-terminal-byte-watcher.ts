@@ -33,6 +33,7 @@ import {
 import { dispatchTerminalNotification } from './use-notification-dispatch'
 import { acquireHiddenRendererPtyDeliveryClaim } from './pty-renderer-delivery-claims'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { parkedTerminalLeafDrivesTabTitle } from './terminal-parked-title-authority'
 
 // Why: keep the live path's BEL-vs-completion race window so notification behavior is identical whether a tab is parked or mounted.
 const PARKED_NOTIFICATION_GRACE_MS = AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS
@@ -55,7 +56,7 @@ export type ParkedTerminalByteWatcherOptions = {
   leafId: string
   /** PaneManager pane id the unmounted pane used; the watcher must write this same slot or a stale "working" title strands. */
   paneId: number
-  /** Whether this PTY's pane was the tab's active split — only the focused split drives the tab title. */
+  /** Fallback title authority when the stored layout has no active leaf. */
   drivesTabTitle?: boolean
   /** Last runtime title at park time; seeds the agent tracker so an agent working at unmount still fires completion when it goes idle. */
   initialTitle?: string
@@ -72,7 +73,7 @@ export function startParkedTerminalByteWatcher(
 ): () => void {
   const { ptyId, tabId, worktreeId, paneId, sendInput } = options
   const remoteRuntimePty = isRemoteRuntimePtyId(ptyId)
-  const drivesTabTitle = options.drivesTabTitle ?? true
+  const capturedDrivesTabTitle = options.drivesTabTitle ?? true
   const paneKey = makePaneKey(tabId, options.leafId)
 
   // Why: one watcher per PTY — a stale watcher from a previous park cycle would double-fire bell/completion for the same bytes.
@@ -128,7 +129,13 @@ export function startParkedTerminalByteWatcher(
       const state = useAppStore.getState()
       wroteRuntimeTitleSlot = true
       state.setRuntimePaneTitle(tabId, paneId, title)
-      if (drivesTabTitle) {
+      if (
+        parkedTerminalLeafDrivesTabTitle({
+          activeLeafId: state.terminalLayoutsByTabId?.[tabId]?.activeLeafId,
+          leafId: options.leafId,
+          capturedAuthority: capturedDrivesTabTitle
+        })
+      ) {
         state.updateTabTitle(tabId, title)
       }
     },
@@ -251,34 +258,9 @@ export function startParkedTerminalByteWatcher(
         onWorking: commandStatusPolicy.onCommandCodeWorking,
         onDone: commandStatusPolicy.onCommandCodeDone
       })
-  const unregisterFactConsumer = factSideEffectAuthority
-    ? registerTerminalSideEffectFactConsumer({
-        ptyId,
-        // Why: ordinary park already has a pane-owned title; the flag below requests a snapshot only when no pane did.
-        callbacks: {
-          ...sideEffectCallbacks,
-          onCommandFinished: commandStatusPolicy.onCommandFinished,
-          onCommandCodeWorking: commandStatusPolicy.onCommandCodeWorking,
-          onCommandCodeDone: commandStatusPolicy.onCommandCodeDone,
-          onPrLink: (link) =>
-            useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link),
-          // Why (gate mode only): the 2031 subscribe arrives as a fact, but the reply stays here — query authority stays with the view/watcher (invariant 6).
-          ...(factOwnsMode2031 ? { onMode2031Subscribe: sendMode2031Reply } : {})
-        },
-        // Why: activation-deferred tabs can start a watcher before any pane restored the title; ordinary parked tabs avoid this IPC.
-        restoreTitleOnRegister: options.restoreTitleOnRegister === true
-      })
-    : null
-
-  // Why: no xterm answers DECSET 2031 while parked; with the gate ON, the responder's sidecar would force-feed bytes to the gated PTY, so skip it.
-  const stopMode2031Responder = factOwnsMode2031
-    ? null
-    : startParkedTerminalMode2031Responder({ ptyId, sendInput })
-
-  // Why: parked tabs are the canonical hidden view — mark the PTY gated so main stops renderer byte delivery.
-  const releaseHiddenDeliveryClaim = hiddenDeliveryGateActive
-    ? acquireHiddenRendererPtyDeliveryClaim(ptyId)
-    : null
+  let unregisterFactConsumer: (() => void) | null = null
+  let stopMode2031Responder: (() => void) | null = null
+  let releaseHiddenDeliveryClaim: (() => void) | null = null
 
   const processLiveData = (data: string): void => {
     if (!processor) {
@@ -293,10 +275,9 @@ export function startParkedTerminalByteWatcher(
       }
     }
   }
-  // Why: paired hosts forward derived facts over the one environment event
-  // stream; parked PTYs never consume terminal multiplex slots or raw bytes.
-  const unsubscribeByteParsers =
-    processor === null ? null : subscribeToPtyData(ptyId, processLiveData)
+  // Why: covered parks restore from an authoritative host snapshot; consuming the
+  // raw gap prevents duplicate side effects on reveal (force-parks stay best-effort).
+  let unsubscribeByteParsers: (() => void) | null = null
 
   const dispose = (): void => {
     if (disposed) {
@@ -326,6 +307,37 @@ export function startParkedTerminalByteWatcher(
     if (parkedWatcherDisposersByPtyId.get(ptyId) === dispose) {
       parkedWatcherDisposersByPtyId.delete(ptyId)
     }
+  }
+  try {
+    unregisterFactConsumer = factSideEffectAuthority
+      ? registerTerminalSideEffectFactConsumer({
+          ptyId,
+          callbacks: {
+            ...sideEffectCallbacks,
+            onCommandFinished: commandStatusPolicy.onCommandFinished,
+            onCommandCodeWorking: commandStatusPolicy.onCommandCodeWorking,
+            onCommandCodeDone: commandStatusPolicy.onCommandCodeDone,
+            onPrLink: (link) =>
+              useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link),
+            ...(factOwnsMode2031 ? { onMode2031Subscribe: sendMode2031Reply } : {})
+          },
+          restoreTitleOnRegister: options.restoreTitleOnRegister === true
+        })
+      : null
+    // Why: gated parked PTYs answer mode 2031 from facts, never raw bytes.
+    stopMode2031Responder = factOwnsMode2031
+      ? null
+      : startParkedTerminalMode2031Responder({ ptyId, sendInput })
+    releaseHiddenDeliveryClaim = hiddenDeliveryGateActive
+      ? acquireHiddenRendererPtyDeliveryClaim(ptyId)
+      : null
+    unsubscribeByteParsers =
+      processor === null
+        ? null
+        : subscribeToPtyData(ptyId, processLiveData, { adoptPreHandlerData: true })
+  } catch (error) {
+    dispose()
+    throw error
   }
   parkedWatcherDisposersByPtyId.set(ptyId, dispose)
   return dispose

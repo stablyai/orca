@@ -17,6 +17,8 @@ import {
 } from './terminal-pane-close-identity'
 import {
   capturedPanesByTabId,
+  markParkedTerminalWatcherOwnershipRestored,
+  notifyParkedTerminalWatcherOwnershipLoss,
   parkedWatchersByTabId,
   type ParkedTabWatcherEntry,
   type ParkedTerminalPaneCapture
@@ -42,24 +44,33 @@ export function startParkedPtyWatcher(args: {
   ) {
     return
   }
+  let exitHandled = false
   const handlePtyExit = (_code: number, { hadPrimary }: { hadPrimary: boolean }): void => {
+    if (exitHandled) {
+      return
+    }
+    exitHandled = true
+    const hadSiblingWatcher = entry.disposersByPtyId.size > 1
+    const dispose = entry.disposersByPtyId.get(ptyId)
+    entry.disposersByPtyId.delete(ptyId)
+    dispose?.()
     useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
-    if (entry.disposersByPtyId.size > 1) {
+    if (hadSiblingWatcher) {
       discardPreHandlerPtyState(ptyId)
-      collapseParkedExitedLeaf(tab.id, ptyId)
-      entry.disposersByPtyId.get(ptyId)?.()
-      entry.disposersByPtyId.delete(ptyId)
+      collapseParkedExitedLeaf(tab.id, ptyId, {
+        entry,
+        leafId: pane.leafId,
+        worktreeId,
+        generation: tab.generation ?? null
+      })
       return
     }
     if (hadPrimary) {
-      entry.disposersByPtyId.get(ptyId)?.()
-      entry.disposersByPtyId.delete(ptyId)
+      notifyParkedTerminalWatcherOwnershipLoss(tab.id, entry, 'primary-exit-unowned')
       return
     }
 
     // Why: the empty entry prevents a pending pinned-close confirmation from restarting the dead PTY.
-    entry.disposersByPtyId.get(ptyId)?.()
-    entry.disposersByPtyId.delete(ptyId)
     closeTerminalTab(tab.id, {
       captureRecentlyClosed: false,
       hostCloseReason: 'pty-exit',
@@ -70,7 +81,9 @@ export function startParkedPtyWatcher(args: {
           parkedWatchersByTabId.delete(tab.id)
         }
       },
-      onCancel: () => {}
+      onCancel: () => {
+        notifyParkedTerminalWatcherOwnershipLoss(tab.id, entry, 'close-cancelled')
+      }
     })
   }
   const initialTitle = state.runtimePaneTitlesByTabId[tab.id]?.[pane.paneId]
@@ -87,22 +100,105 @@ export function startParkedPtyWatcher(args: {
       sendRuntimePtyInput(useAppStore.getState().settings, ptyId, data)
     }
   })
-  const unsubscribeExit = isRemoteRuntimePtyId(ptyId)
-    ? () => {}
-    : subscribeToPtyExit(ptyId, handlePtyExit)
+  let unsubscribeExit: () => void
+  try {
+    unsubscribeExit = isRemoteRuntimePtyId(ptyId)
+      ? () => {}
+      : subscribeToPtyExit(ptyId, handlePtyExit, { adoptPreHandlerExit: true })
+  } catch (error) {
+    entry.paneIdByPtyId.delete(ptyId)
+    entry.disposersByPtyId.delete(ptyId)
+    try {
+      disposeWatcher()
+    } catch {
+      // Why: preserve the subscription failure that prevented watcher ownership.
+    }
+    throw error
+  }
   entry.paneIdByPtyId.set(ptyId, pane.paneId)
   entry.disposersByPtyId.set(ptyId, () => {
     unsubscribeExit()
     disposeWatcher()
   })
+  markParkedTerminalWatcherOwnershipRestored(entry)
 }
 
-export function collapseParkedExitedLeaf(tabId: string, ptyId: string): void {
+type ParkedExitedLeafWatcherFallback = {
+  entry: ParkedTabWatcherEntry
+  leafId: string
+  worktreeId: string
+  generation: number | null
+}
+
+function resolveUnoccupiedParkedExitFallbackLeaf(
+  layout: ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId'][string] | undefined,
+  leafId: string,
+  ptyId: string
+): string | null {
+  const boundPtyId = layout?.ptyIdsByLeafId?.[leafId]
+  return boundPtyId === undefined || boundPtyId === ptyId ? leafId : null
+}
+
+function isCurrentParkedExitedLeafWatcher(
+  state: ReturnType<typeof useAppStore.getState>,
+  tabId: string,
+  watcher: ParkedExitedLeafWatcherFallback
+): boolean {
+  const liveTab = (state.tabsByWorktree[watcher.worktreeId] ?? []).find(
+    (candidate) => candidate.id === tabId
+  )
+  return (
+    liveTab !== undefined &&
+    parkedWatchersByTabId.get(tabId) === watcher.entry &&
+    watcher.entry.worktreeId === watcher.worktreeId &&
+    (liveTab.generation ?? null) === watcher.generation
+  )
+}
+
+function resolveParkedExitedLeafId(
+  state: ReturnType<typeof useAppStore.getState>,
+  tabId: string,
+  ptyId: string,
+  watcher?: ParkedExitedLeafWatcherFallback
+): string | null {
+  if (watcher && !isCurrentParkedExitedLeafWatcher(state, tabId, watcher)) {
+    return null
+  }
+  const layout = state.terminalLayoutsByTabId[tabId]
+  const boundLeafId = Object.entries(layout?.ptyIdsByLeafId ?? {}).find(
+    ([, boundPtyId]) => boundPtyId === ptyId
+  )?.[0]
+  if (boundLeafId) {
+    return boundLeafId
+  }
+  if (watcher) {
+    return resolveUnoccupiedParkedExitFallbackLeaf(layout, watcher.leafId, ptyId)
+  }
+  const entry = parkedWatchersByTabId.get(tabId)
+  const capture = capturedPanesByTabId.get(tabId)
+  if (!entry || !capture || capture.worktreeId !== entry.worktreeId) {
+    return null
+  }
+  const liveTab = (state.tabsByWorktree[entry.worktreeId] ?? []).find(
+    (candidate) => candidate.id === tabId
+  )
+  if (!liveTab || capture.generation !== (liveTab.generation ?? null)) {
+    return null
+  }
+  const capturedLeafId = capture.panes.find((pane) => pane.ptyId === ptyId)?.leafId
+  return capturedLeafId
+    ? resolveUnoccupiedParkedExitFallbackLeaf(layout, capturedLeafId, ptyId)
+    : null
+}
+
+export function collapseParkedExitedLeaf(
+  tabId: string,
+  ptyId: string,
+  watcher?: ParkedExitedLeafWatcherFallback
+): void {
   const state = useAppStore.getState()
   const layout = state.terminalLayoutsByTabId[tabId]
-  const leafId =
-    capturedPanesByTabId.get(tabId)?.panes.find((pane) => pane.ptyId === ptyId)?.leafId ??
-    Object.entries(layout?.ptyIdsByLeafId ?? {}).find(([, boundPtyId]) => boundPtyId === ptyId)?.[0]
+  const leafId = resolveParkedExitedLeafId(state, tabId, ptyId, watcher)
   if (!leafId) {
     return
   }

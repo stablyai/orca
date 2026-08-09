@@ -128,14 +128,27 @@ import {
   recordTerminalWorktreeParkingDebugVerdicts
 } from './terminal-pane/terminal-parking-e2e-overrides'
 import { selectEvictionExemptTerminalTabIds } from './terminal-pane/terminal-eviction-exempt-tabs'
+import { selectSleepingRecordParkExemptTabIds } from './terminal-pane/sleeping-record-park-exemption'
 import {
   canWatcherCoverParkedTerminalTab,
   disposeAllParkedTerminalWatchers,
+  planParkedTerminalTabWatcherCoverage,
   pruneParkedTerminalWatchers,
+  subscribeParkedTerminalWatcherOwnershipLoss,
   shouldDeferParkedPtyExitTabClose,
-  syncParkedTerminalTabWatchers,
-  terminalWatcherLiveWorkspaceIds
+  syncParkedTerminalTabWatchersWithAcknowledgements,
+  terminalWatcherLiveWorkspaceIds,
+  type TerminalParkedWatcherCoveragePlan
 } from './terminal-pane/terminal-parked-tab-watchers'
+import {
+  acknowledgeTerminalParkEpisodeSet,
+  reconcileTerminalParkEpisodeSet,
+  selectAcknowledgedTerminalParkEpisodeUnmounts,
+  selectTerminalParkEpisodeWatcherTabIds,
+  type TerminalParkEpisodeSet
+} from './terminal-pane/terminal-park-episode-set'
+import { terminalParkedWatcherPlanPtyIds } from './terminal-pane/terminal-park-episode-lease'
+import { createParkedTerminalWatcherTopologyKey } from './terminal-pane/terminal-parked-watcher-reconciliation'
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
@@ -333,6 +346,7 @@ function Terminal(): React.JSX.Element | null {
   const terminalRetentionBudgetEnabled = useAppStore(
     (s) => s.settings?.terminalHiddenWorktreeRetentionBudget !== false
   )
+  const sleepingAgentSessionsByPaneKey = useAppStore((s) => s.sleepingAgentSessionsByPaneKey)
   const browserGuestRetentionBudgetEnabled = useAppStore(
     (s) => s.settings?.browserGuestWorktreeRetentionBudget !== false
   )
@@ -420,7 +434,34 @@ function Terminal(): React.JSX.Element | null {
         : [],
     [renderedActiveWorktreeId, tabsByWorktree]
   )
-  useTerminalProviderSnapshotCapability(workspaceSessionReady && hydrationSucceeded)
+  const terminalProviderCapabilityRevision = useTerminalProviderSnapshotCapability(
+    workspaceSessionReady && hydrationSucceeded
+  )
+  const terminalParkedWatcherLayoutsByTabId = useAppStore(
+    useShallow((state) => {
+      const layouts: typeof state.terminalLayoutsByTabId = {}
+      for (const workspace of workspaceSurfaces) {
+        for (const tab of tabsByWorktree[workspace.id] ?? []) {
+          const layout = state.terminalLayoutsByTabId[tab.id]
+          if (layout) {
+            layouts[tab.id] = layout
+          }
+        }
+      }
+      return layouts
+    })
+  )
+  const terminalParkedWatcherTopologyKey = useMemo(
+    () =>
+      JSON.stringify(
+        workspaceSurfaces.map((workspace) =>
+          createParkedTerminalWatcherTopologyKey(workspace.id, tabsByWorktree[workspace.id] ?? [], {
+            terminalLayoutsByTabId: terminalParkedWatcherLayoutsByTabId
+          })
+        )
+      ),
+    [tabsByWorktree, terminalParkedWatcherLayoutsByTabId, workspaceSurfaces]
+  )
 
   // Why: TabBar portals into the titlebar (target created by App.tsx) so tabs share the "Orca" title row.
   const titlebarTabsTarget = document.getElementById('titlebar-tabs')
@@ -800,8 +841,13 @@ function Terminal(): React.JSX.Element | null {
   })
   const effectiveParkedTerminalWorktreeIds = useMemo(
     () =>
-      combineTerminalWorktreeParkIds(parkedTerminalWorktreeIds, manuallyParkedTerminalWorktreeIds),
-    [manuallyParkedTerminalWorktreeIds, parkedTerminalWorktreeIds]
+      terminalParkingEnabled
+        ? combineTerminalWorktreeParkIds(
+            parkedTerminalWorktreeIds,
+            manuallyParkedTerminalWorktreeIds
+          )
+        : new Set<string>(),
+    [manuallyParkedTerminalWorktreeIds, parkedTerminalWorktreeIds, terminalParkingEnabled]
   )
   // Why separate from parkedTerminalWorktreeIds: force-parked worktrees keep
   // their eviction-exempt tabs' panes mounted (per-tab exclusion), which
@@ -816,6 +862,14 @@ function Terminal(): React.JSX.Element | null {
   const [evictionExemptTerminalTabIds, setEvictionExemptTerminalTabIds] = useState<
     ReadonlySet<string>
   >(() => new Set())
+  const legacyParkEpisodeLeasesRef = useRef<TerminalParkEpisodeSet>(new Map())
+  const legacyParkPlansByTabIdRef = useRef<ReadonlyMap<string, TerminalParkedWatcherCoveragePlan>>(
+    new Map()
+  )
+  const legacyForcedParkTabIdsRef = useRef<ReadonlySet<string>>(new Set())
+  const [legacyParkedTerminalTabIds, setLegacyParkedTerminalTabIds] = useState<ReadonlySet<string>>(
+    () => new Set()
+  )
   // Why a ref: eviction captures buffers exactly once per force-park episode, before the unmount render.
   const forceParkedCaptureDoneRef = useRef(new Set<string>())
   // Tab restriction for targeted background mounts (wake/resume); a worktree absent from this map mounts all its tabs.
@@ -824,6 +878,25 @@ function Terminal(): React.JSX.Element | null {
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   // Why: run the cold-activation deferral decision once per activation transition, not on every re-render.
   const lastActivationWorktreeIdRef = useRef<string | null>(null)
+  const revealRejectedActivationDeferredTab = useCallback(
+    (worktreeId: string, tabId: string): void => {
+      if (!activationDeferredMountTabIdsByWorktreeRef.current.get(worktreeId)?.has(tabId)) {
+        return
+      }
+      const allTabIds = (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).map(
+        (tab) => tab.id
+      )
+      revealActivationDeferredTabs({
+        restrictions: backgroundMountTabIdsByWorktreeRef.current,
+        deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
+        worktreeId,
+        allTabIds,
+        immediateTabIds: new Set([tabId])
+      })
+      setBackgroundMountRevision((revision) => revision + 1)
+    },
+    []
+  )
   useEffect(() => {
     const timers = measurableBackgroundWorktreeTimersRef.current
     const closeDialogDebounceTimers = closeDialogDebounceTimersRef.current
@@ -986,21 +1059,18 @@ function Terminal(): React.JSX.Element | null {
       restorePolicy,
       ...overrides
     })
-    // Why memoized: the retention pass below re-asks coverage for EVERY mounted
-    // worktree's tabs, not just the parked few — each call re-reads the store and
-    // can walk the layout tree, so cache per tab for this pass.
-    const watcherCoverageByTabId = new Map<string, boolean>()
+    const watcherCoveragePlanByTabId = new Map<string, TerminalParkedWatcherCoveragePlan>()
     const worktreeTabsAreWatcherCovered = (worktreeId: string, tabs: TerminalTab[]): boolean =>
       tabs.every((tab) => {
-        const cached = watcherCoverageByTabId.get(tab.id)
-        if (cached !== undefined) {
-          return cached
+        const cached = watcherCoveragePlanByTabId.get(tab.id)
+        if (cached) {
+          return cached.status === 'covered'
         }
-        const covered = canWatcherCoverParkedTerminalTab(worktreeId, tab)
-        watcherCoverageByTabId.set(tab.id, covered)
-        return covered
+        const plan = planParkedTerminalTabWatcherCoverage(worktreeId, tab)
+        watcherCoveragePlanByTabId.set(tab.id, plan)
+        return plan.status === 'covered'
       })
-    // Why: a worktree with any watcher-uncoverable tab must never park, or it goes silent for bells/titles/completions (sank the first parking attempt).
+    // Ordinary parking requires a semantic handoff plan for every tab.
     for (const worktreeId of Array.from(nextParkedTerminalWorktreeIds)) {
       if (!worktreeTabsAreWatcherCovered(worktreeId, tabsByWorktree[worktreeId] ?? [])) {
         nextParkedTerminalWorktreeIds.delete(worktreeId)
@@ -1162,7 +1232,9 @@ function Terminal(): React.JSX.Element | null {
     renderedActiveWorktreeId,
     tabsByWorktree,
     terminalParkingEnabled,
+    terminalParkedWatcherTopologyKey,
     terminalParkingRevision,
+    terminalProviderCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
     workspaceSurfaces
@@ -1324,7 +1396,7 @@ function Terminal(): React.JSX.Element | null {
         isTabDeferrable: (tabId) => {
           const tab = tabById.get(tabId)
           return (
-            // Why: byte-mode watchers can't reconstruct pre-registration output; remote/unresolved ownership mounts eagerly since only a local daemon has snapshots.
+            // Why: only authoritative hosts can rebuild pane content beyond the bounded handoff buffer.
             coldActivationDeferralEnabled &&
             activationHostSupportsDeferral &&
             tab !== undefined &&
@@ -1389,7 +1461,153 @@ function Terminal(): React.JSX.Element | null {
     groupsByWorktree,
     activeGroupIdByWorktree
   )
-  // Why: legacy (non-split) host owns watcher reconciliation; split mode's overlay layers own theirs, so only dispose worktrees with no overlay layer.
+  useEffect(() => {
+    const requestedTabIds = new Set<string>()
+    const forcedTabIds = new Set<string>()
+    const requestedTabs: TerminalTab[] = []
+    const worktreeIdByTabId = new Map<string, string>()
+    if (!anyMountedWorktreeHasLayout && terminalParkingEnabled) {
+      for (const workspace of workspaceSurfaces) {
+        if (!mountedWorktreeIdsRef.current.has(workspace.id)) {
+          continue
+        }
+        const isVisible = activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+        const shouldMeasure =
+          !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
+        const worktreePark =
+          !isVisible && !shouldMeasure && effectiveParkedTerminalWorktreeIds.has(workspace.id)
+        const forcePark = worktreePark && forceParkedTerminalWorktreeIds.has(workspace.id)
+        const deferredTabIds = activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id)
+        const sleepingRecordOwnedTabIds = selectSleepingRecordParkExemptTabIds(
+          sleepingAgentSessionsByPaneKey,
+          workspace.id
+        )
+        for (const tab of tabsByWorktree[workspace.id] ?? []) {
+          const portaled =
+            findActivityTerminalPortal(activityTerminalPortals, {
+              worktreeId: workspace.id,
+              tabId: tab.id
+            }) !== null
+          const requestedByWorktree =
+            worktreePark && !portaled && !evictionExemptTerminalTabIds.has(tab.id)
+          const requestedByDeferral =
+            deferredTabIds?.has(tab.id) === true &&
+            !portaled &&
+            !sleepingRecordOwnedTabIds.has(tab.id)
+          if (!requestedByWorktree && !requestedByDeferral) {
+            continue
+          }
+          requestedTabs.push(tab)
+          requestedTabIds.add(tab.id)
+          worktreeIdByTabId.set(tab.id, workspace.id)
+          if (forcePark && requestedByWorktree) {
+            forcedTabIds.add(tab.id)
+          }
+        }
+      }
+    }
+    const reconciled = reconcileTerminalParkEpisodeSet({
+      current: legacyParkEpisodeLeasesRef.current,
+      tabs: requestedTabs,
+      requestedTabIds,
+      forcedTabIds,
+      plan: (tab) => {
+        const worktreeId = worktreeIdByTabId.get(tab.id)
+        if (!worktreeId) {
+          throw new Error(`Missing terminal worktree for ${tab.id}`)
+        }
+        return planParkedTerminalTabWatcherCoverage(worktreeId, tab)
+      }
+    })
+    let nextLeases = reconciled.leases
+    const acknowledgementRequiredTabIds = new Set<string>()
+    if (!anyMountedWorktreeHasLayout) {
+      for (const workspace of workspaceSurfaces) {
+        const deferredTabIds =
+          activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
+        if (
+          !deferredTabIds ||
+          !Array.from(deferredTabIds).some((tabId) => reconciled.unmountTabIds.has(tabId))
+        ) {
+          continue
+        }
+        const tabs = tabsByWorktree[workspace.id] ?? []
+        const watcherReadyTabIds = new Set(
+          tabs
+            .map((tab) => tab.id)
+            .filter(
+              (tabId) =>
+                reconciled.unmountTabIds.has(tabId) &&
+                (legacyParkedTerminalTabIds.has(tabId) || deferredTabIds.has(tabId))
+            )
+        )
+        const acknowledgements = syncParkedTerminalTabWatchersWithAcknowledgements({
+          worktreeId: workspace.id,
+          tabs,
+          parkedTabIds: watcherReadyTabIds,
+          coveragePlansByTabId: reconciled.plansByTabId,
+          forcedTabIds,
+          restoreTitleOnStartTabIds: deferredTabIds
+        })
+        for (const tabId of watcherReadyTabIds) {
+          if (deferredTabIds.has(tabId)) {
+            acknowledgementRequiredTabIds.add(tabId)
+          }
+        }
+        nextLeases = acknowledgeTerminalParkEpisodeSet(nextLeases, acknowledgements).leases
+      }
+    }
+    const nextUnmountTabIds = selectAcknowledgedTerminalParkEpisodeUnmounts({
+      leases: nextLeases,
+      plansByTabId: reconciled.plansByTabId,
+      requestedTabIds,
+      forcedTabIds,
+      acknowledgementRequiredTabIds
+    })
+    legacyParkEpisodeLeasesRef.current = nextLeases
+    legacyParkPlansByTabIdRef.current = reconciled.plansByTabId
+    legacyForcedParkTabIdsRef.current = forcedTabIds
+    if (!anyMountedWorktreeHasLayout) {
+      for (const workspace of workspaceSurfaces) {
+        for (const tabId of activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id) ??
+          []) {
+          if (!nextUnmountTabIds.has(tabId)) {
+            revealRejectedActivationDeferredTab(workspace.id, tabId)
+          }
+        }
+      }
+    }
+    setLegacyParkedTerminalTabIds((current) =>
+      haveSameIdSet(current, nextUnmountTabIds) ? current : nextUnmountTabIds
+    )
+  }, [
+    activeTabId,
+    activeTabIdByWorktree,
+    activeView,
+    activityTerminalPortals,
+    anyMountedWorktreeHasLayout,
+    backgroundMountRevision,
+    effectiveParkedTerminalWorktreeIds,
+    evictionExemptTerminalTabIds,
+    forceParkedTerminalWorktreeIds,
+    groupsByWorktree,
+    legacyParkedTerminalTabIds,
+    pendingStartupByTabId,
+    pairedRuntimeParkingEnvironmentIds,
+    renderedActiveWorktreeId,
+    revealRejectedActivationDeferredTab,
+    sleepingAgentSessionsByPaneKey,
+    tabsByWorktree,
+    terminalParkedWatcherTopologyKey,
+    terminalParkingEnabled,
+    terminalProviderCapabilityRevision,
+    terminalSshParkingEnabled,
+    terminalTitleSnapshotAuthorityEnabled,
+    workspaceSessionReady,
+    workspaceSurfaces
+  ])
+
+  // Legacy owns these watchers; split overlay hooks own worktrees with layouts.
   useEffect(() => {
     pruneParkedTerminalWatchers(
       terminalWatcherLiveWorkspaceIds(workspaceSurfaces.map((workspace) => workspace.id))
@@ -1403,59 +1621,55 @@ function Terminal(): React.JSX.Element | null {
         continue
       }
       const tabs = tabsByWorktree[workspace.id] ?? []
-      const parkedTabIds = new Set<string>()
-      let deferredTabIds: ReadonlySet<string> | null = null
-      if (!anyMountedWorktreeHasLayout && mountedWorktreeIdsRef.current.has(workspace.id)) {
-        const isVisible = activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
-        const shouldMeasureHiddenWorktree =
-          !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
-        const parked =
-          !isVisible &&
-          !shouldMeasureHiddenWorktree &&
-          effectiveParkedTerminalWorktreeIds.has(workspace.id)
-        if (parked) {
-          for (const tab of tabs) {
-            const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
-              worktreeId: workspace.id,
-              tabId: tab.id
-            })
-            // Why the exempt exclusion: force-park keeps eviction-exempt tabs'
-            // panes mounted (a remount would orphan their live pty) — same
-            // per-tab carve-out as Activity portals, so no watcher owns them.
-            // The set is resolved in the force-park pass and holds only those
-            // worktrees' tabs.
-            if (!activityTerminalPortal && !evictionExemptTerminalTabIds.has(tab.id)) {
-              parkedTabIds.add(tab.id)
-            }
-          }
-        }
-        // Why: activation-deferred tabs are unmounted like parked ones — the same byte watchers own their side effects until first reveal.
-        deferredTabIds =
-          activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
-        for (const tab of tabs) {
-          if (
-            deferredTabIds?.has(tab.id) &&
-            !parkedTabIds.has(tab.id) &&
-            canWatcherCoverParkedTerminalTab(workspace.id, tab) &&
-            !findActivityTerminalPortal(activityTerminalPortals, {
-              worktreeId: workspace.id,
-              tabId: tab.id
-            })
-          ) {
-            parkedTabIds.add(tab.id)
-          }
-        }
-      }
-      syncParkedTerminalTabWatchers({
+      const deferredTabIds =
+        activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
+      const parkedTabIds = selectTerminalParkEpisodeWatcherTabIds({
+        worktreeId: workspace.id,
+        tabIds: tabs.map((tab) => tab.id),
+        leases: legacyParkEpisodeLeasesRef.current,
+        plansByTabId: legacyParkPlansByTabIdRef.current,
+        renderedUnmountTabIds: legacyParkedTerminalTabIds,
+        ...(deferredTabIds ? { activationDeferredTabIds: deferredTabIds } : {})
+      })
+      const coveragePlansByTabId = new Map(
+        [...legacyParkPlansByTabIdRef.current].filter(([tabId]) => parkedTabIds.has(tabId))
+      )
+      const forcedTabIds = new Set(
+        [...legacyForcedParkTabIdsRef.current].filter((tabId) => parkedTabIds.has(tabId))
+      )
+      const acknowledgements = syncParkedTerminalTabWatchersWithAcknowledgements({
         worktreeId: workspace.id,
         tabs,
         parkedTabIds,
+        coveragePlansByTabId,
+        forcedTabIds,
         // Why: activation-deferred tabs never mounted a pane to restore their title, unlike ordinary parked tabs.
         ...(deferredTabIds ? { restoreTitleOnStartTabIds: deferredTabIds } : {})
       })
+      const acknowledged = acknowledgeTerminalParkEpisodeSet(
+        legacyParkEpisodeLeasesRef.current,
+        acknowledgements
+      )
+      legacyParkEpisodeLeasesRef.current = acknowledged.leases
+      if (acknowledged.renderChanged) {
+        const failedTabIds = new Set(
+          acknowledgements
+            .filter((acknowledgement) => acknowledgement.status === 'failed')
+            .map((acknowledgement) => acknowledgement.tabId)
+        )
+        setLegacyParkedTerminalTabIds((current) => {
+          const next = new Set([...current].filter((tabId) => !failedTabIds.has(tabId)))
+          return haveSameIdSet(current, next) ? current : next
+        })
+        for (const tabId of failedTabIds) {
+          if (deferredTabIds?.has(tabId)) {
+            revealRejectedActivationDeferredTab(workspace.id, tabId)
+          }
+        }
+      }
     }
   }, [
-    // Why activeTabId: revealing a deferred tab mutates the mount restriction in the same render; sync must re-run so its watcher disposes before the pane attaches.
+    // Why activeTabId: reveal mutates the mount restriction during render; re-run so current leases release stale watcher ownership in the same effect flush.
     activeTabId,
     activeView,
     activityTerminalPortals,
@@ -1465,15 +1679,53 @@ function Terminal(): React.JSX.Element | null {
     evictionExemptTerminalTabIds,
     getEffectiveLayoutForWorktree,
     groupsByWorktree,
-    effectiveParkedTerminalWorktreeIds,
+    legacyParkedTerminalTabIds,
     pendingStartupByTabId,
+    pairedRuntimeParkingEnvironmentIds,
     renderedActiveWorktreeId,
+    revealRejectedActivationDeferredTab,
     tabsByWorktree,
+    terminalParkedWatcherTopologyKey,
     terminalParkingEnabled,
+    terminalProviderCapabilityRevision,
+    terminalSshParkingEnabled,
     terminalTitleSnapshotAuthorityEnabled,
     workspaceSessionReady,
     workspaceSurfaces
   ])
+  useEffect(
+    () =>
+      subscribeParkedTerminalWatcherOwnershipLoss((event) => {
+        const lease = legacyParkEpisodeLeasesRef.current.get(event.tabId)
+        if (!lease || lease.phase === 'forced' || lease.plan.worktreeId !== event.worktreeId) {
+          return
+        }
+        const acknowledged = acknowledgeTerminalParkEpisodeSet(legacyParkEpisodeLeasesRef.current, [
+          {
+            status: 'failed',
+            tabId: event.tabId,
+            materialKey: lease.plan.materialKey,
+            reason: 'watcher-ownership-lost',
+            expectedPtyIds: terminalParkedWatcherPlanPtyIds(lease.plan),
+            watchedPtyIds: []
+          }
+        ])
+        if (!acknowledged.renderChanged) {
+          return
+        }
+        legacyParkEpisodeLeasesRef.current = acknowledged.leases
+        setLegacyParkedTerminalTabIds((current) => {
+          if (!current.has(event.tabId)) {
+            return current
+          }
+          const next = new Set(current)
+          next.delete(event.tabId)
+          return next
+        })
+        revealRejectedActivationDeferredTab(event.worktreeId, event.tabId)
+      }),
+    [revealRejectedActivationDeferredTab]
+  )
   // Why: on host unmount no reconciliation effect runs again, so dispose every remaining parked watcher.
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
   // Auto-create first tab when worktree activates
@@ -2467,6 +2719,7 @@ function Terminal(): React.JSX.Element | null {
                   activationDeferredMountTabIds={
                     activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
                   }
+                  onActivationDeferredWatcherHandoffFailed={revealRejectedActivationDeferredTab}
                 />
               )
             })}
@@ -2531,6 +2784,7 @@ function Terminal(): React.JSX.Element | null {
                         // tabs stay mounted because a remount would orphan their live pty.
                         if (
                           shouldColdParkTerminalPanes &&
+                          legacyParkedTerminalTabIds.has(tab.id) &&
                           !isActivityPortalTab &&
                           !evictionExemptTerminalTabIds.has(tab.id)
                         ) {
@@ -2540,6 +2794,7 @@ function Terminal(): React.JSX.Element | null {
                           <TerminalPane
                             key={`${tab.id}-${tab.generation ?? 0}`}
                             tabId={tab.id}
+                            terminalGeneration={tab.generation}
                             worktreeId={workspace.id}
                             cwd={tab.startupCwd ?? workspace.path}
                             isActive={
@@ -2727,7 +2982,8 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   isForceParked,
   activityTerminalPortals,
   backgroundMountTabIds,
-  activationDeferredMountTabIds
+  activationDeferredMountTabIds,
+  onActivationDeferredWatcherHandoffFailed
 }: {
   worktreeId: string
   worktreePath: string
@@ -2740,6 +2996,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   activityTerminalPortals: ActivityTerminalPortalTarget[]
   backgroundMountTabIds: ReadonlySet<string> | null
   activationDeferredMountTabIds: ReadonlySet<string> | null
+  onActivationDeferredWatcherHandoffFailed: (worktreeId: string, tabId: string) => void
 }): React.JSX.Element {
   const browserPageIds = useAppStore(
     useShallow((state) =>
@@ -2752,6 +3009,10 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(browserPageIds)
   const shouldKeepPaintable =
     shouldMeasureHiddenWorktree || hasAutomationVisibleBrowser || hasMobileDrivenBrowser
+  const revealRejectedActivationDeferredTab = useCallback(
+    (tabId: string) => onActivationDeferredWatcherHandoffFailed(worktreeId, tabId),
+    [onActivationDeferredWatcherHandoffFailed, worktreeId]
+  )
 
   return (
     <div
@@ -2782,6 +3043,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         activityTerminalPortals={activityTerminalPortals}
         backgroundMountTabIds={backgroundMountTabIds}
         activationDeferredMountTabIds={activationDeferredMountTabIds}
+        onActivationDeferredWatcherHandoffFailed={revealRejectedActivationDeferredTab}
       />
       {/* Why: once eligible, retain slot DOM so hidden worktrees keep their Electron guests alive (STA-3228). */}
       <RetainedBrowserPaneOverlayLayer

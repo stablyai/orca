@@ -36,7 +36,7 @@ export function isEvictionExemptTerminalTab(
   if (isEvictionExemptTerminalPty(tab.ptyId, worktreeId)) {
     return true
   }
-  return resolveParkedTerminalPaneCandidates(tab, useAppStore.getState()).some((pane) =>
+  return resolveParkedTerminalPaneCandidates(worktreeId, tab, useAppStore.getState()).some((pane) =>
     isEvictionExemptTerminalPty(pane.ptyId, worktreeId)
   )
 }

@@ -77,7 +77,7 @@ afterEach(() => {
 })
 
 it('retains a continuing watcher and title while reconciling a reminted split leaf', () => {
-  captureParkedTerminalPaneCandidates(TAB_ID, WORKTREE_ID, [
+  captureParkedTerminalPaneCandidates(TAB_ID, WORKTREE_ID, null, [
     { ptyId: FIRST_PTY_ID, paneId: 1, leafId: FIRST_LEAF_ID, drivesTabTitle: true },
     { ptyId: OLD_SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
   ])

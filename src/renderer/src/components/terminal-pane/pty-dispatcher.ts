@@ -15,6 +15,12 @@ import {
 } from './pty-pre-handler-buffer'
 import { deliverPtyExitToHandlers } from './pty-exit-delivery'
 import {
+  ptyExitSidecars,
+  registerPtyExitSidecar,
+  type PtyExitSubscriptionOptions,
+  type PtyExitWatcher
+} from './pty-exit-sidecar-subscriptions'
+import {
   clearReceivedPtyCharTotal,
   isPtyPushDeliveryBlackholed,
   recordPtyDataReceived,
@@ -32,6 +38,7 @@ import {
   ptyReplayHandlers
 } from './pty-shutdown-data-suspension'
 import { markCommittedPtyShutdowns } from './pty-shutdown-exit-deferral'
+import { deliverPtyDataToSidecarCohort } from './pty-data-sidecar-delivery'
 
 export {
   ptyDataHandlers,
@@ -60,10 +67,6 @@ export type PtyDataMeta = {
 
 /** Sidecar PTY-data observers, invoked AFTER the primary handler so a side-effect-only watcher can't delay xterm rendering. */
 /** Per-PTY replay handlers on a dedicated pty:replay channel so the renderer can engage the replay guard and suppress xterm auto-replies. */
-const ptyExitSidecars = new Map<
-  string,
-  Set<(code: number, context: { hadPrimary: boolean }) => void>
->()
 export const ptyWriteUnavailableHandlers = new Map<string, () => void>()
 let ptyDispatcherAttached = false
 
@@ -155,10 +158,9 @@ function handleDispatchedPtyData(payload: {
     }
     const sidecars = ptyDataSidecars.get(payload.id)
     if (sidecars && sidecars.size > 0) {
-      // Why: snapshot before iterating — watchers often unsubscribe (or subscribe siblings) mid-iteration, and mutating the live Set would skip or double-fire.
-      const snapshot = Array.from(sidecars)
-      for (const watcher of snapshot) {
-        watcher(payload.data)
+      const failure = deliverPtyDataToSidecarCohort(sidecars, payload.data)
+      if (failure) {
+        throw failure.error
       }
     }
   }
@@ -222,27 +224,15 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
   window.api.pty.rendererDispatcherReady?.()
 }
 
+export type { PtyExitSubscriptionOptions } from './pty-exit-sidecar-subscriptions'
+
 export function subscribeToPtyExit(
   ptyId: string,
-  watcher: (code: number, context: { hadPrimary: boolean }) => void
+  watcher: PtyExitWatcher,
+  options?: PtyExitSubscriptionOptions
 ): () => void {
   ensurePtyDispatcher()
-  let set = ptyExitSidecars.get(ptyId)
-  if (!set) {
-    set = new Set()
-    ptyExitSidecars.set(ptyId, set)
-  }
-  set.add(watcher)
-  return () => {
-    const current = ptyExitSidecars.get(ptyId)
-    if (!current) {
-      return
-    }
-    current.delete(watcher)
-    if (current.size === 0) {
-      ptyExitSidecars.delete(ptyId)
-    }
-  }
+  return registerPtyExitSidecar(ptyId, watcher, options)
 }
 
 // ─── Eager PTY buffer for reconnection on restart ────────────────────

@@ -101,6 +101,8 @@ type ConsumerEntry = {
   lastLiveTitleSeq: number | null
 }
 
+type FactDeliveryFailure = { error: unknown }
+
 const consumersByPtyId = new Map<string, ConsumerEntry>()
 let channelUnsubscribe: (() => void) | null = null
 
@@ -152,24 +154,36 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
   }
 }
 
-function applyBatchToConsumer(entry: ConsumerEntry, batch: TerminalSideEffectBatch): void {
+function applyBatchToConsumer(
+  entry: ConsumerEntry,
+  batch: TerminalSideEffectBatch
+): FactDeliveryFailure | null {
+  let failure: FactDeliveryFailure | null = null
+  const apply = (callback: () => void): void => {
+    try {
+      callback()
+    } catch (error) {
+      failure ??= { error }
+    }
+  }
   if (batch.replay) {
     // Why: the no-attention-replay rule — (re)attach snapshots restore title
     // state only; historical bells/completions must never fire again. A replay
     // older (by output sequence) than the last live title fact is stale.
     if (entry.lastLiveTitleSeq !== null && batch.seq <= entry.lastLiveTitleSeq) {
-      return
+      return null
     }
     for (const fact of batch.facts) {
       if (fact.kind === 'title') {
-        entry.callbacks.onTitleChange?.(fact.normalizedTitle, fact.rawTitle)
+        apply(() => entry.callbacks.onTitleChange?.(fact.normalizedTitle, fact.rawTitle))
       }
     }
-    return
+    return failure
   }
   for (const fact of batch.facts) {
-    applyLiveFact(entry, fact, batch.seq)
+    apply(() => applyLiveFact(entry, fact, batch.seq))
   }
+  return failure
 }
 
 // Why: a reveal remount unregisters the parked watcher synchronously, but the
@@ -243,18 +257,21 @@ function bufferHandoffFactBatch(batch: TerminalSideEffectBatch): void {
   buffer.batches.push(batch)
 }
 
-function drainHandoffFactBuffer(ptyId: string, entry: ConsumerEntry): void {
+function drainHandoffFactBuffer(ptyId: string, entry: ConsumerEntry): FactDeliveryFailure | null {
   const buffer = handoffFactBuffersByPtyId.get(ptyId)
   if (!buffer) {
-    return
+    return null
   }
   deleteHandoffFactBuffer(ptyId)
   if (buffer.expiresAtMs <= Date.now()) {
-    return
+    return null
   }
+  let failure: FactDeliveryFailure | null = null
   for (const batch of buffer.batches) {
-    applyBatchToConsumer(entry, batch)
+    const batchFailure = applyBatchToConsumer(entry, batch)
+    failure ??= batchFailure
   }
+  return failure
 }
 
 export function dispatchTerminalSideEffectBatch(batch: TerminalSideEffectBatch): void {
@@ -263,7 +280,10 @@ export function dispatchTerminalSideEffectBatch(batch: TerminalSideEffectBatch):
     bufferHandoffFactBatch(batch)
     return
   }
-  applyBatchToConsumer(entry, batch)
+  const failure = applyBatchToConsumer(entry, batch)
+  if (failure) {
+    throw failure.error
+  }
 }
 
 function ensureSideEffectChannelSubscription(): void {
@@ -304,7 +324,14 @@ export function registerTerminalSideEffectFactConsumer(
   }
   consumersByPtyId.set(options.ptyId, entry)
   // Why before the snapshot request: draining live facts sets lastLiveTitleSeq, so the async title replay is correctly dropped as stale.
-  drainHandoffFactBuffer(options.ptyId, entry)
+  const failure = drainHandoffFactBuffer(options.ptyId, entry)
+  if (failure) {
+    if (consumersByPtyId.get(options.ptyId) === entry) {
+      consumersByPtyId.delete(options.ptyId)
+      openHandoffFactBuffer(options.ptyId)
+    }
+    throw failure.error
+  }
 
   if (options.restoreTitleOnRegister) {
     const getSnapshot = (globalThis as { window?: Window }).window?.api?.pty?.getSideEffectSnapshot

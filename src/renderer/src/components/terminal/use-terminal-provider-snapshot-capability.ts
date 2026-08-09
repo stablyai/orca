@@ -1,13 +1,20 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import {
   collectTerminalProviderSnapshotPtyIds,
+  getTerminalProviderSnapshotCapabilityRevision,
+  subscribeTerminalProviderSnapshotCapabilityRevision,
   startTerminalProviderSnapshotCapabilitySynchronization
 } from './terminal-provider-snapshot-capability'
 
-export function useTerminalProviderSnapshotCapability(enabled: boolean): void {
+export function useTerminalProviderSnapshotCapability(enabled: boolean): number {
   const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((state) => state.ptyIdsByTabId)
+  const capabilityRevision = useSyncExternalStore(
+    subscribeTerminalProviderSnapshotCapabilityRevision,
+    getTerminalProviderSnapshotCapabilityRevision,
+    getTerminalProviderSnapshotCapabilityRevision
+  )
   const boundPtyIds = useMemo(
     () => collectTerminalProviderSnapshotPtyIds({ tabsByWorktree, ptyIdsByTabId }),
     [ptyIdsByTabId, tabsByWorktree]
@@ -20,4 +27,6 @@ export function useTerminalProviderSnapshotCapability(enabled: boolean): void {
     }
     return startTerminalProviderSnapshotCapabilitySynchronization(boundPtyIds)
   }, [boundPtyIds, enabled])
+
+  return capabilityRevision
 }

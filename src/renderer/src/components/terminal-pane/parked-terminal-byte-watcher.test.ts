@@ -175,6 +175,28 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
+  it('adopts an OSC title buffered before parked watcher registration', async () => {
+    const { ensurePtyDispatcher } = await import('./pty-dispatcher')
+    ensurePtyDispatcher()
+    emit(WORKING_TITLE_OSC)
+
+    const { dispose } = await startWatcher()
+    flushSideEffects()
+
+    expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledTimes(1)
+    dispose()
+
+    const { dispose: disposeReplacement } = await startWatcher()
+    flushSideEffects()
+    expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledTimes(1)
+    disposeReplacement()
+
+    emit('\x1b[?2031h')
+    const next = await startWatcher()
+    expect(next.sendInput).toHaveBeenCalledExactlyOnceWith('\x1b[?997;1n')
+    next.dispose()
+  })
+
   it('drops the bare cursor-agent native title before it reaches the store', async () => {
     const { dispose } = await startWatcher()
 

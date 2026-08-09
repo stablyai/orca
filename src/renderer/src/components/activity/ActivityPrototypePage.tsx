@@ -55,12 +55,6 @@ import {
   reconcileActivityPortalThreads,
   resolveActivityPortalSwap
 } from './activity-portal-thread-reconciliation'
-import {
-  ACTIVITY_PORTAL_READINESS_BURST_WINDOW_MS,
-  createActivityPortalReadinessLatch,
-  type ActivityPortalReadinessLatch,
-  type ActivityPortalReadinessStatus
-} from './activity-portal-readiness-oscillation'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
@@ -142,7 +136,7 @@ type ActivityThreadGroup = {
 type ActivityTerminalPortalReadiness = {
   target: HTMLElement | null
   paneKey: string | null
-  status: ActivityPortalReadinessStatus
+  status: 'loading' | 'ready' | 'unavailable'
 }
 
 type ActivityTerminalPortalDomStatus = {
@@ -291,13 +285,10 @@ export function useActivityTerminalPortalStatus(
     paneKey: null,
     status: 'loading'
   })
-  // Why: portal churn replaces every subscription identity, so the burst budget must outlive it.
-  const readinessLatchRef = useRef<ActivityPortalReadinessLatch | null>(null)
 
   useLayoutEffect(() => {
     let disposed = false
     let readinessFrame: number | null = null
-    let readinessReleaseTimer: number | null = null
     let pendingStatus: ActivityTerminalPortalReadiness['status'] | null = null
 
     // Why: coalesce observer bursts and cancel frames from stale portal subscriptions.
@@ -330,10 +321,6 @@ export function useActivityTerminalPortalStatus(
         cancelAnimationFrame(readinessFrame)
         readinessFrame = null
       }
-      if (readinessReleaseTimer !== null) {
-        window.clearTimeout(readinessReleaseTimer)
-        readinessReleaseTimer = null
-      }
     }
 
     if (!target || !paneKey) {
@@ -345,35 +332,17 @@ export function useActivityTerminalPortalStatus(
       return disposeFrame
     }
 
-    const readinessLatch = (readinessLatchRef.current ??= createActivityPortalReadinessLatch())
-
-    const updateReadiness = (status: ActivityTerminalPortalReadiness['status']): void => {
-      const nextStatus = readinessLatch.next(status)
-      scheduleReadiness(nextStatus)
-      if (readinessReleaseTimer !== null) {
-        window.clearTimeout(readinessReleaseTimer)
-        readinessReleaseTimer = null
-      }
-      if (nextStatus !== status) {
-        // Why: a quiet loading pane has no mutation to release the burst latch on its own.
-        readinessReleaseTimer = window.setTimeout(
-          checkReadiness,
-          ACTIVITY_PORTAL_READINESS_BURST_WINDOW_MS
-        )
-      }
-    }
-
     const checkReadiness = (): void => {
       const status = getSelectedActivityTerminalPortalStatus(target, paneKey)
       if (status.unavailable) {
-        updateReadiness('unavailable')
+        scheduleReadiness('unavailable')
         return
       }
       if (status.ready) {
-        updateReadiness('ready')
+        scheduleReadiness('ready')
         return
       }
-      updateReadiness('loading')
+      scheduleReadiness('loading')
     }
 
     checkReadiness()
@@ -1603,6 +1572,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   // Why: swap-staged makes the displayed thread selected, so this branch cannot repeat by itself.
   useLayoutEffect(() => {
     const swap = resolveActivityPortalSwap({
+      displayedPaneKey,
       selectedThread,
       selectedHasLiveTab: Boolean(selectedHasLiveTab),
       visibleThread,
@@ -1625,6 +1595,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       setDisplayedPaneKey(swap.paneKey)
     }
   }, [
+    displayedPaneKey,
     inactivePortalSlotId,
     selectedHasLiveTab,
     selectedThread,

@@ -52,6 +52,7 @@ export type ActivityPortalSwap =
 
 /** Decides how displayedPaneKey advances for one commit. */
 export function resolveActivityPortalSwap<TThread extends ActivityPortalThreadRef>(args: {
+  displayedPaneKey: string | null
   selectedThread: TThread | null
   selectedHasLiveTab: boolean
   visibleThread: TThread | null
@@ -61,6 +62,7 @@ export function resolveActivityPortalSwap<TThread extends ActivityPortalThreadRe
   stagedPortalUnavailable: boolean
 }): ActivityPortalSwap {
   const {
+    displayedPaneKey,
     selectedThread,
     selectedHasLiveTab,
     visibleThread,
@@ -70,12 +72,20 @@ export function resolveActivityPortalSwap<TThread extends ActivityPortalThreadRe
     stagedPortalUnavailable
   } = args
   if (!selectedThread || !selectedHasLiveTab) {
+    if (displayedPaneKey === null) {
+      return null
+    }
     return { kind: 'clear' }
   }
   if (stagedThread && (stagedPortalReady || stagedPortalUnavailable)) {
     return { kind: 'swap-staged', paneKey: stagedThread.paneKey }
   }
-  if (!stagedThread && visibleThread?.paneKey === selectedThread.paneKey && visiblePortalReady) {
+  if (
+    displayedPaneKey !== selectedThread.paneKey &&
+    !stagedThread &&
+    visibleThread?.paneKey === selectedThread.paneKey &&
+    visiblePortalReady
+  ) {
     return { kind: 'settle-visible', paneKey: selectedThread.paneKey }
   }
   return null

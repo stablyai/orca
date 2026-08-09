@@ -19,7 +19,11 @@ export type ParkedTerminalPaneCapture = {
   drivesTabTitle: boolean
 }
 
-export type CapturedTabPanes = { worktreeId: string; panes: ParkedTerminalPaneCapture[] }
+export type CapturedTabPanes = {
+  worktreeId: string
+  generation: number | null
+  panes: ParkedTerminalPaneCapture[]
+}
 
 export const capturedPanesByTabId = new Map<string, CapturedTabPanes>()
 
@@ -30,9 +34,10 @@ export const capturedPanesByTabId = new Map<string, CapturedTabPanes>()
 export function captureParkedTerminalPaneCandidates(
   tabId: string,
   worktreeId: string,
+  generation: number | null | undefined,
   panes: ParkedTerminalPaneCapture[]
 ): void {
-  capturedPanesByTabId.set(tabId, { worktreeId, panes })
+  capturedPanesByTabId.set(tabId, { worktreeId, generation: generation ?? null, panes })
 }
 
 export type ParkedTabWatcherEntry = {
@@ -47,6 +52,53 @@ export type ParkedTabWatcherEntry = {
 }
 
 export const parkedWatchersByTabId = new Map<string, ParkedTabWatcherEntry>()
+
+export type ParkedTerminalWatcherOwnershipLossEvent = {
+  worktreeId: string
+  tabId: string
+  reason: 'close-cancelled' | 'primary-exit-unowned'
+}
+
+type ParkedTerminalWatcherOwnershipLossListener = (
+  event: ParkedTerminalWatcherOwnershipLossEvent
+) => void
+
+const ownershipLossListeners = new Set<ParkedTerminalWatcherOwnershipLossListener>()
+const ownershipLossReportedEntries = new WeakSet<ParkedTabWatcherEntry>()
+
+export function subscribeParkedTerminalWatcherOwnershipLoss(
+  listener: ParkedTerminalWatcherOwnershipLossListener
+): () => void {
+  ownershipLossListeners.add(listener)
+  return () => ownershipLossListeners.delete(listener)
+}
+
+export function markParkedTerminalWatcherOwnershipRestored(entry: ParkedTabWatcherEntry): void {
+  ownershipLossReportedEntries.delete(entry)
+}
+
+export function notifyParkedTerminalWatcherOwnershipLoss(
+  tabId: string,
+  entry: ParkedTabWatcherEntry,
+  reason: ParkedTerminalWatcherOwnershipLossEvent['reason']
+): void {
+  if (
+    parkedWatchersByTabId.get(tabId) !== entry ||
+    entry.disposersByPtyId.size > 0 ||
+    ownershipLossReportedEntries.has(entry)
+  ) {
+    return
+  }
+  ownershipLossReportedEntries.add(entry)
+  const event = { worktreeId: entry.worktreeId, tabId, reason } as const
+  for (const listener of Array.from(ownershipLossListeners)) {
+    try {
+      listener(event)
+    } catch {
+      // Why: one host listener must not block another host's recovery.
+    }
+  }
+}
 
 export function getParkedTerminalWatcherTabIds(): string[] {
   return Array.from(parkedWatchersByTabId.keys())
