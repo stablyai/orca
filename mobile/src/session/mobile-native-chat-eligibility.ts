@@ -1,18 +1,25 @@
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import { isRuntimeOwnedSshTargetId } from '../../../src/shared/execution-host'
+import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../src/shared/execution-host'
 import {
   isNativeChatSupportedAgent,
-  nativeChatRequiresLocalTranscript
+  nativeChatRequiresHostReadableTranscript
 } from '../../../src/shared/native-chat-agent-support'
 
-// Why: native chat renders an agent's own JSONL transcript, and the host
-// resolver knows these transcript layouts. Agents whose hook reports no
-// transcript path (Grok, omp) are additionally gated on host readability,
-// because Model-A SSH stores their transcript on the remote target.
+// Why: native chat reads the serving host's transcript storage; Model-A SSH
+// has no runtime reader, so all supported agents must be host-readable there.
 export function isMobileNativeChatTranscriptReadable(
   connectionId: string | null | undefined
 ): boolean {
   return connectionId === null || isRuntimeOwnedSshTargetId(connectionId)
+}
+
+/** Resolve folder-workspace ownership from the host id returned by worktree.show. */
+export function isMobileNativeChatHostReadable(hostId: string | null | undefined): boolean {
+  const host = parseExecutionHostId(hostId)
+  if (!host) {
+    return false
+  }
+  return host.kind !== 'ssh' || isMobileNativeChatTranscriptReadable(host.targetId)
 }
 
 export type MobileNativeChatResolution = {
@@ -40,7 +47,7 @@ export type MobileNativeChatTab = {
  *  hint or the live status; session id from the captured provider session. */
 export function resolveMobileNativeChat(
   tab: MobileNativeChatTab | null,
-  nativeChatTranscriptIsLocalReadable = false
+  nativeChatTranscriptIsLocalReadable?: boolean
 ): MobileNativeChatResolution | null {
   if (!tab || tab.type !== 'terminal') {
     return null
@@ -54,7 +61,10 @@ export function resolveMobileNativeChat(
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }
-  if (nativeChatRequiresLocalTranscript(agent) && !nativeChatTranscriptIsLocalReadable) {
+  if (
+    nativeChatRequiresHostReadableTranscript(agent) &&
+    nativeChatTranscriptIsLocalReadable === false
+  ) {
     return null
   }
   return {
@@ -67,7 +77,7 @@ export function resolveMobileNativeChat(
 /** Whether the tab can toggle into native chat — gates the long-press item. */
 export function canShowMobileNativeChat(
   tab: MobileNativeChatTab | null,
-  nativeChatTranscriptIsLocalReadable = false
+  nativeChatTranscriptIsLocalReadable?: boolean
 ): boolean {
   return resolveMobileNativeChat(tab, nativeChatTranscriptIsLocalReadable) !== null
 }

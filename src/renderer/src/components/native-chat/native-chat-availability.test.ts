@@ -90,6 +90,19 @@ describe('canToggleNativeChat', () => {
     ).toBe(false)
   })
 
+  it('rejects path-backed agents on Model-A SSH because the path is remote', () => {
+    for (const agent of ['claude', 'openclaude', 'codex'] as const) {
+      expect(
+        canToggleNativeChat({
+          experimentalNativeChatEnabled: true,
+          contentType: 'terminal',
+          launchAgent: agent,
+          nativeChatTranscriptIsLocalReadable: false
+        })
+      ).toBe(false)
+    }
+  })
+
   // Why: omp discloses no hook transcript path either, so its session file is
   // only reachable when this process can read the agent's disk.
   it('rejects Model-A SSH omp but accepts it local and runtime-owned', () => {

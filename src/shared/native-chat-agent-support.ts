@@ -14,17 +14,21 @@ export function isNativeChatSupportedAgent(agent: string | null | undefined): bo
   return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)
 }
 
-/** Agents whose hook discloses no transcript path (`extractAgentProviderSession`),
- *  so native chat can only reach the session file by scanning a sessions root on
- *  a disk THIS process can read. Under Model-A SSH that disk is the wrong host,
- *  so the chat view must stay closed instead of loading forever. */
+/** Agents whose native-chat reader opens transcript storage on the serving host.
+ *  Model-A SSH has no runtime RPC reader, so every supported agent must be
+ *  backed by storage on the local process's host before chat can open. */
+export function nativeChatRequiresHostReadableTranscript(
+  agent: string | null | undefined
+): boolean {
+  return resolveNativeChatTranscriptAgent(agent) !== null
+}
+
+/** Agents whose hook does not disclose a direct transcript path. */
 export function nativeChatRequiresLocalTranscript(agent: string | null | undefined): boolean {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
   return (
     transcriptAgent === 'grok' ||
     transcriptAgent === 'omp' ||
-    // Why: OpenCode reports only a session id and keeps conversations in its SQLite
-    // DB (~/.local/share/opencode/opencode.db), so the reader needs that local disk.
     transcriptAgent === 'opencode'
   )
 }
