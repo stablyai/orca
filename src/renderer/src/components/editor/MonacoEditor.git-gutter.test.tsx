@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+// Why: the only MonacoEditor.* test that drives `onMount` — the siblings assert on props before
+// mount — so the fake editor and helper mocks below stub the whole mount path, most of it
+// unrelated to the gutter. A `TypeError: fakeEditor.xyz is not a function` therefore means
+// handleMount gained a call that needs a stub here, not that the gutter regressed.
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { editor } from 'monaco-editor'
