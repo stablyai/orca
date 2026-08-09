@@ -35,7 +35,6 @@ import {
   getLayoutBaseCharacterForCode,
   prefetchLayoutBaseCharacters
 } from '@/lib/keyboard-layout/layout-base-character'
-import { prefetchKoreanInputSource } from '@/lib/keyboard-layout/korean-input-source'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
 import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
@@ -277,8 +276,6 @@ export function useTerminalKeyboardShortcuts({
     // KeyboardLayoutMap; prefetch so the map is cached before the first chord.
     if (isMac) {
       prefetchLayoutBaseCharacters()
-      // Why: the Korean Won rewrite gate reads the active input source ID through the async IPC.
-      prefetchKoreanInputSource()
     }
 
     // Why: KeyboardEvent.location on a character key (e.g. Period) always

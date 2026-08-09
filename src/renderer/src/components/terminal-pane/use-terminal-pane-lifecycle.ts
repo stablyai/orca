@@ -82,8 +82,6 @@ import { copyTerminalSelection } from './terminal-selection-copy'
 import { parseOsc7 } from './parse-osc7'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
-import { resolveTerminalKoreanWonInput } from './terminal-korean-won-input'
-import { isKoreanInputSourceActive } from '@/lib/keyboard-layout/korean-input-source'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
@@ -1018,21 +1016,6 @@ export function useTerminalPaneLifecycle({
               pane.terminal.input(jisYenInput.data)
             }
             observeLinuxCandidateEvent()
-            return false
-          }
-
-          // Why: the gate refreshes on focus AND keyboard activity (Caps Lock /
-          // 한영 switches change the input source while the window keeps focus).
-          const koreanWonInput = resolveTerminalKoreanWonInput(e, {
-            enabled: settingsRef.current?.terminalKoreanWonToBackquote === true,
-            isMac,
-            isKoreanKeyboard: isKoreanInputSourceActive()
-          })
-          if (koreanWonInput) {
-            if (koreanWonInput.type === 'input') {
-              // Why: translated character, not a shortcut — keep it on xterm's onData path so PTY input guards still run.
-              pane.terminal.input(koreanWonInput.data)
-            }
             return false
           }
 

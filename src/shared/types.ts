@@ -3051,8 +3051,6 @@ export type GlobalSettings = {
   terminalMacOptionAsAltMigrated: boolean
   /** Whether macOS terminal input maps the physical JIS Yen (¥) key to backslash, per common terminal expectation. */
   terminalJISYenToBackslash: boolean
-  /** Whether terminal input maps the physical Korean Won (₩) key to backquote, so markdown code fences and shell backquotes type directly. */
-  terminalKoreanWonToBackquote: boolean
   experimentalMobile: boolean
   /** Why: iOS Simulator is default-on for capable macOS hosts; this is the durable off switch (hides UI, blocks CLI attach). */
   mobileEmulatorEnabled?: boolean
