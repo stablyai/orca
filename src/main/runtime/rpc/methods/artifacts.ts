@@ -1,9 +1,13 @@
 import { z } from 'zod'
+import {
+  ARTIFACT_CLI_MAX_RPC_BYTES,
+  artifactWriteRequestByteLength
+} from '../../../../shared/artifacts'
 import { defineMethod, type RpcAnyMethod } from '../core'
 
 const CloudOptions = {
-  apiUrl: z.string().optional(),
-  authToken: z.string().optional()
+  apiUrl: z.string().max(2_048).optional(),
+  authToken: z.string().max(16_384).optional()
 }
 
 const ListOptions = z.object({
@@ -11,14 +15,18 @@ const ListOptions = z.object({
   cursor: z.string().min(1).max(2_048).optional()
 })
 
-const WriteRequest = z.object({
-  sourceKey: z.string().min(1),
-  content: z.string().min(1),
-  contentType: z.enum(['text/html', 'text/markdown']),
-  fileName: z.string().min(1),
-  title: z.string().optional(),
-  ...CloudOptions
-})
+const WriteRequest = z
+  .object({
+    sourceKey: z.string().min(1).max(32_768),
+    content: z.string().min(1).max(ARTIFACT_CLI_MAX_RPC_BYTES),
+    contentType: z.enum(['text/html', 'text/markdown']),
+    fileName: z.string().min(1).max(512),
+    title: z.string().max(512).optional(),
+    ...CloudOptions
+  })
+  .refine((request) => artifactWriteRequestByteLength(request) <= ARTIFACT_CLI_MAX_RPC_BYTES, {
+    message: 'Artifact request exceeds the local RPC size limit.'
+  })
 
 export const ARTIFACT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
@@ -30,6 +38,11 @@ export const ARTIFACT_METHODS: readonly RpcAnyMethod[] = [
     name: 'artifacts.share',
     params: WriteRequest,
     handler: (params, { runtime }) => runtime.shareArtifact(params)
+  }),
+  defineMethod({
+    name: 'artifacts.publish',
+    params: WriteRequest,
+    handler: (params, { runtime }) => runtime.publishArtifact(params)
   }),
   defineMethod({
     name: 'artifacts.update',

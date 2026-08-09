@@ -12,7 +12,7 @@ import {
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { getWorkspaceFileBrowserOpenTarget } from '@/lib/file-preview'
@@ -193,6 +193,12 @@ import { MarkupOverlay } from './markup/MarkupOverlay'
 import { MarkupDrawButton } from './markup/MarkupDrawButton'
 import { deliverMarkupToClipboard } from './markup/markup-clipboard-delivery'
 import { BrowserLoadFailureOverlay } from './browser-load-failure-overlay'
+import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
+import {
+  browserFileUrlToAbsolutePath,
+  getShareableBrowserArtifactFile,
+  readBrowserHtmlArtifactRequest
+} from './browser-artifact-upload'
 import {
   BROWSER_GUEST_RECOVERY_ERROR_CODE,
   createBrowserPageGuestRecovery
@@ -591,26 +597,8 @@ function isChromiumErrorPage(url: string): boolean {
   return url.startsWith('chrome-error://')
 }
 
-function fileUrlToAbsolutePath(url: string): string | null {
-  try {
-    const parsed = new URL(url)
-    if (parsed.protocol !== 'file:') {
-      return null
-    }
-    const hostPrefix =
-      parsed.hostname && parsed.hostname !== 'localhost' ? `//${parsed.hostname}` : ''
-    let absolutePath = `${hostPrefix}${decodeURIComponent(parsed.pathname)}`
-    if (/^\/[A-Za-z]:\//.test(absolutePath)) {
-      absolutePath = absolutePath.slice(1)
-    }
-    return absolutePath
-  } catch {
-    return null
-  }
-}
-
 function getNotebookPathFromBrowserUrl(url: string): string | null {
-  const filePath = fileUrlToAbsolutePath(url)
+  const filePath = browserFileUrlToAbsolutePath(url)
   return filePath?.toLowerCase().endsWith('.ipynb') ? filePath : null
 }
 
@@ -2517,6 +2505,7 @@ function BrowserPagePane({
   const handleInternalFileDragOverRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
   const handleInternalFileDropRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
   const keybindings = useAppStore((state) => state.keybindings)
+  const workspaceConnectionId = useAppStore((state) => getConnectionIdFromState(state, worktreeId))
   const browserDefaultZoomLevel = useAppStore(
     (state) => state.browserDefaultZoomLevel ?? DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
   )
@@ -4569,6 +4558,8 @@ function BrowserPagePane({
   const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
   const externalUrl = getOpenableExternalUrl(webviewRef.current, browserTab.url)
   const currentBrowserUrl = getCurrentBrowserUrl(webviewRef.current, browserTab.url)
+  const shareableArtifactFile =
+    workspaceConnectionId === null ? getShareableBrowserArtifactFile(currentBrowserUrl) : null
   const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
   const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
@@ -5041,6 +5032,13 @@ function BrowserPagePane({
             active={markup.isActive}
             surfaceActive={isActive}
           />
+
+          {shareableArtifactFile ? (
+            <ArtifactPublishButton
+              className="h-7 w-7"
+              createRequest={() => readBrowserHtmlArtifactRequest(currentBrowserUrl)}
+            />
+          ) : null}
 
           <Button
             size="icon"

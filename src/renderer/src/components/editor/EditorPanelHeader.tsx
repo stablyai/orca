@@ -17,6 +17,8 @@ import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 import { useDiffNavigation } from './diff-navigation-context'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
@@ -50,6 +52,7 @@ type EditorPanelHeaderProps = {
   onToggleMarkdownTableOfContents: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
+  createMarkdownArtifactRequest?: () => Promise<ArtifactWriteRequest>
 }
 
 export function EditorPanelHeader({
@@ -83,7 +86,8 @@ export function EditorPanelHeader({
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
-  onExportMarkdownToPdf
+  onExportMarkdownToPdf,
+  createMarkdownArtifactRequest
 }: EditorPanelHeaderProps): React.JSX.Element {
   const diffComments = useAppStore((s) =>
     selectWorktreeDiffCommentsOrEmpty(s, activeFile.worktreeId)
@@ -311,6 +315,9 @@ export function EditorPanelHeader({
           </Tooltip>
         </TooltipProvider>
       )}
+      {isMarkdown && !isDiffSurface && createMarkdownArtifactRequest ? (
+        <ArtifactPublishButton className="size-6" createRequest={createMarkdownArtifactRequest} />
+      ) : null}
       <EditorPanelMarkdownActionsMenu
         isMarkdown={isMarkdown}
         isDiffSurface={isDiffSurface}

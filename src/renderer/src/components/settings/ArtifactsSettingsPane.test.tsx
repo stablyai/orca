@@ -61,13 +61,15 @@ describe('ArtifactsSettingsPane', () => {
     )
 
     expect(screen.getByText('How to use Artifacts')).toBeInTheDocument()
-    expect(screen.getByText('Ask your agent to share it')).toBeInTheDocument()
+    expect(screen.getByText('Share it from Orca or your agent')).toBeInTheDocument()
     expect(
-      screen.getByText('For example: “Share this HTML mock as an artifact.”')
+      screen.getByText(
+        'Use Share as artifact in the browser or Markdown toolbar, or ask: “Share this HTML mock as an artifact.”'
+      )
     ).toBeInTheDocument()
     expect(screen.getByText('Share the public link')).toBeInTheDocument()
     expect(
-      screen.getByText('Your agent returns a link that anyone with the URL can view.')
+      screen.getByText('Orca creates a link that anyone with the URL can view.')
     ).toBeInTheDocument()
     expect(screen.getByText('Manage it in Orca')).toBeInTheDocument()
     expect(

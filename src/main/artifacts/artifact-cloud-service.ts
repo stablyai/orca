@@ -5,12 +5,12 @@ import type {
   ArtifactListOptions,
   ArtifactListPage,
   ArtifactListItem,
+  ArtifactPublishResult,
   ArtifactWriteRequest
 } from '../../shared/artifacts'
 import { assertArtifactSharingAllowed } from '../../shared/artifact-sharing-gate'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
-import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
 import {
   allowsArtifactCloudAuthOverride,
@@ -26,6 +26,8 @@ import {
   saveArtifactShareRecord
 } from './artifact-share-record-store'
 import type { ActiveOrcaProfileState } from '../orca-profiles/profile-index-store'
+import { artifactRequest, artifactWriteBody } from './artifact-cloud-request'
+import { ArtifactPublisher } from './artifact-publisher'
 
 type ArtifactCreateResponse = ArtifactListItem & { editToken: string }
 
@@ -114,6 +116,8 @@ function explicitTokenAuthContext(
 }
 
 export class ArtifactCloudService {
+  private readonly publisher: ArtifactPublisher
+
   /**
    * `isSharingEnabled` is the publish capability gate. It is read per call, never cached, so
    * revoking it in Settings takes effect on the next request. List, unshare, and delete stay
@@ -122,7 +126,9 @@ export class ArtifactCloudService {
   constructor(
     private readonly userDataPath: string,
     private readonly isSharingEnabled: () => boolean
-  ) {}
+  ) {
+    this.publisher = new ArtifactPublisher(userDataPath)
+  }
 
   list(options: ArtifactListOptions): Promise<ArtifactCloudOperation<ArtifactListPage>> {
     return this.withAuth(options, async (token, apiUrl) => {
@@ -139,7 +145,7 @@ export class ArtifactCloudService {
     return this.withAuth(request, async (token, apiUrl, auth) => {
       const response = await artifactRequest<ArtifactCreateResponse>(apiUrl, token, '', {
         method: 'POST',
-        body: writeBody(request),
+        body: artifactWriteBody(request),
         idempotencyKey
       })
       auth.assertCurrent()
@@ -152,6 +158,16 @@ export class ArtifactCloudService {
       })
       return { artifact: response.artifact, shareUrl: response.shareUrl }
     })
+  }
+
+  async publish(
+    request: ArtifactWriteRequest
+  ): Promise<ArtifactCloudOperation<ArtifactPublishResult>> {
+    assertArtifactSharingAllowed(this.isSharingEnabled)
+    const idempotencyKey = randomUUID()
+    return this.withAuth(request, (token, apiUrl, auth) =>
+      this.publisher.publish(request, token, apiUrl, auth, idempotencyKey)
+    )
   }
 
   async update(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
@@ -169,7 +185,7 @@ export class ArtifactCloudService {
       const response = await artifactRequest<ArtifactListItem>(apiUrl, token, `/${record.slug}`, {
         method: 'PUT',
         editToken: record.editToken,
-        body: writeBody(request)
+        body: artifactWriteBody(request)
       })
       auth.assertCurrent()
       refreshArtifactShareRecordExpiration(
@@ -255,41 +271,4 @@ export class ArtifactCloudService {
       ? { status: 'ok', value: result.value }
       : { status: 'reconnect-required' }
   }
-}
-
-function writeBody(request: ArtifactWriteRequest): Record<string, string> {
-  return {
-    content: request.content,
-    contentType: request.contentType,
-    fileName: request.fileName,
-    ...(request.title ? { title: request.title } : {})
-  }
-}
-
-async function artifactRequest<T>(
-  apiUrl: string,
-  token: string,
-  path: string,
-  options: { method?: string; body?: unknown; editToken?: string; idempotencyKey?: string } = {}
-): Promise<T> {
-  const response = await fetch(`${apiUrl}/v1/artifacts${path}`, {
-    method: options.method ?? 'GET',
-    headers: {
-      authorization: `Bearer ${token}`,
-      ...(options.editToken ? { 'x-orca-edit-token': options.editToken } : {}),
-      ...(options.idempotencyKey ? { 'idempotency-key': options.idempotencyKey } : {}),
-      ...(options.body ? { 'content-type': 'application/json' } : {})
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-    redirect: 'error',
-    signal: AbortSignal.timeout(20_000)
-  })
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { code?: string } | null
-    throw new OrcaCloudRequestError(response.status, body?.code)
-  }
-  if (response.status === 204) {
-    return undefined as T
-  }
-  return (await response.json()) as T
 }

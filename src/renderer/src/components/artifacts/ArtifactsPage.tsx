@@ -328,11 +328,11 @@ export default function ArtifactsPage(): React.JSX.Element {
                 : publishingBlocked
                   ? translate(
                       'auto.components.artifacts.ArtifactsPage.publishingOffCopy',
-                      'Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then ask your agent to share an HTML or Markdown file.'
+                      'Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then share from an open HTML or Markdown file or ask your agent.'
                     )
                   : translate(
                       'auto.components.artifacts.ArtifactsPage.emptyCopy',
-                      'Ask your agent to share an HTML or Markdown file, and it will appear here.'
+                      'Open an HTML or Markdown file and select Share as artifact, or ask your agent to share it.'
                     )}
             </p>
             {!nextCursor && publishingBlocked ? (

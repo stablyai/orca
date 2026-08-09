@@ -58,11 +58,11 @@ export function ArtifactsSettingsPane({
       key: 'share',
       title: translate(
         'auto.components.settings.artifacts.shareStepTitle',
-        'Ask your agent to share it'
+        'Share it from Orca or your agent'
       ),
       description: translate(
         'auto.components.settings.artifacts.shareStepDescription',
-        'For example: “Share this HTML mock as an artifact.”'
+        'Use Share as artifact in the browser or Markdown toolbar, or ask: “Share this HTML mock as an artifact.”'
       )
     },
     {
@@ -70,7 +70,7 @@ export function ArtifactsSettingsPane({
       title: translate('auto.components.settings.artifacts.linkStepTitle', 'Share the public link'),
       description: translate(
         'auto.components.settings.artifacts.linkStepDescription',
-        'Your agent returns a link that anyone with the URL can view.'
+        'Orca creates a link that anyone with the URL can view.'
       )
     },
     {
@@ -153,11 +153,11 @@ export function ArtifactsSettingsPane({
             {sharingEnabled
               ? translate(
                   'auto.components.settings.artifacts.howToDescription',
-                  'Ask your agent to share an HTML or Markdown file. Orca handles the upload with your account.'
+                  'Share an open HTML or Markdown file from its toolbar, or ask your agent. Orca uploads it with your account.'
                 )
               : translate(
                   'auto.components.settings.artifacts.howToDescriptionDisabled',
-                  'Publishing is off, so nothing on this device can create a public link yet. Allow it first, then ask your agent to share an HTML or Markdown file.'
+                  'Publishing is off, so nothing on this device can create a public link yet. Allow it first, then share from an open HTML or Markdown file or ask your agent.'
                 )}
           </p>
         </div>
