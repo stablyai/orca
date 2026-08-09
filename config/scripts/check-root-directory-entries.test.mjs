@@ -37,6 +37,30 @@ function commitFiles(root, files) {
   return git(root, ['rev-parse', 'HEAD'])
 }
 
+// Why: a root entry name can be bytes no filesystem here accepts (APFS rejects
+// invalid UTF-8), so build the tree in the object database instead of on disk.
+// git ls-tree -z emits exactly the record format git mktree -z reads back.
+function commitRawEntries(root, parent, entries) {
+  const parentTree = execFileSync('git', ['ls-tree', '-z', parent], { cwd: root })
+  const records = entries.map((name) => {
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], {
+      cwd: root,
+      encoding: 'utf8',
+      input: 'too prominent\n'
+    }).trim()
+    return Buffer.concat([Buffer.from(`100644 blob ${blob}\t`), name, Buffer.from([0])])
+  })
+  const tree = execFileSync('git', ['mktree', '-z'], {
+    cwd: root,
+    encoding: 'utf8',
+    input: Buffer.concat([parentTree, ...records])
+  }).trim()
+  return execFileSync('git', ['commit-tree', tree, '-p', parent, '-m', 'head'], {
+    cwd: root,
+    encoding: 'utf8'
+  }).trim()
+}
+
 function runGuard({ root, base, head }) {
   return runGuardArgs(root, [base, head])
 }
@@ -46,6 +70,10 @@ function runGuardArgs(root, args) {
     cwd: root,
     encoding: 'utf8'
   })
+}
+
+function runGuardBytes({ root, base, head }) {
+  return spawnSync(process.execPath, [guardScript, base, head], { cwd: root })
 }
 
 afterEach(() => {
@@ -99,6 +127,62 @@ describe('root directory guard', () => {
 
     expect(result.status).toBe(1)
     expect(result.stdout).toContain(awkwardName)
+  })
+
+  // Why: decoding git's output as UTF-8 rewrites every invalid byte to U+FFFD, so
+  // the name the guard prints is not the name anyone has to rename.
+  it('reports an entry whose name is not valid UTF-8 byte-for-byte', () => {
+    const rawName = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('-raw.txt')])
+    const fixture = makeFixture()
+    const head = commitRawEntries(fixture.root, fixture.base, [rawName])
+
+    const result = runGuardBytes({ ...fixture, head })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout.includes(rawName)).toBe(true)
+  })
+
+  // Why: U+FFFD is not injective, so two different invalid names decode to the
+  // same string and a new root entry gets waved through as pre-existing.
+  it('does not confuse two different invalid UTF-8 names for the same entry', () => {
+    const fixture = makeFixture()
+    const base = commitRawEntries(fixture.root, fixture.base, [
+      Buffer.concat([Buffer.from([0xc0, 0x80]), Buffer.from('.txt')])
+    ])
+    const head = commitRawEntries(fixture.root, fixture.base, [
+      Buffer.concat([Buffer.from([0xc0, 0x81]), Buffer.from('.txt')])
+    ])
+
+    const result = runGuardBytes({ root: fixture.root, base, head })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout.toString('latin1')).not.toContain('guard passed')
+  })
+
+  // Why: the runner trims leading spaces before matching '::', so an indented
+  // entry name still reaches the workflow-command parser and can forge output.
+  it('prints blocked entries with workflow-command parsing disabled', () => {
+    const fixture = makeFixture()
+    const forgedName = '::error title=forged::injected\n::warning::second line.txt'
+    const head = commitRawEntries(fixture.root, fixture.base, [Buffer.from(forgedName)])
+
+    const result = runGuard({ ...fixture, head })
+    const lines = result.stdout.split('\n')
+    const stopIndex = lines.findIndex((line) => line.startsWith('::stop-commands::'))
+    const resumeToken = lines[stopIndex]?.slice('::stop-commands::'.length)
+    const resumeIndex = lines.indexOf(`::${resumeToken}::`)
+    const escaped = lines.filter(
+      (line, index) =>
+        (index < stopIndex || index > resumeIndex) && line.trimStart().startsWith('::')
+    )
+
+    expect(result.status).toBe(1)
+    expect(resumeToken).toMatch(/^[\da-f-]{36}$/)
+    expect(stopIndex).toBeLessThan(resumeIndex)
+    // Why: the guard's own annotation is the only line the runner may act on.
+    expect(escaped).toHaveLength(1)
+    expect(escaped[0]).toContain('Root-level additions blocked')
+    expect(lines.slice(stopIndex, resumeIndex).join('\n')).toContain(forgedName)
   })
 
   it('exits 2 with usage when the two shas are not both supplied', () => {

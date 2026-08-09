@@ -1,8 +1,13 @@
 import { execFileSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 
 function readRootEntries(sha) {
+  // Why: a git pathname is arbitrary bytes, and 'utf8' folds every invalid
+  // sequence to U+FFFD — that mangles the reported name and makes two different
+  // entries compare equal, so a genuinely new one can slip past the Set below.
+  // latin1 maps each byte to one code unit, so the bytes survive the round trip.
   const stdout = execFileSync('git', ['ls-tree', '-z', '--name-only', sha], {
-    encoding: 'utf8',
+    encoding: 'latin1',
     stdio: ['ignore', 'pipe', 'inherit']
   })
   return stdout.split('\0').filter(Boolean)
@@ -32,9 +37,16 @@ function checkRootDirectoryEntries(argv) {
   )
   console.log('Move each new entry under an existing top-level directory.')
   console.log('Blocked entries:')
+  // Why: an entry name is attacker-controlled and may start with '::' (the runner
+  // trims leading spaces before matching) or embed a newline, so printing it bare
+  // lets a PR forge annotations. Fence the untrusted list with an unguessable
+  // stop-commands token, and write the raw bytes rather than a re-encoded string.
+  const resumeToken = randomUUID()
+  console.log(`::stop-commands::${resumeToken}`)
   for (const entry of blockedEntries) {
-    console.log(`  ${entry}`)
+    process.stdout.write(Buffer.from(`  ${entry}\n`, 'latin1'))
   }
+  console.log(`::${resumeToken}::`)
   return 1
 }
 
