@@ -32,6 +32,16 @@ describe('orchestration worker launch preferences', () => {
     ).toEqual({ model: 'gpt-5.6-sol' })
   })
 
+  it('passes an opaque Pi provider/model through as a launch preference', () => {
+    expect(resolveWorkerLaunchPreferences({ agent: 'pi', model: 'kimi-coding/k3' })).toEqual({
+      preferences: { model: 'kimi-coding/k3' },
+      receipt: {
+        requested: { agent: 'pi', model: 'kimi-coding/k3', effort: null },
+        effective: { agent: 'pi', model: 'kimi-coding/k3', effort: null }
+      }
+    })
+  })
+
   it('rejects model-specific effort combinations the catalog disproves', () => {
     expect(() =>
       resolveWorkerLaunchPreferences({

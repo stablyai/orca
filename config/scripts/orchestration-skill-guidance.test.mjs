@@ -273,6 +273,11 @@ describe('orchestration skill guidance', () => {
       'After every accepted `worker_done`, either transfer the exact terminal to an immediate ' +
         'follow-up Dispatch or run `worker-release` before the next wait.'
     )
+    expect(workerLoop).toContain(
+      '`worker-release` safely returns `retained` with `no_owned_resource` instead of closing or ' +
+        'reporting `dispatch_not_found`'
+    )
+    expect(workerLoop).toContain('Prefer `worker-start` whenever managed cleanup is required.')
   })
 
   it('documents per-invocation model and effort for supervised workers', () => {
@@ -283,6 +288,7 @@ describe('orchestration skill guidance', () => {
     expect(workerLoop).toContain('neither option can combine with `--terminal`')
     expect(workerLoop).toContain('--agent claude --model aws-bedrock-opus-5 --effort high --json')
     expect(workerLoop).toContain('`launch.requested` and `launch.effective`')
+    expect(workerLoop).toContain('--agent pi --model kimi-coding/k3 --json')
   })
 
   it('never authorizes release from idle, timeout, or worker-side triggers', () => {

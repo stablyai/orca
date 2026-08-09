@@ -54,6 +54,23 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'custom-codex-model', effort: 'high' })
   })
 
+  it('launches Pi with the requested opaque provider/model', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'pi',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'kimi-coding/k3' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '-m old-provider/old-model'
+    })
+
+    expect(plan?.launchCommand).toBe("pi '--model' 'kimi-coding/k3'")
+    expect(plan?.launchConfig.agentCommand).toBe("pi '-m' 'old-provider/old-model'")
+    expect(plan?.sessionOptions).toEqual({ model: 'kimi-coding/k3' })
+  })
+
   it('inserts worker preferences before an argument terminator', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',

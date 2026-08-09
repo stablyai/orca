@@ -192,10 +192,11 @@ orca orchestration worker-start --task <task_b> --worktree current --agent claud
 
 `current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`.
 
-For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
+For a per-invocation Claude, Codex, Cursor, or Pi launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
 
 ```bash
 orca orchestration worker-start --task <task_id> --worktree current --agent claude --model aws-bedrock-opus-5 --effort high --json
+orca orchestration worker-start --task <task_id> --worktree current --agent pi --model kimi-coding/k3 --json
 ```
 
 `--effort` requires `--model`, and neither option can combine with `--terminal`. A connected worker server must advertise launch-preference support before Orca forwards either option.
@@ -268,7 +269,7 @@ Recovery is conditional, never a fixed destructive sequence:
 - It remains `outcome_unknown`: either `worker-stop --dispatch <id>` and inspect again, or explicitly `worker-abandon --dispatch <id>` while accepting that resources may still be live. Abandon performs no remote, process, or filesystem action.
 - `worker-stop` closes only the exact supervised agent terminal. It never deletes the worktree, setup terminal, configured tabs, or unrelated processes.
 
-Low-level `worktree create`, `terminal create`, and `dispatch --inject` remain valid recipes for custom argv or topology that `worker-start` does not express.
+Low-level `worktree create`, `terminal create`, and `dispatch --inject` remain valid recipes for custom argv or topology that `worker-start` does not express. A low-level Dispatch has no `worker-start` terminal ownership: `worker-release` safely returns `retained` with `no_owned_resource` instead of closing or reporting `dispatch_not_found`. Prefer `worker-start` whenever managed cleanup is required.
 
 ## Gates And Legacy Inspection
 

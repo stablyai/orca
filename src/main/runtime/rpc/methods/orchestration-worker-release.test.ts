@@ -232,6 +232,48 @@ describe('orchestration worker release', () => {
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
+  it('returns a safe retained receipt for a settled low-level Dispatch', async () => {
+    setup()
+    const task = db.createTask({ spec: 'low-level dispatch', runId: activeRunId })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', workerPaneKey)
+    db.completeDispatch(dispatch.id)
+
+    const receipt = (await call('orchestration.workerRelease', { dispatch: dispatch.id })) as {
+      state: string
+      reason?: string
+      processAction: string
+      recovery?: string
+    }
+
+    expect(receipt).toMatchObject({
+      state: 'retained',
+      reason: 'no_owned_resource',
+      processAction: 'none'
+    })
+    expect(receipt.recovery).toContain('low-level Dispatch')
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  it('rejects an active low-level Dispatch without closing its terminal', async () => {
+    setup()
+    const task = db.createTask({ spec: 'active low-level dispatch', runId: activeRunId })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', workerPaneKey)
+
+    await expect(call('orchestration.workerRelease', { dispatch: dispatch.id })).rejects.toThrow(
+      /only a settled Dispatch can release/
+    )
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  it('still rejects an unknown Dispatch', async () => {
+    setup()
+
+    await expect(call('orchestration.workerRelease', { dispatch: 'ctx_missing' })).rejects.toThrow(
+      /was not found/
+    )
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+  })
+
   it('retains a user-taken-over terminal durably', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()

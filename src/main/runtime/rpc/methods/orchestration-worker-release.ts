@@ -44,6 +44,30 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
             'Connected-server workers do not support release yet; inspect the worker server directly.'
         }
       }
+      if (!db.getWorkerDispatch(params.dispatch)) {
+        const dispatch = db.getDispatchContextById(params.dispatch)
+        if (!dispatch) {
+          throw new OrchestrationError(
+            'dispatch_not_found',
+            `Worker Dispatch ${params.dispatch} was not found.`
+          )
+        }
+        if (!['completed', 'failed', 'circuit_broken'].includes(dispatch.status)) {
+          throw new OrchestrationError(
+            'dispatch_inactive',
+            `Dispatch ${params.dispatch} is ${dispatch.status}; only a settled Dispatch can release.`
+          )
+        }
+        return {
+          dispatchId: params.dispatch,
+          state: 'retained',
+          reason: 'no_owned_resource',
+          processAction: 'none',
+          archive: null,
+          recovery:
+            'This low-level Dispatch has no worker-start terminal ownership; the terminal was preserved. Use worker-start for managed cleanup.'
+        }
+      }
       const requested = db.requestWorkerTerminalRelease(params.dispatch)
       if (requested.disposition === 'already_released') {
         return {
