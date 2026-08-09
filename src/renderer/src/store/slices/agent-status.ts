@@ -23,6 +23,7 @@ import {
 } from '../../../../shared/agent-session-resume'
 import {
   resolveAgentStatusIdentity,
+  shouldIgnoreNestedProviderSessionClaim,
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
@@ -1603,6 +1604,22 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         ) {
           return s
         }
+        // Why: nested Codex (etc.) inherits ORCA_PANE_KEY from Claude; its session
+        // claim must not demote the live parent into a wrong-agent resume (#10105).
+        if (
+          existingStatus &&
+          shouldIgnoreNestedProviderSessionClaim({
+            live: {
+              agentType: existingStatus.agentType,
+              state: existingStatus.state,
+              updatedAt: existingStatus.updatedAt
+            },
+            claimedAgent: agent,
+            now: updatedAt
+          })
+        ) {
+          return s
+        }
         const tabId = routing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? existingRecord?.tabId
         const worktreeId =
           routing?.worktreeId ??
@@ -1844,17 +1861,22 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const canReuseExistingProviderSession =
           existing?.agentType === identity.agentType &&
           (existing.state !== 'done' || payload.state === 'done')
+        // Why: when identity is inherited from the active parent, nested child
+        // hooks must not overwrite the parent's resume session (#10105).
+        const incomingProviderSession = identity.inheritedFromActivePane
+          ? undefined
+          : metadata?.providerSession
         const providerSession =
-          metadata?.providerSession ??
+          incomingProviderSession ??
           (canReuseExistingProviderSession ? existing.providerSession : undefined)
         const existingProviderSession = canReuseExistingProviderSession
           ? existing.providerSession
           : undefined
         const providerSessionChanged =
-          Boolean(metadata?.providerSession && existingProviderSession) &&
+          Boolean(incomingProviderSession && existingProviderSession) &&
           !agentProviderSessionsEqual(
             identity.agentType,
-            metadata?.providerSession,
+            incomingProviderSession,
             existingProviderSession
           )
         const statusTabId =

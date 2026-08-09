@@ -121,6 +121,74 @@ describe('recordAgentProviderSession', () => {
     expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toBeUndefined()
   })
 
+  it('does not let nested Codex overwrite a live Claude parent resume identity (#10105)', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+    const claudeSession = {
+      key: 'session_id' as const,
+      id: 'claude-session-1',
+      transcriptPath: '/tmp/claude.jsonl'
+    }
+    const nestedCodexSession = {
+      key: 'session_id' as const,
+      id: 'codex-worker-1',
+      transcriptPath: '/tmp/codex-worker.jsonl'
+    }
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'parent turn', agentType: 'claude' },
+        'Claude',
+        { updatedAt: 10, stateStartedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession: claudeSession }
+      )
+
+    store
+      .getState()
+      .recordAgentProviderSession(
+        'tab-1:leaf-1',
+        'codex',
+        nestedCodexSession,
+        { updatedAt: 20 },
+        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: null }
+      )
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agentType: 'claude',
+      state: 'working',
+      providerSession: claudeSession
+    })
+    // Nested claim must not demote the live parent into a codex sleeping resume.
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.agent).not.toBe('codex')
+    expect(
+      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.providerSession
+    ).not.toEqual(nestedCodexSession)
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'nested worker', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 30, stateStartedAt: 30 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession: nestedCodexSession }
+      )
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agentType: 'claude',
+      state: 'working',
+      providerSession: claudeSession
+    })
+  })
+
   it('uses the session file as part of Pi resume ownership only', () => {
     const base = {
       paneKey: 'tab-1:leaf-1',

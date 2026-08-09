@@ -78,3 +78,23 @@ export function resolveAgentStatusIdentity(args: {
     inheritedFromActivePane: false
   }
 }
+
+/**
+ * Nested child CLIs inherit ORCA_PANE_KEY. While the parent turn is still a
+ * fresh non-done identity, do not let the child install its resume provenance
+ * (or replace the live row) as if it owned the pane (#10105).
+ */
+export function shouldIgnoreNestedProviderSessionClaim(args: {
+  live?: ExistingAgentIdentity
+  claimedAgent?: AgentType | null
+  now: number
+  staleAfterMs?: number
+}): boolean {
+  const staleAfterMs = args.staleAfterMs ?? AGENT_STATUS_STALE_AFTER_MS
+  const liveAgentType = normalizedKnownAgentType(args.live?.agentType)
+  const claimedAgentType = normalizedKnownAgentType(args.claimedAgent)
+  if (!args.live || !liveAgentType || !claimedAgentType || liveAgentType === claimedAgentType) {
+    return false
+  }
+  return isActiveExistingIdentity(args.live, args.now, staleAfterMs)
+}
