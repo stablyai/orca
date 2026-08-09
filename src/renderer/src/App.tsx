@@ -890,6 +890,7 @@ function App(): React.JSX.Element {
         )
         onboardingPromise.catch(() => {})
         const spacesPromise = timeRendererStartupStep('load-spaces', () => actions.loadSpaces())
+        spacesPromise.catch(() => {})
         // Why: await ui.get() (not overlap) so persisted view settings hydrate before the local catalog/session steps and first paint reflects them.
         const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
         await spacesPromise

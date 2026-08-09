@@ -76,8 +76,8 @@ export const SidebarSpaceSwitcher = React.memo(function SidebarSpaceSwitcher({
           data-space-id={activeSpace?.id}
           aria-label={translate(
             activeSpace
-              ? 'auto.components.sidebar.SidebarSpaceSwitcher.currentSwitcherLabel'
-              : 'auto.components.sidebar.SidebarSpaceSwitcher.switcherLabel',
+              ? 'auto.components.sidebar.SidebarSpaceSwitcher.892767f3e2'
+              : 'auto.components.sidebar.SidebarSpaceSwitcher.d228b65427',
             activeSpace ? 'Spaces: {{value0}}' : 'Spaces',
             activeSpace ? { value0: activeSpace.name } : undefined
           )}
@@ -123,17 +123,17 @@ export const SidebarSpaceSwitcher = React.memo(function SidebarSpaceSwitcher({
         ) : null}
         <DropdownMenuItem onSelect={handleEdit}>
           <Pencil />
-          {translate('auto.components.sidebar.SidebarSpaceSwitcher.editSpace', 'Edit Space')}
+          {translate('auto.components.sidebar.SidebarSpaceSwitcher.b025470e9f', 'Edit Space')}
         </DropdownMenuItem>
         {deletable ? (
           <DropdownMenuItem variant="destructive" onSelect={handleDelete}>
             <Trash2 />
-            {translate('auto.components.sidebar.SidebarSpaceSwitcher.deleteSpace', 'Delete Space')}
+            {translate('auto.components.sidebar.SidebarSpaceSwitcher.e3daa20b07', 'Delete Space')}
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem data-new-space-trigger="" onSelect={handleCreate}>
           <Plus />
-          {translate('auto.components.sidebar.SidebarSpaceSwitcher.newSpace', 'New Space')}
+          {translate('auto.components.sidebar.SidebarSpaceSwitcher.bc5c35ca79', 'New Space')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

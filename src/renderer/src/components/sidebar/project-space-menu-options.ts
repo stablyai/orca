@@ -17,6 +17,7 @@ export function getProjectSpaceMenuOptions(
   repoSpaceId: string | null | undefined,
   hostId?: ExecutionHostId
 ): readonly ProjectSpaceMenuOption[] {
+  // Why: runtime-owned catalogs are host-managed and do not persist desktop Space membership.
   if (!hasCustomSpaces(spaces) || parseExecutionHostId(hostId)?.kind === 'runtime') {
     return NO_SPACE_OPTIONS
   }

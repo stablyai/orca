@@ -5303,11 +5303,11 @@
           "failedTooltip": "{{value0}} · connection failed"
         },
         "SidebarSpaceSwitcher": {
-          "switcherLabel": "Spaces",
-          "currentSwitcherLabel": "Spaces: {{value0}}",
-          "editSpace": "Edit Space",
-          "deleteSpace": "Delete Space",
-          "newSpace": "New Space"
+          "892767f3e2": "Spaces: {{value0}}",
+          "d228b65427": "Spaces",
+          "b025470e9f": "Edit Space",
+          "e3daa20b07": "Delete Space",
+          "bc5c35ca79": "New Space"
         },
         "SpaceDeleteDialog": {
           "title": "Delete Space",
