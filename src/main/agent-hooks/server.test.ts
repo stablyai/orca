@@ -3526,6 +3526,7 @@ describe('AgentHookServer listener replay', () => {
         body: JSON.stringify(
           buildBody({
             hook_event_name: 'pre_llm_call',
+            session_id: 'hermes-session',
             user_message: 'verify Hermes route'
           })
         )
@@ -3541,6 +3542,10 @@ describe('AgentHookServer listener replay', () => {
           tabId: 'tab-1',
           worktreeId: 'wt-1',
           connectionId: null,
+          providerSession: {
+            key: 'session_id',
+            id: 'hermes-session'
+          },
           payload: expect.objectContaining({
             state: 'working',
             prompt: 'verify Hermes route',

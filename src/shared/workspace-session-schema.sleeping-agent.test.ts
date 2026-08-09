@@ -14,13 +14,13 @@ describe('parseWorkspaceSession sleeping agents', () => {
           paneKey: 'tab1:pane-1',
           tabId: 'tab1',
           worktreeId: 'wt',
-          agent: 'codex',
-          providerSession: { key: 'session_id', id: 'codex-session' },
+          agent: 'hermes',
+          providerSession: { key: 'session_id', id: 'hermes-session' },
           prompt: 'continue',
           state: 'working',
           capturedAt: 10,
           updatedAt: 9,
-          terminalTitle: 'Codex',
+          terminalTitle: 'Hermes',
           lastAssistantMessage: 'done',
           launchConfig: {
             agentArgs: '',
@@ -32,7 +32,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
     })
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe('codex')
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe('hermes')
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('live')
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.launchConfig).toEqual({
         agentArgs: '',

@@ -13,7 +13,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'droid',
   'grok',
   'devin',
-  'omp'
+  'omp',
+  'hermes'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -193,9 +194,11 @@ export function extractAgentProviderSession(
     }
     case 'gemini':
     case 'droid':
-    // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
+    case 'hermes':
+    // Why: Hermes reports the managed-hook session id used by `--resume`.
     // falls through
     case 'kimi': {
+      // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
@@ -232,7 +235,6 @@ export function extractAgentProviderSession(
     case 'cursor':
     case 'command-code':
     case 'copilot':
-    case 'hermes':
       return null
   }
 }
@@ -270,5 +272,7 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id'
         ? ['omp', '--resume', ompResumeFilePath?.trim() || id]
         : null
+    case 'hermes':
+      return providerSession.key === 'session_id' ? ['hermes', '--resume', id] : null
   }
 }

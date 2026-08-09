@@ -16,6 +16,10 @@ describe('agent session resume metadata', () => {
     expect(isResumableTuiAgent('omp')).toBe(true)
   })
 
+  it('treats hermes as a resumable TUI agent', () => {
+    expect(isResumableTuiAgent('hermes')).toBe(true)
+  })
+
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],
@@ -35,7 +39,8 @@ describe('agent session resume metadata', () => {
     ['droid', { session_id: 'droid-session' }, { key: 'session_id', id: 'droid-session' }],
     ['grok', { sessionId: 'grok-session' }, { key: 'session_id', id: 'grok-session' }],
     ['devin', { session_id: 'devin-session' }, { key: 'session_id', id: 'devin-session' }],
-    ['omp', { session_id: 'omp-session' }, { key: 'session_id', id: 'omp-session' }]
+    ['omp', { session_id: 'omp-session' }, { key: 'session_id', id: 'omp-session' }],
+    ['hermes', { session_id: 'hermes-session' }, { key: 'session_id', id: 'hermes-session' }]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
   })
@@ -55,7 +60,8 @@ describe('agent session resume metadata', () => {
     ['droid', { key: 'session_id', id: 's1' }, ['droid', '--resume', 's1']],
     ['grok', { key: 'session_id', id: 's1' }, ['grok', '--resume', 's1']],
     ['devin', { key: 'session_id', id: 'abc12345' }, ['devin', '--resume', 'abc12345']],
-    ['omp', { key: 'session_id', id: 's1' }, ['omp', '--resume', 's1']]
+    ['omp', { key: 'session_id', id: 's1' }, ['omp', '--resume', 's1']],
+    ['hermes', { key: 'session_id', id: 's1' }, ['hermes', '--resume', 's1']]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
   })

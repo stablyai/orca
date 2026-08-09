@@ -195,6 +195,17 @@ describe('agent sleep planner', () => {
     }
   )
 
+  it('hibernates completed Hermes sessions with a resume id', () => {
+    const hermes = entry({
+      agentType: 'hermes',
+      providerSession: { key: 'session_id', id: 'hermes-session' }
+    })
+
+    expect(
+      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [hermes.paneKey]: hermes } }))
+    ).toEqual(['wt-bg'])
+  })
+
   it('requires the idle threshold and blocks input after done', () => {
     const fresh = entry({ updatedAt: NOW - 1_000 })
     expect(

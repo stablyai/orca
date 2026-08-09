@@ -638,6 +638,30 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex --profile work 'resume' 's1'")
   })
 
+  it.each(['linux', 'win32'] as const)(
+    'resumes Hermes in its TUI with captured launch settings on %s',
+    (platform) => {
+      const plan = buildAgentResumeStartupPlan({
+        agent: 'hermes',
+        providerSession: { key: 'session_id', id: 'hermes-session' },
+        cmdOverrides: { hermes: 'hermes --tui' },
+        agentCommand: "hermes --tui '--model' 'test-model'",
+        agentArgs: '--model test-model',
+        agentEnv: { HERMES_HOME: '/tmp/hermes-work' },
+        platform
+      })
+
+      expect(plan?.launchCommand).toBe(
+        "hermes --tui '--model' 'test-model' '--resume' 'hermes-session'"
+      )
+      expect(plan?.launchConfig).toEqual({
+        agentCommand: "hermes --tui '--model' 'test-model'",
+        agentArgs: '--model test-model',
+        agentEnv: { HERMES_HOME: '/tmp/hermes-work' }
+      })
+    }
+  )
+
   it('uses a captured launch command when building resume plans after overrides change', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',
