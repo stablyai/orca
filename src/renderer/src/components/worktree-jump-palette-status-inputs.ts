@@ -9,35 +9,52 @@ export type PaletteStatusInputsState = Pick<
   | 'tabsByWorktree'
 >
 
-export type PaletteStatusInputs = PaletteStatusInputsState
+export type PaletteStatusInputs = Pick<
+  PaletteStatusInputsState,
+  'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'tabsByWorktree'
+>
 
-// Why: shared frozen bundle returned whenever the Cmd+J jump palette isn't
-// active. The two hottest maps here — agentStatusByPaneKey and
-// runtimePaneTitlesByTabId — get a new top-level identity on every agent-status
-// transition and every terminal pane-title write app-wide. The palette is always
-// mounted (App.tsx renders <CommandDialog open={visible}>) and stays mounted for
-// the whole session once opened, so subscribing to them while it's closed
-// re-rendered the whole palette — and recomputed its per-worktree live/working-dot
-// sort over every worktree — on unrelated terminal chatter. A useShallow
-// subscription keeps this same reference across that churn, so the closed palette
-// stops reacting. Frozen so the shared singleton can't be mutated.
-export const EMPTY_PALETTE_STATUS_INPUTS: PaletteStatusInputs = Object.freeze({
+/** The two hottest maps, read as a snapshot rather than subscribed. See `selectPaletteIndexStatusSnapshot`. */
+export type PaletteIndexStatusSnapshot = Pick<
+  PaletteStatusInputsState,
+  'agentStatusByPaneKey' | 'runtimePaneTitlesByTabId'
+>
+
+const EMPTY_PALETTE_INDEX_STATUS: PaletteIndexStatusSnapshot = Object.freeze({
   agentStatusByPaneKey: {},
-  runtimePaneTitlesByTabId: {},
+  runtimePaneTitlesByTabId: {}
+})
+
+/**
+ * The agent-status and pane-title maps as of *now*, for the palette's index, ordering and filters.
+ * Snapshotted rather than subscribed because the dots own that churn (`PaletteLiveStatusProvider`),
+ * leaving the index free to freeze on open.
+ */
+export function selectPaletteIndexStatusSnapshot(
+  s: PaletteStatusInputsState,
+  active: boolean
+): PaletteIndexStatusSnapshot {
+  if (!active) {
+    return EMPTY_PALETTE_INDEX_STATUS
+  }
+  return {
+    agentStatusByPaneKey: s.agentStatusByPaneKey,
+    runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId
+  }
+}
+
+// Why: the palette stays mounted once opened, so a shared frozen bundle keeps `useShallow` stable
+// and stops the closed palette re-rendering on unrelated terminal chatter.
+export const EMPTY_PALETTE_STATUS_INPUTS: PaletteStatusInputs = Object.freeze({
   ptyIdsByTabId: {},
   terminalLayoutsByTabId: {},
   tabsByWorktree: {}
 })
 
 /**
- * Select the five status maps the jump palette needs to derive per-worktree
- * live/working dots and switcher ordering — but only while it's `active` (open,
- * or still animating closed). While inactive nothing is shown, so return a stable
- * frozen constant that a `useShallow`-wrapped subscription keeps referentially
- * equal across the (very hot) agent-status / pane-title writes, skipping the
- * re-render that would otherwise fire on the always-mounted palette on every
- * unrelated terminal. The instant it becomes active the live maps flow through
- * and every derivation recomputes exactly as before.
+ * The status maps the palette must keep live while `active` (open, or still animating closed): the
+ * tab set changes underneath it and PTY liveness decides whether a workspace counts as sleeping.
+ * The two hot maps are deliberately absent — see `selectPaletteIndexStatusSnapshot`.
  */
 export function selectPaletteStatusInputs(
   s: PaletteStatusInputsState,
@@ -47,8 +64,6 @@ export function selectPaletteStatusInputs(
     return EMPTY_PALETTE_STATUS_INPUTS
   }
   return {
-    agentStatusByPaneKey: s.agentStatusByPaneKey,
-    runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
     ptyIdsByTabId: s.ptyIdsByTabId,
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,
     tabsByWorktree: s.tabsByWorktree

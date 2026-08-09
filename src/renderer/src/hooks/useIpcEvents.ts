@@ -23,6 +23,7 @@ import {
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
+import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import type {
@@ -1349,6 +1350,12 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onJumpToWorktreeIndex((index) => {
         const store = useAppStore.getState()
+        // Why: while Cmd+J is open the digit chord means "activate recent row N" — main already
+        // preventDefault'd it, so routing it here keeps digits out of the palette's search input.
+        if (store.activeModal === 'worktree-palette') {
+          emitCmdJRowIndexJump(index)
+          return
+        }
         if (store.activeView !== 'terminal') {
           return
         }
@@ -1361,6 +1368,10 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onJumpToTabIndex((index) => {
+        // Why: dropped while Cmd+J is open — never switch tabs behind the overlay.
+        if (useAppStore.getState().activeModal === 'worktree-palette') {
+          return
+        }
         activateTabNumberShortcut(index)
       })
     )

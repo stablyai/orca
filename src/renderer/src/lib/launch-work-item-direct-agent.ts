@@ -16,7 +16,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
-import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import { resolveNativeChatLaunchSessionOptions } from '@/components/native-chat/native-chat-session-option-enrichment'
 import type { PersistedNativeChatSessionOptions } from '../../../shared/native-chat-session-options'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
@@ -51,7 +51,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
       ? resolveTuiAgentLaunchArgs(args.agent, args.settings?.agentDefaultArgs)
       : args.agentArgs
   const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings?.agentDefaultEnv)
-  const sessionOptions = resolveNativeChatSessionOptionDefaults(
+  const sessionOptions = resolveNativeChatLaunchSessionOptions(
     args.settings?.nativeChatSessionOptions,
     args.agent
   )

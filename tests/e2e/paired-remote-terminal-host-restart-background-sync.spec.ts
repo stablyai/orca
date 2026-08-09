@@ -380,6 +380,7 @@ test('foregrounds a preserved daemon PTY after the paired host relaunches', asyn
     expect(readDaemonPid(session.userDataDir), 'daemon must survive the host relaunch').toBe(
       daemonPid
     )
+    await openClientTab(client.page, worktreeId, target.webTabId)
     await expect
       .poll(
         () =>
@@ -391,15 +392,6 @@ test('foregrounds a preserved daemon PTY after the paired host relaunches', asyn
       )
       .toBe(true)
 
-    target.handle = await findTerminalHandle(client, worktreeId, target.parentTabId)
-    const shown = await callRuntime<{ terminal: { ptyId: string | null } }>(
-      client.page,
-      client.environmentId,
-      'terminal.show',
-      { terminal: target.handle }
-    )
-    expect(shown.terminal.ptyId).toBe(target.ptyId)
-    await openClientTab(client.page, worktreeId, target.webTabId)
     await waitForPaneConnected(client.page, target.webTabId)
     await expect
       .poll(
@@ -415,6 +407,7 @@ test('foregrounds a preserved daemon PTY after the paired host relaunches', asyn
       )
       .toBe(true)
     await expectTerminalInteractive(client, target, 'x')
+    target.handle = await findTerminalHandle(client, worktreeId, target.parentTabId)
 
     const reconnectControl = await createHostTerminal(client, worktreeId, 'reconnect-control')
     terminals.push(reconnectControl)

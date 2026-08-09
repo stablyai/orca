@@ -59,6 +59,10 @@ export type GitBranchLineTotal = {
   added: number
   removed: number
   mergeBase: string
+  // Path-heuristic buckets of added/removed; generated wins on overlap. Optional
+  // for pre-split hosts (absent = unknown, not zero).
+  test?: { added: number; removed: number }
+  generated?: { added: number; removed: number }
 }
 
 export type GitStatusResult = {

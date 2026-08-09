@@ -448,6 +448,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear list-issues' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
   }
+  if (command === 'artifacts list' && flag === 'cursor') {
+    return '--cursor <cursor>      Opaque cursor returned by a previous artifacts page'
+  }
   if (command === 'orchestration worker-read' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
   }

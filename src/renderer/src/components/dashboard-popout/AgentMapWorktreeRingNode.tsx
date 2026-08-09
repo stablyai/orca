@@ -13,7 +13,7 @@ import type {
   AgentMapProjectRing,
   AgentMapWorktreeRing
 } from './agent-map-layout'
-import { shouldAggregateAgentMapWorktree } from './agent-map-layout'
+import { AGENT_MAP_LINEAGE_RELATION, shouldAggregateAgentMapWorktree } from './agent-map-layout'
 import { agentMapWorktreeActiveStatus } from './agent-map-worktree-active-status'
 
 type AgentMapWorktreeRingNodeProps = {
@@ -23,6 +23,7 @@ type AgentMapWorktreeRingNodeProps = {
   mapScale: number
   selectedPaneKey: string | null
   allowAggregation: boolean
+  showOrchestrationLinks: boolean
   launchableAgents?: readonly TuiAgent[]
   nodeRefs: MutableRefObject<Map<string, SVGGElement>>
   onSelectAgent: (card: DashboardCard) => void
@@ -49,9 +50,13 @@ function formatDuration(minutes: number): string {
   })
 }
 
+// Why direction-aware: packing can place a child level with or above its parent, and
+// a fixed downward elbow would then exit the wrong side and draw back through both
+// nodes. Leaving the rank tie at +1 keeps the common downward case byte-identical.
 function lineagePath(parent: AgentMapAgentNode, child: AgentMapAgentNode): string {
-  const startY = parent.y + parent.radius
-  const endY = child.y - child.radius
+  const direction = child.y < parent.y ? -1 : 1
+  const startY = parent.y + parent.radius * direction
+  const endY = child.y - child.radius * direction
   const branchY = (startY + endY) / 2
   return `M ${parent.x} ${startY} L ${parent.x} ${branchY} L ${child.x} ${branchY} L ${child.x} ${endY}`
 }
@@ -178,6 +183,7 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
   mapScale,
   selectedPaneKey,
   allowAggregation,
+  showOrchestrationLinks,
   launchableAgents,
   nodeRefs,
   onSelectAgent,
@@ -268,20 +274,26 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
         ) : (
           <>
             <g className="agent-map-lineage-links" aria-hidden>
-              {worktree.agents.map((child) => {
+              {(showOrchestrationLinks ? worktree.agents : []).map((child) => {
                 const parent = child.card.parentPaneKey
                   ? agentsByPaneKey.get(child.card.parentPaneKey)
                   : undefined
-                if (!parent || child.y <= parent.y) {
+                // Why no y-gate: both endpoints are drawn nodes, so the relationship is
+                // real whatever the layout ranked them. Suppressing the edge only hid
+                // lineage that packing pressure had placed side by side.
+                //
+                // Self-parents are dropped explicitly — the layout already ignores them
+                // (`layoutAgentMapLineage`), and the y-gate used to mask them here by
+                // accident since a node never ranks below itself.
+                if (!parent || parent.card.paneKey === child.card.paneKey) {
                   return null
                 }
-                const relation = parent.card.parentPaneKey ? 'subagent' : 'orchestration'
                 return (
                   <path
                     key={child.card.paneKey}
-                    className={`agent-map-lineage-link${relation === 'subagent' ? ' is-subagent' : ''}`}
+                    className="agent-map-lineage-link"
                     data-agent-map-lineage-link=""
-                    data-agent-map-lineage-relation={relation}
+                    data-agent-map-lineage-relation={AGENT_MAP_LINEAGE_RELATION}
                     data-parent-pane-key={parent.card.paneKey}
                     data-child-pane-key={child.card.paneKey}
                     d={lineagePath(parent, child)}

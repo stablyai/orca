@@ -239,8 +239,14 @@
           "34a03a6565": "Mantener {{value0}} actualizado",
           "fa9299a66f": "Tu nuevo worktree está actualizado, pero el {{value0}} local está {{value1}} {{value2}} por detrás. Los diffs de IA pueden omitir commits recientes.",
           "14bc053a47": "No se actualizó el {{value0}} local",
+          "localBaseRefRefreshFailedForWorktree": "No se actualizó el {{value0}} local para \"{{value1}}\"",
           "4a18052018": "El {{value0}} local está {{value1}} por detrás",
-          "903b51c2ed": "Espacio de trabajo creado desde {{value0}}, pero Orca no pudo hacer fast-forward del {{value1}} local porque {{value2}}",
+          "903b51c2ed": "Espacio de trabajo creado desde {{value0}}, pero Orca no pudo hacer fast-forward del {{value1}} local. {{value2}}",
+          "localBaseRefRefreshFailedDescriptionNamed": "El espacio de trabajo \"{{value0}}\" se creó desde {{value1}}, pero Orca no pudo hacer fast-forward del {{value2}} local. {{value3}}",
+          "localBaseRefRefreshFailedDetailDirtyNamed": "El worktree en {{value0}} (donde está checked out el {{value1}} local) tiene cambios sin confirmar. Haz commit, stash o descarta esos cambios y luego actualiza el {{value1}} local manualmente.",
+          "localBaseRefRefreshFailedDetailDirty": "El worktree donde está checked out el {{value0}} local tiene cambios sin confirmar. Haz commit, stash o descarta esos cambios y luego actualiza el {{value0}} local manualmente.",
+          "localBaseRefRefreshFailedDetailNotFastForward": "El {{value0}} local no existe o no se puede hacer fast-forward de forma limpia desde la base remota. Revisa si hay commits solo locales antes de actualizarlo manualmente.",
+          "localBaseRefRefreshFailedDetailError": "Git devolvió un error al actualizar el {{value0}} local. Revisa el repo por refs bloqueados o un estado de worktree inusual y luego actualiza el {{value0}} local manualmente.",
           "0216895fb5": "No se pudo eliminar la rama",
           "19db0085fb": "Rama local eliminada",
           "2b0afc7f14": "No se pudo mantener actualizado el {{value0}} local",
@@ -1977,8 +1983,6 @@
         "556e7232ca": "Actual",
         "684e8d7bc2": "Recopilando tus worktrees recientes y pestañas abiertas.",
         "ff908adfe9": "Cargando objetivos de salto",
-        "1ebe225fee": "Busca worktrees, ajustes, pestañas y acciones...",
-        "4e4ff044d5": "Buscar worktrees, ajustes, pestañas y acciones",
         "4ee378034d": "Saltar a...",
         "f7fda8d562": "Crea un worktree o abre una pestaña en Orca para comenzar.",
         "1628fd7dfa": "No hay worktrees activos, ajustes, acciones ni pestañas abiertas",
@@ -2006,7 +2010,10 @@
         "projectsGroupsHeader": "Proyectos y grupos",
         "projectBadge": "Proyecto",
         "repoGroupBadge": "Grupo de repositorios",
-        "pluginCommandFailed": "No se pudo ejecutar el comando del plugin."
+        "pluginCommandFailed": "No se pudo ejecutar el comando del plugin.",
+        "27f10cca63": "Busca chats, terminales, worktrees, ajustes y acciones...",
+        "2770f02910": "Busca chats, terminales, worktrees, ajustes y acciones",
+        "recentChatsTerminalsHeader": "Chats y terminales recientes"
       },
       "github": {
         "pr": {
@@ -2982,7 +2989,12 @@
             "25dc1cd653": "Abrir archivo",
             "7cdf8ee0c8": "Abrir URL",
             "b27864279e": "Iniciar agente",
-            "39676a184c": "Abrir cualquier archivo, URL, agente, ..."
+            "0e5b7a3f16": "Buscar pestañas abiertas, archivos, URL y agentes…",
+            "8f0a1c4d92": "Cambiar a la pestaña",
+            "2c38630a01": "El espacio de trabajo ya no existe",
+            "4f0d9a71c2": "La pestaña ya no existe",
+            "d7d496a451": "La página del navegador ya no existe",
+            "7726ce9970": "La pestaña del emulador móvil ya no existe"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "Comando",
@@ -3016,7 +3028,7 @@
                 "classifier": {
                   "42e6262ae9": "No hay acción disponible.",
                   "097a982ee0": "Cargando archivos...",
-                  "5a9c83c04b": "Abrir cualquier archivo, URL, agente, ...",
+                  "c41f8d20b7": "Buscar pestañas abiertas, archivos, URL y agentes…",
                   "90eb94dc48": "Introduce una URL http:// o https://.",
                   "5553b283ce": "Introduce una URL o ruta de archivo.",
                   "queryTooLarge": "El texto de búsqueda es demasiado grande.",
@@ -11165,7 +11177,9 @@
             "openSupportedWorkspace": "Abre un workspace antes de reanudar una sesión.",
             "localSessionSshWorkspaceUnsupported": "El historial de esta sesión solo existe en este equipo. Para reanudarla, abre un workspace local. Los workspaces SSH no tienen acceso a ese historial.",
             "sessionHostMismatchUnsupported": "Esta sesión pertenece a un host diferente. Abre un espacio de trabajo en el mismo host para reanudarla.",
-            "prepareSessionResumeFailed": "Could not prepare this session for resume."
+            "prepareSessionResumeFailed": "Could not prepare this session for resume.",
+            "sessionDeleted": "Sesión eliminada",
+            "sessionDeleteFailed": "No se pudo eliminar la sesión"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Buscando sesiones",
@@ -11297,7 +11311,17 @@
             "jumpToWorktree": "Saltar al worktree",
             "recoverableBadge": "No guardada",
             "subagentCountSingular": "1 subagente",
-            "subagentCountPlural": "{{value0}} subagentes"
+            "subagentCountPlural": "{{value0}} subagentes",
+            "delete": "Eliminar",
+            "deleteReasonNonLocalHost": "Solo se pueden eliminar las sesiones de este dispositivo.",
+            "deleteReasonSyntheticPath": "Esta sesión no se puede eliminar desde Orca.",
+            "deleteReasonUnsupportedAgent": "Las sesiones de {{value0}} no se pueden eliminar desde Orca.",
+            "deleteReasonSessionLive": "Esta sesión aún se está ejecutando: espera a que termine antes de eliminarla."
+          },
+          "AiVaultSessionDeleteDialog": {
+            "title": "¿Eliminar esta sesión?",
+            "description": "\"{{value0}}\" se eliminará. Una vez eliminada, tampoco podrá reanudarse desde la línea de comandos propia de {{value1}}.",
+            "confirm": "Eliminar"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "Buscar archivos",

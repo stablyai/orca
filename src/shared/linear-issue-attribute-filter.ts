@@ -98,6 +98,31 @@ export function canonicalizeLinearIssueAttributeFilter(
   }
 }
 
+/**
+ * Enforces the transport bounds that `canonicalize` does not. Canonical form is
+ * deduped but unbounded, so a filter built in memory can exceed limits that only
+ * the throwing parser checks — and be rejected the moment it crosses a schema.
+ */
+export function boundLinearIssueAttributeFilter(
+  filter: LinearIssueAttributeFilter
+): LinearIssueAttributeFilter {
+  const withinLength = (id: string): boolean =>
+    id.length > 0 && id.length <= LINEAR_ISSUE_ATTRIBUTE_FILTER_ID_MAX_LENGTH
+  return {
+    stateIds: filter.stateIds
+      .filter(withinLength)
+      .slice(0, LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS),
+    priorities: filter.priorities.slice(0, LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_PRIORITIES),
+    assignee:
+      filter.assignee?.kind === 'user' && !withinLength(filter.assignee.id)
+        ? null
+        : filter.assignee,
+    labelIds: filter.labelIds
+      .filter(withinLength)
+      .slice(0, LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS)
+  }
+}
+
 export function isEmptyLinearIssueAttributeFilter(
   filter: LinearIssueAttributeFilter | null | undefined
 ): boolean {

@@ -18,6 +18,7 @@ import {
   type PtyIngressEmission,
   type PtyStartupIngressIntent
 } from '../../shared/pty-startup-ingress'
+import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
 import type {
   PendingOutputRecord,
   SessionState,
@@ -222,6 +223,14 @@ export class Session {
 
   write(data: string): void {
     if (this._state === 'exited' || this._disposed) {
+      return
+    }
+
+    // Daemon POSIX PTYs need the local provider's cooked-echo containment (#13137).
+    if (
+      extractOnlyCookedEchoSafeQueryReplies(data) &&
+      this.startupIngress.answerLiveQueryReply(data)
+    ) {
       return
     }
 

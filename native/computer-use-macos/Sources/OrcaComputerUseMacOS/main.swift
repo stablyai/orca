@@ -601,7 +601,7 @@ final class Provider {
         windowIndex: Int?,
         restoreWindow: Bool
     ) throws -> Snapshot {
-        guard accessibilityTrusted() else {
+        guard accessibilityTrustedSettled() else {
             // Why: agents retry failed observations. Only the explicit setup flow
             // should open macOS privacy prompts/settings; runtime calls stay quiet.
             throw ProviderError.coded(
@@ -619,7 +619,7 @@ final class Provider {
             allowRecovery: restoreWindow
         )
         let focusedTitle = stringAttribute(focused, kAXTitleAttribute as String) ?? app.name
-        let canCaptureScreenshot = includeScreenshot && screenCaptureTrusted()
+        let canCaptureScreenshot = includeScreenshot && screenCaptureTrustedSettled()
         guard let capture = WindowCapture.resolve(
             candidates: windowCandidates,
             titleHint: focusedTitle,
@@ -1034,8 +1034,62 @@ private func accessibilityTrusted() -> Bool {
     AXIsProcessTrusted()
 }
 
+private func accessibilityTrustedSettled() -> Bool {
+    // Fresh helper processes can receive transient TCC preflight denials before the real grant settles.
+    PermissionTrustSettling.settle(probe: accessibilityTrusted).settled
+}
+
 private func screenCaptureTrusted() -> Bool {
     CGPreflightScreenCaptureAccess()
+}
+
+private func screenCaptureTrustedSettled() -> Bool {
+    PermissionTrustSettling.settleWithFallback(
+        finalTimeoutMs: 500,
+        probe: screenCaptureTrusted,
+        fallbackProbe: screenCaptureTrustedByCaptureProbe
+    )
+}
+
+private func permissionStatusSnapshotSettled() -> PermissionStatusSnapshot {
+    PermissionStatusSnapshotProbe.capture(
+        accessibilityProbe: accessibilityTrustedSettled,
+        screenshotsProbe: screenCaptureTrustedSettled
+    )
+}
+
+private func screenCaptureTrustedByCaptureProbe() -> Bool {
+    guard let infos = CGWindowListCopyWindowInfo(
+        [.optionOnScreenOnly],
+        kCGNullWindowID
+    ) as? [[String: Any]] else {
+        return false
+    }
+    let windows = infos.compactMap { info -> ScreenCaptureProbeWindow? in
+        guard let layer = info[kCGWindowLayer as String] as? Int,
+              let ownerPid = info[kCGWindowOwnerPID as String] as? NSNumber,
+              let number = info[kCGWindowNumber as String] as? NSNumber
+        else {
+            return nil
+        }
+        return ScreenCaptureProbeWindow(
+            layer: layer,
+            ownerPid: ownerPid.int32Value,
+            windowId: number.uint32Value
+        )
+    }
+    guard let windowId = ScreenCaptureProbeWindowSelection.firstCrossProcessNormalWindow(
+        ownPid: ProcessInfo.processInfo.processIdentifier,
+        windows: windows
+    ) else {
+        return false
+    }
+    return CGWindowListCreateImage(
+        .null,
+        [.optionIncludingWindow],
+        CGWindowID(windowId),
+        [.boundsIgnoreFraming]
+    ) != nil
 }
 
 private func requestScreenCaptureAccess() -> Bool {
@@ -1065,6 +1119,38 @@ private func enableManualAccessibilityIfNeeded(_ appElement: AXUIElement, app: A
 
 private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, visibleWindowCount: Int, allowRecovery: Bool) throws -> AXUIElement {
     let systemWide = AXUIElementCreateSystemWide()
+    if let window = lookupUsableWindow(systemWide: systemWide, appElement: appElement, app: app) {
+        return window
+    }
+    if allowRecovery {
+        recoverWindow(app)
+        if let window = lookupUsableWindow(systemWide: systemWide, appElement: appElement, app: app) {
+            return window
+        }
+    }
+    if visibleWindowCount > 0 {
+        var settledWindow: AXUIElement?
+        let outcome = PermissionTrustSettling.settle {
+            settledWindow = lookupUsableWindow(
+                systemWide: systemWide,
+                appElement: appElement,
+                app: app
+            )
+            return settledWindow != nil
+        }
+        if let window = settledWindow, outcome.settled {
+            return window
+        }
+        throw ProviderError.coded("permission_denied", "app '\(app.name)' has visible windows but no accessibility window (AX reads stayed blocked for \(outcome.waitedMs)ms after retries). macOS Accessibility may need Orca Computer Use toggled off and on again in System Settings.")
+    }
+    throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window; make sure the app has a visible window, then retry with --restore-window.")
+}
+
+private func lookupUsableWindow(
+    systemWide: AXUIElement,
+    appElement: AXUIElement,
+    app: AppDescriptor
+) -> AXUIElement? {
     if let window = focusedSystemWindow(systemWide: systemWide, app: app) {
         return window
     }
@@ -1072,31 +1158,9 @@ private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, visibleW
         return window
     }
     if let windows = copyArray(appElement, kAXWindowsAttribute as String) {
-        if let window = windows.first(where: usableWindow) {
-            return window
-        }
+        return windows.first(where: usableWindow)
     }
-    if allowRecovery {
-        recoverWindow(app)
-        if let window = focusedSystemWindow(systemWide: systemWide, app: app) {
-            return window
-        }
-        if let window = copyElement(appElement, kAXFocusedWindowAttribute as String), usableWindow(window) {
-            return window
-        }
-        if let windows = copyArray(appElement, kAXWindowsAttribute as String) {
-            if let window = windows.first(where: usableWindow) {
-                return window
-            }
-        }
-    }
-    let permissionHint = visibleWindowCount > 0
-        ? " The app has visible windows, so macOS Accessibility may need Orca Computer Use toggled off and on again in System Settings."
-        : ""
-    if visibleWindowCount > 0 {
-        throw ProviderError.coded("permission_denied", "app '\(app.name)' has visible windows but no accessibility window.\(permissionHint)")
-    }
-    throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window; make sure the app has a visible window, then retry with --restore-window.")
+    return nil
 }
 
 private func focusedSystemWindow(systemWide: AXUIElement, app: AppDescriptor) -> AXUIElement? {
@@ -2874,6 +2938,7 @@ private final class PermissionRuntime: NSObject, NSApplicationDelegate {
             windowController?.window?.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
+        windowController?.refreshPermissions()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -2890,6 +2955,7 @@ private final class PermissionWindowController: NSWindowController {
     private var dragAssistantPermission: PermissionKind?
     private let initialPermission: PermissionKind?
     private let terminateWhenDragAssistantCloses: Bool
+    private var permissionStatusRefresh: PermissionStatusRefreshCoordinator?
 
     convenience init(initialPermission: PermissionKind? = nil, terminateWhenDragAssistantCloses: Bool = false) {
         let window = NSWindow(
@@ -2920,6 +2986,14 @@ private final class PermissionWindowController: NSWindowController {
         self.initialPermission = initialPermission
         self.terminateWhenDragAssistantCloses = terminateWhenDragAssistantCloses
         super.init(window: window)
+        permissionStatusRefresh = PermissionStatusRefreshCoordinator(
+            probe: permissionStatusSnapshotSettled,
+            handler: { [weak self] snapshot in
+                Task { @MainActor in
+                    self?.applyPermissionStatus(snapshot)
+                }
+            }
+        )
     }
 
     required init?(coder: NSCoder) {
@@ -2976,21 +3050,25 @@ private final class PermissionWindowController: NSWindowController {
     }
 
     func refreshPermissions() {
-        if let initialPermission, initialPermission.isGranted {
+        permissionStatusRefresh?.refresh()
+    }
+
+    private func applyPermissionStatus(_ snapshot: PermissionStatusSnapshot) {
+        if let initialPermission, initialPermission.isGranted(in: snapshot) {
             // Why: targeted permission helpers should finish once the requested
             // grant lands, even if other Computer Use permissions remain unset.
             completeDragAssistant()
             return
         }
-        if dragAssistantPermission?.isGranted == true {
+        if dragAssistantPermission?.isGranted(in: snapshot) == true {
             // Why: after one grant in full setup, the remaining missing permission
             // needs fresh guidance instead of the old assistant's instructions.
             closeDragAssistant()
         }
-        if PermissionKind.allCases.allSatisfy(\.isGranted) {
+        if PermissionKind.allCases.allSatisfy({ $0.isGranted(in: snapshot) }) {
             closeDragAssistant()
         }
-        (window?.contentView as? PermissionView)?.refreshPermissions()
+        (window?.contentView as? PermissionView)?.refreshPermissions(snapshot)
     }
 }
 
@@ -3045,12 +3123,12 @@ private enum PermissionKind: CaseIterable {
         }
     }
 
-    var isGranted: Bool {
+    func isGranted(in snapshot: PermissionStatusSnapshot) -> Bool {
         switch self {
         case .accessibility:
-            accessibilityTrusted()
+            snapshot.accessibilityGranted
         case .screenshots:
-            screenCaptureTrusted()
+            snapshot.screenshotsGranted
         }
     }
 
@@ -3071,6 +3149,7 @@ private final class PermissionView: NSView {
     private let close: () -> Void
     private var contentStack: NSStackView?
     private var contentConstraints: [NSLayoutConstraint] = []
+    private var permissionStatus: PermissionStatusSnapshot?
 
     init(frame frameRect: NSRect, showDragAssistant: @escaping (PermissionKind) -> Void, close: @escaping () -> Void) {
         self.showDragAssistant = showDragAssistant
@@ -3107,12 +3186,22 @@ private final class PermissionView: NSView {
             icon.heightAnchor.constraint(equalToConstant: 58)
         ])
 
-        let missingPermissions = PermissionKind.allCases.filter { !$0.isGranted }
-        let ready = missingPermissions.isEmpty
+        let missingPermissions = permissionStatus.map { snapshot in
+            PermissionKind.allCases.filter { !$0.isGranted(in: snapshot) }
+        } ?? []
+        let checking = permissionStatus == nil
+        let ready = !checking && missingPermissions.isEmpty
 
-        let title = label(ready ? "Computer Use is Ready" : "Enable Orca Computer Use", size: 22, weight: .bold)
+        let titleText = checking
+            ? "Checking Computer Use"
+            : (ready ? "Computer Use is Ready" : "Enable Orca Computer Use")
+        let title = label(titleText, size: 22, weight: .bold)
         let subtitle = label(
-            ready ? "Orca can use local apps when you ask." : "Grant permissions so Orca can use apps when you ask.",
+            checking
+                ? "Checking Accessibility and Screenshots."
+                : (ready
+                    ? "Orca can use local apps when you ask."
+                    : "Grant permissions so Orca can use apps when you ask."),
             size: 12,
             weight: .regular
         )
@@ -3129,7 +3218,16 @@ private final class PermissionView: NSView {
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         subtitle.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -10).isActive = true
 
-        if ready {
+        if checking {
+            let progress = NSProgressIndicator()
+            progress.style = .spinning
+            progress.controlSize = .small
+            progress.translatesAutoresizingMaskIntoConstraints = false
+            progress.startAnimation(nil)
+            stack.addArrangedSubview(progress)
+            progress.setContentHuggingPriority(.required, for: .horizontal)
+            progress.centerXAnchor.constraint(equalTo: stack.centerXAnchor).isActive = true
+        } else if ready {
             stack.addArrangedSubview(doneButton())
         } else {
             for permission in missingPermissions {
@@ -3149,8 +3247,9 @@ private final class PermissionView: NSView {
         NSLayoutConstraint.activate(contentConstraints)
     }
 
-    func refreshPermissions() {
-        // Why: TCC grants can change in System Settings while this window stays open.
+    func refreshPermissions(_ snapshot: PermissionStatusSnapshot) {
+        guard permissionStatus != snapshot else { return }
+        permissionStatus = snapshot
         build()
     }
 
@@ -4039,14 +4138,16 @@ private func runPermissionCheck(initialPermission: PermissionKind? = nil) {
 }
 
 private func printPermissionStatus() {
-    let accessibility = accessibilityTrusted() ? "granted" : "not-granted"
-    let screenshots = screenCaptureTrusted() ? "granted" : "not-granted"
+    let snapshot = permissionStatusSnapshotSettled()
+    let accessibility = snapshot.accessibilityGranted ? "granted" : "not-granted"
+    let screenshots = snapshot.screenshotsGranted ? "granted" : "not-granted"
     print(#"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)"}"#)
 }
 
 private func writePermissionStatus(to path: String) {
-    let accessibility = accessibilityTrusted() ? "granted" : "not-granted"
-    let screenshots = screenCaptureTrusted() ? "granted" : "not-granted"
+    let snapshot = permissionStatusSnapshotSettled()
+    let accessibility = snapshot.accessibilityGranted ? "granted" : "not-granted"
+    let screenshots = snapshot.screenshotsGranted ? "granted" : "not-granted"
     let text = #"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)"}"#
     do {
         try text.write(toFile: path, atomically: true, encoding: .utf8)

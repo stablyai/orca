@@ -330,6 +330,26 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     vi.clearAllMocks()
   })
 
+  it('keeps the Advanced focus highlight inside the composer edge', () => {
+    current = renderCard()
+
+    const advancedButton = [...current.container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Advanced')
+    )
+
+    expect(advancedButton?.className).toContain('focus-visible:ring-inset')
+  })
+
+  it('removes collapsed Advanced controls from the Tab order', () => {
+    current = renderCard({ advancedOpen: false, branchesEnabled: true })
+
+    const advancedPanel = [...current.container.querySelectorAll('[aria-hidden="true"]')].find(
+      (element) => element.querySelector('textarea[placeholder="Write a note"]') !== null
+    )
+
+    expect(advancedPanel?.hasAttribute('inert')).toBe(true)
+  })
+
   it('passes folder child repos into the create-from field without a source trigger', () => {
     current = renderCard({
       repoBackedSearchRepos: sourceRepos as never

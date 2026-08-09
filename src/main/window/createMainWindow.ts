@@ -19,6 +19,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { isCrashReportReason } from '../../shared/crash-reporting'
+import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import {
   DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
   DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
@@ -303,6 +304,11 @@ export function createMainWindow(
   const rendererWebContentsId = mainWindow.webContents.id
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
+
+  // Unlike query-session-end, session-end cannot be canceled before this signal is recorded.
+  if (process.platform === 'win32') {
+    mainWindow.on('session-end', markSystemSessionEnding)
+  }
 
   if (process.platform === 'darwin') {
     // Why: preserve hidden-window power savings; stable native sizing and frame-only invalidation
@@ -740,17 +746,17 @@ export function createMainWindow(
       return false
     }
 
+    const isIndexJump = action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex'
+    if (isIndexJump && isAutoRepeat) {
+      // Contain held-key repeats in main — every renderer index path skips e.repeat, so yielding a
+      // repeat would leak a raw key to xterm/DOM, and re-firing the jump is never what a hold means.
+      event.preventDefault()
+      return true
+    }
+
     // While the floating panel owns the keyboard, yield indexed switch chords to the renderer
     // so L2 selects a floating tab instead of switching the main workspace behind the panel.
-    if (
-      floatingPanelFocused &&
-      (action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex')
-    ) {
-      if (isAutoRepeat) {
-        // Contain held-key repeats in main — both renderer index paths skip e.repeat, so yielding a repeat would leak a raw key to xterm/DOM.
-        event.preventDefault()
-        return true
-      }
+    if (floatingPanelFocused && isIndexJump) {
       return false
     }
 

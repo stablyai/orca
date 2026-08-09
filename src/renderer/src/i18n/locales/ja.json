@@ -239,8 +239,14 @@
           "34a03a6565": "{{value0}} を最新の状態に保つ",
           "fa9299a66f": "新規ワークツリーは最新ですが、ローカル {{value0}} は {{value1}} {{value2}} 遅れています。 AI の差分では最近の commits が失われる可能性があります。",
           "14bc053a47": "ローカル {{value0}} は更新されませんでした",
+          "localBaseRefRefreshFailedForWorktree": "「{{value1}}」のローカル {{value0}} は更新されませんでした",
           "4a18052018": "ローカル {{value0}} は {{value1}} の後ろにあります",
-          "903b51c2ed": "ワークスペースは {{value0}} から作成されましたが、{{value2}} のため Orca はローカル {{value1}} を早送りできませんでした",
+          "903b51c2ed": "ワークスペースは {{value0}} から作成されましたが、Orca はローカル {{value1}} を早送りできませんでした。{{value2}}",
+          "localBaseRefRefreshFailedDescriptionNamed": "ワークスペース「{{value0}}」は {{value1}} から作成されましたが、Orca はローカル {{value2}} を早送りできませんでした。{{value3}}",
+          "localBaseRefRefreshFailedDetailDirtyNamed": "{{value0}} のワークツリー（ローカル {{value1}} がチェックアウトされている場所）に未コミットの変更があります。コミット、stash、または破棄してから、ローカル {{value1}} を手動で更新してください。",
+          "localBaseRefRefreshFailedDetailDirty": "ローカル {{value0}} がチェックアウトされているワークツリーに未コミットの変更があります。コミット、stash、または破棄してから、ローカル {{value0}} を手動で更新してください。",
+          "localBaseRefRefreshFailedDetailNotFastForward": "ローカル {{value0}} が存在しないか、リモートのベースからクリーンに早送りできません。手動で更新する前に、ローカルにのみ存在するコミットがないか確認してください。",
+          "localBaseRefRefreshFailedDetailError": "ローカル {{value0}} の更新中に Git がエラーを返しました。ロックされた refs や異常なワークツリー状態がないか確認し、ローカル {{value0}} を手動で更新してください。",
           "0216895fb5": "ブランチの削除に失敗しました",
           "19db0085fb": "ローカルブランチが削除されました",
           "2b0afc7f14": "ローカル {{value0}} を最新の状態に維持できませんでした",
@@ -1977,8 +1983,6 @@
         "556e7232ca": "現在",
         "684e8d7bc2": "最近のワークツリーと開いているタブを収集します。",
         "ff908adfe9": "ジャンプターゲットをロード中",
-        "1ebe225fee": "ワークツリー、設定、タブ、操作を検索します...",
-        "4e4ff044d5": "ワークツリー、設定、タブ、操作を検索する",
         "4ee378034d": "にジャンプします...",
         "f7fda8d562": "まず、ワークツリーを作成するか、Orca でタブを開きます。",
         "1628fd7dfa": "アクティブなワークツリー、設定、操作、または開いているタブがありません",
@@ -2006,7 +2010,10 @@
         "projectsGroupsHeader": "プロジェクトとグループ",
         "projectBadge": "プロジェクト",
         "repoGroupBadge": "リポジトリグループ",
-        "pluginCommandFailed": "プラグインのコマンドを実行できませんでした。"
+        "pluginCommandFailed": "プラグインのコマンドを実行できませんでした。",
+        "27f10cca63": "チャット、ターミナル、ワークツリー、設定、操作を検索します...",
+        "2770f02910": "チャット、ターミナル、ワークツリー、設定、操作を検索します",
+        "recentChatsTerminalsHeader": "最近のチャットとターミナル"
       },
       "github": {
         "pr": {
@@ -2982,7 +2989,12 @@
             "25dc1cd653": "ファイルを開く",
             "7cdf8ee0c8": "URLを開く",
             "b27864279e": "agent を起動",
-            "39676a184c": "任意のファイル、URL、agent などを開きます..."
+            "0e5b7a3f16": "開いているタブ、ファイル、URL、agent を検索…",
+            "8f0a1c4d92": "タブに切り替える",
+            "2c38630a01": "ワークスペースは存在しません",
+            "4f0d9a71c2": "タブは存在しません",
+            "d7d496a451": "ブラウザページは存在しません",
+            "7726ce9970": "モバイルエミュレータのタブは存在しません"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "コマンド",
@@ -3016,7 +3028,7 @@
                 "classifier": {
                   "42e6262ae9": "利用可能な操作はありません。",
                   "097a982ee0": "ファイルをロード中...",
-                  "5a9c83c04b": "任意のファイル、URL、agent などを開きます...",
+                  "c41f8d20b7": "開いているタブ、ファイル、URL、agent を検索…",
                   "90eb94dc48": "http:// または https:// URL を入力します。",
                   "5553b283ce": "URL またはファイル パスを入力します。",
                   "queryTooLarge": "検索テキストが大きすぎます。",
@@ -11165,7 +11177,9 @@
             "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースを開いてください。",
             "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。",
-            "prepareSessionResumeFailed": "Could not prepare this session for resume."
+            "prepareSessionResumeFailed": "Could not prepare this session for resume.",
+            "sessionDeleted": "セッションを削除しました",
+            "sessionDeleteFailed": "セッションを削除できませんでした"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -11297,7 +11311,17 @@
             "jumpToWorktree": "ワークツリーにジャンプ",
             "recoverableBadge": "未保存",
             "subagentCountSingular": "1 件のサブエージェント",
-            "subagentCountPlural": "{{value0}} 件のサブエージェント"
+            "subagentCountPlural": "{{value0}} 件のサブエージェント",
+            "delete": "削除",
+            "deleteReasonNonLocalHost": "このデバイス上のセッションのみ削除できます。",
+            "deleteReasonSyntheticPath": "このセッションは Orca では削除できません。",
+            "deleteReasonUnsupportedAgent": "{{value0}} のセッションは Orca では削除できません。",
+            "deleteReasonSessionLive": "このセッションはまだ実行中です — 削除する前に完了を待ってください。"
+          },
+          "AiVaultSessionDeleteDialog": {
+            "title": "このセッションを削除しますか?",
+            "description": "「{{value0}}」を削除します。削除すると、{{value1}} 自体のコマンドラインからも再開できなくなります。",
+            "confirm": "削除"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "ファイルを検索",

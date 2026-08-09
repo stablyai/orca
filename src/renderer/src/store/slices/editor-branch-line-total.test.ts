@@ -69,7 +69,7 @@ describe('createEditorSlice branch line total', () => {
     })
   })
 
-  it('clears a stored total when a later status omits the field', () => {
+  it('keeps the published total when a later status omits the field', () => {
     const store = createEditorStore()
     store
       .getState()
@@ -77,12 +77,25 @@ describe('createEditorSlice branch line total', () => {
         'wt-1',
         status({ branchLineTotal: { added: 24, removed: 3, mergeBase: MERGE_BASE } })
       )
+    const published = store.getState().gitBranchLineTotalByWorktree['wt-1']
 
-    // Why: an omitted field means "not known exact" — an old server, a failed
-    // numstat, or a timeout. Keeping the old number renders a confident lie.
+    // Why: an omitted field is "not computed on this pass" — a soft-deadline
+    // miss or a cooldown — and the host keeps backfilling its cache. Clearing
+    // it blanked the chip mid-poll and then flashed it back.
     store.getState().setGitStatus('wt-1', status())
 
-    expect(store.getState().gitBranchLineTotalByWorktree['wt-1']).toBeUndefined()
+    expect(store.getState().gitBranchLineTotalByWorktree['wt-1']).toBe(published)
+  })
+
+  it('does not produce a new state object when a status merely omits the total', () => {
+    const store = createEditorStore()
+    const tick = status({ branchLineTotal: { added: 24, removed: 3, mergeBase: MERGE_BASE } })
+    store.getState().setGitStatus('wt-1', tick)
+    const before = store.getState()
+
+    store.getState().setGitStatus('wt-1', { ...tick, branchLineTotal: undefined })
+
+    expect(store.getState()).toBe(before)
   })
 
   it('clears a stored total when the listing hits the entry cap', () => {
@@ -132,7 +145,7 @@ describe('createEditorSlice branch line total', () => {
         status({ branchLineTotal: { added: 1, removed: 1, mergeBase: 'other' } })
       )
 
-    store.getState().setGitStatus('wt-1', status())
+    store.getState().setGitStatus('wt-1', status({ didHitLimit: true, statusLength: 2 }))
 
     expect(store.getState().gitBranchLineTotalByWorktree['wt-1']).toBeUndefined()
     expect(store.getState().gitBranchLineTotalByWorktree['wt-2']).toEqual({
@@ -200,6 +213,69 @@ describe('createEditorSlice branch line total', () => {
       added: 25,
       removed: 3,
       mergeBase: MERGE_BASE
+    })
+  })
+
+  // Moving a line from a source file into a test file leaves the totals
+  // identical; without the split in the equality check the hover would keep
+  // showing the old share.
+  it('produces a new state object when only the test split changed', () => {
+    const store = createEditorStore()
+    const tick = status({
+      branchLineTotal: {
+        added: 24,
+        removed: 3,
+        mergeBase: MERGE_BASE,
+        test: { added: 4, removed: 0 }
+      }
+    })
+    store.getState().setGitStatus('wt-1', tick)
+    const before = store.getState()
+
+    store.getState().setGitStatus('wt-1', {
+      ...tick,
+      branchLineTotal: {
+        added: 24,
+        removed: 3,
+        mergeBase: MERGE_BASE,
+        test: { added: 5, removed: 1 }
+      }
+    })
+
+    expect(store.getState()).not.toBe(before)
+    expect(store.getState().gitBranchLineTotalByWorktree['wt-1']?.test).toEqual({
+      added: 5,
+      removed: 1
+    })
+  })
+
+  it('produces a new state object when only the generated split changed', () => {
+    const store = createEditorStore()
+    const tick = status({
+      branchLineTotal: {
+        added: 24,
+        removed: 3,
+        mergeBase: MERGE_BASE,
+        generated: { added: 8, removed: 0 }
+      }
+    })
+    store.getState().setGitStatus('wt-1', tick)
+    const before = store.getState()
+
+    store.getState().setGitStatus('wt-1', {
+      ...tick,
+      branchLineTotal: {
+        added: 24,
+        removed: 3,
+        mergeBase: MERGE_BASE,
+        generated: { added: 12, removed: 1 }
+      }
+    })
+
+    expect(store.getState()).not.toBe(before)
+    expect(store.getState().gitBranchLineTotalByWorktree['wt-1']?.generated).toEqual({
+      added: 12,
+      removed: 1
     })
   })
 

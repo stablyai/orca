@@ -10,7 +10,7 @@ import type {
   AgentMapProjectRing,
   AgentMapWorktreeRing
 } from './agent-map-layout'
-import { shouldAggregateAgentMapWorktree } from './agent-map-layout'
+import { AGENT_MAP_LINEAGE_RELATION, shouldAggregateAgentMapWorktree } from './agent-map-layout'
 import { selectVisibleAgentMapLabels } from './agent-map-label-declutter'
 import { AgentMapWorktreeLabel } from './AgentMapWorktreeLabel'
 import { AgentMapWorktreeRingNode } from './AgentMapWorktreeRingNode'
@@ -23,6 +23,7 @@ type AgentMapSceneProps = {
   mapScale: number
   selectedPaneKey: string | null
   allowAggregation: boolean
+  showOrchestrationLinks: boolean
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   nodeRefs: MutableRefObject<Map<string, SVGGElement>>
   onSelectAgent: (card: DashboardCard) => void
@@ -71,6 +72,7 @@ export const AgentMapScene = memo(function AgentMapScene({
   mapScale,
   selectedPaneKey,
   allowAggregation,
+  showOrchestrationLinks,
   launchableAgentsByWorktreeId,
   nodeRefs,
   onSelectAgent,
@@ -114,17 +116,19 @@ export const AgentMapScene = memo(function AgentMapScene({
           '{{agents}} agents · {{workspaces}} workspaces',
           { agents: project.agentCount, workspaces: project.worktrees.length }
         ).toUpperCase()
-        const crossWorktreeLineage = project.worktrees.flatMap((worktree) =>
-          worktree.agents.flatMap((child) => {
-            const parent = child.card.parentPaneKey
-              ? visibleAgentsByPaneKey.get(child.card.parentPaneKey)
-              : undefined
-            const childLocation = visibleAgentsByPaneKey.get(child.card.paneKey)
-            return parent && childLocation && parent.worktreeId !== childLocation.worktreeId
-              ? [{ parent: parent.agent, child }]
-              : []
-          })
-        )
+        const crossWorktreeLineage = !showOrchestrationLinks
+          ? []
+          : project.worktrees.flatMap((worktree) =>
+              worktree.agents.flatMap((child) => {
+                const parent = child.card.parentPaneKey
+                  ? visibleAgentsByPaneKey.get(child.card.parentPaneKey)
+                  : undefined
+                const childLocation = visibleAgentsByPaneKey.get(child.card.paneKey)
+                return parent && childLocation && parent.worktreeId !== childLocation.worktreeId
+                  ? [{ parent: parent.agent, child }]
+                  : []
+              })
+            )
         return (
           <g key={project.id}>
             <circle
@@ -159,21 +163,18 @@ export const AgentMapScene = memo(function AgentMapScene({
               })}
             </g>
             <g className="agent-map-lineage-links" aria-hidden>
-              {crossWorktreeLineage.map(({ parent, child }) => {
-                const relation = parent.card.parentPaneKey ? 'subagent' : 'orchestration'
-                return (
-                  <path
-                    key={child.card.paneKey}
-                    className={`agent-map-lineage-link is-cross-worktree${relation === 'subagent' ? ' is-subagent' : ''}`}
-                    data-agent-map-lineage-link=""
-                    data-agent-map-cross-worktree-lineage-link=""
-                    data-agent-map-lineage-relation={relation}
-                    data-parent-pane-key={parent.card.paneKey}
-                    data-child-pane-key={child.card.paneKey}
-                    d={agentLineagePath(parent, child)}
-                  />
-                )
-              })}
+              {crossWorktreeLineage.map(({ parent, child }) => (
+                <path
+                  key={child.card.paneKey}
+                  className="agent-map-lineage-link is-cross-worktree"
+                  data-agent-map-lineage-link=""
+                  data-agent-map-cross-worktree-lineage-link=""
+                  data-agent-map-lineage-relation={AGENT_MAP_LINEAGE_RELATION}
+                  data-parent-pane-key={parent.card.paneKey}
+                  data-child-pane-key={child.card.paneKey}
+                  d={agentLineagePath(parent, child)}
+                />
+              ))}
             </g>
             {project.worktrees.map((worktree) => (
               <AgentMapWorktreeRingNode
@@ -184,6 +185,7 @@ export const AgentMapScene = memo(function AgentMapScene({
                 mapScale={mapScale}
                 selectedPaneKey={selectedPaneKey}
                 allowAggregation={allowAggregation}
+                showOrchestrationLinks={showOrchestrationLinks}
                 launchableAgents={launchableAgentsByWorktreeId?.[worktree.worktreeId]}
                 nodeRefs={nodeRefs}
                 onSelectAgent={onSelectAgent}

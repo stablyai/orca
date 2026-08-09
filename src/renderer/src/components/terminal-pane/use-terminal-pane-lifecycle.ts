@@ -115,6 +115,7 @@ import {
   type ReconcilableBinding
 } from './terminal-dead-session-reconcile'
 import { getConnectionId } from '@/lib/connection-context'
+import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { canReleaseReplayedScrollbackFromStore } from './replayed-scrollback-store-release'
@@ -724,6 +725,9 @@ export function useTerminalPaneLifecycle({
     queuedInitialCwdRef.current = initialCwdResolution.queuedInitialCwd
     const startupCwd = initialCwdResolution.startupCwd
     const terminalHomePath = resolveTerminalHomePathFromEnv(startup?.env)
+    const wslDistro = getConnectionId(worktreeId)
+      ? null
+      : resolvePaneWslDistro(useAppStore.getState(), worktreeId, worktreePath)
     const getPaneLinkCwd = (paneId: number): string =>
       resolvePaneLinkCwd(paneCwdRef.current, paneId, startupCwd)
     const getHttpLinkSourceOwnerForPane = (paneId: number) =>
@@ -736,6 +740,7 @@ export function useTerminalPaneLifecycle({
       startupCwd,
       getPaneLinkCwd,
       terminalHomePath,
+      wslDistro,
       managerRef,
       linkProviderDisposablesRef,
       pathExistsCache,
@@ -1040,7 +1045,8 @@ export function useTerminalPaneLifecycle({
 
           const shouldBypass = shouldBypassXtermKeyboardEvent(e, {
             isMac,
-            hasSelection: pane.terminal.hasSelection()
+            hasSelection: pane.terminal.hasSelection(),
+            kittyKeyboardFlags: paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
           })
           observeLinuxCandidateEvent()
           return !shouldBypass

@@ -3,6 +3,7 @@ import type { AiVaultSession } from './ai-vault-types'
 import {
   agentLabel,
   filterAiVaultSessions,
+  folderGroupKey,
   folderLabel,
   groupAiVaultSessions,
   parseVaultQuery
@@ -87,6 +88,89 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
   it('groups by folder', () => {
     const groups = groupAiVaultSessions([baseSession, otherSession], 'folder')
     expect(groups.map((group) => group.label).sort()).toEqual(['packages/ui', 'repo/app'])
+  })
+
+  it('folds trailing-slash and repeated-slash cwd spellings into one folder group', () => {
+    const groups = groupAiVaultSessions(
+      [
+        { ...baseSession, cwd: '/Users/ada/repo/app' },
+        { ...baseSession, id: 'claude:2', cwd: '/Users/ada/repo/app/' },
+        { ...baseSession, id: 'claude:3', cwd: '/Users/ada//repo/app//' }
+      ],
+      'folder'
+    )
+    expect(groups).toHaveLength(1)
+    expect(groups[0].sessions).toHaveLength(3)
+    expect(groups[0].label).toBe('repo/app')
+  })
+
+  it('folds NFD and NFC cwd spellings into one folder group with an NFC label', () => {
+    const groups = groupAiVaultSessions(
+      [
+        { ...baseSession, cwd: '/Users/ada/Café/app'.normalize('NFD') },
+        { ...baseSession, id: 'claude:2', cwd: '/Users/ada/Café/app'.normalize('NFC') }
+      ],
+      'folder'
+    )
+    expect(groups).toHaveLength(1)
+    expect(groups[0].sessions).toHaveLength(2)
+    expect(groups[0].label).toBe('Café/app'.normalize('NFC'))
+  })
+
+  it('folds separator and case variants of one Windows folder', () => {
+    const groups = groupAiVaultSessions(
+      [
+        { ...baseSession, cwd: 'C:\\Users\\Ada\\repo\\app' },
+        { ...baseSession, id: 'claude:2', cwd: 'c:/users/ada/repo/app/' }
+      ],
+      'folder'
+    )
+    expect(groups).toHaveLength(1)
+    expect(groups[0].sessions).toHaveLength(2)
+  })
+
+  it('folds the two WSL UNC aliases of one folder into a single group', () => {
+    const groups = groupAiVaultSessions(
+      [
+        { ...baseSession, cwd: '//wsl.localhost/Ubuntu/home/ada/repo/app' },
+        { ...baseSession, id: 'claude:2', cwd: '//wsl$/Ubuntu/home/ada/repo/app' }
+      ],
+      'folder'
+    )
+    expect(groups).toHaveLength(1)
+    expect(groups[0].sessions.map((session) => session.id)).toEqual(['claude:1', 'claude:2'])
+  })
+
+  it('keeps case-distinct POSIX folders in separate groups', () => {
+    const groups = groupAiVaultSessions(
+      [
+        { ...baseSession, cwd: '/home/ada/Foo' },
+        { ...baseSession, id: 'claude:2', cwd: '/home/ada/foo' }
+      ],
+      'folder'
+    )
+    expect(groups).toHaveLength(2)
+  })
+
+  it('folds the project-grouping fallback onto the resolved folder project key', () => {
+    const resolved = { ...baseSession, cwd: '/Users/ada/repo/app' }
+    const unresolved = { ...baseSession, id: 'claude:2', cwd: '/Users/ada/repo/app/' }
+    // Key literal, not folderGroupKey(), so the test still fails if both builders drift together.
+    const groups = groupAiVaultSessions([resolved, unresolved], 'project', {
+      sessionProjectById: new Map([
+        [
+          resolved.id,
+          { kind: 'folder' as const, key: 'folder:/Users/ada/repo/app', label: 'repo/app' }
+        ]
+      ])
+    })
+    expect(groups).toHaveLength(1)
+    expect(groups[0].sessions).toHaveLength(2)
+  })
+
+  it('keys unknown cwd separately from real folders', () => {
+    expect(folderGroupKey(null)).toBe('unknown')
+    expect(folderGroupKey('/Users/ada/repo/app')).toBe('folder:/Users/ada/repo/app')
   })
 
   it('parses repo: and path: operators from the query', () => {
