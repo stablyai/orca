@@ -206,6 +206,34 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(transport.subscribe).toHaveBeenCalledOnce()
   })
 
+  it('replaces a base message in place when a live append re-emits its id (OpenCode streaming)', async () => {
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: [user('u-1', 'go'), assistant('a-1', 'partial stream')],
+        hasMore: false
+      })
+    )
+    expect(latest?.messages.find((m) => m.id === 'a-1')).toMatchObject({
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'partial stream' }]
+    })
+
+    // OpenCode mutates the same part in place, so the watcher re-emits message
+    // a-1 with the SAME id and the finished text — the stale base copy must not
+    // shadow it (and no duplicate 'a-1' row may appear).
+    await act(async () =>
+      transport.emit({ type: 'appended', messages: [assistant('a-1', 'finished stream')] })
+    )
+
+    const a1 = latest?.messages.filter((m) => m.id === 'a-1')
+    expect(a1).toHaveLength(1)
+    expect(a1?.[0]).toMatchObject({ blocks: [{ type: 'text', text: 'finished stream' }] })
+    expect(latest?.messages.map((m) => m.id)).toEqual(['u-1', 'a-1'])
+  })
+
   it('discards a load-earlier resolve from the previous owner after a flip', async () => {
     // Fill the initial window so hasMore is true and load-earlier can fire.
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>

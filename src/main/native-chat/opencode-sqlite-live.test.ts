@@ -1,0 +1,383 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  createOpenCodeNativeChatState,
+  reconcileOpenCodeNativeChat,
+  subscribeOpenCodeNativeChatTranscript
+} from './opencode-sqlite-live'
+import { openCodeMessageSignature } from './opencode-sqlite-transcript'
+import type { NativeChatMessage } from '../../shared/native-chat-types'
+
+let tempDirs: string[] = []
+
+afterEach(() => {
+  vi.useRealTimers()
+  for (const dir of tempDirs) {
+    rmSync(dir, { recursive: true, force: true })
+  }
+  tempDirs = []
+})
+
+function createTempDb(): { db: DatabaseSync; path: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-opencode-native-chat-live-'))
+  tempDirs.push(dir)
+  const path = join(dir, 'opencode.db')
+  return { db: new DatabaseSync(path), path }
+}
+
+function applyOpenCodeSchema(db: DatabaseSync): void {
+  db.exec(`
+    CREATE TABLE session (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      directory TEXT NOT NULL,
+      title TEXT NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL
+    );
+    CREATE TABLE message (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE part (
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL,
+      data TEXT NOT NULL
+    );
+  `)
+}
+
+function insertSession(db: DatabaseSync, id: string): void {
+  db.prepare(
+    `INSERT INTO session (id, project_id, directory, title, time_created, time_updated)
+     VALUES (?, 'proj-1', '/work', 'S', 1_777_634_000_000, 1_777_634_000_000)`
+  ).run(id)
+}
+
+function upsertMessage(
+  db: DatabaseSync,
+  args: { id: string; sessionId: string; role: 'user' | 'assistant'; timeCreated: number }
+): void {
+  db.prepare(
+    `INSERT INTO message (id, session_id, time_created, time_updated, data)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO NOTHING`
+  ).run(
+    args.id,
+    args.sessionId,
+    args.timeCreated,
+    args.timeCreated,
+    JSON.stringify({ role: args.role })
+  )
+}
+
+function upsertPart(
+  db: DatabaseSync,
+  args: { id: string; messageId: string; sessionId: string; timeCreated: number; data: string }
+): void {
+  // Why: mirrors OpenCode mutating a part's data in place during streaming.
+  db.prepare(
+    `INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET data = excluded.data, time_updated = excluded.time_updated`
+  ).run(args.id, args.messageId, args.sessionId, args.timeCreated, Date.now(), args.data)
+}
+
+function textPart(text: string): string {
+  return JSON.stringify({ type: 'text', text })
+}
+
+describe('reconcileOpenCodeNativeChat', () => {
+  it('emits an initial tail snapshot then only delta appends', async () => {
+    const { db, path } = createTempDb()
+    applyOpenCodeSchema(db)
+    insertSession(db, 'ses_1')
+    upsertMessage(db, { id: 'm1', sessionId: 'ses_1', role: 'user', timeCreated: 1 })
+    upsertPart(db, {
+      id: 'p1',
+      messageId: 'm1',
+      sessionId: 'ses_1',
+      timeCreated: 1,
+      data: textPart('ask')
+    })
+    upsertMessage(db, { id: 'm2', sessionId: 'ses_1', role: 'assistant', timeCreated: 2 })
+    upsertPart(db, {
+      id: 'p2',
+      messageId: 'm2',
+      sessionId: 'ses_1',
+      timeCreated: 2,
+      data: textPart('going')
+    })
+    db.close()
+
+    const state = createOpenCodeNativeChatState()
+    const snapshots: NativeChatMessage[][] = []
+    const appends: NativeChatMessage[][] = []
+    await reconcileOpenCodeNativeChat({
+      dbPath: path,
+      sessionId: 'ses_1',
+      windowLimit: 40,
+      state,
+      onInitialSnapshot: (messages) => snapshots.push(messages),
+      onAppend: (messages) => appends.push(messages)
+    })
+    expect(snapshots).toEqual([
+      [expect.objectContaining({ id: 'm1' }), expect.objectContaining({ id: 'm2' })]
+    ])
+    expect(appends).toEqual([])
+
+    // No change → nothing re-emitted.
+    await reconcileOpenCodeNativeChat({
+      dbPath: path,
+      sessionId: 'ses_1',
+      windowLimit: 40,
+      state,
+      onInitialSnapshot: (messages) => snapshots.push(messages),
+      onAppend: (messages) => appends.push(messages)
+    })
+    expect(appends).toEqual([])
+  })
+
+  it('re-emits a mutated streaming part under the SAME stable id', async () => {
+    const { db, path } = createTempDb()
+    applyOpenCodeSchema(db)
+    insertSession(db, 'ses_1')
+    upsertMessage(db, { id: 'm1', sessionId: 'ses_1', role: 'user', timeCreated: 1 })
+    upsertPart(db, {
+      id: 'p1',
+      messageId: 'm1',
+      sessionId: 'ses_1',
+      timeCreated: 1,
+      data: textPart('ask')
+    })
+    upsertMessage(db, { id: 'm2', sessionId: 'ses_1', role: 'assistant', timeCreated: 2 })
+    upsertPart(db, {
+      id: 'p2',
+      messageId: 'm2',
+      sessionId: 'ses_1',
+      timeCreated: 2,
+      data: textPart('answ')
+    })
+    db.close()
+
+    const state = createOpenCodeNativeChatState()
+    const snapshots: NativeChatMessage[][] = []
+    const appends: NativeChatMessage[][] = []
+    const emit = {
+      onInitialSnapshot: (messages: NativeChatMessage[]) => snapshots.push(messages),
+      onAppend: (messages: NativeChatMessage[]) => appends.push(messages)
+    }
+    await reconcileOpenCodeNativeChat({
+      dbPath: path,
+      sessionId: 'ses_1',
+      windowLimit: 40,
+      state,
+      ...emit
+    })
+
+    // OpenCode rewrites the assistant text part in place (same part id).
+    const db2 = new DatabaseSync(path)
+    upsertPart(db2, {
+      id: 'p2',
+      messageId: 'm2',
+      sessionId: 'ses_1',
+      timeCreated: 2,
+      data: textPart('answering now')
+    })
+    db2.close()
+
+    await reconcileOpenCodeNativeChat({
+      dbPath: path,
+      sessionId: 'ses_1',
+      windowLimit: 40,
+      state,
+      ...emit
+    })
+    expect(appends).toHaveLength(1)
+    expect(appends[0]).toHaveLength(1)
+    expect(appends[0][0]).toMatchObject({ id: 'm2', role: 'assistant' })
+    expect(openCodeMessageSignature(appends[0][0])).not.toBe(
+      openCodeMessageSignature(snapshots[0][1])
+    )
+  })
+
+  it('appends only new messages as they arrive and never re-emits paged history', async () => {
+    const { db, path } = createTempDb()
+    applyOpenCodeSchema(db)
+    insertSession(db, 'ses_1')
+    upsertMessage(db, { id: 'm1', sessionId: 'ses_1', role: 'user', timeCreated: 1 })
+    upsertPart(db, {
+      id: 'p1',
+      messageId: 'm1',
+      sessionId: 'ses_1',
+      timeCreated: 1,
+      data: textPart('first')
+    })
+    db.close()
+
+    const state = createOpenCodeNativeChatState()
+    const snapshots: NativeChatMessage[][] = []
+    const appends: NativeChatMessage[][] = []
+    const emit = {
+      onInitialSnapshot: (messages: NativeChatMessage[]) => snapshots.push(messages),
+      onAppend: (messages: NativeChatMessage[]) => appends.push(messages)
+    }
+    await reconcileOpenCodeNativeChat({
+      dbPath: path,
+      sessionId: 'ses_1',
+      windowLimit: 2,
+      state,
+      ...emit
+    })
+
+    const db2 = new DatabaseSync(path)
+    upsertMessage(db2, { id: 'm2', sessionId: 'ses_1', role: 'assistant', timeCreated: 2 })
+    upsertPart(db2, {
+      id: 'p2',
+      messageId: 'm2',
+      sessionId: 'ses_1',
+      timeCreated: 2,
+      data: textPart('reply')
+    })
+    upsertMessage(db2, { id: 'm3', sessionId: 'ses_1', role: 'user', timeCreated: 3 })
+    upsertPart(db2, {
+      id: 'p3',
+      messageId: 'm3',
+      sessionId: 'ses_1',
+      timeCreated: 3,
+      data: textPart('second ask')
+    })
+    db2.close()
+
+    await reconcileOpenCodeNativeChat({
+      dbPath: path,
+      sessionId: 'ses_1',
+      windowLimit: 2,
+      state,
+      ...emit
+    })
+    // m1 ages out of the 2-wide window; only genuinely new messages append and
+    // the already-delivered m1 is never re-emitted (paged history is preserved).
+    expect(appends).toHaveLength(1)
+    expect(appends[0].map((m) => m.id)).toEqual(['m2', 'm3'])
+    expect(appends.flat().map((m) => m.id)).not.toContain('m1')
+  })
+
+  it('stays silent on a notFound read and still recovers once the session exists', async () => {
+    const { db, path } = createTempDb()
+    applyOpenCodeSchema(db)
+    db.close()
+
+    const state = createOpenCodeNativeChatState()
+    const snapshots: NativeChatMessage[][] = []
+    const errors: string[] = []
+    await reconcileOpenCodeNativeChat({
+      dbPath: path,
+      sessionId: 'ses_new',
+      windowLimit: 40,
+      state,
+      onInitialSnapshot: (messages, hasMore, beforeOffset, error) => {
+        if (error) {
+          errors.push(error)
+          return
+        }
+        snapshots.push(messages)
+      },
+      onAppend: () => {}
+    })
+    expect(errors).toEqual([])
+    expect(snapshots).toEqual([])
+
+    // The session appears.
+    const db2 = new DatabaseSync(path)
+    insertSession(db2, 'ses_new')
+    upsertMessage(db2, { id: 'm1', sessionId: 'ses_new', role: 'user', timeCreated: 1 })
+    upsertPart(db2, {
+      id: 'p1',
+      messageId: 'm1',
+      sessionId: 'ses_new',
+      timeCreated: 1,
+      data: textPart('hi')
+    })
+    db2.close()
+
+    await reconcileOpenCodeNativeChat({
+      dbPath: path,
+      sessionId: 'ses_new',
+      windowLimit: 40,
+      state,
+      onInitialSnapshot: (messages, hasMore, beforeOffset, error) => {
+        if (error) {
+          errors.push(error)
+          return
+        }
+        snapshots.push(messages)
+      },
+      onAppend: () => {}
+    })
+    expect(snapshots[0].map((m) => m.id)).toEqual(['m1'])
+  })
+
+  it('notifies once on a persistent schema error', async () => {
+    const { db, path } = createTempDb()
+    db.exec('CREATE TABLE session (id TEXT)')
+    db.close()
+
+    const state = createOpenCodeNativeChatState()
+    const errors: string[] = []
+    for (let i = 0; i < 3; i++) {
+      await reconcileOpenCodeNativeChat({
+        dbPath: path,
+        sessionId: 'ses_1',
+        windowLimit: 40,
+        state,
+        onInitialSnapshot: (_messages, _hasMore, _beforeOffset, error) => {
+          if (error) {
+            errors.push(error)
+          }
+        },
+        onAppend: () => {}
+      })
+    }
+    expect(errors).toEqual(['Transcript unavailable'])
+  })
+})
+
+describe('subscribeOpenCodeNativeChatTranscript', () => {
+  it('tears down the poll loop on unsubscribe without leaking watchers', async () => {
+    vi.useFakeTimers()
+    const { db, path } = createTempDb()
+    applyOpenCodeSchema(db)
+    insertSession(db, 'ses_1')
+    db.close()
+
+    const onAppend = vi.fn()
+    const onInitialSnapshot = vi.fn()
+    const subscription = subscribeOpenCodeNativeChatTranscript({
+      dbPath: path,
+      sessionId: 'ses_1',
+      initialLimit: 40,
+      reconciliationIntervalMs: 10,
+      onAppend,
+      onInitialSnapshot
+    })
+    expect(subscription.watching).toBe(true)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(onInitialSnapshot).toHaveBeenCalled()
+
+    onInitialSnapshot.mockClear()
+    subscription.unsubscribe()
+    await vi.advanceTimersByTimeAsync(200)
+    expect(onInitialSnapshot).not.toHaveBeenCalled()
+    expect(onAppend).not.toHaveBeenCalled()
+  })
+})

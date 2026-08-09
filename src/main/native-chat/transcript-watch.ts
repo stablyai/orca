@@ -11,6 +11,9 @@ import type {
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
+import { subscribeOpenCodeNativeChatTranscript } from './opencode-sqlite-live'
+import { resolveOpenCodeNativeChatDbPath } from './opencode-sqlite-transcript'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
 export { getActiveNativeChatWatcherCount } from './transcript-watch-engine'
@@ -178,6 +181,18 @@ export async function subscribeNativeChatTranscript(
   args: SubscribeNativeChatTranscriptArgs
 ): Promise<NativeChatTranscriptSubscription> {
   const decode = nativeChatLineDecoderForAgent(args.agent)
+  // Why: OpenCode keeps conversations in SQLite, not a JSONL file, so live
+  // updates come from a poll-based reconcile loop instead of fs.watch on a file.
+  if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
+    return subscribeOpenCodeNativeChatTranscript({
+      dbPath: resolveOpenCodeNativeChatDbPath(args.openCodeDbPath),
+      sessionId: args.sessionId,
+      initialLimit: args.initialLimit,
+      reconciliationIntervalMs: args.reconciliationIntervalMs,
+      onInitialSnapshot: args.onInitialSnapshot,
+      onAppend: args.onAppend
+    })
+  }
   if (!decode) {
     // Nothing watchable — return a no-op teardown so callers can unconditionally
     // unsubscribe without null-checks.

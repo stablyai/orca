@@ -563,6 +563,39 @@ describe('OpenCode plugin lifecycle delivery', () => {
     expect(names()).toEqual(['MessagePart', 'SessionIdle'])
   })
 
+  it('reads sessionID from the OpenCode 1.18.15 message part shape', async () => {
+    const hooks = await loadHooks()
+    await hooks.event({
+      event: {
+        type: 'message.updated',
+        properties: { info: { id: 'user-message', role: 'user' } }
+      }
+    })
+    await hooks.event({
+      event: {
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            type: 'text',
+            text: 'real-shape prompt',
+            messageID: 'user-message',
+            sessionID: 'root'
+          }
+        }
+      }
+    })
+
+    expect(posts).toEqual([
+      {
+        hook_event_name: 'MessagePart',
+        role: 'user',
+        text: 'real-shape prompt',
+        messageID: 'user-message',
+        sessionID: 'root'
+      }
+    ])
+  })
+
   it('reasserts an already-delivered Idle after a later MessagePart', async () => {
     const hooks = await loadHooks()
     await hooks.event({ event: status('busy') })

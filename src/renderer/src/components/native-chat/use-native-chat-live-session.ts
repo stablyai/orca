@@ -311,9 +311,11 @@ export function useNativeChatLiveSession(
   // Computed outside the status memo so hookState churn (status-only) never re-runs the assembler.
   const baseMessages = read.phase === 'ready' ? read.messages : EMPTY_MESSAGES
   const assembledMessages = useMemo(() => {
+    const appendedIds = appended.length > 0 ? new Set(appended.map((m) => m.id)) : null
     const transcript =
-      appended.length > 0 ? [...baseMessages, ...appended] : (baseMessages as NativeChatMessage[])
-    // Base-axis signature: any change forces a full assembler reset so a missed trigger can't leave the cache stale.
+      appended.length > 0
+        ? [...baseMessages.filter((m) => !appendedIds?.has(m.id)), ...appended]
+        : baseMessages
     const baseSig = `${agent}\u0000${sessionId ?? ''}`
     const baseChanged = baseSig !== baseSigRef.current || baseMessages !== baseMessagesRef.current
     const applied = appliedTranscriptRef.current
@@ -322,14 +324,11 @@ export function useNativeChatLiveSession(
       transcript.length >= applied.length &&
       sharesPrefix(transcript, applied, applied.length)
 
-    let out: NativeChatMessage[]
-    if (isSuffixExtension && transcript.length > applied.length) {
-      out = applyAppends(assemblerRef.current, transcript.slice(applied.length))
-    } else if (isSuffixExtension) {
-      out = assemblerRef.current.messages
-    } else {
-      out = resetAssembler(assemblerRef.current, transcript)
-    }
+    const out = isSuffixExtension
+      ? transcript.length > applied.length
+        ? applyAppends(assemblerRef.current, transcript.slice(applied.length))
+        : assemblerRef.current.messages
+      : resetAssembler(assemblerRef.current, transcript)
     baseSigRef.current = baseSig
     baseMessagesRef.current = baseMessages
     appliedTranscriptRef.current = transcript

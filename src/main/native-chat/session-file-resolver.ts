@@ -65,6 +65,9 @@ export type ResolveSessionFileOptions = {
    *  directly — recent Claude Code names the transcript with a UUID that differs
    *  from the hook session_id, so the id-based glob below would miss it. */
   transcriptPath?: string
+  /** Absolute path to the OpenCode SQLite DB (open code overrides the default
+   *  `~/.local/share/opencode/opencode.db` — used by tests/isolated reads). */
+  openCodeDbPath?: string
 }
 
 /**
