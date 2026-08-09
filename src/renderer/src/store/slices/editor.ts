@@ -2057,6 +2057,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           expectedSshTargetId: operationContext.expectedSshTargetId,
           expectedSshConnectionGeneration: operationContext.expectedSshConnectionGeneration,
           expectedExecutionHostId: operationContext.expectedExecutionHostId,
+          // Why: read live state — a captured snapshot can't observe an owner switch mid-flight.
           assertOperationCurrent: () =>
             assertEditorFileOperationCurrent(get(), worktreeId, operationProvenance)
         }

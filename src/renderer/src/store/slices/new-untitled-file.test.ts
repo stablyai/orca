@@ -10,9 +10,7 @@ const { createUntitledEditorFileMock, toastErrorMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/create-untitled-editor-file', () => ({
-  createUntitledEditorFile: createUntitledEditorFileMock,
-  requireOperationAssertion: (assertCurrent: (() => void) | undefined) =>
-    assertCurrent ?? (() => {})
+  createUntitledEditorFile: createUntitledEditorFileMock
 }))
 
 vi.mock('sonner', () => ({
