@@ -37,6 +37,18 @@ describe('room attachment transfers', () => {
     return { directory, database, room, manager, transfers, messages }
   }
 
+  it('initializes attachment storage only when it is used', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-room-attachments-lazy-'))
+    directories.push(directory)
+    const root = join(directory, 'attachments')
+    const manager = new RoomAttachmentManager(root)
+
+    expect(existsSync(root)).toBe(false)
+    const uploadId = await manager.startUpload('room-1', 'empty.txt', 0)
+    expect(existsSync(join(root, '.uploads'))).toBe(true)
+    await manager.cancelUpload(uploadId)
+  })
+
   it('uploads, attaches, authorizes, and downloads a file in bounded chunks', async () => {
     const { database, room, transfers, messages } = setup()
     const bytes = Buffer.from('remote-safe attachment')

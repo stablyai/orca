@@ -30,20 +30,16 @@ export class RoomAttachmentManager {
   private readonly root: string
   private readonly uploadsRoot: string
   private readonly uploads = new Map<string, PendingUpload>()
-  private readonly initialized: Promise<void>
+  private initialized: Promise<void> | null = null
   private canonicalRoot = ''
 
   constructor(root: string) {
     this.root = resolve(root)
     this.uploadsRoot = join(this.root, '.uploads')
-    this.initialized = rm(this.uploadsRoot, { recursive: true, force: true }).then(async () => {
-      await mkdir(this.uploadsRoot, { recursive: true })
-      this.canonicalRoot = await realpath(this.root)
-    })
   }
 
   async startUpload(roomId: string, fileName: string, byteSize: number): Promise<string> {
-    await this.initialized
+    await this.initialize()
     this.cleanupExpired()
     if (this.uploads.size >= MAX_PENDING_UPLOADS) {
       throw new Error('room_attachment_uploads_busy')
@@ -268,7 +264,7 @@ export class RoomAttachmentManager {
   private async openOwned(
     path: string
   ): Promise<{ handle: Awaited<ReturnType<typeof open>>; size: number }> {
-    await this.initialized
+    await this.initialize()
     if (!this.owns(path)) {
       throw new Error('room_attachment_path_invalid')
     }
@@ -287,6 +283,14 @@ export class RoomAttachmentManager {
       throw new Error('room_attachment_not_file')
     }
     return { handle, size: stats.size }
+  }
+
+  private initialize(): Promise<void> {
+    this.initialized ??= rm(this.uploadsRoot, { recursive: true, force: true }).then(async () => {
+      await mkdir(this.uploadsRoot, { recursive: true })
+      this.canonicalRoot = await realpath(this.root)
+    })
+    return this.initialized
   }
 }
 

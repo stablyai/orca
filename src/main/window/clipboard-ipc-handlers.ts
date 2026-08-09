@@ -61,6 +61,33 @@ async function saveClipboardImageBufferForTarget(
   return saveClipboardImageBufferAsTempFile(buffer, args)
 }
 
+async function readClipboardImagePng(): Promise<Buffer | null> {
+  const image = clipboard.readImage()
+  if (image.isEmpty()) {
+    if (process.platform !== 'win32') {
+      return null
+    }
+    const copiedFilePng = await readWindowsClipboardImageFileAsPng(
+      {
+        fileNameW: clipboard.readBuffer('FileNameW'),
+        shellIdListArray: clipboard.readBuffer('Shell IDList Array')
+      },
+      {
+        createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
+        openFile: (filePath) => open(filePath, 'r')
+      }
+    )
+    if (copiedFilePng) {
+      assertClipboardImageByteLengthWithinLimit(copiedFilePng.byteLength)
+    }
+    return copiedFilePng
+  }
+  assertClipboardImageDimensionsWithinLimit(image.getSize())
+  const png = image.toPNG()
+  assertClipboardImageByteLengthWithinLimit(png.byteLength)
+  return png
+}
+
 export function setTrustedClipboardRendererWebContentsId(webContentsId: number | null): void {
   trustedClipboardRendererWebContentsId = webContentsId
 }
@@ -81,6 +108,7 @@ function runCommand(command: string, args: string[], stdin?: string): Promise<vo
 export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:readSelectionText')
+  ipcMain.removeHandler('clipboard:readImage')
   ipcMain.removeHandler('clipboard:writeText')
   ipcMain.removeHandler('clipboard:writeTerminalText')
   ipcMain.removeHandler('clipboard:writeSelectionText')
@@ -109,6 +137,15 @@ export function registerClipboardHandlers(store: Store): void {
     assertTrustedClipboardSender(event)
     return buildClipboardImageThumbnail(clipboard.readImage())
   })
+  ipcMain.handle('clipboard:readImage', async (event) => {
+    assertTrustedClipboardSender(event)
+    const png = await readClipboardImagePng()
+    if (!png) {
+      return null
+    }
+    const content = png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer
+    return { content, mimeType: 'image/png' as const }
+  })
   // Why: terminals need to detect clipboard images to support tools like Claude
   // Code that accept image input via paste. Writes the clipboard image to a
   // temp file and returns the path, or null if the clipboard has no image.
@@ -116,25 +153,8 @@ export function registerClipboardHandlers(store: Store): void {
     'clipboard:saveImageAsTempFile',
     async (event, args?: SaveClipboardImageAsTempFileArgs) => {
       assertTrustedClipboardSender(event)
-      const image = clipboard.readImage()
-      if (image.isEmpty()) {
-        if (process.platform !== 'win32') {
-          return null
-        }
-        const copiedFilePng = await readWindowsClipboardImageFileAsPng(
-          {
-            fileNameW: clipboard.readBuffer('FileNameW'),
-            shellIdListArray: clipboard.readBuffer('Shell IDList Array')
-          },
-          {
-            createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
-            openFile: (filePath) => open(filePath, 'r')
-          }
-        )
-        return copiedFilePng ? saveClipboardImageBufferForTarget(copiedFilePng, args) : null
-      }
-      assertClipboardImageDimensionsWithinLimit(image.getSize())
-      return saveClipboardImageBufferForTarget(image.toPNG(), args)
+      const png = await readClipboardImagePng()
+      return png ? saveClipboardImageBufferForTarget(png, args) : null
     }
   )
   // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer

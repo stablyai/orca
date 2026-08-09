@@ -13,8 +13,10 @@ export async function uploadRoomAttachment(
   target: RuntimeClientTarget,
   roomId: string,
   file: File,
-  onProgress?: (completed: number, total: number) => void
+  onProgress?: (completed: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<PendingRoomAttachment> {
+  throwIfAborted(signal)
   const transfer = await roomRpc<{ uploadId: string; chunkBytes: number }>(
     target,
     'rooms.attachments.upload.start',
@@ -23,6 +25,7 @@ export async function uploadRoomAttachment(
   try {
     let offset = 0
     while (offset < file.size) {
+      throwIfAborted(signal)
       const contentBase64 = await roomBlobBase64(file.slice(offset, offset + transfer.chunkBytes))
       const result = await roomRpc<{ nextOffset: number }>(
         target,
@@ -32,11 +35,52 @@ export async function uploadRoomAttachment(
       offset = result.nextOffset
       onProgress?.(offset, file.size)
     }
+    throwIfAborted(signal)
     await roomRpc(target, 'rooms.attachments.upload.finish', { uploadId: transfer.uploadId })
+    throwIfAborted(signal)
     return { uploadId: transfer.uploadId, fileName: file.name, byteSize: file.size }
   } catch (error) {
     await cancelRoomAttachmentUpload(target, transfer.uploadId)
     throw error
+  }
+}
+
+export async function readRoomAttachmentPreview(
+  target: RuntimeClientTarget,
+  roomId: string,
+  attachment: Pick<RoomAttachment, 'id'>
+): Promise<{ contentBase64: string; mimeType: string } | null> {
+  const source = await roomRpc<{
+    transferId: string
+    mimeType: string
+    byteLength: number
+  }>(target, 'rooms.attachments.download.start', {
+    roomId,
+    attachmentId: attachment.id
+  })
+  try {
+    if (source.byteLength > 50 * 1024 * 1024) {
+      return null
+    }
+    const chunks: string[] = []
+    let offset = 0
+    while (offset < source.byteLength) {
+      const chunk = await roomRpc<{
+        contentBase64: string
+        nextOffset: number
+        done: boolean
+      }>(target, 'rooms.attachments.download.read', { transferId: source.transferId, offset })
+      chunks.push(chunk.contentBase64)
+      offset = chunk.nextOffset
+      if (chunk.done) {
+        break
+      }
+    }
+    return { contentBase64: chunks.join(''), mimeType: source.mimeType }
+  } finally {
+    await roomRpc(target, 'rooms.attachments.download.cancel', {
+      transferId: source.transferId
+    }).catch(() => {})
   }
 }
 
@@ -95,5 +139,11 @@ export async function downloadRoomAttachment(
     await roomRpc(target, 'rooms.attachments.download.cancel', {
       transferId: source.transferId
     }).catch(() => {})
+  }
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new DOMException('Upload canceled', 'AbortError')
   }
 }

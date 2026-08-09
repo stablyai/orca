@@ -7,11 +7,17 @@ import { roomRpc } from '@/runtime/runtime-rooms-client'
 import type { RoomDelivery, RoomMessage } from '../../../../shared/rooms'
 import type { RoomData } from './use-room-data'
 import { RoomDictationButton } from './RoomDictationButton'
+import { cancelRoomAttachmentUpload, uploadRoomAttachment } from './room-attachment-transfer'
 import {
-  cancelRoomAttachmentUpload,
-  type PendingRoomAttachment,
-  uploadRoomAttachment
-} from './room-attachment-transfer'
+  isPreviewableImage,
+  releaseRoomAttachmentPreview,
+  releaseRoomAttachmentPreviews,
+  RoomComposerAttachments,
+  type RoomComposerAttachment,
+  type UploadingRoomAttachment
+} from './RoomAttachments'
+import { getRoomComposerClipboardFiles } from './room-composer-clipboard-files'
+import { useRoomComposerClipboardPaste } from './room-composer-clipboard-paste'
 import {
   applyRoomComposerSuggestion,
   getExactRoomMentionSuggestion,
@@ -32,18 +38,24 @@ export function RoomComposer({
   onReplyChange: (message: RoomMessage | null) => void
 }): React.JSX.Element {
   const [text, setText] = useState('')
-  const [attachments, setAttachments] = useState<PendingRoomAttachment[]>([])
+  const [attachments, setAttachments] = useState<RoomComposerAttachment[]>([])
+  const [uploadingAttachment, setUploadingAttachment] = useState<UploadingRoomAttachment | null>(
+    null
+  )
   const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [sending, setSending] = useState(false)
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([])
   const [cursor, setCursor] = useState(0)
   const [activeSuggestion, setActiveSuggestion] = useState(0)
   const [suggestionsOpen, setSuggestionsOpen] = useState(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const composerRootRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const attachmentsRef = useRef(attachments)
   attachmentsRef.current = attachments
+  const uploadingAttachmentRef = useRef(uploadingAttachment)
+  uploadingAttachmentRef.current = uploadingAttachment
+  const uploadAbortRef = useRef<AbortController | null>(null)
   const roomIdRef = useRef<string | null>(null)
   const composerQuery = suggestionsOpen ? getRoomComposerQuery(text, cursor) : null
   const suggestions = getRoomComposerSuggestions(composerQuery, data.snapshot?.participants ?? [])
@@ -66,10 +78,17 @@ export function RoomComposer({
 
   useEffect(() => {
     roomIdRef.current = data.roomId
+    uploadAbortRef.current?.abort()
+    releaseRoomAttachmentPreviews(attachmentsRef.current)
+    releaseRoomAttachmentPreview(uploadingAttachmentRef.current?.previewUrl ?? null)
     setAttachments([])
+    setUploadingAttachment(null)
     setSelectedRecipients([])
     return () => {
       roomIdRef.current = null
+      uploadAbortRef.current?.abort()
+      releaseRoomAttachmentPreviews(attachmentsRef.current)
+      releaseRoomAttachmentPreview(uploadingAttachmentRef.current?.previewUrl ?? null)
       for (const attachment of attachmentsRef.current) {
         void cancelRoomAttachmentUpload(data.target, attachment.uploadId)
       }
@@ -106,6 +125,7 @@ export function RoomComposer({
             ),
             attachmentUploadIds: attachments.map((attachment) => attachment.uploadId)
           }))
+      releaseRoomAttachmentPreviews(attachments)
       setText('')
       setSelectedRecipients([])
       setAttachments([])
@@ -116,6 +136,7 @@ export function RoomComposer({
           cancelRoomAttachmentUpload(data.target, attachment.uploadId)
         )
       )
+      releaseRoomAttachmentPreviews(attachments)
       setAttachments([])
       toast.error(error instanceof Error ? error.message : String(error))
     } finally {
@@ -131,31 +152,85 @@ export function RoomComposer({
     setUploading(true)
     try {
       for (const file of files.slice(0, 10 - attachments.length)) {
-        const uploaded = await uploadRoomAttachment(data.target, roomId, file, (done, total) =>
-          setUploadProgress(total > 0 ? Math.round((done / total) * 100) : 100)
-        )
-        if (roomIdRef.current !== roomId) {
-          await cancelRoomAttachmentUpload(data.target, uploaded.uploadId)
-          continue
+        const previewUrl = isPreviewableImage(file.type, file.name)
+          ? URL.createObjectURL(file)
+          : null
+        const pending: UploadingRoomAttachment = {
+          id: crypto.randomUUID(),
+          fileName: file.name,
+          byteSize: file.size,
+          mimeType: file.type,
+          previewUrl,
+          progress: 0
         }
-        setAttachments((current) => [...current, uploaded])
+        const controller = new AbortController()
+        uploadAbortRef.current = controller
+        uploadingAttachmentRef.current = pending
+        setUploadingAttachment(pending)
+        try {
+          const uploaded = await uploadRoomAttachment(
+            data.target,
+            roomId,
+            file,
+            (done, total) => {
+              const progress = total > 0 ? Math.round((done / total) * 100) : 100
+              setUploadingAttachment((current) =>
+                current?.id === pending.id ? { ...current, progress } : current
+              )
+            },
+            controller.signal
+          )
+          if (roomIdRef.current !== roomId) {
+            await cancelRoomAttachmentUpload(data.target, uploaded.uploadId)
+            releaseRoomAttachmentPreview(previewUrl)
+            continue
+          }
+          setAttachments((current) => [
+            ...current,
+            { ...uploaded, mimeType: file.type, previewUrl }
+          ])
+        } catch (error) {
+          releaseRoomAttachmentPreview(previewUrl)
+          if (!(error instanceof DOMException && error.name === 'AbortError')) {
+            throw error
+          }
+        } finally {
+          if (uploadingAttachmentRef.current?.id === pending.id) {
+            uploadingAttachmentRef.current = null
+            setUploadingAttachment(null)
+          }
+          if (uploadAbortRef.current === controller) {
+            uploadAbortRef.current = null
+          }
+        }
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error))
     } finally {
       setUploading(false)
-      setUploadProgress(null)
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
     }
   }
 
+  useRoomComposerClipboardPaste(composerRootRef, attach)
+
   return (
     <div className="shrink-0 border-t border-border bg-background px-4 pb-4 pt-2">
       <div
+        ref={composerRootRef}
         className="mx-auto max-w-4xl rounded-lg border border-border bg-muted/30 p-1.5 shadow-xs"
+        data-room-attachment-drop-target="true"
         aria-busy={uploading}
+        onPasteCapture={(event) => {
+          const files = getRoomComposerClipboardFiles(event.clipboardData)
+          if (files.length === 0) {
+            return
+          }
+          event.preventDefault()
+          void attach(files)
+        }}
         onDragOver={(event) => {
           if (event.dataTransfer.types.includes('Files')) {
             event.preventDefault()
@@ -166,6 +241,7 @@ export function RoomComposer({
             return
           }
           event.preventDefault()
+          event.stopPropagation()
           void attach(Array.from(event.dataTransfer.files))
         }}
       >
@@ -211,39 +287,18 @@ export function RoomComposer({
             ))}
           </div>
         ) : null}
-        {attachments.length > 0 ? (
-          <div className="mb-1 flex flex-wrap gap-1">
-            {attachments.map((attachment) => (
-              <span
-                key={attachment.uploadId}
-                className="inline-flex max-w-48 items-center gap-1 rounded border border-border bg-background px-1.5 py-0.5 text-[11px]"
-              >
-                <span className="truncate">{attachment.fileName}</span>
-                <button
-                  type="button"
-                  aria-label={translate('rooms.composer.removeAttachment', 'Remove attachment')}
-                  onClick={() => {
-                    setAttachments((current) =>
-                      current.filter((item) => item.uploadId !== attachment.uploadId)
-                    )
-                    void cancelRoomAttachmentUpload(data.target, attachment.uploadId)
-                  }}
-                >
-                  <X className="size-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : null}
-        {uploading ? (
-          <div className="mb-1 px-2 text-[11px] text-muted-foreground">
-            {uploadProgress === null
-              ? translate('rooms.composer.uploading', 'Uploading attachment…')
-              : translate('rooms.composer.uploadProgress', 'Uploading attachment… {{percent}}%', {
-                  percent: uploadProgress
-                })}
-          </div>
-        ) : null}
+        <RoomComposerAttachments
+          attachments={attachments}
+          uploading={uploadingAttachment}
+          onCancelUpload={() => uploadAbortRef.current?.abort()}
+          onRemove={(attachment) => {
+            setAttachments((current) =>
+              current.filter((item) => item.uploadId !== attachment.uploadId)
+            )
+            releaseRoomAttachmentPreview(attachment.previewUrl)
+            void cancelRoomAttachmentUpload(data.target, attachment.uploadId)
+          }}
+        />
         <RoomComposerSuggestions
           suggestions={suggestions}
           activeIndex={Math.min(activeSuggestion, Math.max(0, suggestions.length - 1))}
@@ -259,14 +314,6 @@ export function RoomComposer({
             setSuggestionsOpen(true)
           }}
           onSelect={(event) => setCursor(event.currentTarget.selectionStart)}
-          onPaste={(event) => {
-            const files = Array.from(event.clipboardData.files)
-            if (files.length === 0) {
-              return
-            }
-            event.preventDefault()
-            void attach(files)
-          }}
           onKeyDown={(event) => {
             const exactMention = getExactRoomMentionSuggestion(composerQuery, suggestions)
             if (event.key === ' ' && exactMention) {
