@@ -121,6 +121,7 @@ import type {
   WarpThemeImportSource
 } from '../shared/terminal-custom-themes'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
+import type { GitBlameResult } from '../shared/git-blame'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
@@ -3304,6 +3305,11 @@ const api = {
     history: (
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),
+    blame: (args: {
+      worktreePath: string
+      filePath: string
+      connectionId?: string
+    }): Promise<GitBlameResult> => ipcRenderer.invoke('git:blame', args),
     conflictOperation: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('git:conflictOperation', args),
     abortMerge: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>

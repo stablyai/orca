@@ -101,6 +101,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.status')
     expect(methods).toContain('git.checkIgnored')
     expect(methods).toContain('git.history')
+    expect(methods).toContain('git.blame')
     expect(methods).toContain('git.commit')
     expect(methods).toContain('git.diff')
     expect(methods).toContain('git.stage')
@@ -370,6 +371,40 @@ describe('GitHandler', () => {
       expect(result.items[0]?.displayId).toHaveLength(7)
       expect(result.hasMore).toBe(false)
       expect(result.limit).toBe(10)
+    })
+
+    it('returns history scoped to one file', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'a.txt'), 'a')
+      writeFileSync(path.join(tmpDir, 'b.txt'), 'b')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'a.txt'), 'a2')
+      gitCommit(tmpDir, 'second')
+
+      const result = (await dispatcher.callRequest('git.history', {
+        worktreePath: tmpDir,
+        filePath: 'a.txt',
+        limit: 10
+      })) as { items: { subject: string }[] }
+
+      expect(result.items.map((item) => item.subject)).toEqual(['second', 'initial'])
+    })
+  })
+
+  describe('blame', () => {
+    it('returns porcelain blame parsed per line', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'hello\nworld\n')
+      gitCommit(tmpDir, 'initial')
+
+      const result = (await dispatcher.callRequest('git.blame', {
+        worktreePath: tmpDir,
+        filePath: 'file.txt'
+      })) as ({ author: string; summary: string } | null)[]
+
+      expect(result).toHaveLength(2)
+      expect(result[0]).toMatchObject({ summary: 'initial' })
+      expect(result[1]).toMatchObject({ summary: 'initial' })
     })
   })
 

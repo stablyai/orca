@@ -19,6 +19,7 @@ import type {
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitBlameResult } from '../../shared/git-blame'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   type ResolvedSourceControlAiGenerationParams
@@ -50,6 +51,7 @@ import {
 import { checkoutBranch, listLocalBranches } from '../git/checkout'
 import type { RuntimeGitCheckoutResult, RuntimeGitLocalBranches } from '../../shared/runtime-types'
 import { getHistory as getGitHistory } from '../git/history'
+import { getBlame as getGitBlame } from '../git/blame'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { gitSyncForkDefaultBranch } from '../git/fork-sync'
@@ -263,17 +265,36 @@ export class RuntimeGitCommands {
     options: GitHistoryOptions = {}
   ): Promise<GitHistoryResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const historyOptions = options.filePath
+      ? { ...options, filePath: normalizeRuntimeGitRelativePath(options.filePath) }
+      : options
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.getHistory(target.worktree.path, options)
+      return provider.getHistory(target.worktree.path, historyOptions)
     }
     return getGitHistory(target.worktree.path, {
-      ...options,
+      ...historyOptions,
       ...localGitOptionsForTarget(target)
     })
+  }
+
+  async getRuntimeGitBlame(
+    worktreeSelector: string,
+    filePath: string
+  ): Promise<GitBlameResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return provider.getBlame(target.worktree.path, relativePath)
+    }
+    return getGitBlame(target.worktree.path, relativePath, localGitOptionsForTarget(target))
   }
 
   async getRuntimeGitConflictOperation(worktreeSelector: string): Promise<GitConflictOperation> {

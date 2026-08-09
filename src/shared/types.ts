@@ -2764,6 +2764,8 @@ export type GlobalSettings = {
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Inline git blame for the active line in Monaco file editors. Default on. */
+  enableInlineGitBlame?: boolean
   /** Opt-in code-editor font; empty (the default) keeps following `terminalFontFamily`. */
   editorFontFamily?: string
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */

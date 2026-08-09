@@ -254,6 +254,19 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(historyResult)
   })
 
+  it('getBlame sends git.blame request', async () => {
+    const blameResult = [{ sha: 'a'.repeat(40), shortSha: 'aaaaaaa', author: 'Ada', authorTime: 1, summary: 'init' }]
+    mux.request.mockResolvedValue(blameResult)
+
+    const result = await provider.getBlame('/home/user/repo', 'src/index.ts')
+
+    expect(mux.request).toHaveBeenCalledWith('git.blame', {
+      worktreePath: '/home/user/repo',
+      filePath: 'src/index.ts'
+    })
+    expect(result).toEqual(blameResult)
+  })
+
   it('commit sends git.commit request', async () => {
     const commitResult = { success: true }
     mux.request.mockResolvedValue(commitResult)

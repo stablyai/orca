@@ -29,6 +29,7 @@ import type {
   TuiAgent
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitBlameResult } from '../../shared/git-blame'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
@@ -61,6 +62,7 @@ import {
   getCommitDiff
 } from '../git/status'
 import { getHistory } from '../git/history'
+import { getBlame } from '../git/blame'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
@@ -1262,7 +1264,13 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ): Promise<GitHistoryResult> => {
-      const options: GitHistoryOptions = { limit: args.limit, baseRef: args.baseRef }
+      const filePath =
+        typeof args.filePath === 'string' && args.filePath.trim() ? args.filePath : undefined
+      const options: GitHistoryOptions = {
+        limit: args.limit,
+        baseRef: args.baseRef,
+        ...(filePath ? { filePath } : {})
+      }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -1271,12 +1279,43 @@ export function registerFilesystemHandlers(
         return provider.getHistory(args.worktreePath, options)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const validatedFilePath = filePath
+        ? validateGitRelativeFilePath(worktreePath, filePath)
+        : undefined
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
-      return getHistory(worktreePath, { ...options, ...gitOptions })
+      return getHistory(worktreePath, {
+        ...options,
+        ...(validatedFilePath ? { filePath: validatedFilePath } : {}),
+        ...gitOptions
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'git:blame',
+    async (
+      _event,
+      args: { worktreePath: string; filePath: string; connectionId?: string }
+    ): Promise<GitBlameResult> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.getBlame(args.worktreePath, args.filePath)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getBlame(worktreePath, filePath, gitOptions)
     }
   )
 

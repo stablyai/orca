@@ -169,6 +169,7 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
 import { getConnectionId } from '@/lib/connection-context'
+import { GitFileHistoryDialog } from '@/components/editor/GitFileHistoryDialog'
 import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
 import {
   abortRuntimeGitMerge,
@@ -1063,6 +1064,7 @@ function SourceControlInner(): React.JSX.Element {
   const sourceControlGroupOrder = resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder)
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
+  const [fileHistoryPath, setFileHistoryPath] = useState<string | null>(null)
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
   // Why: start null (not 'origin/main') so branch compare doesn't fire with a fabricated ref before the IPC resolves.
   const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>(null)
@@ -6270,6 +6272,11 @@ function SourceControlInner(): React.JSX.Element {
                 onOpenCommit={(item) => void openHistoryCommitDiff(item)}
                 onLoadCommitFiles={loadCommitFiles}
                 onOpenCommitFile={openCommitFile}
+                onFileHistory={(_item, entry) => {
+                  if (activeWorktreeId && worktreePath) {
+                    setFileHistoryPath(entry.path)
+                  }
+                }}
                 onCommitAction={handleCommitAction}
               />
             </div>
@@ -6288,6 +6295,19 @@ function SourceControlInner(): React.JSX.Element {
           />
         )}
       </div>
+
+      <GitFileHistoryDialog
+        open={fileHistoryPath !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFileHistoryPath(null)
+          }
+        }}
+        title={fileHistoryPath ?? ''}
+        relativePath={fileHistoryPath ?? ''}
+        filePath={fileHistoryPath ? joinPath(worktreePath ?? '', fileHistoryPath) : ''}
+        worktreeId={activeWorktreeId ?? undefined}
+      />
 
       <Dialog
         open={resolvedPendingDiffCommentsClear !== null}

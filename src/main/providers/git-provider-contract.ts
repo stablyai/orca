@@ -13,6 +13,7 @@ import type {
   RemoveWorktreeResult
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitBlameResult } from '../../shared/git-blame'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
 
@@ -27,6 +28,7 @@ export type IGitProvider = {
   ): Promise<GitStatusResult>
   checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
+  getBlame(worktreePath: string, filePath: string): Promise<GitBlameResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(

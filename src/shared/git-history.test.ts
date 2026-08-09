@@ -162,6 +162,20 @@ describe('git history loader', () => {
     expect(result.mergeBase).toBe(BASE_OID)
   })
 
+  it('scopes the log query to a file path when requested', async () => {
+    const { executor, calls } = createHistoryExecutor()
+
+    await loadGitHistoryFromExecutor(executor, '/repo', {
+      limit: 50,
+      filePath: 'src/index.ts'
+    })
+
+    const logCall = calls.find((args) => args[0] === 'log')
+    expect(logCall).toEqual(
+      expect.arrayContaining(['--follow', '--', 'src/index.ts'])
+    )
+  })
+
   it('does not list newly fetched upstream commits in old workspace history', async () => {
     const upstreamOnlyOid = 'd'.repeat(40)
     const calls: string[][] = []

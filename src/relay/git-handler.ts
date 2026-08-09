@@ -62,6 +62,7 @@ import {
   resolveEffectiveGitUpstream
 } from '../shared/git-effective-upstream'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
+import { parseBlameOutput } from '../shared/git-blame-parser'
 import { buildRelayGitEnv, buildRelayUnattendedGitEnv } from './relay-command-env'
 import {
   removeSafeUntrackedDiscardTarget,
@@ -95,6 +96,7 @@ import { streamRelayGitStdout } from './git-stdout-stream'
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
 const BULK_CHUNK_SIZE = 100
+const GIT_BLAME_TIMEOUT_MS = 30_000
 
 function resolveSubmoduleStatusArea(
   params: Record<string, unknown>
@@ -207,6 +209,7 @@ export class GitHandler {
     )
     this.dispatcher.onRequest('git.checkIgnored', (p) => this.checkIgnored(p))
     this.dispatcher.onRequest('git.history', (p) => this.history(p))
+    this.dispatcher.onRequest('git.blame', (p) => this.blame(p))
     this.dispatcher.onRequest('git.commit', (p) => this.commit(p))
     this.dispatcher.onRequest('git.diff', (p, context) => this.getDiff(p, context))
     this.dispatcher.onRequest('git.stage', (p) => this.stage(p))
@@ -419,10 +422,35 @@ export class GitHandler {
 
   private async history(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
+    const filePath = typeof params.filePath === 'string' ? params.filePath : undefined
+    if (filePath) {
+      const resolved = path.resolve(worktreePath, filePath)
+      const rel = path.relative(path.resolve(worktreePath), resolved)
+      if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+        throw new Error(`Path "${filePath}" resolves outside the worktree`)
+      }
+    }
     return loadGitHistoryFromExecutor(this.git.bind(this), worktreePath, {
       limit: typeof params.limit === 'number' ? params.limit : undefined,
-      baseRef: typeof params.baseRef === 'string' ? params.baseRef : null
+      baseRef: typeof params.baseRef === 'string' ? params.baseRef : null,
+      filePath
     })
+  }
+
+  private async blame(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const filePath = params.filePath as string
+    const resolved = path.resolve(worktreePath, filePath)
+    const rel = path.relative(path.resolve(worktreePath), resolved)
+    if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+      throw new Error(`Path "${filePath}" resolves outside the worktree`)
+    }
+    const { stdout } = await this.git(
+      ['blame', '--porcelain', '--', path.basename(resolved)],
+      path.dirname(resolved),
+      { timeout: GIT_BLAME_TIMEOUT_MS }
+    )
+    return parseBlameOutput(stdout)
   }
 
   private async getDiff(params: Record<string, unknown>, context?: RequestContext) {

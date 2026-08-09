@@ -30,6 +30,8 @@ import {
   setMarkdownDocCompletionDocuments
 } from './monaco-markdown-doc-completions'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
+import { GitFileHistoryDialog } from './GitFileHistoryDialog'
+import { useGitBlame } from './useGitBlame'
 import {
   createMarkdownDocLinkDecorationController,
   type MarkdownDocLinkDecorationController
@@ -185,6 +187,7 @@ export default function MonacoEditor({
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
+  const [gitFileHistoryOpen, setGitFileHistoryOpen] = useState(false)
   const [commentPopover, setCommentPopover] = useState<MarkdownCommentPopoverState | null>(null)
   const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
     useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
@@ -259,6 +262,14 @@ export default function MonacoEditor({
     formatCommentPrompt: formatMarkdownCommentPrompt,
     pendingScrollCommentId: pendingScrollForThisEditor,
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
+  })
+
+  useGitBlame({
+    editor: mountedEditor,
+    worktreeId,
+    filePath,
+    relativePath,
+    enabled: settings?.enableInlineGitBlame !== false
   })
 
   const clearTransientRevealHighlight = useCallback(() => {
@@ -446,6 +457,13 @@ export default function MonacoEditor({
           state.showRightSidebarSearch({ query })
         }
       })
+      const gitHistoryAction = editorInstance.addAction({
+        id: 'orca.gitHistory',
+        label: translate('auto.components.editor.GitFileHistoryDialog.9c3d4e5f60', 'Git History'),
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 3,
+        run: () => setGitFileHistoryOpen(true)
+      })
       const onLargeTextPaste = (event: ClipboardEvent): void => {
         handleMonacoLargeTextPaste(editorInstance, event, {
           readOnly: readOnlyRef.current,
@@ -521,6 +539,7 @@ export default function MonacoEditor({
         cleanupAddReviewNoteShortcut()
         editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
         searchInFilesAction.dispose()
+        gitHistoryAction.dispose()
         autoHeightSub?.dispose()
         if (autoHeightFrame !== null) {
           window.cancelAnimationFrame(autoHeightFrame)
@@ -874,6 +893,14 @@ export default function MonacoEditor({
       />
 
       {toastNode}
+      <GitFileHistoryDialog
+        open={gitFileHistoryOpen}
+        onOpenChange={setGitFileHistoryOpen}
+        title={relativePath}
+        relativePath={relativePath}
+        filePath={filePath}
+        worktreeId={worktreeId}
+      />
       <MonacoGutterContextMenu
         open={gutterMenuOpen}
         onOpenChange={setGutterMenuOpen}

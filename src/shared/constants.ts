@@ -193,6 +193,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
     editorMinimapEnabled: false,
+    enableInlineGitBlame: true,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
     editorWordWrap: true,

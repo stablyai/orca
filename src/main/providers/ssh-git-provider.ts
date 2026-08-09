@@ -19,6 +19,7 @@ import type {
   RemoveWorktreeResult
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitBlameResult } from '../../shared/git-blame'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
@@ -187,6 +188,13 @@ export class SshGitProvider implements IGitProvider {
       worktreePath,
       ...options
     })) as GitHistoryResult
+  }
+
+  async getBlame(worktreePath: string, filePath: string): Promise<GitBlameResult> {
+    return (await this.mux.request('git.blame', {
+      worktreePath,
+      filePath
+    })) as GitBlameResult
   }
 
   async commit(

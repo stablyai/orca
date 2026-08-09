@@ -3,6 +3,7 @@ import { defineMethod, type RpcMethod } from '../core'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control-ai'
 import {
+  GitBlame,
   GitBranchCompare,
   GitBranchDiff,
   GitBulkPaths,
@@ -132,8 +133,15 @@ export const GIT_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitHistory(params.worktree, {
         limit: params.limit,
-        baseRef: params.baseRef
+        baseRef: params.baseRef,
+        ...(params.filePath ? { filePath: params.filePath } : {})
       })
+  }),
+  defineMethod({
+    name: 'git.blame',
+    params: GitBlame,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitBlame(params.worktree, params.filePath)
   }),
   defineMethod({
     name: 'git.conflictOperation',

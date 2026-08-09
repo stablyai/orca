@@ -2126,6 +2126,12 @@ html.native-shell .app-layout {
 
 /* ── Git conflict decorations ───────────────────────────────────── */
 
+.monaco-editor .orca-git-blame {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  opacity: 0.72;
+}
+
 .monaco-editor .orca-conflict-marker-line {
   background: color-mix(in srgb, var(--destructive) 12%, transparent);
 }

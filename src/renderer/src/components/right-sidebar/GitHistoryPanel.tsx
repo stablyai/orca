@@ -48,6 +48,7 @@ export function GitHistoryPanel({
   onOpenCommit,
   onLoadCommitFiles,
   onOpenCommitFile,
+  onFileHistory,
   onCommitAction
 }: {
   state: GitHistoryPanelState
@@ -61,6 +62,7 @@ export function GitHistoryPanel({
     entry: GitBranchChangeEntry,
     event?: SourceControlRowOpenEvent
   ) => void
+  onFileHistory?: (item: GitHistoryItem, entry: GitBranchChangeEntry) => void
   onCommitAction?: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
 }): React.JSX.Element | null {
   const result = state.result
@@ -373,6 +375,7 @@ export function GitHistoryPanel({
                     author={item.author}
                     timestamp={item.timestamp}
                     onOpenFile={(entry, event) => onOpenCommitFile?.(item, entry, event)}
+                    onHistory={onFileHistory ? (entry) => onFileHistory(item, entry) : undefined}
                     onOpenAll={onOpenCommit ? () => onOpenCommit(item) : undefined}
                   />
                 )}

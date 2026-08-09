@@ -303,6 +303,7 @@ import type {
 
 import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
+import type { GitBlameResult } from '../shared/git-blame'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { EphemeralVmRecipeDoctorResult } from '../shared/ephemeral-vm-recipes'
 import type { EphemeralVmRecipeResultWarning } from '../shared/ephemeral-vm-recipe-diagnostics'
@@ -2964,6 +2965,11 @@ export type PreloadApi = {
     history: (
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ) => Promise<GitHistoryResult>
+    blame: (args: {
+      worktreePath: string
+      filePath: string
+      connectionId?: string
+    }) => Promise<GitBlameResult>
     conflictOperation: (args: {
       worktreePath: string
       connectionId?: string

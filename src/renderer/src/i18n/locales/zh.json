@@ -5853,7 +5853,9 @@
           "b82f86d7d2": "Markdown 拼写检查（富文本）",
           "5195f0b9ef": "在编辑富 Markdown 时显示浏览器拼写下划线和建议。",
           "7ddd66fede": "编辑器自动换行",
-          "9b18de6eea": "在文件编辑器中自动换行长行，而无需水平滚动。"
+          "9b18de6eea": "在文件编辑器中自动换行长行，而无需水平滚动。",
+          "1c2a3b4c5d": "内联 Git Blame",
+          "2d3e4f5a6b": "显示最近修改当前编辑器行的提交。"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "本地主机，127.0.0.1，*.internal",
@@ -11348,7 +11350,8 @@
           "GitHistoryCommitFiles": {
             "a1b2c3d4e5": "正在加载文件…",
             "b2c3d4e5f6": "此提交没有文件更改",
-            "c3d4e5f6a7": "一起打开所有更改"
+            "c3d4e5f6a7": "一起打开所有更改",
+            "1f2a3b4c5d": "查看文件历史"
           },
           "GitHistoryRow": {
             "2f9c41ab07": "显示提交{{value0}}中的文件：{{value1}}",
@@ -12657,6 +12660,13 @@
         }
       },
       "editor": {
+        "GitFileHistoryDialog": {
+          "9c3d4e5f60": "Git 历史",
+          "7a1b2c3d4e": "工作区尚不可用。",
+          "8b2c3d4e5f": "加载 Git 历史失败。",
+          "0d4e5f6a71": "正在加载历史…",
+          "1e5f6a7b82": "未找到此文件的提交。"
+        },
         "ChangesModeView": {
           "ef25ae2d09": "没有未提交的更改。",
           "052c184f24": "此文件的文本差异不可用。",

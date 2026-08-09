@@ -215,6 +215,53 @@ describe('git RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: history })
   })
 
+  it('forwards file-scoped history paths', async () => {
+    const history = {
+      items: [],
+      hasIncomingChanges: false,
+      hasOutgoingChanges: false,
+      hasMore: false,
+      limit: 50
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitHistory: vi.fn().mockResolvedValue(history)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('git.history', {
+        worktree: 'id:wt-1',
+        limit: 25,
+        filePath: 'src/index.ts'
+      })
+    )
+
+    expect(runtime.getRuntimeGitHistory).toHaveBeenCalledWith('id:wt-1', {
+      limit: 25,
+      filePath: 'src/index.ts'
+    })
+  })
+
+  it('returns inline blame for a selected file', async () => {
+    const blame = [{ sha: 'a'.repeat(40), shortSha: 'aaaaaaa', author: 'Ada', authorTime: 1, summary: 'init' }]
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitBlame: vi.fn().mockResolvedValue(blame)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.blame', {
+        worktree: 'id:wt-1',
+        filePath: 'src/index.ts'
+      })
+    )
+
+    expect(runtime.getRuntimeGitBlame).toHaveBeenCalledWith('id:wt-1', 'src/index.ts')
+    expect(response).toMatchObject({ ok: true, result: blame })
+  })
+
   it('routes common mutations to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

@@ -9077,6 +9077,8 @@ export class OrcaRuntimeService {
     this.gitCommands.checkRuntimeGitIgnoredPaths.bind(this.gitCommands)
   getRuntimeGitHistory: RuntimeGitCommands['getRuntimeGitHistory'] =
     this.gitCommands.getRuntimeGitHistory.bind(this.gitCommands)
+  getRuntimeGitBlame: RuntimeGitCommands['getRuntimeGitBlame'] =
+    this.gitCommands.getRuntimeGitBlame.bind(this.gitCommands)
   getRuntimeGitConflictOperation: RuntimeGitCommands['getRuntimeGitConflictOperation'] =
     this.gitCommands.getRuntimeGitConflictOperation.bind(this.gitCommands)
   abortRuntimeGitMerge: RuntimeGitCommands['abortRuntimeGitMerge'] =

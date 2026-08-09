@@ -42,6 +42,8 @@ export const GitFilePath = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing file path'))
 })
 
+export const GitBlame = GitFilePath
+
 export const GitDiff = GitFilePath.extend({
   staged: z.boolean(),
   compareAgainstHead: z.boolean().optional()
@@ -72,7 +74,12 @@ export const GitCommitCompare = WorktreeSelector.extend({
 
 export const GitHistory = WorktreeSelector.extend({
   limit: z.number().int().min(1).max(200).optional(),
-  baseRef: z.string().nullable().optional()
+  baseRef: z.string().nullable().optional(),
+  filePath: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing file path'))
+    .optional()
 })
 
 export const GitBranchDiff = GitFilePath.extend({

@@ -206,18 +206,19 @@ export async function loadGitHistoryFromExecutor(
     }
   }
 
-  const { stdout } = await git(
-    [
-      'log',
-      `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
-      '-z',
-      '--topo-order',
-      '--decorate=full',
-      `-n${limit + 1}`,
-      ...historyRevisions
-    ],
-    cwd
-  )
+  const logArgs = [
+    'log',
+    `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
+    '-z',
+    '--topo-order',
+    '--decorate=full',
+    `-n${limit + 1}`,
+    ...historyRevisions
+  ]
+  if (options.filePath) {
+    logArgs.push('--follow', '--', options.filePath)
+  }
+  const { stdout } = await git(logArgs, cwd)
   const parsed = parseGitHistoryLog(stdout)
   const items = parsed.slice(0, limit)
   const hasIncomingChanges =
