@@ -190,6 +190,9 @@ export class SshGitProvider implements IGitProvider {
     })) as GitHistoryResult
   }
 
+  /**
+   * Forwards a blame request to the relay running on the SSH host.
+   */
   async getBlame(worktreePath: string, filePath: string): Promise<GitBlameResult> {
     return (await this.mux.request('git.blame', {
       worktreePath,

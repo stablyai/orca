@@ -7,6 +7,9 @@ import { gitExecFileAsync } from './runner'
 
 const GIT_BLAME_TIMEOUT_MS = 30_000
 
+/**
+ * Runs git blame from the file's own directory so nested repositories resolve.
+ */
 export async function getBlame(
   worktreePath: string,
   filePath: string,
@@ -17,9 +20,9 @@ export async function getBlame(
   // with a bare filename lets git resolve the enclosing repo at any depth, and
   // avoids re-basing paths (which breaks under symlinked worktree roots).
   const absFilePath = isAbsolute(filePath) ? filePath : join(worktreePath, filePath)
-  const { stdout } = await gitExecFileAsync(
-    ['blame', '--porcelain', '--', basename(absFilePath)],
-    { ...gitOptionsForWorktree(dirname(absFilePath), options), timeout: GIT_BLAME_TIMEOUT_MS }
-  )
+  const { stdout } = await gitExecFileAsync(['blame', '--porcelain', '--', basename(absFilePath)], {
+    ...gitOptionsForWorktree(dirname(absFilePath), options),
+    timeout: GIT_BLAME_TIMEOUT_MS
+  })
   return parseBlameOutput(stdout)
 }

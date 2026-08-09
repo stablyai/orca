@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import * as monaco from 'monaco-editor'
 import type { editor } from 'monaco-editor'
 import type { GitBlameResult } from '../../../../shared/git-blame'
@@ -8,8 +8,10 @@ import { formatPrCommentRelativeTime } from '@/lib/pr-comment-time'
 import { getRuntimeGitBlame } from '@/runtime/runtime-git-client'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 
+/** Coalesces in-flight blame reads across Monaco remounts for the same file. */
 const blameCache = new Map<string, Promise<GitBlameResult>>()
 
+/** Formats a blame line as `author · relative time · summary`. */
 function blameLabel(author: string, authorTime: number, summary: string): string {
   const relativeTime = formatPrCommentRelativeTime(
     new Date(authorTime * 1000).toISOString(),
@@ -25,14 +27,16 @@ type UseGitBlameProps = {
   enabled: boolean
 }
 
+/**
+ * Decorates Monaco's active line with inline Git blame when enabled.
+ * Results are cached by worktree+file and invalidated when the model changes.
+ */
 export function useGitBlame({ editor, worktreeId, filePath, enabled }: UseGitBlameProps): void {
-  const enabledRef = useRef(enabled)
-  enabledRef.current = enabled
   const cacheKey = worktreeId && filePath ? `${worktreeId}:${filePath}` : null
 
   useEffect(() => {
     const ed = editor
-    if (!ed || !enabledRef.current || !worktreeId || !cacheKey || !filePath) {
+    if (!ed || !enabled || !worktreeId || !cacheKey || !filePath) {
       return
     }
     const state = useAppStore.getState()
@@ -43,6 +47,7 @@ export function useGitBlame({ editor, worktreeId, filePath, enabled }: UseGitBla
 
     let disposed = false
     let latestResult: GitBlameResult | null = null
+    let blameVersionId: number | null = null
     const decorations = ed.createDecorationsCollection([])
     const update = (): void => {
       if (disposed) {
@@ -76,7 +81,15 @@ export function useGitBlame({ editor, worktreeId, filePath, enabled }: UseGitBla
     update()
     const cursorSub = ed.onDidChangeCursorPosition(update)
     const selectionSub = ed.onDidChangeCursorSelection(update)
-    const contentSub = ed.onDidChangeModelContent(update)
+    const fetchVersionId = ed.getModel()?.getVersionId() ?? null
+    const contentSub = ed.onDidChangeModelContent(() => {
+      const currentVersionId = ed.getModel()?.getVersionId() ?? null
+      if (blameVersionId !== null && currentVersionId !== blameVersionId) {
+        blameCache.delete(cacheKey)
+        latestResult = null
+      }
+      decorations.clear()
+    })
     const disposeSub = ed.onDidDispose(() => {
       disposed = true
       decorations.clear()
@@ -99,7 +112,13 @@ export function useGitBlame({ editor, worktreeId, filePath, enabled }: UseGitBla
         if (disposed) {
           return
         }
+        const currentVersionId = ed.getModel()?.getVersionId() ?? null
+        if (fetchVersionId !== null && currentVersionId !== fetchVersionId) {
+          blameCache.delete(cacheKey)
+          return
+        }
         latestResult = result
+        blameVersionId = fetchVersionId
         update()
       })
       .catch(() => {
@@ -118,5 +137,5 @@ export function useGitBlame({ editor, worktreeId, filePath, enabled }: UseGitBla
       disposeSub.dispose()
       decorations.clear()
     }
-  }, [cacheKey, editor, filePath, worktreeId])
+  }, [cacheKey, editor, enabled, filePath, worktreeId])
 }

@@ -5841,9 +5841,11 @@
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
           "7ddd66fede": "エディターのワードラップ",
-          "9b18de6eea": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
-          "1c2a3b4c5d": "インライン Git blame",
-          "2d3e4f5a6b": "アクティブなエディター行を最後に変更したコミットを表示します。"
+          "9b18de6eea": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。"
+        },
+        "InlineGitBlameSetting": {
+          "b487a63c2b": "インライン Git blame",
+          "3334d39de5": "アクティブなエディター行を最後に変更したコミットを表示します。"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "ローカルホスト、127.0.0.1、*.internal",
@@ -11331,7 +11333,7 @@
             "a1b2c3d4e5": "ファイルを読み込み中…",
             "b2c3d4e5f6": "この commit にはファイルの変更がありません",
             "c3d4e5f6a7": "すべての変更をまとめて開く",
-            "1f2a3b4c5d": "ファイル履歴を表示"
+            "711cf5e588": "ファイル履歴を表示"
           },
           "GitHistoryRow": {
             "2f9c41ab07": "commit{{value0}}のファイルを表示: {{value1}}",
@@ -12641,11 +12643,11 @@
       },
       "editor": {
         "GitFileHistoryDialog": {
-          "9c3d4e5f60": "Git 履歴",
-          "7a1b2c3d4e": "ワークスペースはまだ利用できません。",
-          "8b2c3d4e5f": "Git 履歴を読み込めませんでした。",
-          "0d4e5f6a71": "履歴を読み込んでいます…",
-          "1e5f6a7b82": "このファイルのコミットは見つかりませんでした。"
+          "399ece93d0": "Git 履歴",
+          "13bbd3745e": "ワークスペースはまだ利用できません。",
+          "565f664463": "Git 履歴を読み込めませんでした。",
+          "7f49174c71": "履歴を読み込んでいます…",
+          "77da374615": "このファイルのコミットは見つかりませんでした。"
         },
         "ChangesModeView": {
           "ef25ae2d09": "commit されていない変更はありません。",

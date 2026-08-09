@@ -1,6 +1,7 @@
 import type React from 'react'
 import { ArrowUpRight, History, RefreshCw } from 'lucide-react'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
+import { Button } from '@/components/ui/button'
 import {
   toPermanentSourceControlRowOpenEvent,
   toSourceControlRowOpenEvent,
@@ -19,6 +20,7 @@ export type GitHistoryCommitFilesState =
   | { status: 'error'; error: string }
   | { status: 'ready'; entries: GitBranchChangeEntry[] }
 
+/** A single row inside an expanded commit's file list. */
 function CommitFileRow({
   entry,
   onOpen,
@@ -35,42 +37,39 @@ function CommitFileRow({
   const dirPath = parentDir === '.' ? '' : parentDir
 
   return (
-    <div
-      className="group flex w-full min-w-0 cursor-pointer items-center gap-1 py-1 pl-9 pr-3 text-left text-xs transition-colors hover:bg-accent/40"
-      title={entry.path}
-      role="button"
-      tabIndex={0}
-      data-testid="git-history-commit-file"
-      onClick={(event) => onOpen(entry, toSourceControlRowOpenEvent(event))}
-      onDoubleClick={(event) => onOpen(entry, toPermanentSourceControlRowOpenEvent(event))}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onOpen(entry, toSourceControlRowOpenEvent(event))
-        }
-      }}
-    >
-      <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[status] }} />
-      <span className="min-w-0 flex-1 truncate">
-        <span className="text-foreground">{fileName}</span>
-        {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
-      </span>
-      <span
-        className="w-4 shrink-0 text-center text-[10px] font-bold"
-        style={{ color: STATUS_COLORS[status] }}
+    <div className="group flex w-full min-w-0 items-stretch">
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-1 py-1 pl-9 pr-3 text-left text-xs transition-colors hover:bg-accent/40"
+        title={entry.path}
+        data-testid="git-history-commit-file"
+        onClick={(event) => onOpen(entry, toSourceControlRowOpenEvent(event))}
+        onDoubleClick={(event) => onOpen(entry, toPermanentSourceControlRowOpenEvent(event))}
       >
-        {STATUS_LABELS[status]}
-      </span>
+        <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[status] }} />
+        <span className="min-w-0 flex-1 truncate">
+          <span className="text-foreground">{fileName}</span>
+          {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
+        </span>
+        <span
+          className="w-4 shrink-0 text-center text-[10px] font-bold"
+          style={{ color: STATUS_COLORS[status] }}
+        >
+          {STATUS_LABELS[status]}
+        </span>
+      </button>
       {onHistory && (
-        <button
+        <Button
           type="button"
-          className="shrink-0 rounded-sm p-0.5 text-muted-foreground opacity-100 transition-opacity hover:text-foreground focus-visible:text-foreground can-hover:opacity-0 can-hover:group-hover:opacity-100"
+          variant="ghost"
+          size="icon-xs"
+          className="my-auto mr-2 shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-foreground focus-visible:text-foreground can-hover:opacity-0 can-hover:group-hover:opacity-100"
           title={translate(
-            'auto.components.right.sidebar.GitHistoryCommitFiles.1f2a3b4c5d',
+            'auto.components.right.sidebar.GitHistoryCommitFiles.711cf5e588',
             'Show file history'
           )}
           aria-label={translate(
-            'auto.components.right.sidebar.GitHistoryCommitFiles.1f2a3b4c5d',
+            'auto.components.right.sidebar.GitHistoryCommitFiles.711cf5e588',
             'Show file history'
           )}
           onClick={(event) => {
@@ -79,12 +78,13 @@ function CommitFileRow({
           }}
         >
           <History className="size-3.5" />
-        </button>
+        </Button>
       )}
     </div>
   )
 }
 
+/** Body states for a commit's lazily loaded file list. */
 function CommitFilesBody({
   state,
   onOpenFile,
@@ -132,12 +132,7 @@ function CommitFilesBody({
   return (
     <>
       {state.entries.map((entry) => (
-        <CommitFileRow
-          key={entry.path}
-          entry={entry}
-          onOpen={onOpenFile}
-          onHistory={onHistory}
-        />
+        <CommitFileRow key={entry.path} entry={entry} onOpen={onOpenFile} onHistory={onHistory} />
       ))}
       {onOpenAll && (
         <button
@@ -158,6 +153,7 @@ function CommitFilesBody({
   )
 }
 
+/** Expanded commit files section with optional per-file history actions. */
 export function GitHistoryCommitFiles({
   state,
   author,

@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: runtime git dispatch stays in one boundary so local, SSH, and runtime-environment behavior remains comparable. */
+import { isAbsolute, relative } from 'node:path'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
@@ -131,6 +132,16 @@ function normalizeRuntimeGitRelativePath(filePath: string): string {
     throw new Error('invalid_relative_path')
   }
   return relativePath
+}
+
+/**
+ * Resolves a blame target to a safe path relative to the selected worktree.
+ * Renderer blame calls may carry the editor's absolute host path; runtime RPC
+ * must not let that path escape the resolved worktree on SSH or remote hosts.
+ */
+function normalizeRuntimeBlamePath(worktreePath: string, filePath: string): string {
+  const candidate = isAbsolute(filePath) ? relative(worktreePath, filePath) : filePath
+  return normalizeRuntimeGitRelativePath(candidate)
 }
 
 type RuntimeGitTarget = {
@@ -281,16 +292,21 @@ export class RuntimeGitCommands {
     })
   }
 
+  /**
+   * Reads inline blame for a worktree file, resolving the path against the
+   * selected worktree before forwarding to local Git or the SSH provider.
+   */
   async getRuntimeGitBlame(worktreeSelector: string, filePath: string): Promise<GitBlameResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePath = normalizeRuntimeBlamePath(target.worktree.path, filePath)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.getBlame(target.worktree.path, filePath)
+      return provider.getBlame(target.worktree.path, relativePath)
     }
-    return getGitBlame(target.worktree.path, filePath, localGitOptionsForTarget(target))
+    return getGitBlame(target.worktree.path, relativePath, localGitOptionsForTarget(target))
   }
 
   async getRuntimeGitConflictOperation(worktreeSelector: string): Promise<GitConflictOperation> {

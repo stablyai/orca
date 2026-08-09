@@ -24,6 +24,7 @@ type FileHistoryState =
   | { status: 'error'; error: string }
   | { status: 'ready'; items: GitHistoryItem[] }
 
+/** Formats a history timestamp as a compact relative label. */
 function formatRelativeTimestamp(timestamp: number | undefined): string {
   if (!timestamp || !Number.isFinite(timestamp)) {
     return ''
@@ -31,6 +32,11 @@ function formatRelativeTimestamp(timestamp: number | undefined): string {
   return formatPrCommentRelativeTime(new Date(timestamp).toISOString(), Date.now())
 }
 
+/**
+ * Modal listing commits that touched a single file.
+ * The target worktree and path are captured by the caller to stay stable when
+ * the active worktree changes while the dialog is open.
+ */
 export function GitFileHistoryDialog({
   open,
   onOpenChange,
@@ -53,7 +59,7 @@ export function GitFileHistoryDialog({
       setState({
         status: 'error',
         error: translate(
-          'auto.components.editor.GitFileHistoryDialog.7a1b2c3d4e',
+          'auto.components.editor.GitFileHistoryDialog.13bbd3745e',
           'Workspace is not available yet.'
         )
       })
@@ -83,7 +89,7 @@ export function GitFileHistoryDialog({
               error instanceof Error
                 ? error.message
                 : translate(
-                    'auto.components.editor.GitFileHistoryDialog.8b2c3d4e5f',
+                    'auto.components.editor.GitFileHistoryDialog.565f664463',
                     'Failed to load git history.'
                   )
           })
@@ -100,17 +106,14 @@ export function GitFileHistoryDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.editor.GitFileHistoryDialog.9c3d4e5f60',
-              'Git History'
-            )}
+            {translate('auto.components.editor.GitFileHistoryDialog.399ece93d0', 'Git History')}
           </DialogTitle>
         </DialogHeader>
         <div className="min-h-0 truncate text-xs text-muted-foreground">{title}</div>
         {state.status === 'loading' && (
           <div className="py-6 text-center text-xs text-muted-foreground">
             {translate(
-              'auto.components.editor.GitFileHistoryDialog.0d4e5f6a71',
+              'auto.components.editor.GitFileHistoryDialog.7f49174c71',
               'Loading history…'
             )}
           </div>
@@ -121,7 +124,7 @@ export function GitFileHistoryDialog({
         {state.status === 'ready' && state.items.length === 0 && (
           <div className="py-6 text-center text-xs text-muted-foreground">
             {translate(
-              'auto.components.editor.GitFileHistoryDialog.1e5f6a7b82',
+              'auto.components.editor.GitFileHistoryDialog.77da374615',
               'No commits found for this file.'
             )}
           </div>
@@ -139,12 +142,12 @@ export function GitFileHistoryDialog({
                     <span className="font-mono text-[11px] text-muted-foreground">
                       {item.displayId ?? item.id.slice(0, 7)}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-foreground">
-                      {item.subject}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate text-foreground">{item.subject}</span>
                   </div>
                   <div className="mt-1 pl-6 text-[11px] text-muted-foreground">
-                    {[item.author, formatRelativeTimestamp(item.timestamp)].filter(Boolean).join(' · ')}
+                    {[item.author, formatRelativeTimestamp(item.timestamp)]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </div>
                 </div>
               ))}

@@ -437,6 +437,9 @@ export class GitHandler {
     })
   }
 
+  /**
+   * Runs porcelain blame on the relay host from the file's own directory.
+   */
   private async blame(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string

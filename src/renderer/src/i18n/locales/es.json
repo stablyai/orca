@@ -5856,9 +5856,11 @@
           "b82f86d7d2": "Corrector ortográfico de Rich Markdown",
           "5195f0b9ef": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown.",
           "7ddd66fede": "Ajuste de línea en el editor",
-          "9b18de6eea": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal.",
-          "1c2a3b4c5d": "Blame de Git en línea",
-          "2d3e4f5a6b": "Muestra el último commit que tocó la línea activa del editor."
+          "9b18de6eea": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal."
+        },
+        "InlineGitBlameSetting": {
+          "b487a63c2b": "Blame de Git en línea",
+          "3334d39de5": "Muestra el último commit que tocó la línea activa del editor."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -11331,7 +11333,7 @@
             "a1b2c3d4e5": "Cargando archivos…",
             "b2c3d4e5f6": "No hay cambios de archivos en este commit",
             "c3d4e5f6a7": "Abrir todos los cambios juntos",
-            "1f2a3b4c5d": "Mostrar historial del archivo"
+            "711cf5e588": "Mostrar historial del archivo"
           },
           "GitHistoryRow": {
             "2f9c41ab07": "Mostrar archivos del commit {{value0}}: {{value1}}",
@@ -12641,11 +12643,11 @@
       },
       "editor": {
         "GitFileHistoryDialog": {
-          "9c3d4e5f60": "Historial de Git",
-          "7a1b2c3d4e": "El workspace aún no está disponible.",
-          "8b2c3d4e5f": "No se pudo cargar el historial de Git.",
-          "0d4e5f6a71": "Cargando historial…",
-          "1e5f6a7b82": "No se encontraron commits para este archivo."
+          "399ece93d0": "Historial de Git",
+          "13bbd3745e": "El workspace aún no está disponible.",
+          "565f664463": "No se pudo cargar el historial de Git.",
+          "7f49174c71": "Cargando historial…",
+          "77da374615": "No se encontraron commits para este archivo."
         },
         "ChangesModeView": {
           "ef25ae2d09": "No hay cambios no confirmados.",

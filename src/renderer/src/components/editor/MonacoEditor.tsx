@@ -458,7 +458,7 @@ export default function MonacoEditor({
       })
       const gitHistoryAction = editorInstance.addAction({
         id: 'orca.gitHistory',
-        label: translate('auto.components.editor.GitFileHistoryDialog.9c3d4e5f60', 'Git History'),
+        label: translate('auto.components.editor.GitFileHistoryDialog.399ece93d0', 'Git History'),
         contextMenuGroupId: 'navigation',
         contextMenuOrder: 3,
         run: () => setGitFileHistoryOpen(true)

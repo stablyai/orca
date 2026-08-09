@@ -1064,7 +1064,11 @@ function SourceControlInner(): React.JSX.Element {
   const sourceControlGroupOrder = resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder)
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
-  const [fileHistoryPath, setFileHistoryPath] = useState<string | null>(null)
+  const [fileHistoryTarget, setFileHistoryTarget] = useState<{
+    worktreeId: string
+    worktreePath: string
+    relativePath: string
+  } | null>(null)
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
   // Why: start null (not 'origin/main') so branch compare doesn't fire with a fabricated ref before the IPC resolves.
   const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>(null)
@@ -6274,7 +6278,11 @@ function SourceControlInner(): React.JSX.Element {
                 onOpenCommitFile={openCommitFile}
                 onFileHistory={(_item, entry) => {
                   if (activeWorktreeId && worktreePath) {
-                    setFileHistoryPath(entry.path)
+                    setFileHistoryTarget({
+                      worktreeId: activeWorktreeId,
+                      worktreePath,
+                      relativePath: entry.path
+                    })
                   }
                 }}
                 onCommitAction={handleCommitAction}
@@ -6297,16 +6305,20 @@ function SourceControlInner(): React.JSX.Element {
       </div>
 
       <GitFileHistoryDialog
-        open={fileHistoryPath !== null}
+        open={fileHistoryTarget !== null}
         onOpenChange={(open) => {
           if (!open) {
-            setFileHistoryPath(null)
+            setFileHistoryTarget(null)
           }
         }}
-        title={fileHistoryPath ?? ''}
-        relativePath={fileHistoryPath ?? ''}
-        filePath={fileHistoryPath ? joinPath(worktreePath ?? '', fileHistoryPath) : ''}
-        worktreeId={activeWorktreeId ?? undefined}
+        title={fileHistoryTarget?.relativePath ?? ''}
+        relativePath={fileHistoryTarget?.relativePath ?? ''}
+        filePath={
+          fileHistoryTarget
+            ? joinPath(fileHistoryTarget.worktreePath, fileHistoryTarget.relativePath)
+            : ''
+        }
+        worktreeId={fileHistoryTarget?.worktreeId}
       />
 
       <Dialog

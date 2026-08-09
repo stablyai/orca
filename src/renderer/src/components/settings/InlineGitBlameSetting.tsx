@@ -8,6 +8,9 @@ type InlineGitBlameSettingProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
+/**
+ * Editor setting controlling inline Git blame on the active Monaco line.
+ */
 export function InlineGitBlameSetting({
   settings,
   updateSettings
@@ -15,22 +18,22 @@ export function InlineGitBlameSetting({
   return (
     <SearchableSetting
       title={translate(
-        'auto.components.settings.GeneralEditorSettingsSection.1c2a3b4c5d',
+        'auto.components.settings.InlineGitBlameSetting.b487a63c2b',
         'Inline Git Blame'
       )}
       description={translate(
-        'auto.components.settings.GeneralEditorSettingsSection.2d3e4f5a6b',
+        'auto.components.settings.InlineGitBlameSetting.3334d39de5',
         'Show the last commit that touched the active editor line.'
       )}
       keywords={['git', 'blame', 'history', 'inline', 'author', 'commit']}
     >
       <SettingsSwitchRow
         label={translate(
-          'auto.components.settings.GeneralEditorSettingsSection.1c2a3b4c5d',
+          'auto.components.settings.InlineGitBlameSetting.b487a63c2b',
           'Inline Git Blame'
         )}
         description={translate(
-          'auto.components.settings.GeneralEditorSettingsSection.2d3e4f5a6b',
+          'auto.components.settings.InlineGitBlameSetting.3334d39de5',
           'Show the last commit that touched the active editor line.'
         )}
         checked={settings.enableInlineGitBlame !== false}
