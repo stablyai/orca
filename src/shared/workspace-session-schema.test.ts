@@ -406,6 +406,47 @@ describe('parseWorkspaceSession', () => {
     expect(parseWorkspaceSession(42).ok).toBe(false)
   })
 
+  it('drops one truncated tab without discarding other persisted worktrees', () => {
+    const validTab = {
+      id: 'tab-good',
+      ptyId: null,
+      worktreeId: 'worktree-good',
+      title: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1_700_000_000_000
+    }
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'worktree-good',
+      activeTabId: 'tab-good',
+      tabsByWorktree: {
+        'worktree-good': [validTab],
+        'worktree-corrupt': [
+          {
+            id: 'tab-truncated',
+            ptyId: null,
+            worktreeId: 'worktree-corrupt',
+            title: 'Terminal',
+            sortOrder: 0,
+            generation: 3,
+            startupCwd: '/workspace'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree).toEqual({
+        'worktree-good': [validTab],
+        'worktree-corrupt': []
+      })
+    }
+  })
+
   it('drops bad lastVisitedAtByWorktreeId entries rather than failing the session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
