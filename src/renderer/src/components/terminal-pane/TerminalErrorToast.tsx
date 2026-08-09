@@ -2,6 +2,8 @@ import { translate } from '@/i18n/i18n'
 const SSH_PREFIX = 'SSH connection is not active'
 // Produced by pty-connection.ts reportError() when a PTY reattach can't reach its SSH host.
 const SSH_CONNECT_FAILURE_PREFIX = 'SSH connection failed'
+// Matched with includes(): this arrives IPC-wrapped ("Error invoking remote method 'pty:…': Error: …").
+const SSH_RELAY_LOST_MARKER = 'SSH connection lost, reconnecting'
 const STALE_NODE_PTY_DAEMON_MARKERS = [
   "Daemon's node-pty install is gone",
   'node-pty: posix_spawn failed: ENOENT'
@@ -10,14 +12,20 @@ const STALE_DAEMON_CWD_MARKERS = [
   "Daemon's working directory is gone",
   'node-pty: daemon_cwd failed: ENOENT'
 ]
+// Thrown by ipc/pty.ts when a persisted pane owner can't be proven alive or dead (STA-3536).
+const PANE_OWNER_UNVERIFIED_MARKER = 'terminal_pane_owner_unverified'
 
 function isSshError(error: string): boolean {
-  return error.startsWith(SSH_PREFIX)
+  return error.startsWith(SSH_PREFIX) || error.includes(SSH_RELAY_LOST_MARKER)
 }
 
 /** A single error line the SSH reconnect banner already covers — hide instead of stacking under/over it. */
 export function isSshReconnectOwnedTerminalError(error: string): boolean {
-  return error.startsWith(SSH_CONNECT_FAILURE_PREFIX) || error.startsWith(SSH_PREFIX)
+  return (
+    error.startsWith(SSH_CONNECT_FAILURE_PREFIX) ||
+    error.startsWith(SSH_PREFIX) ||
+    error.includes(SSH_RELAY_LOST_MARKER)
+  )
 }
 
 // Why: onPtyError aggregates errors into one newline-joined string, so classify per line —
@@ -36,6 +44,20 @@ export function shouldOfferDaemonRestart(error: string): boolean {
   )
 }
 
+/** Swaps the raw pane-owner-unverified code for copy a user can act on. */
+export function humanizeTerminalError(error: string): string {
+  if (!error.includes(PANE_OWNER_UNVERIFIED_MARKER)) {
+    return error
+  }
+  return error.replace(
+    PANE_OWNER_UNVERIFIED_MARKER,
+    translate(
+      'auto.components.terminal.pane.TerminalErrorToast.7ee11bc0db',
+      "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry."
+    )
+  )
+}
+
 export function TerminalErrorToast({
   error,
   onDismiss,
@@ -47,6 +69,7 @@ export function TerminalErrorToast({
 }): React.JSX.Element {
   const ssh = isSshError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
+  const displayError = humanizeTerminalError(error)
 
   return (
     <div
@@ -69,7 +92,7 @@ export function TerminalErrorToast({
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
         <span style={{ minWidth: 0 }}>
-          {error}
+          {displayError}
           {showDaemonRestart ? (
             <>
               {'\n'}

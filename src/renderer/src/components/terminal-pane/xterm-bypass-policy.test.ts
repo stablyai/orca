@@ -119,6 +119,23 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     expect(shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC' }), opts)).toBe(false)
   })
 
+  it('no longer special-cases Backslash — the native-text forwarder owns it', () => {
+    // Why: this policy carried a `code === 'Backslash'` bypass because the old
+    // forwarder only claimed keys for input sources on a hardcoded allowlist.
+    // The structural claim covers every printable key, so the exception is gone
+    // and the physical key is no longer named anywhere in this file.
+    for (const type of ['keydown', 'keyup', 'keypress']) {
+      for (const kittyKeyboardFlags of [0, 1]) {
+        expect(
+          shouldBypassXtermKeyboardEvent(event({ type, key: '\\', code: 'Backslash' }), {
+            ...noSel,
+            kittyKeyboardFlags
+          })
+        ).toBe(false)
+      }
+    }
+  })
+
   it('bubbles Shift+non-ASCII printable text so the active keyboard layout wins', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'Ф', code: 'KeyA', shiftKey: true }), opts)

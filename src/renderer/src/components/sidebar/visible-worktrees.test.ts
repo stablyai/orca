@@ -553,6 +553,69 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([parent.id, child.id])
   })
 
+  it('gives a sleeping-exempt main its cached-sort slot, not a position at the end', () => {
+    // #8873: the exempted main enters `all` and is sorted with everyone else,
+    // so Cmd+1-9 numbers it where the sidebar actually renders it.
+    const awakeA = makeWorktree('awake-a')
+    const main = { ...makeWorktree('main'), isMainWorktree: true }
+    const awakeB = makeWorktree('awake-b')
+
+    const options = {
+      showSleepingWorkspaces: false,
+      tabsByWorktree: {
+        [awakeA.id]: [makeTab('t-a', awakeA.id, 'p-a')],
+        [awakeB.id]: [makeTab('t-b', awakeB.id, 'p-b')]
+      },
+      ptyIdsByTabId: { 't-a': ['p-a'], 't-b': ['p-b'] }
+    }
+    const byRepo = { repo1: [awakeA, main, awakeB] }
+    const sortedIds = [awakeA.id, main.id, awakeB.id]
+
+    expect(
+      computeVisibleWorktreeIds(
+        byRepo,
+        sortedIds,
+        visibleOptions({ ...options, alwaysShowDefaultBranchWorkspace: true })
+      )
+    ).toEqual([awakeA.id, main.id, awakeB.id])
+
+    expect(
+      computeVisibleWorktreeIds(
+        byRepo,
+        sortedIds,
+        visibleOptions({ ...options, alwaysShowDefaultBranchWorkspace: false })
+      )
+    ).toEqual([awakeA.id, awakeB.id])
+  })
+
+  it('leaves lineage ordering untouched when the exempted main is also a parent', () => {
+    // The parent used to arrive via addVisibleLineageAncestors and now arrives
+    // on its own; either way it must render immediately above its child.
+    const parent = { ...makeWorktree('parent'), isMainWorktree: true }
+    const child = makeWorktree('child')
+    const sibling = makeWorktree('sibling')
+    const lineage = makeWorktreeLineage(child, parent)
+
+    const run = (alwaysShowDefaultBranchWorkspace: boolean): string[] =>
+      computeVisibleWorktreeIds(
+        { repo1: [parent, child, sibling] },
+        [sibling.id, child.id, parent.id],
+        visibleOptions({
+          showSleepingWorkspaces: false,
+          alwaysShowDefaultBranchWorkspace,
+          tabsByWorktree: {
+            [child.id]: [makeTab('t-child', child.id, 'p-child')],
+            [sibling.id]: [makeTab('t-sib', sibling.id, 'p-sib')]
+          },
+          ptyIdsByTabId: { 't-child': ['p-child'], 't-sib': ['p-sib'] },
+          worktreeLineageById: { [child.id]: lineage }
+        })
+      )
+
+    expect(run(true)).toEqual([sibling.id, parent.id, child.id])
+    expect(run(false)).toEqual(run(true))
+  })
+
   it('includes a filtered parent from resolved inline lineage when hydration has no side-map entry', () => {
     const parent = makeWorktree('parent')
     const child = makeWorktree('child')

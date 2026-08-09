@@ -1,7 +1,23 @@
+import { isWslUncPath } from './wsl-paths'
+
 const SLASH_CHAR_CODE = '/'.charCodeAt(0)
 
 export function isWindowsAbsolutePathLike(value: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\') || value.startsWith('//')
+}
+
+/**
+ * Whether names under `rootPath` compare case-insensitively.
+ *
+ * Decided by path SYNTAX, never by the client platform — a Windows client can
+ * drive a case-sensitive SSH or WSL workspace. Windows drive/UNC roots fold
+ * case; the WSL UNC aliases front a case-sensitive Linux filesystem, as do
+ * POSIX roots. macOS stays case-sensitive here, matching
+ * `normalizeRuntimePathForComparison`: folding a case-sensitive root would
+ * merge distinct files, which is worse than missing a case-only duplicate.
+ */
+export function isCaseInsensitiveRuntimeRoot(rootPath: string): boolean {
+  return isWindowsAbsolutePathLike(rootPath) && !isWslUncPath(rootPath)
 }
 
 export function normalizeRuntimePathSeparators(value: string): string {

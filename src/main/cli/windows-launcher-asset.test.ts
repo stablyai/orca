@@ -16,12 +16,15 @@ describe('packaged Windows CLI launcher asset', () => {
     const sourcePath = join(process.cwd(), 'native', 'windows-cli-launcher', 'OrcaCliLauncher.cs')
     const source = readFileSync(sourcePath, 'utf8')
 
+    // Why: the marker and command name must ride the launcher's own environment, never
+    // ProcessStartInfo's case-insensitive copy of a PATH/Path block (stablyai/orca#12046).
     expect(source).toContain(
-      'startInfo.EnvironmentVariables["ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER"] = "1";'
+      'Environment.SetEnvironmentVariable("ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER", "1");'
     )
-    expect(source).toContain('Environment.GetEnvironmentVariable("ORCA_CLI_COMMAND") == "orca-ide"')
-    expect(source).toContain('? "orca-ide"')
-    expect(source).toContain(': "orca";')
+    expect(source).toContain(
+      'string requestedCliCommand = Environment.GetEnvironmentVariable("ORCA_CLI_COMMAND");'
+    )
+    expect(source).toContain('requestedCliCommand == "orca-ide" ? "orca-ide" : "orca"')
     expect(source).toContain('child.WaitForExit();')
     expect(source).toContain('return child.ExitCode;')
   })

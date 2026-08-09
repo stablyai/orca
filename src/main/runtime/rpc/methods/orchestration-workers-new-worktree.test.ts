@@ -157,6 +157,29 @@ describe('orchestration new-worktree workers', () => {
     expect(runtime.createTerminal).not.toHaveBeenCalled()
   })
 
+  it('passes launch preferences into agent-first worktree creation', async () => {
+    mockCreatedWorktree()
+
+    const { result } = await startWorker({
+      model: 'custom-codex-model',
+      effort: 'high'
+    })
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startupAgent: 'codex',
+        startupLaunchPreferences: { model: 'custom-codex-model', effort: 'high' }
+      })
+    )
+    expect(result).toMatchObject({
+      state: 'ready',
+      launch: {
+        requested: { agent: 'codex', model: 'custom-codex-model', effort: 'high' },
+        effective: { agent: 'codex', model: 'custom-codex-model', effort: 'high' }
+      }
+    })
+  })
+
   it('rejects a new worktree for a folder project before creating effects', async () => {
     vi.mocked(runtime.showRepo).mockResolvedValue({
       id: 'repo',

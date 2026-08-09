@@ -157,10 +157,9 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue(dirStats(true))
     accessSyncMock.mockReturnValue(undefined)
-    // Emulate the real wrapper: prepend /usr/bin/login in front of the shell.
     wrapSpawnMock.mockImplementation((file: string, args: string[]) => ({
-      file: '/usr/bin/login',
-      args: ['-flpq', 'ada', file, ...args]
+      file: '/wrapped/login',
+      args: ['wrapped', file, ...args]
     }))
   })
 
@@ -186,8 +185,8 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
 
     expect(wrapSpawnMock).toHaveBeenCalledWith('/bin/zsh', ['-l'], expect.any(Object))
     expect(ptySpawn).toHaveBeenCalledWith(
-      '/usr/bin/login',
-      ['-flpq', 'ada', '/bin/zsh', '-l'],
+      '/wrapped/login',
+      ['wrapped', '/bin/zsh', '-l'],
       expect.objectContaining({ cwd: '/work', cols: 80, rows: 24 })
     )
     // The reported shellPath stays the real shell so identity/name logic is intact.
@@ -220,8 +219,8 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
       expect.objectContaining({ SHELL: '/bin/bash' })
     )
     expect(ptySpawn).toHaveBeenLastCalledWith(
-      '/usr/bin/login',
-      ['-flpq', 'ada', '/bin/bash', '-l'],
+      '/wrapped/login',
+      ['wrapped', '/bin/bash', '-l'],
       expect.objectContaining({ cwd: '/work' })
     )
     expect(result.shellPath).toBe('/bin/bash')

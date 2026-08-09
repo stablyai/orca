@@ -4,10 +4,16 @@ import { listRegisteredPtys } from '../memory/pty-registry'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
-import { WORKTREE_TEARDOWN_FORCE_HINT } from '../../shared/worktree-removal'
+import {
+  isUnstoppedPtyRemovalError,
+  WORKTREE_TEARDOWN_FORCE_HINT,
+  WORKTREE_TEARDOWN_TIMEOUT_PREFIX
+} from '../../shared/worktree-removal'
 import { settleBeforeDeadline } from './settle-before-deadline'
+import { createWorktreeSweepTracker, settleSweepsForForcedRemoval } from './forced-sweep-settlement'
 import {
   describeError,
+  describeFailedPtySweep,
   describeUnstoppedPtys,
   verifyUnstoppedPtys,
   type UnstoppedPtyVerdict
@@ -87,7 +93,10 @@ export async function killAllProcessesForWorktree(
 ): Promise<WorktreeTeardownResult> {
   const sweepBudgetMs = Math.max(1, deps.timeoutMs ?? WORKTREE_PROCESS_SWEEP_TIMEOUT_MS)
   const deadline = Date.now() + sweepBudgetMs
-  const deadlineError = new Error(`Timed out waiting for physical PTY teardown: ${worktreeId}`)
+  const deadlineError = new Error(
+    `${WORKTREE_TEARDOWN_TIMEOUT_PREFIX} ${worktreeId}. ${WORKTREE_TEARDOWN_FORCE_HINT}`
+  )
+  const sweeps = createWorktreeSweepTracker()
   const stopAttempts = new Map<string, Promise<boolean>>()
   const stopPty = (
     ptyId: string,
@@ -116,7 +125,7 @@ export async function killAllProcessesForWorktree(
   // destructive removal closed.
   const runtimeSweep = deps.runtime
     ? settleBeforeDeadline(
-        () =>
+        sweeps.track(() =>
           deps.runtime!.stopTerminalsForWorktree(worktreeId, {
             deadline,
             stopPty,
@@ -127,7 +136,8 @@ export async function killAllProcessesForWorktree(
             ...(deps.resolvedRuntimeEnvironmentId
               ? { resolvedRuntimeEnvironmentId: deps.resolvedRuntimeEnvironmentId }
               : {})
-          }),
+          })
+        ),
         { stopped: 0 },
         deadline,
         deps.requirePhysicalStop ? deadlineError : undefined,
@@ -142,7 +152,7 @@ export async function killAllProcessesForWorktree(
     deps.includeProviderInventory === false
       ? Promise.resolve(0)
       : settleBeforeDeadline(
-          () =>
+          sweeps.track(() =>
             sweepProviderByPrefix(
               worktreeId,
               deps.localProvider,
@@ -150,7 +160,8 @@ export async function killAllProcessesForWorktree(
               stopPty,
               deps.onPtyStopped,
               deps.requirePhysicalStop
-            ),
+            )
+          ),
           0,
           deadline,
           deps.requirePhysicalStop ? deadlineError : undefined
@@ -159,14 +170,15 @@ export async function killAllProcessesForWorktree(
     deps.includeLocalRegistry === false
       ? Promise.resolve(0)
       : settleBeforeDeadline(
-          () =>
+          sweeps.track(() =>
             sweepRegistryForWorktree(
               worktreeId,
               deps.localProvider,
               deadline,
               stopPty,
               deps.onPtyStopped
-            ),
+            )
+          ),
           0,
           deadline,
           deps.requirePhysicalStop ? deadlineError : undefined
@@ -180,54 +192,39 @@ export async function killAllProcessesForWorktree(
   let providerStopped: number
   let registryStopped: number
   if (deps.allowUnverifiedStop) {
-    // Why: force goes on to delete files, so every sweep must finish releasing
-    // handles first — Promise.all would abandon the siblings of the first
-    // rejection while they were still inside shutdown(), racing the delete.
-    const settled = await Promise.allSettled([runtimeSweep, providerSweep, registrySweep])
-    const [runtimeSettled, providerSettled, registrySettled] = settled
-    const reasons = settled.flatMap((result) =>
-      result.status === 'rejected' ? [result.reason as unknown] : []
+    const forced = await settleSweepsForForcedRemoval(
+      worktreeId,
+      { runtime: runtimeSweep, provider: providerSweep, registry: registrySweep },
+      sweeps,
+      deadlineError
     )
-    if (reasons.length > 0) {
-      // Why (#11960): a sweep that cannot even complete — unresponsive daemon,
-      // dropped SSH channel — fails before the unproven-stop gate below could
-      // offer its escape hatch, so an explicit Force Delete has to survive it.
-      // Report every reason, specific ones first: the shared deadline sentinel
-      // only says that *something* timed out, so leading with it would bury the
-      // provider error that actually explains the failure. This warning is the
-      // only trace of a removal that deleted files without proving a single stop.
-      const detail = [
-        ...reasons.filter((candidate) => candidate !== deadlineError),
-        ...reasons.filter((candidate) => candidate === deadlineError)
-      ]
-        .map(describeError)
-        .join('; ')
-      console.warn(
-        `[worktree-teardown] forcing removal after an incomplete PTY sweep for ${worktreeId} — ${detail}`
-      )
-      // Returning here does skip the verdict below, which could still have named
-      // live PTYs when only one sweep failed — accepted for now because this path
-      // is behind an explicit Force Delete, deletes either way, and clears no
-      // registry rows, so the cost is diagnosability rather than safety.
-      // Report what the surviving sweeps actually stopped rather than a flat zero.
-      return {
-        runtimeStopped: runtimeSettled.status === 'fulfilled' ? runtimeSettled.value.stopped : 0,
-        providerStopped: providerSettled.status === 'fulfilled' ? providerSettled.value : 0,
-        registryStopped: registrySettled.status === 'fulfilled' ? registrySettled.value : 0
-      }
+    if (forced.incomplete) {
+      return forced.stopped
     }
-    runtimeResult = (runtimeSettled as PromiseFulfilledResult<{ stopped: number }>).value
-    providerStopped = (providerSettled as PromiseFulfilledResult<number>).value
-    registryStopped = (registrySettled as PromiseFulfilledResult<number>).value
+    runtimeResult = { stopped: forced.stopped.runtimeStopped }
+    providerStopped = forced.stopped.providerStopped
+    registryStopped = forced.stopped.registryStopped
   } else {
     // Why: without the waiver a rejection aborts the removal and nothing is
     // deleted, so failing fast is safe — and keeps a dead host reporting
     // immediately instead of after the full sweep budget.
-    ;[runtimeResult, providerStopped, registryStopped] = await Promise.all([
-      runtimeSweep,
-      providerSweep,
-      registrySweep
-    ])
+    try {
+      ;[runtimeResult, providerStopped, registryStopped] = await Promise.all([
+        runtimeSweep,
+        providerSweep,
+        registrySweep
+      ])
+    } catch (error) {
+      // Why (#11960): this rejection is the provider's own wording, which the force
+      // classifier cannot recognise — so the wedge Force Delete exists for was the one
+      // failure that never offered it. Re-word it, keeping the original as the cause.
+      throw deps.requirePhysicalStop && !isUnstoppedPtyRemovalError(describeError(error))
+        ? new Error(
+            `${describeFailedPtySweep(worktreeId, error)}. ${WORKTREE_TEARDOWN_FORCE_HINT}`,
+            { cause: error }
+          )
+        : error
+    }
   }
   if (deps.requirePhysicalStop) {
     const stopResults = await Promise.all(

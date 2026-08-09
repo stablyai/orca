@@ -2,9 +2,10 @@ import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import {
+  getBrowserLinkRoutingDescription,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
-} from './browser-link-routing-modifier-copy'
+} from './browser-link-routing-copy'
 
 type BrowserShortcutPlatform = {
   isMac: boolean
@@ -14,19 +15,6 @@ function getDefaultBrowserShortcutPlatform(): BrowserShortcutPlatform {
   return {
     isMac: typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
   }
-}
-
-// Why: "always" stops being true once inverting is on, so only then does the nested
-// row take over the chord sentence — with it off this reads exactly as it always has.
-export function getBrowserLinkRoutingDescription(
-  platform: BrowserShortcutPlatform = getDefaultBrowserShortcutPlatform(),
-  modifierInverts = false
-): string {
-  const base =
-    "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
-  return modifierInverts
-    ? base
-    : `${base} ${platform.isMac ? '⇧⌘-click' : 'Shift+Ctrl+click'} always uses your system browser.`
 }
 
 export function getBrowserPaneSearchEntries(

@@ -11,6 +11,7 @@ import {
   cacheGeneratedRuntimePairingLink,
   clearGeneratedRuntimePairingLink,
   runtimePairingLinkCache,
+  runtimePairingReachForIntent,
   selectRuntimePairingIntent,
   type RuntimePairingIntent,
   type RuntimePairingUrlGeneratorProps
@@ -187,7 +188,10 @@ export function RuntimePairingUrlGenerator({
     try {
       const result = await window.api.mobile.getRuntimePairingUrl({
         address,
-        rotate: true
+        rotate: true,
+        // Why: main gates the one-way network widen on this, so the declared choice must travel with the
+        // address — the address alone cannot tell "This computer only" from a loopback tunnel front-end.
+        reach: runtimePairingReachForIntent(intent)
       })
       if (!result.available) {
         clearGeneratedUrls()

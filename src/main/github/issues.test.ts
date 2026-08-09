@@ -111,11 +111,15 @@ describe('issue source operations', () => {
         title: 'Use upstream issues',
         state: 'open',
         html_url: 'https://github.com/stablyai/orca/issues/923',
-        labels: []
+        labels: [],
+        body: 'The issue body'
       })
     })
 
-    await expect(getIssue('/repo-root', 923)).resolves.toMatchObject({ number: 923 })
+    await expect(getIssue('/repo-root', 923)).resolves.toMatchObject({
+      number: 923,
+      description: 'The issue body'
+    })
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['api', '--cache', '300s', 'repos/stablyai/orca/issues/923'],
       { cwd: '/repo-root', host: 'github.com' }

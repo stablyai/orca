@@ -143,7 +143,11 @@ export type RuntimeSyncedLeaf = {
 export type RuntimeSyncWindowGraph = {
   tabs: RuntimeSyncedTab[]
   leaves: RuntimeSyncedLeaf[]
+  /** Only worktrees whose snapshot changed since the last acknowledged publication. */
   mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[]
+  /** Worktrees the renderer is still publishing unchanged; main must keep their
+   *  stored snapshots alive instead of pruning them as removed. */
+  unchangedMobileSessionWorktrees?: string[]
 }
 
 export type RuntimeNativeChatLaunchDraftResolution = {
@@ -157,6 +161,9 @@ export type RuntimeSyncWindowGraphResult = RuntimeStatus & {
    *  parent metadata needed by title-derived agent rows without name guessing. */
   agentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   nativeChatLaunchDraftResolutions?: RuntimeNativeChatLaunchDraftResolution[]
+  /** Worktrees the renderer withheld as unchanged that main holds no snapshot
+   *  for — it dropped them independently, so the renderer must republish them. */
+  mobileSessionResyncWorktrees?: string[]
 }
 
 export type RuntimeMobileSessionTerminalTab = {
@@ -402,8 +409,8 @@ export type RuntimeTerminalPathOpenTarget =
     }
 
 /** Result of resolving a file path tapped in the mobile terminal against the
- *  worktree root (+ optional cwd). relativePath is null when the path resolves
- *  outside the worktree (not openable via the worktree-scoped file RPCs). */
+ *  selected or sibling workspace root (+ optional cwd). relativePath is null
+ *  when no workspace on the same execution host owns the path. */
 export type RuntimeTerminalPathResolution = {
   worktree: string
   relativePath: string | null

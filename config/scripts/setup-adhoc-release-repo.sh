@@ -39,12 +39,21 @@ else
   # Why the features are off: this repo holds releases and nothing else. Leaving
   # issues open invites bug reports against a branch build in a repo nobody
   # watches, where they are simply lost.
+  #
+  # Why --add-readme in a repo with no source: publishing a release creates a tag,
+  # and a tag needs a commit. Empty repo = "Repository is empty" 25 minutes in.
   gh repo create "$ADHOC_REPO" \
     --public \
     --description "Adhoc macOS dev builds of Orca, cut from unlanded branches. Not a source repo." \
+    --add-readme \
     --disable-issues \
     --disable-wiki ||
     fail "Could not create $ADHOC_REPO."
+fi
+
+# Also checked outside the create branch: a repo made before --add-readme is here.
+if ! gh api "repos/$ADHOC_REPO/commits" --jq 'length' >/dev/null 2>&1; then
+  fail "$ADHOC_REPO has no commits — releases cannot be tagged. Add any file to it first."
 fi
 
 echo

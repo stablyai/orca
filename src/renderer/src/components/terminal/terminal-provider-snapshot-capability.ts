@@ -178,6 +178,20 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
   return unknownCapabilityRetryDelayMs(observedAtMs === undefined ? Date.now() : nowMs)
 }
 
+export async function refreshTerminalProviderSnapshotCapabilities(
+  livePtyIds: readonly string[],
+  resolveCapabilities?: SnapshotCapabilityResolver
+): Promise<number | null> {
+  lastSynchronizedLivePtyIds = null
+  for (const id of livePtyIds) {
+    authoritativeSnapshotByPtyId.delete(id)
+    unknownCapabilityRetryAtByPtyId.delete(id)
+    unknownCapabilityAttemptsByPtyId.delete(id)
+  }
+  refreshEarliestUnknownCapabilityRetry()
+  return synchronizeTerminalProviderSnapshotCapabilities(livePtyIds, resolveCapabilities)
+}
+
 export function startTerminalProviderSnapshotCapabilitySynchronization(
   livePtyIds: readonly string[]
 ): () => void {

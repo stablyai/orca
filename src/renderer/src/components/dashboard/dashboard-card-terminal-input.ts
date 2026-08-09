@@ -9,6 +9,7 @@ import { shouldDisableKittyKeyboardForTerminal } from '@/lib/pane-manager/termin
 import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
 import { resolveTerminalInputHostPlatform } from '@/components/terminal-pane/terminal-input-host-platform'
 import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/terminal-windows-shift-enter'
+import { hasCtrlEnterCsiUAuthorityForPane } from '@/components/terminal-pane/terminal-ctrl-enter'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 
 /** Store slices the pane's own input helpers read. */
@@ -122,6 +123,7 @@ export function resolveDashboardCardTerminalInput(
     localWindowsConpty: isLocalNativeWindowsConpty(windowsPtyContext),
     ...(args.osRelease === undefined ? {} : { osRelease: args.osRelease }),
     windowsShiftEnterEncoding: resolveWindowsShiftEnterEncodingForPane(state, args.paneKey),
+    ctrlEnterCsiU: hasCtrlEnterCsiUAuthorityForPane(state, args.paneKey),
     kittyKeyboardAdvertised: !shouldDisableKittyKeyboardForTerminal({
       ...windowsPtyContext,
       // Why: launch identity is the only agent signal the board holds; it opts

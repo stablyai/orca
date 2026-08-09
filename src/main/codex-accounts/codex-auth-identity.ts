@@ -29,8 +29,17 @@ export function codexAuthMatchesManagedAccount(
     normalizeField(account.workspaceAccountId),
     managedIdentity?.workspaceAccountId
   )
-  const emailMatches = Boolean(selectedEmail && identity.email && selectedEmail === identity.email)
-  if (selectedEmail && identity.email && selectedEmail !== identity.email) {
+  const emailMatches = identityFieldsAgree(selectedEmail, identity.email)
+  if (
+    identityContradictsSelection(
+      {
+        email: selectedEmail,
+        providerAccountId: selectedProviderId,
+        workspaceAccountId: selectedWorkspaceId
+      },
+      identity
+    )
+  ) {
     return false
   }
   if (!identityFieldMatches(selectedProviderId, identity.providerAccountId)) {
@@ -47,6 +56,26 @@ export function codexAuthMatchesManagedAccount(
   return (
     hasStrongIdentity ||
     (emailMatches && !identity.providerAccountId && !identity.workspaceAccountId)
+  )
+}
+
+// Why: an unreadable managed home cannot be compared byte-for-byte, so only the
+// account record itself can rule that home out as the credential's owner.
+export function codexAuthCouldBelongToManagedAccount(
+  runtimeAuthContents: string,
+  account: CodexManagedAccount
+): boolean {
+  const identity = readIdentityFromAuthContents(runtimeAuthContents)
+  return (
+    !identity ||
+    !identityContradictsSelection(
+      {
+        email: normalizeField(account.email),
+        providerAccountId: normalizeField(account.providerAccountId),
+        workspaceAccountId: normalizeField(account.workspaceAccountId)
+      },
+      identity
+    )
   )
 }
 
@@ -239,4 +268,34 @@ function firstNonNull(...values: (string | null | undefined)[]): string | null {
 
 function identityFieldMatches(selectedField: string | null, runtimeField: string | null): boolean {
   return !selectedField || Boolean(runtimeField && selectedField === runtimeField)
+}
+
+// Why: only a claim both sides carry can rule an account out — a credential with
+// no identity claims (api key, PAT, bedrock) contradicts nothing. A ChatGPT
+// rename leaves the record email stale, so a matching account id outranks it.
+function identityContradictsSelection(
+  selected: CodexAuthIdentity,
+  identity: CodexAuthIdentity
+): boolean {
+  if (
+    identityFieldsConflict(selected.providerAccountId, identity.providerAccountId) ||
+    identityFieldsConflict(selected.workspaceAccountId, identity.workspaceAccountId)
+  ) {
+    return true
+  }
+  return (
+    identityFieldsConflict(selected.email, identity.email) &&
+    !identityFieldsAgree(selected.providerAccountId, identity.providerAccountId)
+  )
+}
+
+function identityFieldsAgree(selectedField: string | null, runtimeField: string | null): boolean {
+  return Boolean(selectedField && runtimeField && selectedField === runtimeField)
+}
+
+function identityFieldsConflict(
+  selectedField: string | null,
+  runtimeField: string | null
+): boolean {
+  return Boolean(selectedField && runtimeField && selectedField !== runtimeField)
 }

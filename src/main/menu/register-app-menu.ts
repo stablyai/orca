@@ -180,7 +180,17 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         click: () => {
           // Why: a focused terminal/native-chat pane is not a native editable
           // control, so raw Electron paste cannot know which Orca surface owns it.
-          BrowserWindow.getFocusedWindow()?.webContents.send('ui:appMenuPaste')
+          const focusedWindow = BrowserWindow.getFocusedWindow()
+          if (focusedWindow) {
+            focusedWindow.webContents.send('ui:appMenuPaste')
+            return
+          }
+
+          // Why: a macOS native panel (open/save, Go to Folder) leaves no focused
+          // BrowserWindow, so overriding the paste role would strand Cmd+V as a no-op.
+          if (isMac) {
+            Menu.sendActionToFirstResponder('paste:')
+          }
         }
       },
       { role: 'selectAll' }

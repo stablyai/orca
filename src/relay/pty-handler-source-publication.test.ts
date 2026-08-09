@@ -221,12 +221,18 @@ describe('PtyHandler negotiated source publication', () => {
     expect(exitFrames()).toHaveLength(1)
   })
 
-  function attachSubscriber(): Buffer[] {
+  async function attachSubscriber(
+    holdDataSettlement?: (settle: (result: SinkWriteSettlement) => void) => boolean
+  ): Promise<Buffer[]> {
     const subscriberWrites: Buffer[] = []
-    dispatcher.attachClient(
+    const clientId = dispatcher.attachClient(
       (data, settle) => {
         subscriberWrites.push(Buffer.from(data))
-        if (notification(data)?.method === 'pty.exit') {
+        const frame = notification(data)
+        if (frame?.method === 'pty.data' && holdDataSettlement?.(settle)) {
+          return true
+        }
+        if (frame?.method === 'pty.exit') {
           // Why: real sockets never settle inside write(); see the primary sink above.
           queueMicrotask(() => settle({ ok: true }))
           return true
@@ -234,8 +240,18 @@ describe('PtyHandler negotiated source publication', () => {
         settle({ ok: true })
         return true
       },
-      { supportsWriteCallback: true }
+      { supportsWriteCallback: true },
+      endpointIdentity
     )
+    dispatcher.feedClient(
+      clientId,
+      requestFrame(20, 'pty.openClient', {
+        protocolVersion: 1,
+        clientInstanceId: 'legacy-subscriber',
+        requestedRole: 'subscriber'
+      })
+    )
+    await vi.advanceTimersByTimeAsync(0)
     return subscriberWrites
   }
 
@@ -248,7 +264,7 @@ describe('PtyHandler negotiated source publication', () => {
   it('never re-delivers the exit to subscribers when a cancel retires the record', async () => {
     await spawn({})
     const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
-    const subscriberWrites = attachSubscriber()
+    const subscriberWrites = await attachSubscriber()
     dataCallback!('prompt')
     await vi.advanceTimersByTimeAsync(8)
 
@@ -293,6 +309,13 @@ describe('PtyHandler negotiated source publication', () => {
     await spawn({})
     const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
     await cancelSourceDelivery(spawnResult)
+    const subscriberWrites = await attachSubscriber((settle) => {
+      if (!holdDataSettlements) {
+        return false
+      }
+      heldDataSettlements.push(settle)
+      return true
+    })
     holdDataSettlements = true
 
     dataCallback!('first')
@@ -311,7 +334,7 @@ describe('PtyHandler negotiated source publication', () => {
     heldDataSettlements[0]({ ok: true })
     await vi.advanceTimersByTimeAsync(8)
 
-    const frames = writes
+    const frames = subscriberWrites
       .map(notification)
       .filter(
         (frame): frame is Notification =>
@@ -351,7 +374,7 @@ describe('PtyHandler negotiated source publication', () => {
     await spawn({})
     const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
     const id = String(spawnResult.id)
-    const subscriberWrites = attachSubscriber()
+    const subscriberWrites = await attachSubscriber()
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const publishOwnerExit = vi
       .spyOn(dispatcher, 'tryNotifyPtyExitToClient')
@@ -381,7 +404,7 @@ describe('PtyHandler negotiated source publication', () => {
     await spawn({})
     const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
     const id = String(spawnResult.id)
-    const subscriberWrites = attachSubscriber()
+    const subscriberWrites = await attachSubscriber()
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const settleOwnerExit = vi.spyOn(adapter, 'settleExitPublication').mockImplementation(() => {
       throw new Error('exit settlement failed')
@@ -408,7 +431,7 @@ describe('PtyHandler negotiated source publication', () => {
   it('lets a retired record re-target its own exit instead of broadcasting a duplicate', async () => {
     await spawn({})
     const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
-    const subscriberWrites = attachSubscriber()
+    const subscriberWrites = await attachSubscriber()
     const publishExitAfterRetire = vi.fn(() => true)
     handler.setSourcePublication(stubPublication({ accepts: () => false, publishExitAfterRetire }))
 
@@ -680,20 +703,50 @@ describe('PtyHandler negotiated source publication', () => {
     await spawn({})
     const detached: number[] = []
     const healthyWrites: Buffer[] = []
+    let saturateSubscriber = false
     dispatcher.onClientDetached((clientId) => detached.push(clientId))
-    const saturatedId = dispatcher.attachClient(() => false, {
-      supportsWriteCallback: true,
-      writableLength: () => 16 * 1024,
-      writableHighWaterMark: () => 4 * 1024 * 1024
-    })
+    const saturatedId = dispatcher.attachClient(
+      (_data, settle) => {
+        if (saturateSubscriber) {
+          return false
+        }
+        settle({ ok: true })
+        return true
+      },
+      {
+        supportsWriteCallback: true,
+        writableLength: () => 16 * 1024,
+        writableHighWaterMark: () => 4 * 1024 * 1024
+      },
+      endpointIdentity
+    )
     const healthyId = dispatcher.attachClient(
       (data, settle) => {
         healthyWrites.push(Buffer.from(data))
         settle({ ok: true })
         return true
       },
-      { supportsWriteCallback: true }
+      { supportsWriteCallback: true },
+      endpointIdentity
     )
+    dispatcher.feedClient(
+      saturatedId,
+      requestFrame(20, 'pty.openClient', {
+        protocolVersion: 1,
+        clientInstanceId: 'saturated-subscriber',
+        requestedRole: 'subscriber'
+      })
+    )
+    dispatcher.feedClient(
+      healthyId,
+      requestFrame(21, 'pty.openClient', {
+        protocolVersion: 1,
+        clientInstanceId: 'healthy-subscriber',
+        requestedRole: 'subscriber'
+      })
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    saturateSubscriber = true
     const payload = 's'.repeat(16 * 1024)
     let admitted = 0
     while (

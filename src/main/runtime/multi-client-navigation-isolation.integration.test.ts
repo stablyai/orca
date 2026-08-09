@@ -18,18 +18,19 @@ const CLIENT_A2_WORKTREE_ID = worktreeId('client-a2')
 const CLIENT_B_WORKTREE_ID = worktreeId('client-b')
 const SESSION_WORKTREE_ID = worktreeId('session')
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue(
-    ['host', 'client-a', 'client-a2', 'client-b', 'session'].map((name) => ({
-      path: `/tmp/${name}`,
-      head: name,
-      branch: name,
-      isBare: false,
-      isMainWorktree: false
-    }))
-  ),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+vi.mock('../git/worktree', () => {
+  const worktrees = ['host', 'client-a', 'client-a2', 'client-b', 'session'].map((name) => ({
+    path: `/tmp/${name}`,
+    head: name,
+    branch: name,
+    isBare: false,
+    isMainWorktree: false
+  }))
+  return {
+    listWorktrees: vi.fn().mockResolvedValue(worktrees),
+    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+  }
+})
 
 type PairedSession = {
   ws: WebSocket

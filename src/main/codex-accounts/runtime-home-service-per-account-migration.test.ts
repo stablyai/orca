@@ -21,7 +21,6 @@ beforeEach(() => {
   testState.home = mkdtempSync(join(tmpdir(), 'orca-codex-e-home-'))
   for (const key of [
     'ORCA_USER_DATA_PATH',
-    'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
     'ORCA_DISABLE_CODEX_TRUST_RPC',
     'CODEX_HOME',
     'ORCA_CODEX_HOME'

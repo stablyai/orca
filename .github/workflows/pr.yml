@@ -108,7 +108,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: bash .github/scripts/check-root-directory-entries.sh "$BASE_SHA" "$HEAD_SHA"
+        run: node .github/scripts/check-root-directory-entries.mjs "$BASE_SHA" "$HEAD_SHA"
 
   typecheck:
     runs-on: ubuntu-latest
@@ -183,8 +183,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install zsh
-        run: sudo apt-get update && sudo apt-get install -y zsh
+      # Why fish: shell-ready.test.ts gates its live fish test on the binary being
+      # present, so without this the fish barrier is only covered by config-shape
+      # assertions and never actually exercised.
+      - name: Install zsh and fish
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -233,7 +236,54 @@ jobs:
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
+            --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
+
+  cross-version-wire:
+    name: cross-version wire compatibility
+    runs-on: ubuntu-latest
+
+    steps:
+      # Why fetch-depth 0: the harness extracts the newest release tag to skew
+      # current code against it. The default shallow clone has no tags, which is
+      # why this cannot ride along in the sharded `test` job.
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      # A path filter that matches nothing exits 1 ("No test files found"), so this
+      # lane cannot report success while running zero tests.
+      - name: Old/new client and server terminal journey
+        run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
+
+  managed_hook_node18:
+    name: managed hooks on Node 18
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Build relay companions
+        run: pnpm run build:relay
+
+      - name: Setup Node 18 runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: '18'
+
+      - name: Smoke managed-hook companions
+        run: node config/scripts/smoke-managed-hook-runtime-node18.mjs
 
   package:
     name: package
@@ -399,6 +449,7 @@ jobs:
       - git_compatibility
       - shell_contracts
       - test
+      - managed_hook_node18
       - package
       - package_windows
     runs-on: ubuntu-latest
@@ -420,6 +471,7 @@ jobs:
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
           TEST: ${{ needs.test.result }}
+          MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
           PACKAGE: ${{ needs.package.result }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
         run: |
@@ -430,6 +482,7 @@ jobs:
             "$GIT_COMPATIBILITY" \
             "$SHELL_CONTRACTS" \
             "$TEST" \
+            "$MANAGED_HOOK_NODE18" \
             "$PACKAGE" \
             "$PACKAGE_WINDOWS"; do
             if [ "$result" != "success" ]; then

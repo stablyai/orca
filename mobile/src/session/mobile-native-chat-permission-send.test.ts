@@ -13,6 +13,11 @@ import {
   markMobileNativeChatInputStale,
   resetMobileNativeChatStaleInputForTests
 } from './mobile-native-chat-stale-input'
+import {
+  acquireMobileNativeChatTerminalWrite,
+  releaseMobileNativeChatTerminalWrite,
+  resetMobileNativeChatTerminalWritesForTests
+} from './mobile-native-chat-terminal-write-lock'
 
 describe('sendMobileNativeChatPermissionResponse', () => {
   it('writes an approval as raw bytes without appending Return', async () => {
@@ -64,6 +69,7 @@ describe('useMobileNativeChatPermissionSend', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     resetMobileNativeChatStaleInputForTests()
+    resetMobileNativeChatTerminalWritesForTests()
   })
 
   afterEach(() => {
@@ -101,5 +107,43 @@ describe('useMobileNativeChatPermissionSend', () => {
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '1', enter: false })
     expect(isMobileNativeChatInputStale('terminal')).toBe(true)
+  })
+
+  it('rejects a choice while another composed write holds the terminal, then recovers', async () => {
+    const onSendError = vi.fn()
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { send: { handle: 'terminal', accepted: true, bytesWritten: 1 } }
+    })
+    function Harness(): null {
+      respond = useMobileNativeChatPermissionSend({
+        client: { sendRequest } as unknown as RpcClient,
+        enabled: true,
+        handleRef: { current: 'terminal' },
+        deviceTokenRef: { current: null },
+        onSendError
+      })
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+
+    // An image paste sequence is mid-flight into the same PTY: the choice
+    // keystroke must not interleave into it.
+    expect(acquireMobileNativeChatTerminalWrite('terminal')).toBe(true)
+    await act(async () => {
+      await expect(respond?.('1')).resolves.toBe(false)
+    })
+    expect(sendRequest).not.toHaveBeenCalled()
+    expect(onSendError).toHaveBeenCalledWith('Response not sent')
+
+    releaseMobileNativeChatTerminalWrite('terminal')
+    await act(async () => {
+      await expect(respond?.('1')).resolves.toBe(true)
+    })
+    // The choice released its own hold on the way out.
+    expect(acquireMobileNativeChatTerminalWrite('terminal')).toBe(true)
+    releaseMobileNativeChatTerminalWrite('terminal')
   })
 })

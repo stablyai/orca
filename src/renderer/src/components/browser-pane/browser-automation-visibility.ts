@@ -34,6 +34,10 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
+export function onBrowserAutomationVisibilityChange(listener: () => void): () => void {
+  return subscribe(listener)
+}
+
 function getSnapshot(): number {
   return version
 }

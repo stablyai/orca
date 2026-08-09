@@ -29,7 +29,7 @@ const CHANNEL_DESCRIPTIONS: Record<ReleaseChannel, string> = {
 
 function formatBuildLabel(build: ReleaseBuild): string {
   // Why the release's own title wins: the build workflows compose it (hourly
-  // `1.4.163 • 01 • 07-31 13:54 • e698241`, adhoc `1.4.163 • wasm-terminal • …`),
+  // `1.4.163 • 01 • Jul 31, 1:54PM • e698241`, adhoc `1.4.163 • wasm-terminal • …`),
   // so this row is the same string the GitHub releases list shows — one thing to
   // search for in either place, rather than two renderings of the same build that
   // have to be matched up by eye. For adhoc it is also the only place the branch

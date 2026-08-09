@@ -124,7 +124,7 @@ describe('loadLazyWithRetry', () => {
     expect(settled).toBe(false)
   })
 
-  it('surfaces the original error when the guarded reload never tears the document down', async () => {
+  it('contains the failure when the guarded reload never tears the document down', async () => {
     const reload = spyOnReload()
     stubCrashReportsBreadcrumb()
     const error = chunkParseError()
@@ -146,7 +146,9 @@ describe('loadLazyWithRetry', () => {
     expect(settled).toBe('pending')
 
     await vi.advanceTimersByTimeAsync(10_000)
-    expect(settled).toBe(error)
+    // The reload was the last recovery step, so the boundary gets a nameable error.
+    expect(isLazyChunkLoadError(settled)).toBe(true)
+    expect(settled).toMatchObject({ cause: error })
     expect(reload).toHaveBeenCalledTimes(1)
   })
 
@@ -169,23 +171,26 @@ describe('loadLazyWithRetry', () => {
     expect(isLazyChunkLoadError(caught)).toBe(true)
   })
 
-  it('reports the original error when the guard belongs to this same document (reload vetoed)', async () => {
+  it('contains the failure when the guard belongs to this same document (reload vetoed)', async () => {
     const reload = spyOnReload()
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, String(performance.timeOrigin))
     const error = chunkParseError()
     const factory = vi.fn(() => Promise.reject(error))
 
     const loaded = loadLazyWithRetry(factory, { retries: 0 })
-    const assertion = expect(loaded).rejects.toBe(error)
+    const assertion = expect(loaded).rejects.toMatchObject({
+      name: 'LazyChunkLoadError',
+      cause: error
+    })
     await vi.advanceTimersByTimeAsync(5000)
     await assertion
 
     expect(reload).not.toHaveBeenCalled()
     const caught = await loaded.catch((rejection) => rejection)
-    expect(isLazyChunkLoadError(caught)).toBe(false)
+    expect(isLazyChunkLoadError(caught)).toBe(true)
   })
 
-  it('records a lazy_chunk_reload_vetoed breadcrumb in the tick that reports the crash', async () => {
+  it('records a lazy_chunk_reload_vetoed breadcrumb in the tick that contains the failure', async () => {
     spyOnReload()
     const recordBreadcrumb = stubCrashReportsBreadcrumb()
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, String(performance.timeOrigin))
@@ -195,7 +200,7 @@ describe('loadLazyWithRetry', () => {
       retries: 0,
       reloadKey: 'rich-markdown-editor'
     })
-    const assertion = expect(loaded).rejects.toBe(error)
+    const assertion = expect(loaded).rejects.toMatchObject({ name: 'LazyChunkLoadError' })
     await vi.advanceTimersByTimeAsync(1)
     await assertion
 
@@ -471,7 +476,8 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
     await vi.advanceTimersByTimeAsync(5000)
 
     expect(harness.navigations).toEqual([])
-    expect(settled).toBe(error)
+    expect(isLazyChunkLoadError(settled)).toBe(true)
+    expect(settled).toMatchObject({ cause: error })
     expect(restartAborted).toHaveBeenCalled()
     expect(isIntentionalAppRestartInProgress()).toBe(false)
     expect(recordBreadcrumb).toHaveBeenCalledWith({
@@ -498,7 +504,8 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
       reloadKey: 'rich-markdown-editor'
     }).catch((rejection: unknown) => rejection)
 
-    expect(settled).toBe(error)
+    expect(isLazyChunkLoadError(settled)).toBe(true)
+    expect(settled).toMatchObject({ cause: error })
     expect(harness.hotExitBackups).toBe(1)
     expect(isIntentionalAppRestartInProgress()).toBe(false)
     expect(window.sessionStorage.getItem(RELOAD_GUARD_KEY)).toBeNull()
@@ -531,7 +538,8 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
     )
     await vi.advanceTimersByTimeAsync(50)
 
-    expect(settled).toBe(error)
+    expect(isLazyChunkLoadError(settled)).toBe(true)
+    expect(settled).toMatchObject({ cause: error })
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -555,13 +563,14 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
       return settled
     }
 
-    expect(await attempt()).toBe(error)
+    expect(isLazyChunkLoadError(await attempt())).toBe(true)
     expect(window.sessionStorage.getItem(RELOAD_GUARD_KEY)).toBeNull()
 
-    expect(await attempt()).toBe(error)
+    expect(isLazyChunkLoadError(await attempt())).toBe(true)
     expect(reload).toHaveBeenCalledTimes(2)
 
-    expect(await attempt()).toBe(error)
+    // Cap reached: still contained, but no third navigation.
+    expect(isLazyChunkLoadError(await attempt())).toBe(true)
     expect(reload).toHaveBeenCalledTimes(2)
   })
 

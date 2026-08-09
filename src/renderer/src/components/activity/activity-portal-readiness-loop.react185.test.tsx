@@ -1,7 +1,7 @@
 /** @vitest-environment happy-dom */
 import { act, useLayoutEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -46,10 +46,17 @@ const PANE_C = thread(OTHER_TAB_ID, LEAF_C)
 
 let root: Root
 
+// Freeze Date (not timers/rAF) so the latch's flip window cannot expire between two drains on a
+// loaded CI machine; the readiness frames are still driven by the controllers below.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+})
+
 afterEach(() => {
   act(() => {
     root?.unmount()
   })
+  vi.useRealTimers()
   document.body.replaceChildren()
   vi.unstubAllGlobals()
 })

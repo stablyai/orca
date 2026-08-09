@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { classifyWorktreeForceDeleteReason, WORKTREE_TEARDOWN_FORCE_HINT } from './worktree-removal'
+import {
+  classifyWorktreeForceDeleteReason,
+  isProvenLivePtyRemovalError,
+  UNSTOPPED_PTY_REMOVAL_PREFIX,
+  WORKTREE_TEARDOWN_FORCE_HINT,
+  WORKTREE_TEARDOWN_TIMEOUT_PREFIX
+} from './worktree-removal'
+
+const liveError = `${UNSTOPPED_PTY_REMOVAL_PREFIX} repo-1::/w — still live: term_a. ${WORKTREE_TEARDOWN_FORCE_HINT}`
+const unverifiableError = `${UNSTOPPED_PTY_REMOVAL_PREFIX} repo-1::/w — could not verify these exited: term_a (daemon socket closed). ${WORKTREE_TEARDOWN_FORCE_HINT}`
 
 // Why (#11960): the desktop Force Delete button renders only when this classifier
 // returns a reason. The PTY-teardown error tells the user to force-delete, so an
 // unclassified message leaves them reading advice they cannot act on.
 describe('classifyWorktreeForceDeleteReason for unstopped PTYs', () => {
-  const liveError = `Failed to physically stop every PTY for worktree: repo-1::/w — still live: term_a. ${WORKTREE_TEARDOWN_FORCE_HINT}`
-  const unverifiableError = `Failed to physically stop every PTY for worktree: repo-1::/w — could not verify these exited: term_a (daemon socket closed). ${WORKTREE_TEARDOWN_FORCE_HINT}`
-
   it('offers force for a PTY that is still live', () => {
     expect(classifyWorktreeForceDeleteReason(liveError)).toBe('unstopped-pty')
   })
@@ -29,7 +35,35 @@ describe('classifyWorktreeForceDeleteReason for unstopped PTYs', () => {
     expect(classifyWorktreeForceDeleteReason(liveError, false, true)).toBeNull()
   })
 
+  // Why: a wedged provider rejects the sweep before any per-PTY verdict exists, so the
+  // failure arrives worded as a teardown timeout. The waiver clears it exactly like an
+  // unproven stop, so leaving it unclassified hid the button for the wedge #11960 targeted.
+  it('offers force when the teardown sweep itself timed out', () => {
+    expect(
+      classifyWorktreeForceDeleteReason(
+        `${WORKTREE_TEARDOWN_TIMEOUT_PREFIX} repo-1::/w. ${WORKTREE_TEARDOWN_FORCE_HINT}`
+      )
+    ).toBe('unstopped-pty')
+  })
+
   it('leaves unrelated failures unclassified', () => {
     expect(classifyWorktreeForceDeleteReason('some other failure')).toBeNull()
+  })
+})
+
+// The live verdict escalates the delete toast to "Force Delete will kill them", so it must
+// come from Orca's own detail — not from the worktree id, which is a user-chosen path.
+describe('isProvenLivePtyRemovalError', () => {
+  it('reads the verdict Orca actually recorded', () => {
+    expect(isProvenLivePtyRemovalError(liveError)).toBe(true)
+    expect(isProvenLivePtyRemovalError(unverifiableError)).toBe(false)
+  })
+
+  it('does not let a worktree path spell out a live verdict', () => {
+    expect(
+      isProvenLivePtyRemovalError(
+        `${UNSTOPPED_PTY_REMOVAL_PREFIX} repo-1::/Users/dev/still live: notes — could not verify these exited: term_a (daemon socket closed)`
+      )
+    ).toBe(false)
   })
 })

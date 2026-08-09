@@ -4,6 +4,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
+import { TAB_ACTIVATION_INTENTS } from '../../../../shared/tab-activation-intent'
 import { OptionalBoolean } from '../schemas'
 
 export const WorktreeTabSelector = z.object({
@@ -24,7 +25,10 @@ export const ActivateTab = WorktreeTabSelector.extend({
     .pipe(z.string().min(1, 'Missing tab id')),
   leafId: z.string().max(128).optional(),
   notifyClients: OptionalBoolean,
-  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
+  // Why: absent means user intent, so clients that predate this field keep the
+  // tab-open wake gesture. Only 'automatic' may be refused for a slept pane.
+  intent: z.enum(TAB_ACTIVATION_INTENTS).optional()
 })
 
 export const CloseTab = ActivateTab.extend({

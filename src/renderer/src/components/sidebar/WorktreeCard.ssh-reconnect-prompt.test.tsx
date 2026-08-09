@@ -13,6 +13,7 @@ const updateWorktreeMeta = vi.fn()
 let WorktreeCard: typeof WorktreeCardComponent
 let sshConnectionStates = new Map<string, { status: string }>()
 let sshTargetLabels = new Map<string, string>()
+let removedSshTargetLabels = new Map<string, string>()
 let runtimeStatusByEnvironmentId = new Map<string, { status?: unknown }>()
 let runtimeEnvironments: { id: string; name: string }[] = []
 let sshStateByEnvironment = new Map()
@@ -35,7 +36,7 @@ vi.mock('@/store', () => ({
       remoteBranchConflictByWorktreeId: {},
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
-      removedSshTargetLabels: new Map(),
+      removedSshTargetLabels,
       settings: null,
       sshConnectionStates,
       sshStateByEnvironment,
@@ -68,24 +69,6 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'idle'
-}))
-
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: ({
-    open,
-    status,
-    targetLabel
-  }: {
-    open: boolean
-    status: string
-    targetLabel: string
-  }) => (
-    <div
-      data-ssh-disconnected-dialog={open ? 'open' : 'closed'}
-      data-ssh-status={status}
-      data-ssh-target-label={targetLabel}
-    />
-  )
 }))
 
 vi.mock('./WorktreeContextMenu', () => ({
@@ -137,6 +120,7 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     vi.clearAllMocks()
     sshConnectionStates = new Map()
     sshTargetLabels = new Map()
+    removedSshTargetLabels = new Map()
     runtimeStatusByEnvironmentId = new Map()
     runtimeEnvironments = []
     sshStateByEnvironment = new Map()
@@ -144,7 +128,9 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     worktreeCardProperties = ['status']
   })
 
-  it('does not auto-open the blocking reconnect dialog for a restored active disconnected SSH worktree', () => {
+  // Supersedes the old "does not auto-open the blocking reconnect dialog" assertion:
+  // the dialog is gone, so no card state can open one.
+  it('offers an inline reconnect control and never a blocking dialog for a disconnected SSH worktree', () => {
     sshConnectionStates.set('ssh-target-1', { status: 'disconnected' })
     sshTargetLabels.set('ssh-target-1', 'Remote target')
 
@@ -152,11 +138,82 @@ describe('WorktreeCard SSH reconnect prompt', () => {
       <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={true} />
     )
 
-    // The dialog is blocking, so being the active/restored card must not steal
-    // focus app-wide; it only opens on deliberate click (see handleClick).
-    expect(markup).toContain('data-ssh-disconnected-dialog="closed"')
-    // The disconnected state is still discoverable via the non-blocking card chip.
-    expect(markup).toContain('SSH disconnected')
+    expect(markup).toContain('Connect to SSH host Remote target')
+    expect(markup).toContain('Connect')
+    expect(markup).not.toContain('ssh-disconnected-dialog')
+    // Why: a card-root opacity composites the whole subtree, so it would dim the control's
+    // destructive tint and spinner in the exact state the control exists for.
+    expect(markup).not.toContain('opacity-60')
+  })
+
+  it('names the failure state in the control verb rather than a generic Connect', () => {
+    sshConnectionStates.set('ssh-target-1', { status: 'auth-failed' })
+    sshTargetLabels.set('ssh-target-1', 'Remote target')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('Reconnect SSH host Remote target')
+    expect(markup).toContain('authentication failed')
+  })
+
+  it('renders the passive host glyph, not a control, when the SSH host is connected', () => {
+    sshConnectionStates.set('ssh-target-1', { status: 'connected' })
+    sshTargetLabels.set('ssh-target-1', 'Remote target')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('Project on SSH host Remote target')
+    expect(markup).not.toContain('Connect to SSH host')
+  })
+
+  // Why: the control keys off repo.connectionId, which is orthogonal to workspace kind —
+  // a folder workspace on a disconnected SSH host must get the same affordance.
+  it('offers the control for a folder workspace on a disconnected SSH host', () => {
+    sshConnectionStates.set('ssh-target-1', { status: 'error' })
+    sshTargetLabels.set('ssh-target-1', 'Remote target')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree()}
+        repo={{ ...makeRepo(), kind: 'folder' }}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Retry SSH connection to Remote target')
+  })
+
+  // Why: ssh:listTargets filters runtime-owned targets out, so "absent from the target list"
+  // is not evidence of removal — deriving targetRemoved from it would put every ephemeral-VM
+  // workspace card into the dead "host removed" state.
+  it('never reports a runtime-owned SSH target as removed', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree()}
+        repo={{ ...makeRepo(), connectionId: 'runtime-ssh-abc123' }}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('was removed')
+    expect(markup).toContain('Project on SSH host')
+  })
+
+  // Why: a removed host can never connect, so the card must not offer a Connect that only fails.
+  it('reports a removed SSH host once the target list no longer carries it', () => {
+    sshConnectionStates.set('ssh-target-1', { status: 'error' })
+    removedSshTargetLabels.set('ssh-target-1', 'Remote target (removed)')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('was removed')
+    expect(markup).not.toContain('Retry SSH connection')
   })
 
   it('marks a runtime-host worktree disconnected when its environment has no status', () => {

@@ -140,6 +140,7 @@ Rules:
 - Use `--peek` and `--all` only for read-only history/debugging. Type filters decide when a waiter wakes; the returned actionable Delivery is still the oldest full batch.
 - Use `dispatch:<id>` for coordinator guidance to one supervised worker. Orca routes that stable address locally or through the connected-server relay; do not substitute a remote terminal handle.
 - Terminal handles remain appropriate for low-level pre-Dispatch messaging. Prefer `agentTerminalHandle` from the create response, fall back to `startupTerminal.handle` for older runtimes, then re-resolve with `orca terminal list --worktree ... --json` if missing or stale. Continue with the replacement handle only; never dual-send to old and new handles.
+- `terminal list --json` omits `visualLayouts` because handle recovery does not need topology. Add `--include-visual-layouts` only for explicit tab and pane inspection.
 - `orca orchestration check --peek --format --json` returns locally formatted unread mail without consuming it; it never writes to terminal input or remotely wakes another terminal. Use `orchestration dispatch --inject` to deliver a tracked task, or `terminal send` when an existing agent needs a free-form prompt.
 - While supervising workers manually, use `check --wait --types worker_done,escalation,question --timeout-ms <n>` instead of sleep/poll loops. Process the whole Delivery, reply to `question` messages with `orca orchestration reply --id <msg_id> --body <answer> --json`, then acknowledge and keep waiting.
 - Treat a `check --wait` timeout or `{count:0}` as a checkpoint, not a worker failure. Long coding tasks routinely run 15-60 minutes; keep using rolling waits unless you receive `worker_done`/`escalation`, the terminal exits or disappears, or the user explicitly asks you to stop.
@@ -190,6 +191,14 @@ orca orchestration worker-start --task <task_b> --worktree current --agent claud
 ```
 
 `current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`.
+
+For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
+
+```bash
+orca orchestration worker-start --task <task_id> --worktree current --agent claude --model aws-bedrock-opus-5 --effort high --json
+```
+
+`--effort` requires `--model`, and neither option can combine with `--terminal`. A connected worker server must advertise launch-preference support before Orca forwards either option.
 
 For a new worktree, setup runs by default and agent-first creation reuses the returned startup agent terminal:
 
@@ -355,7 +364,7 @@ Sidebar lineage and orchestration lifecycle are related but not identical. A sam
 Other terminal commands coordinators often need:
 
 ```bash
-orca terminal list [--worktree <selector>] [--json]
+orca terminal list [--worktree <selector>] [--include-visual-layouts] [--json]
 orca terminal create [--worktree <selector>] [--title <text>] [--command <cmd>] [--json]
 orca terminal split --terminal <handle> [--direction horizontal|vertical] [--command <cmd>] [--json]
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms <n> --json

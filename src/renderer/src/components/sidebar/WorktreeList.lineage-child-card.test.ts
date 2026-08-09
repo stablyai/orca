@@ -212,26 +212,6 @@ vi.mock('./WorktreeContextMenu', () => ({
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
 }))
 
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: ({
-    open,
-    status,
-    targetId,
-    targetLabel
-  }: {
-    open: boolean
-    status: string
-    targetId: string
-    targetLabel: string
-  }) =>
-    React.createElement('aside', {
-      'data-lineage-ssh-dialog': open ? 'open' : 'closed',
-      'data-ssh-status': status,
-      'data-ssh-target-id': targetId,
-      'data-ssh-target-label': targetLabel
-    })
-}))
-
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),

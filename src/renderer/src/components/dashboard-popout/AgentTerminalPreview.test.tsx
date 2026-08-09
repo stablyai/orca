@@ -45,8 +45,7 @@ const imeHarness = vi.hoisted(() => ({
     sendInput: (data: string) => void
   }[],
   trackers: [] as { dispose: ReturnType<typeof vi.fn> }[],
-  claimResult: false,
-  inputSourceTrackerRequests: 0
+  claimResult: false
 }))
 
 vi.mock('@xterm/xterm', () => ({
@@ -131,12 +130,6 @@ vi.mock('@/components/terminal-pane/terminal-ime-composition-tracker', () => ({
     return tracker
   }
 }))
-vi.mock('@/components/terminal-pane/terminal-ime-input-source', () => ({
-  getMacNativeTextInputSourceTracker: () => {
-    imeHarness.inputSourceTrackerRequests++
-    return { getFeatures: () => ({}) }
-  }
-}))
 vi.mock('@/store', () => {
   const useAppStore = (selector: (s: typeof storeState) => unknown): unknown => selector(storeState)
   useAppStore.getState = (): typeof storeState => storeState
@@ -165,7 +158,6 @@ describe('AgentTerminalPreview', () => {
     imeHarness.forwarders.length = 0
     imeHarness.trackers.length = 0
     imeHarness.claimResult = false
-    imeHarness.inputSourceTrackerRequests = 0
     emitData = null
     emitAppMenuPaste = null
     connect.mockResolvedValue({
@@ -235,7 +227,6 @@ describe('AgentTerminalPreview', () => {
     await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
     expect(imeHarness.forwarders).toHaveLength(1)
     expect(imeHarness.trackers).toHaveLength(1)
-    expect(imeHarness.inputSourceTrackerRequests).toBe(1)
 
     imeHarness.forwarders[0]!.sendInput('。')
     expect(terminal.input).toHaveBeenCalledOnce()
@@ -260,7 +251,6 @@ describe('AgentTerminalPreview', () => {
     expect(copied).toBe(false)
     expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text')
     expect(writeClipboardText).not.toHaveBeenCalled()
-    expect(imeHarness.inputSourceTrackerRequests).toBe(1)
   })
 
   it('does not install the IME native-text forwarder off macOS', async () => {

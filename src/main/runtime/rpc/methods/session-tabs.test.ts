@@ -68,6 +68,58 @@ describe('session tab RPC methods', () => {
     })
   })
 
+  // Why: only this field separates a reconnect probe from a user opening the tab,
+  // and the tab-open gesture is what wakes a deliberately slept pane (STA-3465).
+  it('forwards an automatic activation intent to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      activateMobileSessionTab: vi.fn().mockResolvedValue({ tabs: [] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('session.tabs.activate', {
+        worktree: 'id:wt-1',
+        tabId: 'tab-1',
+        notifyClients: false,
+        intent: 'automatic'
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.activateMobileSessionTab).toHaveBeenCalledWith(
+      'id:wt-1',
+      'tab-1',
+      undefined,
+      expect.objectContaining({ intent: 'automatic' })
+    )
+  })
+
+  // Why: the field is additive, so a client that predates it sends nothing and
+  // must keep the permissive default rather than losing its wake gesture.
+  it('passes no intent for a client that omits the field', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      activateMobileSessionTab: vi.fn().mockResolvedValue({ tabs: [] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('session.tabs.activate', {
+        worktree: 'id:wt-1',
+        tabId: 'tab-1',
+        notifyClients: false
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.activateMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1', undefined, {
+      notifyClients: false,
+      clientNavigationId: undefined,
+      navigation: 'caller'
+    })
+  })
+
   it('refuses a reasonless close without invoking destructive runtime logic', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

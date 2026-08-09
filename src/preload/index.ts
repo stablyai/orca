@@ -4,7 +4,12 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
-import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
+import type {
+  DashboardRevealAgentArgs,
+  DashboardSleepWorkspaceArgs,
+  DashboardSnapshot,
+  DashboardSpawnAgentArgs
+} from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -22,6 +27,7 @@ import type {
 } from '../shared/agent-session-resume'
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
+import type { RuntimePairingReach } from '../shared/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../shared/mobile-relay-mint-failure'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../shared/remote-pairing-verification'
 import type {
@@ -184,7 +190,9 @@ import type {
 } from '../shared/github-project-types'
 import {
   richMarkdownContextMenuCommandChannel,
-  type RichMarkdownContextMenuCommandPayload
+  richMarkdownContextMenuTargetChannel,
+  type RichMarkdownContextMenuCommandPayload,
+  type RichMarkdownContextMenuTableTarget
 } from '../shared/rich-markdown-context-menu'
 import type {
   AgentStatusClearIpcPayload,
@@ -235,17 +243,17 @@ import type {
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 import type {
+  AiVaultDeleteSessionArgs,
+  AiVaultDeleteSessionResult
+} from '../shared/ai-vault-session-deletion'
+import type {
   AiVaultFirstUserPromptArgs,
   AiVaultListArgs,
   AiVaultSubagentListArgs
 } from '../shared/ai-vault-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../shared/ai-vault-resume-preparation'
 import type { AgentType } from '../shared/native-chat-types'
-import {
-  ORCA_APP_RESTART_ABORTED_EVENT,
-  ORCA_APP_RESTART_STARTED_EVENT,
-  ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
-} from '../shared/updater-renderer-events'
+import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
 import {
   ORCA_INTERNAL_FILE_DRAG_TYPE,
   createNativeFileDropPayload,
@@ -281,14 +289,23 @@ import type {
 } from '../shared/crash-reporting'
 import type { RendererHeapStatistics } from '../shared/renderer-heap-statistics'
 import { readRendererHeapStatistics } from './renderer-heap-statistics-reader'
+import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
 import {
-  createUpdaterQuitAbortRelay,
-  prepareRendererForAppRestart
-} from '../shared/renderer-restart-preparation'
-import {
+  prepareAndInvokeAppRestart,
   prepareAndInvokeUpdaterInstall,
   registerRendererRestartIpcRelays
 } from './renderer-restart-wiring'
+
+// Why: the sync checkpoint only stages; this joins its durable write so a
+// navigating path can abort instead of losing the staged session.
+async function awaitBeforeUnloadCheckpoint(): Promise<void> {
+  const result = (await ipcRenderer.invoke('app:await-before-unload-checkpoint')) as {
+    ok?: unknown
+  }
+  if (result?.ok !== true) {
+    throw new Error('Failed to persist renderer state before unload.')
+  }
+}
 
 type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
@@ -475,20 +492,24 @@ const api = {
     getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
     getFeatureWallAssetBaseUrl: (): Promise<string> =>
       ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
-    relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch'),
-    restart: async (): Promise<void> => {
-      await prepareRendererForAppRestart(window, {
-        startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
-        abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT
-      })
-      try {
-        return await ipcRenderer.invoke('app:restart')
-      } catch (error) {
-        window.dispatchEvent(new Event(ORCA_APP_RESTART_ABORTED_EVENT))
-        throw error
-      }
-    },
-    reload: (): Promise<void> => ipcRenderer.invoke('app:reload'),
+    relaunch: (): Promise<void> =>
+      prepareAndInvokeAppRestart(
+        window,
+        () => ipcRenderer.invoke('app:relaunch'),
+        awaitBeforeUnloadCheckpoint
+      ),
+    restart: (): Promise<void> =>
+      prepareAndInvokeAppRestart(
+        window,
+        () => ipcRenderer.invoke('app:restart'),
+        awaitBeforeUnloadCheckpoint
+      ),
+    reload: (): Promise<void> =>
+      prepareAndInvokeAppRestart(
+        window,
+        () => ipcRenderer.invoke('app:reload'),
+        awaitBeforeUnloadCheckpoint
+      ),
     stageBeforeUnloadSync: (args: Parameters<PreloadApi['app']['stageBeforeUnloadSync']>[0]) => {
       const result = ipcRenderer.sendSync('app:stage-before-unload-sync', args) as {
         ok?: unknown
@@ -753,6 +774,12 @@ const api = {
     list: (args) => ipcRenderer.invoke('worktrees:list', args),
 
     listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
+
+    listKnownForExecutionHost: (args) =>
+      ipcRenderer.invoke('worktrees:listKnownForExecutionHost', args),
+
+    forgetRemovedForExecutionHost: (args) =>
+      ipcRenderer.invoke('worktrees:forgetRemovedForExecutionHost', args),
 
     cancelListDetected: (args) => ipcRenderer.invoke('worktrees:cancelListDetected', args),
 
@@ -1236,7 +1263,8 @@ const api = {
       listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
       killAll: () => ipcRenderer.invoke('pty:management:killAll'),
       killOne: (args: { sessionId: string }) => ipcRenderer.invoke('pty:management:killOne', args),
-      restart: () => ipcRenderer.invoke('pty:management:restart')
+      restart: () => ipcRenderer.invoke('pty:management:restart'),
+      macTccAttribution: () => ipcRenderer.invoke('pty:management:macTccAttribution')
     }
   },
 
@@ -2265,7 +2293,8 @@ const api = {
 
   dashboard: {
     // Open the pop-out dashboard window, or focus it if already open.
-    openPopout: (): Promise<void> => ipcRenderer.invoke('dashboardPopout:open'),
+    openPopout: (view?: 'board' | 'map'): Promise<void> =>
+      ipcRenderer.invoke('dashboardPopout:open', view),
 
     // ── Producer side (main window) ──────────────────────────────────────
     publishSnapshot: (snapshot: DashboardSnapshot): Promise<void> =>
@@ -2293,6 +2322,20 @@ const api = {
       ipcRenderer.on('ui:ackDashboardAgent', listener)
       return () => ipcRenderer.removeListener('ui:ackDashboardAgent', listener)
     },
+    onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, args: DashboardSpawnAgentArgs): void =>
+        callback(args)
+      ipcRenderer.on('ui:spawnDashboardAgent', listener)
+      return () => ipcRenderer.removeListener('ui:spawnDashboardAgent', listener)
+    },
+    onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        args: DashboardSleepWorkspaceArgs
+      ): void => callback(args)
+      ipcRenderer.on('ui:sleepDashboardWorkspace', listener)
+      return () => ipcRenderer.removeListener('ui:sleepDashboardWorkspace', listener)
+    },
 
     // ── Consumer side (pop-out window) ───────────────────────────────────
     requestSnapshot: (): Promise<void> => ipcRenderer.invoke('dashboard:requestSnapshot'),
@@ -2302,10 +2345,20 @@ const api = {
       ipcRenderer.on('dashboard:snapshot', listener)
       return () => ipcRenderer.removeListener('dashboard:snapshot', listener)
     },
+    onViewRequested: (callback: (view: 'board' | 'map') => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, view: 'board' | 'map'): void =>
+        callback(view)
+      ipcRenderer.on('dashboard:viewRequested', listener)
+      return () => ipcRenderer.removeListener('dashboard:viewRequested', listener)
+    },
     revealAgent: (args: DashboardRevealAgentArgs): Promise<void> =>
       ipcRenderer.invoke('dashboardPopout:revealAgent', args),
     ackAgent: (paneKey: string): Promise<void> =>
-      ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey })
+      ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey }),
+    spawnAgent: (args: DashboardSpawnAgentArgs): Promise<void> =>
+      ipcRenderer.invoke('dashboardPopout:spawnAgent', args),
+    sleepWorkspace: (args: DashboardSleepWorkspaceArgs): Promise<void> =>
+      ipcRenderer.invoke('dashboardPopout:sleepWorkspace', args)
   },
 
   terminalPreview: {
@@ -2357,7 +2410,9 @@ const api = {
     request: (args: { id: string }): Promise<unknown> =>
       ipcRenderer.invoke('developerPermissions:request', args),
     openSettings: (args: { id: string }): Promise<void> =>
-      ipcRenderer.invoke('developerPermissions:openSettings', args)
+      ipcRenderer.invoke('developerPermissions:openSettings', args),
+    testLocalNetworkConnection: (args: { host: string; port: number }): Promise<unknown> =>
+      ipcRenderer.invoke('developerPermissions:testLocalNetworkConnection', args)
   },
 
   computerUsePermissions: {
@@ -2733,6 +2788,7 @@ const api = {
     sessionCreateProfile: (args: {
       scope: 'default' | 'isolated' | 'imported'
       label: string
+      userAgentMode?: 'clean' | 'native'
     }): Promise<unknown> => ipcRenderer.invoke('browser:session:createProfile', args),
 
     sessionDeleteProfile: (args: { profileId: string }): Promise<boolean> =>
@@ -2974,8 +3030,11 @@ const api = {
     showLinuxPackage: () => ipcRenderer.invoke('updater:showLinuxPackage'),
     listBuilds: (channel) => ipcRenderer.invoke('updater:listBuilds', channel),
     quitAndInstall: (): Promise<void> =>
-      prepareAndInvokeUpdaterInstall(window, updaterQuitAbortRelay, () =>
-        ipcRenderer.invoke('updater:quitAndInstall')
+      prepareAndInvokeUpdaterInstall(
+        window,
+        updaterQuitAbortRelay,
+        () => ipcRenderer.invoke('updater:quitAndInstall'),
+        awaitBeforeUnloadCheckpoint
       ),
 
     onStatus: (callback) => {
@@ -3214,10 +3273,19 @@ const api = {
       includeIgnored?: boolean
       bypassEffectiveUpstreamNegativeCache?: boolean
       reuseLineStats?: boolean
+      branchLineTotalMergeBase?: string
       requestToken?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:status', args),
     cancelStatus: (args: { requestToken: string }): Promise<void> =>
       ipcRenderer.invoke('git:cancelStatus', args),
+    setStatusUpstreamRefWatch: (args: {
+      worktreeId: string
+      worktreePath: string
+      executionHostId: string
+      connectionId?: string
+      branch?: string
+      upstreamName?: string
+    }): Promise<void> => ipcRenderer.invoke('git:setStatusUpstreamRefWatch', args),
     submoduleStatus: (args: {
       worktreePath: string
       submodulePath: string
@@ -4015,6 +4083,9 @@ const api = {
     setMarkdownEditorFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setMarkdownEditorFocused', focused)
     },
+    setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null): void => {
+      ipcRenderer.send(richMarkdownContextMenuTargetChannel, target)
+    },
     setTerminalInputFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setTerminalInputFocused', focused)
     },
@@ -4175,6 +4246,8 @@ const api = {
       ipcRenderer.invoke('aiVault:listSubagentSessions', args),
     getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs): Promise<unknown> =>
       ipcRenderer.invoke('aiVault:getFirstUserPrompt', args),
+    deleteSession: (args: AiVaultDeleteSessionArgs): Promise<AiVaultDeleteSessionResult> =>
+      ipcRenderer.invoke('aiVault:deleteSession', args),
     onWindowFocused: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('aiVault:windowFocused', listener)
@@ -4604,7 +4677,7 @@ const api = {
 
   mobile: {
     listNetworkInterfaces: (): Promise<{
-      interfaces: { name: string; address: string }[]
+      interfaces: { name: string; address: string; hasDefaultRoute?: boolean }[]
     }> => ipcRenderer.invoke('mobile:listNetworkInterfaces'),
 
     getPairingQR: (args?: {
@@ -4623,7 +4696,8 @@ const api = {
           qrDataUrl: string | null
           qrError?: 'encoding_failed'
           pairingUrl: string
-          endpoint: string
+          /** Null when no direct address was advertised — the QR pairs over Relay alone. */
+          endpoint: string | null
           deviceId: string
           connectionMode: MobilePairingConnectionMode
         }
@@ -4639,6 +4713,9 @@ const api = {
     getRuntimePairingUrl: (args?: {
       address?: string
       rotate?: boolean
+      // Why: the widen is one-way and host-wide, so main must gate it on the reach the user picked, not
+      // on how the typed address happens to look (a Custom loopback may front an SSH tunnel).
+      reach?: RuntimePairingReach
     }): Promise<
       | { available: false; reason?: 'network_exposure_failed'; guidance?: string }
       | {

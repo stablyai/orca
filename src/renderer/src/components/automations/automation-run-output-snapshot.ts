@@ -1,16 +1,10 @@
-/* eslint-disable no-control-regex -- terminal snapshots normalize ANSI/control output. */
 import type { AutomationRunOutputSnapshot } from '../../../../shared/automations-types'
+import {
+  stripAnsiEscapeSequences,
+  TERMINAL_CONTROL_CHARACTER_PATTERN
+} from '../../../../shared/ansi-escape-sequences'
 
 const MAX_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
-
-// Why: Codex/Claude TUIs emit OSC title/progress frames in hidden automation
-// PTYs; saved run output should keep command text, not terminal metadata.
-const OSC_SEQUENCE_PATTERN = /(?:\u001b\]|\u009d)[\s\S]*?(?:\u0007|\u001b\\|\u009c)/g
-const STRING_SEQUENCE_PATTERN =
-  /(?:\u001b[P_^X]|\u0090|\u0098|\u009e|\u009f)[\s\S]*?(?:\u001b\\|\u009c)/g
-const CSI_SEQUENCE_PATTERN = /(?:\u001b\[|\u009b)[0-?]*[ -/]*[@-~]/g
-const ESCAPE_SEQUENCE_PATTERN = /\u001b[ -/]*[0-~]/g
-const CONTROL_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g
 
 export type AutomationRunOutputSnapshotBuffer = {
   append: (chunk: string) => void
@@ -43,14 +37,10 @@ export function selectAutomationRunOutputSnapshot(
 }
 
 function stripTerminalControls(value: string): string {
-  return value
-    .replace(OSC_SEQUENCE_PATTERN, '')
-    .replace(STRING_SEQUENCE_PATTERN, '')
-    .replace(CSI_SEQUENCE_PATTERN, '')
-    .replace(ESCAPE_SEQUENCE_PATTERN, '')
+  return stripAnsiEscapeSequences(value)
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
-    .replace(CONTROL_PATTERN, '')
+    .replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
 }
 
 export function createAutomationRunOutputSnapshotBuffer(): AutomationRunOutputSnapshotBuffer {

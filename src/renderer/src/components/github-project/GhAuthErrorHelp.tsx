@@ -40,14 +40,12 @@ function refreshCommandForHost(host: string | null | undefined): string {
 // macOS/Linux vs PowerShell on Windows.
 const IS_WINDOWS = typeof navigator !== 'undefined' && /Win(dows|32|64)/i.test(navigator.userAgent)
 
-function reloadOrcaRenderer(): void {
-  const reload = window.api.app.reload
-  if (typeof reload !== 'function') {
-    window.location.reload()
-    return
-  }
-  void reload().catch(() => {
-    window.location.reload()
+export function reloadOrcaRenderer(): void {
+  void window.api.app.reload().catch((error) => {
+    console.error(
+      '[github-projects] Renderer reload refused:',
+      error instanceof Error ? error.name : typeof error
+    )
   })
 }
 

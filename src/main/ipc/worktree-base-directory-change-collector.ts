@@ -16,6 +16,12 @@ export type WorktreeBaseCollectedChanges = {
   headIdentityRepoIds: string[]
 }
 
+export function hasCollectedWorktreeBaseChanges(changes: WorktreeBaseCollectedChanges): boolean {
+  return [changes.structureRepoIds, changes.gitStatusRepoIds, changes.headIdentityRepoIds].some(
+    (ids) => ids.length > 0
+  )
+}
+
 type ChangeBuckets = {
   structureRepoIds: Set<string>
   gitStatusRepoIds: Set<string>

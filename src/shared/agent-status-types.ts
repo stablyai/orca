@@ -31,6 +31,7 @@ export type WellKnownAgentType =
   | 'aider'
   | 'pi'
   | 'omp'
+  | 'prime-agent'
   | 'droid'
   | 'command-code'
   | 'grok'
@@ -126,6 +127,8 @@ export type AgentStatusEntry = {
   /** True when this `done` was reached via interrupt, not normal completion
    *  (agent-reported or Orca's guarded fallback). Undefined otherwise. */
   interrupted?: boolean
+  /** True when this `done` is a session boundary, not a completed turn. See AgentStatusPayload. */
+  sessionBoundary?: boolean
   /** Orchestration dispatch context for panes spawned by another agent.
    *  Why: parent/child hierarchy is pane-level state, not worktree lineage — workers often share the coordinator's worktree. */
   orchestration?: AgentStatusOrchestrationContext
@@ -170,6 +173,11 @@ export type AgentStatusPayload = {
   interactivePrompt?: string
   lastAssistantMessage?: string
   interrupted?: boolean
+  /** True when this `done` marks a session boundary (connect/resume/clear landing idle,
+   *  e.g. Claude SessionStart — STA-3386), not a completed turn. Consumers that react to
+   *  completions (notifications, automation runs, unread badges, finished timestamps)
+   *  must ignore it. Only meaningful on `done`. */
+  sessionBoundary?: boolean
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
 }
@@ -180,6 +188,32 @@ export type AgentStatusPayload = {
  * absence ("no new info") from an explicit empty string.
  */
 export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { prompt: string }
+
+/**
+ * Narrow an `AgentStatusIpcPayload` (or any superset) down to the status fields alone.
+ * Why: the IPC shape is flattened, so a spread cannot be narrowed structurally — copying
+ * a hook row into a client-visible projection would otherwise ship `launchToken`,
+ * `connectionId`, `promptInteractionKey` and `providerSessionOnly` to every paired client.
+ */
+export function pickParsedAgentStatusPayload(
+  row: ParsedAgentStatusPayload
+): ParsedAgentStatusPayload {
+  return {
+    state: row.state,
+    prompt: row.prompt,
+    ...(row.agentType !== undefined ? { agentType: row.agentType } : {}),
+    ...(row.model !== undefined ? { model: row.model } : {}),
+    ...(row.toolName !== undefined ? { toolName: row.toolName } : {}),
+    ...(row.toolInput !== undefined ? { toolInput: row.toolInput } : {}),
+    ...(row.interactivePrompt !== undefined ? { interactivePrompt: row.interactivePrompt } : {}),
+    ...(row.lastAssistantMessage !== undefined
+      ? { lastAssistantMessage: row.lastAssistantMessage }
+      : {}),
+    ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
+    ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
+    ...(row.subagents !== undefined ? { subagents: row.subagents } : {})
+  }
+}
 
 /**
  * Wire shape for agent-status IPC. Both `agentStatus:set` and `agentStatus:getSnapshot`
@@ -376,6 +410,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     ),
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
+    sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
     subagents: normalizeSubagentsField(obj.subagents)
   }
 }

@@ -30,6 +30,7 @@ import {
 } from './rpc/mobile-socket-wiring'
 import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import {
   mobileRelayMintFailureFromUnknown,
   type MobileRelayMintFailure
@@ -661,6 +662,9 @@ export class OrcaRuntimeRpcServer {
     name?: string
     rotate?: boolean
     scope?: DeviceScope
+    // Why: STA-2370 — recorded on the grant so a "This computer only" client reconnecting cannot make the
+    // next launch bind every interface. Defaults to network reach, which is what every other caller means.
+    reach?: RuntimePairingReach
   }):
     | PairingOfferUnavailable
     | {
@@ -697,9 +701,10 @@ export class OrcaRuntimeRpcServer {
     const scope = args.scope ?? 'runtime'
     let device: DeviceEntry
     try {
+      const reach = args.reach ?? 'network'
       device = args.rotate
-        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope)
+        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
@@ -1161,6 +1166,8 @@ export class OrcaRuntimeRpcServer {
 
     // Why: WebSocket uses per-device tokens + E2EE (tweetnacl) instead of TLS since React Native can't pin self-signed certs.
     if (this.enableWebSocket) {
+      // Why: land any deferred lastSeen write before a replacement registry reads the same file.
+      this.deviceRegistry?.flushPendingLastSeen()
       const pairingIdentity = this.initializePairingIdentity()
       if (!pairingIdentity.ok) {
         this.deviceRegistry = null
@@ -1228,13 +1235,17 @@ export class OrcaRuntimeRpcServer {
 
   // Why: STA-2370 — a desktop with no previously-connected device stays on loopback until the user
   // explicitly pairs; `orca serve`/E2E (exposeNetworkByDefault) and a reconnecting paired device bind wide.
+  // A grant minted for "This computer only" is excluded: its client is a browser on this machine, so
+  // counting it would republish the runtime on every interface one restart after the user declined that.
   private resolveInitialWebSocketBindHost(): string {
     if (this.exposeNetworkByDefault) {
       return WS_BIND_HOST_ALL_INTERFACES
     }
-    const hasConnectedDevice =
-      this.deviceRegistry?.listDevices().some((device) => device.lastSeenAt > 0) ?? false
-    return hasConnectedDevice ? WS_BIND_HOST_ALL_INTERFACES : WS_BIND_HOST_LOOPBACK
+    const hasConnectedNetworkDevice =
+      this.deviceRegistry
+        ?.listDevices()
+        .some((device) => device.lastSeenAt > 0 && device.pairingReach !== 'this-computer') ?? false
+    return hasConnectedNetworkDevice ? WS_BIND_HOST_ALL_INTERFACES : WS_BIND_HOST_LOOPBACK
   }
 
   // Why: builds and starts a WS transport bound to `host`, wiring the session-scoped mobile socket
@@ -1340,9 +1351,10 @@ export class OrcaRuntimeRpcServer {
   }
 
   // Why: STA-2370 — widen the loopback listener to all interfaces so a freshly generated pairing
-  // offer's advertised LAN endpoint is reachable. Idempotent and only ever runs on the first opt-in
-  // (before any device has connected), so no live socket is disrupted; the resolved port is reused so
-  // an already-issued endpoint stays valid.
+  // offer's advertised LAN endpoint is reachable. Idempotent, but it is no longer confined to the first
+  // pairing action: a "This computer only" link never widens, so live loopback clients can already be
+  // connected when a later LAN/QR offer opts in. Rebinding terminates them (ws cannot move a listener),
+  // so the resolved port is reused — already-issued endpoints stay valid and clients reconnect in place.
   async ensureNetworkExposure(): Promise<void> {
     if (
       !this.enableWebSocket ||
@@ -1487,10 +1499,15 @@ export class OrcaRuntimeRpcServer {
     this.metadataOwnershipWatch = null
     this.mobileSocketWiring = null
     this.detachWebSocketWiring = null
-    if (transports.length === 0) {
-      return
+    const stopResults = await Promise.allSettled(
+      transports.map(async (transport) => transport.stop())
+    )
+    // Why: before-quit fences relay input; direct auth can still refresh lastSeen while these transports close.
+    this.deviceRegistry?.flushPendingLastSeen()
+    const failedStop = stopResults.find((result) => result.status === 'rejected')
+    if (failedStop?.status === 'rejected') {
+      throw failedStop.reason
     }
-    await Promise.all(transports.map((t) => t.stop()))
     // Why: leave the metadata file on shutdown — shared userData may host another live runtime whose bootstrap file we'd erase.
   }
 

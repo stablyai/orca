@@ -176,25 +176,23 @@ export const SettingsUpdate = z
   .strict()
   .default({})
 
+const TopLevelViewSchema = z.enum([
+  'terminal',
+  'settings',
+  'tasks',
+  'activity',
+  'automations',
+  'space',
+  'skills',
+  'artifacts',
+  'mobile'
+])
 const UiUpdateFields = z
   .object({
     lastActiveRepoId: NullableString.optional(),
     lastActiveWorktreeId: NullableString.optional(),
-    // Why: App.tsx persists this on every top-level view switch (#9002). Desktop
-    // hydration ignores it on 'sync' broadcasts, so accepting it cannot yank a
-    // paired window's current view — it only restores the view on next startup.
-    activeView: z
-      .enum([
-        'terminal',
-        'settings',
-        'tasks',
-        'activity',
-        'automations',
-        'space',
-        'skills',
-        'mobile'
-      ])
-      .optional(),
+    // Why: sync hydration ignores this persisted startup view, so paired windows stay put.
+    activeView: TopLevelViewSchema.optional(),
     sidebarWidth: z.number().finite().optional(),
     rightSidebarOpen: z.boolean().optional(),
     rightSidebarTab: RightSidebarTabParam.optional(),
@@ -223,6 +221,7 @@ const UiUpdateFields = z
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
     hideCliCreatedWorkspaces: z.boolean().optional(),
     hideDetachedHeadWorkspaces: z.boolean().optional(),
+    alwaysShowDefaultBranchWorkspace: z.boolean().optional(),
     filterRepoIds: StringArray.optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),

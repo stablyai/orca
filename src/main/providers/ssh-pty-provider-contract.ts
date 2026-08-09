@@ -27,6 +27,8 @@ export type SshPtyDataCallback = (payload: {
     sourceEndSu: number
   }>
   sourceMalformed?: boolean
+  sourceRejected?: boolean
+  rejectedSourceRecovery?: 'confirm-existing' | 'fresh-activation' | 'reconnect-channel'
 }) => void
 export type SshPtyReplayCallback = (payload: { id: string; data: string }) => void
 export type SshPtyExitCallback = (payload: {

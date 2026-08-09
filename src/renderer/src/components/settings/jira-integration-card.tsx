@@ -99,7 +99,14 @@ export function JiraIntegrationCard(): React.JSX.Element {
       }
       checking={checking}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={connected ? 'Connected' : 'Not connected'}
+      statusLabel={
+        connected
+          ? translate('auto.components.settings.jira.integration.card.statusConnected', 'Connected')
+          : translate(
+              'auto.components.settings.jira.integration.card.statusNotConnected',
+              'Not connected'
+            )
+      }
       actions={
         !checking ? (
           <Button

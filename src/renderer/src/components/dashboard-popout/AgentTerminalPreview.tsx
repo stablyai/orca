@@ -49,11 +49,13 @@ function clamp(value: number, min: number, max: number): number {
  */
 export function AgentTerminalPreview({
   ptyId,
-  terminalInput = null
+  terminalInput = null,
+  className
 }: {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
   terminalInput?: DashboardCardTerminalInput | null
+  className?: string
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
@@ -444,7 +446,10 @@ export function AgentTerminalPreview({
     // buffer is. The terminal keeps the pane's true dimensions and is scaled/
     // clipped to fit; fitToBox anchors whichever end keeps the cursor in view.
     <div
-      className="relative h-[calc(100vh-140px)] w-full overflow-hidden bg-background p-1.5"
+      className={cn(
+        'relative h-[calc(100vh-140px)] w-full overflow-hidden bg-background p-1.5',
+        className
+      )}
       style={terminalTheme?.background ? { backgroundColor: terminalTheme.background } : undefined}
     >
       {ptyGone ? (

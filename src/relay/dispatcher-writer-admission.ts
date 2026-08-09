@@ -12,6 +12,7 @@ export type DispatcherWriterSettlement = { ok: true } | { ok: false; error: Erro
 export type DispatcherWriterEntry = {
   lane: DispatcherWriterLane
   encode: () => Buffer
+  isStillAdmitted?: () => boolean
   estimatedBytes: number
   onSettled: (result: DispatcherWriterSettlement) => void
   settled: boolean
