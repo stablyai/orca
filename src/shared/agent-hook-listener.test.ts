@@ -386,6 +386,25 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.interactivePrompt).toBe(JSON.stringify(properties))
   })
 
+  it('captures OpenCode permission details for the native chat approval card', () => {
+    const permission = { type: 'edit', pattern: 'src/**' }
+    const event = normalizeHookPayload(
+      state,
+      'opencode',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'PermissionRequest', permission }
+      },
+      'production'
+    )
+
+    expect(event?.payload.state).toBe('waiting')
+    expect(event?.payload.toolName).toBe('edit')
+    expect(JSON.parse(event?.payload.interactivePrompt ?? '')).toMatchObject({
+      approval: { tool: 'edit' }
+    })
+  })
+
   it('maps Pi tool_call ask_user_question to blocked with interactivePrompt', () => {
     const questions = {
       questions: [
