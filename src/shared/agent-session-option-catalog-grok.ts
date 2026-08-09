@@ -55,6 +55,10 @@ export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     // agent picker…" and never persist a model, so `-m` would never be emitted.
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },
+  // Why: `--reasoning-effort` is a global grok flag, not a per-model capability, and
+  // launch resolves against this static seed. Without this, a discovered id the seed
+  // does not carry shows the effort menu but launches with the flag dropped.
+  unknownModelOptions: [GROK_EFFORT],
   // Why: grok's selectable ids retire between releases, so a stale seed entry
   // must be droppable — picking one is a fatal launch, not a warning.
   discoveredModelsAreAuthoritative: true,

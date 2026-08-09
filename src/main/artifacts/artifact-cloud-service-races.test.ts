@@ -47,7 +47,7 @@ function createResponse(slug: string): Response {
 async function setup(): Promise<ArtifactCloudService> {
   const path = await mkdtemp(join(tmpdir(), 'orca-artifact-races-'))
   createdPaths.push(path)
-  return new ArtifactCloudService(path)
+  return new ArtifactCloudService(path, () => true)
 }
 
 afterEach(async () => {

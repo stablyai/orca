@@ -70,6 +70,10 @@ import { shouldShowOnboarding } from './components/onboarding/should-show-onboar
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
 import {
+  persistFloatingTerminalPanelOpen,
+  readPersistedFloatingTerminalPanelViewState
+} from './components/floating-terminal/floating-terminal-panel-view-state'
+import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
 } from '@/lib/floating-terminal'
@@ -440,7 +444,11 @@ function App(): React.JSX.Element {
   const clearUnreadDockBadge = useUnreadDockBadge()
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
-  const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
+  // Why restored: leaving the panel closed forces the user to reopen and re-maximize it,
+  // and that size jump reflows a live TUI's buffer (see floating-terminal-panel-view-state).
+  const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(
+    () => readPersistedFloatingTerminalPanelViewState()?.open === true
+  )
   const floatingWorkspaceTourInteractionSnapshotRef = useRef<{
     wasPreviouslyInteracted?: boolean
     persisted?: Promise<void>
@@ -535,6 +543,10 @@ function App(): React.JSX.Element {
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
   const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')
   const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
+  // Why tracked separately: the flag reads false while settings are still loading, and a
+  // false read at boot must not be treated as the user disabling the feature. The store
+  // initializes `settings` to null (not undefined) - fetchSettings replaces it atomically.
+  const floatingTerminalSettingsHydrated = useAppStore((s) => s.settings != null)
   const floatingTerminalTriggerLocation = useAppStore(
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   )
@@ -632,8 +644,19 @@ function App(): React.JSX.Element {
         restoreFloatingTerminalReturnFocus()
       }
       setFloatingTerminalOpen(resolvedOpen)
+      // Why gated on the flag: `settings` is undefined until it hydrates, so the
+      // feature-off effect force-closes the panel on every boot. Persisting there would
+      // overwrite the user's restored `open` with a value they never chose.
+      if (floatingTerminalEnabled) {
+        persistFloatingTerminalPanelOpen(resolvedOpen)
+      }
     },
-    [floatingTerminalOpen, rememberFloatingTerminalReturnFocus, restoreFloatingTerminalReturnFocus]
+    [
+      floatingTerminalEnabled,
+      floatingTerminalOpen,
+      rememberFloatingTerminalReturnFocus,
+      restoreFloatingTerminalReturnFocus
+    ]
   )
 
   useEffect(() => {
@@ -647,10 +670,13 @@ function App(): React.JSX.Element {
   }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
 
   useEffect(() => {
-    if (!floatingTerminalEnabled) {
+    // Why the hydration gate: this effect fires on every boot while settings are still
+    // undefined, and closing there discards the restored open state before the real flag
+    // value arrives. Only a hydrated flag-off is an actual disable.
+    if (floatingTerminalSettingsHydrated && !floatingTerminalEnabled) {
       setFloatingTerminalOpenWithFocus(false)
     }
-  }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
+  }, [floatingTerminalSettingsHydrated, floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
 
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)

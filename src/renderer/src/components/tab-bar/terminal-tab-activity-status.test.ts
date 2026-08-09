@@ -4,7 +4,10 @@ import type { TerminalTab } from '../../../../shared/types'
 import {
   hasUnreadAgentCompletionForTerminalTab,
   resetTerminalTabActivityFlagsCacheForTest,
-  resolveTerminalTabActivityStatus
+  resolveTerminalTabActivityStatus,
+  resolveTerminalTabAttentionBadge,
+  terminalTabActivityToAgentDotState,
+  terminalTabHasUnreadActivity
 } from './terminal-tab-activity-status'
 
 const TAB_ID = 'tab-1'
@@ -227,5 +230,53 @@ describe('hasUnreadAgentCompletionForTerminalTab', () => {
     expect(
       hasUnreadAgentCompletionForTerminalTab({ [`tab-2:${SECOND_LEAF_ID}`]: true }, TAB_ID)
     ).toBe(false)
+  })
+
+  // Why: the param accepts boolean maps, so a cleared-to-`false` marker must not read as unread.
+  it('ignores a falsy marker left on the owning tab', () => {
+    expect(
+      hasUnreadAgentCompletionForTerminalTab({ [`${TAB_ID}:${FIRST_LEAF_ID}`]: false }, TAB_ID)
+    ).toBe(false)
+  })
+})
+
+describe('resolveTerminalTabAttentionBadge', () => {
+  it('prefers working, then permission, then unread, then done', () => {
+    expect(resolveTerminalTabAttentionBadge({ status: 'working', hasUnread: true })).toBe('working')
+    expect(resolveTerminalTabAttentionBadge({ status: 'permission', hasUnread: true })).toBe(
+      'permission'
+    )
+    expect(resolveTerminalTabAttentionBadge({ status: 'done', hasUnread: true })).toBe('unread')
+    expect(resolveTerminalTabAttentionBadge({ status: 'done', hasUnread: false })).toBe('done')
+    expect(resolveTerminalTabAttentionBadge({ status: 'active', hasUnread: false })).toBeNull()
+  })
+})
+
+describe('terminalTabHasUnreadActivity', () => {
+  it('is true for a tab bell or completion pane', () => {
+    expect(
+      terminalTabHasUnreadActivity({
+        terminalTabId: TAB_ID,
+        unreadTerminalTabs: { [TAB_ID]: true },
+        unreadAgentCompletionPanes: {}
+      })
+    ).toBe(true)
+    expect(
+      terminalTabHasUnreadActivity({
+        terminalTabId: TAB_ID,
+        unreadTerminalTabs: {},
+        unreadAgentCompletionPanes: { [`${TAB_ID}:${FIRST_LEAF_ID}`]: true }
+      })
+    ).toBe(true)
+  })
+})
+
+describe('terminalTabActivityToAgentDotState', () => {
+  it('maps glyph statuses and drops quiet ones', () => {
+    expect(terminalTabActivityToAgentDotState('working')).toBe('working')
+    expect(terminalTabActivityToAgentDotState('permission')).toBe('permission')
+    expect(terminalTabActivityToAgentDotState('done')).toBe('done')
+    expect(terminalTabActivityToAgentDotState('active')).toBeNull()
+    expect(terminalTabActivityToAgentDotState('inactive')).toBeNull()
   })
 })

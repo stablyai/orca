@@ -6174,7 +6174,10 @@
           "5567191a6e": "Browse",
           "0e9fc0eadc": "Workspace Directory",
           "e2955d9ccb": "Configure where new workspaces are created.",
-          "7511097c5d": "Workspace"
+          "7511097c5d": "Workspace",
+          "31e300af1c": "Ask Before Deleting Artifacts",
+          "fb29a73a17": "Show a confirmation dialog before deleting a shared artifact and breaking its public link.",
+          "bf46474e33": "Show a confirmation before deleting a shared artifact. Anyone holding its public link loses access."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Apply Changes",
@@ -10431,7 +10434,15 @@
           "openArtifactsDescriptionV2": "Preview, copy, and manage links shared through your account.",
           "signInTitle": "Sign in to share artifacts",
           "signInDescription": "Use your Orca account to upload artifacts and manage their public links.",
-          "signInAgain": "Sign in again"
+          "signInAgain": "Sign in again",
+          "enableStepTitle": "Allow publishing first",
+          "enableStepWebDescription": "Open Settings → Artifacts in the Orca desktop app on the host device and turn publishing on. Until then every share fails with artifact_sharing_disabled.",
+          "enableStepDescription": "Turn on “Allow publishing public artifact links” above. Until then every share fails with artifact_sharing_disabled.",
+          "allowPublishing": "Allow publishing public artifact links",
+          "allowPublishingWebDescription": "Desktop only. This capability is granted on the device running Orca — open Settings → Artifacts there to change it. Shown read-only here so it matches what that device enforces.",
+          "allowPublishingDescription": "Off by default. When on, anything running on this device — your agents and the orca CLI — can upload HTML and Markdown files to your Orca account and mint links anyone with the URL can open. Turning it off does not delete existing links — remove those from Artifacts.",
+          "howToDescriptionDisabled": "Publishing is off, so nothing on this device can create a public link yet. Allow it first, then ask your agent to share an HTML or Markdown file.",
+          "allowPublishingSearchDescription": "Let agents and the orca CLI upload files to your Orca account and mint public links."
         },
         "orcaAccount": {
           "connected": "Connected",
@@ -14458,7 +14469,16 @@
       "confirmation": {
         "dialog": {
           "8490e5d36a": "Confirm",
-          "56f5c60e0c": "Cancel"
+          "56f5c60e0c": "Cancel",
+          "92bac3217e": "Don't ask again"
+        },
+        "skip": {
+          "saved": "We'll skip this confirmation next time.",
+          "savedDescription": "You can change this in Settings.",
+          "openSettings": "Open Settings",
+          "preference": {
+            "0b0cb6e3f9": "Could not save the confirmation preference."
+          }
         }
       },
       "jira": {
@@ -14950,7 +14970,18 @@
           "deleteArtifact": "Delete artifact",
           "moreAvailable": "More artifacts are available",
           "moreAvailableCopy": "Load the next page to continue.",
-          "loadMoreFailed": "Could not load more artifacts."
+          "loadMoreFailed": "Could not load more artifacts.",
+          "publishingOff": "Publishing is turned off",
+          "publishingOffCopy": "Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then ask your agent to share an HTML or Markdown file.",
+          "openArtifactsSettings": "Open Settings → Artifacts",
+          "loadedCountMore": "{{count}} loaded · more available",
+          "loadedCount": "{{count}} shared",
+          "retry": "Retry",
+          "reconnectHeading": "Sign in to Orca again",
+          "reconnectCopy": "Sign in again to view and manage the artifacts shared through your account.",
+          "signInAgainAction": "Sign in again",
+          "unconfiguredCopy": "Orca account sign-in is not configured on this machine yet.",
+          "openAccountSettings": "Open account settings"
         },
         "copySuccess": "Artifact link copied",
         "copyFailed": "Could not copy artifact link",
@@ -14962,7 +14993,20 @@
         "actions": "Artifact actions",
         "ArtifactCollection": {
           "loadMore": "Load more"
-        }
+        },
+        "ArtifactDetailHeader": {
+          "publicLink": "Anyone with this link can view it"
+        },
+        "ArtifactListPane": {
+          "search": "Search artifacts",
+          "listLabel": "Shared artifacts",
+          "noMatches": "No matches"
+        },
+        "updatedAt": "Updated {{when}}",
+        "updatedRecently": "recently",
+        "expiryUnknown": "Expiry unknown",
+        "expired": "Link expired",
+        "expires": "Link expires {{when}}"
       }
     },
     "i18n": {

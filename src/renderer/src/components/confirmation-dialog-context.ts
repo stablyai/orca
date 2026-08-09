@@ -8,6 +8,8 @@ export type ConfirmationDialogOptions = {
   confirmLabel?: string
   cancelLabel?: string
   confirmVariant?: 'default' | 'destructive'
+  /** Renders a "Don't ask again" checkbox. `onConfirmed` runs only when the user confirms with it checked. */
+  dontAskAgain?: { label?: string; onConfirmed: () => void }
 }
 
 export type ConfirmationDialogContextValue = (

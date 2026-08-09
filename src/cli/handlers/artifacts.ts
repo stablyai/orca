@@ -12,6 +12,11 @@ import {
   REMOTE_ARTIFACT_INPUT_ENV
 } from '../../shared/artifact-cli-bridge'
 import { readArtifactFileWithinLimit } from '../../shared/artifact-file-read'
+import {
+  ARTIFACT_SHARING_DISABLED_CODE,
+  ARTIFACT_SHARING_DISABLED_MESSAGE,
+  ARTIFACT_SHARING_DISABLED_NEXT_STEPS
+} from '../../shared/artifact-sharing-gate'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
 import { formatArtifactListPage, formatArtifactShared } from '../artifact-format'
@@ -76,6 +81,31 @@ async function readStdinWithinLimit(maxBytes: number): Promise<string> {
   return Buffer.concat(chunks).toString('utf8')
 }
 
+/**
+ * Publishing is off by default, so denial is the common outcome. A tiny `settings.get` read
+ * answers it before we load (or pipe in) up to the full RPC byte budget the host would reject.
+ * Only an explicit `false` denies: a host predating the capability omits the field entirely,
+ * and an unreachable host stays the publish RPC's problem, not the preflight's.
+ */
+async function preflightPublishCapability(ctx: HandlerContext): Promise<void> {
+  let enabled: unknown
+  try {
+    const response = await ctx.client.call<{
+      settings?: { artifactSharingEnabled?: boolean }
+    }>('settings.get')
+    enabled = response.result?.settings?.artifactSharingEnabled
+  } catch {
+    return
+  }
+  if (enabled === false) {
+    throw new RuntimeClientError(
+      ARTIFACT_SHARING_DISABLED_CODE,
+      ARTIFACT_SHARING_DISABLED_MESSAGE,
+      { nextSteps: [...ARTIFACT_SHARING_DISABLED_NEXT_STEPS] }
+    )
+  }
+}
+
 async function readArtifactRequest(ctx: HandlerContext): Promise<ArtifactWriteRequest> {
   const remoteInput = parseRemoteArtifactInput(process.env[REMOTE_ARTIFACT_INPUT_ENV])
   const sourceKey = remoteInput?.sourceKey ?? resolve(ctx.cwd, requireStringFlag(ctx, 'file'))
@@ -83,6 +113,7 @@ async function readArtifactRequest(ctx: HandlerContext): Promise<ArtifactWriteRe
   if (!contentType) {
     throw new RuntimeClientError('invalid_argument', 'Artifacts must be HTML or Markdown files.')
   }
+  await preflightPublishCapability(ctx)
   const localRead = remoteInput
     ? null
     : await readArtifactFileWithinLimit(sourceKey, ARTIFACT_CLI_MAX_RPC_BYTES)

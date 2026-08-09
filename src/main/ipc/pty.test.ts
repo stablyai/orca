@@ -17124,6 +17124,33 @@ describe('registerPtyHandlers', () => {
     ])
   })
 
+  it('refreshes the WSL hook relay for the distro a reattached pane already owns', async () => {
+    // Why here and not only in the helper's unit test: nothing else catches pty.ts dropping the
+    // reattach call — the manager owns the hooks/platform gating this spy stands in for.
+    const ensureForDistro = vi
+      .spyOn(wslHookRelayManager, 'ensureForDistro')
+      .mockImplementation(() => {})
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({ id: 'pty-wsl', isReattach: true, wslDistro: 'Ubuntu-24.04' })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    registerPtyHandlers(mainWindow as never)
+
+    try {
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, sessionId: 'pty-wsl' })
+      expect(ensureForDistro).toHaveBeenCalledWith('Ubuntu-24.04')
+    } finally {
+      ensureForDistro.mockRestore()
+    }
+  })
+
   posixOnlyIt(
     'does not guess route provenance for a pane-local shell startup CODEX_HOME',
     async () => {

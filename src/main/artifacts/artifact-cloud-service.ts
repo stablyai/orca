@@ -7,6 +7,7 @@ import type {
   ArtifactListItem,
   ArtifactWriteRequest
 } from '../../shared/artifacts'
+import { assertArtifactSharingAllowed } from '../../shared/artifact-sharing-gate'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
@@ -113,7 +114,15 @@ function explicitTokenAuthContext(
 }
 
 export class ArtifactCloudService {
-  constructor(private readonly userDataPath: string) {}
+  /**
+   * `isSharingEnabled` is the publish capability gate. It is read per call, never cached, so
+   * revoking it in Settings takes effect on the next request. List, unshare, and delete stay
+   * ungated: a user who turns publishing off must still be able to audit and revoke old links.
+   */
+  constructor(
+    private readonly userDataPath: string,
+    private readonly isSharingEnabled: () => boolean
+  ) {}
 
   list(options: ArtifactListOptions): Promise<ArtifactCloudOperation<ArtifactListPage>> {
     return this.withAuth(options, async (token, apiUrl) => {
@@ -122,7 +131,10 @@ export class ArtifactCloudService {
     })
   }
 
-  share(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
+  // Why async: the gate must surface as a rejection, not a synchronous throw, so every caller's
+  // promise chain handles it the same way.
+  async share(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
+    assertArtifactSharingAllowed(this.isSharingEnabled)
     const idempotencyKey = randomUUID()
     return this.withAuth(request, async (token, apiUrl, auth) => {
       const response = await artifactRequest<ArtifactCreateResponse>(apiUrl, token, '', {
@@ -142,7 +154,8 @@ export class ArtifactCloudService {
     })
   }
 
-  update(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
+  async update(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
+    assertArtifactSharingAllowed(this.isSharingEnabled)
     return this.withAuth(request, async (token, apiUrl, auth) => {
       const record = getArtifactShareRecord(
         auth.profileId,
