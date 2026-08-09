@@ -19,6 +19,11 @@ import {
   mobileNativeChatEmptyState,
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
+import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
+import {
+  useMobileNativeChatInputLock,
+  type MobileNativeChatInputLockReason
+} from './use-mobile-native-chat-input-lock'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
 import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
@@ -31,15 +36,15 @@ import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
-import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import type {
+  MobileNativeChatLoadEarlier,
+  MobileNativeChatStatus
+} from './use-mobile-native-chat-session'
 
-const INPUT_LOCK_SETTLE_MS = 600
-
-/** Why the composer input is locked: the transport is disconnected, or the
- *  terminal subscription has not acknowledged its input lease yet. */
-export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
+const NATIVE_CHAT_MAINTAIN_VISIBLE_CONTENT_POSITION = { minIndexForVisible: 0 } as const
 
 type Props = {
+  conversationIdentity: string
   /** Raw transcript, only for telling "still loading" from "loaded and empty". */
   messages: NativeChatMessage[]
   /** `messages` with noise stripped and tool turns folded in, from the overlay. */
@@ -56,7 +61,7 @@ type Props = {
   streaming: string | null
   hasMore?: boolean
   loadingEarlier?: boolean
-  onLoadEarlier?: () => void
+  onLoadEarlier?: MobileNativeChatLoadEarlier
   onSend: (text: string) => Promise<boolean>
   /** Optimistic queued sends (owned by the route so they survive view switches). */
   /** Optimistic user echoes, including any ridden-along image preview URIs. */
@@ -115,6 +120,7 @@ type Props = {
 }
 
 export function MobileNativeChatView({
+  conversationIdentity,
   messages,
   folded,
   status,
@@ -164,17 +170,16 @@ export function MobileNativeChatView({
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
-  const [atBottom, setAtBottom] = useState(true)
-  const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
-  useEffect(
-    () => () => {
-      if (sendScrollTimerRef.current) {
-        clearTimeout(sendScrollTimerRef.current)
-      }
-    },
+  const scrollToEnd = useCallback(
+    (animated: boolean) => listRef.current?.scrollToEnd({ animated }),
     []
   )
+  const tailFollow = useMobileNativeChatTailFollow({
+    conversationIdentity,
+    hasContent: messages.length > 0,
+    scrollToEnd
+  })
+  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
 
   const pendingIds = useMemo(() => new Set(pending.map((p) => p.id)), [pending])
   // `data` is the list source: folded transcript + synthetic streaming bubble +
@@ -196,12 +201,11 @@ export function MobileNativeChatView({
   // we don't yank the user away while they read history. (Also fires on keyboard
   // close, which is harmless while atBottom.)
   useEffect(() => {
-    if (data.length === 0 || !atBottom) {
+    if (data.length === 0) {
       return
     }
-    const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60)
-    return () => clearTimeout(t)
-  }, [data.length, atBottom, keyboardInset])
+    tailFollow.scheduleTailFollow()
+  }, [data.length, keyboardInset, tailFollow.scheduleTailFollow])
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
@@ -213,36 +217,44 @@ export function MobileNativeChatView({
       // or a stale "Message not sent" sits above the delivered message.
       onClearSendError?.()
       // Always jump to the newest message when the user sends.
-      setAtBottom(true)
-      if (sendScrollTimerRef.current) {
-        clearTimeout(sendScrollTimerRef.current)
-      }
-      sendScrollTimerRef.current = setTimeout(() => {
-        sendScrollTimerRef.current = null
-        listRef.current?.scrollToEnd({ animated: true })
-      }, 60)
+      tailFollow.followTailAfterLayout()
       return true
     },
-    [onSend, onClearSendError]
+    [onSend, onClearSendError, tailFollow.followTailAfterLayout]
   )
 
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent
-      const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height)
-      setAtBottom(distanceFromBottom < 80)
+      const { contentOffset } = e.nativeEvent
+      tailFollow.onScroll(e)
       // Near the top — page in older history.
-      if (contentOffset.y < 60 && hasMore && !loadingEarlier) {
-        onLoadEarlier?.()
+      if (contentOffset.y < 60 && hasMore && !loadingEarlier && onLoadEarlier) {
+        tailFollow.requestHistoryFromScroll(onLoadEarlier)
       }
     },
-    [hasMore, loadingEarlier, onLoadEarlier]
+    [
+      hasMore,
+      loadingEarlier,
+      onLoadEarlier,
+      tailFollow.onScroll,
+      tailFollow.requestHistoryFromScroll
+    ]
   )
 
+  const handleLoadEarlier = useCallback(() => {
+    if (!loadingEarlier && onLoadEarlier) {
+      tailFollow.requestHistory(onLoadEarlier)
+    }
+  }, [loadingEarlier, onLoadEarlier, tailFollow.requestHistory])
+
   // Align a single message's top to the top of the viewport.
-  const onScrollToMessage = useCallback((index: number) => {
-    listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
-  }, [])
+  const onScrollToMessage = useCallback(
+    (index: number) => {
+      tailFollow.detachTail()
+      listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
+    },
+    [tailFollow.detachTail]
+  )
 
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
@@ -262,18 +274,7 @@ export function MobileNativeChatView({
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
 
-  // A dead PTY emits subscribed→end; settle both edges so its false lease cannot flash the composer enabled.
-  const rawLockReason = inputLockReason ?? null
-  const rawLockHeld = rawLockReason !== null
-  const [lockHeld, setLockHeld] = useState(false)
-  useEffect(() => {
-    if (rawLockHeld === lockHeld) {
-      return
-    }
-    const timer = setTimeout(() => setLockHeld(rawLockHeld), INPUT_LOCK_SETTLE_MS)
-    return () => clearTimeout(timer)
-  }, [lockHeld, rawLockHeld])
-  const lockReason = lockHeld ? (rawLockReason ?? 'waiting') : null
+  const lockReason = useMobileNativeChatInputLock(inputLockReason)
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>
@@ -294,12 +295,16 @@ export function MobileNativeChatView({
               // instead of being swallowed by the dismiss gesture.
               keyboardShouldPersistTaps="handled"
               onScroll={onScroll}
+              onScrollBeginDrag={tailFollow.onScrollBeginDrag}
+              onScrollEndDrag={tailFollow.onScrollEndDrag}
+              onMomentumScrollBegin={tailFollow.onMomentumScrollBegin}
+              onMomentumScrollEnd={tailFollow.onMomentumScrollEnd}
               scrollEventThrottle={32}
-              onContentSizeChange={() => {
-                if (data.length > 0 && atBottom) {
-                  listRef.current?.scrollToEnd({ animated: false })
-                }
-              }}
+              // Grow the list upward on a loadEarlier prepend instead of jumping
+              // the reader. Index 0 is the first message — FlatList accounts for
+              // the load-earlier header offset internally.
+              maintainVisibleContentPosition={NATIVE_CHAT_MAINTAIN_VISIBLE_CONTENT_POSITION}
+              onContentSizeChange={(_width, height) => tailFollow.onContentSizeChange(height)}
               // scrollToIndex can fail before an off-screen row is measured —
               // fall back to an estimated offset, then retry once it's laid out.
               onScrollToIndexFailed={(info) => {
@@ -319,7 +324,7 @@ export function MobileNativeChatView({
                 hasMore ? (
                   <Pressable
                     style={styles.loadEarlier}
-                    onPress={onLoadEarlier}
+                    onPress={handleLoadEarlier}
                     disabled={loadingEarlier}
                   >
                     {loadingEarlier ? (
@@ -342,11 +347,11 @@ export function MobileNativeChatView({
           </GestureDetector>
           {/* Jump-to-latest control. The scroll-to-top affordance now lives
               per-message (the up-arrow in each agent message's controls). */}
-          {!atBottom ? (
+          {!tailFollow.atBottom ? (
             <Pressable
               accessibilityLabel="Scroll to latest"
               style={[styles.fab, styles.fabBottom]}
-              onPress={() => listRef.current?.scrollToEnd({ animated: true })}
+              onPress={() => tailFollow.followTail(true)}
             >
               <ArrowDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
             </Pressable>

@@ -15,15 +15,14 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { orderNativeChatMessages } from './native-chat-message-grouping'
 import { stripNoiseMessages } from './native-chat-noise'
 import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold'
-import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
+import {
+  isNativeChatNearBottom,
+  shouldShowNativeChatJumpToLatest
+} from '../../../../shared/native-chat-scroll-geometry'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
-
-function geometryOf(el: HTMLElement): ScrollGeometry {
-  return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
-}
 
 function proseToMarkdown(blocks: NativeChatBlock[]): string {
   return blocks
@@ -287,13 +286,14 @@ export function NativeChatMessageList({
     if (!el) {
       return
     }
-    const geometry = geometryOf(el)
-    const stick = isNearBottom(geometry)
+    const stick = isNativeChatNearBottom(el.scrollTop, el.scrollHeight, el.clientHeight)
     setStuckToBottom(stick)
-    setShowJump(shouldShowJumpToLatest(stick, geometry))
+    setShowJump(
+      shouldShowNativeChatJumpToLatest(stick, el.scrollTop, el.scrollHeight, el.clientHeight)
+    )
     // Near the top — page in older history, anchoring the current position so the
     // prepend doesn't yank the view.
-    if (geometry.scrollTop < 80 && hasMore && !loadingEarlier) {
+    if (el.scrollTop < 80 && hasMore && !loadingEarlier) {
       prependAnchorRef.current = { scrollHeight: el.scrollHeight, scrollTop: el.scrollTop }
       loadEarlier()
     }

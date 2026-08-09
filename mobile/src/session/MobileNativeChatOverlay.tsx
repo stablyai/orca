@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
+import { MobileNativeChatView } from './MobileNativeChatView'
+import type { MobileNativeChatInputLockReason } from './use-mobile-native-chat-input-lock'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
@@ -59,6 +60,7 @@ export function MobileNativeChatOverlay({
   return (
     <View style={styles.overlay}>
       <MobileNativeChatView
+        conversationIdentity={controller.nativeChatIdentity}
         messages={session.messages}
         folded={folded}
         status={session.status}

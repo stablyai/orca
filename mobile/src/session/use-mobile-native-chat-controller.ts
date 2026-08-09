@@ -75,6 +75,7 @@ export function useMobileNativeChatController(args: {
   const activeChatSessionId = activeChatResolution?.sessionId ?? null
   const routeKey = `${hostId}\0${worktreeId}\0${activeSessionTabId ?? ''}`
   const streamIdentity = `${routeKey}\0${activeChatSessionId ?? ''}\0${activeHandleRef.current ?? ''}`
+  const nativeChatIdentity = `${streamIdentity}\0${activeChatResolution?.agent ?? ''}\0${activeChatResolution?.transcriptPath ?? ''}`
   // Same chat, but keyed off the tab rather than the view-gated resolution:
   // `streamIdentity` goes session-less the moment the user peeks at the terminal,
   // and a scope that flips on a view toggle throws the gate's baseline away.
@@ -256,6 +257,7 @@ export function useMobileNativeChatController(args: {
     showNativeChat,
     showNativeChatRef,
     nativeChatAgent: activeChatResolution?.agent ?? null,
+    nativeChatIdentity,
     chatComposerText,
     setChatComposerText,
     chatPending,

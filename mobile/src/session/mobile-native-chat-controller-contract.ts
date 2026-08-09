@@ -15,6 +15,7 @@ export type MobileNativeChatController = {
   showNativeChatRef: MutableRefObject<boolean>
   /** Resolved agent for the active chat tab (names the empty-state copy). */
   nativeChatAgent: string | null
+  nativeChatIdentity: string
   chatComposerText: string
   setChatComposerText: Dispatch<SetStateAction<string>>
   chatPending: MobileNativeChatPendingMessage[]
