@@ -10252,6 +10252,10 @@ export class OrcaRuntimeService {
     return null
   }
 
+  private isLiveCursorNativeTitle(rawTitle: string, meta?: TerminalTitleFactMeta): boolean {
+    return isCursorNativeAgentTitle(rawTitle) && meta?.staleWorkingTitleClear !== true
+  }
+
   /** Display fallback for identities intentionally omitted from liveness records. */
   private getTrackedDisplayTitleForPty(ptyId: string): string | null {
     return (
@@ -10263,6 +10267,11 @@ export class OrcaRuntimeService {
 
   private getUnpersistedTrackedTitleForPty(ptyId: string | null): string | null {
     if (!ptyId || this.getTrackedRawTitleForPty(ptyId) !== null) {
+      return null
+    }
+    // Why: a manual title is authoritative until explicitly cleared with null.
+    const pty = this.ptysById.get(ptyId)
+    if (pty && pty.title !== null) {
       return null
     }
     return this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.getLastNormalizedTitle() ?? null
@@ -10317,8 +10326,7 @@ export class OrcaRuntimeService {
             ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
           })
           const changed = this.applyTrackedPtyTitle(ptyId, rawTitle, normalizedTitle, meta)
-          const isLiveCursorNativeTitle =
-            isCursorNativeAgentTitle(rawTitle) && meta?.staleWorkingTitleClear !== true
+          const isLiveCursorNativeTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
           if (!changed && !isLiveCursorNativeTitle) {
             return
           }
@@ -10409,8 +10417,7 @@ export class OrcaRuntimeService {
     // so working/idle transitions are unaffected by normalization; the records
     // store the NORMALIZED title so rotating Grok/Pi/Gemini frames collapse to
     // one stable stored label (#7880) instead of churning `ps`/mobile tabs.
-    const isLiveCursorNativeTitle =
-      isCursorNativeAgentTitle(rawTitle) && meta?.staleWorkingTitleClear !== true
+    const isLiveCursorNativeTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
     const agentStatus = detectAgentStatusFromTitle(rawTitle)
     let ptyRecordChanged = false
     const pty = this.ptysById.get(ptyId)

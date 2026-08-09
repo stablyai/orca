@@ -9154,6 +9154,36 @@ describe('OrcaRuntimeService', () => {
       expect(terminal).not.toHaveProperty('agentStatus')
     })
 
+    it('lets an explicit terminal rename override cached Cursor identity and restores it after clearing', async () => {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`)
+
+      runtime.onPtyData('pty-1', '\x1b]0;Cursor Agent\x07', 100)
+      const mobileTerminal = (
+        await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+      ).tabs.find((tab) => tab.type === 'terminal')
+      if (mobileTerminal?.type !== 'terminal' || !mobileTerminal.terminal) {
+        throw new Error('expected mobile terminal handle')
+      }
+      expect(mobileTerminal.terminal).toBe(created.handle)
+
+      await runtime.renameTerminal(mobileTerminal.terminal, 'Pinned Cursor')
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs[0]).toMatchObject(
+        { type: 'terminal', title: 'Pinned Cursor' }
+      )
+
+      await runtime.renameTerminal(mobileTerminal.terminal, null)
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs[0]).toMatchObject(
+        { type: 'terminal', title: 'Cursor Agent' }
+      )
+    })
+
     it('confirms title-based agent exits against the foreground process', async () => {
       const { runtime, batches } = createSideEffectRuntime()
       syncSinglePty(runtime)

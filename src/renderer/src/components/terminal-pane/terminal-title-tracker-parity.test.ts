@@ -30,14 +30,15 @@ type TitleFactPath = {
   feed: (chunk: string) => void
 }
 
-function createRendererPath(): TitleFactPath {
+function createRendererPath(initialTitle?: string): TitleFactPath {
   const events: TitleFactEvent[] = []
   const processor = createPtyOutputProcessor({
     onTitleChange: (normalized, raw) => events.push({ kind: 'title', normalized, raw }),
     onAgentBecameWorking: () => events.push({ kind: 'became-working' }),
     onAgentBecameIdle: (title) => events.push({ kind: 'became-idle', title }),
     onAgentExited: () => events.push({ kind: 'agent-exited' }),
-    onBell: () => events.push({ kind: 'bell' })
+    onBell: () => events.push({ kind: 'bell' }),
+    initialAgentTitle: initialTitle
   })
   const callbacks = { onData: () => {} }
   return {
@@ -52,18 +53,21 @@ function createRendererPath(): TitleFactPath {
   }
 }
 
-function createMainPath(): TitleFactPath {
+function createMainPath(initialTitle?: string): TitleFactPath {
   const events: TitleFactEvent[] = []
   // Why: mirrors OrcaRuntimeService.onPtyData — the per-PTY OSC 9999
   // processor strips status payloads before the title tracker sees the chunk.
   const processAgentStatusChunk = createAgentStatusOscProcessor()
-  const tracker = createTerminalTitleTracker({
-    onTitle: (normalized, raw) => events.push({ kind: 'title', normalized, raw }),
-    onAgentBecameWorking: () => events.push({ kind: 'became-working' }),
-    onAgentBecameIdle: (title) => events.push({ kind: 'became-idle', title }),
-    onAgentExited: () => events.push({ kind: 'agent-exited' }),
-    onBell: () => events.push({ kind: 'bell' })
-  })
+  const tracker = createTerminalTitleTracker(
+    {
+      onTitle: (normalized, raw) => events.push({ kind: 'title', normalized, raw }),
+      onAgentBecameWorking: () => events.push({ kind: 'became-working' }),
+      onAgentBecameIdle: (title) => events.push({ kind: 'became-idle', title }),
+      onAgentExited: () => events.push({ kind: 'agent-exited' }),
+      onBell: () => events.push({ kind: 'bell' })
+    },
+    initialTitle !== undefined ? { initialTitle } : undefined
+  )
   return {
     events,
     feed(chunk: string): void {
@@ -137,6 +141,21 @@ describe('main title tracker parity with the renderer transport processor', () =
       'title',
       'title',
       'became-working'
+    ])
+  })
+
+  it('keeps a restored native Cursor title identity-only before synthesized work', () => {
+    const restoredPaths = {
+      renderer: createRendererPath('Cursor Agent'),
+      main: createMainPath('Cursor Agent')
+    }
+
+    feedBoth(restoredPaths, `${ESC}]0;⠋ Cursor Agent${BEL}`)
+
+    expect(restoredPaths.main.events).toEqual(restoredPaths.renderer.events)
+    expect(restoredPaths.main.events).toEqual([
+      { kind: 'title', normalized: '⠋ Cursor Agent', raw: '⠋ Cursor Agent' },
+      { kind: 'became-working' }
     ])
   })
 

@@ -187,6 +187,10 @@ export function createPtyOutputProcessor({
     retained: () => pendingSideEffects.length
   }
   const disposePendingSideEffectGauge = registerPtySideEffectPendingGauge(pendingSideEffectGauge)
+  const initialAgentStatusTitle =
+    initialAgentTitle !== undefined && !isIgnoredCursorNativeTitle(initialAgentTitle)
+      ? initialAgentTitle
+      : undefined
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -195,7 +199,7 @@ export function createPtyOutputProcessor({
           },
           onAgentBecameWorking,
           onAgentExited,
-          initialAgentTitle
+          initialAgentStatusTitle
         )
       : null
 

@@ -138,6 +138,10 @@ export function createTerminalTitleTracker(
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
   // Why: flags the stale-timer clear so its idle callback carries timer provenance, not a genuine task-complete.
   let applyingStaleWorkingTitleClear = false
+  const initialAgentStatusTitle =
+    options.initialTitle !== undefined && !isCursorNativeAgentTitle(options.initialTitle)
+      ? options.initialTitle
+      : undefined
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -149,7 +153,7 @@ export function createTerminalTitleTracker(
           },
           onAgentBecameWorking,
           onAgentExited,
-          options.initialTitle
+          initialAgentStatusTitle
         )
       : null
 
