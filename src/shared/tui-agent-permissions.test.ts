@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyAgentPermissionMode,
   AUTO_TUI_AGENT_ARGS,
+  AUTO_TUI_AGENT_ENV,
   isAutoApprovingPermissionMode,
   resolveAgentPermissionModeSummary,
   resolveTuiAgentPermissionMode,
@@ -25,7 +26,7 @@ describe('tui agent permissions', () => {
     )
   })
 
-  it('recognizes the applied auto profile as auto (verified agents only)', () => {
+  it('recognizes the applied auto profile as auto (vendor-supported harnesses)', () => {
     const applied = applyAgentPermissionMode({
       mode: 'auto',
       agentDefaultArgs: YOLO_TUI_AGENT_ARGS,
@@ -33,11 +34,21 @@ describe('tui agent permissions', () => {
     })
     expect(resolveAgentPermissionModeSummary(applied)).toBe('auto')
     expect(applied.agentDefaultArgs.claude).toBe(AUTO_TUI_AGENT_ARGS.claude)
+    expect(applied.agentDefaultArgs['claude-agent-teams']).toBe(
+      AUTO_TUI_AGENT_ARGS['claude-agent-teams']
+    )
+    expect(applied.agentDefaultArgs.openclaude).toBe(AUTO_TUI_AGENT_ARGS.openclaude)
     expect(applied.agentDefaultArgs.codex).toBe(AUTO_TUI_AGENT_ARGS.codex)
+    expect(applied.agentDefaultArgs.antigravity).toBe(AUTO_TUI_AGENT_ARGS.antigravity)
+    expect(applied.agentDefaultArgs.gemini).toBe(AUTO_TUI_AGENT_ARGS.gemini)
+    expect(applied.agentDefaultArgs['qwen-code']).toBe(AUTO_TUI_AGENT_ARGS['qwen-code'])
     expect(applied.agentDefaultArgs.grok).toBe(AUTO_TUI_AGENT_ARGS.grok)
+    expect(applied.agentDefaultArgs.devin).toBe(AUTO_TUI_AGENT_ARGS.devin)
+    expect(applied.agentDefaultEnv.goose).toEqual(AUTO_TUI_AGENT_ENV.goose)
     // Why: agents without a verified auto preset must not inherit yolo when Auto is chosen.
-    expect(applied.agentDefaultArgs.gemini).toBe('')
-    expect(applied.agentDefaultEnv.goose).toEqual({})
+    expect(applied.agentDefaultArgs.copilot).toBe('')
+    expect(applied.agentDefaultArgs.cursor).toBe('')
+    expect(applied.agentDefaultArgs.aider).toBe('')
   })
 
   it('preserves custom agent arguments when applying manual mode', () => {
@@ -67,6 +78,17 @@ describe('tui agent permissions', () => {
 
     expect(result.agentDefaultArgs.claude).toBe('--model sonnet')
     expect(result.agentDefaultArgs.codex).toBe(AUTO_TUI_AGENT_ARGS.codex)
+  })
+
+  it('preserves custom agent env when applying auto mode', () => {
+    const customGoose = { GOOSE_MODE: 'chat', EXTRA: '1' }
+    const result = applyAgentPermissionMode({
+      mode: 'auto',
+      agentDefaultArgs: {},
+      agentDefaultEnv: { goose: customGoose }
+    })
+
+    expect(result.agentDefaultEnv.goose).toEqual(customGoose)
   })
 
   it('preserves whitespace-only arguments when applying permission modes', () => {
@@ -187,6 +209,36 @@ describe('tui agent permissions', () => {
         agentEnv: YOLO_TUI_AGENT_ENV.goose
       })
     ).toBe('yolo')
+  })
+
+  it('resolves env-driven goose auto launches as auto', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'goose',
+        agentArgs: '',
+        agentEnv: AUTO_TUI_AGENT_ENV.goose
+      })
+    ).toBe('auto')
+  })
+
+  it('classifies each new vendor auto-arg harness as auto', () => {
+    const agents = [
+      'claude-agent-teams',
+      'openclaude',
+      'antigravity',
+      'gemini',
+      'qwen-code',
+      'devin'
+    ] as const
+    for (const agent of agents) {
+      expect(
+        resolveTuiAgentPermissionMode({
+          agent,
+          agentArgs: AUTO_TUI_AGENT_ARGS[agent],
+          agentEnv: {}
+        })
+      ).toBe('auto')
+    }
   })
 
   it('treats yolo and auto as auto-approving permission modes', () => {
