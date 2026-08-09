@@ -2,14 +2,24 @@
 import { act, cleanup, render } from '@testing-library/react'
 import type { editor } from 'monaco-editor'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitStatusEntry, Repo, Worktree } from '../../../../../shared/types'
+import type { LargeDiffRenderLimit } from '../../../../../shared/large-diff-render-limit'
+import type {
+  GitDiffResult,
+  GitStatusEntry,
+  GlobalSettings,
+  Repo,
+  Worktree
+} from '../../../../../shared/types'
 
 const getRuntimeGitDiffMock = vi.hoisted(() => vi.fn())
 const toastMock = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), warning: vi.fn() }))
 const storeState = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
-const selectorState = vi.hoisted(() => ({
-  worktree: null as unknown,
-  repo: null as unknown
+// Why: keyed lookups, not constants — the doubles must prove the hook resolves the FILE's worktree
+// and routes that worktree's SSH connection, which argument-blind stubs cannot pin.
+const storeDoubles = vi.hoisted(() => ({
+  worktrees: new Map<string, unknown>(),
+  repos: new Map<string, unknown>(),
+  connectionIdByWorktreeId: new Map<string, string>()
 }))
 
 vi.mock('@/store', () => ({
@@ -19,20 +29,32 @@ vi.mock('@/store', () => ({
   )
 }))
 vi.mock('@/store/selectors', () => ({
-  useWorktreeById: () => selectorState.worktree,
-  useRepoById: () => selectorState.repo
+  useWorktreeById: (worktreeId: string | null) =>
+    worktreeId ? (storeDoubles.worktrees.get(worktreeId) ?? null) : null,
+  useRepoMap: () => storeDoubles.repos
 }))
 vi.mock('@/runtime/runtime-git-client', () => ({ getRuntimeGitDiff: getRuntimeGitDiffMock }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: (settings: unknown) => settings
+  settingsForRuntimeOwner: (
+    settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+    runtimeEnvironmentId: string | null | undefined
+  ) => (runtimeEnvironmentId ? { activeRuntimeEnvironmentId: runtimeEnvironmentId } : settings)
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))
+vi.mock('@/lib/connection-context', () => ({
+  getConnectionIdForFile: (worktreeId: string) =>
+    storeDoubles.connectionIdByWorktreeId.get(worktreeId) ?? null
+}))
 vi.mock('sonner', () => ({ toast: toastMock }))
 
-import { GIT_GUTTER_DEBOUNCE_MS, useEditorGitGutter } from './useEditorGitGutter'
+import {
+  GIT_GUTTER_DEBOUNCE_MS,
+  GIT_GUTTER_MAX_WAIT_MS,
+  useEditorGitGutter
+} from './useEditorGitGutter'
 
 const FILE_ID = '/repo/wt/src/a.ts'
 const WORKTREE_ID = 'repo-1::wt'
+const OTHER_WORKTREE_ID = 'repo-2::wt'
 const BASELINE = 'alpha\nbravo\ncharlie'
 const MODIFIED = 'alpha\nBRAVO\ncharlie'
 
@@ -47,20 +69,28 @@ const MODIFIED_LINE_TWO_DECORATION = {
 let decorationsCollection: { set: ReturnType<typeof vi.fn>; clear: ReturnType<typeof vi.fn> }
 let editorInstance: editor.IStandaloneCodeEditor
 
-function textDiffResult(originalContent: string, extra: Record<string, unknown> = {}): unknown {
+function textDiffResult(
+  originalContent: string,
+  largeDiffRenderLimit?: LargeDiffRenderLimit
+): GitDiffResult {
   return {
     kind: 'text',
     originalContent,
     modifiedContent: '',
     originalIsBinary: false,
     modifiedIsBinary: false,
-    ...extra
+    largeDiffRenderLimit
   }
 }
 
-function setStore(
-  overrides: { statusEntries?: GitStatusEntry[]; headSha?: string; gutterEnabled?: boolean } = {}
-): void {
+type StoreOverrides = {
+  statusEntries?: GitStatusEntry[]
+  headSha?: string
+  gutterEnabled?: boolean
+  runtimeEnvironmentId?: string
+}
+
+function setStore(overrides: StoreOverrides = {}): void {
   storeState.current = {
     settings: {
       activeRuntimeEnvironmentId: null,
@@ -74,7 +104,8 @@ function setStore(
         worktreeId: WORKTREE_ID,
         language: 'typescript',
         isDirty: false,
-        mode: 'edit'
+        mode: 'edit',
+        runtimeEnvironmentId: overrides.runtimeEnvironmentId
       }
     ],
     gitStatusByWorktree: {
@@ -99,15 +130,15 @@ async function flushBaseline(): Promise<void> {
   })
 }
 
-async function runDebounce(): Promise<void> {
+async function advance(milliseconds: number): Promise<void> {
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(GIT_GUTTER_DEBOUNCE_MS)
+    await vi.advanceTimersByTimeAsync(milliseconds)
   })
 }
 
 async function settle(): Promise<void> {
   await flushBaseline()
-  await runDebounce()
+  await advance(GIT_GUTTER_DEBOUNCE_MS)
 }
 
 beforeEach(() => {
@@ -121,12 +152,15 @@ beforeEach(() => {
   toastMock.mockReset()
   toastMock.error.mockReset()
   toastMock.warning.mockReset()
-  selectorState.worktree = {
+  storeDoubles.worktrees.clear()
+  storeDoubles.repos.clear()
+  storeDoubles.connectionIdByWorktreeId.clear()
+  storeDoubles.worktrees.set(WORKTREE_ID, {
     id: WORKTREE_ID,
     repoId: 'repo-1',
     path: '/repo/wt'
-  } as unknown as Worktree
-  selectorState.repo = { id: 'repo-1', kind: 'git' } as unknown as Repo
+  } as unknown as Worktree)
+  storeDoubles.repos.set('repo-1', { id: 'repo-1', kind: 'git' } as unknown as Repo)
   setStore()
 })
 
@@ -142,10 +176,30 @@ describe('useEditorGitGutter', () => {
 
     expect(getRuntimeGitDiffMock).toHaveBeenCalledTimes(1)
     expect(getRuntimeGitDiffMock).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId: WORKTREE_ID, worktreePath: '/repo/wt' }),
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: WORKTREE_ID,
+        worktreePath: '/repo/wt',
+        connectionId: undefined
+      },
       { filePath: 'src/a.ts', staged: false, compareAgainstHead: true }
     )
     expect(decorationsCollection.set).toHaveBeenLastCalledWith([MODIFIED_LINE_TWO_DECORATION])
+  })
+
+  it('routes the read through the file worktree ssh connection and runtime owner', async () => {
+    storeDoubles.connectionIdByWorktreeId.set(WORKTREE_ID, 'ssh-target-1')
+    setStore({ runtimeEnvironmentId: 'env-7' })
+    render(<GutterHarness content={MODIFIED} />)
+    await settle()
+
+    expect(getRuntimeGitDiffMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: 'ssh-target-1',
+        settings: { activeRuntimeEnvironmentId: 'env-7' }
+      }),
+      expect.anything()
+    )
   })
 
   it('performs no git read across a burst of content changes', async () => {
@@ -161,10 +215,48 @@ describe('useEditorGitGutter', () => {
       'alpha\nbravo'
     ]) {
       rerender(<GutterHarness content={keystroke} />)
-      await runDebounce()
+      await advance(GIT_GUTTER_DEBOUNCE_MS)
     }
 
     expect(getRuntimeGitDiffMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps repainting through edits arriving faster than the debounce window', async () => {
+    const { rerender } = render(<GutterHarness content={BASELINE} />)
+    await settle()
+    const paintsBeforeBurst = decorationsCollection.set.mock.calls.length
+
+    // Changes spaced under the debounce — a sustained agent write. Trailing-only starves: every
+    // change cancels the pending timer, so nothing repaints until the burst ends seconds later.
+    const changeCount = 40
+    const changeIntervalMs = GIT_GUTTER_DEBOUNCE_MS - 50
+    for (let change = 0; change < changeCount; change += 1) {
+      rerender(<GutterHarness content={`${BASELINE}\nadded-${change}`} />)
+      await advance(changeIntervalMs)
+    }
+    const paintsDuringBurst = decorationsCollection.set.mock.calls.length - paintsBeforeBurst
+    await advance(GIT_GUTTER_DEBOUNCE_MS)
+
+    // One paint per maxWait window, minus a slot of slack for where the burst lands in it.
+    const owedPaints = Math.floor((changeCount * changeIntervalMs) / GIT_GUTTER_MAX_WAIT_MS) - 1
+    expect(paintsDuringBurst).toBeGreaterThanOrEqual(owedPaints)
+    expect(decorationsCollection.set).toHaveBeenLastCalledWith([
+      {
+        range: { startLineNumber: 4, startColumn: 1, endLineNumber: 4, endColumn: 1 },
+        options: {
+          isWholeLine: true,
+          linesDecorationsClassName: 'orca-git-gutter orca-git-gutter-added'
+        }
+      }
+    ])
+  })
+
+  it('paints a fresh baseline on the leading edge instead of waiting out the debounce', async () => {
+    render(<GutterHarness content={MODIFIED} />)
+    await flushBaseline()
+    await advance(1)
+
+    expect(decorationsCollection.set).toHaveBeenCalledTimes(1)
   })
 
   it('refetches when the worktree HEAD moves', async () => {
@@ -218,6 +310,22 @@ describe('useEditorGitGutter', () => {
     expect(decorationsCollection.set).toHaveBeenCalledTimes(1)
   })
 
+  it('rebuilds the collection when the editor instance is swapped', async () => {
+    const { rerender } = render(<GutterHarness content={MODIFIED} />)
+    await settle()
+    const firstCollection = decorationsCollection
+
+    decorationsCollection = { set: vi.fn(), clear: vi.fn() }
+    editorInstance = {
+      createDecorationsCollection: vi.fn(() => decorationsCollection)
+    } as unknown as editor.IStandaloneCodeEditor
+    rerender(<GutterHarness content={MODIFIED} />)
+    await settle()
+
+    expect(firstCollection.clear).toHaveBeenCalled()
+    expect(decorationsCollection.set).toHaveBeenLastCalledWith([MODIFIED_LINE_TWO_DECORATION])
+  })
+
   it('does nothing when the gutter setting is off', async () => {
     setStore({ gutterEnabled: false })
     render(<GutterHarness content={MODIFIED} />)
@@ -236,6 +344,43 @@ describe('useEditorGitGutter', () => {
     expect(decorationsCollection.set).not.toHaveBeenCalled()
   })
 
+  it('does not read git while the path is an unresolved conflict', async () => {
+    setStore({
+      statusEntries: [
+        {
+          path: 'src/a.ts',
+          status: 'modified',
+          area: 'unstaged',
+          conflictKind: 'both_modified',
+          conflictStatus: 'unresolved'
+        }
+      ]
+    })
+    render(<GutterHarness content={MODIFIED} />)
+    await settle()
+
+    expect(getRuntimeGitDiffMock).not.toHaveBeenCalled()
+    expect(decorationsCollection.set).not.toHaveBeenCalled()
+  })
+
+  it('keeps painting a file whose text merely looks like conflict markers', async () => {
+    const setextHeading = 'Summary\n=======\nbody'
+    getRuntimeGitDiffMock.mockResolvedValue(textDiffResult('Summary\n=======\nold body'))
+    render(<GutterHarness content={setextHeading} />)
+    await settle()
+
+    expect(getRuntimeGitDiffMock).toHaveBeenCalledTimes(1)
+    expect(decorationsCollection.set).toHaveBeenLastCalledWith([
+      {
+        range: { startLineNumber: 3, startColumn: 1, endLineNumber: 3, endColumn: 1 },
+        options: {
+          isWholeLine: true,
+          linesDecorationsClassName: 'orca-git-gutter orca-git-gutter-modified'
+        }
+      }
+    ])
+  })
+
   it('paints nothing for a binary file', async () => {
     getRuntimeGitDiffMock.mockResolvedValue({
       kind: 'binary',
@@ -243,7 +388,7 @@ describe('useEditorGitGutter', () => {
       modifiedContent: '',
       originalIsBinary: true,
       modifiedIsBinary: true
-    })
+    } satisfies GitDiffResult)
     render(<GutterHarness content={MODIFIED} />)
     await settle()
 
@@ -253,13 +398,33 @@ describe('useEditorGitGutter', () => {
 
   it('paints nothing when the diff came back over the render limit', async () => {
     getRuntimeGitDiffMock.mockResolvedValue(
-      textDiffResult('', { largeDiffRenderLimit: { kind: 'lines', limit: 20000, actual: 90000 } })
+      textDiffResult('', {
+        limited: true,
+        reason: 'line-count',
+        lineCounts: { original: 900_000, modified: 900_000 },
+        characterCount: 9_000_000,
+        limits: { maxLinesPerSide: 120_000, maxCombinedCharacters: 6_000_000 }
+      })
     )
     render(<GutterHarness content={MODIFIED} />)
     await settle()
 
     expect(getRuntimeGitDiffMock).toHaveBeenCalledTimes(1)
     expect(decorationsCollection.set).not.toHaveBeenCalled()
+  })
+
+  it('still paints when the host reports the diff was within the render limit', async () => {
+    getRuntimeGitDiffMock.mockResolvedValue(
+      textDiffResult(BASELINE, {
+        limited: false,
+        lineCounts: { original: 3, modified: 3 },
+        characterCount: 40
+      })
+    )
+    render(<GutterHarness content={MODIFIED} />)
+    await settle()
+
+    expect(decorationsCollection.set).toHaveBeenLastCalledWith([MODIFIED_LINE_TWO_DECORATION])
   })
 
   it('drops the marks silently when the git read fails', async () => {
@@ -274,7 +439,14 @@ describe('useEditorGitGutter', () => {
   })
 
   it('does not read git in a folder workspace with no repository', async () => {
-    selectorState.repo = { id: 'repo-1', kind: 'folder' } as unknown as Repo
+    storeDoubles.repos.set('repo-1', { id: 'repo-1', kind: 'folder' } as unknown as Repo)
+    // Why: a git-backed repo elsewhere in the store must not leak in — the gate is the file's own.
+    storeDoubles.worktrees.set(OTHER_WORKTREE_ID, {
+      id: OTHER_WORKTREE_ID,
+      repoId: 'repo-2',
+      path: '/repo/other'
+    } as unknown as Worktree)
+    storeDoubles.repos.set('repo-2', { id: 'repo-2', kind: 'git' } as unknown as Repo)
     setStore({ statusEntries: [] })
     render(<GutterHarness content={MODIFIED} />)
     await settle()

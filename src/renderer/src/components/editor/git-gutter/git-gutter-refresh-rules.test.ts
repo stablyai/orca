@@ -12,7 +12,6 @@ describe('isGitGutterEligible', () => {
     mode: 'edit' as const,
     relativePath: 'src/a.ts',
     statusEntries: [entry()],
-    hasConflictMarkers: false,
     isGitBackedWorktree: true
   }
 
@@ -51,8 +50,40 @@ describe('isGitGutterEligible', () => {
     ).toBe(true)
   })
 
-  it('refuses while the file still has conflict markers', () => {
-    expect(isGitGutterEligible({ ...base, hasConflictMarkers: true })).toBe(false)
+  it('refuses while the path is an unresolved conflict', () => {
+    expect(
+      isGitGutterEligible({
+        ...base,
+        statusEntries: [entry({ conflictKind: 'both_modified', conflictStatus: 'unresolved' })]
+      })
+    ).toBe(false)
+  })
+
+  it('allows a conflict the user already resolved locally', () => {
+    expect(
+      isGitGutterEligible({
+        ...base,
+        statusEntries: [
+          entry({ conflictKind: 'both_modified', conflictStatus: 'resolved_locally' })
+        ]
+      })
+    ).toBe(true)
+  })
+
+  it('ignores an unresolved conflict belonging to another file', () => {
+    expect(
+      isGitGutterEligible({
+        ...base,
+        statusEntries: [
+          entry(),
+          entry({
+            path: 'src/other.ts',
+            conflictKind: 'both_modified',
+            conflictStatus: 'unresolved'
+          })
+        ]
+      })
+    ).toBe(true)
   })
 
   it('refuses when status has not loaded yet', () => {

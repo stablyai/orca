@@ -24,17 +24,9 @@ export function isGitGutterEligible(args: {
   mode: OpenFile['mode']
   relativePath: string
   statusEntries: readonly GitStatusEntry[] | undefined
-  hasConflictMarkers: boolean
   isGitBackedWorktree: boolean
 }): boolean {
-  // Why: conflict decorations already occupy this gutter lane (monaco-conflict-decorations.ts);
-  // stacking both is unreadable.
-  if (
-    !args.enabled ||
-    !args.isGitBackedWorktree ||
-    args.mode !== 'edit' ||
-    args.hasConflictMarkers
-  ) {
+  if (!args.enabled || !args.isGitBackedWorktree || args.mode !== 'edit') {
     return false
   }
   // Why: without status we cannot tell "clean and tracked" from "untracked", and guessing
@@ -42,9 +34,15 @@ export function isGitGutterEligible(args: {
   if (!args.statusEntries) {
     return false
   }
-  return !entriesForPath(args.statusEntries, args.relativePath).some((candidate) =>
-    STATUSES_ABSENT_FROM_HEAD_AT_PATH.includes(candidate.status)
-  )
+  const entries = entriesForPath(args.statusEntries, args.relativePath)
+  // Why: conflict decorations already occupy this gutter lane (monaco-conflict-decorations.ts);
+  // stacking both is unreadable. Git's own conflict status is the signal — scanning the buffer for
+  // marker text costs a full pass per keystroke and reads a markdown `=======` setext underline as
+  // a conflict, silently killing the gutter for the rest of the file.
+  if (entries.some((candidate) => candidate.conflictStatus === 'unresolved')) {
+    return false
+  }
+  return !entries.some((candidate) => STATUSES_ABSENT_FROM_HEAD_AT_PATH.includes(candidate.status))
 }
 
 /**
