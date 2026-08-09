@@ -11,7 +11,8 @@ import {
   detectAgentStatusFromTitle,
   extractAllOscTitles,
   isCursorNativeAgentTitle,
-  normalizeTerminalTitle
+  normalizeTerminalTitle,
+  shouldSuppressCursorNativeTitle
 } from './agent-detection'
 import { createBellDetector } from './terminal-bell-detector'
 import {
@@ -137,6 +138,10 @@ export function createTerminalTitleTracker(
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
   // Why: flags the stale-timer clear so its idle callback carries timer provenance, not a genuine task-complete.
   let applyingStaleWorkingTitleClear = false
+  const initialAgentStatusTitle =
+    options.initialTitle !== undefined && !isCursorNativeAgentTitle(options.initialTitle)
+      ? options.initialTitle
+      : undefined
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -148,7 +153,7 @@ export function createTerminalTitleTracker(
           },
           onAgentBecameWorking,
           onAgentExited,
-          options.initialTitle
+          initialAgentStatusTitle
         )
       : null
 
@@ -162,6 +167,13 @@ export function createTerminalTitleTracker(
   function applyObservedTitle(rawTitle: string): void {
     // Why: cursor-agent re-emits its bare native title mid-turn; passing it through would stomp Orca's synthesized spinner state.
     if (isCursorNativeAgentTitle(rawTitle)) {
+      if (shouldSuppressCursorNativeTitle(lastEmittedTitle)) {
+        return
+      }
+      // Why: a hookless Cursor pane needs the literal once so it has an identity (#10258),
+      // but never as activity — its null status would read as an exit in the status tracker.
+      lastEmittedTitle = normalizeTerminalTitle(rawTitle)
+      onTitle?.(lastEmittedTitle, rawTitle)
       return
     }
     lastEmittedTitle = normalizeTerminalTitle(rawTitle)
@@ -258,12 +270,15 @@ export function createTerminalTitleTracker(
     handleChunk,
     applySyntheticTitleFrame,
     seedInitialTitle(rawTitle: string): void {
-      // Why: the cursor-agent literal drop applies to seeds too — a bare native title would stomp synthesized spinner state.
-      if (lastEmittedTitle !== null || !rawTitle || isCursorNativeAgentTitle(rawTitle)) {
+      if (lastEmittedTitle !== null || !rawTitle) {
         return
       }
       lastEmittedTitle = normalizeTerminalTitle(rawTitle)
-      agentTracker?.seedTitle(rawTitle)
+      // Why: the cursor-agent literal seeds identity only — feeding its null status to the
+      // tracker would make the next real frame look like an agent exit.
+      if (!isCursorNativeAgentTitle(rawTitle)) {
+        agentTracker?.seedTitle(rawTitle)
+      }
     },
     restoreLastAgentExit(): AgentStatus | null {
       return agentTracker?.restoreLastExit() ?? null

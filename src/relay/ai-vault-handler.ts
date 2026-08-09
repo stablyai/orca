@@ -3,8 +3,14 @@ import { homedir } from 'node:os'
 import { AI_VAULT_SCOPE_PATHS_MAX_COUNT, type AiVaultListResult } from '../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import {
+  AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT,
+  type AiVaultSessionTitleRequest,
+  type AiVaultSessionTitlesResult
+} from '../shared/ai-vault-session-title'
+import {
   SSH_AI_VAULT_LIST_LIMIT_MAX,
   SSH_AI_VAULT_LIST_SESSIONS_METHOD,
+  SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD,
   SSH_AI_VAULT_SCOPE_PATH_MAX_LENGTH,
   type SshAiVaultRelayListParams
 } from '../shared/ssh-ai-vault-relay'
@@ -16,6 +22,7 @@ import { readRelayFileContent } from './fs-handler-file-read'
 import { relayLogLine } from './relay-diagnostic-log'
 import type { RelayDispatcher } from './dispatcher'
 import { AiVaultScanCoordinator } from '../main/ai-vault/ai-vault-scan-coordinator'
+import { readAiVaultSessionTitlesFromFiles } from '../main/ai-vault/session-title-file-reader'
 
 type ScanRemoteSessions = typeof scanRemoteAiVaultSessions
 
@@ -48,6 +55,16 @@ export class AiVaultHandler {
     dispatcher.onRequest(SSH_AI_VAULT_LIST_SESSIONS_METHOD, (params, context) =>
       this.listSessions(hostPlatform, params, context.signal)
     )
+    dispatcher.onRequest(SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD, (params, context) =>
+      this.resolveSessionTitles(params, context.signal)
+    )
+  }
+
+  private resolveSessionTitles(
+    rawParams: Record<string, unknown>,
+    signal?: AbortSignal
+  ): Promise<AiVaultSessionTitlesResult> {
+    return readAiVaultSessionTitlesFromFiles(normalizeTitleRequests(rawParams.requests), { signal })
   }
 
   private async listSessions(
@@ -94,6 +111,34 @@ export class AiVaultHandler {
       ]
     }
   }
+}
+
+function normalizeTitleRequests(raw: unknown): AiVaultSessionTitleRequest[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  const requests: AiVaultSessionTitleRequest[] = []
+  for (const value of raw.slice(0, AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT)) {
+    if (!value || typeof value !== 'object') {
+      continue
+    }
+    const record = value as Record<string, unknown>
+    const agent = record.agent
+    const sessionId = typeof record.sessionId === 'string' ? record.sessionId.trim() : ''
+    const transcriptPath =
+      typeof record.transcriptPath === 'string' ? record.transcriptPath.trim() : ''
+    if (
+      (agent !== 'claude' && agent !== 'codex') ||
+      !sessionId ||
+      sessionId.length > 512 ||
+      !transcriptPath ||
+      transcriptPath.length > 32_768
+    ) {
+      continue
+    }
+    requests.push({ agent, sessionId, transcriptPath })
+  }
+  return requests
 }
 
 export function normalizeSshAiVaultRelayListParams(

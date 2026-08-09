@@ -122,4 +122,31 @@ describe('buildAiVaultResumeCommand', () => {
       })
     ).toBe("cd '/Users/ada/repo' && omp --resume '019f27cd-4268-7000-96e7-62f42a55c144'")
   })
+
+  it('resumes Prime Agent by absolute transcript path like OMP', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'prime-agent',
+        sessionId: 'dddddddd-eeee-4fff-8aaa-111111111111',
+        resumeFilePath:
+          '/Users/ada/.prime/agent/sessions/dddddddd-eeee-4fff-8aaa-111111111111.jsonl',
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe(
+      "cd '/Users/ada/repo' && prime-agent --resume '/Users/ada/.prime/agent/sessions/dddddddd-eeee-4fff-8aaa-111111111111.jsonl'"
+    )
+  })
+
+  it('falls back to the session id when no Prime Agent transcript path is known', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'prime-agent',
+        sessionId: 'dddddddd-eeee-4fff-8aaa-111111111111',
+        resumeFilePath: null,
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/Users/ada/repo' && prime-agent --resume 'dddddddd-eeee-4fff-8aaa-111111111111'")
+  })
 })

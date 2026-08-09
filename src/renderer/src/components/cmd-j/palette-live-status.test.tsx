@@ -133,6 +133,37 @@ describe('palette live status', () => {
     expect(bodyRenderCount).toBe(rendersAfterMount)
   })
 
+  // Why: unread writes are app-wide chatter. The pip owns them here so the palette body can read
+  // its unread from the open-time snapshot instead of re-rendering the whole list on every bell.
+  it('re-renders the unread pip without re-rendering the frozen body around it', async () => {
+    await act(async () => {
+      testRoot.render(
+        <PaletteLiveStatusProvider active>
+          <FrozenBody>
+            <PaletteRecentTabStatusDot
+              row={{
+                id: 'workspace-tab:tab-a',
+                worktreeId: 'wt-a',
+                unifiedTabId: 'tab-a',
+                terminalTab: { id: 'term-a', title: 'Chat' },
+                worktreeLastActivityAt: 0
+              }}
+              fallback={<span data-fallback="true" />}
+            />
+          </FrozenBody>
+        </PaletteLiveStatusProvider>
+      )
+    })
+    const rendersAfterMount = bodyRenderCount
+
+    await act(async () => {
+      useAppStore.setState({ unreadTerminalTabs: { 'term-a': true } } as Partial<AppState>)
+    })
+
+    expect(dotLabels()).toEqual(['Unread agent completion'])
+    expect(bodyRenderCount).toBe(rendersAfterMount)
+  })
+
   it('goes inert while the palette is closed', async () => {
     setAgentState('working')
     await render(false)
@@ -162,7 +193,200 @@ describe('palette live status', () => {
     expect(dotLabels()).toEqual([])
   })
 
-  it('resolves a live dot for a recent row backed by a terminal', async () => {
+  it('badges only working and permission — not quiet active — on terminal-backed rows', async () => {
+    // Live PTY, no agent activity → active, but quiet chats stay icon-only (no emerald pip).
+    await act(async () => {
+      testRoot.render(
+        <PaletteLiveStatusProvider active>
+          <PaletteRecentTabStatusDot
+            row={{
+              id: 'workspace-tab:tab-a',
+              worktreeId: 'wt-a',
+              unifiedTabId: 'tab-a',
+              terminalTab: { id: 'term-a', title: 'Chat' },
+              worktreeLastActivityAt: 0
+            }}
+            fallback={<span data-fallback="true" />}
+          />
+        </PaletteLiveStatusProvider>
+      )
+    })
+    expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
+    expect(dotLabels()).toEqual([])
+    expect(testContainer.querySelector('[data-spinner]')).toBeNull()
+
+    await act(async () => {
+      setAgentState('working')
+    })
+    // Why: A2 — category identity stays on the content icon; only high-signal agent states get a pip.
+    expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
+    expect(testContainer.querySelector('[data-spinner]')).not.toBeNull()
+    expect(dotLabels()).toEqual(['Working'])
+    // Hover tooltip on the outer hit target (badge is pointer-events-none).
+    expect(testContainer.querySelector('[title="Working"]')).not.toBeNull()
+
+    await act(async () => {
+      setAgentState('blocked')
+    })
+    expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
+    expect(testContainer.querySelector('[data-spinner]')).toBeNull()
+    expect(dotLabels()).toEqual(['Needs permission'])
+    expect(testContainer.querySelector('[title="Needs permission"]')).not.toBeNull()
+  })
+
+  it('shows only the content icon when a terminal-backed row is inactive', async () => {
+    useAppStore.setState({
+      ptyIdsByTabId: {}
+    } as Partial<AppState>)
+    await act(async () => {
+      testRoot.render(
+        <PaletteLiveStatusProvider active>
+          <PaletteRecentTabStatusDot
+            row={{
+              id: 'workspace-tab:tab-a',
+              worktreeId: 'wt-a',
+              unifiedTabId: 'tab-a',
+              terminalTab: { id: 'term-a', title: 'Chat' },
+              worktreeLastActivityAt: 0
+            }}
+            fallback={<span data-fallback="true" />}
+          />
+        </PaletteLiveStatusProvider>
+      )
+    })
+    expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
+    expect(dotLabels()).toEqual([])
+    expect(testContainer.querySelector('[data-spinner]')).toBeNull()
+  })
+
+  it('badges unread agent completion when the agent is quiet', async () => {
+    useAppStore.setState({
+      unreadAgentCompletionPanes: {
+        [makePaneKey('term-a', LEAF)]: true
+      }
+    } as Partial<AppState>)
+    await act(async () => {
+      testRoot.render(
+        <PaletteLiveStatusProvider active>
+          <PaletteRecentTabStatusDot
+            row={{
+              id: 'workspace-tab:tab-a',
+              worktreeId: 'wt-a',
+              unifiedTabId: 'tab-a',
+              terminalTab: { id: 'term-a', title: 'Chat' },
+              worktreeLastActivityAt: 0
+            }}
+            fallback={<span data-fallback="true" />}
+          />
+        </PaletteLiveStatusProvider>
+      )
+    })
+    expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
+    expect(testContainer.querySelector('[data-spinner]')).toBeNull()
+    expect(dotLabels()).toEqual(['Unread agent completion'])
+    expect(testContainer.querySelector('[title="Unread agent completion"]')).not.toBeNull()
+  })
+
+  it('prefers working over unread on the same row', async () => {
+    setAgentState('working')
+    useAppStore.setState({
+      unreadTerminalTabs: { 'term-a': true }
+    } as Partial<AppState>)
+    await act(async () => {
+      testRoot.render(
+        <PaletteLiveStatusProvider active>
+          <PaletteRecentTabStatusDot
+            row={{
+              id: 'workspace-tab:tab-a',
+              worktreeId: 'wt-a',
+              unifiedTabId: 'tab-a',
+              terminalTab: { id: 'term-a', title: 'Chat' },
+              worktreeLastActivityAt: 0
+            }}
+            fallback={<span data-fallback="true" />}
+          />
+        </PaletteLiveStatusProvider>
+      )
+    })
+    expect(testContainer.querySelector('[data-spinner]')).not.toBeNull()
+    expect(dotLabels()).toEqual(['Working'])
+  })
+
+  it('badges freshly done with a check when quiet and not unread', async () => {
+    setAgentState('done')
+    await act(async () => {
+      testRoot.render(
+        <PaletteLiveStatusProvider active>
+          <PaletteRecentTabStatusDot
+            row={{
+              id: 'workspace-tab:tab-a',
+              worktreeId: 'wt-a',
+              unifiedTabId: 'tab-a',
+              terminalTab: { id: 'term-a', title: 'Chat' },
+              worktreeLastActivityAt: 0
+            }}
+            fallback={<span data-fallback="true" />}
+          />
+        </PaletteLiveStatusProvider>
+      )
+    })
+    expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
+    expect(dotLabels()).toEqual(['Done'])
+    expect(testContainer.querySelector('[title="Done"]')).not.toBeNull()
+    // lucide CircleCheck class marker
+    expect(testContainer.innerHTML).toContain('lucide-circle-check')
+  })
+
+  it('prefers unread over freshly done on the same row', async () => {
+    setAgentState('done')
+    useAppStore.setState({
+      unreadTerminalTabs: { 'term-a': true }
+    } as Partial<AppState>)
+    await act(async () => {
+      testRoot.render(
+        <PaletteLiveStatusProvider active>
+          <PaletteRecentTabStatusDot
+            row={{
+              id: 'workspace-tab:tab-a',
+              worktreeId: 'wt-a',
+              unifiedTabId: 'tab-a',
+              terminalTab: { id: 'term-a', title: 'Chat' },
+              worktreeLastActivityAt: 0
+            }}
+            fallback={<span data-fallback="true" />}
+          />
+        </PaletteLiveStatusProvider>
+      )
+    })
+    expect(dotLabels()).toEqual(['Unread agent completion'])
+    expect(testContainer.innerHTML).not.toContain('lucide-circle-check')
+  })
+
+  it('prefers permission over unread on the same row', async () => {
+    setAgentState('blocked')
+    useAppStore.setState({
+      unreadTerminalTabs: { 'term-a': true }
+    } as Partial<AppState>)
+    await act(async () => {
+      testRoot.render(
+        <PaletteLiveStatusProvider active>
+          <PaletteRecentTabStatusDot
+            row={{
+              id: 'workspace-tab:tab-a',
+              worktreeId: 'wt-a',
+              unifiedTabId: 'tab-a',
+              terminalTab: { id: 'term-a', title: 'Chat' },
+              worktreeLastActivityAt: 0
+            }}
+            fallback={<span data-fallback="true" />}
+          />
+        </PaletteLiveStatusProvider>
+      )
+    })
+    expect(dotLabels()).toEqual(['Needs permission'])
+  })
+
+  it('cuts the pip out of the dialog surface, and out of accent when selected', async () => {
     setAgentState('working')
     await act(async () => {
       testRoot.render(
@@ -180,11 +404,14 @@ describe('palette live status', () => {
         </PaletteLiveStatusProvider>
       )
     })
-    expect(dotLabels()).toEqual(['Working'])
-
-    await act(async () => {
-      setAgentState('blocked')
-    })
-    expect(dotLabels()).toEqual(['Needs permission'])
+    const pip = testContainer.querySelector<HTMLElement>('[aria-hidden="true"].rounded-full')
+    expect(pip).not.toBeNull()
+    // Why popover and not background: the CommandDialog surface is --popover (#171717 dark), while
+    // --background is the app canvas (#0a0a0a) — the mismatch punched a dark halo through each row.
+    expect(pip?.className).toContain('bg-popover')
+    expect(pip?.className).toContain('ring-popover')
+    expect(pip?.className).not.toContain('bg-background')
+    expect(pip?.className).toContain('group-data-[selected=true]:bg-accent')
+    expect(pip?.className).toContain('group-data-[selected=true]:ring-accent')
   })
 })

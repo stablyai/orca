@@ -75,7 +75,7 @@ import type {
 } from '../../shared/types'
 import { browserSessionRegistry } from './browser-session-registry'
 import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
-import { setupClientHintsOverride } from './browser-session-ua'
+import { isAdvertisableChromiumEngineVersion, setupClientHintsOverride } from './browser-session-ua'
 import {
   isGoogleSourceBoundCookie,
   normalizeCookieDomain,
@@ -804,32 +804,34 @@ export function getUserAgentForBrowser(
     }
   }
 
+  function chromeShapedUa(version: string | null, edgeSuffix = false): string | null {
+    if (!version || !isAdvertisableChromiumEngineVersion(version)) {
+      return null
+    }
+    const base = `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${version} Safari/537.36`
+    return edgeSuffix ? `${base} Edg/${version}` : base
+  }
+
   switch (family) {
     case 'chrome': {
-      const v = readBrowserVersion('/Applications/Google Chrome.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+      return chromeShapedUa(readBrowserVersion('/Applications/Google Chrome.app'))
     }
     case 'edge': {
-      const v = readBrowserVersion('/Applications/Microsoft Edge.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36 Edg/${v}` : null
+      return chromeShapedUa(readBrowserVersion('/Applications/Microsoft Edge.app'), true)
     }
     case 'arc': {
-      const v = readBrowserVersion('/Applications/Arc.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+      return chromeShapedUa(readBrowserVersion('/Applications/Arc.app'))
     }
     case 'chromium': {
-      const v = readBrowserVersion('/Applications/Brave Browser.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+      return chromeShapedUa(readBrowserVersion('/Applications/Brave Browser.app'))
     }
     case 'comet': {
       // Why: Comet is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
-      const v = readBrowserVersion('/Applications/Comet.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+      return chromeShapedUa(readBrowserVersion('/Applications/Comet.app'))
     }
     case 'helium': {
       // Why: Helium is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
-      const v = readBrowserVersion('/Applications/Helium.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+      return chromeShapedUa(readBrowserVersion('/Applications/Helium.app'))
     }
     case 'firefox':
     case 'safari':

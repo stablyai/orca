@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  dropFailedGitHubRepoSlugEntries,
   filterGitHubProjectRowsForRepos,
   findRepoForGitHubProjectRepository,
   normalizeGitHubRepositorySlug
@@ -254,5 +255,39 @@ describe('GitHub project repo matching', () => {
         'github.acme-corp.com'
       )
     ).toBeNull()
+  })
+
+  // Regression: a transient github.repoSlug error used to be cached as a
+  // resolved "no repository", which filtered that repo's rows out forever.
+  it('leaves a failed slug lookup matchable by the path fallback', () => {
+    expect(
+      findRepoForGitHubProjectRepository(
+        'stablyai/orca',
+        [{ id: 'repo-1', path: '/Users/me/stablyai/orca', displayName: 'orca' }],
+        { 'repo-1': { path: '/Users/me/stablyai/orca', repository: null, failed: true } }
+      )
+    ).toEqual({ id: 'repo-1', path: '/Users/me/stablyai/orca', displayName: 'orca' })
+  })
+})
+
+describe('dropFailedGitHubRepoSlugEntries', () => {
+  it('drops only the entries a retry could still resolve', () => {
+    expect(
+      dropFailedGitHubRepoSlugEntries({
+        'repo-1': { path: '/a', repository: { owner: 'stablyai', repo: 'orca' } },
+        'repo-2': { path: '/b', repository: null, failed: true },
+        'repo-3': { path: '/c', repository: null }
+      })
+    ).toEqual({
+      'repo-1': { path: '/a', repository: { owner: 'stablyai', repo: 'orca' } },
+      'repo-3': { path: '/c', repository: null }
+    })
+  })
+
+  // Why: the cache is a slug-effect dependency, so a fresh object on every
+  // refresh would re-run the effect even when there is nothing to retry.
+  it('returns the same object when nothing failed', () => {
+    const cache = { 'repo-1': { path: '/a', repository: null } }
+    expect(dropFailedGitHubRepoSlugEntries(cache)).toBe(cache)
   })
 })

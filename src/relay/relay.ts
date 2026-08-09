@@ -68,6 +68,11 @@ import {
 import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
+import { prepareRemoteArtifactCliInput } from './remote-artifact-cli-input'
+import {
+  assertRemoteArtifactCliForwardingFits,
+  type RemoteArtifactCliForwardingParams
+} from './remote-artifact-cli-forwarding'
 import { registerManagedHookInstaller } from './managed-hook-installer'
 import { registerRelayPluginHostCallHandlers } from './plugin-host-call-handler'
 import { DispatcherClientWriter } from './dispatcher-client-writer'
@@ -302,7 +307,34 @@ async function runOrcaCliMode(
   endpointCredential?: string
 ): Promise<void> {
   const myVersion = readLaunchVersion()
-  const stdin = shouldReadRemoteCliStdin(argv) ? await readOrcaCliStdin() : undefined
+  let preparedArtifact: Awaited<ReturnType<typeof prepareRemoteArtifactCliInput>>
+  try {
+    preparedArtifact = await prepareRemoteArtifactCliInput(argv, process.cwd())
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+    process.exitCode = 1
+    return
+  }
+  const stdin =
+    preparedArtifact.stdin ??
+    (shouldReadRemoteCliStdin(argv) ? await readOrcaCliStdin() : undefined)
+  const env = pickRemoteCliEnv(process.env)
+  const requestParams: RemoteArtifactCliForwardingParams = {
+    argv,
+    cwd: process.cwd(),
+    env,
+    ...(stdin !== undefined ? { stdin } : {}),
+    ...(preparedArtifact.artifactInput ? { artifactInput: preparedArtifact.artifactInput } : {})
+  }
+  if (preparedArtifact.artifactInput) {
+    try {
+      assertRemoteArtifactCliForwardingFits(requestParams)
+    } catch (error) {
+      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+      process.exitCode = 1
+      return
+    }
+  }
   const sock = createConnection({ path: sockPath })
   const stdoutWriter = new DispatcherClientWriter(
     (data, onSettled) =>
@@ -327,18 +359,12 @@ async function runOrcaCliMode(
   let initialExitCode = 0
 
   const sendRequest = (): void => {
-    const env = pickRemoteCliEnv(process.env)
     const frame = encodeJsonRpcFrame(
       {
         jsonrpc: '2.0',
         id: requestId,
         method: 'orca.cli',
-        params: {
-          argv,
-          cwd: process.cwd(),
-          env,
-          ...(stdin !== undefined ? { stdin } : {})
-        }
+        params: requestParams
       },
       nextSeq++,
       highestReceivedSeq
@@ -817,6 +843,15 @@ async function main(): Promise<void> {
           env.ORCA_OMP_SOURCE_AGENT_DIR = result.sourceAgentDir
         }
       }
+      if (kind === 'prime-agent') {
+        const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'prime-agent')
+        const result = pluginOverlay.materializePi(overlayId, sourceDir, 'prime-agent', {
+          materializeDefaultHome: explicitKind === 'prime-agent'
+        })
+        if (result?.sourceAgentDir) {
+          env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = result.sourceAgentDir
+        }
+      }
     }
     return env
   })
@@ -844,19 +879,23 @@ async function main(): Promise<void> {
     const opencode = params.opencodePluginSource
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
+    const primeAgent = params.primeAgentExtensionSource
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
+    assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
-      ompExtensionSource: typeof omp === 'string' ? omp : undefined
+      ompExtensionSource: typeof omp === 'string' ? omp : undefined,
+      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
     })
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
         pi: pluginOverlay.hasPiSource('pi'),
-        omp: pluginOverlay.hasPiSource('omp')
+        omp: pluginOverlay.hasPiSource('omp'),
+        primeAgent: pluginOverlay.hasPiSource('prime-agent')
       }
     }
   })

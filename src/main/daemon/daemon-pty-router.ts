@@ -73,8 +73,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.supportsAgentSessionCreateOperations()
   }
 
-  async attach(id: string): Promise<void> {
-    await this.adapterFor(id).attach(id)
+  async attach(id: string): ReturnType<IPtyProvider['attach']> {
+    return await this.adapterFor(id).attach(id)
   }
 
   hasPty(id: string): boolean {

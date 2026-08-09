@@ -4830,24 +4830,33 @@
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": [],
-      "coverageNotes": "Platform-neutral unit coverage proves the Resource Manager closed badge performs one readiness seed, coalesces unknown spawn signals, skips known-session reattach signals, installs no interval, and re-reads only once per explicit daemon-management kill/restart (which emits no pty:exit). Broader terminal interaction coverage remains on the pending reliability stack.",
+      "coveredProviders": ["local", "ssh", "remote-runtime"],
+      "coverageNotes": "Platform-neutral unit coverage proves the Resource Manager closed badge performs one readiness seed, coalesces unknown spawn signals, skips known-session reattach signals, installs no interval, and re-reads only once per explicit daemon-management kill/restart. AI Vault tab-title sync uses bounded exact identities on the transcript-owning local, SSH, or runtime host and has no access to broad listing; unsupported older hosts retain persisted titles without fallback scans. WSL path translation still needs a Windows integration oracle.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7002",
         "https://github.com/stablyai/orca/pull/6858",
         "https://github.com/stablyai/orca/issues/9386",
-        "https://github.com/stablyai/orca/pull/9387"
+        "https://github.com/stablyai/orca/pull/9387",
+        "https://github.com/stablyai/orca/pull/12778"
       ],
-      "invariant": "Typing, focus, terminal switch, workspace switch, visibility resume, resize, render, and per-pane liveness paths must not call global pty:listSessions; they must use targeted per-PTY APIs or cached provider-owned state.",
-      "oracle": "The current executable slice asserts targeted visibility/first-input liveness, resize re-assertion after visibility resume, light tab/active-state resume, SSH/remote skip behavior, and a closed Resource Manager budget of one readiness seed plus one coalesced inventory read only for unknown spawn IDs; known-session reattach signals and steady closed time perform zero reads. Targeted hasPty/getSize calls are allowed for liveness/resize slices and forbidden for light tab/active-state resume. The full hot-path oracle still needs instrumentation around raw focus, split focus, workspace switch, render ticks, and high-session local/daemon/SSH fixtures.",
+      "invariant": "Typing, focus, terminal switch, workspace switch, visibility resume, resize, render, per-pane liveness, and tab-title synchronization must not call global pty:listSessions or aiVault.listSessions; they must use targeted APIs or cached provider-owned state.",
+      "oracle": "The current executable slice asserts targeted visibility/first-input liveness, resize re-assertion after visibility resume, light tab/active-state resume, SSH/remote skip behavior, and a closed Resource Manager budget of one readiness seed plus one coalesced inventory read only for unknown spawn IDs. AI Vault title sync deterministically accepts only resolveSessionTitles, batches at most 64 exact identities, serializes worker work, routes requests to the transcript-owning local/SSH/runtime host, and proves zero broad scans for unsupported hosts. The full hot-path oracle still needs instrumentation around raw focus, split focus, workspace switch, render ticks, and high-session PTY fixtures.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx src/renderer/src/components/status-bar/resource-session-inventory.test.ts src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx src/renderer/src/components/status-bar/resource-session-inventory.test.ts src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-worker-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts src/relay/ai-vault-handler.test.ts"
       ],
       "testFiles": [
         "src/main/ipc/pty.test.ts",
         "src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx",
         "src/renderer/src/components/status-bar/resource-session-inventory.test.ts",
-        "src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts"
+        "src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts",
+        "src/renderer/src/lib/ai-vault-tab-title-sync.test.ts",
+        "src/main/ai-vault/session-scanner-worker-client.test.ts",
+        "src/main/ai-vault/session-title-file-reader.test.ts",
+        "src/main/ai-vault/session-parse-cache-persistence.test.ts",
+        "src/main/ipc/ai-vault.test.ts",
+        "src/main/runtime/rpc/methods/ai-vault.test.ts",
+        "src/relay/ai-vault-handler.test.ts"
       ],
       "assertionRefs": [
         {
@@ -4881,6 +4890,38 @@
             "the closed inventory hook installs no interval",
             "the badge count comes from cached daemon inventory rather than wake-hint bindings"
           ]
+        },
+        {
+          "file": "src/renderer/src/lib/ai-vault-tab-title-sync.test.ts",
+          "assertions": [
+            "title sync invokes only exact resolveSessionTitles requests",
+            "status pings and worktree path changes do not trigger rereads",
+            "title requests are bounded to 64 identities per batch",
+            "independent hosts resolve concurrently while each host wire stays serial"
+          ]
+        },
+        {
+          "file": "src/main/ai-vault/session-scanner-worker-client.test.ts",
+          "assertions": [
+            "full scans and exact-title reads share one serial FIFO worker",
+            "active cancellation stays serialized and queued work remains bounded",
+            "worker faults restart queued work and idle time preserves incremental parse state",
+            "worker disposal rejects retained work and terminates the worker"
+          ]
+        },
+        {
+          "file": "src/main/ai-vault/session-parse-cache-persistence.test.ts",
+          "assertions": [
+            "the background scanner receives the configured persisted-cache identity",
+            "unchanged transcripts remain reusable across process restarts"
+          ]
+        },
+        {
+          "file": "src/main/ipc/ai-vault.test.ts",
+          "assertions": [
+            "exact title identities route to local, SSH, and runtime host authority",
+            "unsupported remote hosts return no refresh and never fall back to broad scans"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -4892,6 +4933,15 @@
           "result": "passed",
           "durationSeconds": 4.3,
           "summary": "4 files and 358 tests passed, covering readiness seed/recovery, zero interval polling, bounded unknown-spawn reconciliation, concurrent provider starts, exit fencing, cleanup, and out-of-order refresh fencing."
+        },
+        {
+          "date": "2026-08-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-worker-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts src/relay/ai-vault-handler.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.1,
+          "summary": "The focused run passed 112 tests across 7 files, proving exact-title-only renderer requests, provider-isolated batching, persistent serial worker lifecycle and fault recovery, exact transcript identity, host routing, mixed-version degradation, and zero broad-scan fallback."
         }
       ],
       "runtimeBudget": {
@@ -4904,11 +4954,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests assert visibility resume prefers targeted hasPty over listSessions, first input after visibility resume calls targeted hasPty once, resize re-assertion after visibility resume uses getSize/resize without listSessions, light tab switches and visible active-state resume avoid listSessions/hasPty/getSize fanout while still allowing the active PTY scheduler hint, SSH/remote broad listing is skipped, and the closed Resource Manager performs one readiness seed while known reattach signals and steady time perform no additional reads. Needs broader raw focus/workspace-switch/render/high-session count coverage before promotion."
+        "evidence": "Tests assert visibility resume prefers targeted hasPty over listSessions, first input after visibility resume calls targeted hasPty once, resize re-assertion after visibility resume uses getSize/resize without listSessions, light tab switches and visible active-state resume avoid listSessions/hasPty/getSize fanout, and the closed Resource Manager performs one readiness seed while known reattach signals and steady time perform no additional reads. For the #12778 regression, title sync no longer receives a listSessions dependency at all: it sends at most 64 exact identities per batch to one serial worker or transcript-owning remote host, and old hosts degrade without broad fallback. Needs broader raw focus/workspace-switch/render/high-session PTY count coverage before promotion."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "This gate is the performance budget for global session listing in hot paths."
+        "evidence": "This gate is the performance budget for global session listing in hot paths. AI Vault title sync permits zero global scans, at most 64 exact identities per request, one active worker operation, 16 queued operations, four concurrent transcript parses inside the worker, a 4,096-title index, and no worktree-path-triggered refresh. The worker emits the aiVault.scan.worker span with duration and session count for full scans."
       },
       "promotionCriteria": [
         "Add deterministic call-count instrumentation.",
@@ -4918,7 +4968,8 @@
       "knownGaps": [
         "Current commands cover Resource Manager readiness/lifecycle inventory counts; the broader targeted-liveness slice still lives on the pending fix-terminal-reliability stack.",
         "Current coverage includes the closed Resource Manager's no-interval and known-reattach budgets, but not every hot interaction listed in the invariant.",
-        "No Electron or IPC-level high-session counter gate yet proves raw focus, workspace switch, render, or high-session typing stay at zero global listSessions calls."
+        "No Electron or IPC-level high-session counter gate yet proves raw focus, workspace switch, render, or high-session typing stay at zero PTY listSessions calls.",
+        "The exact-title path has deterministic provider routing coverage but no packaged Windows WSL or live SSH performance run yet."
       ],
       "demotionRule": "Cannot promote if the test allows broad listing in any hot interaction path."
     },
@@ -6658,13 +6709,14 @@
       "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY.",
       "oracle": "The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary and long-held letter-to-digit typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text, while the legacy orphaned-letter-keyup sequence sends no selector byte to the PTY. Real legacy IME commit preservation and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
         "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts",
@@ -6682,9 +6734,16 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts",
           "assertions": [
             "synthetic and native input-source paths are classified for covered fixtures"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts",
+          "assertions": [
+            "an OS key-binding substitution reaches the PTY instead of the raw layout character",
+            "the same key with no substitution in play still sends the layout character"
           ]
         },
         {
@@ -6740,6 +6799,15 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-08-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.7,
+          "summary": "8 test file(s) passed, 143 tests, after adding the OS key-binding substitution replay. Discrimination checked by mutation rather than assumed: suppressing the structural claim, and separately removing the single character the older punctuation table happened to list, each make the replay send the raw layout character while both paired negatives stay green."
+        },
+        {
           "date": "2026-07-11",
           "runner": "local",
           "platform": "macos",
@@ -6770,10 +6838,10 @@
           "date": "2026-07-07",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
           "result": "passed",
           "durationSeconds": 0.7,
-          "summary": "7 test file(s) passed, 144 tests passed on the Linux/Sogou candidate-key branch (includes held-key repeat guard coverage)."
+          "summary": "7 test file(s) passed, 144 tests passed on the Linux/Sogou candidate-key branch (includes held-key repeat guard coverage). The command shown is the gate's current one, which the manifest check requires; the run itself predates two of the files it now lists. The 2026-08-09 entry is the one that covers the current slice."
         },
         {
           "date": "2026-07-07",
@@ -7650,6 +7718,127 @@
         "The local Electron restart proof covers retained visible output from the same-build daemon checkpoint, not transcript recovery after a transport cut or distinct A/B runtime replacement."
       ],
       "demotionRule": "Keep experimental or demote if either Electron journey flakes without a product or harness defect, if local worker-start can return before tab materialization without an explicit reveal warning, if focus moves to the worker, if restart or workspace re-entry spawns/resumes/duplicates/interferes with the worker, if retained output becomes unreadable, or if pane-stable delivery reads the wrong mailbox."
+    },
+    {
+      "id": "orchestration.context-only-dispatch-release",
+      "title": "Manual Dispatch release fences assignments without stopping unsupervised terminals",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "orchestration",
+      "layer": "cli-runtime-sqlite-terminal-lifecycle",
+      "surfaces": [
+        "orchestration dispatch",
+        "dispatch-show",
+        "worker-abandon",
+        "worker-stop",
+        "manual terminal reuse"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Deterministic runtime tests cover both release verbs, durable outcomes, repeat and cross-verb idempotency, superseded Task ownership, unrelated and supervised Dispatch isolation, and unknown ids. An isolated Electron journey drives the real app runtime and proves both releases preserve the exact PTY incarnation and allow immediate same-pane redispatch.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/13005",
+        "https://github.com/stablyai/orca/pull/13250"
+      ],
+      "invariant": "A live Dispatch created by orchestration dispatch can be stopped or abandoned even though it has no supervised worker row. Release must durably record the requested outcome, revoke lifecycle authority, close questions, free the exact assignee identity, and block only the Task whose current Dispatch was released. It must never close the unsupervised terminal process, disturb unrelated or supervised workers, or let a repeat or opposite verb rewrite the persisted outcome.",
+      "oracle": "Create manual, unrelated, and supervised Dispatches through production runtime methods. Require dispatch-show to return the manual id while no worker row exists, then release it and require failed status with exact stopped or abandoned provenance, completion and revocation timestamps, one status notification, zero terminal closes, and immediate redispatch to the same terminal. Repeat through the opposite verb and require the first durable outcome. Create two active contexts for one Task through an explicit ready override, release the older context, and require only its identity to unlock while the newer context and Task remain dispatched. In an isolated Electron runtime, repeat both verbs against one real pane and require the same PTY/incarnation to survive before a third dispatch succeeds.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-manual-dispatch-release.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/rpc/methods/orchestration-workers-recovery.test.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/cli/handlers/orchestration-worker-cli.test.ts --reporter=dot",
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/orchestration-low-level-dispatch-release.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-low-level-dispatch-release.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/main/runtime/rpc/methods/orchestration-manual-dispatch-release.test.ts",
+        "src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-workers-recovery.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-worker-release.test.ts",
+        "src/cli/handlers/orchestration-worker-cli.test.ts",
+        "tests/e2e/orchestration-low-level-dispatch-release.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-manual-dispatch-release.test.ts",
+          "assertions": [
+            "worker-abandon and worker-stop durably release context-only Dispatches without closing terminals",
+            "repeat and cross-verb calls preserve the first stored outcome",
+            "superseded release frees only the old identity and leaves the current Task Dispatch active",
+            "unrelated and supervised workers remain unchanged"
+          ]
+        },
+        {
+          "file": "src/cli/handlers/orchestration-worker-cli.test.ts",
+          "assertions": [
+            "text-mode worker-stop reports that a manual Dispatch retained its unsupervised terminal process"
+          ]
+        },
+        {
+          "file": "tests/e2e/orchestration-low-level-dispatch-release.spec.ts",
+          "assertions": [
+            "dispatch-show returns the live manual Dispatch before release",
+            "abandon and stop record distinct durable outcomes",
+            "the exact PTY and incarnation survive worker-stop",
+            "the same pane accepts a third Dispatch after both releases"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-low-level-dispatch-release.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "failed",
+          "durationSeconds": 4.3,
+          "summary": "Current main 2dc172f666 reproduced issue #13005: dispatch-show returned the live id, then worker-abandon failed with dispatch_not_found before any release or pane reuse could occur."
+        },
+        {
+          "date": "2026-08-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-manual-dispatch-release.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/rpc/methods/orchestration-workers-recovery.test.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/cli/handlers/orchestration-worker-cli.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 3.38,
+          "summary": "Five focused files passed 60 tests, including both context-only release verbs, stale/current ownership, question closure, repeat and cross-verb idempotency, supervised controls, terminal-close negative assertions, and text-mode retained-process guidance."
+        },
+        {
+          "date": "2026-08-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-low-level-dispatch-release.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 4.1,
+          "summary": "The isolated Electron journey passed both release verbs, preserved the exact pane PTY/incarnation, and dispatched a third Task to the same terminal."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused runtime contracts plus one isolated Electron journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic unit and Electron journeys pass locally; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical Electron oracle failed on current main 2dc172f666 with dispatch_not_found and passed after the context-only release implementation. The focused runtime oracle additionally proves durable outcomes and stale Task ownership."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Release is an explicit control-path transaction with indexed Dispatch and worker lookups, one latest-context lookup for the affected Task, bounded updates, and no polling, process inspection, provider listing, subprocess, renderer work, or terminal I/O."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history on macOS, Linux, and Windows.",
+        "Add isolated headed and headless paired-runtime journeys against mixed client and host versions.",
+        "Add Docker SSH and physical Windows WSL same-pane reuse evidence."
+      ],
+      "knownGaps": [
+        "Live paired-runtime, headless serve, SSH, WSL, Linux, and Windows evidence is not yet attached.",
+        "The Electron journey calls production runtime RPC methods directly instead of spawning a separate CLI process.",
+        "The local journey covers a folder-backed seeded repository through the app fixture but not a git-independent folder workspace."
+      ],
+      "demotionRule": "Keep experimental or demote if release closes an unsupervised terminal, rewrites a durable outcome, blocks a newer Task Dispatch, leaves an assignee identity occupied, or the focused oracle flakes without a product or harness defect."
     },
     {
       "id": "orchestration.settled-worker-terminal-release",
@@ -10161,6 +10350,88 @@
         "Physical Windows, WSL, SSH, and paired-runtime-host journeys were not run."
       ],
       "demotionRule": "Demote if any exit duration can evade the spawn budget, concurrent children or timers appear, cleanup retains resources, or a transient failure cannot recover within the budget."
+    },
+    {
+      "id": "ssh-managed-hooks.node18-runtime-compatibility",
+      "title": "SSH managed-hook companions load and install hooks on Node 18",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-hooks",
+      "layer": "ssh-relay-companion-runtime",
+      "surfaces": [
+        "SSH managed-hook companion startup",
+        "remote Codex hook installation",
+        "remote Claude hook installation"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["ssh"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["ssh"],
+      "coverageNotes": "A real Node 18 process loads every platform's built companion and runs the bundled Codex and Claude installers against an isolated temporary home. The six artifacts share one platform-neutral source bundle; live SSH transport and physical remote hosts remain uncollected.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/12617"],
+      "invariant": "Every managed-hook companion shipped for Node 18 must load before agent installers execute, and importing desktop-only state inspection must not make unrelated remote installers depend on node:sqlite.",
+      "oracle": "Build all relay artifacts, require each managed-hook-runtime.js in a real Node 18 process, assert its installer export, then install only Codex and Claude into a fresh temporary home. Require two successful installer results, executable hook scripts, and both agent configs to reference their managed scripts without touching the user's home.",
+      "commands": [
+        "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/pr-workflow-parallelism.test.mjs"
+      ],
+      "testFiles": [
+        "config/scripts/smoke-managed-hook-runtime-node18.mjs",
+        "config/scripts/pr-workflow-parallelism.test.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "config/scripts/smoke-managed-hook-runtime-node18.mjs",
+          "assertions": [
+            "all six built companions load and export installManagedHooks under Node 18",
+            "Codex and Claude installations both succeed in an isolated home",
+            "both generated configs reference executable managed hook scripts"
+          ]
+        },
+        {
+          "file": "config/scripts/pr-workflow-parallelism.test.mjs",
+          "assertions": [
+            "PR CI builds the companions before switching to Node 18 and running the smoke oracle"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-08",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.mjs",
+          "durationSeconds": 4,
+          "summary": "All six companions loaded under Node 18.20.8; Codex and Claude produced two successful results, executable hook scripts, and managed configs in a temporary home."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "six built-companion loads plus two isolated local-filesystem installer executions"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "New deterministic artifact smoke with no timing oracle; CI history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "On main de4f272b31, the same Node 18 require exited 1 before exports with ERR_UNKNOWN_BUILTIN_MODULE for node:sqlite. The candidate passes all six loads and both installers; restoring the eager node:sqlite value import reproduces the original exit."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The product change replaces one eager built-in import with a constructor-time built-in lookup. It adds no polling, IPC, filesystem scan, subprocess, listener, or recurring work."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Collect one live SSH install on Linux and one on Windows OpenSSH.",
+        "Keep all-platform load, selected installer, isolated-home, and workflow-order assertions green."
+      ],
+      "knownGaps": [
+        "The artifact journey uses local filesystem calls rather than a live SSH transport.",
+        "Platform-named bundles are loaded on macOS locally; physical Linux and Windows evidence is not yet recorded."
+      ],
+      "demotionRule": "Demote if any shipped companion stops loading on Node 18, selected installers mutate outside the isolated home, or the CI lane no longer runs the built artifact with Node 18."
     }
   ]
 }

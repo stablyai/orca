@@ -36,7 +36,6 @@ import {
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
-import { normalizeLinearIssueViewResumeState } from '../../../../shared/linear-issue-view-resume-state'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
@@ -560,12 +559,6 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   if (typeof input.linearQuery === 'string') {
     next.linearQuery = input.linearQuery
   }
-  // Why: normalization drops a malformed preference or filter entry on its own,
-  // so corrupt Linear view state can't take the rest of the resume state down.
-  const linearIssueView = normalizeLinearIssueViewResumeState(input.linearIssueView)
-  if (linearIssueView) {
-    next.linearIssueView = linearIssueView
-  }
   if (input.linearContext && typeof input.linearContext === 'object') {
     const context = input.linearContext as Record<string, unknown>
     if (
@@ -624,6 +617,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeSettings:
     | 'terminal'
@@ -632,6 +626,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeActivity:
     | 'terminal'
@@ -640,6 +635,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeAutomations:
     | 'terminal'
@@ -648,6 +644,7 @@ export type UISlice = {
     | 'activity'
     | 'space'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeSpace:
     | 'terminal'
@@ -656,6 +653,7 @@ export type UISlice = {
     | 'activity'
     | 'automations'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeSkills:
     | 'terminal'
@@ -664,6 +662,7 @@ export type UISlice = {
     | 'activity'
     | 'automations'
     | 'space'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeMobile:
     | 'terminal'
@@ -673,6 +672,16 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'artifacts'
+  previousViewBeforeArtifacts:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'mobile'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -690,6 +699,8 @@ export type UISlice = {
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
+  taskListPosition: { contextKey: string; page: number; scrollTop: number } | null
+  setTaskListPosition: (position: UISlice['taskListPosition']) => void
   githubTaskDrawerWorkItem: GitHubWorkItem | null
   setGithubTaskDrawerWorkItem: (item: GitHubWorkItem | null) => void
   newWorkspaceDraft: {
@@ -751,6 +762,8 @@ export type UISlice = {
   closeSpacePage: () => void
   openSkillsPage: () => void
   closeSkillsPage: () => void
+  openArtifactsPage: () => void
+  closeArtifactsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
@@ -1243,9 +1256,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeSpace: 'terminal',
   previousViewBeforeSkills: 'terminal',
   previousViewBeforeMobile: 'terminal',
+  previousViewBeforeArtifacts: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
+  taskListPosition: null,
   githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
   openTaskPage: (data = {}, options = {}) => {
@@ -1400,6 +1415,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ taskResumeState: next }).catch(console.error)
       return { taskResumeState: next }
     }),
+  setTaskListPosition: (taskListPosition) => set({ taskListPosition }),
   setGithubTaskDrawerWorkItem: (item) => set({ githubTaskDrawerWorkItem: item }),
   closeTaskPage: () =>
     set((state) => {
@@ -1487,6 +1503,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   closeSkillsPage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeSkills
+    })),
+  openArtifactsPage: () =>
+    set((state) => ({
+      activeView: 'artifacts',
+      previousViewBeforeArtifacts:
+        state.activeView === 'artifacts' ? state.previousViewBeforeArtifacts : state.activeView
+    })),
+  closeArtifactsPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeArtifacts
     })),
   openMobilePage: () =>
     set((state) => ({
