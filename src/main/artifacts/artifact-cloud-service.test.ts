@@ -215,6 +215,65 @@ describe('ArtifactCloudService record authorization', () => {
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'PUT' })
   })
 
+  it('serializes manual publish with CLI share for the same source', async () => {
+    const { service } = await setup()
+    let resolvePublish: ((response: Response) => void) | undefined
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolvePublish = resolve
+          })
+      )
+      .mockResolvedValueOnce(createResponse('artifact-b'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const publish = service.publish(writeRequest)
+    const share = service.share(writeRequest)
+    await vi.waitFor(() => expect(resolvePublish).toBeTypeOf('function'))
+    expect(fetchMock).toHaveBeenCalledOnce()
+    resolvePublish?.(createResponse('artifact-a'))
+
+    await expect(Promise.all([publish, share])).resolves.toMatchObject([
+      { status: 'ok', value: { change: 'created' } },
+      { status: 'ok', value: { shareUrl: 'https://share.onorca.dev/a/artifact-b' } }
+    ])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('serializes account deletion with a mapped source update', async () => {
+    const { service } = await setup()
+    let resolveUpdate: ((response: Response) => void) | undefined
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createResponse())
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveUpdate = resolve
+          })
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await service.share(writeRequest)
+
+    const update = service.update(writeRequest)
+    await vi.waitFor(() => expect(resolveUpdate).toBeTypeOf('function'))
+    const deletion = service.delete('artifact-a', { apiUrl, authToken: 'token-a' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    resolveUpdate?.(createResponse())
+
+    await expect(Promise.all([update, deletion])).resolves.toMatchObject([
+      { status: 'ok' },
+      { status: 'ok' }
+    ])
+    await expect(
+      service.getPublishedLink({ sourceKey: writeRequest.sourceKey, apiUrl, authToken: 'token-a' })
+    ).resolves.toEqual({ status: 'ok', value: null })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('recreates an artifact when its stored public link was deleted elsewhere', async () => {
     const { service } = await setup()
     const fetchMock = vi
@@ -427,6 +486,7 @@ describe('ArtifactCloudService publish capability gate', () => {
 
   it.each([
     ['share', (service: ArtifactCloudService) => service.share(writeRequest)],
+    ['publish', (service: ArtifactCloudService) => service.publish(writeRequest)],
     ['update', (service: ArtifactCloudService) => service.update(writeRequest)]
   ])('rejects %s without reaching the network when the capability is off', async (_name, call) => {
     const { service } = await setup({ value: false })

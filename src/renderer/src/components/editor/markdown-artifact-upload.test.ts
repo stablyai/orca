@@ -66,11 +66,16 @@ describe('Markdown artifact upload', () => {
       }
     })
     expect(JSON.parse(markdownArtifactSourceKey(file))).toEqual([
-      'editor',
-      'server-1',
-      'ssh:build-box',
+      'ssh',
+      'build-box',
       '/repo/notes.md'
     ])
+  })
+
+  it('matches the SSH CLI source identity for external files', () => {
+    expect(
+      JSON.parse(markdownArtifactSourceKey(openFile({ externalSshTargetId: 'build-box' })))
+    ).toEqual(['ssh', 'build-box', '/repo/notes.md'])
   })
 
   it('flushes and reads the latest unsaved editor buffer', () => {

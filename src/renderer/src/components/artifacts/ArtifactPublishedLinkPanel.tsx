@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Check, Copy, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -18,23 +18,33 @@ export function ArtifactPublishedLinkPanel({
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
+  const mountedRef = useRef(false)
 
-  useEffect(() => {
-    return () => {
-      if (copiedResetTimerRef.current !== null) {
-        window.clearTimeout(copiedResetTimerRef.current)
-      }
+  const clearCopiedResetTimer = useCallback((): void => {
+    if (copiedResetTimerRef.current !== null) {
+      window.clearTimeout(copiedResetTimerRef.current)
+      copiedResetTimerRef.current = null
     }
   }, [])
+  const setPanelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      mountedRef.current = node !== null
+      if (!node) {
+        clearCopiedResetTimer()
+      }
+    },
+    [clearCopiedResetTimer]
+  )
 
   const copyLink = async (): Promise<void> => {
     if (!(await copyArtifactLink(shareUrl, { showSuccessToast: false }))) {
       return
     }
-    setCopied(true)
-    if (copiedResetTimerRef.current !== null) {
-      window.clearTimeout(copiedResetTimerRef.current)
+    if (!mountedRef.current) {
+      return
     }
+    setCopied(true)
+    clearCopiedResetTimer()
     copiedResetTimerRef.current = window.setTimeout(() => {
       copiedResetTimerRef.current = null
       setCopied(false)
@@ -46,7 +56,7 @@ export function ArtifactPublishedLinkPanel({
     : translate('auto.components.artifacts.ArtifactPublishedLinkPanel.copyLink', 'Copy link')
 
   return (
-    <div className="space-y-3">
+    <div ref={setPanelRef} className="space-y-3">
       <div className="flex min-w-0 items-center gap-0.5">
         <p
           className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground"

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowRight, Loader2, Share2 } from 'lucide-react'
-import type { ArtifactPublishResult, ArtifactWriteRequest } from '../../../../shared/artifacts'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -21,20 +21,19 @@ export function ArtifactPublishButton({
   sourceKey,
   createRequest,
   className,
-  disabled,
-  onPublished
+  disabled
 }: {
   sourceKey: string
   createRequest: () => Promise<ArtifactWriteRequest>
   className?: string
   disabled?: boolean
-  onPublished?: (result: ArtifactPublishResult) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [lookupRevision, setLookupRevision] = useState(0)
   const [linkLookup, setLinkLookup] = useState<PublishedLinkLookup | null>(null)
   const lookupSequence = useRef(0)
+  const popoverContentRef = useRef<HTMLDivElement>(null)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const connecting = useAppStore((state) => state.orcaProfileConnecting)
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
@@ -62,7 +61,7 @@ export function ArtifactPublishButton({
 
   useEffect(() => {
     const sequence = ++lookupSequence.current
-    if (!lookupKey) {
+    if (!open || !lookupKey) {
       setLinkLookup(null)
       return
     }
@@ -82,7 +81,7 @@ export function ArtifactPublishButton({
     return () => {
       lookupSequence.current += 1
     }
-  }, [lookupKey, lookupRevision, sourceKey])
+  }, [lookupKey, lookupRevision, open, sourceKey])
 
   const publish = async (): Promise<void> => {
     if (blocked || !signedIn || !sharingEnabled) {
@@ -95,7 +94,6 @@ export function ArtifactPublishButton({
         if (lookupKey) {
           setLinkLookup({ key: lookupKey, status: 'loaded', shareUrl: result.item.shareUrl })
         }
-        onPublished?.(result)
       }
     } finally {
       setPublishing(false)
@@ -135,10 +133,15 @@ export function ArtifactPublishButton({
       </Tooltip>
 
       <PopoverContent
+        ref={popoverContentRef}
+        tabIndex={-1}
         align="end"
         sideOffset={6}
         className="w-80 p-0"
-        onOpenAutoFocus={(event) => event.preventDefault()}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          popoverContentRef.current?.focus({ preventScroll: true })
+        }}
       >
         <div className="space-y-1 border-b border-border/60 px-4 py-3.5">
           <h3 className="text-sm font-semibold">
@@ -262,6 +265,7 @@ export function ArtifactPublishButton({
             </div>
           ) : publishedLink ? (
             <ArtifactPublishedLinkPanel
+              key={publishedLink}
               shareUrl={publishedLink}
               publishing={publishing}
               sharingEnabled={sharingEnabled}

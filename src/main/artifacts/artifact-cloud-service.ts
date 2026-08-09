@@ -23,14 +23,11 @@ import {
   getArtifactShareRecord,
   isArtifactShareLifecycleCurrent,
   refreshArtifactShareRecordExpiration,
-  removeArtifactShareRecords,
-  saveArtifactShareRecord
+  removeArtifactShareRecords
 } from './artifact-share-record-store'
 import type { ActiveOrcaProfileState } from '../orca-profiles/profile-index-store'
 import { artifactRequest, artifactWriteBody } from './artifact-cloud-request'
 import { ArtifactPublisher } from './artifact-publisher'
-
-type ArtifactCreateResponse = ArtifactListItem & { editToken: string }
 
 type ArtifactAuthContext = {
   profileId: string
@@ -157,22 +154,9 @@ export class ArtifactCloudService {
   async share(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
     assertArtifactSharingAllowed(this.isSharingEnabled)
     const idempotencyKey = randomUUID()
-    return this.withAuth(request, async (token, apiUrl, auth) => {
-      const response = await artifactRequest<ArtifactCreateResponse>(apiUrl, token, '', {
-        method: 'POST',
-        body: artifactWriteBody(request),
-        idempotencyKey
-      })
-      auth.assertCurrent()
-      saveArtifactShareRecord(auth.profileId, this.userDataPath, request.sourceKey, {
-        slug: response.artifact.slug,
-        editToken: response.editToken,
-        shareUrl: response.shareUrl,
-        expiresAt: response.artifact.expiresAt,
-        ...auth.scope
-      })
-      return { artifact: response.artifact, shareUrl: response.shareUrl }
-    })
+    return this.withAuth(request, (token, apiUrl, auth) =>
+      this.publisher.share(request, token, apiUrl, auth, idempotencyKey)
+    )
   }
 
   async publish(
@@ -187,63 +171,85 @@ export class ArtifactCloudService {
 
   async update(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
     assertArtifactSharingAllowed(this.isSharingEnabled)
-    return this.withAuth(request, async (token, apiUrl, auth) => {
-      const record = getArtifactShareRecord(
-        auth.profileId,
-        this.userDataPath,
-        request.sourceKey,
-        auth.scope
-      )
-      if (!record) {
-        throw new Error('This file has not been shared from the active Orca profile.')
-      }
-      const response = await artifactRequest<ArtifactListItem>(apiUrl, token, `/${record.slug}`, {
-        method: 'PUT',
-        editToken: record.editToken,
-        body: artifactWriteBody(request)
+    return this.withAuth(request, (token, apiUrl, auth) =>
+      this.publisher.runForSource(request.sourceKey, auth, async () => {
+        auth.assertCurrent()
+        const record = getArtifactShareRecord(
+          auth.profileId,
+          this.userDataPath,
+          request.sourceKey,
+          auth.scope
+        )
+        if (!record) {
+          throw new Error('This file has not been shared from the active Orca profile.')
+        }
+        return this.publisher.runForSlug(record.slug, auth, async () => {
+          auth.assertCurrent()
+          const response = await artifactRequest<ArtifactListItem>(
+            apiUrl,
+            token,
+            `/${record.slug}`,
+            {
+              method: 'PUT',
+              editToken: record.editToken,
+              body: artifactWriteBody(request)
+            }
+          )
+          auth.assertCurrent()
+          refreshArtifactShareRecordExpiration(
+            auth.profileId,
+            this.userDataPath,
+            request.sourceKey,
+            auth.scope,
+            record,
+            response.artifact.expiresAt
+          )
+          return response
+        })
       })
-      auth.assertCurrent()
-      refreshArtifactShareRecordExpiration(
-        auth.profileId,
-        this.userDataPath,
-        request.sourceKey,
-        auth.scope,
-        record,
-        response.artifact.expiresAt
-      )
-      return response
-    })
+    )
   }
 
   unshare(
     request: ArtifactCloudOptions & { sourceKey: string }
   ): Promise<ArtifactCloudOperation<void>> {
-    return this.withAuth(request, async (token, apiUrl, auth) => {
-      const record = getArtifactShareRecord(
-        auth.profileId,
-        this.userDataPath,
-        request.sourceKey,
-        auth.scope
-      )
-      if (!record) {
-        throw new Error('This file has not been shared from the active Orca profile.')
-      }
-      await artifactRequest<void>(apiUrl, token, `/${record.slug}`, {
-        method: 'DELETE',
-        editToken: record.editToken
+    return this.withAuth(request, (token, apiUrl, auth) =>
+      this.publisher.runForSource(request.sourceKey, auth, async () => {
+        auth.assertCurrent()
+        const record = getArtifactShareRecord(
+          auth.profileId,
+          this.userDataPath,
+          request.sourceKey,
+          auth.scope
+        )
+        if (!record) {
+          throw new Error('This file has not been shared from the active Orca profile.')
+        }
+        return this.publisher.runForSlug(record.slug, auth, async () => {
+          auth.assertCurrent()
+          await artifactRequest<void>(apiUrl, token, `/${record.slug}`, {
+            method: 'DELETE',
+            editToken: record.editToken
+          })
+          removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, {
+            sourceKey: request.sourceKey,
+            slug: record.slug
+          })
+        })
       })
-      removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, {
-        sourceKey: request.sourceKey,
-        slug: record.slug
-      })
-    })
+    )
   }
 
   delete(id: string, options: ArtifactCloudOptions): Promise<ArtifactCloudOperation<void>> {
-    return this.withAuth(options, async (token, apiUrl, auth) => {
-      await artifactRequest<void>(apiUrl, token, `/${encodeURIComponent(id)}`, { method: 'DELETE' })
-      removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, { slug: id })
-    })
+    return this.withAuth(options, (token, apiUrl, auth) =>
+      this.publisher.runForSlug(id, auth, async () => {
+        auth.assertCurrent()
+        await artifactRequest<void>(apiUrl, token, `/${encodeURIComponent(id)}`, {
+          method: 'DELETE'
+        })
+        removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, { slug: id })
+      })
+    )
   }
 
   private async withAuth<T>(

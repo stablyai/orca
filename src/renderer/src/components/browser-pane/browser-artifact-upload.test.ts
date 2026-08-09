@@ -26,7 +26,11 @@ describe('browser artifact upload', () => {
     })
     expect(getShareableBrowserArtifactFile('file:///C:/repo/report.HTM')).toEqual({
       fileName: 'report.HTM',
-      filePath: 'C:/repo/report.HTM'
+      filePath: 'C:\\repo\\report.HTM'
+    })
+    expect(getShareableBrowserArtifactFile('file://server/share/report.html')).toEqual({
+      fileName: 'report.html',
+      filePath: '\\\\server\\share\\report.html'
     })
     expect(getShareableBrowserArtifactFile('https://example.com/report.html')).toBeNull()
     expect(getShareableBrowserArtifactFile('file:///tmp/report.md')).toBeNull()

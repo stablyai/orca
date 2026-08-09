@@ -1,4 +1,6 @@
 import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import { sshArtifactSourceKey } from '../../../../shared/artifact-cli-bridge'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { basename } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
@@ -6,6 +8,13 @@ import { flushPendingEditorChange } from './editor-pending-flush'
 
 export function markdownArtifactSourceKey(file: OpenFile): string {
   const route = file.operationProvenance?.generation.route
+  const host = parseExecutionHostId(route?.executionHostId)
+  if (host?.kind === 'ssh') {
+    return sshArtifactSourceKey(host.targetId, file.filePath)
+  }
+  if (file.externalSshTargetId) {
+    return sshArtifactSourceKey(file.externalSshTargetId, file.filePath)
+  }
   if (route && (route.runtimeEnvironmentId || route.executionHostId !== 'local')) {
     return JSON.stringify([
       'editor',
@@ -14,13 +23,8 @@ export function markdownArtifactSourceKey(file: OpenFile): string {
       file.filePath
     ])
   }
-  if (file.runtimeEnvironmentId || file.externalSshTargetId) {
-    return JSON.stringify([
-      'editor',
-      file.runtimeEnvironmentId ?? null,
-      file.externalSshTargetId ?? 'remote',
-      file.filePath
-    ])
+  if (file.runtimeEnvironmentId) {
+    return JSON.stringify(['editor', file.runtimeEnvironmentId ?? null, 'remote', file.filePath])
   }
   return file.filePath
 }

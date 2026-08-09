@@ -21,10 +21,39 @@ type ArtifactPublishAuthContext = {
   assertCurrent: () => void
 }
 
+function artifactOperationQueueKey(
+  kind: 'source' | 'slug',
+  auth: Pick<ArtifactPublishAuthContext, 'profileId' | 'scope'>,
+  identity: string
+): string {
+  return JSON.stringify([
+    kind,
+    auth.profileId,
+    auth.scope.cloudUserId,
+    auth.scope.cloudProfileId,
+    auth.scope.cloudOrganizationId,
+    auth.scope.apiOrigin,
+    identity
+  ])
+}
+
 export class ArtifactPublisher {
   private readonly queues = new Map<string, Promise<void>>()
 
   constructor(private readonly userDataPath: string) {}
+
+  async share(
+    request: ArtifactWriteRequest,
+    token: string,
+    apiUrl: string,
+    auth: ArtifactPublishAuthContext,
+    idempotencyKey: string
+  ): Promise<ArtifactListItem> {
+    return this.runForSource(request.sourceKey, auth, async () => {
+      auth.assertCurrent()
+      return (await this.create(request, token, apiUrl, auth, idempotencyKey)).item
+    })
+  }
 
   publish(
     request: ArtifactWriteRequest,
@@ -33,8 +62,7 @@ export class ArtifactPublisher {
     auth: ArtifactPublishAuthContext,
     idempotencyKey: string
   ): Promise<ArtifactPublishResult> {
-    const queueKey = JSON.stringify([auth.profileId, auth.scope, request.sourceKey])
-    return this.runSerialized(queueKey, async () => {
+    return this.runForSource(request.sourceKey, auth, async () => {
       auth.assertCurrent()
       const record = getArtifactShareRecord(
         auth.profileId,
@@ -44,21 +72,24 @@ export class ArtifactPublisher {
       )
       if (record) {
         try {
-          const item = await artifactRequest<ArtifactListItem>(apiUrl, token, `/${record.slug}`, {
-            method: 'PUT',
-            editToken: record.editToken,
-            body: artifactWriteBody(request)
+          return await this.runForSlug(record.slug, auth, async () => {
+            auth.assertCurrent()
+            const item = await artifactRequest<ArtifactListItem>(apiUrl, token, `/${record.slug}`, {
+              method: 'PUT',
+              editToken: record.editToken,
+              body: artifactWriteBody(request)
+            })
+            auth.assertCurrent()
+            refreshArtifactShareRecordExpiration(
+              auth.profileId,
+              this.userDataPath,
+              request.sourceKey,
+              auth.scope,
+              record,
+              item.artifact.expiresAt
+            )
+            return { change: 'updated', item }
           })
-          auth.assertCurrent()
-          refreshArtifactShareRecordExpiration(
-            auth.profileId,
-            this.userDataPath,
-            request.sourceKey,
-            auth.scope,
-            record,
-            item.artifact.expiresAt
-          )
-          return { change: 'updated', item }
         } catch (error) {
           if (!(error instanceof OrcaCloudRequestError) || error.statusCode !== 404) {
             throw error
@@ -72,6 +103,22 @@ export class ArtifactPublisher {
       }
       return this.create(request, token, apiUrl, auth, idempotencyKey)
     })
+  }
+
+  runForSource<T>(
+    sourceKey: string,
+    auth: Pick<ArtifactPublishAuthContext, 'profileId' | 'scope'>,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    return this.runSerialized(artifactOperationQueueKey('source', auth, sourceKey), operation)
+  }
+
+  runForSlug<T>(
+    slug: string,
+    auth: Pick<ArtifactPublishAuthContext, 'profileId' | 'scope'>,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    return this.runSerialized(artifactOperationQueueKey('slug', auth, slug), operation)
   }
 
   private async create(
@@ -106,9 +153,10 @@ export class ArtifactPublisher {
     const released = new Promise<void>((resolve) => {
       release = resolve
     })
-    const current = previous.catch(() => {}).then(() => released)
+    const ready = previous.catch(() => {})
+    const current = ready.then(() => released)
     this.queues.set(key, current)
-    await previous.catch(() => {})
+    await ready
     try {
       return await operation()
     } finally {

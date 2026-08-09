@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   copyLink: vi.fn(),
   openLink: vi.fn(),
   publish: vi.fn(),
+  openPopover: null as ((open: boolean) => void) | null,
   state: {
     orcaProfileAuthStatus: { configured: true, state: 'connected' } as Record<string, unknown>,
     orcaProfileConnecting: false,
@@ -32,9 +33,20 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/components/ui/popover', () => ({
-  Popover: ({ children }: { children: ReactNode }) => <>{children}</>,
+  Popover: ({
+    children,
+    onOpenChange
+  }: {
+    children: ReactNode
+    onOpenChange?: (open: boolean) => void
+  }) => {
+    mocks.openPopover = onOpenChange ?? null
+    return <>{children}</>
+  },
   PopoverContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  PopoverTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
+  PopoverTrigger: ({ children }: { children: ReactNode }) => (
+    <span onClick={() => mocks.openPopover?.(true)}>{children}</span>
+  )
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -68,6 +80,8 @@ describe('ArtifactPublishButton', () => {
       item: { shareUrl: 'https://example.com' }
     })
     mocks.getPublishedLink.mockResolvedValue(null)
+    mocks.copyLink.mockResolvedValue(true)
+    mocks.openPopover = null
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'connected' }
     mocks.state.orcaProfileConnecting = false
     mocks.state.settings = { artifactSharingEnabled: true }
@@ -106,6 +120,7 @@ describe('ArtifactPublishButton', () => {
     mocks.state.settings = { artifactSharingEnabled: false }
     render(<ArtifactPublishButton sourceKey="/repo/report.md" createRequest={vi.fn()} />)
 
+    await user.click(screen.getByRole('button', { name: 'Share as artifact' }))
     expect(await screen.findByRole('button', { name: 'Share public link' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'Open Artifacts settings' }))
 
@@ -132,6 +147,7 @@ describe('ArtifactPublishButton', () => {
 
     render(<ArtifactPublishButton sourceKey="/repo/report.md" createRequest={createRequest} />)
 
+    await user.click(screen.getByRole('button', { name: 'Share as artifact' }))
     expect(await screen.findByText('https://share.onorca.dev/a/artifact-a')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Copy link' }))
     expect(mocks.copyLink).toHaveBeenCalledWith('https://share.onorca.dev/a/artifact-a', {
@@ -143,13 +159,48 @@ describe('ArtifactPublishButton', () => {
   })
 
   it('keeps existing links available when publishing is disabled', async () => {
+    const user = userEvent.setup()
     mocks.state.settings = { artifactSharingEnabled: false }
     mocks.getPublishedLink.mockResolvedValue('https://share.onorca.dev/a/artifact-a')
 
     render(<ArtifactPublishButton sourceKey="/repo/report.md" createRequest={vi.fn()} />)
 
+    await user.click(screen.getByRole('button', { name: 'Share as artifact' }))
     expect(await screen.findByRole('button', { name: 'Copy link' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Update shared content' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Open Artifacts settings' })).toBeInTheDocument()
+  })
+
+  it('looks up a persisted link only after the popover opens', async () => {
+    const user = userEvent.setup()
+    render(<ArtifactPublishButton sourceKey="/repo/report.md" createRequest={vi.fn()} />)
+
+    expect(mocks.getPublishedLink).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Share as artifact' }))
+
+    await waitFor(() => expect(mocks.getPublishedLink).toHaveBeenCalledOnce())
+  })
+
+  it('does not start copy feedback after the panel unmounts', async () => {
+    const user = userEvent.setup()
+    let finishCopy: ((copied: boolean) => void) | undefined
+    mocks.getPublishedLink.mockResolvedValue('https://share.onorca.dev/a/artifact-a')
+    mocks.copyLink.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        finishCopy = resolve
+      })
+    )
+    const timeoutSpy = vi.spyOn(window, 'setTimeout')
+    const view = render(
+      <ArtifactPublishButton sourceKey="/repo/report.md" createRequest={vi.fn()} />
+    )
+    await user.click(screen.getByRole('button', { name: 'Share as artifact' }))
+    await user.click(await screen.findByRole('button', { name: 'Copy link' }))
+
+    view.unmount()
+    finishCopy?.(true)
+    await Promise.resolve()
+
+    expect(timeoutSpy).not.toHaveBeenCalledWith(expect.any(Function), 1_500)
   })
 })

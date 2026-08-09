@@ -20,6 +20,9 @@ export function browserFileUrlToAbsolutePath(url: string): string | null {
     if (/^\/[A-Za-z]:\//.test(absolutePath)) {
       absolutePath = absolutePath.slice(1)
     }
+    if (/^[A-Za-z]:\//.test(absolutePath) || absolutePath.startsWith('//')) {
+      absolutePath = absolutePath.replaceAll('/', '\\')
+    }
     return absolutePath
   } catch {
     return null
