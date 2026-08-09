@@ -147,7 +147,7 @@ export function FolderSourceControlSections({
   )
 
   /** Toggles whether a tree directory is collapsed. */
-  const toggleTreeDirectory = (key: string): void => {
+  function toggleTreeDirectory(key: string): void {
     setCollapsedTreeDirs((current) => {
       const next = new Set(current)
       if (next.has(key)) {

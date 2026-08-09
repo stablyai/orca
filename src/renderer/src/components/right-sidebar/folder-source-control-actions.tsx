@@ -239,7 +239,7 @@ export function FolderBaseRefEditor({
   onApply: (value: string) => void
 }): React.JSX.Element {
   /** Applies a trimmed base ref when it differs from the current value. */
-  const applyIfChanged = (next: string): void => {
+  function applyIfChanged(next: string): void {
     const trimmed = next.trim()
     if (trimmed.length === 0 || trimmed === value.trim()) {
       return

@@ -101,7 +101,9 @@ export function useFolderSourceControlData({
   const loadDetails = useCallback(async () => {
     const runId = ++loadRunRef.current
     /** Guards state writes to the latest load cycle. */
-    const isCurrent = (): boolean => loadRunRef.current === runId
+    function isCurrent(): boolean {
+      return loadRunRef.current === runId
+    }
     setBranchCompare({ status: 'loading' })
     setHistory({ status: 'loading' })
     let baseRef = baseRefOverride || worktree?.baseRef || target.repo?.worktreeBaseRef || null
