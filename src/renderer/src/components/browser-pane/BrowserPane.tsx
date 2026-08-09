@@ -2469,10 +2469,13 @@ function BrowserPagePane({
     isMobileDriven
   })
   const pageViewport = ensureBrowserPageViewport(browserTab.id, workspaceId)
+  // Why: render-scoped identities so effects keyed on them rebind after a shell rebuild.
+  const viewportContainer = pageViewport?.container ?? null
+  const viewportScroller = pageViewport?.scroller ?? null
   const containerRef = useRef<HTMLDivElement | null>(null)
-  containerRef.current = pageViewport?.container ?? null
+  containerRef.current = viewportContainer
   const scrollerRef = useRef<HTMLDivElement | null>(null)
-  scrollerRef.current = pageViewport?.scroller ?? null
+  scrollerRef.current = viewportScroller
   const chromeHeaderRef = useRef<HTMLDivElement | null>(null)
   const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -2875,23 +2878,28 @@ function BrowserPagePane({
     const bumpOverlayViewportVersion = (): void => {
       setBrowserOverlayViewport((current) => ({ ...current, version: current.version + 1 }))
     }
-    const observedContainer = containerRef.current
+    // Why: keyed on the element identities so a shell rebuild rebinds both observers.
     const resizeObserver =
-      typeof ResizeObserver === 'undefined' || !observedContainer
+      typeof ResizeObserver === 'undefined' || !viewportContainer
         ? null
         : new ResizeObserver(bumpOverlayViewportVersion)
-    if (resizeObserver && observedContainer) {
-      resizeObserver.observe(observedContainer)
+    if (resizeObserver && viewportContainer) {
+      resizeObserver.observe(viewportContainer)
     }
     // Why: panning a viewport preset moves the webview under container-pinned anchors.
-    const scroller = scrollerRef.current
-    scroller?.addEventListener('scroll', bumpOverlayViewportVersion, { passive: true })
+    viewportScroller?.addEventListener('scroll', bumpOverlayViewportVersion, { passive: true })
 
     return () => {
       resizeObserver?.disconnect()
-      scroller?.removeEventListener('scroll', bumpOverlayViewportVersion)
+      viewportScroller?.removeEventListener('scroll', bumpOverlayViewportVersion)
     }
-  }, [browserAnnotations.length, isActive, pendingAnnotationPayload])
+  }, [
+    browserAnnotations.length,
+    isActive,
+    pendingAnnotationPayload,
+    viewportContainer,
+    viewportScroller
+  ])
 
   useEffect(() => {
     initialBrowserUrlRef.current = browserTab.url
