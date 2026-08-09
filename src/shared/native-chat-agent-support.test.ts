@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isNativeChatSupportedAgent,
+  nativeChatRequiresHostReadableTranscript,
   nativeChatRequiresLocalTranscript,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
@@ -36,10 +37,7 @@ describe('isNativeChatSupportedAgent', () => {
 })
 
 describe('nativeChatRequiresLocalTranscript', () => {
-  it('covers the agents whose hook discloses no transcript path', () => {
-    // Claude/Codex report `transcript_path`; Grok, omp, and OpenCode report only
-    // an id, so native chat has to find their session data on a disk this
-    // process can read (OpenCode's conversations live in its local SQLite DB).
+  it('covers agents whose hooks disclose no direct transcript path', () => {
     expect(nativeChatRequiresLocalTranscript('grok')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('omp')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('opencode')).toBe(true)
@@ -49,6 +47,23 @@ describe('nativeChatRequiresLocalTranscript', () => {
     expect(nativeChatRequiresLocalTranscript('cursor')).toBe(false)
     expect(nativeChatRequiresLocalTranscript(null)).toBe(false)
     expect(nativeChatRequiresLocalTranscript(undefined)).toBe(false)
+  })
+})
+
+describe('nativeChatRequiresHostReadableTranscript', () => {
+  it('covers every supported transcript reader', () => {
+    // Model-A SSH has no runtime RPC reader, so even a hook-reported path must
+    // belong to this process's host; runtime-owned hosts satisfy the same check
+    // on their own runtime process.
+    expect(nativeChatRequiresHostReadableTranscript('grok')).toBe(true)
+    expect(nativeChatRequiresHostReadableTranscript('omp')).toBe(true)
+    expect(nativeChatRequiresHostReadableTranscript('opencode')).toBe(true)
+    expect(nativeChatRequiresHostReadableTranscript('claude')).toBe(true)
+    expect(nativeChatRequiresHostReadableTranscript('openclaude')).toBe(true)
+    expect(nativeChatRequiresHostReadableTranscript('codex')).toBe(true)
+    expect(nativeChatRequiresHostReadableTranscript('cursor')).toBe(false)
+    expect(nativeChatRequiresHostReadableTranscript(null)).toBe(false)
+    expect(nativeChatRequiresHostReadableTranscript(undefined)).toBe(false)
   })
 })
 
