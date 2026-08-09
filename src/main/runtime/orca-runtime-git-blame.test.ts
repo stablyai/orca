@@ -44,6 +44,7 @@ describe('RuntimeGitCommands blame path handling', () => {
     mocks.getSshGitProvider.mockReset()
   })
 
+  /** Verifies absolute paths are normalized against the selected worktree. */
   it('resolves absolute blame paths against the selected worktree', async () => {
     const worktreePath = '/repo'
     mocks.getBlame.mockResolvedValue([])
@@ -53,6 +54,7 @@ describe('RuntimeGitCommands blame path handling', () => {
     expect(mocks.getBlame).toHaveBeenCalledWith(worktreePath, 'src/a.ts', {})
   })
 
+  /** Verifies worktree-relative normalization rejects escape paths. */
   it('rejects absolute blame paths outside the selected worktree', async () => {
     const commands = makeCommands('/repo')
 
@@ -62,6 +64,7 @@ describe('RuntimeGitCommands blame path handling', () => {
     expect(mocks.getBlame).not.toHaveBeenCalled()
   })
 
+  /** Verifies SSH blame requests receive the normalized relative path. */
   it('forwards normalized blame paths through the SSH provider', async () => {
     const provider = { getBlame: vi.fn().mockResolvedValue([]) }
     mocks.getSshGitProvider.mockReturnValue(provider as never)

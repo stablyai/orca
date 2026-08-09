@@ -191,6 +191,7 @@ export type RuntimeGitCommandHost = {
   getWorktreeLinkedIssueMeta?(worktreeId: string): PullRequestLinkedIssueMeta | null | undefined
 }
 
+/** Runtime-facing git command dispatch with local and SSH routing. */
 export class RuntimeGitCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
 

@@ -20,6 +20,7 @@ function blameLabel(author: string, authorTime: number, summary: string): string
   return [author, relativeTime, summary].filter(Boolean).join(' · ')
 }
 
+/** Props consumed by the inline Git blame hook. */
 type UseGitBlameProps = {
   editor: editor.IStandaloneCodeEditor | null
   worktreeId?: string
@@ -47,7 +48,6 @@ export function useGitBlame({ editor, worktreeId, filePath, enabled }: UseGitBla
 
     let disposed = false
     let latestResult: GitBlameResult | null = null
-    let blameVersionId: number | null = null
     const decorations = ed.createDecorationsCollection([])
     const update = (): void => {
       if (disposed) {
@@ -83,11 +83,8 @@ export function useGitBlame({ editor, worktreeId, filePath, enabled }: UseGitBla
     const selectionSub = ed.onDidChangeCursorSelection(update)
     const fetchVersionId = ed.getModel()?.getVersionId() ?? null
     const contentSub = ed.onDidChangeModelContent(() => {
-      const currentVersionId = ed.getModel()?.getVersionId() ?? null
-      if (blameVersionId !== null && currentVersionId !== blameVersionId) {
-        blameCache.delete(cacheKey)
-        latestResult = null
-      }
+      blameCache.delete(cacheKey)
+      latestResult = null
       decorations.clear()
     })
     const disposeSub = ed.onDidDispose(() => {
@@ -118,12 +115,13 @@ export function useGitBlame({ editor, worktreeId, filePath, enabled }: UseGitBla
           return
         }
         latestResult = result
-        blameVersionId = fetchVersionId
         update()
       })
       .catch(() => {
-        if (!disposed) {
+        if (blameCache.get(cacheKey) === promise) {
           blameCache.delete(cacheKey)
+        }
+        if (!disposed) {
           latestResult = []
           update()
         }

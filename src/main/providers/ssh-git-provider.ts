@@ -84,6 +84,7 @@ function filterUntrackedPorcelainStatus(stdout: string | undefined): string | un
   return trackedLines.length > 0 ? trackedLines.join('\n') : undefined
 }
 
+/** SSH-backed implementation of the git provider contract. */
 export class SshGitProvider implements IGitProvider {
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult | GitDiffResult[]>()
 

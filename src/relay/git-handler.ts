@@ -175,6 +175,7 @@ function execFileWithStdin(
   })
 }
 
+/** Relay-side git RPC handler that mirrors the local git command surface. */
 export class GitHandler {
   private dispatcher: RelayDispatcher
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<unknown>()
