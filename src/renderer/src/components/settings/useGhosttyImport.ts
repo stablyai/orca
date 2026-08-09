@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/types'
+import { mergeImportedTerminalColorOverrides } from '../../../../shared/terminal-color-overrides'
 import { useMountedRef } from '../../hooks/useMountedRef'
 
 export type UseGhosttyImportReturn = {
@@ -52,15 +53,11 @@ export function useGhosttyImport(
     if (applied || !preview?.found || Object.keys(preview.diff).length === 0 || !settings) {
       return
     }
+    const { terminalColorOverrides, ...diffWithoutColorOverrides } = preview.diff
     const merged = {
-      ...preview.diff,
-      ...(preview.diff.terminalColorOverrides
-        ? {
-            terminalColorOverrides: {
-              ...settings.terminalColorOverrides,
-              ...preview.diff.terminalColorOverrides
-            }
-          }
+      ...diffWithoutColorOverrides,
+      ...(terminalColorOverrides
+        ? mergeImportedTerminalColorOverrides(settings, terminalColorOverrides)
         : {})
     }
     setApplyError(null)

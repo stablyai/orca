@@ -48,6 +48,17 @@ describe('composeActiveTerminalTheme', () => {
     expect(result!.background).toBe('#101010')
   })
 
+  it('applies only the mode-specific color override bag', () => {
+    const base = { background: '#101010', foreground: '#fafafa' }
+    const settings = settingsWith({
+      terminalUseSeparateLightTheme: true,
+      terminalColorOverridesDark: { background: '#0a0a0a' },
+      terminalColorOverridesLight: { background: '#f5f5f5' }
+    })
+    expect(composeActiveTerminalTheme(base, settings, 'dark')!.background).toBe('#0a0a0a')
+    expect(composeActiveTerminalTheme(base, settings, 'light')!.background).toBe('#f5f5f5')
+  })
+
   it('applies background opacity by converting the hex background to rgba', () => {
     const base = { background: '#112233' }
     const result = composeActiveTerminalTheme(

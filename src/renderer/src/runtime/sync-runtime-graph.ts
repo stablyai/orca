@@ -10,6 +10,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { getSystemPrefersDark, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import { resolveTerminalColorOverridesForMode } from '../../../shared/terminal-color-overrides'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import type { AppState } from '@/store/types'
 import type {
@@ -1768,9 +1769,8 @@ function resolveMobileTerminalTheme(
     return undefined
   }
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-  const resolvedTheme = appearance.theme
-    ? { ...appearance.theme, ...settings.terminalColorOverrides }
-    : undefined
+  const colorOverrides = resolveTerminalColorOverridesForMode(settings, appearance.mode)
+  const resolvedTheme = appearance.theme ? { ...appearance.theme, ...colorOverrides } : undefined
   if (!resolvedTheme) {
     return undefined
   }

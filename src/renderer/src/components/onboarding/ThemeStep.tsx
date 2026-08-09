@@ -10,6 +10,7 @@ import type {
   GhosttyImportPreview,
   GlobalSettings
 } from '../../../../shared/types'
+import { mergeImportedTerminalColorOverrides } from '../../../../shared/terminal-color-overrides'
 import { translate } from '@/i18n/i18n'
 import { ChromePreview } from './theme-chrome-preview'
 
@@ -145,15 +146,11 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
         track('onboarding_ghostty_import_failed', { reason: 'empty_diff' })
         return
       }
+      const { terminalColorOverrides, ...diffWithoutColorOverrides } = resolved.diff
       await updateSettings({
-        ...resolved.diff,
-        ...(resolved.diff.terminalColorOverrides
-          ? {
-              terminalColorOverrides: {
-                ...settings.terminalColorOverrides,
-                ...resolved.diff.terminalColorOverrides
-              }
-            }
+        ...diffWithoutColorOverrides,
+        ...(terminalColorOverrides
+          ? mergeImportedTerminalColorOverrides(settings, terminalColorOverrides)
           : {})
       })
       // Why: parent controller holds local `theme` state that overwrites

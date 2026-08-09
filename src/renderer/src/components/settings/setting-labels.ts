@@ -18,6 +18,8 @@ export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   primarySelectionMiddleClickPaste: 'Middle-click Paste from Selection',
   terminalFocusFollowsMouse: 'Focus Follows Mouse',
   terminalColorOverrides: 'Color Overrides',
+  terminalColorOverridesDark: 'Color Overrides (Dark)',
+  terminalColorOverridesLight: 'Color Overrides (Light)',
   terminalMacOptionAsAlt: 'Option as Alt',
   terminalPaddingX: 'Padding X',
   terminalPaddingY: 'Padding Y',

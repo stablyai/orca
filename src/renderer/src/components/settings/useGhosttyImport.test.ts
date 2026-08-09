@@ -227,8 +227,10 @@ describe('useGhosttyImport', () => {
     await ghostty.handleApply()
 
     expect(updateSettings).toHaveBeenCalledTimes(1)
+    // Why: first import promotes into dark-only so light mode is not polluted.
     expect(updateSettings).toHaveBeenCalledWith({
-      terminalColorOverrides: {
+      terminalColorOverrides: undefined,
+      terminalColorOverridesDark: {
         foreground: '#e0e0e0',
         red: '#ff0000',
         background: '#1a1a1a'

@@ -3,8 +3,9 @@ import { RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
-import { ColorField, NumberField } from './SettingsFormControls'
+import { NumberField } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
+import { TerminalColorOverridesSection } from './TerminalColorOverridesSection'
 import { clampNumber } from '@/lib/terminal-theme'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -14,13 +15,10 @@ type TerminalWindowSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'
-
 export function TerminalWindowSection({
   settings,
   updateSettings
 }: TerminalWindowSectionProps): React.JSX.Element {
-  const [colorOverridesExpanded, setColorOverridesExpanded] = useState(false)
   // Why: windowBackgroundBlur is only read by createMainWindow() at startup
   // (macOS vibrancy / Windows acrylic both require window creation options),
   // so the UI has to ask the user to restart for the change to take effect.
@@ -277,75 +275,7 @@ export function TerminalWindowSection({
           </button>
         </SearchableSetting>
 
-        <SearchableSetting
-          title={translate(
-            'auto.components.settings.TerminalWindowSection.63f8d9336e',
-            'Color Overrides'
-          )}
-          description={translate(
-            'auto.components.settings.TerminalWindowSection.e86e09b5c7',
-            'Override individual terminal colors.'
-          )}
-          keywords={['color', 'override', 'ansi', 'palette', 'theme']}
-          className="space-y-3"
-        >
-          <div className="space-y-2">
-            <button
-              onClick={() => setColorOverridesExpanded((prev) => !prev)}
-              className="flex items-center gap-2 text-sm font-medium"
-            >
-              <span className={`transition-transform ${colorOverridesExpanded ? 'rotate-90' : ''}`}>
-                ▶
-              </span>
-              {translate(
-                'auto.components.settings.TerminalWindowSection.63f8d9336e',
-                'Color Overrides'
-              )}
-            </button>
-            <div
-              className={`grid overflow-hidden transition-all duration-300 ease-out ${
-                colorOverridesExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-              }`}
-            >
-              <div className="min-h-0 space-y-4">
-                {COLOR_OVERRIDE_GROUPS.map((group) => (
-                  <div key={group.label} className="space-y-2">
-                    <p className="text-xs font-semibold text-muted-foreground">{group.label}</p>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {group.keys.map((item) => (
-                        <ColorField
-                          key={item.key}
-                          label={item.label}
-                          description={item.description}
-                          value={settings.terminalColorOverrides?.[item.key] ?? ''}
-                          fallback=""
-                          onChange={(value) =>
-                            updateSettings({
-                              terminalColorOverrides: {
-                                ...settings.terminalColorOverrides,
-                                [item.key]: value || undefined
-                              }
-                            })
-                          }
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => updateSettings({ terminalColorOverrides: undefined })}
-                >
-                  {translate(
-                    'auto.components.settings.TerminalWindowSection.03c855d15f',
-                    'Reset all color overrides'
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </SearchableSetting>
+        <TerminalColorOverridesSection settings={settings} updateSettings={updateSettings} />
       </div>
     </section>
   )
