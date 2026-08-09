@@ -2834,6 +2834,8 @@ export class Store {
     const loaded = this.load()
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
+    // After the leaf remap, so every folded binding keys on a UUID.
+    const foldedSshPaneBindings = this.foldSshPaneBindingsIntoLocalPartition()
     // Why: activeView is a frequent, tiny preference; keeping it beside the
     // profile avoids serializing the multi-MB recovery store on navigation.
     this.activeViewPreference = new ActiveViewPreference(this.dataFile, this.state.ui?.activeView)
@@ -2852,7 +2854,7 @@ export class Store {
       this.state.legacyPaneKeyAliasEntries = entries
       this.scheduleSave()
     })
-    if (normalized.changed || this.loadNeedsSave || adaptedProjectGroups) {
+    if (normalized.changed || this.loadNeedsSave || adaptedProjectGroups || foldedSshPaneBindings) {
       // Why: rewrite legacy pane:1 leaves so older renderer writes can't revive them; other migrations also set loadNeedsSave.
       this.scheduleSave()
     }
@@ -7260,22 +7262,49 @@ export class Store {
    *
    * Returns the number of leases retired, for logging.
    */
-  /** The PTY a pane is durably bound to, across the target and local partitions. */
+  /**
+   * One-time fold: SSH pane bindings written to an `ssh:<target>` partition by an older build move
+   * into `local`, the partition the renderer has always published pane membership to. Two homes is
+   * the STA-3077 defect itself — the reattach writer updated one and supersession read the other.
+   * `local` wins on conflict because it is the live publisher; the loser is dropped rather than
+   * demoted to an orphan candidate, since relay pty ids recycle and cannot identify a shell alone.
+   */
+  private foldSshPaneBindingsIntoLocalPartition(): boolean {
+    const partitions = this.state.workspaceSessionsByHostId ?? {}
+    const local = (this.state.workspaceSession ??= getDefaultWorkspaceSession())
+    let changed = false
+    for (const hostId of Object.keys(partitions)) {
+      if (parseExecutionHostId(hostId)?.kind !== 'ssh') {
+        continue
+      }
+      const host: WorkspaceSessionState | undefined = partitions[hostId]
+      for (const [tabId, layout] of Object.entries(host?.terminalLayoutsByTabId ?? {})) {
+        const bindings = layout.ptyIdsByLeafId
+        if (!bindings || Object.keys(bindings).length === 0) {
+          continue
+        }
+        const localLayout = local.terminalLayoutsByTabId?.[tabId]
+        if (localLayout) {
+          localLayout.ptyIdsByLeafId = { ...bindings, ...localLayout.ptyIdsByLeafId }
+        }
+        layout.ptyIdsByLeafId = {}
+        changed = true
+      }
+    }
+    return changed
+  }
+
+  /** The PTY a pane is durably bound to. SSH pane bindings live in the local partition only —
+   *  see `foldSshPaneBindingsIntoLocalPartition`. Hedging across two partitions is what let a
+   *  stale `ssh:<target>` copy outvote the live binding and no-op supersession (STA-3077). */
   private durablyBoundPtyIdForPane(
     targetId: string,
     tabId: string,
     leafId: string
   ): string | undefined {
-    for (const session of [
-      this.state.workspaceSessionsByHostId?.[toSshExecutionHostId(targetId)],
-      this.state.workspaceSession
-    ]) {
-      const boundPtyId = session?.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId?.[leafId]
-      if (boundPtyId) {
-        return this.getRelayPtyIdForSshLeaseComparison(targetId, boundPtyId)
-      }
-    }
-    return undefined
+    const boundPtyId =
+      this.state.workspaceSession?.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId?.[leafId]
+    return boundPtyId ? this.getRelayPtyIdForSshLeaseComparison(targetId, boundPtyId) : undefined
   }
 
   /**

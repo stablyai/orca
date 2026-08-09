@@ -5205,15 +5205,16 @@ describe('registerPtyHandlers', () => {
             state: 'attached'
           })
         )
-        expect(store.persistPtyBinding).toHaveBeenCalledWith(
-          {
-            worktreeId: 'wt-1',
-            tabId: 'tab-1',
-            leafId,
-            ptyId: 'ssh-pty'
-          },
-          'ssh:ssh-1'
-        )
+        // STA-3077 step P inverted this: SSH pane bindings no longer go to a
+        // per-target `ssh:<target>` partition. One home (`local`) only, so the
+        // hostId argument is gone — pin its absence, not its old value.
+        expect(store.persistPtyBinding).toHaveBeenCalledWith({
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          leafId,
+          ptyId: 'ssh-pty'
+        })
+        expect(store.persistPtyBinding.mock.calls.at(-1)).toHaveLength(1)
 
         store.upsertSshRemotePtyLease.mockClear()
         store.persistPtyBinding.mockClear()
@@ -9391,6 +9392,9 @@ describe('registerPtyHandlers', () => {
     )
     expect(runtime.noteTerminalSpawnCommand).not.toHaveBeenCalled()
     expect(store.persistPtyBinding).toHaveBeenCalledOnce()
+    // STA-3077 step P inverted this: the reattach writer no longer passes a
+    // hostId slot at all (it used to pass `undefined` here for the local case),
+    // so the call is now strictly single-argument.
     expect(store.persistPtyBinding).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId,
@@ -9402,9 +9406,9 @@ describe('registerPtyHandlers', () => {
           ptyId: 'pty-persisted-owner',
           incarnationId: 'inc-stale-owner'
         }
-      }),
-      undefined
+      })
     )
+    expect(store.persistPtyBinding.mock.calls[0]!).toHaveLength(1)
     expect(
       mainWindow.webContents.send.mock.calls.filter(([channel]) => channel === 'pty:spawned')
     ).toHaveLength(1)
@@ -10103,9 +10107,8 @@ describe('registerPtyHandlers', () => {
     expect(runtime.onPtyExit).toHaveBeenCalledWith('pty-already-retired-owner', 0, undefined)
   })
 
-  it('retires a dead owner from the exact SSH host session before fresh recovery', async () => {
+  it('retires a dead owner from the local session — the one pane-binding home — before fresh recovery', async () => {
     const connectionId = 'ssh-dead-stable-pane'
-    const hostId = `ssh:${connectionId}`
     const tabId = 'tab-dead-ssh-owner'
     const leafId = '34343434-3434-4434-8434-343434343434'
     const paneKey = makePaneKey(tabId, leafId)
@@ -10154,12 +10157,16 @@ describe('registerPtyHandlers', () => {
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-dead-ssh-owner' }
     }
     const store = {
+      // STA-3077 step P inverted these: the reader/retirer used to target the
+      // per-target `ssh:<connectionId>` partition while the renderer published
+      // pane membership to `local` — two homes, so supersession no-opped. Both
+      // sides now address the single default (local) partition, i.e. no hostId.
       getWorkspaceSession: vi.fn((requestedHostId?: string) => {
-        expect(requestedHostId).toBe(hostId)
+        expect(requestedHostId).toBeUndefined()
         return session
       }),
       setWorkspaceSession: vi.fn((next, requestedHostId?: string) => {
-        expect(requestedHostId).toBe(hostId)
+        expect(requestedHostId).toBeUndefined()
         session = next
       }),
       flushOrThrow: vi.fn(),
@@ -10222,16 +10229,25 @@ describe('registerPtyHandlers', () => {
       expect(remoteSpawn.mock.calls[1]?.[0]).toMatchObject({
         command: 'codex resume exact-dead-ssh-provider-session'
       })
-      expect(store.setWorkspaceSession).toHaveBeenCalledWith(expect.anything(), hostId)
+      // STA-3077 step P inverted these: the retirement write and the fresh
+      // binding write both land in the single default (local) partition now, so
+      // no hostId is passed. The dead owner must still actually be retired.
+      expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
+      expect(store.setWorkspaceSession.mock.calls[0]!).toHaveLength(1)
+      expect(
+        store.setWorkspaceSession.mock.calls[0]![0].terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[
+          leafId
+        ]
+      ).not.toBe(deadPtyId)
       expect(store.persistPtyBinding).toHaveBeenCalledWith(
         expect.objectContaining({
           worktreeId,
           tabId,
           leafId,
           ptyId: freshPtyId
-        }),
-        hostId
+        })
       )
+      expect(store.persistPtyBinding.mock.calls.at(-1)!).toHaveLength(1)
     } finally {
       unregisterSshPtyProvider(connectionId)
     }
@@ -10577,15 +10593,15 @@ describe('registerPtyHandlers', () => {
         state: 'attached'
       })
     )
-    expect(store.persistPtyBinding).toHaveBeenCalledWith(
-      {
-        worktreeId: 'wt-remote',
-        tabId: 'tab-remote',
-        leafId,
-        ptyId: 'ssh:ssh-1@@relay-pty'
-      },
-      'ssh:ssh-1'
-    )
+    // STA-3077 step P inverted this: the headless binding writer no longer
+    // targets `ssh:<target>`; one home (`local`) only, so no hostId argument.
+    expect(store.persistPtyBinding).toHaveBeenCalledWith({
+      worktreeId: 'wt-remote',
+      tabId: 'tab-remote',
+      leafId,
+      ptyId: 'ssh:ssh-1@@relay-pty'
+    })
+    expect(store.persistPtyBinding.mock.calls[0]!).toHaveLength(1)
     expect(store.persistPtyBinding.mock.invocationCallOrder[0]!).toBeLessThan(
       store.upsertSshRemotePtyLease.mock.invocationCallOrder[0]!
     )
@@ -10729,15 +10745,15 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding: true
       })
 
-      expect(store.persistPtyBinding).toHaveBeenCalledWith(
-        {
-          worktreeId: 'wt-remote',
-          tabId: 'tab-remote',
-          leafId,
-          ptyId: 'ssh:ssh-reattach-ok@@relay-pty'
-        },
-        'ssh:ssh-reattach-ok'
-      )
+      // STA-3077 step P inverted this: the reattach binding refresh writes to the
+      // single default (local) partition, so the `ssh:<target>` hostId is gone.
+      expect(store.persistPtyBinding).toHaveBeenCalledWith({
+        worktreeId: 'wt-remote',
+        tabId: 'tab-remote',
+        leafId,
+        ptyId: 'ssh:ssh-reattach-ok@@relay-pty'
+      })
+      expect(store.persistPtyBinding.mock.calls.at(-1)!).toHaveLength(1)
       expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
         expect.objectContaining({
           targetId: 'ssh-reattach-ok',

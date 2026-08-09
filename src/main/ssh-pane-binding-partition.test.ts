@@ -91,6 +91,12 @@ function rendererPublishesPane(store: TestStore, relayPtyId: string): void {
   store.setWorkspaceSession(paneSession(relayPtyId) as never, LOCAL_EXECUTION_HOST_ID)
 }
 
+/** A mid-session write into `ssh:<target>` — orphan adoption still targets that partition, so the
+ *  one-time load fold cannot be the only thing keeping the two homes from reappearing. */
+function somethingRewritesTheSshPartition(store: TestStore, relayPtyId: string): void {
+  store.setWorkspaceSession(paneSession(relayPtyId) as never, SSH_PARTITION)
+}
+
 /** ssh-relay-session.ts:2504 — the reattach bind. No hostId, refuses to create. */
 function relayReattachBindsPane(store: TestStore, relayPtyId: string): boolean | null {
   return store.persistPtyBinding({
@@ -199,6 +205,21 @@ describe('STA-3077 step P: one pane, one live claim across partitions', () => {
     expect(relayReattachBindsPane(store, 'pty-2')).toBe(true)
 
     store.supersedeDuplicatePaneLeases(TARGET)
+
+    expect(liveLeaseIdsForPane(store)).toEqual(['pty-2'])
+  })
+
+  // Isolates the reader from the one-time load fold. Without this clause the fold masks the
+  // partition preference — it deletes the divergent copy at boot, so restoring the ssh-first
+  // hedge stays green and the reader guard ships unproven. Anything that writes `ssh:<target>`
+  // after load (orphan adoption still does) would then revive the defect inside one session.
+  it('supersedes the predecessor when the ssh partition is rewritten mid-session', async () => {
+    const store = await createStore(diskAfterEarlierSession('pty-1'))
+    sshSpawnUpsertsLease(store, 'pty-1')
+    expect(relayReattachBindsPane(store, 'pty-2')).toBe(true)
+    somethingRewritesTheSshPartition(store, 'pty-1')
+
+    sshSpawnUpsertsLease(store, 'pty-2')
 
     expect(liveLeaseIdsForPane(store)).toEqual(['pty-2'])
   })

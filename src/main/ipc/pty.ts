@@ -16,7 +16,6 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../runtime/mobile-session-terminal-persistence-retirement'
 import type { GlobalSettings, TuiAgent } from '../../shared/types'
-import { toSshExecutionHostId } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
@@ -660,11 +659,13 @@ type StablePaneAdoption = {
 } | null
 const stablePaneAdoptionsByOwnerKey = new Map<string, Promise<StablePaneAdoption>>()
 
+// Pane bindings have one home: the local partition. An SSH pane is not partitioned out — the
+// renderer publishes its membership to `local` and `mayCreate: false` is evaluated there — so
+// selecting `ssh:<target>` here read a partition no live writer maintains (STA-3077 step P).
 function resolvePersistedStablePaneOwner(
   store: Store | undefined,
   paneKey: string,
-  worktreeId: string,
-  connectionId: string | null | undefined
+  worktreeId: string
 ): Pick<StablePaneOwner, 'tabId' | 'leafId' | 'ptyId' | 'incarnationId'> | null {
   if (!store || typeof store.getWorkspaceSession !== 'function') {
     return null
@@ -673,9 +674,7 @@ function resolvePersistedStablePaneOwner(
   if (!parsed) {
     return null
   }
-  const session = store.getWorkspaceSession(
-    connectionId ? toSshExecutionHostId(connectionId) : undefined
-  )
+  const session = store.getWorkspaceSession()
   const tab = session.tabsByWorktree?.[worktreeId]?.find(
     (candidate) => candidate.id === parsed.tabId && candidate.worktreeId === worktreeId
   )
@@ -715,7 +714,7 @@ function resolveStablePaneOwner(
       }
     }
   }
-  const persisted = resolvePersistedStablePaneOwner(store, paneKey, worktreeId, connectionId)
+  const persisted = resolvePersistedStablePaneOwner(store, paneKey, worktreeId)
   if (resolved?.ptyId && persisted && resolved.ptyId !== persisted.ptyId) {
     throw new Error('terminal_pane_owner_conflict')
   }
@@ -751,15 +750,13 @@ function resolveStablePaneOwner(
 function retirePersistedStablePaneOwner(
   store: Store | undefined,
   owner: StablePaneOwner,
-  worktreeId: string,
-  connectionId: string | null | undefined
+  worktreeId: string
 ): boolean {
   if (!store) {
     return false
   }
   const paneKey = makePaneKey(owner.tabId, owner.leafId)
-  const hostId = connectionId ? toSshExecutionHostId(connectionId) : undefined
-  const current = resolvePersistedStablePaneOwner(store, paneKey, worktreeId, connectionId)
+  const current = resolvePersistedStablePaneOwner(store, paneKey, worktreeId)
   if (!current) {
     // Why: persistence already dropped this pane binding (an earlier stop retired it while the
     // runtime kept history), so there is nothing left to clear — that is a completed retirement,
@@ -769,7 +766,7 @@ function retirePersistedStablePaneOwner(
   if (current.ptyId !== owner.ptyId || current.incarnationId !== owner.persistedIncarnationId) {
     return false
   }
-  const session = store.getWorkspaceSession(hostId)
+  const session = store.getWorkspaceSession()
   const retired = retireTerminalSurfaceFromPersistence(session, {
     worktreeId,
     parentTabId: owner.tabId,
@@ -780,7 +777,7 @@ function retirePersistedStablePaneOwner(
   if (retired === session) {
     return false
   }
-  store.setWorkspaceSession(retired, hostId)
+  store.setWorkspaceSession(retired)
   store.flushOrThrow()
   return true
 }
@@ -814,24 +811,20 @@ function persistAdmittedStablePaneBinding(args: {
   result: PtySpawnResult
   worktreeId: string | undefined
   startupCwd: string | undefined
-  connectionId: string | null | undefined
 }): boolean {
   const expectedBinding = stablePanePersistenceFence(args.owner)
   if (!args.store || !args.owner || !args.worktreeId || !expectedBinding) {
     return false
   }
-  const persisted = args.store.persistPtyBinding(
-    {
-      worktreeId: args.worktreeId,
-      tabId: args.owner.tabId,
-      leafId: args.owner.leafId,
-      ptyId: args.result.id,
-      ...(args.result.incarnationId ? { incarnationId: args.result.incarnationId } : {}),
-      ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
-      expectedBinding
-    },
-    args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
-  )
+  const persisted = args.store.persistPtyBinding({
+    worktreeId: args.worktreeId,
+    tabId: args.owner.tabId,
+    leafId: args.owner.leafId,
+    ptyId: args.result.id,
+    ...(args.result.incarnationId ? { incarnationId: args.result.incarnationId } : {}),
+    ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
+    expectedBinding
+  })
   if (persisted === false) {
     throw new Error('terminal_pane_owner_changed')
   }
@@ -880,10 +873,7 @@ async function attachStablePaneOwner(
     runtime?.onPtyExit(owner.ptyId, 0, owner.incarnationId)
     clearProviderPtyState(owner.ptyId)
     ptyOwnership.delete(owner.ptyId)
-    if (
-      args.worktreeId &&
-      !retirePersistedStablePaneOwner(args.store, owner, args.worktreeId, args.connectionId)
-    ) {
+    if (args.worktreeId && !retirePersistedStablePaneOwner(args.store, owner, args.worktreeId)) {
       throw new Error('terminal_pane_owner_changed')
     }
     if (args.resolveOwner?.()) {
@@ -5045,8 +5035,7 @@ export function registerPtyHandlers(
             owner: stablePaneOwner,
             result,
             worktreeId: hostSessionBinding?.worktreeId,
-            startupCwd: cwd,
-            connectionId: args.connectionId
+            startupCwd: cwd
           })
         } catch (error) {
           if (error instanceof Error && error.message === 'terminal_pane_owner_changed') {
@@ -5144,14 +5133,7 @@ export function registerPtyHandlers(
               ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
               ...(cwd ? { startupCwd: cwd } : {})
             }
-            if (args.connectionId) {
-              hostSessionBinding.store.persistPtyBinding(
-                binding,
-                toSshExecutionHostId(args.connectionId)
-              )
-            } else {
-              hostSessionBinding.store.persistPtyBinding(binding)
-            }
+            hostSessionBinding.store.persistPtyBinding(binding)
           } catch (err) {
             console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
             if (!result.isReattach) {
@@ -6442,8 +6424,7 @@ export function registerPtyHandlers(
             owner: stablePaneOwner,
             result,
             worktreeId: args.worktreeId,
-            startupCwd: cwd,
-            connectionId: args.connectionId
+            startupCwd: cwd
           })
         } catch (error) {
           if (error instanceof Error && error.message === 'terminal_pane_owner_changed') {
@@ -6524,11 +6505,7 @@ export function registerPtyHandlers(
               ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
               ...(cwd ? { startupCwd: cwd } : {})
             }
-            if (args.connectionId) {
-              store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
-            } else {
-              store.persistPtyBinding(binding)
-            }
+            store.persistPtyBinding(binding)
           } catch (err) {
             console.error('[pty] failed to persist PTY binding after spawn:', err)
             if (!result.isReattach) {
