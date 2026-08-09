@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 const { fsWriteFileMock, randomUUIDMock, getSshFilesystemProviderMock } = vi.hoisted(() => ({
@@ -32,6 +33,9 @@ import {
 } from './clipboard-image-temp-file'
 
 const UUID = '00000000-0000-4000-8000-000000000000'
+// Why: local temp paths go through path.join, which emits backslashes on Windows.
+const SEP = path.sep === '\\' ? '\\\\' : path.sep
+const LOCAL_TEMP = `${SEP}local-temp${SEP}`
 
 describe('sanitizeAttachmentFileName', () => {
   it('keeps an ordinary file name unchanged', () => {
@@ -139,7 +143,7 @@ describe('saveClipboardImageBufferAsTempFile', () => {
 
     const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from('bytes'))
 
-    expect(savedPath).toMatch(new RegExp(`^/local-temp/orca-paste-\\d+-${UUID}\\.png$`))
+    expect(savedPath).toMatch(new RegExp(`^${LOCAL_TEMP}orca-paste-\\d+-${UUID}\\.png$`))
   })
 
   it('appends the sanitized original name for named attachments', async () => {
@@ -149,7 +153,7 @@ describe('saveClipboardImageBufferAsTempFile', () => {
       fileName: '../notes/agenda.md'
     })
 
-    expect(savedPath).toMatch(new RegExp(`^/local-temp/orca-file-\\d+-${UUID}-notesagenda\\.md$`))
+    expect(savedPath).toMatch(new RegExp(`^${LOCAL_TEMP}orca-file-\\d+-${UUID}-notesagenda\\.md$`))
   })
 
   it('falls back to the generated name with no suffix when the name sanitizes away', async () => {
@@ -159,7 +163,7 @@ describe('saveClipboardImageBufferAsTempFile', () => {
       fileName: '///'
     })
 
-    expect(savedPath).toMatch(new RegExp(`^/local-temp/orca-file-\\d+-${UUID}$`))
+    expect(savedPath).toMatch(new RegExp(`^${LOCAL_TEMP}orca-file-\\d+-${UUID}$`))
   })
 
   it('uses identical naming for SSH remote writes', async () => {
