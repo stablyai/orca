@@ -60,6 +60,8 @@ export type SessionTabsResult = {
   tabs: MobileSessionTab[]
   activeTabId: string | null
   activeTabType: MobileSessionTabType | null
+  /** Host explicitly navigated this device (desktop/CLI `navigation: clients|all`), not a plain republication. */
+  navigationIntent?: 'follow'
 }
 
 export type RuntimeStatusResult = {

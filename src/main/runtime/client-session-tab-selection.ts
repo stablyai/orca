@@ -202,11 +202,18 @@ export class ClientSessionTabSelectionStore {
       }
     }
     const projected = projectClientSessionTabSelection(snapshot, state.selection)
-    statesByWorktree.set(snapshot.worktree, {
-      selection: projected.selection,
-      revision: state.revision,
-      shouldPersist: state.shouldPersist
-    })
+    // Why: a browser guest process swap drops its tab for one snapshot; the topology fallback
+    // must not overwrite (and persist) the device's explicit pick, or focus never returns.
+    const selectionSurvived =
+      !state.selection.activeTabId ||
+      snapshot.tabs.some((tab) => tab.id === state.selection.activeTabId)
+    if (selectionSurvived) {
+      statesByWorktree.set(snapshot.worktree, {
+        selection: projected.selection,
+        revision: state.revision,
+        shouldPersist: state.shouldPersist
+      })
+    }
     return {
       ...projected.snapshot,
       publicationEpoch: `${snapshot.publicationEpoch}:client-navigation`,

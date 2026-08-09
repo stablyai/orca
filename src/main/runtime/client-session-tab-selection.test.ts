@@ -251,6 +251,23 @@ describe('client session-tab selection', () => {
     expect(store.project(snapshot(), 'device-a').activeTabId).toBe('browser-unified')
   })
 
+  it('restores the selection after a snapshot transiently drops the selected tab', () => {
+    const store = new ClientSessionTabSelectionStore()
+    const full = snapshot()
+    store.activate(full, 'device-a', 'browser-unified')
+
+    // A browser guest process swap omits the tab from one snapshot.
+    const withoutBrowser = {
+      ...full,
+      activeTabId: 'terminal-a::leaf-a',
+      activeTabType: 'terminal' as const,
+      tabs: full.tabs.filter((tab) => tab.id !== 'browser-unified')
+    }
+    expect(store.project(withoutBrowser, 'device-a').activeTabId).toBe('terminal-a::leaf-a')
+
+    expect(store.project(full, 'device-a').activeTabId).toBe('browser-unified')
+  })
+
   it('drops malformed persisted payloads instead of hydrating them', () => {
     expect(
       normalizePersistedMobileClientTabSelections({
