@@ -10468,6 +10468,12 @@
           "openAutomationsDescription": "Create schedules and inspect recent runs.",
           "title": "Automations",
           "description": "Schedule agent work and choose whether Automations appears in the sidebar."
+        },
+        "EditorGitGutterSetting": {
+          "0d6a6bc1e3": "Git Change Indicators",
+          "68bbcab1b6": "Show added, modified, and deleted line markers in the editor gutter, compared against the last commit.",
+          "e65156c441": "Off",
+          "ae469f513d": "On"
         }
       },
       "right": {

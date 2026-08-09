@@ -66,6 +66,7 @@ import {
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
 import { monacoFindOptions } from './monaco-find-options'
 import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
+import { useEditorGitGutter } from './git-gutter/useEditorGitGutter'
 
 type MonacoEditorProps = {
   fileId: string
@@ -233,6 +234,8 @@ export default function MonacoEditor({
     (comment: DiffComment) => formatMarkdownReviewNotes([comment as MarkdownReviewNote], content),
     [content]
   )
+
+  useEditorGitGutter({ editorInstance: mountedEditor, fileId, content })
 
   useDiffCommentDecorator({
     editor: shouldShowMarkdownAnnotations ? mountedEditor : null,

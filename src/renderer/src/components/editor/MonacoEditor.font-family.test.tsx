@@ -31,7 +31,9 @@ vi.mock('@/store', () => ({
       updateDiffComment: vi.fn(),
       scrollToDiffCommentId: null,
       setScrollToDiffCommentId: vi.fn(),
-      worktreeDiffComments: {}
+      worktreeDiffComments: {},
+      openFiles: [],
+      repos: []
     })
 }))
 vi.mock('../diff-comments/useDiffCommentDecorator', () => ({
