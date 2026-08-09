@@ -15012,7 +15012,11 @@
           "publishingOffDescription": "Learn about public links and enable sharing in Settings.",
           "openSettings": "Open Artifacts settings",
           "sharing": "Sharing…",
-          "sharePublicLink": "Share public link"
+          "sharePublicLink": "Share public link",
+          "publishedDescription": "Anyone with this link can view the shared file.",
+          "checkingLink": "Checking for an existing link…",
+          "checkFailed": "Could not check for an existing link.",
+          "tryAgain": "Try again"
         },
         "artifact-publish-flow": {
           "9a078a0c65": "Artifact sharing is unavailable",
@@ -15026,6 +15030,12 @@
           "e2ed5acd8c": "Orca couldn't read this file. Open it from a workspace and try again.",
           "6d475e9b25": "Only local HTML and Markdown files can be shared as artifacts.",
           "29a406be09": "Artifacts must contain text."
+        },
+        "ArtifactPublishedLinkPanel": {
+          "copyLink": "Copy link",
+          "openLink": "Open link",
+          "updating": "Updating…",
+          "update": "Update shared content"
         }
       }
     },

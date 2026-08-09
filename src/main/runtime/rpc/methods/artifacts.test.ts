@@ -22,6 +22,12 @@ describe('artifact RPC schemas', () => {
     expect(writeSchema('artifacts.publish').safeParse(validRequest).success).toBe(true)
   })
 
+  it('registers the persisted-link lookup', () => {
+    const schema = writeSchema('artifacts.getPublishedLink')
+    expect(schema.safeParse({ sourceKey: validRequest.sourceKey }).success).toBe(true)
+    expect(schema.safeParse({ sourceKey: '' }).success).toBe(false)
+  })
+
   it('rejects empty and oversized artifact requests', () => {
     const schema = writeSchema('artifacts.publish')
     expect(schema.safeParse({ ...validRequest, content: '' }).success).toBe(false)

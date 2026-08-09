@@ -15,6 +15,11 @@ const ListOptions = z.object({
   cursor: z.string().min(1).max(2_048).optional()
 })
 
+const SourceRequest = z.object({
+  sourceKey: z.string().min(1).max(32_768),
+  ...CloudOptions
+})
+
 const WriteRequest = z
   .object({
     sourceKey: z.string().min(1).max(32_768),
@@ -35,6 +40,11 @@ export const ARTIFACT_METHODS: readonly RpcAnyMethod[] = [
     handler: (params, { runtime }) => runtime.listArtifacts(params)
   }),
   defineMethod({
+    name: 'artifacts.getPublishedLink',
+    params: SourceRequest,
+    handler: (params, { runtime }) => runtime.getPublishedArtifactLink(params)
+  }),
+  defineMethod({
     name: 'artifacts.share',
     params: WriteRequest,
     handler: (params, { runtime }) => runtime.shareArtifact(params)
@@ -51,7 +61,7 @@ export const ARTIFACT_METHODS: readonly RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'artifacts.unshare',
-    params: z.object({ sourceKey: z.string().min(1), ...CloudOptions }),
+    params: SourceRequest,
     handler: (params, { runtime }) => runtime.unshareArtifact(params)
   }),
   defineMethod({

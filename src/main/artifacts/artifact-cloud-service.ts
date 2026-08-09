@@ -5,6 +5,7 @@ import type {
   ArtifactListOptions,
   ArtifactListPage,
   ArtifactListItem,
+  ArtifactPublishedLink,
   ArtifactPublishResult,
   ArtifactWriteRequest
 } from '../../shared/artifacts'
@@ -134,6 +135,20 @@ export class ArtifactCloudService {
     return this.withAuth(options, async (token, apiUrl) => {
       const query = options.cursor ? `?cursor=${encodeURIComponent(options.cursor)}` : ''
       return artifactRequest<ArtifactListPage>(apiUrl, token, query)
+    })
+  }
+
+  getPublishedLink(
+    request: ArtifactCloudOptions & { sourceKey: string }
+  ): Promise<ArtifactCloudOperation<ArtifactPublishedLink | null>> {
+    return this.withAuth(request, async (_token, _apiUrl, auth) => {
+      const record = getArtifactShareRecord(
+        auth.profileId,
+        this.userDataPath,
+        request.sourceKey,
+        auth.scope
+      )
+      return record ? { shareUrl: record.shareUrl } : null
     })
   }
 

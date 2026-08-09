@@ -43,6 +43,10 @@ export type ArtifactPublishResult = {
   item: ArtifactListItem
 }
 
+export type ArtifactPublishedLink = {
+  shareUrl: string
+}
+
 export type ArtifactCloudOptions = {
   apiUrl?: string
   authToken?: string

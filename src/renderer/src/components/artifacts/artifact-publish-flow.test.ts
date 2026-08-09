@@ -5,7 +5,6 @@ import { publishArtifactFromSurface } from './artifact-publish-flow'
 const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),
   connect: vi.fn(),
-  copyLink: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
   state: {
@@ -24,8 +23,6 @@ vi.mock('@/i18n/i18n', () => ({
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError, success: mocks.toastSuccess }
 }))
-vi.mock('./artifact-link-actions', () => ({ copyArtifactLink: mocks.copyLink }))
-
 const request = {
   sourceKey: '/repo/report.html',
   content: '<h1>Report</h1>',
@@ -104,15 +101,10 @@ describe('artifact publish flow', () => {
     })
   })
 
-  it('offers the public link as the success action', async () => {
+  it('shows confirmation without putting the public link in the toast', async () => {
     mocks.callRuntimeRpc.mockResolvedValue({ status: 'ok', value: published })
     await publishArtifactFromSurface(() => Promise.resolve(request))
 
-    const options = mocks.toastSuccess.mock.calls[0]?.[1] as {
-      action: { label: string; onClick: () => void }
-    }
-    expect(options.action.label).toBe('Copy link')
-    options.action.onClick()
-    expect(mocks.copyLink).toHaveBeenCalledWith(published.item.shareUrl)
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Artifact shared')
   })
 })

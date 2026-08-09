@@ -11,7 +11,6 @@ import {
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
-import { copyArtifactLink } from './artifact-link-actions'
 
 const LOCAL_RUNTIME = { kind: 'local' } as const
 
@@ -110,13 +109,7 @@ function showArtifactPublishedToast(result: ArtifactPublishResult): void {
   toast.success(
     result.change === 'created'
       ? translate('auto.components.artifacts.artifact-publish-flow.430019efd0', 'Artifact shared')
-      : translate('auto.components.artifacts.artifact-publish-flow.2fc727c831', 'Artifact updated'),
-    {
-      action: {
-        label: translate('auto.components.artifacts.artifact-publish-flow.5cb4f5ec36', 'Copy link'),
-        onClick: () => void copyArtifactLink(result.item.shareUrl)
-      }
-    }
+      : translate('auto.components.artifacts.artifact-publish-flow.2fc727c831', 'Artifact updated')
   )
 }
 

@@ -5035,6 +5035,7 @@ function BrowserPagePane({
 
           {shareableArtifactFile ? (
             <ArtifactPublishButton
+              sourceKey={shareableArtifactFile.filePath}
               className="h-7 w-7"
               createRequest={() => readBrowserHtmlArtifactRequest(currentBrowserUrl)}
             />
