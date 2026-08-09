@@ -1410,7 +1410,11 @@ function getRuntimeTargetCachePrefix(
 }
 
 type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId?: string | null }
-type AddRepoPathRouteOptions = { runtimeEnvironmentId?: string | null }
+type AddRepoPathRouteOptions = {
+  runtimeEnvironmentId?: string | null
+  deferAlreadyAddedFeedback?: boolean
+  onProjectAlreadyPresent?: (repo: Repo) => void
+}
 type RuntimeCatalogFetchOptions = { runtimeEnvironmentId?: string | null }
 
 function getFolderWorkspacePathStatusRouteSettings(
@@ -2936,6 +2940,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const alreadyAdded = get().repos.some((r) => getRepoHostIdentity(r) === repoIdentity)
       if (alreadyAdded) {
         get().clearOrcaHookTrustForRepo(repo.id)
+        options?.onProjectAlreadyPresent?.(repo)
       }
       set((s) => {
         if (s.repos.some((r) => getRepoHostIdentity(r) === repoIdentity)) {
@@ -2954,9 +2959,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         }
       })
       if (alreadyAdded) {
-        toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
-          description: repo.displayName
-        })
+        if (!options?.deferAlreadyAddedFeedback) {
+          toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
+            description: repo.displayName
+          })
+        }
       } else {
         toast.success(
           isGitRepoKind(repo)

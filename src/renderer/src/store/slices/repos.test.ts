@@ -177,6 +177,24 @@ describe('repo slice runtime routing', () => {
     expect(orcaProfileFindProjectProfiles).not.toHaveBeenCalled()
   })
 
+  it('defers duplicate feedback to the Add Project Space resolver', async () => {
+    const onProjectAlreadyPresent = vi.fn()
+    const ownedLocalRepo = { ...localRepo, executionHostId: 'local' as const }
+    reposAdd.mockResolvedValue({ repo: localRepo })
+    const store = createTestStore()
+    store.setState({ repos: [ownedLocalRepo] })
+
+    await store.getState().addRepoPath('/local', 'git', {
+      runtimeEnvironmentId: null,
+      deferAlreadyAddedFeedback: true,
+      onProjectAlreadyPresent
+    })
+
+    expect(onProjectAlreadyPresent).toHaveBeenCalledWith(ownedLocalRepo)
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
   it('warns when a local project is already present in another profile', async () => {
     reposAdd.mockResolvedValue({ repo: localRepo })
     orcaProfileFindProjectProfiles.mockResolvedValue({

@@ -55,6 +55,9 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     createParent: '',
     createError: null,
     isCreating: false,
+    spaceConflict: null,
+    spaceConflictError: null,
+    isResolvingSpaceConflict: false,
     createDefaultParent: '',
     createGitAvailability: 'unknown',
     createRuntimeParentStatus: 'idle',
@@ -84,6 +87,9 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     onCreateParentChange: vi.fn(),
     onPickCreateParent: vi.fn(),
     onCreate: vi.fn(),
+    onCancelSpaceConflict: vi.fn(),
+    onMoveSpaceConflict: vi.fn(),
+    onOpenSpaceConflict: vi.fn(),
     ...overrides
   }
 
@@ -139,6 +145,22 @@ describe('AddRepoDialogStepContent nested imports', () => {
 
     expect(html).toContain('Create a new project')
     expect(html).toContain('host folder not selected')
+  })
+
+  it('offers explicit move and open actions for a project in another Space', () => {
+    const html = renderStepContent({
+      step: 'space-conflict',
+      spaceConflict: {
+        projectName: 'Orca',
+        sourceSpaceName: 'Work',
+        targetSpaceName: 'Personal'
+      }
+    })
+
+    expect(html).toContain('Project is in “Work”')
+    expect(html).toContain('It will no longer appear in “Work”')
+    expect(html).toContain('Open in Work')
+    expect(html).toContain('Move to Personal')
   })
 
   it('uses manual path entry for SSH create project locations', () => {

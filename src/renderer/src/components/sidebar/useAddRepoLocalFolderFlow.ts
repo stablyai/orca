@@ -14,7 +14,7 @@ import type { RepoSlice } from '@/store/slices/repos'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { CompleteAddedGitRepo } from './add-repo-dialog-types'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -58,11 +58,7 @@ export function useAddRepoLocalFolderFlow({
   setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
   showNestedRepoReview: ShowNestedRepoReview
-  onGitRepoReady: (
-    repoId: string,
-    source: AddRepoExistingWorkspaceSource,
-    executionHostId?: ExecutionHostId
-  ) => Promise<void>
+  onGitRepoReady: CompleteAddedGitRepo
   setIsAdding: (isAdding: boolean) => void
   setAddProjectBusyLabel: (label: string | null) => void
 }): {
@@ -160,8 +156,15 @@ export function useAddRepoLocalFolderFlow({
           return { status: 'paused' }
         }
         setAddProjectBusyLabel('Opening project...')
+        let alreadyPresent = false
         const repo = await addRepoPath(path, undefined, {
-          runtimeEnvironmentId: activeRuntimeEnvironmentId ?? null
+          runtimeEnvironmentId: activeRuntimeEnvironmentId ?? null,
+          ...(mode === 'single'
+            ? {
+                deferAlreadyAddedFeedback: true,
+                onProjectAlreadyPresent: () => (alreadyPresent = true)
+              }
+            : {})
         })
         if (gen !== localAddGenRef.current) {
           return { status: 'cancelled' }
@@ -179,7 +182,7 @@ export function useAddRepoLocalFolderFlow({
           if (mode === 'batch') {
             return { status: 'completed', repo }
           }
-          await onGitRepoReady(repo.id, source, ownerOptions.executionHostId)
+          await onGitRepoReady(repo.id, source, ownerOptions.executionHostId, alreadyPresent)
         } else {
           // Why: folder repos skip the Git default-checkout handoff and activate
           // their synthetic root workspace in the folder add flow.

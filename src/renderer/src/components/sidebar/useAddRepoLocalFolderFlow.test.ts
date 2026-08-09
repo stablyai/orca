@@ -129,6 +129,40 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(onGitRepoReady).toHaveBeenCalledWith('alpha', 'local_folder_picker', 'local')
   })
 
+  it('reports an existing project to the Space conflict flow', async () => {
+    pickFolders.mockResolvedValue(['/projects/existing'])
+    addRepoPath.mockImplementation(async (path: string, _kind, options) => {
+      const repo = makeRepo(path)
+      options?.onProjectAlreadyPresent?.(repo)
+      return repo
+    })
+    const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+    const { handleBrowse } = useAddRepoLocalFolderFlow({
+      isOpen: true,
+      droppedLocalPath: '',
+      activeRuntimeEnvironmentId: null,
+      addRepoPath,
+      closeModal,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady,
+      setIsAdding,
+      setAddProjectBusyLabel
+    })
+
+    await handleBrowse()
+
+    expect(addRepoPath).toHaveBeenCalledWith(
+      '/projects/existing',
+      undefined,
+      expect.objectContaining({ deferAlreadyAddedFeedback: true })
+    )
+    expect(onGitRepoReady).toHaveBeenCalledWith('existing', 'local_folder_picker', 'local', true)
+  })
+
   it('skips nested-review folders in a multi-folder add and continues with git folders', async () => {
     pickFolders.mockResolvedValue(['/projects/monorepo', '/projects/later'])
     scanNestedRepos.mockImplementationOnce(async (_path, _connectionId, controls) => {
