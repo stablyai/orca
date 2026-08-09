@@ -60,6 +60,15 @@ import type { AiVaultSessionTitle } from './ai-vault-session-title'
 export type { WorkspaceSource as WorkspaceCreateTelemetrySource } from './workspace-source'
 export type { TaskProvider } from './task-providers'
 export type {
+  DebugSession,
+  DebugSessionState,
+  DebugAdapterConfig,
+  DebugAdapterEventMessage,
+  DebugSessionEvent
+} from './debug-session-types'
+export type { Breakpoint } from './debug-breakpoint-types'
+export type { Thread, StackFrame, Scope, Variable } from './debug-stack-types'
+export type {
   GitBranchChangeStatus,
   GitConflictKind,
   GitConflictOperation,

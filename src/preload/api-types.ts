@@ -33,6 +33,7 @@ import type {
 } from '../shared/local-log-tail-types'
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
+import type { DebugAdapterConfig, DebugSessionEvent } from '../shared/debug-session-types'
 import type { ReleaseChannel } from '../shared/release-channel'
 import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
@@ -1524,6 +1525,26 @@ export type PreloadApi = {
       callback: (event: WorkspacePortAdvertisedUrlChangedEvent) => void
     ) => () => void
   }
+  debug: {
+    start: (args: {
+      worktreeId: string
+      connectionId?: string | null
+      config: DebugAdapterConfig
+    }) => Promise<string>
+    setBreakpoints: (sessionId: string, args: Record<string, unknown>) => Promise<unknown>
+    continue: (sessionId: string, threadId: number) => Promise<void>
+    pause: (sessionId: string, threadId: number) => Promise<void>
+    stepOver: (sessionId: string, threadId: number) => Promise<void>
+    stepInto: (sessionId: string, threadId: number) => Promise<void>
+    stepOut: (sessionId: string, threadId: number) => Promise<void>
+    terminate: (sessionId: string) => Promise<void>
+    evaluate: (sessionId: string, args: Record<string, unknown>) => Promise<unknown>
+    getStackTrace: (sessionId: string, threadId: number) => Promise<unknown>
+    getVariables: (sessionId: string, variablesReference: number) => Promise<unknown>
+    getThreads: (sessionId: string) => Promise<unknown>
+    onEvent: (callback: (event: DebugSessionEvent) => void) => () => void
+  }
+
   pty: {
     spawn: (opts: {
       cols: number
