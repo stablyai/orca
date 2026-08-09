@@ -1,0 +1,92 @@
+import { describe, expect, it } from 'vitest'
+import {
+  shouldBypassXtermForIosTextEdit,
+  shouldBypassXtermKeyboardEvent
+} from './xterm-bypass-policy'
+import { event } from './xterm-bypass-event-fixture'
+
+// iPadOS reports a real physical key for every jamo — `key: 'ㅎ'`, `code: 'KeyG'`,
+// `keyCode: 71`, `isComposing: false` — and runs no composition session. Only by
+// leaving those keys to the default handler does the system compose them.
+const HANGUL_JAMO_KEYDOWN = { key: 'ㅎ', code: 'KeyG', keyCode: 71 }
+
+describe('shouldBypassXtermForIosTextEdit', () => {
+  it('claims an unmodified jamo keydown on iOS web', () => {
+    expect(shouldBypassXtermForIosTextEdit(event(HANGUL_JAMO_KEYDOWN), true)).toBe(true)
+  })
+
+  it('claims the matching keyup and keypress so xterm cannot re-send the glyph', () => {
+    for (const type of ['keyup', 'keypress']) {
+      expect(shouldBypassXtermForIosTextEdit(event({ ...HANGUL_JAMO_KEYDOWN, type }), true)).toBe(
+        true
+      )
+    }
+  })
+
+  it('leaves ASCII alone so English typing keeps the normal xterm path', () => {
+    expect(
+      shouldBypassXtermForIosTextEdit(event({ key: 'a', code: 'KeyA', keyCode: 65 }), true)
+    ).toBe(false)
+  })
+
+  it('leaves named keys alone so Enter and arrows still reach the shell', () => {
+    for (const key of ['Enter', 'Backspace', 'ArrowLeft', 'Escape']) {
+      expect(shouldBypassXtermForIosTextEdit(event({ key }), true)).toBe(false)
+    }
+  })
+
+  it('leaves modifier chords alone so shortcuts are not swallowed', () => {
+    expect(
+      shouldBypassXtermForIosTextEdit(event({ ...HANGUL_JAMO_KEYDOWN, ctrlKey: true }), true)
+    ).toBe(false)
+    expect(
+      shouldBypassXtermForIosTextEdit(event({ ...HANGUL_JAMO_KEYDOWN, metaKey: true }), true)
+    ).toBe(false)
+    expect(
+      shouldBypassXtermForIosTextEdit(event({ ...HANGUL_JAMO_KEYDOWN, altKey: true }), true)
+    ).toBe(false)
+  })
+
+  it('is inert off iOS web, leaving desktop IME handling untouched', () => {
+    expect(shouldBypassXtermForIosTextEdit(event(HANGUL_JAMO_KEYDOWN), false)).toBe(false)
+  })
+})
+
+describe('shouldBypassXtermKeyboardEvent — iOS web', () => {
+  const iosOptions = { isMac: true, isIosWeb: true, hasSelection: false }
+  const macOptions = { isMac: true, hasSelection: false }
+
+  it('bypasses a bare jamo keydown', () => {
+    expect(shouldBypassXtermKeyboardEvent(event(HANGUL_JAMO_KEYDOWN), iosOptions)).toBe(true)
+  })
+
+  it('does not bypass the same key on a Mac desktop browser', () => {
+    // Why: iPadOS reports `Macintosh` in its default desktop mode, so `isMac`
+    // alone must not turn the iOS path on for real Macs.
+    expect(shouldBypassXtermKeyboardEvent(event(HANGUL_JAMO_KEYDOWN), macOptions)).toBe(false)
+  })
+
+  it('still bypasses Shift+jamo without the iOS flag, as it did before', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(
+        event({ key: 'ㄲ', code: 'KeyR', keyCode: 82, shiftKey: true }),
+        macOptions
+      )
+    ).toBe(true)
+  })
+
+  it('keeps Cmd+C bubbling on iOS web', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), iosOptions)
+    ).toBe(true)
+  })
+
+  it('keeps Enter on xterm so the command is submitted', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(
+        event({ key: 'Enter', code: 'Enter', keyCode: 13 }),
+        iosOptions
+      )
+    ).toBe(false)
+  })
+})

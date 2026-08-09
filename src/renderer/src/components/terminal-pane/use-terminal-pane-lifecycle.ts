@@ -95,6 +95,8 @@ import {
   getMacNativeTextInputSourceTracker
 } from './terminal-ime-input-source'
 import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
+import { installTerminalIosTextEditMirror } from './terminal-ios-text-edit-mirror'
+import { isCurrentPlatformIosWeb } from '@/lib/ios-web-platform'
 import {
   shouldBypassXtermKeyboardEvent,
   shouldHandleTerminalInterruptKeyboardEvent,
@@ -914,10 +916,19 @@ export function useTerminalPaneLifecycle({
           : null
         const macNativeTextInputSourceTracker = isMac ? getMacNativeTextInputSourceTracker() : null
         const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
+        // Why: iOS/iPadOS composes CJK by rewriting the field and fires no composition events, so the field's edits are the only signal. See terminal-ios-text-edit-mirror.ts.
+        const isIosWeb = isCurrentPlatformIosWeb()
+        const iosTextEditMirror = isIosWeb
+          ? installTerminalIosTextEditMirror({
+              terminalElement: pane.terminal.element,
+              sendInput: (data) => pane.terminal.input(data)
+            })
+          : null
         imeCompositionDisposablesRef.current.set(pane.id, {
           dispose: () => {
             imeCompositionTracker.dispose()
             linuxImeCandidateState?.dispose()
+            iosTextEditMirror?.dispose()
           }
         })
         // Why: only known macOS native text paths (physical CJK/Vietnamese IME) need the keydown bypass; synthetic Unicode lacks physical key identity.
@@ -1045,9 +1056,14 @@ export function useTerminalPaneLifecycle({
 
           const shouldBypass = shouldBypassXtermKeyboardEvent(e, {
             isMac,
+            isIosWeb,
             hasSelection: pane.terminal.hasSelection(),
             kittyKeyboardFlags: paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
           })
+          if (!shouldBypass && e.type === 'keydown') {
+            // Why: xterm is about to write to the PTY itself, so any text mirrored from the field is already stale.
+            iosTextEditMirror?.reset()
+          }
           observeLinuxCandidateEvent()
           return !shouldBypass
         })

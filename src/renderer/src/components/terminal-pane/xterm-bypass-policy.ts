@@ -37,6 +37,10 @@ export type XtermBypassOptions = {
    *  Windows/Linux should only bubble to clipboard when something is selected,
    *  otherwise it must reach the shell as SIGINT. */
   hasSelection: boolean
+  /** True when the renderer runs inside iOS/iPadOS WebKit, where the system
+   *  composes CJK text by rewriting the field instead of running a composition
+   *  session. See `terminal-ios-text-edit-mirror.ts`. */
+  isIosWeb?: boolean
 }
 
 export type XtermImeKeyboardOptions = {
@@ -113,6 +117,27 @@ export function shouldBypassXtermForMacNativeText(
 
 function isXtermHandledKeyEvent(type: string): boolean {
   return type === 'keydown' || type === 'keyup'
+}
+
+/**
+ * Why: iOS/iPadOS composes CJK text by rewriting the field through
+ * `beforeinput`/`input`, with no composition session, and that only runs when
+ * the printable keydown reaches the default handler. xterm has to stay out of
+ * the way for those keys so `terminal-ios-text-edit-mirror.ts` can mirror the
+ * resulting edits. `keypress` is included because `_keyPress` would otherwise
+ * send the glyph a second time alongside the mirror.
+ */
+export function shouldBypassXtermForIosTextEdit(
+  event: XtermBypassEvent,
+  isIosWeb: boolean
+): boolean {
+  if (!isIosWeb || event.ctrlKey || event.metaKey || event.altKey) {
+    return false
+  }
+  if (!isXtermHandledKeyEvent(event.type) && event.type !== 'keypress') {
+    return false
+  }
+  return isSingleNonAsciiPrintableText(event.key)
 }
 
 /** Returns whether xterm must not process an IME-owned keyboard event. */
@@ -244,6 +269,9 @@ export function shouldBypassXtermKeyboardEvent(
   event: XtermBypassEvent,
   options: XtermBypassOptions
 ): boolean {
+  if (shouldBypassXtermForIosTextEdit(event, options.isIosWeb === true)) {
+    return true
+  }
   if (!isXtermHandledKeyEvent(event.type)) {
     return false
   }
