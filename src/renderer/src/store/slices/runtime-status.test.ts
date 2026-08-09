@@ -433,6 +433,23 @@ describe('runtime-status slice', () => {
     expect(store.getState().runtimeStatusByEnvironmentId.has('env-removed-midflight')).toBe(false)
   })
 
+  it('does not commit a pre-removal probe after the same id is re-added', async () => {
+    let resolveStatus!: (value: unknown) => void
+    const getStatus = vi.fn().mockReturnValue(new Promise((resolve) => (resolveStatus = resolve)))
+    stubRuntimeEnvironmentApi({ getStatus })
+    const store = createSliceStore()
+    store.getState().setRuntimeEnvironments([{ id: 'env-readded', createdAt: 1 } as never])
+
+    // First probe: no status has been cached yet when the env is removed.
+    const refresh = store.getState().refreshRuntimeEnvironmentStatus('env-readded')
+    store.getState().setRuntimeEnvironments([])
+    store.getState().setRuntimeEnvironments([{ id: 'env-readded', createdAt: 2 } as never])
+    resolveStatus(createCompatibleRuntimeStatusResponse('runtime-a'))
+
+    await expect(refresh).resolves.toBe(false)
+    expect(store.getState().runtimeStatusByEnvironmentId.has('env-readded')).toBe(false)
+  })
+
   it('does not commit a probe that started before the environment was re-paired', async () => {
     let resolveStatus!: (value: unknown) => void
     const getStatus = vi.fn().mockReturnValue(new Promise((resolve) => (resolveStatus = resolve)))

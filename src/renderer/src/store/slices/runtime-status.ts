@@ -110,12 +110,15 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       .filter((id) => !nextIds.has(id))
     set((s) => {
       const keep = new Set(environments.map((environment) => environment.id))
+      const removedIdSet = new Set(removedIds)
       const nextStatuses = new Map(s.runtimeStatusByEnvironmentId)
       let statusesChanged = false
       for (const id of nextStatuses.keys()) {
         if (!keep.has(id)) {
           nextStatuses.delete(id)
-          advanceRuntimeEnvironmentConnectionGeneration(id)
+          if (!removedIdSet.has(id)) {
+            advanceRuntimeEnvironmentConnectionGeneration(id)
+          }
           statusesChanged = true
         }
       }
@@ -131,6 +134,11 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       const nextRemoved = new Set(s.removedRuntimeEnvironmentIds)
       let removedChanged = false
       for (const id of removedIds) {
+        // Why: advance for every removed id, cached status or not — a first
+        // probe can be in flight before any status exists, and a remove +
+        // same-id re-add clears the tombstone, so only the generation can stop
+        // that stale probe committing to the new pairing.
+        advanceRuntimeEnvironmentConnectionGeneration(id)
         if (!nextRemoved.has(id)) {
           nextRemoved.add(id)
           removedChanged = true
