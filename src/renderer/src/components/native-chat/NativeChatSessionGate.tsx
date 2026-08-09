@@ -22,6 +22,15 @@ export function NativeChatSessionGate({
     lastResolutionRef.current?.paneKey === input.paneKey ? lastResolutionRef.current : null
   const resolution = (() => {
     if (!currentResolution) {
+      // An explicit agent signal (including an unsupported agent) is authoritative.
+      // Only an evidence-free gap may reuse the last identity during reconnect.
+      const hasExplicitAgentSignal =
+        input.agentStatusEntry?.agentType != null ||
+        input.launchAgent != null ||
+        input.resolvedAgent != null
+      if (hasExplicitAgentSignal) {
+        return null
+      }
       return previousResolution
     }
     if (

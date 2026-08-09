@@ -51,6 +51,7 @@ import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owne
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import type { NativeChatViewProps } from './native-chat-view-types'
+import { isNativeChatInteractiveTranscriptSettled } from './native-chat-transcript-readiness'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
@@ -415,7 +416,10 @@ function NativeChatResolvedView({
         send={interactiveSend}
         canSend={canSend}
         messages={sessionAfterCommandBoundaries.messages}
-        transcriptSettled={session.readPhase === 'ready'}
+        transcriptSettled={isNativeChatInteractiveTranscriptSettled(
+          session.readPhase,
+          session.messages.length
+        )}
         onShowingQuestionChange={setQuestionActive}
         answerInputRef={questionAnswerInputRef}
       />

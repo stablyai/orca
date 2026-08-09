@@ -334,6 +334,23 @@ describe('useMobileNativeChatSession', () => {
     expect(state?.hasMore).toBe(false)
   })
 
+  it('clears a stream error when a later snapshot recovers', async () => {
+    const sendRequest = vi.fn()
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({ type: 'error', message: 'socket closed' })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+    expect(state?.status).toBe('error')
+    expect(state?.error).toBe('socket closed')
+
+    await act(async () => emit({ type: 'snapshot', messages: [message('recovered')] }))
+
+    expect(state?.status).toBe('ready')
+    expect(state?.error).toBeUndefined()
+  })
+
   it('fences an in-flight older page when a merging replay re-cuts the byte cursor', async () => {
     let resolveEarlier: (response: unknown) => void = () => {}
     const sendRequest = vi.fn(
