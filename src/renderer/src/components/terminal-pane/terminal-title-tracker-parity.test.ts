@@ -150,6 +150,9 @@ describe('main title tracker parity with the renderer transport processor', () =
       main: createMainPath('Cursor Agent')
     }
 
+    feedBoth(restoredPaths, `${ESC}]0;Cursor Agent${BEL}`)
+    expect(restoredPaths.main.events).toEqual([])
+
     feedBoth(restoredPaths, `${ESC}]0;⠋ Cursor Agent${BEL}`)
 
     expect(restoredPaths.main.events).toEqual(restoredPaths.renderer.events)
