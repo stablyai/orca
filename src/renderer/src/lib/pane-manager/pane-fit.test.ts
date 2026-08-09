@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
-import type { ManagedPane, ScrollState } from './pane-manager-types'
+import type { ManagedPane, ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import { safeFit, safeFitAndThen } from './pane-fit'
+import { applyOrDeferPaneMetricOptions } from './pane-metric-options-deferral'
 import { paneFitClientSizeChanged } from './pane-reveal-fit'
 
 vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
@@ -214,6 +215,54 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     expect(continuation).not.toHaveBeenCalled()
     await expect(handle.completion).resolves.toBe(false)
   })
+
+  it('does not retry a pane explicitly hidden with display none', async () => {
+    vi.mocked(recordRendererCrashBreadcrumb).mockClear()
+    const pane = createPane({ rect: { width: 0, height: 0 } })
+    const container = (pane as unknown as ManagedPaneInternal).xtermContainer
+    Object.assign(container, {
+      ownerDocument: {
+        defaultView: { getComputedStyle: () => ({ display: 'none' }) }
+      },
+      parentElement: null
+    })
+    const continuation = vi.fn()
+
+    const handle = safeFitAndThen(pane, 'reattach-pty-resize', continuation, {
+      retryIfUnmeasurable: true
+    })
+
+    expect(requestAnimationFrame).not.toHaveBeenCalled()
+    expect(continuation).not.toHaveBeenCalled()
+    expect(recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
+    await expect(handle.completion).resolves.toBe(false)
+  })
+
+  it('stops retrying when a pane becomes display none', async () => {
+    vi.mocked(recordRendererCrashBreadcrumb).mockClear()
+    const pane = createPane({ rect: { width: 0, height: 0 } })
+    const container = (pane as unknown as ManagedPaneInternal).xtermContainer
+    let display = 'block'
+    Object.assign(container, {
+      ownerDocument: {
+        defaultView: { getComputedStyle: () => ({ display }) }
+      },
+      parentElement: null
+    })
+    const continuation = vi.fn()
+
+    const handle = safeFitAndThen(pane, 'reattach-pty-resize', continuation, {
+      retryIfUnmeasurable: true
+    })
+    display = 'none'
+    flushAnimationFrames()
+    vi.advanceTimersByTime(16)
+
+    expect(requestAnimationFrame).toHaveBeenCalledOnce()
+    expect(continuation).not.toHaveBeenCalled()
+    expect(recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
+    await expect(handle.completion).resolves.toBe(false)
+  })
 })
 
 describe('paneFitClientSizeChanged (reveal fit gate)', () => {
@@ -271,5 +320,44 @@ describe('paneFitClientSizeChanged (reveal fit gate)', () => {
     safeFit(pane)
     pane.setXtermRect({ width: 800, height: 560 })
     expect(paneFitClientSizeChanged(pane)).toBe(true)
+  })
+})
+
+describe('deferred metric flush inside safeFit', () => {
+  function createMetricPane(): ManagedPane & { fitAddon: { fit: ReturnType<typeof vi.fn> } } {
+    const terminal = { cols: 80, rows: 24, options: {} as Record<string, unknown> }
+    // Grid shrinks once the parked large font lands — the case the min-dimension
+    // gate exists to reject, but which it can only see after the flush.
+    const proposeDimensions = (): { cols: number; rows: number } =>
+      Number(terminal.options.fontSize ?? 10) >= 24 ? { cols: 5, rows: 2 } : { cols: 40, rows: 20 }
+    return {
+      id: 11,
+      terminal,
+      container: {
+        dataset: {},
+        getBoundingClientRect: () => ({ width: 340, height: 240 })
+      },
+      fitAddon: { fit: vi.fn(), proposeDimensions: vi.fn(proposeDimensions) }
+    } as unknown as ManagedPane & { fitAddon: { fit: ReturnType<typeof vi.fn> } }
+  }
+
+  it('does not fit when the flushed font drops the pane under the minimum grid', () => {
+    const pane = createMetricPane()
+    applyOrDeferPaneMetricOptions(pane, { fontSize: 24 }, false)
+
+    expect(safeFit(pane)).toBe(false)
+    // The parked value still lands so the pane is not stuck on stale metrics.
+    expect(pane.terminal.options.fontSize).toBe(24)
+    // But the PTY must not be pinned to the 5x2 grid the floor rejects.
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+  })
+
+  it('still fits when the flushed font keeps the pane above the minimum grid', () => {
+    const pane = createMetricPane()
+    applyOrDeferPaneMetricOptions(pane, { fontSize: 12 }, false)
+
+    expect(safeFit(pane)).toBe(true)
+    expect(pane.terminal.options.fontSize).toBe(12)
+    expect(pane.fitAddon.fit).toHaveBeenCalled()
   })
 })

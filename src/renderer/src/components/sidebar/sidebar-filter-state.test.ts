@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computeClearFilterActions,
   isDefaultBranchWorkspace,
+  isSleepingSweepExemptionNarrowingList,
   sidebarHasActiveFilters
 } from './visible-worktrees'
 import type { Worktree } from '../../../../shared/types'
@@ -111,6 +112,21 @@ describe('sidebarHasActiveFilters', () => {
 
   it('returns true when only host visibility is narrowed', () => {
     expect(sidebarHasActiveFilters(filterState({ visibleWorkspaceHostIds: ['local'] }))).toBe(true)
+  })
+})
+
+describe('isSleepingSweepExemptionNarrowingList', () => {
+  it('is false while sleeping workspaces are shown, even when opted out', () => {
+    expect(isSleepingSweepExemptionNarrowingList(true, false)).toBe(false)
+  })
+
+  it('is true only when the sweep is on and the exemption is opted out', () => {
+    expect(isSleepingSweepExemptionNarrowingList(false, false)).toBe(true)
+    expect(isSleepingSweepExemptionNarrowingList(false, true)).toBe(false)
+  })
+
+  it('treats a missing flag as the on default', () => {
+    expect(isSleepingSweepExemptionNarrowingList(false, undefined)).toBe(false)
   })
 })
 

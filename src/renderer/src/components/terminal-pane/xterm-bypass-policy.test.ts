@@ -119,6 +119,49 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     expect(shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC' }), opts)).toBe(false)
   })
 
+  it('leaves physical Backslash to native keypress when kitty reporting is inactive', () => {
+    // Why: third-party IMEs outside the forwarder's CJK allowlist (Qingg, #10896)
+    // need Chromium's text pipeline to turn this key into 、 rather than \.
+    for (const type of ['keydown', 'keyup']) {
+      expect(
+        shouldBypassXtermKeyboardEvent(
+          event({ type, key: '\\', code: 'Backslash', keyCode: 220 }),
+          { ...noSel, kittyKeyboardFlags: 0 }
+        )
+      ).toBe(true)
+    }
+  })
+
+  it('does not bypass the native Backslash keypress', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(
+        event({ type: 'keypress', key: '\\', code: 'Backslash', keyCode: 0x3001 }),
+        { ...noSel, kittyKeyboardFlags: 0 }
+      )
+    ).toBe(false)
+  })
+
+  it('keeps modified or kitty-reported Backslash in xterm', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: '|', code: 'Backslash', shiftKey: true }), {
+        ...noSel,
+        kittyKeyboardFlags: 0
+      })
+    ).toBe(false)
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: '\\', code: 'Backslash', ctrlKey: true }), {
+        ...noSel,
+        kittyKeyboardFlags: 0
+      })
+    ).toBe(false)
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: '\\', code: 'Backslash' }), {
+        ...noSel,
+        kittyKeyboardFlags: 1
+      })
+    ).toBe(false)
+  })
+
   it('bubbles Shift+non-ASCII printable text so the active keyboard layout wins', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'Ф', code: 'KeyA', shiftKey: true }), opts)

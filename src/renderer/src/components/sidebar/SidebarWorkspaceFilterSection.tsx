@@ -38,20 +38,24 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
         checked={!showSleepingWorkspaces}
         onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
       />
-      <FilterToggleRow
-        indented
-        icon={<GitBranch className="size-3.5" />}
-        label={translate(
-          'auto.components.sidebar.SidebarWorkspaceFilterSection.keepDefaultBranch',
-          'Except default branch'
-        )}
-        ariaLabel={translate(
-          'auto.components.sidebar.SidebarWorkspaceFilterSection.keepDefaultBranchAria',
-          'Keep the default branch visible while hiding sleeping workspaces'
-        )}
-        checked={alwaysShowDefaultBranchWorkspace}
-        onChange={setAlwaysShowDefaultBranchWorkspace}
-      />
+      {/* Why gated: the exemption only has an effect while sleeping workspaces
+          are being swept, so it stays hidden until its parent row is on. */}
+      {!showSleepingWorkspaces && (
+        <FilterToggleRow
+          indented
+          icon={<GitBranch className="size-3.5" />}
+          label={translate(
+            'auto.components.sidebar.SidebarWorkspaceFilterSection.keepDefaultBranch',
+            'Except default branch'
+          )}
+          ariaLabel={translate(
+            'auto.components.sidebar.SidebarWorkspaceFilterSection.keepDefaultBranchAria',
+            'Keep the default branch visible while hiding sleeping workspaces'
+          )}
+          checked={alwaysShowDefaultBranchWorkspace}
+          onChange={setAlwaysShowDefaultBranchWorkspace}
+        />
+      )}
       <FilterToggleRow
         icon={<GitBranch className="size-3.5" />}
         label={translate(

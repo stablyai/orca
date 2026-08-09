@@ -1,4 +1,5 @@
 import type { ManagedPane, ManagedPaneInternal, ScrollState } from './pane-manager-types'
+import { isManagedPaneDisplayNone } from './pane-display-visibility'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import {
   armPaneFitContinuationRetry,
@@ -20,11 +21,16 @@ import {
   deferTerminalGeometryMutationDuringRebuild,
   isTerminalScrollIntentRebuildInFlight
 } from './terminal-scroll-intent-rebuild'
+import { flushDeferredPaneMetricOptions } from './pane-metric-options-deferral'
+import { canMeasurePaneForFit, getProposedPaneDimensions } from './pane-fit-measurability'
+import { notifyPaneFitSucceeded } from './pane-fit-webgl-attach-signal'
+import { recordPaneFitClientSize } from './pane-fit-client-size'
 
-const MIN_PANE_FIT_WIDTH_PX = 48
-const MIN_PANE_FIT_HEIGHT_PX = 24
-const MIN_PANE_FIT_COLS = 8
-const MIN_PANE_FIT_ROWS = 4
+export {
+  canApplyPaneMetricOptions,
+  canMeasurePaneForFit,
+  flushDeferredPaneMetricOptionsIfMeasurable
+} from './pane-fit-measurability'
 
 export type SafeFitContinuationHandle = {
   completion: Promise<boolean>
@@ -42,50 +48,7 @@ const pendingSafeFitContinuations = new WeakMap<
   Map<string, PendingSafeFitContinuation>
 >()
 
-function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number } | null {
-  try {
-    return pane.fitAddon.proposeDimensions() ?? null
-  } catch {
-    return null
-  }
-}
-
-// Why: measure the element FitAddon fits (the xterm host), not the outer .pane —
-// a title/banner can shrink the inner fittable area while the outer stays put.
-// Round to whole pixels so sub-pixel jitter never reads as a resize.
-export function readFitClientSize(pane: ManagedPane): { width: number; height: number } | null {
-  const element = (pane as ManagedPaneInternal).xtermContainer ?? pane.container
-  const measure = element?.getBoundingClientRect
-  if (typeof measure !== 'function') {
-    return null
-  }
-  const rect = measure.call(element)
-  return { width: Math.round(rect.width), height: Math.round(rect.height) }
-}
-
-function recordPaneFitClientSize(pane: ManagedPane): void {
-  const size = readFitClientSize(pane)
-  if (size && size.width > 0 && size.height > 0) {
-    ;(pane as ManagedPaneInternal).lastFitClientSize = size
-  }
-}
-
-export function canMeasurePaneForFit(pane: ManagedPane): boolean {
-  const measure = pane.container?.getBoundingClientRect
-  if (typeof measure === 'function') {
-    const rect = measure.call(pane.container)
-    if (rect.width < MIN_PANE_FIT_WIDTH_PX || rect.height < MIN_PANE_FIT_HEIGHT_PX) {
-      return false
-    }
-  }
-  const dims = getProposedDimensions(pane)
-  if (!dims) {
-    return false
-  }
-  // Why: worktree switches can briefly measure a near-zero overlay before
-  // fallback positioning lands. Fitting there pins the PTY at ~2 cols.
-  return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
-}
+export { readFitClientSize } from './pane-fit-client-size'
 
 function canPreserveScrollIntentForFit(pane: ManagedPane): boolean {
   // Why: split reparent has its own delayed restore; restoring here can fight that timer.
@@ -99,6 +62,14 @@ function performSafeFit(pane: ManagedPane): boolean {
     return false
   }
   if (!canMeasurePaneForFit(pane)) {
+    return false
+  }
+  // Why here: metric options deferred while the pane was unmeasurable must land
+  // before this fit reads dimensions, or the fit pins cols/rows to stale metrics.
+  // Why re-check: the gate above measured with the old cell size — a large font
+  // jump on a narrow pane can drop it under the floor, and fit() would then pin
+  // the PTY at the tiny grid that floor exists to prevent.
+  if (flushDeferredPaneMetricOptions(pane) && !canMeasurePaneForFit(pane)) {
     return false
   }
   let scrollIntent = null as ReturnType<typeof captureTerminalStructuralScrollIntent>
@@ -128,7 +99,7 @@ function performSafeFit(pane: ManagedPane): boolean {
       return true
     }
 
-    const dims = getProposedDimensions(pane)
+    const dims = getProposedPaneDimensions(pane)
     if (dims && dims.cols === pane.terminal.cols && dims.rows === pane.terminal.rows) {
       // Why: divider drags often stay within one cell; avoid needless clear/refresh churn.
       resumePendingFitScrollRestoreAfterFit(pane.terminal)
@@ -214,6 +185,8 @@ export function flushPendingSafeFitContinuations(pane: ManagedPane): void {
 export function safeFit(pane: ManagedPane): boolean {
   const completed = performSafeFit(pane)
   if (completed) {
+    // A completed fit proves measurability — the reattach moment for a DOM-stuck pane.
+    notifyPaneFitSucceeded(pane)
     // Why: baseline for the reveal fit to tell a real resize from a metric wobble.
     recordPaneFitClientSize(pane)
     // Why: replay transactions may be waiting for renderer dimensions; any
@@ -230,7 +203,7 @@ function pruneStaleSafeFitContinuations(pane: ManagedPane): void {
     return
   }
   for (const [operationKey, pending] of operations) {
-    if (!pending.shouldContinue()) {
+    if (!pending.shouldContinue() || isManagedPaneDisplayNone(pane)) {
       settlePendingSafeFitContinuation(pane, operationKey, pending, false)
     }
   }
@@ -314,7 +287,11 @@ export function safeFitAndThen(
       () => {
         if (pendingSafeFitContinuations.get(pane)?.get(operationKey) === pending) {
           if (!safeFit(pane) && options.retryIfUnmeasurable) {
-            armSafeFitContinuationRetry(pane)
+            if (isManagedPaneDisplayNone(pane)) {
+              cancel()
+            } else {
+              armSafeFitContinuationRetry(pane)
+            }
           }
         }
       }
@@ -323,7 +300,11 @@ export function safeFitAndThen(
     return { completion, cancel }
   }
   if (!safeFit(pane) && options.retryIfUnmeasurable) {
-    armSafeFitContinuationRetry(pane)
+    if (isManagedPaneDisplayNone(pane)) {
+      cancel()
+    } else {
+      armSafeFitContinuationRetry(pane)
+    }
   }
   return { completion, cancel }
 }

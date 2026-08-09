@@ -118,6 +118,43 @@ describe('createIpcPtyTransport', () => {
     expect(kill).not.toHaveBeenCalled()
   })
 
+  // Why: retained gauges would inflate every later high-water profile.
+  it.each(['detach', 'destroy'] as const)(
+    'drops its side-effect gauge from the census on %s',
+    async (teardown) => {
+      await import('./pty-side-effect-pending-census')
+      const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
+
+      const transport = createIpcPtyTransport({})
+      await transport.connect({ url: '', callbacks: {} })
+      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
+
+      transport[teardown]?.()
+
+      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
+    }
+  )
+
+  // Why: teardown that already failed is exactly when a stranded gauge would pin the processor.
+  it('drops its side-effect gauge even when destroy throws mid-disconnect', async () => {
+    await import('./pty-side-effect-pending-census')
+    const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({})
+    await transport.connect({ url: '', callbacks: {} })
+    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
+
+    kill.mockImplementationOnce(() => {
+      throw new Error('ipc channel closed')
+    })
+
+    expect(() => transport.destroy?.()).toThrow('ipc channel closed')
+    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
+  })
+
   it('retires an adopted PTY when recovery disconnects before a replacement spawn', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>

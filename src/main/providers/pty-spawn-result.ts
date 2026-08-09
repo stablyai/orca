@@ -45,6 +45,10 @@ export type PtySpawnResult = {
   snapshotKittyKeyboardFlags?: number
   /** True when the spawn reattached to an existing daemon session. */
   isReattach?: boolean
+  /** Last OSC title tracked by the daemon session the snapshot came from.
+   *  Seeds main's terminal title records after a relaunch; never replayed
+   *  into a terminal. */
+  lastTitle?: string
   /** True when the reattached session uses the alternate screen buffer
    *  (e.g., Codex CLI, vim). Normal-screen TUIs like Claude Code are false. */
   isAlternateScreen?: boolean
@@ -65,5 +69,7 @@ export type PtySpawnResult = {
     cols?: number
     rows?: number
     oscLinks?: TerminalOscLinkRange[]
+    /** Last OSC title from the recovered checkpoint (see `lastTitle` above). */
+    lastTitle?: string
   }
 }

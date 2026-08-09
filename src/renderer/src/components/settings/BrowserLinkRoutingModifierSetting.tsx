@@ -4,7 +4,7 @@ import { SettingsSwitchRow } from './SettingsFormControls'
 import {
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
-} from './browser-link-routing-modifier-copy'
+} from './browser-link-routing-copy'
 
 type BrowserLinkRoutingModifierSettingProps = {
   settings: Pick<GlobalSettings, 'openLinksInApp' | 'openLinksInAppModifierInverts'>

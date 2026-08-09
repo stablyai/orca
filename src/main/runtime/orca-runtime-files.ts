@@ -38,6 +38,7 @@ import {
   resolveRuntimePath
 } from '../../shared/cross-platform-path'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
+import { sortDirEntries } from '../../shared/file-name-sort'
 import type {
   RuntimeFileListResult,
   RuntimeFileOpenResult,
@@ -719,7 +720,8 @@ export class RuntimeFileCommands {
     pathText: string,
     cwd?: string | null,
     clientId?: string,
-    terminalHandle?: string | null
+    terminalHandle?: string | null,
+    crossWorkspace?: boolean
   ): Promise<RuntimeTerminalPathResolution> {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
@@ -757,8 +759,10 @@ export class RuntimeFileCommands {
       terminalFileUriHostname
     })
     const relativePath = relativePathInsideRoot(worktree.path, absolutePath)
+    // Why: clients that predate crossWorkspace reuse their own worktree id for the
+    // follow-up files.open, so retargeting to a sibling workspace must be opt-in.
     const knownWorkspaceTarget =
-      relativePath === null
+      crossWorkspace && relativePath === null
         ? await this.host.resolveKnownWorkspaceFileTarget?.(
             absolutePath,
             getRuntimeFileTargetExecutionHostId(target)
@@ -1289,7 +1293,9 @@ export class RuntimeFileCommands {
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.readDir(target.path)
+      // Why: re-sort locally — the remote relay may be an older build with
+      // lexicographic ordering.
+      return sortDirEntries(await provider.readDir(target.path))
     }
 
     const dirPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
@@ -1304,12 +1310,7 @@ export class RuntimeFileCommands {
         }
       })
     )
-    return mapped.sort((a, b) => {
-      if (a.isDirectory !== b.isDirectory) {
-        return a.isDirectory ? -1 : 1
-      }
-      return a.name.localeCompare(b.name)
-    })
+    return sortDirEntries(mapped)
   }
 
   async watchFileExplorer(

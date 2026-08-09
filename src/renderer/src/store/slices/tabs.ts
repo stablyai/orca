@@ -666,6 +666,7 @@ export function projectWorktreeTabModelReconciliation(
               ? { quickCommandLabel: tab.quickCommandLabel.trim() }
               : {}),
             ...(tab.generatedTitle?.trim() ? { generatedLabel: tab.generatedTitle.trim() } : {}),
+            ...(tab.aiVaultTitle ? { aiVaultTitle: tab.aiVaultTitle } : {}),
             customLabel: tab.customTitle,
             color: tab.color,
             sortOrder: tab.sortOrder,
@@ -1999,7 +2000,19 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     set((state) => {
       const currentLayout = state.layoutByWorktree[worktreeId]
       if (!currentLayout) {
-        return {}
+        return state
+      }
+      // Why: an unchanged ratio must not mint fresh root state — every store
+      // subscriber wakes on the new reference (STA-3328).
+      let targetNode: TabGroupLayoutNode | undefined = currentLayout
+      for (const segment of nodePath.length > 0 ? nodePath.split('.') : []) {
+        targetNode =
+          targetNode && targetNode.type === 'split' && (segment === 'first' || segment === 'second')
+            ? targetNode[segment]
+            : undefined
+      }
+      if (!targetNode || targetNode.type !== 'split' || (targetNode.ratio ?? 0.5) === ratio) {
+        return state
       }
       return {
         layoutByWorktree: {

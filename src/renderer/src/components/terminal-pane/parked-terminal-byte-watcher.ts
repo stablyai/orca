@@ -303,6 +303,9 @@ export function startParkedTerminalByteWatcher(
       return
     }
     disposed = true
+    // Why first: each park/reveal cycle owns a distinct processor gauge, and the store/IPC
+    // teardown below must not be able to throw its way past the census drop.
+    processor?.disposePendingSideEffectGauge()
     // Why: unhide BEFORE the reveal remount registers pane handlers, so main resumes delivery and emits the restore marker the pane consumes.
     releaseHiddenDeliveryClaim?.()
     stopMode2031Responder?.()

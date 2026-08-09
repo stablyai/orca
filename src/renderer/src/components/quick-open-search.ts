@@ -1,4 +1,5 @@
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
+import { compareFileNames } from '../../../shared/file-name-sort'
 
 export const QUICK_OPEN_RESULT_LIMIT = 50
 export const QUICK_OPEN_QUERY_MAX_BYTES = 2 * 1024
@@ -51,7 +52,11 @@ export function rankQuickOpenFiles(
   // still naturally type backslashes in path queries.
   const normalizedQuery = query.trim().replace(/\\/g, '/').toLowerCase()
   if (!normalizedQuery) {
-    return files.slice(0, limit).map((file) => ({ path: file.path, score: 0 }))
+    const results: QuickOpenRankedResult[] = []
+    for (const file of files) {
+      retainTopResult(results, { path: file.path, score: 0, inputIndex: file.inputIndex }, limit)
+    }
+    return finalizeResults(results)
   }
 
   const results: QuickOpenRankedResult[] = []
@@ -61,10 +66,10 @@ export function rankQuickOpenFiles(
       continue
     }
 
-    insertTopResult(results, { path: file.path, score, inputIndex: file.inputIndex }, limit)
+    retainTopResult(results, { path: file.path, score, inputIndex: file.inputIndex }, limit)
   }
 
-  return results.map(({ path, score }) => ({ path, score }))
+  return finalizeResults(results)
 }
 
 function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): number {
@@ -106,42 +111,63 @@ type QuickOpenRankedResult = QuickOpenSearchResult & {
   inputIndex: number
 }
 
-function insertTopResult(
-  results: QuickOpenRankedResult[],
+function retainTopResult(
+  heap: QuickOpenRankedResult[],
   candidate: QuickOpenRankedResult,
   limit: number
 ): void {
-  const worst = results.at(-1)
-  if (results.length === limit && worst && compareRankedResult(candidate, worst) >= 0) {
+  if (heap.length === limit && compareRankedResult(candidate, heap[0]) >= 0) {
     return
   }
 
-  const insertAt = findInsertionIndex(results, candidate)
-  results.splice(insertAt, 0, candidate)
-  if (results.length > limit) {
-    results.pop()
+  if (heap.length < limit) {
+    heap.push(candidate)
+    siftResultUp(heap, heap.length - 1)
+    return
+  }
+
+  heap[0] = candidate
+  siftResultDown(heap)
+}
+
+function siftResultUp(heap: QuickOpenRankedResult[], startIndex: number): void {
+  let index = startIndex
+  while (index > 0) {
+    const parentIndex = Math.floor((index - 1) / 2)
+    if (compareRankedResult(heap[index], heap[parentIndex]) <= 0) {
+      return
+    }
+    ;[heap[index], heap[parentIndex]] = [heap[parentIndex], heap[index]]
+    index = parentIndex
   }
 }
 
-function findInsertionIndex(
-  results: readonly QuickOpenRankedResult[],
-  candidate: QuickOpenRankedResult
-): number {
-  let low = 0
-  let high = results.length
-
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2)
-    if (compareRankedResult(candidate, results[mid]) < 0) {
-      high = mid
-    } else {
-      low = mid + 1
+function siftResultDown(heap: QuickOpenRankedResult[]): void {
+  let index = 0
+  while (true) {
+    const leftIndex = index * 2 + 1
+    if (leftIndex >= heap.length) {
+      return
     }
+    const rightIndex = leftIndex + 1
+    const worseChildIndex =
+      rightIndex < heap.length && compareRankedResult(heap[rightIndex], heap[leftIndex]) > 0
+        ? rightIndex
+        : leftIndex
+    if (compareRankedResult(heap[worseChildIndex], heap[index]) <= 0) {
+      return
+    }
+    ;[heap[index], heap[worseChildIndex]] = [heap[worseChildIndex], heap[index]]
+    index = worseChildIndex
   }
+}
 
-  return low
+function finalizeResults(results: QuickOpenRankedResult[]): QuickOpenSearchResult[] {
+  return results
+    .sort(compareRankedResult)
+    .map(({ path, score }): QuickOpenSearchResult => ({ path, score }))
 }
 
 function compareRankedResult(a: QuickOpenRankedResult, b: QuickOpenRankedResult): number {
-  return a.score - b.score || a.inputIndex - b.inputIndex
+  return a.score - b.score || compareFileNames(a.path, b.path) || a.inputIndex - b.inputIndex
 }

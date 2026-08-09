@@ -35,7 +35,6 @@ const RESTRICTED_ENV_KEYS = [
   'HOMEPATH',
   'CODEX_HOME',
   'ORCA_CODEX_HOME',
-  'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
   'ORCA_E2E_HOME_DIR',
   'ORCA_E2E_USER_DATA_DIR',
   'ORCA_USER_DATA_PATH',
@@ -69,7 +68,7 @@ async function resolveRealPath(candidate) {
   }
 }
 
-export function createValidationEnv(inheritedEnv, layout, options = {}) {
+export function createValidationEnv(inheritedEnv, layout) {
   const env = { ...inheritedEnv }
   for (const key of RESTRICTED_ENV_KEYS) {
     delete env[key]
@@ -81,12 +80,7 @@ export function createValidationEnv(inheritedEnv, layout, options = {}) {
     NODE_ENV: 'development',
     ORCA_E2E_HOME_DIR: layout.homeDir,
     ORCA_E2E_USER_DATA_DIR: layout.userDataDir,
-    ORCA_USER_DATA_PATH: layout.userDataDir,
-    // Why: flag OFF pins every codex spawn to an explicit managed CODEX_HOME,
-    // so native codex never resolves the OS profile — the only Windows
-    // configuration where strict zero-event containment is reachable. It also
-    // exercises the emergency kill-switch lane users fall back to.
-    ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: options.systemDefaultRealHome === 'off' ? '0' : '1'
+    ORCA_USER_DATA_PATH: layout.userDataDir
   }
 }
 
@@ -268,8 +262,7 @@ function parseArgs(argv) {
     primaryHome: os.homedir(),
     configTemplate: null,
     tempParent: null,
-    laneAwareContainment: false,
-    systemDefaultRealHome: 'on'
+    laneAwareContainment: false
   }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
@@ -299,14 +292,8 @@ function parseArgs(argv) {
       options.skipBuild = true
     } else if (arg === '--keep') {
       options.keep = true
-    } else if (arg === '--system-default-real-home') {
-      const value = readValue()
-      if (value !== 'on' && value !== 'off') {
-        throw new Error('--system-default-real-home must be "on" or "off"')
-      }
-      options.systemDefaultRealHome = value
     } else if (arg === '--lane-aware-containment') {
-      // Why: on Windows the flag-ON system-default lane cannot be env-sandboxed
+      // Why: on Windows the system-default real-home lane cannot be env-sandboxed
       // (native codex ignores USERPROFILE), so strict zero-event containment is
       // structurally unreachable there. This mode records codex's designed
       // volatile churn without aborting while every other real-home write stays
@@ -314,7 +301,7 @@ function parseArgs(argv) {
       options.laneAwareContainment = true
     } else if (arg === '--help') {
       console.log(
-        'Usage: node config/scripts/run-codex-real-account-validation.mjs [--scenario mixed|managed-only|codex-lb] [--config-template <path>] [--temp-parent <dir>] [--skip-build] [--dry-run] [--close-after-launch] [--keep] [--lane-aware-containment] [--system-default-real-home on|off] [--report <path>]'
+        'Usage: node config/scripts/run-codex-real-account-validation.mjs [--scenario mixed|managed-only|codex-lb] [--config-template <path>] [--temp-parent <dir>] [--skip-build] [--dry-run] [--close-after-launch] [--keep] [--lane-aware-containment] [--report <path>]'
       )
       process.exit(0)
     } else {
@@ -480,7 +467,7 @@ async function main() {
   const reportPath =
     options.reportPath ??
     path.join(os.tmpdir(), `orca-codex-real-account-${options.scenario}-${Date.now()}.json`)
-  const launchEnv = createValidationEnv(process.env, layout, options)
+  const launchEnv = createValidationEnv(process.env, layout)
   let app = null
   let tripwire = null
   const abortController = new AbortController()

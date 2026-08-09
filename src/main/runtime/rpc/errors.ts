@@ -108,7 +108,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     const code = (error as { code: string }).code
-    return errorResponse(id, meta, code, message, computerErrorData(code))
+    return errorResponse(id, meta, code, message, computerErrorData(code, message))
   }
   if (
     error instanceof Error &&

@@ -165,7 +165,6 @@ describe('scanAiVaultSessions', () => {
       'Indexed Codex resume picker title',
       'Vault polish pass'
     ])
-
     const claude = result.sessions.find((session) => session.agent === 'claude')
     expect(claude).toMatchObject({
       sessionId: 'claude-session',

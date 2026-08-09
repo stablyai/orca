@@ -752,6 +752,21 @@
   "auto.components.contextual.tours.ContextualTourProgressDots.dcd6e6b03e": {
     "ko": "{{value1}}단계 중 {{value0}}단계"
   },
+  "auto.components.contextual.tours.ContextualTourOverlaySurface.complete": {
+    "ko": "완료"
+  },
+  "auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.body": {
+    "ko": "자동화는 일정에 따라 agent 작업을 실행합니다. 이 버튼을 눌러 자동화를 추가하세요."
+  },
+  "auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.title": {
+    "ko": "자동화란 무엇인가요?"
+  },
+  "auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body": {
+    "ko": "실행 내역에서 자동화가 언제 실행되었는지, 어떤 일이 발생했는지, 출력을 어디서 확인할 수 있는지 볼 수 있습니다."
+  },
+  "auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.title": {
+    "ko": "결과 확인"
+  },
   "auto.components.crash.report.CrashReportDialog.88fea8e84e": {
     "ko": "보내지 않음"
   },
@@ -1868,6 +1883,9 @@
   "auto.components.right.sidebar.SourceControl.3a231c845b": {
     "ko": "알 수 없음"
   },
+  "auto.components.right.sidebar.SourceControl.6d7f2a47e5": {
+    "ko": "폴더의 변경 사항 취소"
+  },
   "auto.components.right.sidebar.SourceControl.812cb992ee": {
     "ko": "{{value0}}에서 열기"
   },
@@ -1879,6 +1897,9 @@
   },
   "auto.components.right.sidebar.SourceControl.9bb062a886": {
     "ko": "commit 되지 않음"
+  },
+  "auto.components.right.sidebar.SourceControl.a5e5a11090": {
+    "ko": "모든 변경 사항 취소 실패 — 취소 전에 파일의 스테이징을 해제하지 못했습니다."
   },
   "auto.components.right.sidebar.SourceControl.aaf1451654": {
     "ko": "초안 {{value0}} 만들기"
@@ -1994,6 +2015,9 @@
   "auto.components.right.sidebar.source.control.discard.confirmation.2ae5a785b3": {
     "ko": "스테이징되지 않은 변경 사항을 모두 삭제하시겠습니까?"
   },
+  "auto.components.right.sidebar.source.control.discard.confirmation.40e9357b2a": {
+    "ko": "이렇게 하면 HEAD에서 파일을 복원하고 파일 삭제를 취소합니다. 이 작업은 취소할 수 없습니다."
+  },
   "auto.components.right.sidebar.source.control.discard.confirmation.5ddd8cac7f": {
     "ko": "스테이징된 변경 사항을 모두 삭제하시겠습니까?"
   },
@@ -2014,6 +2038,9 @@
   },
   "auto.components.right.sidebar.source.control.primary.action.1d47e850cf": {
     "ko": "연결된 리뷰 브랜치에 업데이트 푸시"
+  },
+  "auto.components.right.sidebar.source.control.primary.action.5a477d80cb": {
+    "ko": "모든 변경 사항 스테이징"
   },
   "auto.components.right.sidebar.source.control.primary.action.a5d1f7b036": {
     "ko": "{{value0}}을(를) 만들기 전에 commits을 게시하세요."
@@ -2162,6 +2189,9 @@
   "auto.components.settings.AutoRenameBranchFromWorkSetting.a4fa380b67": {
     "ko": "{assistantMessage}"
   },
+  "auto.components.settings.AutoRenameBranchFromWorkSetting.d9b65054ef": {
+    "ko": ") 작업을 요약하는 짧은 이름으로 변경됩니다. Orca가 직접 이름 붙인 브랜치만 이름을 바꾸며, 푸시된 후에는 이름을 바꾸지 않습니다."
+  },
   "auto.components.settings.AutoRenameBranchPromptEditor.ebb942a2ec": {
     "ko": "fix-login-flow"
   },
@@ -2228,6 +2258,9 @@
   "auto.components.settings.DefaultWindowsProjectRuntimeSetting.wslUnavailable": {
     "ko": "WSL을 사용할 수 없습니다. WSL을 상속하는 프로젝트는 복구가 필요합니다."
   },
+  "auto.components.settings.DevToolsPane.orcaCloudDescription": {
+    "ko": "자사 클라우드 로그인의 개발자 전용 미리보기. 프로덕션에서는 숨겨집니다. 개발 환경에서는 ORCA_CLOUD_API_URL과 ORCA_CLOUD_CLIENT_ID가 설정되면 사이드바 계정 전환기에도 표시됩니다."
+  },
   "auto.components.settings.DeveloperPermissionsPane.16381e040a": {
     "ko": "마이크"
   },
@@ -2254,6 +2287,12 @@
   },
   "auto.components.settings.ExperimentalPane.newWorktreeCardStyle.description": {
     "ko": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다."
+  },
+  "auto.components.settings.EphemeralVmsPane.recipes": {
+    "ko": "레시피"
+  },
+  "auto.components.settings.EphemeralVmsPane.whatTitle": {
+    "ko": "이 스킬로 함께 하는 작업"
   },
   "auto.components.settings.GeneralEditorSettingsSection.45c6e85c4d": {
     "ko": "편집기"
@@ -2727,7 +2766,7 @@
     "ko": "이 SSH 대상의 원격 릴레이를 강제로 중지합니다. 이 대상의 활성 원격 terminals과 포트 포워딩이 종료됩니다."
   },
   "auto.components.settings.SshTargetForm.137e88ce8d": {
-    "ko": "연결 해제 후 릴레이가 terminals을 활성 상태로 유지하는 기간입니다. 기본값: 10800(3시간). 최대:"
+    "ko": "Orca가 이 호스트에서 연결 해제된 뒤에도 원격 터미널은 계속 실행됩니다."
   },
   "auto.components.settings.SshTargetForm.2ee9bcd2e8": {
     "ko": "server, deploy@server:2222, ssh://server"
@@ -3710,6 +3749,9 @@
   "auto.components.settings.ssh.search.f9493b80c0": {
     "ko": "서버"
   },
+  "auto.components.settings.source.control.action.recipe.options.commitMessage": {
+    "ko": "스테이징된 변경 사항에서 commit 메시지를 생성합니다."
+  },
   "auto.components.settings.task.tracker.integration.cards.1a12e33fe5": {
     "ko": "Linear 액세스 추가"
   },
@@ -4683,7 +4725,7 @@
     "ko": "중지 중"
   },
   "auto.components.status.bar.WorkspaceSpaceCompactPanel.8ff597593d": {
-    "ko": "Space"
+    "ko": "저장 공간"
   },
   "auto.components.status.bar.WorkspaceSpaceCompactPanel.9be86c46a0": {
     "ko": "확보 가능"
@@ -4953,7 +4995,7 @@
     "ko": "선택한 리포지토리와 일치하는 비활성 워크스페이스가 없습니다."
   },
   "auto.components.workspace.space.WorkspaceSpacePage.45f6302dbc": {
-    "ko": "Space"
+    "ko": "저장 공간"
   },
   "auto.components.workspace.space.WorkspaceSpacePage.8d0048e1cb": {
     "ko": "워크스페이스 디스크 사용량과 회수 가능한 워크트리 저장 공간."

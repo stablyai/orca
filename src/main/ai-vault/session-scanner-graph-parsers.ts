@@ -5,6 +5,7 @@ import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import { withOmpSubagentTranscriptCount } from './session-scanner-omp-subagent-transcripts'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
@@ -239,10 +240,14 @@ export function createMessageGraphSessionResumeState(
   agent: MessageGraphAgent,
   file: FileWithMtime
 ): ResumableSessionParseState {
-  return accumulatorFoldResumeState(
+  const state = accumulatorFoldResumeState(
     createAccumulator({ agent, file, sessionId: sessionIdFromFileName(file.path) }),
     consumeMessageGraphRecordLine
   )
+  // Why: only OMP materializes task-subagent transcripts beside its sessions
+  // (in the same-named artifact dir); the row UI shows the count without
+  // expanding details. Pi/OpenClaw have no such layout — skip the readdir.
+  return agent === 'omp' ? withOmpSubagentTranscriptCount(state, file.path) : state
 }
 
 async function parseMessageGraphSessionLines(args: {

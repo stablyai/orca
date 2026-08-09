@@ -96,9 +96,6 @@ export class DesktopRelayService {
 
   start(): void {
     this.refreshDemand()
-    if (!this.livenessTimer) {
-      this.livenessTimer = setInterval(() => this.ensureLive(), RELAY_LIVENESS_INTERVAL_MS)
-    }
   }
 
   // Safe to call from any wake signal (power resume, network change).
@@ -113,6 +110,13 @@ export class DesktopRelayService {
   }
 
   fenceAndCloseNow(): void {
+    // Why: a fence must be hard — a surviving liveness tick could catch the
+    // window between the pre-sign-out fence and the profile wipe and briefly
+    // resurrect a broker. The next auth mutation re-arms via refreshDemand.
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer)
+      this.livenessTimer = null
+    }
     this.coordinator.fenceAndCloseNow()
   }
 
@@ -306,6 +310,9 @@ export class DesktopRelayService {
   private refreshDemand(): void {
     if (this.stopped) {
       return
+    }
+    if (!this.livenessTimer) {
+      this.livenessTimer = setInterval(() => this.ensureLive(), RELAY_LIVENESS_INTERVAL_MS)
     }
     if (this.demandExpiryTimer) {
       clearTimeout(this.demandExpiryTimer)

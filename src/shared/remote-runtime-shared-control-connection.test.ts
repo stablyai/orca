@@ -20,7 +20,10 @@ import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime-prepa
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
 import { isRuntimeSubscriptionReplayResponse } from './runtime-subscription-replay'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from './protocol-version'
+import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+} from './protocol-version'
 
 const TEST_PROJECT_PATH = path.join('tmp', 'project')
 
@@ -62,7 +65,10 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect(server.auths).toContainEqual({
       type: 'e2ee_auth',
       deviceToken: 'device-token',
-      clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+      clientCapabilities: [
+        SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+      ]
     })
     expect(server.requests.map((request) => request.method)).toEqual([
       'worktree.ps',

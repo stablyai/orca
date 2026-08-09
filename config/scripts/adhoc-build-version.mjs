@@ -71,7 +71,7 @@ export function normalizeAdhocLabel(label) {
 }
 
 /**
- * `1.4.163 • wasm-terminal • 08-01 14:25 • abc1234` — the human-facing release
+ * `1.4.163 • wasm-terminal • Aug 1, 2:25PM • abc1234` — the human-facing release
  * title, shown verbatim in both the GitHub releases list and the build picker.
  *
  * Why the label sits where hourly puts its build number: several adhoc builds

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: persistence keeps schema defaults, migration, and load/save/flush in one file so the storage contract reviews as a unit. */
-import { app, safeStorage } from 'electron'
+import { app } from 'electron'
 import {
   readFileSync,
   writeFileSync,
@@ -38,6 +38,8 @@ import {
 } from '../shared/automation-schedules'
 import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
+import { normalizeProxyUrl } from '../shared/network-proxy'
+import { normalizeKagiSessionLink } from '../shared/browser-url'
 import type {
   PersistedState,
   Project,
@@ -279,36 +281,23 @@ import {
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
+import {
+  PROTECTED_SECRET_SLOT,
+  ProtectedSecretPersistence,
+  sshPtyOwnerLeaseSecretSlot,
+  type ProtectedSecretRetentionUpdate
+} from './protected-secret-persistence'
 
-function encrypt(plaintext: string): string {
-  if (!plaintext || !safeStorage.isEncryptionAvailable()) {
-    return plaintext
-  }
-  try {
-    return safeStorage.encryptString(plaintext).toString('base64')
-  } catch (err) {
-    console.error('[persistence] Encryption failed:', err)
-    return plaintext
-  }
+function isLegacyOpenCodeSessionCookie(value: string): boolean {
+  const trimmed = value.trim()
+  return (
+    trimmed.startsWith('Fe26.2**') ||
+    trimmed.split(';').some((pair) => /^(?:auth|__Host-auth)=\S+$/i.test(pair.trim()))
+  )
 }
 
-function decrypt(ciphertext: string): string {
-  if (!ciphertext || !safeStorage.isEncryptionAvailable()) {
-    return ciphertext
-  }
-  try {
-    return safeStorage.decryptString(Buffer.from(ciphertext, 'base64'))
-  } catch {
-    // Why: decrypt failure usually means plaintext (pre-encryption) or a changed keychain; return raw so the cookie survives upgrade.
-    console.warn(
-      '[persistence] safeStorage decryption failed — returning ciphertext as-is. Possible keychain reset.'
-    )
-    return ciphertext
-  }
-}
-
-function decryptOptionalSecret(value: string | null | undefined): string | null {
-  return value ? decrypt(value) : null
+function isLegacySshPtyOwnerLease(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
 function retireLegacyInstructionsForClearedTextActionRecipes(
@@ -1399,10 +1388,18 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   if (!value || typeof value !== 'object') {
     return undefined
   }
-  const candidate = value as { owner?: unknown; repo?: unknown }
+  const candidate = value as { owner?: unknown; repo?: unknown; host?: unknown }
   const owner = typeof candidate.owner === 'string' ? candidate.owner.trim() : ''
   const repo = typeof candidate.repo === 'string' ? candidate.repo.trim() : ''
-  return owner && repo ? { owner, repo } : undefined
+  if (!owner || !repo) {
+    return undefined
+  }
+  // Why: an `upstream` remote may live on a different server than `origin`, so
+  // dropping the host forced consumers to re-infer it from origin and could bind
+  // a GHES parent to a same-named github.com repo. Absent host stays absent so
+  // records written before this survive unchanged.
+  const host = typeof candidate.host === 'string' ? candidate.host.trim() : ''
+  return host ? { owner, repo, host } : { owner, repo }
 }
 
 function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | null | undefined {
@@ -2793,6 +2790,7 @@ export class Store {
   private pendingGithubCacheWrite: Promise<void> | null = null
   private readonly staleGithubCacheTempCleanup: Promise<void>
   private gitUsernameCache = new Map<string, string>()
+  private readonly protectedSecrets = new ProtectedSecretPersistence()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
     (
@@ -3055,13 +3053,43 @@ export class Store {
 
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
-          parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
+          parsed.settings.opencodeSessionCookie = this.protectedSecrets.decrypt(
+            PROTECTED_SECRET_SLOT.opencodeSessionCookie,
+            parsed.settings.opencodeSessionCookie,
+            isLegacyOpenCodeSessionCookie
+          )
         }
         if (parsed.settings?.httpProxyUrl) {
-          parsed.settings.httpProxyUrl = decrypt(parsed.settings.httpProxyUrl)
+          const decryptedProxy = this.protectedSecrets.decryptWithStatus(
+            PROTECTED_SECRET_SLOT.httpProxyUrl,
+            parsed.settings.httpProxyUrl,
+            (value) => normalizeProxyUrl(value).ok
+          )
+          // Why (STA-3442): after a keychain reset decrypt returns raw ciphertext; a non-URL
+          // value must not masquerade as a configured proxy (silent DIRECT fallback) or
+          // re-persist as garbage. Plaintext URLs still pass, preserving the upgrade path.
+          if (
+            decryptedProxy.status === 'unavailable' ||
+            (decryptedProxy.status === 'failed' && !decryptedProxy.plaintext)
+          ) {
+            parsed.settings.httpProxyUrl = ''
+          } else if (normalizeProxyUrl(decryptedProxy.plaintext).ok) {
+            parsed.settings.httpProxyUrl = decryptedProxy.plaintext
+          } else {
+            console.warn(
+              '[persistence] httpProxyUrl could not be decrypted — clearing the stored proxy URL. Re-enter it in Settings > Advanced > Network.'
+            )
+            parsed.settings.httpProxyUrl = ''
+            this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
+            this.loadNeedsSave = true
+          }
         }
         if (parsed.ui?.browserKagiSessionLink) {
-          parsed.ui.browserKagiSessionLink = decryptOptionalSecret(parsed.ui.browserKagiSessionLink)
+          parsed.ui.browserKagiSessionLink = this.protectedSecrets.decrypt(
+            PROTECTED_SECRET_SLOT.browserKagiSessionLink,
+            parsed.ui.browserKagiSessionLink,
+            (value) => normalizeKagiSessionLink(value) !== null
+          )
         }
         parsed.sshPtyConsumerRecoveries = (
           Array.isArray(parsed.sshPtyConsumerRecoveries) ? parsed.sshPtyConsumerRecoveries : []
@@ -3070,8 +3098,23 @@ export class Store {
             normalizeSshPtyConsumerRecovery(record, ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH)
           )
           .filter((record): record is SshPtyConsumerRecovery => record !== null)
-          .map((record) => ({ ...record, ownerLease: decrypt(record.ownerLease) }))
-          .map((record) => normalizeSshPtyConsumerRecovery(record))
+          .map((record) => {
+            const slot = sshPtyOwnerLeaseSecretSlot(record.targetId)
+            const decrypted = this.protectedSecrets.decryptWithStatus(
+              slot,
+              record.ownerLease,
+              isLegacySshPtyOwnerLease
+            )
+            const normalized =
+              decrypted.status === 'unavailable' ||
+              (decrypted.status === 'failed' && !decrypted.plaintext)
+                ? record
+                : normalizeSshPtyConsumerRecovery({ ...record, ownerLease: decrypted.plaintext })
+            if (!normalized) {
+              this.protectedSecrets.removeRetainedBlob(slot)
+            }
+            return normalized
+          })
           .filter((record): record is SshPtyConsumerRecovery => record !== null)
 
         // Merge with defaults in case new fields were added
@@ -3872,8 +3915,12 @@ export class Store {
     return durable
   }
 
-  // Why: build payload synchronously so hash and serialized bytes reflect the same state tick (no await interleave). One full-state stringify serves both the on-disk payload and the no-op-write guard hash: each secret slot is serialized as a fresh unguessable sentinel, then sentinels are substituted to ciphertext for the payload and to plaintext for the hash. The hash is thus a pure function of plaintext state (skips a byte-identical rewrite) without a second stringify.
-  private buildStateToSave(): { payload: string; stateHash: string } {
+  // Why: build payload synchronously so hash and bytes reflect one state tick. A degraded prefix makes the first healthy retry durable even when plaintext state is unchanged.
+  private buildStateToSave(): {
+    payload: string
+    stateHash: string
+    protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
+  } {
     // Why sentinels (not a blob/key string match): the substitution must be
     // position-exact. A plain search for the ciphertext — or even for a
     // `"key":"blob"` token — can be mimicked by user-controlled state (e.g. an
@@ -3883,54 +3930,79 @@ export class Store {
     // on deterministic-IV platforms (macOS/legacy-Linux OSCrypt). A per-slot
     // random UUID can't occur anywhere else in the serialized state (the user
     // sets their data before it is minted), so it appears exactly once.
-    const secretSubs: { sentinel: string; blob: string; plaintext: string }[] = []
-    const encryptToSentinel = (plaintext: string): string => {
-      const blob = encrypt(plaintext)
-      // Deterministic already (empty secret / safeStorage unavailable / encrypt
-      // failure): blob === plaintext, so no normalization — and no sentinel,
-      // which also avoids substituting an empty or plaintext-shaped slot.
-      if (blob === plaintext) {
+    const secretSubs: { sentinel: string; blob: string; hashValue: string }[] = []
+    const protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
+    let protectedStorageDegraded = false
+    const encryptToSentinel = (slot: string, plaintext: string): string => {
+      const encrypted = this.protectedSecrets.encrypt(slot, plaintext)
+      if (encrypted.retentionUpdate) {
+        protectedSecretUpdates.push(encrypted.retentionUpdate)
+      }
+      protectedStorageDegraded ||= encrypted.degraded
+      const { blob, hashValue = plaintext } = encrypted
+      // Values already identical in payload and hash need no sentinel substitution.
+      if (blob === plaintext && hashValue === plaintext) {
         return blob
       }
       const sentinel = `orca-secret-slot-${randomUUID()}`
-      secretSubs.push({ sentinel, blob, plaintext })
+      secretSubs.push({ sentinel, blob, hashValue })
       return sentinel
+    }
+    const encryptOptionalToSentinel = (
+      slot: string,
+      plaintext: string | null | undefined
+    ): string | null => {
+      const encrypted = encryptToSentinel(slot, plaintext ?? '')
+      return encrypted || null
     }
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
       sshPtyConsumerRecoveries: (this.state.sshPtyConsumerRecoveries ?? []).map((record) => ({
         ...record,
-        ownerLease: encryptToSentinel(record.ownerLease)
+        ownerLease: encryptToSentinel(
+          sshPtyOwnerLeaseSecretSlot(record.targetId),
+          record.ownerLease
+        )
       })),
       settings: {
         ...this.state.settings,
-        opencodeSessionCookie: encryptToSentinel(this.state.settings.opencodeSessionCookie),
-        httpProxyUrl: encryptToSentinel(this.state.settings.httpProxyUrl ?? '')
+        opencodeSessionCookie: encryptToSentinel(
+          PROTECTED_SECRET_SLOT.opencodeSessionCookie,
+          this.state.settings.opencodeSessionCookie
+        ),
+        httpProxyUrl: encryptToSentinel(
+          PROTECTED_SECRET_SLOT.httpProxyUrl,
+          this.state.settings.httpProxyUrl ?? ''
+        )
       },
       ui: {
         ...this.state.ui,
-        browserKagiSessionLink: this.state.ui.browserKagiSessionLink
-          ? encryptToSentinel(this.state.ui.browserKagiSessionLink)
-          : null
+        browserKagiSessionLink: encryptOptionalToSentinel(
+          PROTECTED_SECRET_SLOT.browserKagiSessionLink,
+          this.state.ui.browserKagiSessionLink
+        )
       }
     }
     // Why compact: ~20% fewer bytes and less serialize time; all readers JSON.parse so formatting is irrelevant.
     // One full-state stringify; secret slots currently hold sentinels.
     const serialized = JSON.stringify(stateToSave)
     // Substitute each unique sentinel exactly once: ciphertext for the on-disk
-    // payload, plaintext for the guard hash. Function-form replacement keeps
-    // `$` in blob/plaintext inert; both sides read the sentinel as JSON-escaped
+    // payload, a stable normalized value for the guard hash. Function-form
+    // replacement keeps `$` inert; both sides read the sentinel as JSON-escaped
     // in `serialized`, so each replace is byte-for-byte position-exact.
     let payload = serialized
     let hashInput = serialized
-    for (const { sentinel, blob, plaintext } of secretSubs) {
+    for (const { sentinel, blob, hashValue } of secretSubs) {
       const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
-      payload = payload.replace(escapedSentinel, () => blob)
-      hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(plaintext).slice(1, -1))
+      payload = payload.replace(escapedSentinel, () => JSON.stringify(blob).slice(1, -1))
+      hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(hashValue).slice(1, -1))
     }
-    const stateHash = createHash('sha1').update(hashInput).digest('hex')
-    return { payload, stateHash }
+    const stateHash = createHash('sha1')
+      .update(protectedStorageDegraded ? 'safeStorage-degraded\0' : '')
+      .update(hashInput)
+      .digest('hex')
+    return { payload, stateHash, protectedSecretUpdates }
   }
 
   // Why: async writes avoid blocking the main Electron thread on every debounced save.
@@ -3939,7 +4011,7 @@ export class Store {
       return
     }
     const gen = this.writeGeneration
-    const { payload, stateHash } = this.buildStateToSave()
+    const { payload, stateHash, protectedSecretUpdates } = this.buildStateToSave()
     // Why: don't rewrite a byte-identical multi-MB file when state nets out to already-persisted.
     if (stateHash === this.lastWrittenStateHash) {
       this.lastDurableWriteGeneration = Math.max(this.lastDurableWriteGeneration, gen)
@@ -3981,6 +4053,7 @@ export class Store {
       // Why re-check gen: a mutation or sync flush during rename makes the installed hash ambiguous; invalidate the no-op guard.
       if (renamed && this.writeGeneration === gen) {
         this.lastWrittenStateHash = stateHash
+        this.protectedSecrets.commitRetentionUpdates(protectedSecretUpdates)
       } else if (renamed) {
         this.lastWrittenStateHash = null
       }
@@ -4007,7 +4080,7 @@ export class Store {
     if (this.writesFrozen) {
       return
     }
-    const { payload, stateHash } = this.buildStateToSave()
+    const { payload, stateHash, protectedSecretUpdates } = this.buildStateToSave()
     // Why: matching hash means the file already holds this state; force overrides when an async rename may be racing past the gen check.
     if (!opts.force && stateHash === this.lastWrittenStateHash) {
       return
@@ -4027,6 +4100,7 @@ export class Store {
       writeFileDurableSync(tmpFile, dataFile, payload)
       renamed = true
       this.lastWrittenStateHash = stateHash
+      this.protectedSecrets.commitRetentionUpdates(protectedSecretUpdates)
       this.lastDurableWriteGeneration = Math.max(
         this.lastDurableWriteGeneration,
         this.writeGeneration
@@ -4208,11 +4282,16 @@ export class Store {
     if (!project) {
       return null
     }
+    // Why: the same repo id can exist on multiple execution hosts, so match this setup's own host
+    // row and never fall back to a sibling host's row — a stale repoId/hostId would delete that host's
+    // registration. With no exact match the setup is stale, and the path below drops just the setup.
     const repo = setup.repoId
-      ? this.state.repos.find((entry) => entry.id === setup.repoId)
+      ? this.state.repos.find(
+          (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
+        )
       : undefined
     if (repo) {
-      this.removeProject(repo.id)
+      this.removeProjectForHost(repo.id, setup.hostId)
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
     this.state.projectHostSetups = this.state.projectHostSetups.filter(
@@ -5687,6 +5766,12 @@ export class Store {
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
     const sanitizedUpdates = stripLegacyTerminalScrollbackBytes(updates)
+    if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
+      this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
+    }
+    if ('httpProxyUrl' in updates && !updates.httpProxyUrl) {
+      this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
+    }
     // Why: coerce to boolean here (not the IPC edge) so every write path is covered and a truthy non-bool can't persist as "tray-minimize on".
     if ('minimizeToTrayOnClose' in updates) {
       sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
@@ -5911,6 +5996,9 @@ export class Store {
   }
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
+    if ('browserKagiSessionLink' in updates && !updates.browserKagiSessionLink) {
+      this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.browserKagiSessionLink)
+    }
     const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
     const { activeView, ...durableUpdates } = sanitizedUpdates
     const activeViewChanged = this.activeViewPreference.set(activeView)
@@ -6622,11 +6710,26 @@ export class Store {
       ptyId: string
       incarnationId?: string
       startupCwd?: string
+      expectedBinding?: { ptyId: string; incarnationId?: string }
     },
     hostId?: string | null
-  ): void {
+  ): boolean {
     const resolvedHostId = this.resolveHostId(hostId)
     const session = this.getWorkspaceSession(resolvedHostId)
+    const paneKey = `${args.tabId}:${args.leafId}`
+    if (args.expectedBinding) {
+      const tab = session.tabsByWorktree?.[args.worktreeId]?.find(
+        (candidate) => candidate.id === args.tabId && candidate.worktreeId === args.worktreeId
+      )
+      const boundPtyId = session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
+      if (
+        !tab ||
+        boundPtyId !== args.expectedBinding.ptyId ||
+        session.terminalPtyIncarnationsByPaneKey?.[paneKey] !== args.expectedBinding.incarnationId
+      ) {
+        return false
+      }
+    }
     if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
       this.state.workspaceSessionsByHostId = {
         ...this.state.workspaceSessionsByHostId,
@@ -6634,15 +6737,17 @@ export class Store {
       }
     }
     const sessionBeforeBinding = cloneWorkspaceSessionState(session)
-    const paneKey = `${args.tabId}:${args.leafId}`
+    const reconciledIncarnation =
+      args.expectedBinding !== undefined &&
+      args.incarnationId !== args.expectedBinding.incarnationId
     let terminalMembershipChanged = false
-    const advanceTopologyAfterMembershipChange = (): void => {
+    const advanceTopologyFence = (): void => {
       const repoId = getRepoIdFromWorktreeId(args.worktreeId)
       const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-      if (!terminalMembershipChanged || currentRevision <= 0) {
+      if (!reconciledIncarnation && (!terminalMembershipChanged || currentRevision <= 0)) {
         return
       }
-      // Why: a real host-admitted spawn after a retirement must be distinguishable from a stale renderer replay.
+      // Why: host-admitted membership or incarnation changes must outrank a stale renderer replay.
       session.terminalTopologyRevisionByRepoId = {
         ...session.terminalTopologyRevisionByRepoId,
         [repoId]: currentRevision + 1
@@ -6697,14 +6802,14 @@ export class Store {
     }
     if (!isTerminalLeafId(args.leafId)) {
       // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
-      advanceTopologyAfterMembershipChange()
+      advanceTopologyFence()
       try {
         this.flushOrThrow()
       } catch (err) {
         restoreSession()
         throw err
       }
-      return
+      return true
     }
     const layout = session.terminalLayoutsByTabId?.[args.tabId]
     if (layout) {
@@ -6745,13 +6850,14 @@ export class Store {
         }
       }
     }
-    advanceTopologyAfterMembershipChange()
+    advanceTopologyFence()
     try {
       this.flushOrThrow()
     } catch (err) {
       restoreSession()
       throw err
     }
+    return true
   }
 
   // ── SSH Targets ────────────────────────────────────────────────────
@@ -6798,6 +6904,7 @@ export class Store {
     }
     this.state.sshTargets = nextTargets
     this.state.sshPtyConsumerRecoveries = nextRecoveries
+    this.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(id))
     this.scheduleSave()
   }
 
@@ -6948,6 +7055,7 @@ export class Store {
     const retainedRecoveries = recoveries.filter((record) => record.targetId !== oldTargetId)
     if (retainedRecoveries.length !== recoveries.length) {
       this.state.sshPtyConsumerRecoveries = retainedRecoveries
+      this.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(oldTargetId))
       carrierChanged = true
     }
     let setupsChanged = false
@@ -6990,6 +7098,12 @@ export class Store {
     const record = (this.state.sshPtyConsumerRecoveries ?? []).find(
       (candidate) => candidate.targetId === targetId
     )
+    if (
+      record &&
+      this.protectedSecrets.isSealed(sshPtyOwnerLeaseSecretSlot(record.targetId), record.ownerLease)
+    ) {
+      return null
+    }
     return record ? structuredClone(record) : null
   }
 
@@ -7013,6 +7127,7 @@ export class Store {
       return
     }
     this.state.sshPtyConsumerRecoveries = next
+    this.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(targetId))
     await this.flushSshPtyConsumerRecovery()
   }
 
@@ -7068,6 +7183,13 @@ export class Store {
     if (this.updateSshRemotePtyLeaseStates(targetId, state)) {
       this.flush()
     }
+  }
+
+  // Why no write of its own: the committed quit path calls this immediately before the final store
+  // flush, and that flush is what persists it. A durable write here would race the flush and be
+  // rejected the moment it latches, which is exactly how an attached lease used to survive quit.
+  markSshRemotePtyLeasesForShutdown(targetId: string, state: SshRemotePtyLease['state']): void {
+    this.updateSshRemotePtyLeaseStates(targetId, state)
   }
 
   async markSshRemotePtyLeasesAsync(

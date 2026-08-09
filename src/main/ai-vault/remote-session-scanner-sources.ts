@@ -12,6 +12,8 @@ import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
 import { parseCursorSessionContent } from './session-scanner-cursor-parser'
 import { parseHermesSessionContent } from './session-scanner-hermes-parser'
+import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
+import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subagent-transcripts'
 import type { FileWithMtime } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { remoteCodexIndexTitles } from './remote-session-scanner-codex-index'
@@ -49,7 +51,7 @@ export function remoteSessionSources(
       // subagent counts instead. Partitioning also prunes the subagent
       // transcripts themselves, which would otherwise list as phantom
       // top-level sessions carrying the parent's sessionId.
-      collectSubagentSiblingCounts: true
+      partitionSubagentTranscripts: partitionSubagentTranscriptPaths
     },
     remoteAntigravitySource(remoteHome, hostPlatform),
     source(
@@ -92,7 +94,13 @@ export function remoteSessionSources(
       parseDevinSessionContent
     ),
     jsonlSource('pi', remoteHome, hostPlatform, remotePiSessionsSegments(), piParser),
-    jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),
+    {
+      ...jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),
+      // Same posture as Claude above: OMP stores task-subagent transcripts in
+      // the session's same-named artifact dir; the walk supplies counts and the
+      // partition keeps the children out of the top-level list (#9330).
+      partitionSubagentTranscripts: partitionOmpSubagentTranscriptPaths
+    },
     jsonlSource(
       'droid',
       remoteHome,

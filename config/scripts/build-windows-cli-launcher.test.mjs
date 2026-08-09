@@ -14,6 +14,21 @@ import { describe, expect, it } from 'vitest'
 
 const itCrossHost = process.platform === 'win32' ? it.skip : it
 const projectRoot = resolve(import.meta.dirname, '../..')
+const WINDOWS_LOCK_CODES = ['EBUSY', 'ENOTEMPTY', 'EPERM']
+
+// Why: Windows releases the image handle on a just-executed exe (and finishes the
+// AV scan of the freshly compiled one) after the process exits, so tearing down the
+// fixture races those locks. Retry, then leave the temp tree rather than reporting a
+// teardown lock as a launcher failure.
+function removeFixtureTree(path) {
+  try {
+    rmSync(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  } catch (error) {
+    if (process.platform !== 'win32' || !WINDOWS_LOCK_CODES.includes(error?.code)) {
+      throw error
+    }
+  }
+}
 // Why: cold csc.exe startup exceeds Vitest's 5s unit budget on hosted Windows;
 // keep the larger allowance scoped to the real compiler integration test.
 function itWindows(name, test) {
@@ -35,7 +50,7 @@ describe('Windows CLI launcher', () => {
       expect(result.stderr).toContain('Windows CLI launcher')
       expect(result.stderr).toContain('Windows host')
     } finally {
-      rmSync(outputRoot, { recursive: true, force: true })
+      removeFixtureTree(outputRoot)
     }
   })
 
@@ -108,7 +123,7 @@ describe('Windows CLI launcher', () => {
         orcaNodeOptions: '--no-warnings'
       })
     } finally {
-      rmSync(appRoot, { recursive: true, force: true })
+      removeFixtureTree(appRoot)
     }
   })
 
@@ -161,7 +176,7 @@ describe('Windows CLI launcher', () => {
         pathKeys: ['PATH', 'Path']
       })
     } finally {
-      rmSync(appRoot, { recursive: true, force: true })
+      removeFixtureTree(appRoot)
     }
   })
 })

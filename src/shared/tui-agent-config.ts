@@ -41,6 +41,8 @@ export type TuiAgentConfig = {
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
   windowsShiftEnterEncoding?: 'csi-u'
+  /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
+  ctrlEnterEncoding?: 'csi-u'
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
@@ -239,7 +241,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'droid',
     promptInjectionMode: 'argv',
     // Why: Droid decodes CSI-u on Windows; the legacy Esc+CR fallback reads as Enter and submits instead of newline.
-    windowsShiftEnterEncoding: 'csi-u'
+    windowsShiftEnterEncoding: 'csi-u',
+    ctrlEnterEncoding: 'csi-u'
   },
   kimi: {
     detectCmd: 'kimi',
@@ -298,7 +301,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: argv (grok takes a positional prompt) so multi-line/special-char text isn't mangled as raw PTY keystrokes.
     promptInjectionMode: 'argv',
     // Why: separator so prompts like `help`/`--version` aren't parsed as Grok CLI syntax.
-    argvPromptSeparator: '--'
+    argvPromptSeparator: '--',
+    ctrlEnterEncoding: 'csi-u'
   },
   devin: {
     detectCmd: 'devin',

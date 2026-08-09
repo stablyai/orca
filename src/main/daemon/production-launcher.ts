@@ -1,7 +1,6 @@
 import { fork, type ChildProcess } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
 import {
-  serializeDaemonPidFile,
+  unlinkOwnedDaemonPidFile,
   type DaemonLauncher,
   type DaemonProcessHandle
 } from './daemon-spawner'
@@ -28,6 +27,7 @@ export function createProductionLauncher(opts: ProductionLauncherOptions): Daemo
     }
     const entryPath = opts.getDaemonEntryPath()
 
+    const appVersion = opts.getAppVersion()
     const child = fork(
       entryPath,
       [
@@ -35,7 +35,18 @@ export function createProductionLauncher(opts: ProductionLauncherOptions): Daemo
         socketPath,
         '--token',
         tokenPath,
-        ...(pidPath && launchNonce ? ['--pid-record', pidPath, '--launch-nonce', launchNonce] : [])
+        ...(pidPath && launchNonce
+          ? [
+              '--pid-record',
+              pidPath,
+              '--launch-nonce',
+              launchNonce,
+              '--entry-path',
+              entryPath,
+              '--app-version',
+              appVersion
+            ]
+          : [])
       ],
       {
         // Why: detached daemon output is not consumed; ignored streams cannot
@@ -47,31 +58,18 @@ export function createProductionLauncher(opts: ProductionLauncherOptions): Daemo
       }
     )
 
-    let readyIdentity: DaemonReadyIdentity
     try {
-      readyIdentity = await waitForReady(child)
+      await waitForReady(child)
     } catch (error) {
-      return rejectAfterChildCleanup(child, error)
+      return rejectAfterChildCleanup(child, error, pidPath, launchNonce)
     }
-    if (pidPath && launchNonce) {
-      if (!Number.isSafeInteger(child.pid) || (child.pid as number) <= 0) {
-        return rejectAfterChildCleanup(child, new Error('Daemon readiness identity is incomplete'))
-      }
-      try {
-        writeFileSync(
-          pidPath,
-          serializeDaemonPidFile({
-            pid: child.pid as number,
-            ...readyIdentity,
-            entryPath,
-            appVersion: opts.getAppVersion(),
-            launchNonce
-          }),
-          { mode: 0o600, flag: 'wx' }
-        )
-      } catch (error) {
-        return rejectAfterChildCleanup(child, error)
-      }
+    if (!Number.isSafeInteger(child.pid) || (child.pid as number) <= 0) {
+      return rejectAfterChildCleanup(
+        child,
+        new Error('Daemon readiness identity is incomplete'),
+        pidPath,
+        launchNonce
+      )
     }
 
     // Unref so the Electron process can exit without waiting for the daemon
@@ -79,7 +77,10 @@ export function createProductionLauncher(opts: ProductionLauncherOptions): Daemo
     child.disconnect()
 
     return {
-      shutdown: () => shutdownChild(child)
+      shutdown: async () => {
+        await shutdownChild(child)
+        unlinkLaunchedDaemonPidFile(child, pidPath, launchNonce)
+      }
     }
   }
 }
@@ -208,7 +209,12 @@ async function shutdownChild(child: ChildProcess): Promise<void> {
   }
 }
 
-async function rejectAfterChildCleanup(child: ChildProcess, launchError: unknown): Promise<never> {
+async function rejectAfterChildCleanup(
+  child: ChildProcess,
+  launchError: unknown,
+  pidPath?: string,
+  launchNonce?: string
+): Promise<never> {
   try {
     await shutdownChild(child)
   } catch (cleanupError) {
@@ -217,7 +223,18 @@ async function rejectAfterChildCleanup(child: ChildProcess, launchError: unknown
       'Daemon launch and child cleanup both failed'
     )
   }
+  unlinkLaunchedDaemonPidFile(child, pidPath, launchNonce)
   throw launchError
+}
+
+function unlinkLaunchedDaemonPidFile(
+  child: ChildProcess,
+  pidPath?: string,
+  launchNonce?: string
+): void {
+  if (pidPath && launchNonce && Number.isSafeInteger(child.pid) && (child.pid as number) > 0) {
+    unlinkOwnedDaemonPidFile(pidPath, child.pid as number, launchNonce)
+  }
 }
 
 function isNoSuchProcessError(error: unknown): boolean {

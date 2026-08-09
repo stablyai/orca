@@ -32,6 +32,7 @@ export type XtermBypassEvent = {
 
 export type XtermBypassOptions = {
   isMac: boolean
+  kittyKeyboardFlags?: number
   /** True when the terminal has a current text selection — Ctrl+C on
    *  Windows/Linux should only bubble to clipboard when something is selected,
    *  otherwise it must reach the shell as SIGINT. */
@@ -81,6 +82,33 @@ function isSingleNonAsciiPrintableText(key: string): boolean {
   }
   const codePoint = chars[0].codePointAt(0)
   return codePoint !== undefined && codePoint >= 0x80
+}
+
+/**
+ * Why: kept from #13128 when the rest of it was reverted. The native-text
+ * forwarder only claims keys for input sources in its hardcoded CJK allowlist,
+ * so third-party IMEs off that list (Qingg, issue #10896) never get their
+ * backslash-position key claimed and xterm sends the raw `\` instead of `、`.
+ * Bypassing keydown lets Chromium's text pipeline produce the layout character.
+ * Scoped to the bare backslash key: broadening this to all non-ASCII text would
+ * race the forwarder and double-send.
+ */
+export function shouldBypassXtermForMacNativeText(
+  event: XtermBypassEvent,
+  isMac: boolean,
+  kittyKeyboardActive = false
+): boolean {
+  if (
+    !isMac ||
+    !isXtermHandledKeyEvent(event.type) ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.altKey ||
+    event.shiftKey
+  ) {
+    return false
+  }
+  return !kittyKeyboardActive && event.code === 'Backslash'
 }
 
 function isXtermHandledKeyEvent(type: string): boolean {
@@ -221,6 +249,9 @@ export function shouldBypassXtermKeyboardEvent(
   }
 
   const { isMac, hasSelection } = options
+  if (shouldBypassXtermForMacNativeText(event, isMac, (options.kittyKeyboardFlags ?? 0) !== 0)) {
+    return true
+  }
   const platformModifierHeld = isMac
     ? event.metaKey && !event.ctrlKey
     : event.ctrlKey && !event.metaKey

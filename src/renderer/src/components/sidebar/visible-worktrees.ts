@@ -54,6 +54,18 @@ export function isSleepingSweepExemptWorkspace(
   return alwaysShowDefaultBranchWorkspace !== false && worktree.isMainWorktree
 }
 
+/**
+ * Whether turning the exemption off is currently narrowing the list. It only
+ * bites during the "Hide sleeping" sweep, so its row — and the filter badge on
+ * both menu surfaces — ignores it while sleeping workspaces are shown.
+ */
+export function isSleepingSweepExemptionNarrowingList(
+  showSleepingWorkspaces: boolean,
+  alwaysShowDefaultBranchWorkspace: boolean | undefined
+): boolean {
+  return !showSleepingWorkspaces && alwaysShowDefaultBranchWorkspace === false
+}
+
 export function isAutomationGeneratedWorkspace(worktree: Worktree): boolean {
   return worktree.automationProvenance?.kind === 'created-by-automation'
 }

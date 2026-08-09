@@ -2,7 +2,8 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionVerdict } from '../transport/connection-health'
-import type { HostProfile } from '../transport/types'
+import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
+import type { ConnectionState, HostCredentialStatus, HostProfile } from '../transport/types'
 import {
   markHomeWorktreeCatalogUnavailable,
   type HostWorktreeInfo
@@ -15,7 +16,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight', Monitor: 'Monitor' }))
+vi.mock('lucide-react-native', () => ({ Monitor: 'Monitor', MoreVertical: 'MoreVertical' }))
 vi.mock('./StatusDot', () => ({ StatusDot: 'StatusDot' }))
 
 const host: HostProfile = {
@@ -47,17 +48,27 @@ describe('MobileHostCard', () => {
     renderer = null
   })
 
-  async function renderCard(worktreeInfo: HostWorktreeInfo | undefined): Promise<string[]> {
+  async function renderCard(
+    worktreeInfo: HostWorktreeInfo | undefined,
+    overrides?: {
+      state?: ConnectionState
+      verdict?: ConnectionVerdict
+      path?: MobileConnectionPath
+      credentialStatus?: HostCredentialStatus
+    }
+  ): Promise<string[]> {
     await act(async () => {
       renderer = create(
         createElement(MobileHostCard, {
           host,
-          state: 'connected',
-          verdict,
-          path: 'lan',
+          state: overrides?.state ?? 'connected',
+          verdict: overrides?.verdict ?? verdict,
+          path: overrides?.path ?? 'lan',
+          credentialStatus: overrides?.credentialStatus,
           worktreeInfo,
           onPress: () => {},
-          onLongPress: () => {}
+          onLongPress: () => {},
+          onOpenActions: () => {}
         })
       )
     })
@@ -84,10 +95,75 @@ describe('MobileHostCard', () => {
     )
   })
 
+  it('names the relay while the dial is still in flight', async () => {
+    const lines = await renderCard(undefined, {
+      state: 'connecting',
+      verdict: { kind: 'normal', label: 'Connecting…' },
+      path: 'relay'
+    })
+
+    expect(lines).toContain('Connecting…')
+    expect(lines).toContain(' · Orca Relay')
+  })
+
+  it('names the relay while a failed direct dial is still retrying', async () => {
+    const lines = await renderCard(undefined, {
+      state: 'reconnecting',
+      verdict: { kind: 'normal', label: 'Reconnecting…' },
+      path: 'relay'
+    })
+
+    expect(lines).toContain(' · Orca Relay')
+  })
+
+  it('leaves an idle disconnected host unlabelled', async () => {
+    const lines = await renderCard(undefined, {
+      state: 'disconnected',
+      verdict: { kind: 'normal', label: 'Disconnected' },
+      path: 'relay'
+    })
+
+    expect(lines).not.toContain(' · Orca Relay')
+  })
+
+  it('does not guess a direct path before the dial resolves', async () => {
+    const lines = await renderCard(undefined, {
+      state: 'connecting',
+      verdict: { kind: 'normal', label: 'Connecting…' },
+      path: 'lan'
+    })
+
+    expect(lines).not.toContain(' · Direct · LAN')
+  })
+
   it('shows no worktree line before the first read lands', async () => {
     const lines = await renderCard(undefined)
 
     expect(lines).not.toContain('0 worktrees')
     expect(lines).not.toContain('Worktree list unavailable')
+  })
+
+  it('offers re-pairing when the credential is missing', async () => {
+    const lines = await renderCard(loaded, {
+      state: 'connected',
+      verdict: { kind: 'auth-failed', label: 'Pairing invalid' },
+      credentialStatus: 'missing'
+    })
+
+    expect(lines).toContain('Pairing invalid')
+    expect(lines).toContain('Tap to re-pair with your desktop')
+    expect(lines).not.toContain('12 worktrees · 2 active')
+  })
+
+  it('offers a retry without declaring a transient read failure invalid', async () => {
+    const lines = await renderCard(undefined, {
+      state: 'disconnected',
+      verdict: { kind: 'normal', label: 'Disconnected' },
+      credentialStatus: 'temporarily-unavailable'
+    })
+
+    expect(lines).toContain('Pairing temporarily unavailable')
+    expect(lines).toContain('Unlock your phone, then tap to retry')
+    expect(lines).not.toContain('Pairing invalid')
   })
 })

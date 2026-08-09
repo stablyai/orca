@@ -277,6 +277,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     showTitlebarAppName: true,
     showTasksButton: true,
     showAutomationsButton: true,
+    artifactsEnabled: true,
+    showArtifactsButton: false,
     showMobileButton: true,
     showPinnedWorktreesInGroups: false,
     ctrlTabOrderMode: 'mru',
@@ -344,6 +346,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalMacOptionAsAlt: 'auto',
     terminalMacOptionAsAltMigrated: false,
     terminalJISYenToBackslash: false,
+    terminalKoreanWonToBackquote: false,
     experimentalMobile: false,
     mobileEmulatorEnabled: true,
     mobileEmulatorDefaultDeviceUdid: null,
@@ -357,10 +360,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // Why: off keeps the cosmetic overlay unmounted for users who never opt in.
     experimentalPet: false,
     experimentalActivity: false,
-    experimentalAgentDashboardPopout: false,
-    // Why: in-window screen popover is the default surface; users opt into a separate pop-out window.
-    experimentalAgentDashboardMode: 'in-window',
-    experimentalAgentDashboardShowIdle: false,
     experimentalActivityDefaultedOffForAllUsers: true,
     experimentalTerminalAttention: false,
     experimentalAgentHibernation: false,

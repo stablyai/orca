@@ -5655,6 +5655,26 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
   })
 
+  it('rejects provider-side partial results when completeness is required', async () => {
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      items: [],
+      sources: {
+        issues: { owner: 'up', repo: 'r' },
+        prs: { owner: 'fork', repo: 'r' },
+        originCandidate: { owner: 'fork', repo: 'r' },
+        upstreamCandidate: { owner: 'up', repo: 'r' }
+      },
+      errors: { issues: { type: 'permission_denied', message: 'no access' } }
+    })
+
+    await expect(
+      store
+        .getState()
+        .fetchWorkItems('repo-id', '/repo', 24, '', { force: true, requireComplete: true })
+    ).rejects.toThrow('partial result')
+  })
+
   it('force-retry invalidates a still-failing in-flight request instead of deduping onto it', async () => {
     // Why: parent design doc §2 acceptance criterion 4 — the [Retry] button
     // must re-invoke the fetch with force=true and clear the banner on
@@ -6454,6 +6474,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         }
       })
       .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
 
     try {
       const repos = [{ repoId: 'github-repo', path: '/server/github-repo' }]
@@ -6466,7 +6487,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       expect(result.items).toEqual([{ ...item, repoId: 'github-repo' }])
       expect(result.failedCount).toBe(0)
       expect(result.githubUnavailable).toBe(true)
-      expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
+      expect(result.requestFailureCount).toBe(1)
+
+      const completeOnly = await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '', {
+        force: true,
+        requireComplete: true,
+        allowStaleFallback: false
+      })
+      expect(completeOnly.items).toEqual([])
+      expect(completeOnly.failedCount).toBe(1)
+      expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3)
     } finally {
       consoleWarn.mockRestore()
     }
@@ -6604,6 +6634,73 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     }
   })
 
+  it('reports skipped SSH repos when a complete first page is required', async () => {
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockRejectedValueOnce(
+      new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
+    )
+
+    const result = await store
+      .getState()
+      .fetchWorkItemsAcrossRepos([{ repoId: 'ssh-repo', path: '/server/ssh-repo' }], 24, 100, '', {
+        requireComplete: true
+      })
+
+    expect(result.failedCount).toBe(1)
+    expect(result.requestFailureCount).toBe(1)
+  })
+
+  it('reports skipped SSH repos when a complete later page is required', async () => {
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockRejectedValueOnce(
+      new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
+    )
+
+    const result = await store
+      .getState()
+      .fetchWorkItemsNextPage([{ repoId: 'ssh-repo', path: '/server/ssh-repo' }], 24, 100, '', 1, {
+        requireComplete: true
+      })
+
+    expect(result.failedCount).toBe(1)
+  })
+
+  it('rejects provider-side partial data from a complete later-page result', async () => {
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      items: [
+        {
+          id: 'issue:1',
+          type: 'issue',
+          number: 1,
+          title: 'Partial',
+          state: 'open',
+          url: 'https://github.com/o/r/issues/1',
+          labels: [],
+          updatedAt: '2026-05-22T00:00:00Z',
+          author: 'author'
+        }
+      ],
+      sources: {
+        issues: { owner: 'o', repo: 'r' },
+        prs: { owner: 'o', repo: 'r' },
+        originCandidate: { owner: 'o', repo: 'r' },
+        upstreamCandidate: null
+      },
+      errors: { issues: { type: 'permission_denied', message: 'no access' } }
+    })
+
+    const result = await store
+      .getState()
+      .fetchWorkItemsNextPage([{ repoId: 'repo-1', path: '/repo' }], 24, 100, '', 2, {
+        requireComplete: true
+      })
+
+    expect(result.items).toEqual([])
+    expect(result.failedCount).toBe(1)
+    expect(result.errorTypes).toEqual(['permission_denied'])
+  })
+
   it('routes work-item next-page fetches through the active runtime environment', async () => {
     const item = {
       type: 'pr',
@@ -6639,7 +6736,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         24,
         100,
         'is:open',
-        1
+        1,
+        { noCache: true }
       )
 
     expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
@@ -6650,7 +6748,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         repo: 'runtime-repo-id',
         limit: 24,
         query: 'is:open',
-        page: 1
+        page: 1,
+        noCache: true
       },
       timeoutMs: 30_000
     })

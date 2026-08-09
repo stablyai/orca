@@ -66,7 +66,8 @@ function registryFor(
             lastSeenAt: 0
           }
         : null,
-    updateLastSeen: vi.fn()
+    updateLastSeen: vi.fn(),
+    updateLastSeenDeferred: vi.fn()
   } as unknown as DeviceRegistry
 }
 

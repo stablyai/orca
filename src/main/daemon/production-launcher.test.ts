@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createProductionLauncher } from './production-launcher'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { DaemonClient } from './client'
@@ -148,18 +148,18 @@ describe('createProductionLauncher', () => {
     expect(handlers.exit).toHaveLength(0)
     expect(child.disconnect).toHaveBeenCalled()
     expect(child.unref).toHaveBeenCalled()
-    expect(JSON.parse(readFileSync(pidPath, 'utf8'))).toEqual({
-      pid: 12345,
-      startedAtMs: 123_456,
-      linuxStartTicks: '4242',
-      bootId: 'boot-a',
-      entryPath: join(dir, 'daemon-entry.js'),
-      appVersion: '1.2.3',
-      launchNonce: 'launch-a'
-    })
     expect(forkMock).toHaveBeenCalledWith(
       join(dir, 'daemon-entry.js'),
-      expect.arrayContaining(['--pid-record', pidPath, '--launch-nonce', 'launch-a']),
+      expect.arrayContaining([
+        '--pid-record',
+        pidPath,
+        '--launch-nonce',
+        'launch-a',
+        '--entry-path',
+        join(dir, 'daemon-entry.js'),
+        '--app-version',
+        '1.2.3'
+      ]),
       expect.objectContaining({ stdio: ['ignore', 'ignore', 'ignore', 'ipc'] })
     )
   })
@@ -208,7 +208,9 @@ describe('createProductionLauncher', () => {
       getDaemonEntryPath: () => join(dir, 'daemon-entry.js'),
       getAppVersion: () => '1.2.3'
     })
-    const launch = launcher(socketPathFor(dir), tokenPathFor(dir))
+    const pidPath = join(dir, 'daemon.pid')
+    writeFileSync(pidPath, JSON.stringify({ pid: 12345, launchNonce: 'launch-shutdown' }))
+    const launch = launcher(socketPathFor(dir), tokenPathFor(dir), pidPath, 'launch-shutdown')
     handlers.message[0]?.({ type: 'ready', startedAtMs: 123_456 })
     const handle = await launch
 
@@ -216,6 +218,7 @@ describe('createProductionLauncher', () => {
 
     expect(child.kill).toHaveBeenCalledWith('SIGTERM')
     expect(child.exitCode).toBe(0)
+    expect(existsSync(pidPath)).toBe(false)
   })
 
   it('rejects shutdown and releases child handles when SIGKILL never produces exit', async () => {
@@ -337,7 +340,7 @@ describe('createProductionLauncher', () => {
     }
   })
 
-  it('preserves PID publication and cleanup failures', async () => {
+  it('preserves exact PID ownership when child exit cannot be confirmed', async () => {
     const handlers: Record<string, ((arg?: unknown) => void)[]> = {
       message: [],
       error: [],
@@ -370,24 +373,65 @@ describe('createProductionLauncher', () => {
       unref: vi.fn()
     }
     forkMock.mockReturnValueOnce(child)
-    const pidPath = join(dir, 'occupied.pid')
-    writeFileSync(pidPath, 'occupied')
+    const launcher = createProductionLauncher({
+      getDaemonEntryPath: () => join(dir, 'daemon-entry.js'),
+      getAppVersion: () => '1.2.3'
+    })
+    const pidPath = join(dir, 'daemon.pid')
+    writeFileSync(pidPath, JSON.stringify({ pid: 12345, launchNonce: 'launch-b' }))
+
+    const launch = launcher(socketPathFor(dir), tokenPathFor(dir), pidPath, 'launch-b')
+    handlers.message[0]?.({ type: 'ready' })
+
+    const error = await launch.catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(AggregateError)
+    expect((error as AggregateError).errors).toEqual([
+      expect.objectContaining({ message: 'Daemon readiness identity is incomplete' }),
+      signalError
+    ])
+    expect(child.disconnect).toHaveBeenCalledOnce()
+    expect(child.unref).toHaveBeenCalledOnce()
+    expect(existsSync(pidPath)).toBe(true)
+  })
+
+  it('removes exact child-side PID ownership after a pre-ready exit', async () => {
+    const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+      message: [],
+      error: [],
+      exit: []
+    }
+    const child = {
+      pid: 12345,
+      connected: true,
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      on: vi.fn((event: string, cb: (arg?: unknown) => void) => {
+        handlers[event]?.push(cb)
+        return child
+      }),
+      off: vi.fn((event: string, cb: (arg?: unknown) => void) => {
+        handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+        return child
+      }),
+      disconnect: vi.fn(() => {
+        child.connected = false
+      }),
+      unref: vi.fn()
+    }
+    forkMock.mockReturnValueOnce(child)
+    const pidPath = join(dir, 'daemon.pid')
+    writeFileSync(pidPath, JSON.stringify({ pid: 12345, launchNonce: 'launch-c' }))
     const launcher = createProductionLauncher({
       getDaemonEntryPath: () => join(dir, 'daemon-entry.js'),
       getAppVersion: () => '1.2.3'
     })
 
-    const launch = launcher(socketPathFor(dir), tokenPathFor(dir), pidPath, 'launch-b')
-    handlers.message[0]?.({ type: 'ready', startedAtMs: 123_456 })
+    const launch = launcher(socketPathFor(dir), tokenPathFor(dir), pidPath, 'launch-c')
+    child.exitCode = 1
+    handlers.exit[0]?.(1)
 
-    const error = await launch.catch((caught: unknown) => caught)
-    expect(error).toBeInstanceOf(AggregateError)
-    expect((error as AggregateError).errors).toEqual([
-      expect.objectContaining({ code: 'EEXIST' }),
-      signalError
-    ])
-    expect(child.disconnect).toHaveBeenCalledOnce()
-    expect(child.unref).toHaveBeenCalledOnce()
+    await expect(launch).rejects.toThrow('Daemon process exited prematurely with code 1')
+    expect(existsSync(pidPath)).toBe(false)
   })
 })
 

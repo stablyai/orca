@@ -115,6 +115,136 @@ describe('GitHub project repo matching', () => {
     ).toBe(repos[1])
   })
 
+  it('matches an upstream project row against a fork clone', () => {
+    const fork = {
+      id: 'repo-1',
+      path: '/Users/me/r2r-mirror',
+      displayName: 'r2r-mirror',
+      upstream: { owner: 'SciPhi-AI', repo: 'R2R' }
+    }
+
+    expect(
+      findRepoForGitHubProjectRepository('SciPhi-AI/R2R', [fork], {
+        'repo-1': {
+          path: '/Users/me/r2r-mirror',
+          repository: { owner: 'me', repo: 'r2r-mirror' }
+        }
+      })
+    ).toBe(fork)
+  })
+
+  it('prefers the clone that owns the slug over a fork of it', () => {
+    const upstreamClone = { id: 'repo-1', path: '/Users/me/r2r', displayName: 'r2r' }
+    const fork = {
+      id: 'repo-2',
+      path: '/Users/me/r2r-mirror',
+      displayName: 'r2r-mirror',
+      upstream: { owner: 'SciPhi-AI', repo: 'R2R' }
+    }
+
+    expect(
+      findRepoForGitHubProjectRepository('SciPhi-AI/R2R', [upstreamClone, fork], {
+        'repo-1': {
+          path: '/Users/me/r2r',
+          repository: { owner: 'SciPhi-AI', repo: 'R2R' }
+        },
+        'repo-2': {
+          path: '/Users/me/r2r-mirror',
+          repository: { owner: 'me', repo: 'r2r-mirror' }
+        }
+      })
+    ).toBe(upstreamClone)
+  })
+
+  it('does not pick a repo when two forks share the same upstream', () => {
+    const forks = [
+      {
+        id: 'repo-1',
+        path: '/Users/me/a',
+        displayName: 'a',
+        upstream: { owner: 'SciPhi-AI', repo: 'R2R' }
+      },
+      {
+        id: 'repo-2',
+        path: '/Users/me/b',
+        displayName: 'b',
+        upstream: { owner: 'SciPhi-AI', repo: 'R2R' }
+      }
+    ]
+
+    expect(
+      findRepoForGitHubProjectRepository('SciPhi-AI/R2R', forks, {
+        'repo-1': { path: '/Users/me/a', repository: { owner: 'me', repo: 'a' } },
+        'repo-2': { path: '/Users/me/b', repository: { owner: 'me', repo: 'b' } }
+      })
+    ).toBeNull()
+  })
+
+  it('does not bind a github.com fork parent to a same-named Enterprise row', () => {
+    const fork = {
+      id: 'repo-1',
+      path: '/Users/me/r2r-mirror',
+      displayName: 'r2r-mirror',
+      upstream: { owner: 'SciPhi-AI', repo: 'R2R' }
+    }
+
+    expect(
+      findRepoForGitHubProjectRepository(
+        'SciPhi-AI/R2R',
+        [fork],
+        {
+          'repo-1': {
+            path: '/Users/me/r2r-mirror',
+            repository: { owner: 'me', repo: 'r2r-mirror', host: 'github.com' }
+          }
+        },
+        'github.acme-corp.com'
+      )
+    ).toBeNull()
+  })
+
+  it('drops the fork alias while its own origin is unresolved', () => {
+    const fork = {
+      id: 'repo-1',
+      path: '/Users/me/widgets-mirror',
+      displayName: 'widgets-mirror',
+      upstream: { owner: 'acme', repo: 'widgets' }
+    }
+
+    for (const slugs of [
+      {},
+      { 'repo-1': { path: '/Users/me/widgets-mirror', repository: null } },
+      { 'repo-1': { path: '/moved', repository: { owner: 'me', repo: 'widgets' } } }
+    ]) {
+      expect(findRepoForGitHubProjectRepository('acme/widgets', [fork], slugs)).toBeNull()
+    }
+  })
+
+  it('scopes a host-less fork parent to the host the fork itself was cloned from', () => {
+    const enterpriseFork = {
+      id: 'repo-1',
+      path: '/Users/me/widgets-mirror',
+      displayName: 'widgets-mirror',
+      upstream: { owner: 'acme', repo: 'widgets' }
+    }
+    const slugs = {
+      'repo-1': {
+        path: '/Users/me/widgets-mirror',
+        repository: { owner: 'me', repo: 'widgets', host: 'github.acme-corp.com' }
+      }
+    }
+
+    expect(
+      findRepoForGitHubProjectRepository(
+        'acme/widgets',
+        [enterpriseFork],
+        slugs,
+        'github.acme-corp.com'
+      )
+    ).toBe(enterpriseFork)
+    expect(findRepoForGitHubProjectRepository('acme/widgets', [enterpriseFork], slugs)).toBeNull()
+  })
+
   it('does not use hostless path heuristics for Enterprise Project rows', () => {
     expect(
       findRepoForGitHubProjectRepository(

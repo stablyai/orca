@@ -16,13 +16,24 @@ import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   getOrcaProfileBrowserDefaultPartition,
-  getOrcaProfileBrowserPartitionSegment,
   getOrcaProfileBrowserSessionPartition
 } from '../../shared/orca-profiles'
-import type { BrowserSessionProfile, BrowserSessionProfileScope } from '../../shared/types'
+import type {
+  BrowserSessionProfile,
+  BrowserSessionProfileCreateOptions,
+  BrowserSessionProfileScope
+} from '../../shared/types'
 import { browserManager } from './browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
-import { cleanElectronUserAgent, setupClientHintsOverride } from './browser-session-ua'
+import {
+  cleanElectronUserAgent,
+  isUnadvertisableChromeUserAgent,
+  setupClientHintsOverride
+} from './browser-session-ua'
+import {
+  clearBrowserSessionUserAgentMode,
+  setBrowserSessionUserAgentMode
+} from './browser-session-user-agent-mode'
 import { resolveChromiumCookiesPath } from './chromium-cookie-path'
 import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
 import {
@@ -46,8 +57,8 @@ export type BrowserSessionRegistryProfileOptions = {
 }
 
 const BROWSER_SESSION_META_FILE_NAME = 'browser-session-meta.json'
-const LEGACY_BROWSER_SESSION_PARTITION_RE =
-  /^persist:orca-browser-session-[\da-f-]{8}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{12}$/
+const BROWSER_SESSION_PROFILE_ID_RE =
+  /^[\da-f-]{8}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{12}$/
 
 // Why: source of truth for valid partitions; will-attach-webview consults it so a compromised renderer can't smuggle in an arbitrary partition.
 
@@ -181,19 +192,30 @@ class BrowserSessionRegistry {
     }
 
     // Why: nothing else installs policies on the default partition (hydrate skips it), so without this its guest permissions would be denied.
-    this.setupSessionPolicies(this.defaultPartition)
+    this.setupSessionPolicies(this.getDefaultProfile())
 
-    const partitions = new Set([
-      this.defaultPartition,
-      ...this.listProfiles().map((p) => p.partition)
-    ])
-    for (const partition of partitions) {
+    for (const profile of this.listProfiles()) {
+      const partition = profile.partition
       try {
         const sess = session.fromPartition(partition)
+        const userAgentMode = profile.userAgentMode ?? 'clean'
+        setBrowserSessionUserAgentMode(sess, userAgentMode)
         const persistedUa = meta.userAgentByPartition[partition]
         if (persistedUa) {
-          sess.setUserAgent(persistedUa)
-          setupClientHintsOverride(sess, persistedUa)
+          // Why: imports before the engine-version gate stored a fork's product version (Chrome/1.x);
+          // it is reapplied every launch, so drop it here or the profile stays blocked forever.
+          if (isUnadvertisableChromeUserAgent(persistedUa)) {
+            this.persistUserAgent(partition, null)
+          } else {
+            sess.setUserAgent(persistedUa)
+            setupClientHintsOverride(sess, persistedUa, {
+              googleAuthOverride: userAgentMode !== 'native'
+            })
+            continue
+          }
+        }
+
+        if (profile.userAgentMode === 'native') {
           continue
         }
 
@@ -360,9 +382,18 @@ class BrowserSessionRegistry {
     return this.profiles.get(profileId)?.partition ?? null
   }
 
-  createProfile(scope: BrowserSessionProfileScope, label: string): BrowserSessionProfile | null {
-    // Why: block scope:'default' here — only the constructor makes the default profile; a second one sharing the partition breaks delete.
-    if (scope === 'default') {
+  createProfile(
+    scope: BrowserSessionProfileScope,
+    label: string,
+    options: BrowserSessionProfileCreateOptions = {}
+  ): BrowserSessionProfile | null {
+    // Why: the registry is also an IPC boundary, so runtime types alone cannot keep invalid values out of persisted metadata.
+    if (
+      (scope !== 'isolated' && scope !== 'imported') ||
+      (options.userAgentMode !== undefined &&
+        options.userAgentMode !== 'clean' &&
+        options.userAgentMode !== 'native')
+    ) {
       return null
     }
     const id = randomUUID()
@@ -373,10 +404,11 @@ class BrowserSessionRegistry {
       scope,
       partition,
       label,
-      source: null
+      source: null,
+      ...(options.userAgentMode ? { userAgentMode: options.userAgentMode } : {})
     }
     this.profiles.set(id, profile)
-    this.setupSessionPolicies(partition)
+    this.setupSessionPolicies(profile)
     this.persistProfiles()
     return profile
   }
@@ -421,6 +453,7 @@ class BrowserSessionRegistry {
     // Why: clear the partition's storage so deleting a profile doesn't leave orphaned cookies/cache behind.
     try {
       const sess = session.fromPartition(profile.partition)
+      clearBrowserSessionUserAgentMode(sess)
       this.clearSessionPolicies(profile.partition, sess)
       await sess.clearStorageData()
       await sess.clearCache()
@@ -471,25 +504,18 @@ class BrowserSessionRegistry {
       typeof candidate.id === 'string' &&
       typeof candidate.partition === 'string' &&
       typeof candidate.label === 'string' &&
-      this.isProfileOwnedSessionPartition(candidate.partition)
+      (candidate.userAgentMode === undefined ||
+        candidate.userAgentMode === 'clean' ||
+        candidate.userAgentMode === 'native') &&
+      this.isProfileOwnedSessionPartition(candidate.id, candidate.partition)
     )
   }
 
-  private isProfileOwnedSessionPartition(partition: string): boolean {
-    if (
-      this.activeOrcaProfileId === DEFAULT_LOCAL_ORCA_PROFILE_ID &&
-      LEGACY_BROWSER_SESSION_PARTITION_RE.test(partition)
-    ) {
-      return true
-    }
-
-    const segment = getOrcaProfileBrowserPartitionSegment(this.activeOrcaProfileId)
-    const prefix = `persist:orca-profile-${segment}-browser-session-`
-    if (!partition.startsWith(prefix)) {
-      return false
-    }
-    const profileId = partition.slice(prefix.length)
-    return /^[\da-f-]{8}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{12}$/.test(profileId)
+  private isProfileOwnedSessionPartition(profileId: string, partition: string): boolean {
+    return (
+      BROWSER_SESSION_PROFILE_ID_RE.test(profileId) &&
+      partition === getOrcaProfileBrowserSessionPartition(this.activeOrcaProfileId, profileId)
+    )
   }
 
   hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {
@@ -499,7 +525,7 @@ class BrowserSessionRegistry {
       }
       this.profiles.set(profile.id, profile)
       if (profile.partition !== this.defaultPartition) {
-        this.setupSessionPolicies(profile.partition)
+        this.setupSessionPolicies(profile)
       }
     }
   }
@@ -514,14 +540,16 @@ class BrowserSessionRegistry {
     browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
   }
 
-  private setupSessionPolicies(partition: string): void {
+  private setupSessionPolicies(profile: BrowserSessionProfile): void {
+    const { partition } = profile
+    const sess = session.fromPartition(partition)
+    setBrowserSessionUserAgentMode(sess, profile.userAgentMode ?? 'clean')
     if (this.configuredPartitions.has(partition)) {
       return
     }
 
-    const sess = session.fromPartition(partition)
     browserManager.installCertificateRequestGuard(sess)
-    if (typeof sess.getUserAgent === 'function') {
+    if (profile.userAgentMode !== 'native' && typeof sess.getUserAgent === 'function') {
       const cleanUA = cleanElectronUserAgent(sess.getUserAgent())
       sess.setUserAgent(cleanUA)
       setupClientHintsOverride(sess, cleanUA)

@@ -9,6 +9,7 @@ import {
   clearRuntimeCompatibilityCacheForTests
 } from '../../runtime/runtime-rpc-client'
 import {
+  clearRuntimeEnvironmentConnectionGenerationsForTests,
   createRuntimeStatusSlice,
   type RuntimeStatusSlice,
   getRuntimeEnvironmentConnectionGeneration
@@ -74,6 +75,7 @@ function stubRuntimeEnvironmentApi({
 }
 
 beforeEach(() => {
+  clearRuntimeEnvironmentConnectionGenerationsForTests()
   vi.mocked(toast.warning).mockReset()
   vi.mocked(toast.dismiss).mockReset()
 })
@@ -377,6 +379,26 @@ describe('runtime-status slice', () => {
       checkedAt: 4
     })
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(2)
+  })
+
+  it('keeps stored and canonical generations aligned after same-id re-pairing', () => {
+    const store = createSliceStore()
+    store.getState().setRuntimeEnvironments([makeEnvironment({ pairingRevision: 1 })])
+    store.getState().setRuntimeEnvironmentStatus('env-a', {
+      status: makeStatus({ runtimeId: 'runtime-a' }),
+      checkedAt: 1
+    })
+
+    store.getState().setRuntimeEnvironments([makeEnvironment({ pairingRevision: 2 })])
+    store.getState().setRuntimeEnvironmentStatus('env-a', {
+      status: makeStatus({ runtimeId: 'runtime-b' }),
+      checkedAt: 2
+    })
+
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
+      getRuntimeEnvironmentConnectionGeneration('env-a')
+    )
+    expect(getRuntimeEnvironmentConnectionGeneration('env-a')).toBe(3)
   })
 
   it('invalidates provider state only when the active runtime session changes', () => {
