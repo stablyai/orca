@@ -12,7 +12,11 @@ import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
-import { toHostReadableTranscriptPath, wslCodexSessionsDirs } from './host-readable-transcript-path'
+import {
+  needsWslHostTranslation,
+  toHostReadableTranscriptPath,
+  wslCodexSessionsDirs
+} from './host-readable-transcript-path'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
 // run in the main process against the runtime's own home directory; over SSH
@@ -98,7 +102,12 @@ export async function resolveHostOwnedTranscriptPath(
   transcriptPath: string,
   options: ResolveSessionFileOptions
 ): Promise<string | null> {
-  if (!isAbsolute(transcriptPath) || hasParentPathSegment(transcriptPath)) {
+  // Windows' path module can reject a guest POSIX path before the WSL
+  // translator gets a chance to convert it to its host UNC path.
+  if (
+    (!isAbsolute(transcriptPath) && !needsWslHostTranslation(transcriptPath)) ||
+    hasParentPathSegment(transcriptPath)
+  ) {
     return null
   }
   const hostReadablePath = await toHostReadableTranscriptPath(transcriptPath)

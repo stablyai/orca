@@ -62,7 +62,7 @@ afterEach(() => {
 })
 
 describe('resolveSessionFilePath on a Windows host with WSL', () => {
-  it('translates a WSL hook transcript path to its host-readable UNC twin (#10326)', async () => {
+  it('accepts a WSL POSIX hook path before converting it to the host-readable UNC twin (#10326)', async () => {
     const resolved = await resolveSessionFilePath('codex', 'wsl-sess', {
       transcriptPath: ROLLOUT_LINUX,
       codexSessionsDirs: []
