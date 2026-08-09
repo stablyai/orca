@@ -21,6 +21,10 @@ export type MobileNativeChatController = {
   chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   nativeChatAgentWorking: boolean
+  /** Whether transport state can still refresh the displayed agent status. */
+  nativeChatAgentStatusLive: boolean
+  /** Exact write gate used by the Stop handler. */
+  nativeChatStopTargetWritable: boolean
   nativeChatStreamingText?: string
   /** Agent mid-turn, regardless of whether chat is the visible view. */
   nativeChatStreamLive: boolean

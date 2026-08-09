@@ -262,6 +262,8 @@ export function useMobileNativeChatController(args: {
     chatImagePreviewsByMessageId,
     nativeChatSession,
     nativeChatAgentWorking,
+    nativeChatAgentStatusLive: connState === 'connected',
+    nativeChatStopTargetWritable: inputSendable,
     nativeChatStreamingText,
     nativeChatStreamLive,
     nativeChatStreamScopeKey: streamScopeKey,

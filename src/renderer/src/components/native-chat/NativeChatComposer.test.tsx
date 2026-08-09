@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   fieldProps: null as {
     onSend?: () => void
     onStop?: () => void
+    sendButtonDisabled?: boolean
     onCompositionStart?: () => void
     onCompositionEnd?: (event: { currentTarget: HTMLTextAreaElement }) => void
     sessionOptionsSurface?: SessionOptionsSurface | null
@@ -214,6 +215,21 @@ describe('NativeChatComposer', () => {
     expect(mocks.cancelPendingSends.mock.invocationCallOrder[0]).toBeLessThan(
       onStop.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
     )
+  })
+
+  it('disables Stop when the working session has no writable PTY target', () => {
+    const props = {
+      terminalTabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1',
+      agent: 'codex' as const,
+      isWorking: true,
+      onStop: vi.fn()
+    }
+    const view = render(<NativeChatComposer {...props} targetPtyId="pty-1" />)
+    expect(mocks.fieldProps?.sendButtonDisabled).toBe(false)
+
+    view.rerender(<NativeChatComposer {...props} targetPtyId={null} />)
+    expect(mocks.fieldProps?.sendButtonDisabled).toBe(true)
   })
 
   it('associates a delayed submit with its optimistic cache entry', () => {

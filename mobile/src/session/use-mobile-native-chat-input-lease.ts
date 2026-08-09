@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { MobileNativeChatInputLockReason } from './MobileNativeChatView'
+import type { MobileNativeChatInputLockReason } from './use-mobile-native-chat-control-state'
 
 export function useMobileNativeChatInputLease(args: {
   activeHandle: string | null

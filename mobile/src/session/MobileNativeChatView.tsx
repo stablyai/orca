@@ -31,13 +31,11 @@ import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
+import {
+  useMobileNativeChatControlState,
+  type MobileNativeChatInputLockReason
+} from './use-mobile-native-chat-control-state'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
-
-const INPUT_LOCK_SETTLE_MS = 600
-
-/** Why the composer input is locked: the transport is disconnected, or the
- *  terminal subscription has not acknowledged its input lease yet. */
-export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 
 type Props = {
   /** Raw transcript, only for telling "still loading" from "loaded and empty". */
@@ -49,6 +47,10 @@ type Props = {
   /** Resolved agent for this chat; names the empty-state copy (desktop parity). */
   agent?: string | null
   agentWorking?: boolean
+  /** Canonical transport liveness for status sourced before the latest disconnect. */
+  agentStatusLive: boolean
+  /** Canonical controller write gate for Stop. */
+  stopTargetWritable: boolean
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
   onStop?: () => void
   /** Live partial assistant text to show as an in-progress bubble, already gated
@@ -121,6 +123,8 @@ export function MobileNativeChatView({
   error,
   agent,
   agentWorking,
+  agentStatusLive,
+  stopTargetWritable,
   onStop,
   streaming,
   hasMore,
@@ -262,18 +266,12 @@ export function MobileNativeChatView({
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
 
-  // A dead PTY emits subscribed→end; settle both edges so its false lease cannot flash the composer enabled.
-  const rawLockReason = inputLockReason ?? null
-  const rawLockHeld = rawLockReason !== null
-  const [lockHeld, setLockHeld] = useState(false)
-  useEffect(() => {
-    if (rawLockHeld === lockHeld) {
-      return
-    }
-    const timer = setTimeout(() => setLockHeld(rawLockHeld), INPUT_LOCK_SETTLE_MS)
-    return () => clearTimeout(timer)
-  }, [lockHeld, rawLockHeld])
-  const lockReason = lockHeld ? (rawLockReason ?? 'waiting') : null
+  const { lockReason, statusStale, canStopAgent } = useMobileNativeChatControlState({
+    inputLockReason: inputLockReason ?? null,
+    agentStatusLive,
+    stopTargetWritable,
+    stopCommandAvailable: onStop !== undefined
+  })
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>
@@ -393,7 +391,7 @@ export function MobileNativeChatView({
           tool-calls expand/collapse toggle on the left, Stop in the far corner. */}
       <View style={styles.chromeRow}>
         <View style={styles.chromeLeft}>
-          {agentWorking ? <MobileAgentWorkingIndicator /> : null}
+          {agentWorking ? <MobileAgentWorkingIndicator stale={statusStale} /> : null}
           <Pressable
             style={({ pressed }) => [styles.chromeToggle, pressed && styles.pressed]}
             onPress={() => setToolsExpanded((v) => !v)}
@@ -409,8 +407,13 @@ export function MobileNativeChatView({
         </View>
         {agentWorking ? (
           <Pressable
-            style={({ pressed }) => [styles.stopButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.stopButton,
+              pressed && styles.pressed,
+              !canStopAgent && styles.stopDisabled
+            ]}
             onPress={onStop}
+            disabled={!canStopAgent}
             hitSlop={8}
             accessibilityLabel="Stop the agent"
           >

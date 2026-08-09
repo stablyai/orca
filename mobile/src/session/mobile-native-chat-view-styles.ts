@@ -24,6 +24,9 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs
   },
+  stopDisabled: {
+    opacity: 0.4
+  },
   stopLabel: {
     color: colors.statusRed,
     fontSize: typography.metaSize,

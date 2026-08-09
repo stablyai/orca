@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
+import { MobileNativeChatView } from './MobileNativeChatView'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import type { MobileNativeChatInputLockReason } from './use-mobile-native-chat-control-state'
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
@@ -65,6 +66,8 @@ export function MobileNativeChatOverlay({
         error={session.error}
         agent={controller.nativeChatAgent}
         agentWorking={controller.nativeChatAgentWorking}
+        agentStatusLive={controller.nativeChatAgentStatusLive}
+        stopTargetWritable={controller.nativeChatStopTargetWritable}
         streaming={streaming}
         onStop={controller.handleNativeChatStop}
         ask={controller.nativeChatAsk}

@@ -35,6 +35,9 @@ type Tick = {
   streamingText?: string
   streamLive?: boolean
   identity?: string
+  agentStatusLive?: boolean
+  stopTargetWritable?: boolean
+  inputLockReason?: 'disconnected' | 'waiting' | null
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
@@ -43,6 +46,8 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     nativeChatSession: { messages: tick.messages ?? [], status: 'ready' },
     nativeChatAgent: 'claude',
     nativeChatAgentWorking: tick.streamLive ?? false,
+    nativeChatAgentStatusLive: tick.agentStatusLive ?? true,
+    nativeChatStopTargetWritable: tick.stopTargetWritable ?? true,
     nativeChatStreamingText: tick.streamingText,
     nativeChatStreamLive: tick.streamLive ?? false,
     nativeChatStreamScopeKey: tick.identity ?? 'tab-a',
@@ -59,7 +64,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     dictationMode: 'toggle',
     onMicPressIn: vi.fn(),
     onMicPressOut: vi.fn(),
-    inputLockReason: null,
+    inputLockReason: tick.inputLockReason ?? null,
     sendErrorMessage: null,
     onClearSendError: vi.fn(),
     keyboardInset: 0
@@ -94,6 +99,25 @@ describe('MobileNativeChatOverlay streaming gate', () => {
       renderer?.update(overlayElement(tick))
     })
   }
+
+  function chatViewProps(): Record<string, unknown> {
+    return renderer!.root.find((node) => node.type === 'ChatView').props
+  }
+
+  it('routes canonical liveness independently of the composer lock', async () => {
+    await render({
+      streamLive: true,
+      agentStatusLive: false,
+      stopTargetWritable: false,
+      inputLockReason: null
+    })
+
+    expect(chatViewProps()).toMatchObject({
+      agentStatusLive: false,
+      stopTargetWritable: false,
+      inputLockReason: null
+    })
+  })
 
   /** The bubble text handed to the chat list, or `'hidden'` when chat is off. */
   function streaming(): string | null | 'hidden' {

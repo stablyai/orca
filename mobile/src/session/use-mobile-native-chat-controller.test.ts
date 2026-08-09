@@ -108,7 +108,13 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   // itself is mocked above).
   const clientStub = { sendRequest: vi.fn() }
 
-  function Harness({ connState = 'connected' }: { connState?: ConnectionState }): null {
+  function Harness({
+    connState = 'connected',
+    leaseReady = true
+  }: {
+    connState?: ConnectionState
+    leaseReady?: boolean
+  }): null {
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState,
@@ -119,7 +125,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
-      nativeChatInputLeaseReady: true,
+      nativeChatInputLeaseReady: leaseReady,
       onSendError,
       onSendResolved
     })
@@ -301,6 +307,19 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(clientStub.sendRequest).not.toHaveBeenCalled()
     expect(sendWithOutcome).not.toHaveBeenCalled()
     expect(onSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
+  })
+
+  it('publishes transport liveness and the exact Stop write gate', () => {
+    expect(controller?.nativeChatAgentStatusLive).toBe(true)
+    expect(controller?.nativeChatStopTargetWritable).toBe(true)
+
+    act(() => renderer?.update(createElement(Harness, { leaseReady: false })))
+    expect(controller?.nativeChatAgentStatusLive).toBe(true)
+    expect(controller?.nativeChatStopTargetWritable).toBe(false)
+
+    act(() => renderer?.update(createElement(Harness, { connState: 'reconnecting' })))
+    expect(controller?.nativeChatAgentStatusLive).toBe(false)
+    expect(controller?.nativeChatStopTargetWritable).toBe(false)
   })
 
   it('reports a rejected send and posts no echo', async () => {

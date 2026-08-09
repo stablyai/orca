@@ -10,6 +10,7 @@ import {
 import type { NativeChatSendHandle } from './native-chat-runtime-send'
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
+import { canStopNativeChatAgent } from '../../../../shared/native-chat-action-availability'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
   applyMentionSuggestion,
@@ -174,8 +175,12 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         setDraft,
         setNotice
       })
+    const canStopAgent = canStopNativeChatAgent({
+      targetWritable: hasPty,
+      stopCommandAvailable: onStop !== undefined
+    })
     const sendButtonDisabled = isWorking
-      ? !hasPty || !onStop
+      ? !canStopAgent
       : disabled || (draft.trim() === '' && imageAttachments.length === 0)
 
     const { insertTypedText, focus } = useNativeChatTypedInsertion({
