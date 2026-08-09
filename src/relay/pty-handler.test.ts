@@ -1142,6 +1142,86 @@ describe('PtyHandler', () => {
     ).rejects.toThrow('PTY "pty-1" not found')
   })
 
+  it('adopts the attaching client viewport so a reattached pane leaves host dimensions', async () => {
+    await spawnPty({ cols: 200, rows: 50 })
+    mockPtyInstance.resize.mockClear()
+
+    await attachPty({ id: 'pty-1', cols: 105, rows: 30, suppressReplayNotification: true })
+
+    expect(mockPtyInstance.resize).toHaveBeenCalledWith(105, 30)
+  })
+
+  it('leaves the PTY grid untouched when attach carries no viewport', async () => {
+    await spawnPty({ cols: 200, rows: 50 })
+    mockPtyInstance.resize.mockClear()
+
+    await attachPty({ id: 'pty-1', suppressReplayNotification: true })
+
+    expect(mockPtyInstance.resize).not.toHaveBeenCalled()
+  })
+
+  it('ignores a malformed attach viewport instead of forcing the default grid', async () => {
+    await spawnPty({ cols: 200, rows: 50 })
+    mockPtyInstance.resize.mockClear()
+
+    await attachPty({ id: 'pty-1', cols: 'wide', rows: 0, suppressReplayNotification: true })
+
+    expect(mockPtyInstance.resize).not.toHaveBeenCalled()
+  })
+
+  it('ignores coercible non-numeric attach viewports instead of shrinking the PTY', async () => {
+    await spawnPty({ cols: 200, rows: 50 })
+
+    for (const viewport of [
+      { cols: true, rows: true },
+      { cols: '105', rows: '30' },
+      { cols: [105], rows: [30] }
+    ]) {
+      mockPtyInstance.resize.mockClear()
+      await attachPty({ id: 'pty-1', ...viewport, suppressReplayNotification: true })
+      expect(mockPtyInstance.resize).not.toHaveBeenCalled()
+    }
+  })
+
+  it('does not resize when attach is rejected for an identity mismatch', async () => {
+    await spawnPty({ cols: 200, rows: 50, env: { ORCA_PANE_KEY: 'tab-a:0' } })
+    mockPtyInstance.resize.mockClear()
+
+    await expect(
+      attachPty({
+        id: 'pty-1',
+        cols: 105,
+        rows: 30,
+        expectedPaneKey: 'tab-b:0',
+        suppressReplayNotification: true
+      })
+    ).rejects.toThrow('identity mismatch')
+
+    expect(mockPtyInstance.resize).not.toHaveBeenCalled()
+  })
+
+  // Why: node-pty caches cols/rows, so a child that ran `stty` leaves the cache
+  // agreeing with the viewport while the kernel PTY has drifted. Reasserting
+  // unconditionally is what makes reattach authoritative.
+  it('reasserts the attach viewport even when node-pty reports matching dimensions', async () => {
+    const resize = vi.fn()
+    mockPtySpawn.mockReturnValue({ ...mockPtyInstance, cols: 105, rows: 30, resize })
+    await spawnPty({ cols: 105, rows: 30 })
+
+    await attachPty({ id: 'pty-1', cols: 105, rows: 30, suppressReplayNotification: true })
+
+    expect(resize).toHaveBeenCalledWith(105, 30)
+  })
+
+  it('clamps an out-of-range attach viewport to the resize bounds', async () => {
+    await spawnPty({ cols: 200, rows: 50 })
+    mockPtyInstance.resize.mockClear()
+
+    await attachPty({ id: 'pty-1', cols: 9000, rows: 9000, suppressReplayNotification: true })
+
+    expect(mockPtyInstance.resize).toHaveBeenCalledWith(500, 500)
+  })
+
   it('settles concurrent immediate shutdown when attach proves the shell exited', async () => {
     const mockKill = vi.fn()
     mockPtySpawn.mockReturnValue({

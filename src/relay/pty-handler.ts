@@ -329,6 +329,34 @@ export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
 
 type PtyIdentity = { paneKey?: string; tabId?: string }
 
+const PTY_DIMENSION_MIN = 1
+const PTY_DIMENSION_MAX = 500
+
+function clampPtyDimension(value: number): number {
+  return Math.max(PTY_DIMENSION_MIN, Math.min(PTY_DIMENSION_MAX, Math.floor(value)))
+}
+
+/**
+ * The joining client's pane grid, or null when it sent none.
+ * Why: absent/junk dimensions must leave the PTY alone — defaulting the way
+ * `resize()` does would shrink a live remote pane to 80x24 for every client
+ * that omits a viewport (#7209).
+ */
+function parseAttachViewport(
+  params: Record<string, unknown>
+): { cols: number; rows: number } | null {
+  const { cols, rows } = params
+  // Why: only a real number counts as a viewport. Coercing would turn `true`,
+  // `"105"`, and `[105]` into plausible grids and SIGWINCH a live TUI to 1x1.
+  if (typeof cols !== 'number' || typeof rows !== 'number') {
+    return null
+  }
+  if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 1 || rows < 1) {
+    return null
+  }
+  return { cols: clampPtyDimension(cols), rows: clampPtyDimension(rows) }
+}
+
 /**
  * True when a reattach's expected pane identity contradicts the target PTY's own.
  * Rejects cross-relay-generation id collisions (a reset relay reuses `pty-N`).
@@ -1627,6 +1655,18 @@ export class PtyHandler {
       throw new Error(`PTY "${id}" not found (identity mismatch)`)
     }
 
+    // Why: the reattaching pane owns the grid. Without this the PTY keeps the
+    // dimensions it was last spawned/resized at, so an SSH pane renders clipped
+    // or wrap-corrupted until something else happens to resize it (#7209).
+    // Applied before every return path below. Unconditional on purpose: only
+    // reattach carries a viewport (a plain reveal sends none), and node-pty's
+    // cached cols/rows can lag the kernel PTY after a child runs `stty`, so
+    // comparing them would skip exactly the drift this reassert exists to fix.
+    const attachViewport = parseAttachViewport(params)
+    if (attachViewport) {
+      managed.pty.resize(attachViewport.cols, attachViewport.rows)
+    }
+
     managed.startupIngress?.snapshotBarrier()
     let sourceRecovery = parseSourceRecoveryRequest(params.sourceRecovery)
     if (
@@ -1704,8 +1744,8 @@ export class PtyHandler {
 
   private resize(params: Record<string, unknown>): void {
     const id = params.id as string
-    const cols = Math.max(1, Math.min(500, Math.floor(Number(params.cols) || 80)))
-    const rows = Math.max(1, Math.min(500, Math.floor(Number(params.rows) || 24)))
+    const cols = clampPtyDimension(Number(params.cols) || 80)
+    const rows = clampPtyDimension(Number(params.rows) || 24)
     const managed = this.ptys.get(id)
     if (managed && !managed.disposed) {
       managed.pty.resize(cols, rows)
