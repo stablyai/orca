@@ -159,8 +159,6 @@ export function GeneralEditorSettingsSection({
             onChange={(e) => updateAutoSaveDelayDraft(e.target.value)}
             onBlur={commitAutoSaveDelay}
             onKeyDown={(e) => {
-              // No IME guard: Chromium blanks number inputs at compositionstart, so a
-              // confirm-Enter only ever reaches the empty-draft reset in commitAutoSaveDelay.
               if (e.key === 'Enter') {
                 commitAutoSaveDelay()
               }

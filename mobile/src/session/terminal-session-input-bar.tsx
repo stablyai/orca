@@ -10,12 +10,6 @@ import {
   getTerminalLiveInputKeyboardType
 } from '../terminal/terminal-keyboard-type'
 import type { useMobileDictation } from '../hooks/use-mobile-dictation'
-import {
-  TerminalLiveInputField,
-  type TerminalLiveInputFieldHandle
-} from '../terminal/terminal-live-input-field'
-import type { TerminalLiveInputChangeEvent } from '../terminal/use-terminal-live-input-commit'
-import { imeGuardedSubmitProps } from '../ime/ime-submit-carry'
 import { styles } from './mobile-session-styles'
 
 type Dictation = ReturnType<typeof useMobileDictation>
@@ -28,7 +22,7 @@ type TerminalSessionInputBarProps = {
   readonly dictation: Dictation
   readonly dictationMode: 'toggle' | 'hold'
   readonly focusLiveInput: () => void
-  readonly handleLiveInputChangeWithPreedit: (event: TerminalLiveInputChangeEvent) => void
+  readonly handleLiveInputChange: (text: string) => void
   readonly handleLiveInputKeyPress: (event: { nativeEvent: { key: string } }) => void
   readonly handleLiveInputSubmit: () => void
   readonly handleNativeKey: (event: { nativeEvent: NativeKeyEvent }) => void
@@ -37,9 +31,8 @@ type TerminalSessionInputBarProps = {
   readonly input: string
   readonly isAttaching: boolean
   readonly liveInputCapture: string
-  readonly liveInputComposing: boolean
   readonly liveInputEnabled: boolean
-  readonly liveInputRef: RefObject<TerminalLiveInputFieldHandle | null>
+  readonly liveInputRef: RefObject<TextInput | null>
   readonly onAttachFile: () => void
   readonly onAttachImage: () => void
   readonly onCancelDictation: () => void
@@ -63,7 +56,7 @@ export function TerminalSessionInputBar({
   dictation,
   dictationMode,
   focusLiveInput,
-  handleLiveInputChangeWithPreedit,
+  handleLiveInputChange,
   handleLiveInputKeyPress,
   handleLiveInputSubmit,
   handleNativeKey,
@@ -72,7 +65,6 @@ export function TerminalSessionInputBar({
   input,
   isAttaching,
   liveInputCapture,
-  liveInputComposing,
   liveInputEnabled,
   liveInputRef,
   onAttachFile,
@@ -141,15 +133,14 @@ export function TerminalSessionInputBar({
             dictation={dictation}
             isAttaching={isAttaching}
             liveInputText={liveInputCapture}
-            composingText={liveInputComposing ? liveInputCapture : ''}
           />
         </Pressable>
         <MobileTerminalInputActions {...inputActionsProps} />
-        <TerminalLiveInputField
+        <TextInput
           ref={liveInputRef}
           style={styles.liveInputCapture}
           value={liveInputCapture}
-          onChange={handleLiveInputChangeWithPreedit}
+          onChangeText={handleLiveInputChange}
           onKeyPress={handleLiveInputKeyPress}
           onSubmitEditing={handleLiveInputSubmit}
           placeholder=""
@@ -198,7 +189,7 @@ export function TerminalSessionInputBar({
         returnKeyType="send"
         // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
         editable={canCompose}
-        {...imeGuardedSubmitProps(Platform.OS, handleSend)}
+        onSubmitEditing={handleSend}
       />
       <MobileTerminalInputActions {...inputActionsProps} />
       <Pressable

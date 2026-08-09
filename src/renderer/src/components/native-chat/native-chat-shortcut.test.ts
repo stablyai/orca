@@ -3,23 +3,11 @@ import {
   matchesNativeChatToggleShortcut,
   nativeChatToggleShortcutLabel
 } from './native-chat-shortcut'
-import { markImeOwnedShortcutEvent } from '@/lib/ime-composition-keyboard-event'
 
-type Combo = Pick<
-  KeyboardEvent,
-  'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'defaultPrevented'
->
+type Combo = Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'>
 
 function combo(overrides: Partial<Combo>): Combo {
-  return {
-    key: 'j',
-    metaKey: false,
-    ctrlKey: false,
-    shiftKey: false,
-    altKey: false,
-    defaultPrevented: false,
-    ...overrides
-  }
+  return { key: 'j', metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...overrides }
 }
 
 describe('nativeChatToggleShortcutLabel', () => {
@@ -64,21 +52,6 @@ describe('matchesNativeChatToggleShortcut', () => {
   it('rejects a different key', () => {
     expect(
       matchesNativeChatToggleShortcut(combo({ key: 'k', metaKey: true, shiftKey: true }), true)
-    ).toBe(false)
-  })
-
-  it('yields events already owned by the app dispatcher', () => {
-    const event = combo({ ctrlKey: true, shiftKey: true })
-    markImeOwnedShortcutEvent(event)
-    expect(matchesNativeChatToggleShortcut(event, false)).toBe(false)
-  })
-
-  it('yields ordinary shortcuts prevented by the app dispatcher', () => {
-    expect(
-      matchesNativeChatToggleShortcut(
-        combo({ ctrlKey: true, shiftKey: true, defaultPrevented: true }),
-        false
-      )
     ).toBe(false)
   })
 })

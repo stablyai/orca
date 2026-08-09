@@ -1,8 +1,11 @@
-import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
-import { useLayoutEffect } from 'react'
+import type {
+  ClipboardEventHandler,
+  CompositionEventHandler,
+  KeyboardEventHandler,
+  RefObject
+} from 'react'
 import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { basename } from '@/lib/path'
@@ -35,8 +38,8 @@ export type NativeChatComposerFieldProps = {
   onDraftChange: (value: string, element: HTMLTextAreaElement) => void
   onTextareaSelect: (element: HTMLTextAreaElement) => void
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
-  onCompositionStart: (event: React.CompositionEvent<HTMLTextAreaElement>) => void
-  onCompositionEnd: (event: React.CompositionEvent<HTMLTextAreaElement>) => void
+  onCompositionStart: CompositionEventHandler<HTMLTextAreaElement>
+  onCompositionEnd: CompositionEventHandler<HTMLTextAreaElement>
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>
   pickerListboxId: string
   onChoosePickerItem: (item: NativeChatPickerItem) => void
@@ -94,16 +97,6 @@ export function NativeChatComposerField({
   sessionOptionsSurface,
   sessionOptionsSnapshot
 }: NativeChatComposerFieldProps): React.JSX.Element {
-  const imeEnter = useImeEnterGestureOwnership()
-
-  useLayoutEffect(() => {
-    const textarea = textareaRef.current
-    if (!textarea || imeEnter.isComposing() || textarea.value === draft) {
-      return
-    }
-    textarea.value = draft
-  }, [draft, textareaRef, imeEnter])
-
   return (
     <div className="shrink-0 bg-background">
       {/* Extra bottom padding keeps the input box off the window rim. */}
@@ -171,25 +164,13 @@ export function NativeChatComposerField({
             ) : null}
             <textarea
               ref={textareaRef}
-              defaultValue={draft}
+              value={draft}
               disabled={disabled}
               rows={2}
               onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
-              onKeyDown={(event) => {
-                if (!imeEnter.ownsKeyDown(event)) {
-                  onKeyDown(event)
-                }
-              }}
-              onKeyUp={imeEnter.onKeyUp}
-              onBlur={imeEnter.reset}
-              onCompositionStart={(event) => {
-                imeEnter.setComposing(true)
-                onCompositionStart(event)
-              }}
-              onCompositionEnd={(event) => {
-                imeEnter.setComposing(false)
-                onCompositionEnd(event)
-              }}
+              onKeyDown={onKeyDown}
+              onCompositionStart={onCompositionStart}
+              onCompositionEnd={onCompositionEnd}
               onPaste={onPaste}
               onSelect={(e) => onTextareaSelect(e.currentTarget)}
               aria-expanded={autocomplete.mode === 'slash' || autocomplete.mode === 'skill'}

@@ -116,7 +116,6 @@ import {
   loadTerminalAccessoryLayout
 } from '../../../../src/terminal/terminal-accessory-layout'
 import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/terminal-live-accessory-input'
-import type { TerminalLiveInputFieldHandle } from '../../../../src/terminal/terminal-live-input-field'
 import { sendTerminalLiveAccessoryRawBytes } from '../../../../src/terminal/terminal-live-accessory-raw-send'
 import {
   clearTerminalLiveInputFocusTimer,
@@ -130,7 +129,6 @@ import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-sen
 import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-terminal-query-reply'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
-import { useTerminalLiveInputPreedit } from '../../../../src/terminal/use-terminal-live-input-preedit'
 import { resolveMobileTerminalInputGate } from '../../../../src/terminal/terminal-input-connection-gate'
 import {
   buildTerminalSendParams,
@@ -1050,7 +1048,7 @@ export default function SessionScreen() {
   const viewportRef = useRef<{ cols: number; rows: number } | null>(null)
   const viewportMeasuredRef = useRef(false)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
-  const liveInputRef = useRef<TerminalLiveInputFieldHandle>(null)
+  const liveInputRef = useRef<TextInput>(null)
   const commandInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
@@ -1111,12 +1109,9 @@ export default function SessionScreen() {
     liveInputRef,
     liveInputTerminalHandles,
     liveInputTerminalHandlesRef,
-    platform: Platform.OS,
     sendLiveTerminalInputRef,
     setLiveInputCapture
   })
-  const { isComposing: liveInputComposing, handleLiveInputChangeWithPreedit } =
-    useTerminalLiveInputPreedit(handleLiveInputChange)
   const { canCompose, canSend } = resolveMobileTerminalInputGate({
     connState,
     activeHandle,
@@ -5019,7 +5014,7 @@ export default function SessionScreen() {
                   dictation={dictation}
                   dictationMode={dictationMode}
                   focusLiveInput={focusLiveInput}
-                  handleLiveInputChangeWithPreedit={handleLiveInputChangeWithPreedit}
+                  handleLiveInputChange={handleLiveInputChange}
                   handleLiveInputKeyPress={handleLiveInputKeyPress}
                   handleLiveInputSubmit={handleLiveInputSubmit}
                   handleNativeKey={handleNativeKey}
@@ -5028,7 +5023,6 @@ export default function SessionScreen() {
                   input={input}
                   isAttaching={isAttaching}
                   liveInputCapture={liveInputCapture}
-                  liveInputComposing={liveInputComposing}
                   liveInputEnabled={liveInputEnabled}
                   liveInputRef={liveInputRef}
                   onAttachFile={() => void attachImage('files')}

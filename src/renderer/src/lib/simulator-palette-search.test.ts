@@ -96,6 +96,40 @@ describe('simulator-palette-search', () => {
     ])
   })
 
+  it('stamps each row with its own execution host when worktree ids collide', () => {
+    // Two hosts can serve the same worktree id, so activation needs the host
+    // that owns the row rather than the first id match in the store.
+    const entries = [
+      {
+        tab: makeTab({ id: 'sim-local' }),
+        worktree: makeWorktree(),
+        repoName: 'repo/mobile',
+        worktreeSortIndex: 0,
+        isCurrentTab: false,
+        isCurrentWorktree: false
+      },
+      {
+        tab: makeTab({ id: 'sim-remote' }),
+        worktree: makeWorktree({ hostId: 'ssh:host-1' }),
+        repoName: 'repo/mobile',
+        worktreeSortIndex: 1,
+        isCurrentTab: false,
+        isCurrentWorktree: false
+      }
+    ]
+
+    expect(
+      searchSimulatorTabs(entries, 'emulator').map((result) => [
+        result.tabId,
+        result.worktreeId,
+        result.executionHostId
+      ])
+    ).toEqual([
+      ['sim-local', 'wt-1', undefined],
+      ['sim-remote', 'wt-1', 'ssh:host-1']
+    ])
+  })
+
   it('matches mobile emulator and simulator aliases', () => {
     const entries = [
       {

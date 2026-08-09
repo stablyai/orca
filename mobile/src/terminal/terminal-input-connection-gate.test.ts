@@ -99,10 +99,7 @@ describe('session route offline-compose wiring', () => {
   })
 
   it('keeps the buffered command box editable offline while the live capture stays send-gated', () => {
-    const bufferedInput = inputBarSlice(
-      'ref={commandInputRef}',
-      '{...imeGuardedSubmitProps(Platform.OS, handleSend)}'
-    )
+    const bufferedInput = inputBarSlice('ref={commandInputRef}', 'onSubmitEditing={handleSend}')
     expect(bufferedInput).toContain('editable={canCompose}')
 
     const liveCapture = inputBarSlice('ref={liveInputRef}', 'importantForAutofill="no"')

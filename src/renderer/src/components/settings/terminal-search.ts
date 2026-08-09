@@ -2,7 +2,6 @@ import type { SettingsSearchEntry } from './settings-search'
 import {
   getTerminalAdvancedSearchEntries,
   getTerminalGhosttyImportSearchEntries,
-  getTerminalKoreanWonSearchEntries,
   getTerminalMacOptionSearchEntries,
   getTerminalMacYenSearchEntries
 } from './terminal-advanced-platform-search'
@@ -53,7 +52,6 @@ export {
 } from './terminal-theme-search'
 export {
   getTerminalAdvancedSearchEntries,
-  getTerminalKoreanWonSearchEntries,
   getTerminalMacOptionSearchEntries,
   getTerminalMacYenSearchEntries,
   getTerminalGhosttyImportSearchEntries
@@ -122,12 +120,7 @@ export function getTerminalPaneSearchEntries(platform: {
     ...getManageSessionsSearchEntries(),
     ...getTerminalAdvancedSearchEntries(),
     ...(platform.isMac
-      ? [
-          ...getTerminalMacOptionSearchEntries(),
-          ...getTerminalMacYenSearchEntries(),
-          // Why: the mapping targets Korean keyboard input on macOS (see korean-input-source.ts), so it is Mac-only like JIS Yen.
-          ...getTerminalKoreanWonSearchEntries()
-        ]
+      ? [...getTerminalMacOptionSearchEntries(), ...getTerminalMacYenSearchEntries()]
       : [])
   ]
 }

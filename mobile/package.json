@@ -21,11 +21,10 @@
     "@noble/hashes": "1.8.0",
     "@orca/expo-hardware-keyboard": "file:./packages/expo-hardware-keyboard",
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
-    "@orca/react-native-terminal-input": "file:./packages/react-native-terminal-input",
     "@react-native-async-storage/async-storage": "^2.2.0",
-    "@xterm/addon-unicode11": "0.10.0-beta.287",
-    "@xterm/addon-webgl": "0.20.0-beta.286",
-    "@xterm/xterm": "6.1.0-beta.287",
+    "@xterm/addon-unicode11": "0.10.0-beta.285",
+    "@xterm/addon-webgl": "0.20.0-beta.284",
+    "@xterm/xterm": "6.1.0-beta.285",
     "buffer": "^6.0.3",
     "expo": "^55.0.27",
     "expo-build-properties": "^55.0.13",
@@ -87,10 +86,6 @@
   "pnpm": {
     "overrides": {
       "xcode>uuid": "11.1.1"
-    },
-    "patchedDependencies": {
-      "react-native@0.83.9": "patches/react-native@0.83.9.patch",
-      "@xterm/xterm@6.1.0-beta.287": "../config/patches/@xterm__xterm@6.1.0-beta.287.patch"
     }
   }
 }

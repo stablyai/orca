@@ -484,21 +484,6 @@ function createPaneContainer(): HTMLElement {
   return container
 }
 
-function makeInspectableBufferLine(text: string) {
-  const cells = Array.from(text)
-  return {
-    length: cells.length,
-    getCell: (column: number) => {
-      const char = cells[column]
-      return char === undefined ? undefined : { getChars: () => char, getWidth: () => 1 }
-    },
-    translateToString: (trimRight = false, start = 0, end = cells.length) => {
-      const value = cells.slice(start, end).join('')
-      return trimRight ? value.trimEnd() : value
-    }
-  }
-}
-
 function createPane(paneId: number) {
   const leafId = leafIdForPane(paneId)
   const activeBuffer = {
@@ -3723,29 +3708,6 @@ describe('connectPanePty', () => {
 
     sendTerminalInputThroughPane(pane, 'x')
     expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)
-  })
-
-  it('sends only while the terminal still owns its PTY transport generation', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('pty-pane-2')
-    transportFactoryQueue.push(transport)
-    const deps = createDeps()
-    const pane = createPane(2)
-
-    connectPanePty(pane as never, createManager(1) as never, deps as never)
-    await flushAsyncTicks()
-    transport.sendInput.mockClear()
-
-    sendTerminalInputThroughPane(pane, 'ordinary')
-    expect(transport.sendInput).toHaveBeenCalledWith('ordinary')
-
-    transport.sendInput.mockClear()
-    const replacement = createMockTransport('pty-replacement')
-    deps.paneTransportsRef.current.set(2, replacement)
-    sendTerminalInputThroughPane(pane, 'stale')
-
-    expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(replacement.sendInput).not.toHaveBeenCalled()
   })
 
   it('keeps a fresh split pane mounted when its newborn PTY exits before output or input', async () => {
@@ -16587,13 +16549,6 @@ describe('connectPanePty', () => {
     setReattachPaneTitle('renamed shell')
 
     const pane = createPane(1)
-    Object.assign(pane.terminal.buffer.active, {
-      cursorY: 39,
-      getLine: (row: number) =>
-        makeInspectableBufferLine(
-          row === 1 ? '  Cursor Agent' : row === 8 ? '  → Plan, search, build anything' : ''
-        )
-    })
     const textarea = {} as HTMLTextAreaElement
     configureTerminalFocusMode(pane, textarea)
     const manager = createManager(1)
@@ -16707,8 +16662,8 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     // Why: a buffer whose visible rows carry no Cursor Agent screen models a shell foreground after a dead run left its screen in scrollback.
     Object.assign(pane.terminal.buffer.active, {
-      cursorY: 39,
-      getLine: () => makeInspectableBufferLine('')
+      cursorX: 2,
+      getLine: () => undefined
     })
     const textarea = {} as HTMLTextAreaElement
     configureTerminalFocusMode(pane, textarea)

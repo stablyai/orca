@@ -1,6 +1,4 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
-import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -53,9 +51,8 @@ function typeNativeTwoSetKoreanPreedit(processId: number, keyCodes: readonly num
   ])
 }
 
-function commitNativeComposition(shift = false): void {
-  const modifier = shift ? ' using shift down' : ''
-  execFileSync('osascript', ['-e', `tell application "System Events" to key code 36${modifier}`])
+function commitNativeComposition(): void {
+  execFileSync('osascript', ['-e', 'tell application "System Events" to key code 36'])
 }
 
 async function readActiveComposition(page: Page): Promise<string | null> {
@@ -75,8 +72,7 @@ async function runNativeScenario(
   processId: number,
   keyCodes: readonly number[],
   expectedText: string,
-  preCommit?: { committedText: string; preeditText: string; shiftEnter?: boolean },
-  ordinaryControl = false
+  preCommit?: { committedText: string; preeditText: string }
 ): Promise<void> {
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
@@ -87,7 +83,7 @@ async function runNativeScenario(
   )
 
   const ptyId = await waitForActivePanePtyId(page)
-  let reader = createTerminalImeByteReader(testRepoPath, ordinaryControl ? 2 : 1)
+  const reader = createTerminalImeByteReader(testRepoPath, 1)
   let completed = false
   try {
     await startTerminalImeByteReader(page, ptyId, reader)
@@ -99,45 +95,15 @@ async function runNativeScenario(
       await expect
         .poll(async () => (await readTerminalImeBoundaryTrace(page)).onData.join(''))
         .toBe(preCommit.committedText)
-      commitNativeComposition(preCommit.shiftEnter)
+      commitNativeComposition()
     } else {
       typeNativeTwoSetKorean(processId, keyCodes)
     }
 
-    if (ordinaryControl) {
-      await expect
-        .poll(async () => (await readTerminalImeBoundaryTrace(page)).onData.join(''))
-        .toBe(`${expectedText}\r`)
-      await page.keyboard.type('ordinary')
-      await page.keyboard.press('Enter')
-      expect(await waitForTerminalImeBytes(page, reader)).toEqual([
-        Buffer.from(`${expectedText}\n`).toString('hex'),
-        Buffer.from('ordinary\n').toString('hex')
-      ])
-    } else if (preCommit?.shiftEnter) {
-      expect(await waitForTerminalImeBytes(page, reader)).toEqual([
-        Buffer.from(`${expectedText}\x1b\n`).toString('hex')
-      ])
-      removeTerminalImeByteReader(reader)
-      reader = createTerminalImeByteReader(testRepoPath, 1)
-      await startTerminalImeByteReader(page, ptyId, reader)
-      await page.keyboard.type('ordinary')
-      await page.keyboard.press('Shift+Enter')
-      expect(await waitForTerminalImeBytes(page, reader)).toEqual([
-        Buffer.from('ordinary\x1b\n').toString('hex')
-      ])
-    } else {
-      expect(await waitForTerminalImeBytes(page, reader)).toEqual([
-        Buffer.from(`${expectedText}\n`).toString('hex')
-      ])
-    }
+    const receivedBytes = await waitForTerminalImeBytes(page, reader)
+    expect(receivedBytes).toEqual([Buffer.from(`${expectedText}\n`).toString('hex')])
     const trace = await readTerminalImeBoundaryTrace(page)
-    const expectedOnData = ordinaryControl
-      ? `${expectedText}\rordinary\r`
-      : preCommit?.shiftEnter
-        ? `${expectedText}\x1b\rordinary\x1b\r`
-        : `${expectedText}\r`
-    expect(trace.onData.join('')).toBe(expectedOnData)
+    expect(trace.onData.join('')).toBe(`${expectedText}\r`)
     completed = true
   } finally {
     await attachTerminalImeBoundaryEvidence(page, testInfo, 'native-macos-2set-boundaries').catch(
@@ -149,34 +115,6 @@ async function runNativeScenario(
     }
     removeTerminalImeByteReader(reader)
   }
-}
-
-async function activateLocalFolderWorkspace(page: Page, folderPath: string): Promise<void> {
-  const workspaceKey = await page.evaluate(async (folderPath) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Renderer store unavailable')
-    }
-    const group =
-      store.getState().projectGroups.find((candidate) => candidate.executionHostId === 'local') ??
-      (await store.getState().createProjectGroup('IME folder group'))
-    if (!group) {
-      throw new Error('Local project group unavailable')
-    }
-    const workspace = await store.getState().createFolderWorkspace({
-      folderPath,
-      name: 'IME folder workspace',
-      projectGroupId: group.id
-    })
-    if (!workspace) {
-      throw new Error('Folder workspace was not created')
-    }
-    store.getState().setActiveFolderWorkspace(workspace.id, 'local')
-    return `folder:${workspace.id}`
-  }, folderPath)
-  await expect
-    .poll(() => page.evaluate(() => window.__store?.getState().activeWorktreeId))
-    .toBe(workspaceKey)
 }
 
 test.describe('Native macOS 2-Set Korean terminal input @headful', () => {
@@ -195,9 +133,8 @@ test.describe('Native macOS 2-Set Korean terminal input @headful', () => {
       testInfo,
       testRepoPath,
       electronApp.process().pid!,
-      [5, 40, 1, 15, 46, 3],
-      '한글',
-      { committedText: '한', preeditText: '글' }
+      [5, 40, 1, 15, 46, 3, 36],
+      '한글'
     )
   })
 
@@ -229,44 +166,6 @@ test.describe('Native macOS 2-Set Korean terminal input @headful', () => {
       [15, 40, 1, 40, 14, 40],
       '가나다',
       { committedText: '가나', preeditText: '다' }
-    )
-  })
-
-  test('commits the final syllable before physical Shift+Enter', async ({
-    electronApp,
-    orcaPage,
-    testRepoPath
-  }, testInfo) => {
-    await runNativeScenario(
-      orcaPage,
-      testInfo,
-      testRepoPath,
-      electronApp.process().pid!,
-      [13, 40],
-      '자',
-      { committedText: '', preeditText: '자', shiftEnter: true }
-    )
-  })
-
-  test('uses the same native owner in a folder workspace', async ({
-    electronApp,
-    orcaPage,
-    testRepoPath
-  }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    const folderPath = path.join(testRepoPath, 'ime-folder-workspace')
-    mkdirSync(folderPath)
-    await activateLocalFolderWorkspace(orcaPage, folderPath)
-    await runNativeScenario(
-      orcaPage,
-      testInfo,
-      testRepoPath,
-      electronApp.process().pid!,
-      [5, 40, 1, 15, 46, 3, 36],
-      '한글',
-      undefined,
-      true
     )
   })
 })

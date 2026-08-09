@@ -157,8 +157,6 @@ export function TerminalAdvancedSection({
                       onChange={(e) => setScrollbackRowsDraft(e.target.value)}
                       onBlur={commitScrollbackRowsDraft}
                       onKeyDown={(e) => {
-                        // No IME guard: Chromium blanks number inputs at compositionstart, so a
-                        // confirm-Enter only ever reaches the empty-draft reset below.
                         if (e.key === 'Enter') {
                           commitScrollbackRowsDraft()
                         }
