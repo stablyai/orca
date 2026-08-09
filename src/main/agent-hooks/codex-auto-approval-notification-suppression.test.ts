@@ -32,6 +32,17 @@ describe('Codex hook auto-approval notification suppression', () => {
     ).toBe(false)
   })
 
+  it('keeps request_user_input waits visible under yolo attribution', () => {
+    expect(
+      shouldSuppressCodexAutoApprovalSyntheticTitleFromHook({
+        agentType: 'codex',
+        state: 'waiting',
+        toolName: 'request_user_input',
+        launchConfig: { agentArgs: YOLO_TUI_AGENT_ARGS.codex, agentEnv: {} }
+      })
+    ).toBe(false)
+  })
+
   it('fails open for unrelated statuses or missing attribution', () => {
     expect(
       shouldSuppressCodexAutoApprovalSyntheticTitleFromHook({

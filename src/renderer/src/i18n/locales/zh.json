@@ -11514,12 +11514,11 @@
           "1eee1c7bd8": "PATH 中未检测到智能体。可选择一个稍后安装，或使用空白终端继续。",
           "hideAgents": "隐藏智能体",
           "showMoreAgents": "显示另外 {{value0}} 个智能体→",
-          "agentPermissionsLabel": "智能体权限",
-          "agentPermissionsInfo": "智能体权限信息",
-          "agentPermissionsTooltip": "手动模式每次都提示，Auto 使用厂商推荐的默认值，Yolo 跳过权限提示。",
-          "agentPermissionsManual": "手动",
-          "agentPermissionsAuto": "Auto",
-          "agentPermissionsYolo": "Yolo"
+          "f90b42acbb": "智能体权限",
+          "e4799d3a54": "手动模式每次都提示，Auto 使用厂商推荐的默认值，Yolo 跳过权限提示。",
+          "9c219f644f": "手动",
+          "9659ea9cce": "Auto",
+          "e8e2990559": "Yolo"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "智能体可互相通信、领取任务并协调交接。",

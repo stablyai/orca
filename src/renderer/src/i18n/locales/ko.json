@@ -11494,12 +11494,11 @@
           "1eee1c7bd8": "PATH에서 agents를 찾지 못했습니다. 나중에 설치할 항목을 선택하거나 빈 terminal로 계속 진행하세요.",
           "hideAgents": "agents 숨기기",
           "showMoreAgents": "agents {{value0}}개 더 보기→",
-          "agentPermissionsLabel": "Agent 권한",
-          "agentPermissionsInfo": "Agent 권한 정보",
-          "agentPermissionsTooltip": "수동은 매번 확인하고, Auto는 공급업체 권장 기본값을 사용하며, Yolo는 권한 프롬프트를 건너뜁니다.",
-          "agentPermissionsManual": "수동",
-          "agentPermissionsAuto": "Auto",
-          "agentPermissionsYolo": "Yolo"
+          "f90b42acbb": "에이전트 권한",
+          "e4799d3a54": "수동은 매번 확인하고, Auto는 공급업체 권장 기본값을 사용하며, Yolo는 권한 프롬프트를 건너뜁니다.",
+          "9c219f644f": "수동",
+          "9659ea9cce": "Auto",
+          "e8e2990559": "Yolo"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Agents는 서로 메시지를 보내고, 작업을 수행하고, 핸드오프를 조정할 수 있습니다.",

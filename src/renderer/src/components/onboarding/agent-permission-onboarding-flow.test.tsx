@@ -66,6 +66,16 @@ function mixedSettings(): AppState['settings'] {
   }
 }
 
+function autoWithManualOverrideSettings(): AppState['settings'] {
+  const settings = autoSettings()
+  return settings
+    ? {
+        ...settings,
+        agentDefaultArgs: { ...settings.agentDefaultArgs, claude: '' }
+      }
+    : null
+}
+
 function renderFlow() {
   return renderHook(() => useOnboardingFlow(getDefaultOnboardingState(), vi.fn()))
 }
@@ -124,6 +134,21 @@ describe('onboarding agent permission flow', () => {
     })
 
     expect(updateSettings).toHaveBeenCalledWith({ defaultTuiAgent: 'blank' })
+  })
+
+  it('preserves a manual override inside an otherwise Auto profile', async () => {
+    const settings = autoWithManualOverrideSettings()
+    resetStore(settings)
+    const flow = renderFlow()
+
+    expect(flow.result.current.agentPermissionMode).toBeNull()
+
+    await act(async () => {
+      await flow.result.current.next()
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ defaultTuiAgent: 'blank' })
+    expect(settings?.agentDefaultArgs?.claude).toBe('')
   })
 
   it('applies Auto with manual fallbacks for unsupported agents after explicit selection', async () => {

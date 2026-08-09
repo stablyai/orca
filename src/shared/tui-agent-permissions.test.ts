@@ -3,7 +3,9 @@ import {
   applyAgentPermissionMode,
   AUTO_TUI_AGENT_ARGS,
   AUTO_TUI_AGENT_ENV,
+  hasAutoAgentPermissionPreset,
   isAutoApprovingPermissionMode,
+  projectAgentPermissionSettingsForLegacyClient,
   resolveAgentPermissionModeSummary,
   resolveTuiAgentPermissionMode,
   YOLO_TUI_AGENT_ARGS,
@@ -165,6 +167,32 @@ describe('tui agent permissions', () => {
     ).toBe('mixed')
   })
 
+  it('reports mixed when an auto-capable agent stays manual', () => {
+    const applied = applyAgentPermissionMode({
+      mode: 'auto',
+      agentDefaultArgs: YOLO_TUI_AGENT_ARGS,
+      agentDefaultEnv: YOLO_TUI_AGENT_ENV
+    })
+
+    expect(
+      resolveAgentPermissionModeSummary({
+        ...applied,
+        agentDefaultArgs: { ...applied.agentDefaultArgs, claude: '' }
+      })
+    ).toBe('mixed')
+  })
+
+  it('keeps unsupported manual fallbacks inside the auto summary', () => {
+    const applied = applyAgentPermissionMode({
+      mode: 'auto',
+      agentDefaultArgs: YOLO_TUI_AGENT_ARGS,
+      agentDefaultEnv: YOLO_TUI_AGENT_ENV
+    })
+
+    expect(applied.agentDefaultArgs.copilot).toBe('')
+    expect(resolveAgentPermissionModeSummary(applied)).toBe('auto')
+  })
+
   it('resolves one Codex yolo launch as yolo', () => {
     expect(
       resolveTuiAgentPermissionMode({
@@ -189,6 +217,52 @@ describe('tui agent permissions', () => {
     expect(resolveTuiAgentPermissionMode({ agent: 'codex', agentArgs: '', agentEnv: {} })).toBe(
       'manual'
     )
+  })
+
+  it('classifies whitespace-decorated presets as mixed', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'claude',
+        agentArgs: ` ${YOLO_TUI_AGENT_ARGS.claude}`,
+        agentEnv: {}
+      })
+    ).toBe('mixed')
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'codex',
+        agentArgs: `${AUTO_TUI_AGENT_ARGS.codex} `,
+        agentEnv: {}
+      })
+    ).toBe('mixed')
+    expect(resolveTuiAgentPermissionMode({ agent: 'codex', agentArgs: '   ' })).toBe('mixed')
+  })
+
+  it('uses current vendor auto flags for Antigravity and Qwen Code', () => {
+    expect(AUTO_TUI_AGENT_ARGS.antigravity).toBe('--mode=accept-edits')
+    expect(AUTO_TUI_AGENT_ARGS['qwen-code']).toBe('--approval-mode auto')
+  })
+
+  it('projects Auto settings as Manual for legacy clients', () => {
+    const applied = applyAgentPermissionMode({
+      mode: 'auto',
+      agentDefaultArgs: { ...YOLO_TUI_AGENT_ARGS, opencode: '--model custom' },
+      agentDefaultEnv: YOLO_TUI_AGENT_ENV
+    })
+
+    expect(hasAutoAgentPermissionPreset(applied)).toBe(true)
+    const projected = projectAgentPermissionSettingsForLegacyClient(applied)
+    expect(resolveAgentPermissionModeSummary(projected)).toBe('manual')
+    expect(projected.agentDefaultArgs.opencode).toBe('--model custom')
+  })
+
+  it('does not project settings that contain no Auto preset', () => {
+    const projected = projectAgentPermissionSettingsForLegacyClient({
+      agentDefaultArgs: YOLO_TUI_AGENT_ARGS,
+      agentDefaultEnv: YOLO_TUI_AGENT_ENV
+    })
+
+    expect(projected.agentDefaultArgs).toEqual(YOLO_TUI_AGENT_ARGS)
+    expect(projected.agentDefaultEnv).toEqual(YOLO_TUI_AGENT_ENV)
   })
 
   it('resolves custom Codex permission arguments as mixed', () => {

@@ -433,11 +433,15 @@ describe('AgentsPane', () => {
   })
 
   it('displays auto mode without collapsing it to yolo', () => {
-    const element = AgentPermissionsSetting({ mode: 'auto', onChange: vi.fn() })
+    const onChange = vi.fn()
+    const element = AgentPermissionsSetting({ mode: 'auto', onChange })
     const props = element.props.children.props.action.props as {
       value: 'yolo' | 'auto' | 'manual' | 'mixed'
+      onChange: (value: 'yolo' | 'auto' | 'manual' | 'mixed') => void
     }
     expect(props.value).toBe('auto')
+    props.onChange('auto')
+    expect(onChange).toHaveBeenCalledWith('auto')
   })
 
   it('keeps catalog agent ids, labels, and commands discoverable in settings search', () => {

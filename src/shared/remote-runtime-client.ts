@@ -23,6 +23,7 @@ import {
 } from './runtime-rpc-envelope'
 import type { RuntimeStatus } from './runtime-types'
 import {
+  AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
 } from './protocol-version'
@@ -139,7 +140,8 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
     deviceToken: pairing.deviceToken,
     clientCapabilities: [
       SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+      AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY
     ]
   })
   const pendingRequest = {
@@ -515,7 +517,8 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     deviceToken: pairing.deviceToken,
     clientCapabilities: [
       SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+      AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY
     ]
   })
   return await new Promise((resolve, reject) => {

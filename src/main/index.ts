@@ -1511,6 +1511,7 @@ function openMainWindow(): BrowserWindow {
           ? shouldSuppressCodexAutoApprovalSyntheticTitleFromHook({
               agentType: payload.agentType,
               state: payload.state,
+              toolName: payload.toolName,
               launchConfig: runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
             })
           : false

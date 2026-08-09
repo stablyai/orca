@@ -40,6 +40,7 @@ describe('AgentStep', () => {
     expect(html).toContain(`Show ${AGENT_CATALOG.length - 1} more agents→`)
     expect(html).toContain('data-agent-grid-scroll')
     expect(html).toContain('Agent Permissions')
+    expect(html).toContain('Manual prompts for every check')
     expect(html).toContain('Manual')
     expect(html).toContain('Auto')
     expect(html).toContain('Yolo')

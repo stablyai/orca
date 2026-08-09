@@ -15,6 +15,7 @@ import {
   publicKeyToBase64
 } from './web-e2ee'
 import {
+  AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
@@ -461,7 +462,8 @@ export class WebRuntimeClient {
             deviceToken: this.pairing.deviceToken,
             clientCapabilities: [
               SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-              AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+              AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+              AGENT_PERMISSION_AUTO_SETTINGS_RUNTIME_CAPABILITY
             ]
           })
           return

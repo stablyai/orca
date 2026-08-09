@@ -1,9 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { Check, ExternalLink, Info } from 'lucide-react'
+import { Check, ExternalLink } from 'lucide-react'
 import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SettingsSegmentedControl } from '@/components/settings/SettingsFormControls'
 import type { TuiAgent } from '../../../../shared/types'
 import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissions'
@@ -206,58 +205,38 @@ function AgentPermissionsControl({
   onChange?: (mode: SelectableAgentPermissionMode) => void
 }): React.JSX.Element {
   return (
-    <div className="mt-auto flex shrink-0 items-center justify-between gap-4 rounded-lg border border-border bg-muted/25 px-4 py-3">
-      <span className="flex min-w-0 items-center gap-2">
+    <div className="mt-auto flex shrink-0 items-start justify-between gap-4 rounded-lg border border-border bg-muted/25 px-4 py-3">
+      <span className="min-w-0">
         <span className="min-w-0 text-sm font-medium text-foreground">
+          {translate('auto.components.onboarding.AgentStep.f90b42acbb', 'Agent Permissions')}
+        </span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
           {translate(
-            'auto.components.onboarding.AgentStep.agentPermissionsLabel',
-            'Agent Permissions'
+            'auto.components.onboarding.AgentStep.e4799d3a54',
+            'Manual prompts for every check, Auto for vendor-recommended defaults, or Yolo to skip permission prompts.'
           )}
         </span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label={translate(
-                'auto.components.onboarding.AgentStep.agentPermissionsInfo',
-                'Agent permission info'
-              )}
-              className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              <Info className="size-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={6} style={{ zIndex: 120 }}>
-            {translate(
-              'auto.components.onboarding.AgentStep.agentPermissionsTooltip',
-              'Manual prompts for every check, Auto for vendor-recommended defaults, or Yolo to skip permission prompts.'
-            )}
-          </TooltipContent>
-        </Tooltip>
       </span>
       <SettingsSegmentedControl<SelectableAgentPermissionMode>
         value={mode}
         onChange={(next) => onChange?.(next)}
         ariaLabel={translate(
-          'auto.components.onboarding.AgentStep.agentPermissionsLabel',
+          'auto.components.onboarding.AgentStep.f90b42acbb',
           'Agent Permissions'
         )}
         size="sm"
         options={[
           {
             value: 'manual',
-            label: translate(
-              'auto.components.onboarding.AgentStep.agentPermissionsManual',
-              'Manual'
-            )
+            label: translate('auto.components.onboarding.AgentStep.9c219f644f', 'Manual')
           },
           {
             value: 'auto',
-            label: translate('auto.components.onboarding.AgentStep.agentPermissionsAuto', 'Auto')
+            label: translate('auto.components.onboarding.AgentStep.9659ea9cce', 'Auto')
           },
           {
             value: 'yolo',
-            label: translate('auto.components.onboarding.AgentStep.agentPermissionsYolo', 'Yolo')
+            label: translate('auto.components.onboarding.AgentStep.e8e2990559', 'Yolo')
           }
         ]}
       />

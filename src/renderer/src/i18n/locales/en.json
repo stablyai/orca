@@ -11903,12 +11903,11 @@
           "1eee1c7bd8": "No agents detected on your PATH. Pick one to install later, or continue with a blank terminal.",
           "hideAgents": "Hide agents",
           "showMoreAgents": "Show {{value0}} more agents→",
-          "agentPermissionsLabel": "Agent Permissions",
-          "agentPermissionsInfo": "Agent permission info",
-          "agentPermissionsTooltip": "Manual prompts for every check, Auto for vendor-recommended defaults, or Yolo to skip permission prompts.",
-          "agentPermissionsManual": "Manual",
-          "agentPermissionsAuto": "Auto",
-          "agentPermissionsYolo": "Yolo"
+          "f90b42acbb": "Agent Permissions",
+          "e4799d3a54": "Manual prompts for every check, Auto for vendor-recommended defaults, or Yolo to skip permission prompts.",
+          "9c219f644f": "Manual",
+          "9659ea9cce": "Auto",
+          "e8e2990559": "Yolo"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Agents can message each other, take tasks, and coordinate handoffs.",
