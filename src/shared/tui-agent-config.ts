@@ -13,6 +13,7 @@ export type DraftPasteReadySignal =
   | 'render-quiet-after-bracketed-paste'
   | 'codex-composer-prompt'
   | 'render-cursor-after-bracketed-paste'
+  | 'grok-composer-prompt'
 
 export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
 
@@ -302,6 +303,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'argv',
     // Why: separator so prompts like `help`/`--version` aren't parsed as Grok CLI syntax.
     argvPromptSeparator: '--',
+    // Why: grok shimmers its startup logo until the session opens, so the quiet
+    // window never settles and launch drafts waited out the full 8s hard
+    // timeout; its composer glyph lands ~0.6s in.
+    draftPasteReadySignal: 'grok-composer-prompt',
     ctrlEnterEncoding: 'csi-u'
   },
   devin: {
