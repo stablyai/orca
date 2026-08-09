@@ -4,11 +4,8 @@ import {
   shouldSuppressEnterSubmit
 } from './new-workspace-enter-guard'
 
-function makeEvent(
-  overrides: Partial<{ isComposing: boolean; keyCode: number; shiftKey: boolean }>
-): {
+function makeEvent(overrides: Partial<{ isComposing: boolean; shiftKey: boolean }>): {
   isComposing: boolean
-  keyCode?: number
   shiftKey: boolean
 } {
   return { isComposing: false, shiftKey: false, ...overrides }
@@ -35,10 +32,6 @@ describe('shouldSuppressEnterSubmit', () => {
 
   it('returns true when IME composition is active', () => {
     expect(shouldSuppressEnterSubmit(makeEvent({ isComposing: true }), false)).toBe(true)
-  })
-
-  it('returns true for an IME Process/229 keydown without isComposing', () => {
-    expect(shouldSuppressEnterSubmit(makeEvent({ keyCode: 229 }), false)).toBe(true)
   })
 
   it('returns true for Shift+Enter inside a textarea', () => {

@@ -98,7 +98,6 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { dirname } from '@/lib/path'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import { translate } from '@/i18n/i18n'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 
 const EMPTY_MARKDOWN_DOCUMENTS: MarkdownDocument[] = []
 
@@ -2042,7 +2041,7 @@ function MarkdownSingleNoteSendMenu({
   )
 }
 
-export function MarkdownAnnotationComposer({
+function MarkdownAnnotationComposer({
   onCancel,
   onSubmit
 }: {
@@ -2053,7 +2052,6 @@ export function MarkdownAnnotationComposer({
 }): React.JSX.Element {
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const imeEnter = useImeEnterGestureOwnership()
   const mountedRef = useMountedRef()
   const composerRef = useRef<HTMLDivElement | null>(null)
 
@@ -2116,20 +2114,13 @@ export function MarkdownAnnotationComposer({
           el.style.height = 'auto'
           el.style.height = `${Math.min(el.scrollHeight, 240)}px`
         }}
-        onBlur={imeEnter.reset}
-        onCompositionStart={() => imeEnter.setComposing(true)}
-        onCompositionEnd={() => imeEnter.setComposing(false)}
-        onKeyUp={imeEnter.onKeyUp}
         onKeyDown={(event) => {
-          if (imeEnter.ownsKeyDown(event)) {
-            return
-          }
           if (event.key === 'Escape') {
             event.preventDefault()
             onCancel()
             return
           }
-          if (event.key === 'Enter' && !event.shiftKey) {
+          if (event.key === 'Enter' && !event.nativeEvent.isComposing && !event.shiftKey) {
             event.preventDefault()
             void submit()
           }

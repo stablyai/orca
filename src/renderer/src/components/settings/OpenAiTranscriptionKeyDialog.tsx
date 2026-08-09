@@ -11,7 +11,6 @@ import {
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { translate } from '@/i18n/i18n'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 
 type OpenAiTranscriptionKeyDialogProps = {
   open: boolean
@@ -76,10 +75,6 @@ export function OpenAiTranscriptionKeyDialog({
             disabled={pending}
             onChange={(event) => onApiKeyDraftChange(event.target.value)}
             onKeyDown={(event) => {
-              // Why: an Enter confirming a CJK IME candidate must not save a half-composed key.
-              if (isImeCompositionKeyDown(event)) {
-                return
-              }
               if (event.key === 'Enter' && apiKeyDraft.trim()) {
                 onSave()
               }

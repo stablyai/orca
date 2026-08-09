@@ -446,7 +446,6 @@ import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
 import {
   folderWorkspaceKey,
-  isWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../shared/workspace-scope'
@@ -683,6 +682,10 @@ import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtim
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
 import {
+  scanLocalRepoWorktreesForResolution,
+  type RuntimeWorktreeScanResult
+} from './repo-worktree-resolution-scan'
+import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePath
@@ -874,7 +877,7 @@ import {
   FLOATING_TERMINAL_WORKTREE_ID,
   getDefaultVoiceSettings
 } from '../../shared/constants'
-import { listRepoWorktrees } from '../repo-worktrees'
+import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
@@ -2611,14 +2614,10 @@ type WorktreeLineageResolution =
       warnings: WorktreeLineageWarning[]
     }
 
-type RuntimeWorktreeScanResult =
-  | { ok: true; worktrees: GitWorktreeInfo[] }
-  | { ok: false; worktrees: GitWorktreeInfo[] }
-
 type RuntimeWorktreeScanCache = {
   generation: number
   runtimeKey: string
-  result: Extract<RuntimeWorktreeScanResult, { ok: true }>
+  result: RuntimeWorktreeScanResult
   expiresAt: number
 }
 
@@ -20875,7 +20874,7 @@ export class OrcaRuntimeService {
       scan = { ok: false, worktrees: [] }
     }
     if (scan.ok) {
-      this.pruneLineageForMissingRepoWorktrees(repo, scan.worktrees)
+      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
     }
     const agentScratchWorktreePathMatcher = createAgentScratchWorktreePathMatcher([
       repo.path,
@@ -28842,7 +28841,7 @@ export class OrcaRuntimeService {
           )) ?? { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
         const gitWorktrees = scan.worktrees
         if (scan.ok) {
-          this.pruneLineageForMissingRepoWorktrees(repo, gitWorktrees)
+          pruneLineageForMissingRepoWorktrees(this.requireStore(), repo, gitWorktrees)
         }
         return gitWorktrees.map((gitWorktree) => {
           const worktreeId = `${repo.id}::${gitWorktree.path}`
@@ -28889,48 +28888,6 @@ export class OrcaRuntimeService {
     return { worktrees, platformByRepoId }
   }
 
-  private pruneLineageForMissingRepoWorktrees(repo: Repo, gitWorktrees: GitWorktreeInfo[]): void {
-    const store = this.store
-    if (
-      !store ||
-      typeof store.getAllWorktreeLineage !== 'function' ||
-      typeof store.removeWorktreeLineage !== 'function'
-    ) {
-      return
-    }
-    const liveIds = new Set(gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`))
-    const repoPrefix = `${repo.id}::`
-    for (const childWorkspaceKey of Object.keys(store.getAllWorkspaceLineage?.() ?? {})) {
-      const childScope = parseWorkspaceKey(childWorkspaceKey)
-      if (
-        childScope?.type === 'worktree' &&
-        childScope.worktreeId.startsWith(repoPrefix) &&
-        !liveIds.has(childScope.worktreeId)
-      ) {
-        if (isWorkspaceKey(childWorkspaceKey)) {
-          store.removeWorkspaceLineage?.(childWorkspaceKey)
-        }
-      }
-    }
-    for (const [childId, lineage] of Object.entries(store.getAllWorktreeLineage())) {
-      if (childId.startsWith(repoPrefix) && !liveIds.has(childId)) {
-        // Why: once a scan proves the child gone, purge stale lineage so it can't survive into a same-path replacement checkout.
-        store.removeWorktreeLineage(childId)
-        store.removeWorkspaceLineage?.(worktreeWorkspaceKey(childId))
-      }
-      if (
-        lineage.parentWorktreeId.startsWith(repoPrefix) &&
-        !liveIds.has(lineage.parentWorktreeId)
-      ) {
-        const parentMeta = store.getWorktreeMeta(lineage.parentWorktreeId)
-        if (!parentMeta || parentMeta.instanceId === lineage.parentWorktreeInstanceId) {
-          // Why: a missing parent path needs one fresh identity so same-path replacement checkouts can't validate old lineage.
-          store.setWorktreeMeta(lineage.parentWorktreeId, { instanceId: randomUUID() })
-        }
-      }
-    }
-  }
-
   private async listRepoWorktreesForResolution(
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
@@ -28965,8 +28922,9 @@ export class OrcaRuntimeService {
     this.worktreeScanInFlight.set(repo.id, { generation, runtimeKey, promise })
     try {
       const result = await promise
+      // Why: back off local spawn failures under resource pressure while disconnected SSH can recover on the next poll.
       if (
-        result.ok &&
+        (result.ok || !repo.connectionId) &&
         generation === (this.worktreeScanGenerations.get(repo.id) ?? 0) &&
         this.worktreeScanInFlight.get(repo.id)?.promise === promise
       ) {
@@ -28990,13 +28948,10 @@ export class OrcaRuntimeService {
     projectRuntime: ProjectExecutionRuntimeResolution | undefined
   ): Promise<RuntimeWorktreeScanResult> {
     if (!repo.connectionId) {
-      return {
-        ok: true,
-        worktrees: await listRepoWorktrees(
-          repo,
-          getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
-        )
-      }
+      return await scanLocalRepoWorktreesForResolution(
+        repo.path,
+        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
+      )
     }
     const provider = getSshGitProvider(repo.connectionId)
     if (!provider) {

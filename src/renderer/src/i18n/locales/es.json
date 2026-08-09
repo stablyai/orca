@@ -2987,7 +2987,13 @@
             "d62d63b807": "Crear archivo",
             "25dc1cd653": "Abrir archivo",
             "7cdf8ee0c8": "Abrir URL",
-            "b27864279e": "Iniciar agente"
+            "b27864279e": "Iniciar agente",
+            "0e5b7a3f16": "Buscar pestañas abiertas, archivos, URL y agentes…",
+            "8f0a1c4d92": "Cambiar a la pestaña",
+            "2c38630a01": "El espacio de trabajo ya no existe",
+            "4f0d9a71c2": "La pestaña ya no existe",
+            "d7d496a451": "La página del navegador ya no existe",
+            "7726ce9970": "La pestaña del emulador móvil ya no existe"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "Comando",
@@ -3021,6 +3027,7 @@
                 "classifier": {
                   "42e6262ae9": "No hay acción disponible.",
                   "097a982ee0": "Cargando archivos...",
+                  "c41f8d20b7": "Buscar pestañas abiertas, archivos, URL y agentes…",
                   "90eb94dc48": "Introduce una URL http:// o https://.",
                   "5553b283ce": "Introduce una URL o ruta de archivo.",
                   "queryTooLarge": "El texto de búsqueda es demasiado grande.",

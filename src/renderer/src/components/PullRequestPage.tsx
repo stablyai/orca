@@ -63,7 +63,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { setWithLRU } from '@/lib/scroll-cache'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
@@ -446,7 +445,6 @@ function PRReviewersPanel({
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
   const reviewerPanelMountedRef = useRef(true)
-  const reviewerImeEnter = useImeEnterGestureOwnership()
 
   const cancelReviewerInputFocusFrame = useCallback((): void => {
     if (reviewerInputFocusFrameRef.current !== null) {
@@ -937,10 +935,6 @@ function PRReviewersPanel({
                 ref={reviewerInputRef}
                 value={reviewerInput}
                 onChange={(event) => setReviewerInput(event.target.value)}
-                onCompositionStart={() => reviewerImeEnter.setComposing(true)}
-                onCompositionEnd={() => reviewerImeEnter.setComposing(false)}
-                onKeyUp={reviewerImeEnter.onKeyUp}
-                onBlur={reviewerImeEnter.reset}
                 disabled={submitting || !canRequestReview}
                 placeholder={translate(
                   'auto.components.PullRequestPage.3bde131f49',
@@ -951,9 +945,6 @@ function PRReviewersPanel({
                 aria-haspopup="listbox"
                 className="h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"
                 onKeyDown={(event) => {
-                  if (reviewerImeEnter.ownsKeyDown(event)) {
-                    return
-                  }
                   if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
                     event.preventDefault()
                     setActiveReviewerIndex(

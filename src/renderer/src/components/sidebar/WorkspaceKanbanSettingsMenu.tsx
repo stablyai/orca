@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { SettingsSwitch } from '../settings/SettingsFormControls'
 import type { WorkspaceStatusDefinition } from '../../../../shared/types'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
@@ -126,11 +125,6 @@ export default function WorkspaceKanbanSettingsMenu({
                     onBlur={(event) => onRenameStatus(status.id, event.target.value)}
                     onKeyDown={(event) => {
                       event.stopPropagation()
-                      // Oracle tier only: the confirm's unmarked redispatch still blurs and renames,
-                      // but with complete text — local and reversible.
-                      if (isImeOwnedKeyboardEvent(event)) {
-                        return
-                      }
                       if (event.key === 'Enter') {
                         event.currentTarget.blur()
                       }

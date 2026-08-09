@@ -1,69 +1,83 @@
 import { getTerminalLiveSpecialKeyBytes } from './terminal-live-input'
 
-const TERMINAL_DEL_BYTE = '\x7f'
+export type TerminalLiveSpecialKeyDecision =
+  | { readonly kind: 'ignore' }
+  | { readonly kind: 'local-edit' }
+  | { readonly kind: 'send-now'; readonly bytes: string }
+  | { readonly kind: 'commit-held-then-send'; readonly bytes: string }
 
-export type TerminalLiveReplacement = {
-  readonly text: string
-  readonly replacementText: string
-  readonly replacementRange: {
-    readonly start: number
-    readonly end: number
-  }
+export type TerminalLiveSpecialKeyDecisionInput = {
+  readonly key: string
+  readonly heldText: string
+  readonly sentText: string
 }
 
-export type TerminalLiveCommit = {
-  readonly committedText: string
-  readonly payload: string
+export type TerminalLiveAccessoryLocalEdit = 'backspace' | 'delete'
+
+export type TerminalLiveAccessoryBytesDecision =
+  | { readonly kind: 'local-edit'; readonly localEdit: TerminalLiveAccessoryLocalEdit }
+  | { readonly kind: 'send-now'; readonly bytes: string }
+  | { readonly kind: 'commit-held-then-send'; readonly bytes: string }
+
+export type TerminalLiveAccessoryBytesDecisionInput = {
+  readonly bytes: string
+  readonly localEdit?: TerminalLiveAccessoryLocalEdit
+  readonly heldText: string
+  readonly sentText: string
 }
 
-function splitsSurrogatePair(text: string, offset: number): boolean {
-  if (offset <= 0 || offset >= text.length) {
-    return false
-  }
-  const before = text.charCodeAt(offset - 1)
-  const after = text.charCodeAt(offset)
-  return before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff
-}
-
-export function deriveTerminalLiveCommit(
-  committedText: string,
-  change: TerminalLiveReplacement
-): TerminalLiveCommit | null {
-  const { start, end } = change.replacementRange
-  if (
-    !Number.isInteger(start) ||
-    !Number.isInteger(end) ||
-    start < 0 ||
-    start > committedText.length ||
-    end < committedText.length ||
-    end < start ||
-    splitsSurrogatePair(committedText, start)
-  ) {
-    return null
-  }
-  if (change.text === committedText) {
-    return { committedText, payload: '' }
-  }
-
-  const retainedText = committedText.slice(0, start)
-  const predictedText = retainedText + change.replacementText
-  const operationMatchesText = change.text === predictedText
-  const replacementStart = operationMatchesText ? start : 0
-
-  const eraseCount = Array.from(committedText.slice(replacementStart)).length
-  return {
-    committedText: change.text,
-    payload: TERMINAL_DEL_BYTE.repeat(eraseCount) + change.text.slice(replacementStart)
-  }
-}
-
-export function getTerminalLiveSpecialKeyDecision(
-  key: string,
-  hasCommittedText: boolean
-): { readonly kind: 'ignore' } | { readonly kind: 'send'; readonly bytes: string } {
+export function getTerminalLiveSpecialKeyDecision({
+  key,
+  heldText,
+  sentText
+}: TerminalLiveSpecialKeyDecisionInput): TerminalLiveSpecialKeyDecision {
   const bytes = getTerminalLiveSpecialKeyBytes(key)
-  if (bytes === null || ((key === 'Backspace' || key === 'Delete') && hasCommittedText)) {
+  if (bytes === null) {
     return { kind: 'ignore' }
   }
-  return { kind: 'send', bytes }
+
+  // Why: native field edits fire onChangeText and the mirror diff emits the
+  // matching PTY erase; sending raw DEL here as well would double-erase.
+  if ((key === 'Backspace' || key === 'Delete') && (heldText.length > 0 || sentText.length > 0)) {
+    return { kind: 'local-edit' }
+  }
+
+  if (heldText.length > 0) {
+    return { kind: 'commit-held-then-send', bytes }
+  }
+
+  return { kind: 'send-now', bytes }
+}
+
+export function getTerminalLiveAccessoryBytesDecision({
+  bytes,
+  localEdit,
+  heldText,
+  sentText
+}: TerminalLiveAccessoryBytesDecisionInput): TerminalLiveAccessoryBytesDecision {
+  if (localEdit && (heldText.length > 0 || sentText.length > 0)) {
+    return { kind: 'local-edit', localEdit }
+  }
+
+  if (heldText.length > 0) {
+    return { kind: 'commit-held-then-send', bytes }
+  }
+
+  return { kind: 'send-now', bytes }
+}
+
+export function getTerminalLiveAccessoryLocalEditText({
+  localEdit,
+  fieldText
+}: {
+  readonly localEdit: TerminalLiveAccessoryLocalEdit
+  readonly fieldText: string
+}): string {
+  if (localEdit === 'delete') {
+    // Why: accessory Delete mirrors forward-delete at the hidden input's end;
+    // it stays local but does not remove the field text.
+    return fieldText
+  }
+
+  return Array.from(fieldText).slice(0, -1).join('')
 }

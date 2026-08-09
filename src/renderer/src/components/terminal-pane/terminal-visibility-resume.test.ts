@@ -32,6 +32,10 @@ vi.mock('@/lib/pane-manager/pane-fit', () => ({
   flushDeferredPaneMetricOptionsIfMeasurable: (pane: unknown) =>
     flushDeferredPaneMetricOptionsIfMeasurable(pane)
 }))
+const repairPaneWebglCanvasDprMismatch = vi.fn((_pane: unknown) => false)
+vi.mock('@/lib/pane-manager/terminal-canvas-dpr-repair', () => ({
+  repairPaneWebglCanvasDprMismatch: (pane: unknown) => repairPaneWebglCanvasDprMismatch(pane)
+}))
 const resetTerminalLinkifierHoverState = vi.fn()
 const isTerminalLinkifierHoverActive = vi.fn((_terminal: unknown) => false)
 vi.mock('@/lib/pane-manager/terminal-linkifier-hover-reset', () => ({
@@ -153,6 +157,19 @@ describe('resumeTerminalVisibility reveal repaint', () => {
 
     expect(manager.fitAllRevealedPanes).not.toHaveBeenCalled()
     expect(manager.fitAllPanes).not.toHaveBeenCalled()
+  })
+
+  it('checks each pane for a stale WebGL backing on a light tab reveal', () => {
+    const first = { terminal: { name: 'pane-a' } }
+    const second = { terminal: { name: 'pane-b' } }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([first, second])
+
+    resumeTerminalVisibility(resumeArgs(manager, true))
+
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenCalledTimes(2)
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenNthCalledWith(1, first)
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenNthCalledWith(2, second)
   })
 
   it('flushes hidden-era metric options on reveal and refits the light path', () => {

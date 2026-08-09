@@ -1,5 +1,4 @@
 import { Loader2 } from 'lucide-react'
-import { ImeEnterGuardedForm } from '@/components/ime-enter-guarded-form'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -32,7 +31,7 @@ export function OrcaProfileCreateDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[380px]">
-        <ImeEnterGuardedForm onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-4">
           <DialogHeader>
             <DialogTitle>
               {translate('auto.components.orca.profiles.switcher.16e3681072', 'New local profile')}
@@ -60,7 +59,7 @@ export function OrcaProfileCreateDialog({
               {translate('auto.components.orca.profiles.switcher.cfa59f8ad1', 'Create and Switch')}
             </Button>
           </DialogFooter>
-        </ImeEnterGuardedForm>
+        </form>
       </DialogContent>
     </Dialog>
   )

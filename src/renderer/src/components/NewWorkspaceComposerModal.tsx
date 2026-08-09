@@ -19,7 +19,6 @@ import {
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import type {
   GitHubWorkItem,
   TuiAgent,
@@ -284,12 +283,6 @@ function QuickTabBody({
         }
         event.preventDefault()
         onDismiss()
-        return
-      }
-
-      // Closes the gap isScreenSubmitShortcut leaves: it reads only isComposing, so an
-      // IME that reports keyCode 229 without it would still submit mid-composition.
-      if (isImeOwnedKeyboardEvent(event)) {
         return
       }
 

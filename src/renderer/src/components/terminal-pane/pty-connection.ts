@@ -2,7 +2,8 @@
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import type { IBuffer, IDisposable } from '@xterm/xterm'
-import { viewportShowsParkedCursorAgentScreen } from './cursor-agent-parked-screen'
+import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-ime-anchor'
+import { installTerminalImeCompositionRoute } from './terminal-ime-composition-route'
 import { detectAgentStatusFromTitle, agentTypeToIconAgent, isClaudeAgent } from '@/lib/agent-status'
 import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
 import { resolvePaneTitleDecision } from './terminal-title-evidence'
@@ -334,7 +335,6 @@ import {
 } from './renderer-owned-agent-status-registry'
 import type { DirectSshPaneRetryAttempt } from '@/store/slices/direct-ssh-terminal-recovery'
 import { directSshAuthoritiesEqual } from '@/store/slices/direct-ssh-terminal-authority-ledger'
-import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -453,13 +453,15 @@ function parsedViewportShowsParkedCursorAgentScreen(
   ) {
     return null
   }
-  return viewportShowsParkedCursorAgentScreen({
-    buffer,
-    rows: terminal.rows,
-    cols: terminal.cols,
-    cursorX: buffer.cursorX,
-    cursorY: buffer.cursorY
-  })
+  return (
+    resolveCursorAgentImeAnchor({
+      buffer,
+      rows: terminal.rows,
+      cols: terminal.cols,
+      cursorX: buffer.cursorX,
+      cursorY: buffer.cursorY
+    }) !== null
+  )
 }
 
 function terminalHasFocusReportingEnabled(terminal: TerminalWithFocusMode): boolean {
@@ -2296,7 +2298,7 @@ export function connectPanePty(
     }
     if (
       (event.metaKey || event.ctrlKey) &&
-      isLatinShortcutKey(event, 'c') &&
+      event.key.toLowerCase() === 'c' &&
       pane.terminal.hasSelection()
     ) {
       return
@@ -4083,9 +4085,6 @@ export function connectPanePty(
   )
 
   const onDataDisposable = pane.terminal.onData((data) => {
-    if (disposed || deps.paneTransportsRef.current.get(pane.id) !== transport) {
-      return
-    }
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
     // OSC 10/11, focus, CPR) via onData. When we replay recorded PTY bytes
     // into xterm for scrollback/cold-restore/snapshot, those queries would
@@ -4221,6 +4220,13 @@ export function connectPanePty(
       requestRecoveryForUndeliverableInput()
     }
   })
+  const imeCompositionRouteDisposable = installTerminalImeCompositionRoute({
+    terminalElement: pane.terminal.element,
+    terminal: pane.terminal,
+    capturedTransport: transport,
+    getCurrentTransport: () => deps.paneTransportsRef.current.get(pane.id)
+  })
+
   const shouldSuppressDesktopPtyResize = (): boolean => {
     const currentPtyId = transport.getPtyId()
     return Boolean(
@@ -9453,6 +9459,7 @@ export function connectPanePty(
         clearTimeout(connectFallbackTimer)
         connectFallbackTimer = null
       }
+      imeCompositionRouteDisposable.dispose()
       onDataDisposable.dispose()
       userInputActivityDisposable?.dispose()
       terminalCapabilityRepliesDisposable.dispose()

@@ -18,12 +18,12 @@
 // submitted line can never lose its last syllable to the next line.
 //
 // The capture did NOT reproduce the suspected defect, and that null is the useful part. The
-// deferred-newline route (deleted by #13128) could only invert this ordering via a session end
-// carrying dataPendingReconciliation, which the vendored xterm patch dispatches from exactly one
+// deferred-newline route could only invert this ordering via a session end carrying
+// dataPendingReconciliation, which the vendored xterm patch dispatches from exactly one
 // site — a compositionstart force-ending a still-pending prior session. Plain compose-then-Enter
 // cannot reach it: the IME finalizes first, so Enter arrives with isComposing false and the
 // newline was never held. Back-to-back arms at 25/60/120 ms attacked that precondition directly
-// and still read `가\r나` every time. So the route was a real code-level hazard that this gesture
+// and still read `가\r나` every time. So the route is a real code-level hazard that this gesture
 // does not reach on Windows + MS Korean.
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

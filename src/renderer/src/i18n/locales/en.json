@@ -110,7 +110,7 @@
       "port": "Port",
       "pr": "PR"
     },
-    "renderCapOverflow": "{{value0}} more - keep typing or add a filter to narrow",
+    "renderCapOverflow": "{{value0}} more — scroll or keep typing to narrow",
     "filter": {
       "emptyTitle": "No results match the active filter",
       "emptySubtitle": "Clear the filter above, or widen it to more hosts and projects.",
@@ -5299,19 +5299,6 @@
           "connectName": "Connect to SSH host {{value0}}",
           "authFailedTooltip": "{{value0}} · authentication failed",
           "failedTooltip": "{{value0}} · connection failed"
-        },
-        "SshDisconnectedDialog": {
-          "disconnected": "This SSH host is not connected.",
-          "reconnecting": "Reconnecting to the remote host...",
-          "reconnectionFailed": "Reconnection to the remote host failed.",
-          "376bed88e5": "The connection to the remote host encountered an error.",
-          "authFailed": "Authentication to the remote host failed.",
-          "656368f3a2": "Reconnection failed",
-          "cb5938ae79": "Reconnecting...",
-          "11552bf786": "SSH Disconnected",
-          "89385db176": "Dismiss",
-          "ca4a7892af": "Connecting...",
-          "4afcca1d24": "Reconnect"
         }
       },
       "shared": {
