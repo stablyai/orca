@@ -118,7 +118,8 @@ import {
 } from '@/lib/new-workspace-ssh-gate'
 import {
   getComposerEligibleRepos,
-  resolveComposerActiveRepoId
+  resolveComposerActiveRepoId,
+  resolveComposerEligibleRepoId
 } from '@/lib/new-workspace-composer-repo'
 import {
   filterProjectGroupsForActiveSpace,
@@ -691,6 +692,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const eligibleRepos = useMemo(() => getComposerEligibleRepos(repos), [repos])
+  const spaceScopedInitialRepoId = resolveComposerEligibleRepoId(eligibleRepos, initialRepoId)
+  const spaceScopedRepoIdOverride = resolveComposerEligibleRepoId(eligibleRepos, repoIdOverride)
   const hostOptions = useMemo(
     () =>
       buildExecutionHostRegistry({
@@ -748,7 +751,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     projects,
     projectHostSetups,
     draftRepoId,
-    initialRepoId,
+    initialRepoId: spaceScopedInitialRepoId,
     activeRepoId: seedActiveRepoId,
     projectId: initialRunSeed.projectId,
     hostId: initialRunSeed.hostId,
@@ -780,7 +783,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
   const initialProjectGroupAppliedRef = useRef(Boolean(initialFolderProjectGroup))
   const [projectError, setProjectError] = useState<string | null>(null)
-  const repoId = repoIdOverride ?? internalRepoId
+  const repoId = spaceScopedRepoIdOverride ?? internalRepoId
   const selectedProjectGroup = useMemo<ProjectGroup | null>(
     () =>
       findActionableFolderProjectGroup({
@@ -1299,7 +1302,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     getInitialGitHubPrStartPointSelection({
       item: initialGitHubWorkItem,
       linkedWorkItem: initialLinkedWorkItemSeed,
-      repoId: selectedRepo?.id ?? initialRepoId
+      repoId: selectedRepo?.id ?? spaceScopedInitialRepoId
     })
   )
   useEffect(() => {

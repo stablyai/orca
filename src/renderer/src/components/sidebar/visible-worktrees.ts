@@ -242,6 +242,11 @@ export function computeVisibleWorktreeIds(
     isWorktreeInActiveSpace(worktree, opts.repoMap, activeSpaceFilterId, opts.repoByHostIdentity)
   if (activeSpaceFilterId) {
     all = all.filter(inActiveSpace)
+    for (const [worktreeId, worktree] of lineageAncestorById) {
+      if (!inActiveSpace(worktree)) {
+        lineageAncestorById.delete(worktreeId)
+      }
+    }
   }
 
   const visibleHostIds =

@@ -893,4 +893,12 @@ describe('computeVisibleWorktreeIds Space scoping', () => {
       })
     ).toEqual([remote.id])
   })
+
+  it('does not inject a lineage parent from another Space', () => {
+    expect(
+      visible(spacedRepoMap('space-a', null), 'space-a', {
+        worktreeLineageById: { [local.id]: makeWorktreeLineage(local, remote) }
+      })
+    ).toEqual([local.id])
+  })
 })
