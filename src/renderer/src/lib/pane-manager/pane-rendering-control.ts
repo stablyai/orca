@@ -50,6 +50,9 @@ export function suspendPaneRendering(panes: Iterable<ManagedPaneInternal>): void
   }
 }
 
+/** Re-enable WebGL rendering at a resume boundary (worktree foreground,
+ *  window wake), except for panes pinned to the DOM renderer by their
+ *  context-loss budget. */
 export function resumePaneRendering(panes: Iterable<ManagedPaneInternal>): void {
   for (const pane of panes) {
     // Why: resume (worktree foreground, window wake) is the WebGL retry
