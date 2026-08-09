@@ -65,7 +65,6 @@ let cachedIsKorean: boolean | null = null
 let refreshGeneration = 0
 let lastRefreshAt = 0
 let listenerAttached = false
-let prefetchEpoch = 0
 let focusTarget: Pick<Window, 'addEventListener' | 'removeEventListener'> | null = null
 let focusCallback: (() => void) | null = null
 let keyboardActivityCallback: ((event: KeyboardEvent) => void) | null = null
@@ -159,7 +158,7 @@ export function prefetchKoreanInputSource(options: PrefetchKoreanInputSourceOpti
   // both keydown and keyup so a held toggle key still refreshes on release.
   target.addEventListener('keydown', keyboardActivityCallback, true)
   target.addEventListener('keyup', keyboardActivityCallback, true)
-  void runInitialProbe(readInputSourceId, ++prefetchEpoch)
+  void runInitialProbe(readInputSourceId, target)
 }
 
 /** Why: a keystroke-triggered refresh is async, so it can never classify the
@@ -168,13 +167,12 @@ export function prefetchKoreanInputSource(options: PrefetchKoreanInputSourceOpti
  *  reader yields an ID rather than leaving the gate cold for the session. */
 async function runInitialProbe(
   readInputSourceId: InputSourceIdReader,
-  epoch: number
+  target: Pick<Window, 'addEventListener' | 'removeEventListener'>
 ): Promise<void> {
   for (const delayMs of INITIAL_PROBE_BACKOFF_MS) {
-    // Why: an epoch, not window identity — production always passes the same
-    // window, so an identity check is dead there and a stop/start would let a
-    // sleeping loop wake and race the new one.
-    if (!listenerAttached || epoch !== prefetchEpoch) {
+    // Why: a reset (or a prefetch onto another window) must stop this loop, or
+    // it repopulates the cache the reset just cleared.
+    if (!listenerAttached || focusTarget !== target) {
       return
     }
     lastRefreshAt = Date.now()
@@ -184,7 +182,7 @@ async function runInitialProbe(
     }
     await new Promise((resolve) => setTimeout(resolve, delayMs))
   }
-  if (!listenerAttached || epoch !== prefetchEpoch) {
+  if (!listenerAttached || focusTarget !== target) {
     return
   }
   lastRefreshAt = Date.now()
@@ -205,11 +203,8 @@ export function _setKoreanInputSourceForTests(value: boolean | null): void {
 
 /** Test-only: reset cache, detach listeners, and invalidate any in-flight
  *  refreshes so a stale probe cannot repopulate the cache. */
-/** Detaches the probe. Without this the global listeners outlive the setting
- *  being switched off and keep spawning the refresh. */
-export function stopKoreanInputSourcePrefetch(): void {
+export function _resetKoreanInputSourceForTests(): void {
   refreshGeneration += 1
-  prefetchEpoch += 1
   if (focusTarget && focusCallback && keyboardActivityCallback) {
     focusTarget.removeEventListener('focus', focusCallback)
     focusTarget.removeEventListener('keydown', keyboardActivityCallback, true)
@@ -221,8 +216,4 @@ export function stopKoreanInputSourcePrefetch(): void {
   listenerAttached = false
   cachedIsKorean = null
   lastRefreshAt = 0
-}
-
-export function _resetKoreanInputSourceForTests(): void {
-  stopKoreanInputSourcePrefetch()
 }
