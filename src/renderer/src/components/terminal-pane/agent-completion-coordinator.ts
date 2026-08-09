@@ -285,6 +285,7 @@ export function createAgentCompletionCoordinator(
     )
   }
 
+  /** Run one completion's side effects; false when a guard vetoed it and nothing was announced. */
   function dispatchCompletion(
     source: CompletionSource,
     title: string,
@@ -297,23 +298,23 @@ export function createAgentCompletionCoordinator(
        *  inventory), so the synthetic `done` must not run pane lifecycle side effects. */
       notifyWithoutLifecycle?: boolean
     } = {}
-  ): void {
+  ): boolean {
     if (source !== 'hook' && pendingHookDoneTimer !== null) {
-      return
+      return false
     }
     if (requiresFreshWorking || lastCompletedTurn === currentTurn) {
-      return
+      return false
     }
     if (!options.isLive() || !hasAgentRunEvidence) {
-      return
+      return false
     }
     const now = Date.now()
     const token = completionToken(source)
     if (token === lastCompletionToken && now - lastCompletionAt < COMPLETION_REPLAY_GUARD_MS) {
-      return
+      return false
     }
     if (completionIdentityAlreadyNotified(optionsOverride.completionIdentity)) {
-      return
+      return false
     }
     lastCompletionToken = token
     lastCompletionAt = now
@@ -350,6 +351,7 @@ export function createAgentCompletionCoordinator(
     } else {
       options.dispatchCompletion(title)
     }
+    return true
   }
 
   function dispatchAttentionNotification(payload: AgentCompletionStatusSnapshot): void {
@@ -816,14 +818,16 @@ export function createAgentCompletionCoordinator(
     }
   }
 
-  /** True when this pane already announced the turn that ended at this timestamp. */
+  /** True when this pane already announced the turn that ended at this timestamp. Read from both
+   *  records that can hold it: the pane-scoped one outlives a remount, and the coordinator-local
+   *  one outlives a working title, which drops the pane-scoped one. */
   function turnCompletedAtAlreadyNotified(turnCompletedAt: number | undefined): boolean {
     if (!isFiniteTurnCompletedAt(turnCompletedAt)) {
       return false
     }
     return (
       lastCompletionIdentityByPaneKey.get(options.paneKey)?.lastTurnCompletedAtNotified ===
-      turnCompletedAt
+        turnCompletedAt || lastCompletionIdentity?.lastTurnCompletedAtNotified === turnCompletedAt
     )
   }
 
@@ -851,17 +855,24 @@ export function createAgentCompletionCoordinator(
         // working-run must not collapse onto a single banner.
         stateStartedAt: turnCompletedAt
       }
-      lastCompletionIdentity = {
+      const announcedIdentity: LastCompletionIdentity = {
         source: 'hook',
         identity: completionIdentityFor('done', payload.agentType, turnCompletedAt),
         agentIdentity: hookCompletionAgentIdentity(payload),
         lastTurnCompletedAtNotified: turnCompletedAt
       }
-      dispatchCompletion('hook', payload.agentType ?? options.paneKey, {
+      const announced = dispatchCompletion('hook', payload.agentType ?? options.paneKey, {
         agentStatus: completionPayload,
-        completionIdentity: lastCompletionIdentity,
+        completionIdentity: announcedIdentity,
         notifyWithoutLifecycle: true
       })
+      // Why: a vetoed dispatch (pane not live, or an earlier completion for this agent already
+      // recorded) announces nothing and writes no pane record. Mirroring the identity anyway
+      // would make this turn's all-clear `done` read as the tail of an announcement the user
+      // never saw, and the turn would go silent entirely (#13245).
+      if (announced) {
+        lastCompletionIdentity = announcedIdentity
+      }
     }
     options.dispatchHookLifecycle?.(payload)
   }

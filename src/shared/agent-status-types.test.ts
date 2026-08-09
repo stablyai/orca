@@ -456,6 +456,13 @@ Fix dispatch fallback preview for normalized status prompts`
         parseAgentStatusPayload(`{"state":"done","turnCompletedAt":${raw}}`)!.turnCompletedAt
       ).toBeUndefined()
     }
+    // Why: the object entry point is not fed by JSON.parse, so it can carry values JSON cannot.
+    // A non-finite stamp names no turn and must not reach a completion consumer.
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        normalizeAgentStatusPayload({ state: 'done', turnCompletedAt: value })!.turnCompletedAt
+      ).toBeUndefined()
+    }
   })
 
   it('carries turnCompletedAt through the client-visible payload projection', () => {

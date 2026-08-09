@@ -116,6 +116,21 @@ describe('shared agent-hook-listener', () => {
       expect(allClear?.payload.turnCompletedAt).toBe(stop?.payload.turnCompletedAt)
     })
 
+    it('does not stamp a turn end time on an interrupted Stop', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
+      claudeEvent({ hook_event_name: 'SubagentStart', agent_id: 'a1' })
+      // Why: a running child still gates the pane up to `working`, but the lead turn was cut
+      // short rather than finished — stamping it would announce a completion for work the user
+      // interrupted (#13245).
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        is_interrupt: true,
+        background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
+      })
+      expect(stop?.payload.state).toBe('working')
+      expect(stop?.payload.turnCompletedAt).toBeUndefined()
+    })
+
     it('does not stamp a turn end time on a Stop that already resolves to done', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'ship it' })
       const stop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
