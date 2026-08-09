@@ -93,21 +93,25 @@ test.describe('Native macOS 2-Set Korean terminal chord commit @headful', () => 
     'Requires macOS with 2-Set Korean available and Accessibility access'
   )
 
-  // `renderer` is what onData emits; `pty` is what the child reads after the tty converts CR to LF.
-  // Asserting both makes the conversion evidence that the capture reached past the renderer, rather
-  // than a constant a later reader "corrects" back to the renderer form.
+  // `pty` is what the child reads. The trailing LF is the standing proof the capture got past the
+  // renderer: onData emits CR and only the tty converts it, so a reader "correcting" a constant
+  // back to the renderer form would show CR here (#11936/#11951).
+  //
+  // `flushesOwnLine` says whether the chord's own bytes end the line. The reader splits on 0x0a,
+  // so CSI-u — carrying no line terminator — needs a plain Return after it, or the line stays open
+  // and the capture times out at zero however correct the product was.
   for (const chord of [
     {
       name: 'Shift+Enter',
       modifier: 'shift' as const,
-      renderer: '하 하 하\u001b\r',
+      flushesOwnLine: true,
       pty: '하 하 하\u001b\n'
     },
     {
       name: 'Ctrl+Enter',
       modifier: 'control' as const,
-      renderer: '하 하 하\u001b[13;5u',
-      pty: '하 하 하\u001b[13;5u'
+      flushesOwnLine: false,
+      pty: '하 하 하\u001b[13;5u\n'
     }
   ]) {
     test(`commits the preedit before physical ${chord.name}`, async ({
@@ -151,6 +155,12 @@ test.describe('Native macOS 2-Set Korean terminal chord commit @headful', () => 
         // Finish `하 하 하`: the control already left `하` composing, so send the remainder.
         typeNativeKeyCodes(processId, HA_HA_HA_KEY_CODES.slice(2))
         pressReturnChord(processId, chord.modifier)
+        if (!chord.flushesOwnLine) {
+          // Safe to send unmodified: the chord above already committed the preedit, which the
+          // assertion's leading `하 하 하` proves — a surviving preedit would eat this Return and
+          // put its own commit ahead of the chord's bytes.
+          typeNativeKeyCodes(processId, [RETURN_KEY_CODE])
+        }
 
         // The sibling spec's :364/:383 assert at the RENDERER (onData), where the terminator is CR.
         // This reads the PTY child, so the tty has already converted CR to LF — see #11936/#11951,
