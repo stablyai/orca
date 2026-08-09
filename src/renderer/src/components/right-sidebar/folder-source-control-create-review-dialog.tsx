@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import {
@@ -49,9 +49,11 @@ export function FolderSourceControlCreateReviewDialog({
   const [draft, setDraft] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const initializedRef = useRef(false)
 
   useEffect(() => {
     if (!open) {
+      initializedRef.current = false
       return
     }
     let stale = false
@@ -76,7 +78,8 @@ export function FolderSourceControlCreateReviewDialog({
           return
         }
         setEligibility(result)
-        if (result.canCreate) {
+        if (result.canCreate && !initializedRef.current) {
+          initializedRef.current = true
           setBase(result.defaultBaseRef ?? baseRef ?? '')
           setBaseQuery('')
           setTitle('')
@@ -128,6 +131,7 @@ export function FolderSourceControlCreateReviewDialog({
     try {
       const result = await createHostedReview(target.repo?.path ?? target.path, {
         repoId: target.repo?.id ?? undefined,
+        connectionId: target.connectionId ?? undefined,
         provider: eligibility.provider,
         base,
         head: branch,
@@ -158,6 +162,7 @@ export function FolderSourceControlCreateReviewDialog({
     eligibility,
     onCreated,
     onOpenChange,
+    target.connectionId,
     target.path,
     target.repo,
     title,

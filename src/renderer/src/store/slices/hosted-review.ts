@@ -38,7 +38,10 @@ type FetchOptions = {
    */
   active?: boolean
 }
-type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string | null }
+type CreateHostedReviewStoreInput = CreateHostedReviewInput & {
+  repoId?: string | null
+  connectionId?: string | null
+}
 
 const CACHE_TTL_MS = 60_000
 const HOSTED_REVIEW_CACHE_MAX = 500
@@ -307,7 +310,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       window.api.hostedReview.getCreationEligibility({
         ...args,
         repoId: repo?.id ?? args.repoId,
-        connectionId: repo?.connectionId ?? null
+        connectionId: repo?.connectionId ?? args.connectionId ?? null
       })
     )
   },
@@ -317,7 +320,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     const repo = findHostedReviewRepoByPath(get().repos, repoPath, input.repoId)
     const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
     const target = getActiveRuntimeTarget(ownerSettings)
-    const { repoId: inputRepoId, ...hostedReviewInput } = input
+    const { repoId: inputRepoId, connectionId: inputConnectionId, ...hostedReviewInput } = input
     if (target.kind === 'environment') {
       const { worktreePath, ...runtimeInput } = hostedReviewInput
       return callRuntimeRpc<CreateHostedReviewResult>(
@@ -334,7 +337,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     return window.api.hostedReview.create({
       repoPath,
       repoId: repo?.id ?? inputRepoId ?? undefined,
-      connectionId: repo?.connectionId ?? null,
+      connectionId: repo?.connectionId ?? inputConnectionId ?? null,
       ...hostedReviewInput
     })
   },

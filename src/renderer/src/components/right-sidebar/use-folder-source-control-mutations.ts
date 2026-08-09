@@ -11,6 +11,7 @@ import {
 import type { GitStatusEntry } from '../../../../shared/types'
 import type { RepoStatusState } from './folder-source-control-rows'
 import { useFolderSourceControlBulkActions } from './folder-source-control-bulk-actions'
+import { getDiscardAllPaths, getStageAllPaths } from './discard-all-sequence'
 import type { PendingDiscardConfirmation } from './source-control-discard-dialog'
 
 export function useFolderSourceControlMutations({
@@ -78,7 +79,10 @@ export function useFolderSourceControlMutations({
   const stageAll = useCallback(() => {
     void runOperation(async () => {
       const entries = statusState?.status?.entries ?? []
-      const paths = entries.filter((entry) => entry.area !== 'staged').map((entry) => entry.path)
+      const paths = [
+        ...getStageAllPaths(entries, 'unstaged'),
+        ...getStageAllPaths(entries, 'untracked')
+      ]
       if (paths.length === 0) {
         return
       }
@@ -135,9 +139,7 @@ export function useFolderSourceControlMutations({
 
   const requestDiscardAll = useCallback(
     (area: 'unstaged' | 'untracked') => {
-      const paths = (statusState?.status?.entries ?? [])
-        .filter((entry) => entry.area === area)
-        .map((entry) => entry.path)
+      const paths = getDiscardAllPaths(statusState?.status?.entries ?? [], area)
       if (paths.length > 0) {
         setPendingDiscard({ kind: 'area', area, paths })
       }

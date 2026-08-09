@@ -37,6 +37,14 @@ describe('source control entry actions', () => {
     expect(
       canDiscardStatusEntry(entry({ area: 'unstaged', conflictStatus: 'resolved_locally' }))
     ).toBe(false)
+    expect(
+      canDiscardStatusEntry(
+        entry({
+          area: 'unstaged',
+          submodule: { commitChanged: false, trackedChanges: true, untrackedChanges: true }
+        })
+      )
+    ).toBe(false)
   })
 
   it('hides Stage for submodule-internal rows', () => {

@@ -1,5 +1,5 @@
 import type { GitStatusEntry } from '../../../../shared/types'
-import { isStageableStatusEntry } from './discard-all-sequence'
+import { isDiscardableStatusEntry, isStageableStatusEntry } from './discard-all-sequence'
 
 /**
  * Per-row Source Control action eligibility, centralized so the stage/unstage/
@@ -19,9 +19,6 @@ export function canUnstageStatusEntry(entry: GitStatusEntry): boolean {
 
 export function canDiscardStatusEntry(entry: GitStatusEntry): boolean {
   return (
-    entry.conflictStatus !== 'unresolved' &&
-    entry.conflictStatus !== 'resolved_locally' &&
-    !entry.submoduleRoot &&
-    (entry.area === 'unstaged' || entry.area === 'untracked')
+    (entry.area === 'unstaged' || entry.area === 'untracked') && isDiscardableStatusEntry(entry)
   )
 }

@@ -418,6 +418,64 @@ describe('hosted review slice', () => {
     })
   })
 
+  it('keeps the explicit connectionId for unregistered scanned repo eligibility', async () => {
+    mockApi.hostedReview.getCreationEligibility.mockResolvedValueOnce({
+      provider: 'github',
+      review: null,
+      canCreate: true,
+      blockedReason: null,
+      nextAction: null
+    })
+    const store = makeStore()
+
+    await store.getState().getHostedReviewCreationEligibility({
+      repoPath: '/remote/scanned',
+      connectionId: 'ssh-1',
+      worktreePath: '/remote/scanned',
+      branch: 'feature/create-pr',
+      base: 'main'
+    })
+
+    expect(mockApi.hostedReview.getCreationEligibility).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: '/remote/scanned',
+        connectionId: 'ssh-1',
+        branch: 'feature/create-pr',
+        base: 'main'
+      })
+    )
+  })
+
+  it('keeps the explicit connectionId when creating a review for an unregistered repo', async () => {
+    mockApi.hostedReview.create.mockResolvedValueOnce({
+      ok: true,
+      number: 12,
+      url: 'https://github.com/acme/orca/pull/12'
+    })
+    const store = makeStore()
+
+    await store.getState().createHostedReview('/remote/scanned', {
+      connectionId: 'ssh-1',
+      provider: 'github',
+      base: 'main',
+      head: 'feature/create-pr',
+      title: 'Create PR',
+      worktreePath: '/remote/scanned'
+    })
+
+    expect(mockApi.hostedReview.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: '/remote/scanned',
+        connectionId: 'ssh-1',
+        provider: 'github',
+        base: 'main',
+        head: 'feature/create-pr',
+        title: 'Create PR',
+        worktreePath: '/remote/scanned'
+      })
+    )
+  })
+
   it('rejects a never-settling local eligibility probe after the timeout', async () => {
     vi.useFakeTimers()
     // A hung git/gh subprocess never resolves; the store must not wait forever.

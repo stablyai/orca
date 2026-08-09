@@ -2,6 +2,15 @@ import type { GitStatusEntry } from '../../../../shared/types'
 
 export type DiscardAllArea = 'staged' | 'unstaged' | 'untracked'
 
+export function isDiscardableStatusEntry(entry: GitStatusEntry): boolean {
+  return (
+    entry.conflictStatus !== 'unresolved' &&
+    entry.conflictStatus !== 'resolved_locally' &&
+    !entry.submoduleRoot &&
+    !isSubmoduleWorktreeOnlyChange(entry)
+  )
+}
+
 /**
  * Collect the paths a "Discard all" bulk action should operate on for a given
  * area. Unresolved and locally-resolved conflicts are excluded — discarding
@@ -12,12 +21,7 @@ export function getDiscardAllPaths(
   area: DiscardAllArea
 ): string[] {
   return entries
-    .filter(
-      (entry) =>
-        entry.area === area &&
-        entry.conflictStatus !== 'unresolved' &&
-        entry.conflictStatus !== 'resolved_locally'
-    )
+    .filter((entry) => entry.area === area && isDiscardableStatusEntry(entry))
     .map((entry) => entry.path)
 }
 

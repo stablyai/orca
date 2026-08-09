@@ -62,6 +62,19 @@ describe('getDiscardAllPaths', () => {
     expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['clean.ts'])
   })
 
+  it('skips submodule-internal and nested-only submodule rows', () => {
+    const entries: GitStatusEntry[] = [
+      entry({ path: 'clean.ts', area: 'unstaged' }),
+      entry({ path: 'inner.ts', area: 'unstaged', submoduleRoot: 'vendor/lib' }),
+      entry({
+        path: 'nested-repo',
+        area: 'unstaged',
+        submodule: { commitChanged: false, trackedChanges: true, untrackedChanges: true }
+      })
+    ]
+    expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['clean.ts'])
+  })
+
   it('returns an empty array when nothing matches', () => {
     expect(getDiscardAllPaths([], 'staged')).toEqual([])
     expect(getDiscardAllPaths([entry({ path: 'a.ts', area: 'staged' })], 'unstaged')).toEqual([])

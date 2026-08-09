@@ -6,6 +6,24 @@ import {
   type RuntimeGitContext
 } from '@/runtime/runtime-git-client'
 import type { GitStatusEntry } from '../../../../shared/types'
+import {
+  getDiscardAllPaths,
+  getStageAllPaths,
+  getUnstageAllPaths,
+  type StageAllArea
+} from './discard-all-sequence'
+
+export function resolveFolderBulkPaths(
+  entries: readonly GitStatusEntry[],
+  area: 'staged' | 'unstaged' | 'untracked',
+  operation: (ctx: RuntimeGitContext, paths: string[]) => Promise<void>
+): string[] {
+  return operation === bulkStageRuntimeGitPaths
+    ? getStageAllPaths(entries, area as StageAllArea)
+    : operation === bulkUnstageRuntimeGitPaths
+      ? getUnstageAllPaths(entries)
+      : getDiscardAllPaths(entries, area)
+}
 
 export function useFolderSourceControlBulkActions({
   context,
@@ -27,7 +45,7 @@ export function useFolderSourceControlBulkActions({
       area: 'staged' | 'unstaged' | 'untracked',
       operation: (ctx: RuntimeGitContext, paths: string[]) => Promise<void>
     ) => {
-      const paths = entries.filter((entry) => entry.area === area).map((entry) => entry.path)
+      const paths = resolveFolderBulkPaths(entries, area, operation)
       if (paths.length === 0) {
         return
       }
