@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
@@ -20,9 +20,11 @@ vi.mock('@/store', () => ({
 // Why: the real grid picker renders thousands of lazy emoji nodes; the click contract is what matters.
 vi.mock('emoji-picker-react', () => ({
   default: ({ onEmojiClick }: { onEmojiClick: (data: { emoji: string }) => void }) => (
-    <button type="button" onClick={() => onEmojiClick({ emoji: '🚀' })}>
-      pick-rocket
-    </button>
+    <div className="epr-body" data-testid="emoji-scroll-region">
+      <button type="button" onClick={() => onEmojiClick({ emoji: '🚀' })}>
+        pick-rocket
+      </button>
+    </div>
   ),
   EmojiStyle: { NATIVE: 'native' },
   Theme: { DARK: 'dark', LIGHT: 'light' }
@@ -97,6 +99,22 @@ describe('SpaceEditorDialog', () => {
         emoji: null
       })
     })
+  })
+
+  it('scrolls the emoji grid with wheel input inside the dialog', async () => {
+    const user = userEvent.setup()
+    render(<SpaceEditorDialog />)
+
+    await user.click(screen.getByLabelText('Choose Space emoji'))
+    const scrollRegion = await screen.findByTestId('emoji-scroll-region')
+    Object.defineProperties(scrollRegion, {
+      clientHeight: { configurable: true, value: 300 },
+      scrollHeight: { configurable: true, value: 900 }
+    })
+
+    fireEvent.wheel(scrollRegion, { deltaMode: WheelEvent.DOM_DELTA_PIXEL, deltaY: 120 })
+
+    await waitFor(() => expect(scrollRegion.scrollTop).toBe(120))
   })
 
   it('stays open and allows retrying when save fails', async () => {

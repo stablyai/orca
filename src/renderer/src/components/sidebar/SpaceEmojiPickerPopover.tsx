@@ -58,7 +58,11 @@ export function SpaceEmojiPickerPopover({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto border-none p-0">
+      <PopoverContent
+        align="start"
+        className="w-auto border-none p-0"
+        scrollTargetSelector=".epr-body"
+      >
         <div className="repo-icon-emoji-picker overflow-hidden rounded-md border bg-popover">
           <EmojiPicker
             autoFocusSearch

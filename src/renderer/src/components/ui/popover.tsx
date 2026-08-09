@@ -23,12 +23,14 @@ function PopoverContent({
   align = 'center',
   sideOffset = 4,
   portalContainer,
+  scrollTargetSelector,
   style,
   onWheel,
   ref: forwardedRef,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
   portalContainer?: HTMLElement | null
+  scrollTargetSelector?: string
 }) {
   const wheelFrameIdsRef = React.useRef<Set<number>>(new Set())
 
@@ -55,8 +57,17 @@ function PopoverContent({
         return
       }
 
-      const el = event.currentTarget
-      if (!el.classList.contains('popover-scroll-content') || el.scrollHeight <= el.clientHeight) {
+      const content = event.currentTarget
+      const el = scrollTargetSelector
+        ? content.querySelector<HTMLElement>(scrollTargetSelector)
+        : content
+      if (
+        !el ||
+        (scrollTargetSelector
+          ? !el.contains(event.target as Node)
+          : !el.classList.contains('popover-scroll-content')) ||
+        el.scrollHeight <= el.clientHeight
+      ) {
         return
       }
 
@@ -84,7 +95,7 @@ function PopoverContent({
         wheelFrameIdsRef.current.add(frameId)
       }
     },
-    [onWheel]
+    [onWheel, scrollTargetSelector]
   )
 
   return (
