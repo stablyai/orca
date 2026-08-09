@@ -18,6 +18,7 @@ import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import {
   getLanguageEntries,
   getMenuBarIconEntries,
+  getNotchStatusEntries,
   getSystemTrayEntries,
   getThemeEntries,
   getTitlebarEntries,
@@ -62,6 +63,7 @@ export function AppearanceInterfaceSection({
   const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
   const languageEntry = getLanguageEntries()[0]
   const menuBarIconEntry = getMenuBarIconEntries({ showMenuBarIcon: true })[0]
+  const notchStatusEntry = getNotchStatusEntries({ showNotchStatus: true })[0]
   const systemTrayEntry = getSystemTrayEntries({ showSystemTray: true })[0]
   const themeEntry = getThemeEntries()[0]
   const themeLabel = translate('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')
@@ -71,7 +73,8 @@ export function AppearanceInterfaceSection({
   const advancedEntries = [
     ...getTitlebarEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
-    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
+    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac }),
+    ...getNotchStatusEntries({ showNotchStatus: isDesktopMac })
   ]
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
   const languageTitle = translate('settings.appearance.language.title', 'Language')
@@ -263,6 +266,34 @@ export function AppearanceInterfaceSection({
                   checked={settings.showMenuBarIcon !== false}
                   onChange={() =>
                     updateSettings({ showMenuBarIcon: settings.showMenuBarIcon === false })
+                  }
+                />
+              </SearchableSetting>
+            ) : null}
+
+            {isDesktopMac ? (
+              <SearchableSetting
+                title={translate(
+                  'settings.appearance.notchStatus.title',
+                  'Show Agent Status at the Notch'
+                )}
+                description={notchStatusEntry?.description}
+                keywords={notchStatusEntry?.keywords ?? ['notch', 'agents', 'status', 'counts']}
+              >
+                <SettingsSwitchRow
+                  label={translate(
+                    'settings.appearance.notchStatus.title',
+                    'Show Agent Status at the Notch'
+                  )}
+                  // Why: opt-in — it is a permanently visible always-on-top surface, and this
+                  // switch is the only way to dismiss it.
+                  description={translate(
+                    'settings.appearance.notchStatus.description',
+                    'Pin live agent counts beside the camera, and keep them updating while the Orca window is closed.'
+                  )}
+                  checked={settings.showNotchStatus === true}
+                  onChange={() =>
+                    updateSettings({ showNotchStatus: settings.showNotchStatus !== true })
                   }
                 />
               </SearchableSetting>

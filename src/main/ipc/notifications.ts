@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: notification IPC keeps permission, dispatch, custom sound asset, and sound-loading handlers colocated so renderer/main contracts stay auditable. */
-import { app, BrowserWindow, Notification, ipcMain, shell } from 'electron'
+import { app, Notification, ipcMain, shell } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, isAbsolute, normalize } from 'node:path'
 import beepSoundPath from '../../../resources/notification-sounds/beep.mp3?asset'
@@ -28,6 +28,7 @@ import { readNotificationAuthorizationStatus } from './notification-authorizatio
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
+import { findAppWindow } from '../window/app-window-lookup'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 const MAX_RECENT_NOTIFICATION_KEYS = 50
@@ -395,7 +396,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
       // Why: light the tray attention dot before the cooldown/focus/enabled gates so they can't hold it back (clears on window show/restore; see index.ts).
       if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
-        const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
+        const activeWindow = findAppWindow()
         if (!isMainWindowVisible(activeWindow)) {
           setTrayAttention(true)
         }
@@ -430,8 +431,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         }
       }
 
-      const browserWindow =
-        BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null
+      const browserWindow = findAppWindow()
       if (
         settings.suppressWhenFocused &&
         args.isActiveWorktree &&
@@ -512,7 +512,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
           const repoId = getRepoIdFromWorktreeId(args.worktreeId)
           clickHandler = () => {
             release()
-            const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+            const win = findAppWindow()
             if (!win) {
               return
             }

@@ -247,6 +247,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     minimizeToTrayOnClose: false,
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
+    // Why default-on: the indicator is the point of the feature — it is only useful if it is
+    // already there when an agent blocks. Dismissable from Settings > Appearance > Advanced.
+    showNotchStatus: true,
     terminalClipboardOnSelect: false,
     // Why: default on so Zellij/tmux/nvim copy works out of the box. Query
     // replies stay disabled and payload size is capped in the OSC 52 handler.

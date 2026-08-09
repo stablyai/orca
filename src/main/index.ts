@@ -204,7 +204,7 @@ import {
   type SystemTrayOptions
 } from './tray/system-tray'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
-import { focusExistingMainWindow } from './window/focus-existing-window'
+import { focusExistingMainWindow, safelyRevealWindow } from './window/focus-existing-window'
 import { notifyMainWindowBecameVisible } from './window/main-window-visibility'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
@@ -245,6 +245,26 @@ import {
 } from './claude-accounts/live-pty-gate'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer, type AgentHookProviderSessionIdentity } from './agent-hooks/server'
+import { NotchStatusService } from './notch/notch-status-service'
+import {
+  closeNotchWindow,
+  closeNotchWindowForQuit,
+  createNotchWindow,
+  getNotchWindow,
+  setNotchExpanded
+} from './notch/notch-window'
+import {
+  NOTCH_QUIT_ABORT_GRACE_MS,
+  shouldRestoreNotchAfterQuitAttempt
+} from './notch/notch-quit-restore'
+import { findAppWindow } from './window/app-window-lookup'
+import { buildNotchRows } from './notch/notch-rows'
+import { registerNotchHandlers } from './ipc/notch'
+import {
+  NOTCH_REVEAL_PANE_CHANNEL,
+  type NotchFocusPaneRequest
+} from '../shared/notch/notch-snapshot'
+import { getTrustedUIRendererWindow } from './ipc/ui'
 import { createHookProviderSessionInvalidator } from './agent-hooks/hook-provider-session-invalidation'
 import { createHookStatusSessionTabsInvalidator } from './agent-hooks/hook-status-session-tabs-invalidation'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
@@ -254,7 +274,7 @@ import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder
 import { moveWorktree } from './git/worktree'
 import { setDefaultWslDistroOverride } from './git/runner'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
-import { parseWorkspaceKey } from '../shared/workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { EmulatorBridge } from './emulator/emulator-bridge'
@@ -1220,6 +1240,92 @@ function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
   return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
 }
 
+// Why: the notch reads agentHookServer directly rather than the main window's status IPC, so
+// it keeps counting while the app window is closed — which is the entire point of the surface.
+let notchStatusService: NotchStatusService | null = null
+
+function syncNotchStatus(showNotchStatus: boolean): void {
+  if (process.platform !== 'darwin' || isServeMode) {
+    return
+  }
+  if (!showNotchStatus) {
+    closeNotchWindow()
+    notchStatusService?.stop()
+    notchStatusService = null
+    return
+  }
+  if (!notchStatusService) {
+    notchStatusService = new NotchStatusService({ source: agentHookServer })
+    notchStatusService.start()
+  }
+  const service = notchStatusService
+  createNotchWindow({
+    getSummary: () => service.getSummary(),
+    subscribe: (listener) => service.subscribe(listener),
+    buildRows: (summary) =>
+      buildNotchRows({
+        sessions: summary.sessions,
+        lookup: {
+          getDisplayName: (worktreeId) =>
+            store?.getWorktreeMeta(worktreeId)?.displayName ??
+            store
+              ?.getFolderWorkspaces()
+              .find((workspace) => folderWorkspaceKey(workspace.id) === worktreeId)?.name ??
+            null
+        },
+        fallbackTitle: 'Agent'
+      })
+  })
+}
+
+// Why both events: the notch panel is `focusable: false`, so it never gets a blur of its own
+// and would otherwise stay open behind whatever you did next. `did-resign-active` covers
+// switching to another app; `browser-window-focus` covers clicking back into Orca. Neither can
+// be emitted by the notch window itself, so this cannot fight the user's own click.
+app.on('did-resign-active', () => setNotchExpanded(false))
+app.on('browser-window-focus', () => setNotchExpanded(false))
+
+// Why: clicking a notch row must work with the app window closed — that is the state the notch
+// exists for — so this reopens it rather than no-oping the way the pop-out relay does.
+/**
+ * Buffered until the app renderer says its listener is attached.
+ *
+ * Why not `did-finish-load`: that fires at page load, but useNotchRevealBridge registers its
+ * listener inside a React effect committed in a later task, and ipcRenderer does not queue for
+ * a channel with no listener — so the reveal was silently dropped every time the row was
+ * clicked with the window closed, which is the case the notch exists for. Mirrors the
+ * rendererReady handshake AutomationService already uses for the same problem.
+ */
+let pendingNotchReveal: NotchFocusPaneRequest | null = null
+
+function flushNotchReveal(): void {
+  const args = pendingNotchReveal
+  pendingNotchReveal = null
+  const window = getTrustedUIRendererWindow()
+  if (!args || !window || window.isDestroyed() || window.webContents.isDestroyed()) {
+    return
+  }
+  window.webContents.send(NOTCH_REVEAL_PANE_CHANNEL, args)
+}
+
+function revealNotchPane(args: NotchFocusPaneRequest): void {
+  const existing = getTrustedUIRendererWindow()
+  const window = existing ?? openMainWindow()
+  safelyRevealWindow(window)
+  // An already-live renderer has its listener attached, so send straight through; a freshly
+  // opened one buffers until it acks.
+  if (existing && !existing.webContents.isLoading()) {
+    existing.webContents.send(NOTCH_REVEAL_PANE_CHANNEL, args)
+  } else {
+    pendingNotchReveal = args
+  }
+  try {
+    app.focus({ steal: true })
+  } catch {
+    // Best-effort; the per-window reveal above may still bring it forward.
+  }
+}
+
 function openMainWindow(): BrowserWindow {
   logStartupMilestone('open-main-window-start')
   if (!store) {
@@ -1282,6 +1388,9 @@ function openMainWindow(): BrowserWindow {
     onQuitAborted: () => {
       isQuitting = false
       clearExpectedRendererReload()
+      // Deliberately does NOT restore the notch. onQuitAborted also fires during the ordinary
+      // deferred-quit dance, and re-creating an always-on-top window there re-suppresses
+      // `window-all-closed` — which is the very event Orca needs to finish quitting.
     },
     onRendererProcessGone: (details, webContentsId) => {
       recordProcessGoneCrash(
@@ -1337,6 +1446,7 @@ function openMainWindow(): BrowserWindow {
       if (syncMacMenuBarIcon(store.getSettings().showMenuBarIcon !== false)) {
         logStartupMilestone('tray-created')
       }
+      syncNotchStatus(store.getSettings().showNotchStatus === true)
       return
     }
     const options = getSystemTrayOptions()
@@ -1368,6 +1478,11 @@ function openMainWindow(): BrowserWindow {
   }
   window.webContents.on('did-finish-load', onFirstWindowLoad)
 
+  registerNotchHandlers({
+    getService: () => notchStatusService,
+    revealPane: revealNotchPane,
+    onRevealRendererReady: flushNotchReveal
+  })
   registerCoreHandlers(
     store,
     runtime,
@@ -2138,6 +2253,9 @@ void app.whenReady().then(async () => {
     if ('showMenuBarIcon' in updates) {
       // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
+    }
+    if ('showNotchStatus' in updates) {
+      syncNotchStatus(settings.showNotchStatus === true)
     }
   })
   // Why: run before ClaudeRuntimeAuthService's constructor sync — a surviving daemon Claude CLI holds the single-use refresh token; early refresh rotates it out mid-session.
@@ -3204,4 +3322,44 @@ app.on('window-all-closed', () => {
   ) {
     app.quit()
   }
+})
+
+// Quit handling for the notch. The teardown must happen on `before-quit` so `window-all-closed`
+// can fire and complete a deferred Cmd+Q; the restore below covers a quit that gets vetoed.
+// Registered after the main quit handlers so those observe quit state first (and so the main
+// `before-quit` block stays the first in this file, which the startup-ordering test slices on).
+let notchQuitCommitted = false
+let notchRestorePending = false
+
+app.on('will-quit', () => {
+  notchQuitCommitted = true
+})
+
+app.on('before-quit', () => {
+  // Why captured in the closure rather than read from module scope at fire time: two vetoed
+  // quits inside the grace window would otherwise cancel each other. The second `before-quit`
+  // finds the window already destroyed, and a shared flag would then read false when the first
+  // timer fires — leaving the bar hidden for the session with the settings switch still on.
+  // A restore already pending also counts as "was open", so the second attempt re-arms.
+  const wasOpen = getNotchWindow() !== null || notchRestorePending
+  closeNotchWindowForQuit()
+  if (!wasOpen) {
+    return
+  }
+  notchRestorePending = true
+  const timer = setTimeout(() => {
+    notchRestorePending = false
+    if (
+      shouldRestoreNotchAfterQuitAttempt({
+        quitCommitted: notchQuitCommitted,
+        hasAppWindow: findAppWindow() !== null,
+        settingEnabled: store?.getSettings().showNotchStatus === true,
+        wasOpenBeforeQuit: wasOpen
+      })
+    ) {
+      syncNotchStatus(true)
+    }
+  }, NOTCH_QUIT_ABORT_GRACE_MS)
+  // Why: unref'd so a committed quit is never delayed by this timer.
+  timer.unref?.()
 })

@@ -59,6 +59,16 @@
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
       },
+      "notchStatus": {
+        "title": "Show Agent Status at the Notch",
+        "description": "Pin live agent counts beside the camera, and keep them updating while the Orca window is closed.",
+        "keyword": {
+          "notch": "notch",
+          "agents": "agents",
+          "status": "status",
+          "counts": "counts"
+        }
+      },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar."
@@ -15211,6 +15221,20 @@
       "deliveryFailed": "The new {{agent}} session started, but its context could not be sent.",
       "launchFailed": "Could not start a new {{agent}} session."
     }
+  },
+  "notch": {
+    "status": {
+      "working": "{{count}} working",
+      "attention": "{{count}} awaiting input",
+      "done": "{{count}} finished",
+      "idle": "No agents running"
+    },
+    "rowState": {
+      "working": "Working",
+      "attention": "Needs you",
+      "done": "Finished"
+    },
+    "sessionList": "Agent sessions"
   },
   "dashboardPopout": {
     "view": {

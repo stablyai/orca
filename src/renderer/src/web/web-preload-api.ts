@@ -666,6 +666,16 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     e2e: {
       getConfig: () => webE2EConfig
     },
+    // The notch is a macOS desktop-chrome surface; the web client has no window to place.
+    notch: {
+      onSnapshot: () => () => undefined,
+      acknowledgePanes: () => undefined,
+      setExpanded: () => undefined,
+      setInteractive: () => undefined,
+      focusPane: () => undefined,
+      onRevealPane: () => () => undefined,
+      notifyRevealReady: () => undefined
+    },
     settings: {
       get: async () => getRuntimeBackedStoredSettings(),
       // Why: localStorage-backed settings are synchronous, so the pre-hydration kill-switch read works the same as desktop.

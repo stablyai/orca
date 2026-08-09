@@ -191,6 +191,12 @@ function prepareMacDevElectronApp() {
     )
   }
 
+  // Why before the early return: this helper's output lives in the repo's .build/release, not
+  // in the copied bundle, so copiedAppIsUsable() never observes it. Called from inside the
+  // cached branch it would only build on the first dev launch — a deleted binary or an edited
+  // main.swift would then silently leave the notch on its pill fallback.
+  buildDevScreenGeometryHelper()
+
   if (copiedAppIsUsable()) {
     process.env.ELECTRON_EXEC_PATH = executablePath
     return
@@ -319,6 +325,27 @@ function getDevUserDataPath() {
     process.env.XDG_CONFIG_HOME ?? path.join(process.env.HOME ?? '', '.config'),
     'orca-dev'
   )
+}
+
+function buildDevScreenGeometryHelper() {
+  // NSScreen's notch geometry has no Electron API, so without this every MacBook renders as a
+  // centred capsule in dev and the hardware-notch path is never exercised.
+  try {
+    execFileSync(
+      process.execPath,
+      // No --output: unpackaged builds resolve the helper from the repo's .build/release
+      // (see resolveHelperPath in src/main/notch/screen-geometry.ts), not from the bundle.
+      [
+        path.join(repoRoot, 'config', 'scripts', 'build-screen-geometry-macos.mjs'),
+        '--single-arch'
+      ],
+      { stdio: 'inherit' }
+    )
+  } catch (error) {
+    console.warn(
+      `[orca-dev] screen-geometry helper build failed (notch falls back to the pill): ${error?.message ?? error}`
+    )
+  }
 }
 
 function prepareDevCliWrapper() {

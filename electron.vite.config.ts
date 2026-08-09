@@ -307,6 +307,9 @@ export const electronViteConfig: UserConfig = {
         input: {
           index: resolve('src/renderer/index.html'),
           popout: resolve('src/renderer/popout.html'),
+          // Built on every platform but only ever loaded on macOS, so the darwin gate lives
+          // in main rather than in the build graph.
+          notch: resolve('src/renderer/notch.html'),
           web: resolve('src/renderer/web-index.html')
         }
       }

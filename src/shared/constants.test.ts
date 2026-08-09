@@ -67,6 +67,7 @@ describe('getDefaultSettings', () => {
 
   it('defaults the menu bar icon on so the value round-trips across platforms', () => {
     expect(getDefaultSettings('/tmp').showMenuBarIcon).toBe(true)
+    expect(getDefaultSettings('/tmp').showNotchStatus).toBe(true)
   })
 
   it('confirms before closing pinned tabs by default', () => {

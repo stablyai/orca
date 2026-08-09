@@ -475,6 +475,37 @@ describe('AppearancePane', () => {
     expect(updateSettings).toHaveBeenCalledWith({ showMenuBarIcon: false })
   })
 
+  it('shows and updates the notch status preference only on desktop macOS', async () => {
+    // Why: this switch is the only way to dismiss a permanently visible always-on-top surface,
+    // so it has to be reachable — before it existed the notch could only be turned off by
+    // hand-editing persisted settings.
+    mocks.state.appPlatform = 'darwin'
+    mocks.state.settingsSearchQuery = 'notch'
+    const updateSettings = vi.fn()
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+    const toggle = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Show Agent Status at the Notch"]'
+    )
+
+    expect(toggle).not.toBeNull()
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    // Defaults on now, so the first click turns it off — this switch is the only way to
+    // dismiss a permanently visible surface.
+    expect(updateSettings).toHaveBeenCalledWith({ showNotchStatus: false })
+  })
+
+  it('hides the notch status preference off macOS', async () => {
+    mocks.state.appPlatform = 'win32'
+    mocks.state.settingsSearchQuery = 'notch'
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+
+    expect(
+      container.querySelector('button[role="switch"][aria-label="Show Agent Status at the Notch"]')
+    ).toBeNull()
+  })
+
   it('keeps description-only search matches visible after helper text is hidden', async () => {
     mocks.state.settingsSearchQuery = 'app window'
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))

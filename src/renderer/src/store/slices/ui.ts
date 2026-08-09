@@ -1235,6 +1235,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     if (notificationIds.length > 0 && typeof window !== 'undefined') {
       void window.api?.notifications?.dismiss?.(notificationIds)
     }
+    // Why: main owns the notch's copy of "visited" so a finished agent stops counting green.
+    // Fire-and-forget — the notch is chrome, and a dropped ack self-corrects on the next visit.
+    if (paneKeys.length > 0 && typeof window !== 'undefined') {
+      window.api?.notch?.acknowledgePanes?.(paneKeys)
+    }
   },
   unacknowledgeAgents: (paneKeys) =>
     set((s) => {
