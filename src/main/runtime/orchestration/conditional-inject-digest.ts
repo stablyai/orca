@@ -35,3 +35,21 @@ export function canonicalConditionalInjectRequest(input: ConditionalInjectDigest
 export function digestConditionalInjectRequest(input: ConditionalInjectDigestInput): string {
   return createHash('sha256').update(canonicalConditionalInjectRequest(input), 'utf8').digest('hex')
 }
+
+// Why: agent-status prompt evidence is intentionally capped at 200 characters.
+// The operation id plus the full request digest does not fit after the compact
+// dispatch header, so hash both into a short, operation-bound acknowledgement
+// token that survives normalization while retaining 128 bits of collision
+// resistance.
+export function conditionalInjectAgentAckMarker(
+  operationId: string,
+  requestDigest: string
+): string {
+  const token = createHash('sha256')
+    .update(operationId, 'utf8')
+    .update('\0', 'utf8')
+    .update(requestDigest, 'utf8')
+    .digest('hex')
+    .slice(0, 32)
+  return `[orca-conditional-ack:${token}]`
+}

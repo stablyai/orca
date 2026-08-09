@@ -10,9 +10,11 @@ import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
 import {
+  conditionalInjectAgentAckMarker,
   CONDITIONAL_INJECT_SCHEMA,
   digestConditionalInjectRequest
 } from '../../orchestration/conditional-inject-digest'
+import { normalizePromptField } from '../../../../shared/agent-status-field-normalization'
 
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
@@ -2271,9 +2273,13 @@ describe('orchestration RPC methods', () => {
       })
       expect(send).toHaveBeenCalledTimes(1)
       const [sentPrompt, sendOptions] = [send.mock.calls[0][1], send.mock.calls[0][2]]
-      const expectedMarker = `[orca-conditional-inject:${params.operationId}:${params.requestDigest}]`
+      const expectedMarker = conditionalInjectAgentAckMarker(
+        params.operationId,
+        params.requestDigest
+      )
       expect(sentPrompt).toContain(expectedMarker)
       expect(sendOptions?.requireAgentAck?.expectedPromptMarker).toBe(expectedMarker)
+      expect(normalizePromptField(sentPrompt)).toContain(expectedMarker)
     })
 
     it('admits one delivery winner across concurrent identical calls', async () => {

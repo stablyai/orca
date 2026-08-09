@@ -30,6 +30,7 @@ import type { RunRow } from '../../orchestration/types'
 import { encodeFederatedControlMessage } from '../../orchestration/federation-control-message'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
 import {
+  conditionalInjectAgentAckMarker,
   CONDITIONAL_INJECT_SCHEMA,
   digestConditionalInjectRequest
 } from '../../orchestration/conditional-inject-digest'
@@ -1495,7 +1496,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         return { operation: started.operation, dispatch: started.dispatch, injected: false }
       }
       try {
-        const agentAckMarker = `[orca-conditional-inject:${params.operationId}:${params.requestDigest}]`
+        const agentAckMarker = conditionalInjectAgentAckMarker(
+          params.operationId,
+          params.requestDigest
+        )
         const dispatchCapability = db.mintDispatchCapability({
           dispatchId: started.dispatch.id,
           paneKey: params.expectedWorkerPane,
