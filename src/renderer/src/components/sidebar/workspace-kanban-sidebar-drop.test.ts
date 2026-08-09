@@ -551,6 +551,48 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
 })
 
 describe('workspace kanban sidebar drop updates', () => {
+  it('does not request Manual for a same-lane no-op drop in a derived sort', () => {
+    const worktreeById = new Map([
+      ['doing-a', worktree({ id: 'doing-a', workspaceStatus: 'doing', sortOrder: 2000 })],
+      ['doing-b', worktree({ id: 'doing-b', workspaceStatus: 'doing', sortOrder: 1000 })]
+    ])
+
+    const result = buildWorkspaceKanbanSidebarDropUpdates({
+      worktreeIds: ['doing-a'],
+      status: 'doing',
+      dropIndex: 1,
+      groups: [{ key: 'doing', worktreeIds: ['doing-a', 'doing-b'] }],
+      worktreeById,
+      workspaceStatuses,
+      sortBy: 'recent',
+      now: 10_000
+    })
+
+    expect(result.shouldSwitchToManual).toBe(false)
+    expect(result.updates.size).toBe(0)
+  })
+
+  it('requests Manual for a clear same-lane reorder in a derived sort', () => {
+    const worktreeById = new Map([
+      ['doing-a', worktree({ id: 'doing-a', workspaceStatus: 'doing', sortOrder: 2000 })],
+      ['doing-b', worktree({ id: 'doing-b', workspaceStatus: 'doing', sortOrder: 1000 })]
+    ])
+
+    const result = buildWorkspaceKanbanSidebarDropUpdates({
+      worktreeIds: ['doing-a'],
+      status: 'doing',
+      dropIndex: 2,
+      groups: [{ key: 'doing', worktreeIds: ['doing-a', 'doing-b'] }],
+      worktreeById,
+      workspaceStatuses,
+      sortBy: 'recent',
+      now: 10_000
+    })
+
+    expect(result.shouldSwitchToManual).toBe(true)
+    expect(result.updates.get('doing-a')).toEqual({ manualOrder: 0 })
+  })
+
   it('writes a status-only update for cross-lane drops outside Manual sort', () => {
     const worktreeById = new Map([
       ['todo-a', worktree({ id: 'todo-a', workspaceStatus: 'todo', sortOrder: 3000 })],

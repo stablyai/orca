@@ -51,12 +51,15 @@ describe('terminal-fit-restore', () => {
 
     await expect(restoreTerminalFitToDesktop('remote:pty-1', undefined)).resolves.toBe(true)
 
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-one' },
-      'terminal.restoreFit',
-      { terminal: 'terminal-one' },
-      { timeoutMs: 15_000 }
-    )
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
+    const [target, method, params, options] = vi.mocked(callRuntimeRpc).mock.calls[0] ?? []
+    expect(target).toEqual({ kind: 'environment', environmentId: 'env-one' })
+    expect(method).toBe('terminal.restoreFit')
+    expect(params).toEqual({ terminal: 'terminal-one' })
+    // Why: deadline is remaining time (deadlineAt - Date.now()); real clocks can
+    // tick 1ms between those reads, so assert a band instead of exact 15_000.
+    expect(options?.timeoutMs).toBeGreaterThan(14_000)
+    expect(options?.timeoutMs).toBeLessThanOrEqual(15_000)
     expect(restoreTerminalFit).not.toHaveBeenCalled()
   })
 
@@ -69,12 +72,13 @@ describe('terminal-fit-restore', () => {
       restoreTerminalFitToDesktop('remote:pty-2', { activeRuntimeEnvironmentId: 'env-active' })
     ).resolves.toBe(true)
 
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-active' },
-      'terminal.restoreFit',
-      { terminal: 'terminal-two' },
-      { timeoutMs: 15_000 }
-    )
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
+    const [target, method, params, options] = vi.mocked(callRuntimeRpc).mock.calls[0] ?? []
+    expect(target).toEqual({ kind: 'environment', environmentId: 'env-active' })
+    expect(method).toBe('terminal.restoreFit')
+    expect(params).toEqual({ terminal: 'terminal-two' })
+    expect(options?.timeoutMs).toBeGreaterThan(14_000)
+    expect(options?.timeoutMs).toBeLessThanOrEqual(15_000)
   })
 
   it('deduplicates bulk restore PTYs and succeeds when any restore succeeds', async () => {

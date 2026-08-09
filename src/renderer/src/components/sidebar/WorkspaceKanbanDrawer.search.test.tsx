@@ -7,6 +7,7 @@ import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from '@/lib/worktree-palette-query-b
 import { useAppStore } from '@/store'
 import type { Repo, Worktree, WorktreeMeta } from '../../../../shared/types'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
+import type { SortBy } from './smart-sort'
 import type { WorkspaceKanbanLaneView } from './workspace-kanban-search'
 
 type HeaderCapture = {
@@ -196,6 +197,7 @@ const allWorktrees = [alpha, beta, gamma, delta, omega]
 let container: HTMLDivElement
 let root: Root
 let updateWorktreesMeta: ReturnType<typeof vi.fn<UpdateWorktreesMeta>>
+let setSortBy: ReturnType<typeof vi.fn<(sortBy: SortBy) => void>>
 
 function renderDrawer(open = true): void {
   act(() => {
@@ -233,6 +235,7 @@ beforeEach(() => {
   selectionScopeState.current = []
   syncWorkspaceBoardTaskStatusesMock.mockClear()
   updateWorktreesMeta = vi.fn<UpdateWorktreesMeta>(() => Promise.resolve())
+  setSortBy = vi.fn<(sortBy: SortBy) => void>()
   useAppStore.setState({
     repos: [
       { id: 'repo-a', path: '/repo-a', name: 'repo-a', connectionId: null } as unknown as Repo
@@ -246,6 +249,7 @@ beforeEach(() => {
     sidebarOpen: true,
     sidebarWidth: 280,
     sortBy: 'manual',
+    setSortBy,
     updateWorktreeMeta: vi.fn(),
     updateWorktreesMeta,
     getKnownWorktreeById: (id: string) => allWorktrees.find((item) => item.id === id),
@@ -412,5 +416,39 @@ describe('WorkspaceKanbanDrawer search', () => {
     expect(dropped?.workspaceStatus).toBe('todo')
     expect(dropped?.manualOrder).toBeGreaterThan(gamma.manualOrder ?? 0)
     expect(dropped?.manualOrder).toBeLessThan(delta.manualOrder ?? 0)
+  })
+
+  it('does not request Manual when a derived-sort card returns to its original gap', () => {
+    useAppStore.setState({ sortBy: 'recent' })
+    renderDrawer()
+    const [firstId] = laneIds('todo')
+
+    act(() => {
+      pointerDragState.current?.onDropWorktreesInStatus({
+        worktreeIds: [firstId!],
+        status: 'todo',
+        dropIndex: 1
+      })
+    })
+
+    expect(setSortBy).not.toHaveBeenCalled()
+    expect(updateWorktreesMeta).not.toHaveBeenCalled()
+  })
+
+  it('requests Manual when a derived-sort card is clearly reordered', () => {
+    useAppStore.setState({ sortBy: 'recent' })
+    renderDrawer()
+    const ids = laneIds('todo')
+
+    act(() => {
+      pointerDragState.current?.onDropWorktreesInStatus({
+        worktreeIds: [ids[0]!],
+        status: 'todo',
+        dropIndex: ids.length
+      })
+    })
+
+    expect(setSortBy).toHaveBeenCalledWith('manual')
+    expect(updateWorktreesMeta).toHaveBeenCalledTimes(1)
   })
 })
