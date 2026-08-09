@@ -22,38 +22,39 @@ const GROK_COMPOSER_PROMPT = '❯'
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
 
 type DraftPasteReadySignalSpec = {
-  /** Bytes that must be seen before `marker` counts; everything earlier is ignored. */
-  anchor: string
+  /** Bytes that must precede `marker` for it to count; null when there is no marker. */
+  markerAnchor: string | null
   /** Composer-ready marker, or null for signals that only use the quiet window. */
   marker: string | null
-  /** Whether the quiet window is armed as a fallback once the anchor is seen. */
-  quietFallback: boolean
+  /** Bytes that arm the quiet-window fallback, or null when the signal has none. */
+  quietAnchor: string | null
 }
 
 const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySignalSpec> = {
   'codex-composer-prompt': {
-    anchor: DECSET_BRACKETED_PASTE,
+    markerAnchor: DECSET_BRACKETED_PASTE,
     marker: CODEX_COMPOSER_PROMPT,
-    quietFallback: false
+    quietAnchor: null
   },
   'render-cursor-after-bracketed-paste': {
-    anchor: DECSET_BRACKETED_PASTE,
+    markerAnchor: DECSET_BRACKETED_PASTE,
     marker: DECTCEM_SHOW_CURSOR,
-    quietFallback: false
+    quietAnchor: null
   },
   'grok-composer-prompt': {
-    anchor: DECSET_ALT_SCREEN,
+    markerAnchor: DECSET_ALT_SCREEN,
     marker: GROK_COMPOSER_PROMPT,
-    // Why: grok renders differentially, so the composer glyph is painted once
-    // and a scanner that attached after that frame would never see it. The
-    // quiet window can't pre-empt the marker here — grok animates its startup
-    // logo continuously until well past composer mount.
-    quietFallback: true
+    // Why: the quiet window stays on DECSET 2004, independent of the alt-screen
+    // marker anchor. grok can be configured to render inline (`--no-alt-screen`,
+    // `[ui] screen_mode = "minimal"`), where 1049h never arrives — anchoring the
+    // fallback there too would leave the draft with no delivery path at all, and
+    // the main-process caller drops the draft when readiness never resolves.
+    quietAnchor: DECSET_BRACKETED_PASTE
   },
   'render-quiet-after-bracketed-paste': {
-    anchor: DECSET_BRACKETED_PASTE,
+    markerAnchor: null,
     marker: null,
-    quietFallback: true
+    quietAnchor: DECSET_BRACKETED_PASTE
   }
 }
 
@@ -84,10 +85,15 @@ export type DraftPasteReadyScanResult = {
  *   - `grok-composer-prompt`: ready when grok's `❯` glyph renders after the
  *     alternate-screen switch (`\x1b[?1049h`). grok shimmers its startup logo
  *     until the session opens, so the quiet window alone never settles and the
- *     draft waited out the full hard timeout (~8s). The anchor is the alt-screen
- *     switch, not DECSET 2004, because the shell that runs the launch command
- *     emits 2004 too and its own prompt may be `❯` (starship, pure) — anchoring
- *     there could paste into the shell. Keeps the quiet window as a fallback.
+ *     draft waited out the full hard timeout (~8s). The glyph is anchored on the
+ *     alt-screen switch rather than DECSET 2004 because the shell that runs the
+ *     launch command emits 2004 too and its own prompt may be `❯` (starship,
+ *     pure) — anchoring there could paste into the shell. This is the only
+ *     signal with both a marker and a quiet window, and they use DIFFERENT
+ *     anchors: grok can render inline (`--no-alt-screen`, `[ui] screen_mode =
+ *     "minimal"`) and on legacy Windows consoles draws `> ` instead of `❯`, so
+ *     the marker is best-effort and the 2004-anchored quiet window is the floor
+ *     that keeps those launches on the pre-existing delivery path.
  *   - `render-quiet-after-bracketed-paste` (default): no signal marker; arms the
  *     quiet window once DECSET 2004 is seen.
  *
@@ -99,41 +105,44 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
 } {
   let recent = ''
   let postAnchorRecent = ''
-  let sawAnchor = false
+  let sawMarkerAnchor = false
+  let sawQuietAnchor = false
 
-  const { anchor, marker: signalMarker, quietFallback } = DRAFT_PASTE_READY_SIGNALS[readySignal]
+  const { markerAnchor, marker: signalMarker, quietAnchor } = DRAFT_PASTE_READY_SIGNALS[readySignal]
 
   return {
     observe(data: string): DraftPasteReadyScanResult {
       const combined = recent + data
       recent = combined.slice(-512)
-      if (!sawAnchor) {
-        const anchorIndex = combined.indexOf(anchor)
-        if (anchorIndex === -1) {
-          return { ready: false, armQuietTimer: false }
+      if (!sawQuietAnchor && quietAnchor !== null && combined.includes(quietAnchor)) {
+        sawQuietAnchor = true
+      }
+      if (signalMarker !== null && markerAnchor !== null) {
+        if (!sawMarkerAnchor) {
+          const anchorIndex = combined.indexOf(markerAnchor)
+          if (anchorIndex !== -1) {
+            sawMarkerAnchor = true
+            const postAnchorChunk = combined.slice(anchorIndex + markerAnchor.length)
+            if (postAnchorChunk.includes(signalMarker)) {
+              return { ready: true, armQuietTimer: false }
+            }
+            postAnchorRecent = postAnchorChunk.slice(-512)
+          }
+        } else {
+          if (data.includes(signalMarker) || (postAnchorRecent + data).includes(signalMarker)) {
+            return { ready: true, armQuietTimer: false }
+          }
+          postAnchorRecent = (postAnchorRecent + data).slice(-512)
         }
-        sawAnchor = true
-        const postAnchorChunk = combined.slice(anchorIndex + anchor.length)
-        if (signalMarker !== null && postAnchorChunk.includes(signalMarker)) {
-          return { ready: true, armQuietTimer: false }
-        }
-        postAnchorRecent = postAnchorChunk.slice(-512)
-      } else {
-        if (
-          signalMarker !== null &&
-          (data.includes(signalMarker) || (postAnchorRecent + data).includes(signalMarker))
-        ) {
-          return { ready: true, armQuietTimer: false }
-        }
-        postAnchorRecent = (postAnchorRecent + data).slice(-512)
       }
       // Why: the Codex glyph and opencode show-cursor signals must NOT arm the
-      // quiet window. opencode goes silent for ~1.5-2s between enabling
-      // bracketed paste and mounting its composer, so a quiet window would fire
-      // during that gap — before the composer exists — and pre-empt the marker.
-      // Those signals wait for their marker, bounded only by the caller's hard
-      // timeout (and the caller's best-effort process-ownership paste after it).
-      return { ready: false, armQuietTimer: quietFallback && sawAnchor }
+      // quiet window (they carry no quiet anchor). opencode goes silent for
+      // ~1.5-2s between enabling bracketed paste and mounting its composer, so a
+      // quiet window would fire during that gap — before the composer exists —
+      // and pre-empt the marker. Those signals wait for their marker, bounded
+      // only by the caller's hard timeout (and its best-effort
+      // process-ownership paste after that).
+      return { ready: false, armQuietTimer: sawQuietAnchor }
     }
   }
 }
