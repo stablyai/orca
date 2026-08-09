@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GitStatusEntry } from '../../../../../shared/types'
-import { computeGitGutterBaselineToken, isGitGutterEligible } from './git-gutter-baseline-refresh'
+import { computeGitGutterBaselineToken, isGitGutterEligible } from './git-gutter-refresh-rules'
 
 function entry(overrides: Partial<GitStatusEntry> = {}): GitStatusEntry {
   return { path: 'src/a.ts', status: 'modified', area: 'unstaged', ...overrides }
@@ -12,7 +12,8 @@ describe('isGitGutterEligible', () => {
     mode: 'edit' as const,
     relativePath: 'src/a.ts',
     statusEntries: [entry()],
-    hasConflictMarkers: false
+    hasConflictMarkers: false,
+    isGitBackedWorktree: true
   }
 
   it('allows a tracked, modified file in an edit tab', () => {
@@ -56,6 +57,39 @@ describe('isGitGutterEligible', () => {
 
   it('refuses when status has not loaded yet', () => {
     expect(isGitGutterEligible({ ...base, statusEntries: undefined })).toBe(false)
+  })
+
+  it('refuses when the worktree is not git-backed', () => {
+    expect(isGitGutterEligible({ ...base, isGitBackedWorktree: false })).toBe(false)
+  })
+
+  it('refuses a staged-added file so a brand-new staged file is not a wall of green', () => {
+    expect(
+      isGitGutterEligible({
+        ...base,
+        statusEntries: [entry({ status: 'added', area: 'staged' })]
+      })
+    ).toBe(false)
+  })
+
+  it('refuses renamed and copied files because HEAD has no blob at the current path', () => {
+    expect(
+      isGitGutterEligible({
+        ...base,
+        statusEntries: [entry({ status: 'renamed', area: 'staged', oldPath: 'src/old.ts' })]
+      })
+    ).toBe(false)
+    expect(
+      isGitGutterEligible({
+        ...base,
+        statusEntries: [entry({ status: 'copied', area: 'staged', oldPath: 'src/source.ts' })]
+      })
+    ).toBe(false)
+  })
+
+  it('refuses on conflict-review and check-details tabs', () => {
+    expect(isGitGutterEligible({ ...base, mode: 'conflict-review' })).toBe(false)
+    expect(isGitGutterEligible({ ...base, mode: 'check-details' })).toBe(false)
   })
 })
 
@@ -123,5 +157,21 @@ describe('computeGitGutterBaselineToken', () => {
       statusEntries: []
     })
     expect(spaceInPath).not.toBe(spaceInWorktreeId)
+  })
+
+  it('incorporates both a staged and an unstaged entry for the same path, order-independently', () => {
+    const staged = entry({ area: 'staged' })
+    const unstaged = entry({ area: 'unstaged' })
+    const forward = computeGitGutterBaselineToken({
+      ...base,
+      statusEntries: [staged, unstaged]
+    })
+    const reversed = computeGitGutterBaselineToken({
+      ...base,
+      statusEntries: [unstaged, staged]
+    })
+    expect(forward).toBe(reversed)
+    expect(forward).not.toBe(computeGitGutterBaselineToken({ ...base, statusEntries: [staged] }))
+    expect(forward).not.toBe(computeGitGutterBaselineToken({ ...base, statusEntries: [unstaged] }))
   })
 })
