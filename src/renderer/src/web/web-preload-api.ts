@@ -3731,7 +3731,13 @@ function updateEnvironmentFromResponse(
     typeof (response.result as { pairedDeviceId?: unknown }).pairedDeviceId === 'string'
       ? (response.result as { pairedDeviceId: string }).pairedDeviceId
       : undefined
-  activeEnvironment = updateStoredEnvironmentRuntimeId(environment, runtimeId, pairedDeviceId)
+  if (
+    runtimeId === activeEnvironment.runtimeId &&
+    (pairedDeviceId === undefined || pairedDeviceId === activeEnvironment.pairedDeviceId)
+  ) {
+    return
+  }
+  activeEnvironment = updateStoredEnvironmentRuntimeId(activeEnvironment, runtimeId, pairedDeviceId)
 }
 
 function getStoredSettings(): GlobalSettings {

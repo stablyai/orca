@@ -492,6 +492,7 @@ describe('web runtime environment identity', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
     const onResponse = vi.fn()
+    const setItem = vi.spyOn(globals.storage, 'setItem')
 
     await globals.window.api.runtimeEnvironments.subscribe(
       { selector: 'web-server-a', method: 'session.tabs.subscribeAll', params: {} },
@@ -505,11 +506,18 @@ describe('web runtime environment identity', () => {
       _meta: { runtimeId: 'runtime-after-serve-restart' }
     } as RuntimeRpcResponse<unknown>
     subscriptionCallbacks?.onResponse(response)
+    expect(setItem).toHaveBeenCalledOnce()
+    const storedAfterReplacement = globals.storage.getItem('orca.web.runtimeEnvironment.v1')
+
+    subscriptionCallbacks?.onResponse(response)
 
     await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
       { id: 'web-server-a', runtimeId: 'runtime-after-serve-restart' }
     ])
-    expect(onResponse).toHaveBeenCalledWith(response)
+    expect(setItem).toHaveBeenCalledOnce()
+    expect(globals.storage.getItem('orca.web.runtimeEnvironment.v1')).toBe(storedAfterReplacement)
+    expect(onResponse).toHaveBeenCalledTimes(2)
+    expect(onResponse).toHaveBeenLastCalledWith(response)
   })
 
   it('fences a web runtime response that completes after manual disconnect', async () => {
