@@ -25,6 +25,21 @@ function makeFileOption(path: string): ActiveOption {
   }
 }
 
+function makeMenuOption(kind: 'new-terminal' | 'new-untitled-file'): ActiveOption {
+  return { kind: 'menu', option: { id: kind, kind, label: kind, keywords: [] } }
+}
+
+// lucide stamps `lucide-<kebab-icon-name>` on every icon it renders, which is a
+// stabler handle on "which icon" than path data or a snapshot.
+function renderedIconClasses(option: ActiveOption): DOMTokenList {
+  renderRow(option)
+  const svg = container.querySelector('svg')
+  if (!svg) {
+    throw new Error('row did not render an icon')
+  }
+  return svg.classList
+}
+
 // The tooltip itself is asserted in tests/e2e/tab-create-entry-file-paths.spec.ts,
 // where it actually opens; here we only need the row's own text layout.
 function renderRow(option: ActiveOption): HTMLButtonElement {
@@ -82,6 +97,19 @@ describe('EntryActionRow', () => {
     const text = renderRow(makeFileOption('C:\\repo\\src\\SecondaryNav.tsx')).textContent ?? ''
 
     expect(text.indexOf('SecondaryNav.tsx')).toBeLessThan(text.indexOf('C:\\repo\\src\\'))
+  })
+
+  it('gives the New File menu option its own icon instead of the terminal fallback', () => {
+    const classes = renderedIconClasses(makeMenuOption('new-untitled-file'))
+
+    expect(classes.contains('lucide-file')).toBe(true)
+    expect(classes.contains('lucide-square-terminal')).toBe(false)
+  })
+
+  it('falls back to the terminal icon for menu options without their own branch', () => {
+    expect(
+      renderedIconClasses(makeMenuOption('new-terminal')).contains('lucide-square-terminal')
+    ).toBe(true)
   })
 
   it('renders a bare filename without a directory fragment', () => {

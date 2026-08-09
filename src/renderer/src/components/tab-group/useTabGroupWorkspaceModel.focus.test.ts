@@ -199,6 +199,8 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
   })
 
   it('creates the untitled file in the owning group, not the globally focused one', async () => {
+    // The "+" menu can fire from an unfocused panel, so global focus must lose.
+    storeBox.state = { ...storeBox.state, activeGroupIdByWorktree: { 'wt-1': 'group-2' } }
     const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
     const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
 
