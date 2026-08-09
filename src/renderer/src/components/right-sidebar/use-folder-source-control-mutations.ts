@@ -14,6 +14,7 @@ import { useFolderSourceControlBulkActions } from './folder-source-control-bulk-
 import { getDiscardAllPaths, getStageAllPaths } from './discard-all-sequence'
 import type { PendingDiscardConfirmation } from './source-control-discard-dialog'
 
+/** Manages commit, stage, unstage, discard, and create-review mutations. */
 export function useFolderSourceControlMutations({
   context,
   statusState,
@@ -56,6 +57,7 @@ export function useFolderSourceControlMutations({
   const [commitBusy, setCommitBusy] = useState(false)
   const [commitError, setCommitError] = useState<string | null>(null)
 
+  /** Runs a mutation and surfaces its error in the panel. */
   const runOperation = useCallback(async (operation: () => Promise<void>) => {
     setOperationError(null)
     try {
@@ -76,6 +78,7 @@ export function useFolderSourceControlMutations({
     onBranchChanged
   })
 
+  /** Stages all eligible unstaged and untracked entries. */
   const stageAll = useCallback(() => {
     void runOperation(async () => {
       const entries = statusState?.status?.entries ?? []
@@ -97,6 +100,7 @@ export function useFolderSourceControlMutations({
     })
   }, [context, loadDetails, onBranchChanged, runOperation, statusState?.status?.entries])
 
+  /** Stages a single source-control entry. */
   const stageEntry = useCallback(
     (entry: GitStatusEntry) => {
       void runOperation(async () => {
@@ -108,6 +112,7 @@ export function useFolderSourceControlMutations({
     [context, loadDetails, onBranchChanged, runOperation]
   )
 
+  /** Unstages a single source-control entry. */
   const unstageEntry = useCallback(
     (entry: GitStatusEntry) => {
       void runOperation(async () => {
@@ -119,10 +124,12 @@ export function useFolderSourceControlMutations({
     [context, loadDetails, onBranchChanged, runOperation]
   )
 
+  /** Opens discard confirmation for a single source-control entry. */
   const discardEntry = useCallback((entry: GitStatusEntry) => {
     setPendingDiscard({ kind: 'entry', entry })
   }, [])
 
+  /** Stages all eligible entries in one area. */
   const stageAllArea = useCallback(
     (area: 'unstaged' | 'untracked') => {
       void runOperation(() => bulkStageAllArea(area))
@@ -130,6 +137,7 @@ export function useFolderSourceControlMutations({
     [bulkStageAllArea, runOperation]
   )
 
+  /** Unstages all eligible entries in the staged area. */
   const unstageAllArea = useCallback(
     (area: 'staged') => {
       void runOperation(() => bulkUnstageAllArea(area))
@@ -137,6 +145,7 @@ export function useFolderSourceControlMutations({
     [bulkUnstageAllArea, runOperation]
   )
 
+  /** Opens discard confirmation for all eligible paths in one area. */
   const requestDiscardAll = useCallback(
     (area: 'unstaged' | 'untracked') => {
       const paths = getDiscardAllPaths(statusState?.status?.entries ?? [], area)
@@ -147,6 +156,7 @@ export function useFolderSourceControlMutations({
     [statusState?.status?.entries]
   )
 
+  /** Runs the discard action represented by the pending confirmation. */
   const confirmPendingDiscard = useCallback(() => {
     const pending = pendingDiscard
     if (!pending) {
@@ -169,6 +179,7 @@ export function useFolderSourceControlMutations({
     void runOperation(() => discardAllArea(area, pending.paths))
   }, [context, discardAllArea, loadDetails, onBranchChanged, pendingDiscard, runOperation])
 
+  /** Commits the current message and refreshes the panel. */
   const handleCommit = useCallback(async () => {
     const message = commitMessage.trim()
     if (!message || commitBusy) {
@@ -199,6 +210,7 @@ export function useFolderSourceControlMutations({
     }
   }, [commitBusy, commitMessage, context, loadDetails, onBranchChanged])
 
+  /** Opens create review or blocks it when the working tree is dirty. */
   const handleCreatePrClick = useCallback(() => {
     const dirty = (statusState?.status?.entries.length ?? 0) > 0
     setCreateReviewBlocked(dirty)

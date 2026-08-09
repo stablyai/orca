@@ -2,6 +2,7 @@ import type { GitStatusEntry } from '../../../../shared/types'
 
 export type DiscardAllArea = 'staged' | 'unstaged' | 'untracked'
 
+/** Whether a row is safe to include in a bulk discard operation. */
 export function isDiscardableStatusEntry(entry: GitStatusEntry): boolean {
   return (
     entry.conflictStatus !== 'unresolved' &&

@@ -20,6 +20,7 @@ import { useFolderSourceControlScope } from './use-folder-source-control-scope'
 const FOLDER_STATUS_POLL_MS = 30_000
 const FOLDER_STATUS_CONCURRENCY = 4
 
+/** Runs async work over items with a bounded concurrency limit. */
 async function runWithConcurrency<T>(
   items: readonly T[],
   limit: number,
@@ -36,6 +37,7 @@ async function runWithConcurrency<T>(
   await Promise.all(workers)
 }
 
+/** Returns the primary worktree for a repo, falling back to the first entry. */
 function getPrimaryWorktree(
   worktreesByRepo: Record<string, Worktree[]>,
   repoId: string
@@ -44,6 +46,7 @@ function getPrimaryWorktree(
   return worktrees.find((worktree) => worktree.isMainWorktree) ?? worktrees[0] ?? null
 }
 
+/** Renders the folder-scope Source Control panel with nested git repos. */
 export default function FolderSourceControl(): React.JSX.Element | null {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
@@ -129,6 +132,7 @@ export default function FolderSourceControl(): React.JSX.Element | null {
     }
   }, [folderConnectionId, parentPath, scanNestedRepos])
 
+  /** Polls git status for every folder git target. */
   const refreshStatuses = useCallback(
     async (signal?: AbortSignal) => {
       await runWithConcurrency(targets, FOLDER_STATUS_CONCURRENCY, async (target) => {
@@ -183,6 +187,7 @@ export default function FolderSourceControl(): React.JSX.Element | null {
     [targets]
   )
 
+  /** Runs a status refresh, aborting and replacing an in-flight cycle. */
   const runRefreshStatuses = useCallback(
     (force = false): Promise<void> => {
       if (statusRefreshPromiseRef.current) {
@@ -218,6 +223,7 @@ export default function FolderSourceControl(): React.JSX.Element | null {
     }
   }, [runRefreshStatuses])
 
+  /** Toggles whether a folder git target is expanded. */
   const toggleExpanded = useCallback((key: string) => {
     setExpandedRepoKeys((current) => {
       const next = new Set(current)

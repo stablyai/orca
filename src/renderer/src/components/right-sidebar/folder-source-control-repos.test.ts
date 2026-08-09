@@ -5,6 +5,7 @@ import {
   selectFolderSourceControlRepos
 } from './folder-source-control-repos'
 
+/** Builds a Repo fixture with sensible defaults for folder tests. */
 function repo(overrides: Partial<Repo>): Repo {
   return {
     id: 'repo-id',
@@ -16,7 +17,9 @@ function repo(overrides: Partial<Repo>): Repo {
   }
 }
 
+/** Tests folder repo selection for registered folder targets. */
 describe('selectFolderSourceControlRepos', () => {
+  /** Repos outside the folder path or execution host should be excluded. */
   it('returns git repos under a folder repo path', () => {
     const parent = repo({
       id: 'parent',
@@ -57,6 +60,7 @@ describe('selectFolderSourceControlRepos', () => {
     ).toEqual(['first', 'second'])
   })
 
+  /** Folder workspaces should surface their candidate git repos. */
   it('returns git repos for folder workspaces through candidate repos', () => {
     const folderWorkspace = {
       id: 'folder-1',
@@ -86,7 +90,9 @@ describe('selectFolderSourceControlRepos', () => {
   })
 })
 
+/** Tests merging scanned nested git dirs into folder targets. */
 describe('mergeFolderGitTargets', () => {
+  /** Registered and duplicate scanned paths should collapse to one target. */
   it('adds scanned git directories that are not registered as Orca repos', () => {
     const known = repo({ id: 'known', path: '/root/known', displayName: 'known' })
 

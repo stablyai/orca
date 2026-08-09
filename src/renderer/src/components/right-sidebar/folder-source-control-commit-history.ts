@@ -16,6 +16,7 @@ import {
 
 const COMMIT_COMPARE_CACHE_MAX = 100
 
+/** Reads and promotes a cached commit compare result to most-recent use. */
 function getCachedCommitCompare(
   cache: Map<string, GitCommitCompareResult>,
   key: string
@@ -29,6 +30,7 @@ function getCachedCommitCompare(
   return value
 }
 
+/** Writes a commit compare result into the bounded LRU cache. */
 function cacheCommitCompare(
   cache: Map<string, GitCommitCompareResult>,
   key: string,
@@ -45,6 +47,7 @@ function cacheCommitCompare(
   }
 }
 
+/** Loads and opens commit history diffs for a folder-scope repo. */
 export function useFolderSourceControlCommitHistory({
   context,
   diffWorktreeId,
@@ -77,6 +80,7 @@ export function useFolderSourceControlCommitHistory({
     commitCompareCacheRef.current = new Map()
   }, [context])
 
+  /** Resolves the split editor group for a modifier-assisted open. */
   const resolveSplitTargetGroupId = useCallback(
     (event?: SourceControlRowOpenEvent): string | undefined => {
       if (!event || !activeWorktreeId || !isSourceControlSplitOpenModifier(event, isMac)) {
@@ -92,6 +96,7 @@ export function useFolderSourceControlCommitHistory({
     [activeGroupIdByWorktree, activeWorktreeId, createEmptySplitGroup, groupsByWorktree, isMac]
   )
 
+  /** Loads or returns cached changed files for one commit. */
   const loadCommitFiles = useCallback(
     async (item: GitHistoryItem): Promise<GitBranchChangeEntry[]> => {
       const cached = getCachedCommitCompare(commitCompareCacheRef.current, item.id)
@@ -108,6 +113,7 @@ export function useFolderSourceControlCommitHistory({
     [context]
   )
 
+  /** Opens every changed file for a commit as diffs. */
   const openHistoryCommitDiff = useCallback(
     async (item: GitHistoryItem): Promise<void> => {
       try {
@@ -138,6 +144,7 @@ export function useFolderSourceControlCommitHistory({
     [diffWorktreeId, loadCommitFiles, openCommitAllDiffs, worktreePath]
   )
 
+  /** Opens one commit file diff, preserving split-open modifiers. */
   const openCommitFile = useCallback(
     (item: GitHistoryItem, entry: GitBranchChangeEntry, event?: SourceControlRowOpenEvent) => {
       const cached = getCachedCommitCompare(commitCompareCacheRef.current, item.id)

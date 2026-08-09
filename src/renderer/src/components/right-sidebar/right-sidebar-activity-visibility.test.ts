@@ -79,6 +79,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
     ).toEqual(['explorer', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
   })
 
+  /** Folder scopes should retain Source Control for nested git repos. */
   it('shows Source Control for folder scopes so nested repos can be discovered', () => {
     expect(
       getVisibleRightSidebarActivityItems(

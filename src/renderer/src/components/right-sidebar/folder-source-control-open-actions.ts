@@ -9,6 +9,7 @@ import type {
   GitStatusEntry
 } from '../../../../shared/types'
 
+/** Opens folder-scope status entries and branch diffs in editor tabs. */
 export function useFolderSourceControlOpenActions({
   diffWorktreeId,
   targetPath,
@@ -33,6 +34,7 @@ export function useFolderSourceControlOpenActions({
   const openConflictFile = useAppStore((state) => state.openConflictFile)
   const setEditorViewMode = useAppStore((state) => state.setEditorViewMode)
 
+  /** Opens a status entry as a file or diff and reveals its editor tab. */
   const openEntry = useCallback(
     (entry: GitStatusEntry) => {
       const filePath = joinPath(targetPath, entry.path)
@@ -81,6 +83,7 @@ export function useFolderSourceControlOpenActions({
     ]
   )
 
+  /** Opens a branch change entry as a diff and reveals its editor tab. */
   const openBranchEntry = useCallback(
     (entry: GitBranchChangeEntry) => {
       if (branchCompare) {
@@ -114,6 +117,7 @@ export function useFolderSourceControlOpenActions({
     [branchCompare, diffWorktreeId, openBranchDiff, openDiff, showVisibleEditorTab, targetPath]
   )
 
+  /** Opens every file in a source-control area as one diff bundle. */
   const viewAllArea = useCallback(
     (area: 'staged' | 'unstaged' | 'untracked') => {
       const entries = statusEntries.filter((entry) => entry.area === area)

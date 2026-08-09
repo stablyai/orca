@@ -3333,10 +3333,12 @@ const api = {
       connectionId?: string
       pushTarget?: GitPushTarget
     }): Promise<GitUpstreamStatus> => ipcRenderer.invoke('git:upstreamStatus', args),
+    /** Lists local branches through the main-process git IPC. */
     localBranches: (args: {
       worktreePath: string
       connectionId?: string
     }): Promise<RuntimeGitLocalBranches> => ipcRenderer.invoke('git:localBranches', args),
+    /** Checks out a branch through the main-process git IPC. */
     checkout: (args: {
       worktreePath: string
       branch: string

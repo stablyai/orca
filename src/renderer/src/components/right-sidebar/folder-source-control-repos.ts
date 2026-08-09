@@ -33,10 +33,12 @@ export type FolderGitTarget = {
   repo?: Repo | null
 }
 
+/** Whether the repo runs on the same execution host as the active target. */
 function sameExecutionHost(repo: Repo, targetHostId: string): boolean {
   return getRepoExecutionHostId(repo) === targetHostId
 }
 
+/** Filters registered repos to those nested under the active folder target. */
 function filterFolderRepoCandidates(args: {
   repos: readonly Repo[]
   projectGroups: readonly ProjectGroup[]
@@ -77,6 +79,7 @@ function filterFolderRepoCandidates(args: {
   ]
 }
 
+/** Selects the git repos that should appear under a folder-scope target. */
 export function selectFolderSourceControlRepos(
   state: FolderSourceControlState,
   activeWorktreeId: string | null | undefined,
@@ -104,6 +107,7 @@ export function selectFolderSourceControlRepos(
   })
 }
 
+/** Merges registered repos and scanned nested git dirs into folder targets. */
 export function mergeFolderGitTargets(args: {
   repos: readonly Repo[]
   scannedRepos: readonly NestedRepoCandidate[]

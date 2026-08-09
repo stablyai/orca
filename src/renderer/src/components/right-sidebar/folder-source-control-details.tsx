@@ -26,6 +26,7 @@ import type { RepoStatusState } from './folder-source-control-rows'
 import { useFolderSourceControlData } from './use-folder-source-control-data'
 import { useFolderSourceControlMutations } from './use-folder-source-control-mutations'
 
+/** Renders the expanded source-control panel for one folder git target. */
 export function FolderSourceControlDetails({
   target,
   worktree,
@@ -71,6 +72,7 @@ export function FolderSourceControlDetails({
       context: data.context,
       diffWorktreeId,
       worktreePath: data.effectiveWorktreePath,
+      /** Reveals the newly opened diff tab when split-open creates it. */
       onOpenVisibleFile: (fileId, label) => showVisibleEditorTab(fileId, 'diff', label)
     })
 
@@ -82,6 +84,7 @@ export function FolderSourceControlDetails({
     statusEntries: statusState?.status?.entries ?? []
   })
 
+  /** Toggles whether a source-control section is collapsed. */
   const toggleSection = useCallback((id: string) => {
     setCollapsedSections((current) => {
       const next = new Set(current)

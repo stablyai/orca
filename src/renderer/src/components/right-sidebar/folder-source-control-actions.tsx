@@ -7,6 +7,7 @@ import type { LocalizedHostedReviewCopy } from '@/i18n/hosted-review-localized-c
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { SourceControlHeaderOverflowMenu } from './source-control-header-overflow-menu'
 
+/** Renders a searchable branch switcher for a folder-scope repo. */
 function BranchSwitcher({
   branch,
   branches,
@@ -85,6 +86,7 @@ function BranchSwitcher({
   )
 }
 
+/** Renders the folder source-control toolbar and commit input. */
 export function FolderSourceControlToolbar({
   branch,
   branches,
@@ -185,6 +187,7 @@ export function FolderSourceControlToolbar({
   )
 }
 
+/** Renders the commit message input and submit button. */
 export function FolderCommitArea({
   value,
   onChange,
@@ -227,6 +230,7 @@ export function FolderCommitArea({
   )
 }
 
+/** Renders the inline editor for a scanned repo's base ref. */
 export function FolderBaseRefEditor({
   value,
   onApply
@@ -234,6 +238,7 @@ export function FolderBaseRefEditor({
   value: string
   onApply: (value: string) => void
 }): React.JSX.Element {
+  /** Applies a trimmed base ref when it differs from the current value. */
   const applyIfChanged = (next: string): void => {
     const trimmed = next.trim()
     if (trimmed.length === 0 || trimmed === value.trim()) {
@@ -262,6 +267,7 @@ export function FolderBaseRefEditor({
   )
 }
 
+/** Explains why creating a review requires a clean working tree. */
 export function CreateReviewBlockedNotice({
   reviewLabel
 }: {

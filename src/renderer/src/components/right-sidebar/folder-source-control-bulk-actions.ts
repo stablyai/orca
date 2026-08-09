@@ -13,6 +13,7 @@ import {
   type StageAllArea
 } from './discard-all-sequence'
 
+/** Resolve the paths a folder bulk action may operate on for the given area. */
 export function resolveFolderBulkPaths(
   entries: readonly GitStatusEntry[],
   area: 'staged' | 'unstaged' | 'untracked',
@@ -25,6 +26,7 @@ export function resolveFolderBulkPaths(
       : getDiscardAllPaths(entries, area)
 }
 
+/** Runs bulk stage, unstage, and discard actions for a folder-scope repo. */
 export function useFolderSourceControlBulkActions({
   context,
   entries,
@@ -40,6 +42,7 @@ export function useFolderSourceControlBulkActions({
   unstageAllArea: (area: 'staged') => Promise<void>
   discardAllArea: (area: 'unstaged' | 'untracked', paths: readonly string[]) => Promise<void>
 } {
+  /** Runs one confirmed bulk operation and refreshes the panel. */
   const runBulk = useCallback(
     async (
       area: 'staged' | 'unstaged' | 'untracked',
@@ -57,16 +60,19 @@ export function useFolderSourceControlBulkActions({
     [context, entries, loadDetails, onBranchChanged]
   )
 
+  /** Stages every eligible unstaged/untracked path. */
   const stageAllArea = useCallback(
     (area: 'unstaged' | 'untracked') => runBulk(area, bulkStageRuntimeGitPaths),
     [runBulk]
   )
 
+  /** Unstages every eligible staged path. */
   const unstageAllArea = useCallback(
     (area: 'staged') => runBulk(area, bulkUnstageRuntimeGitPaths),
     [runBulk]
   )
 
+  /** Discards the confirmed path snapshot for the requested area. */
   const discardAllArea = useCallback(
     (area: 'unstaged' | 'untracked', paths: readonly string[]) =>
       runBulk(area, bulkDiscardRuntimeGitPaths, paths),

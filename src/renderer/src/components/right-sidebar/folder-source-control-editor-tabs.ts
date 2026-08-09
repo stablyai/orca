@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 
+/** Activates or creates the visible editor tab for a folder-scope file. */
 export function useShowVisibleEditorTab(
   activeWorktreeId: string | null | undefined,
   activeEditorGroupId: string | undefined

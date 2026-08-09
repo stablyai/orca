@@ -7,6 +7,7 @@ import {
 import type { GitStatusEntry } from '../../../../shared/types'
 import { resolveFolderBulkPaths } from './folder-source-control-bulk-actions'
 
+/** Builds a GitStatusEntry fixture with the required path and area. */
 function entry(
   overrides: Partial<GitStatusEntry> & { path: string; area: GitStatusEntry['area'] }
 ): GitStatusEntry {
@@ -16,6 +17,7 @@ function entry(
   }
 }
 
+/** Tests folder bulk path resolution against shared eligibility rules. */
 describe('resolveFolderBulkPaths', () => {
   const entries: GitStatusEntry[] = [
     entry({ path: 'unstaged.ts', area: 'unstaged' }),
@@ -40,6 +42,7 @@ describe('resolveFolderBulkPaths', () => {
     entry({ path: 'staged.ts', area: 'staged' })
   ]
 
+  /** Stage-all paths should use the same conflict/submodule rules as rows. */
   it('uses shared stage eligibility for bulk stage paths', () => {
     expect(resolveFolderBulkPaths(entries, 'unstaged', bulkStageRuntimeGitPaths)).toEqual([
       'unstaged.ts',
@@ -47,12 +50,14 @@ describe('resolveFolderBulkPaths', () => {
     ])
   })
 
+  /** Discard-all paths should exclude unresolved and submodule-internal rows. */
   it('uses shared discard eligibility for bulk discard paths', () => {
     expect(resolveFolderBulkPaths(entries, 'unstaged', bulkDiscardRuntimeGitPaths)).toEqual([
       'unstaged.ts'
     ])
   })
 
+  /** Unstage-all should include every staged row. */
   it('uses shared unstage paths', () => {
     expect(resolveFolderBulkPaths(entries, 'staged', bulkUnstageRuntimeGitPaths)).toEqual([
       'staged.ts'

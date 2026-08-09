@@ -1047,6 +1047,7 @@ export function buildDiffEditorFileId(
     : legacyId
 }
 
+/** Builds the stable editor tab id for an uncommitted "view all" diff. */
 export function buildAllDiffsUncommittedTabId(
   worktreeId: string,
   areaFilter?: string | undefined

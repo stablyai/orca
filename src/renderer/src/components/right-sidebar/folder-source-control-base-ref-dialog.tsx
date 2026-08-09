@@ -11,6 +11,7 @@ import { translate } from '@/i18n/i18n'
 import { FolderBaseRefEditor } from './folder-source-control-actions'
 import type { FolderGitTarget } from './folder-source-control-repos'
 
+/** Lets users change the compare base ref for a folder-scope repo. */
 export function FolderSourceControlBaseRefDialog({
   open,
   onOpenChange,

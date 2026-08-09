@@ -2084,12 +2084,14 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         pushTarget
       })
     },
+    /** Lists local branches through the active git runtime. */
     localBranches: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.localBranches', {
         worktree: toRuntimeWorktreeSelector(worktree.id)
       })
     },
+    /** Checks out a local branch through the active git runtime. */
     checkout: async ({ worktreePath, branch }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.checkout', {

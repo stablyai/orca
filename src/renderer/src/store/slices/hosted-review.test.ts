@@ -418,6 +418,7 @@ describe('hosted review slice', () => {
     })
   })
 
+  /** Scanned repos without a registered repo should keep the SSH connection. */
   it('keeps the explicit connectionId for unregistered scanned repo eligibility', async () => {
     mockApi.hostedReview.getCreationEligibility.mockResolvedValueOnce({
       provider: 'github',
@@ -446,6 +447,7 @@ describe('hosted review slice', () => {
     )
   })
 
+  /** Create review should route scanned repo requests through the SSH connection. */
   it('keeps the explicit connectionId when creating a review for an unregistered repo', async () => {
     mockApi.hostedReview.create.mockResolvedValueOnce({
       ok: true,

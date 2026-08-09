@@ -12,6 +12,7 @@ import type { FolderGitTarget } from './folder-source-control-repos'
 import type { GitUpstreamStatus } from '../../../../shared/types'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 
+/** Creates a hosted review from a folder-scope git branch. */
 export function FolderSourceControlCreateReviewDialog({
   open,
   onOpenChange,
@@ -122,6 +123,7 @@ export function FolderSourceControlCreateReviewDialog({
     worktreePath
   ])
 
+  /** Creates the hosted review and opens it in the user's browser. */
   const handleCreate = useCallback(async () => {
     if (!eligibility || !branch || creating || !base.trim() || !title.trim()) {
       return

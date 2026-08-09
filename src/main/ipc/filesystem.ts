@@ -501,6 +501,7 @@ async function isDirectoryEntry(
   return false
 }
 
+/** Resolves a git read path, allowing standalone folder git repos. */
 async function resolveGitReadPath(worktreePath: string, store: Store): Promise<string> {
   try {
     return await resolveRegisteredWorktreePath(worktreePath, store)
@@ -523,6 +524,7 @@ async function resolveGitReadPath(worktreePath: string, store: Store): Promise<s
   }
 }
 
+/** Resolves git options for a read path, defaulting when unregistered. */
 function getLocalGitOptionsForReadPath(
   store: Store,
   requestedPath: string,

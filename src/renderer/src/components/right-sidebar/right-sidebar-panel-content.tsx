@@ -16,6 +16,7 @@ const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktr
 const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrChecksPanel'))
 const PluginPanel = lazy(() => import('./PluginPanel'))
 
+/** Routes Source Control to folder or worktree source-control panels. */
 function SourceControlPanelRoute(): React.JSX.Element {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const activeWorktree = useActiveWorktree()

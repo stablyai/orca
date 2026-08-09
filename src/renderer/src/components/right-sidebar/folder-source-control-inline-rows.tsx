@@ -25,6 +25,7 @@ export const SECTION_LABELS: Record<
   }
 }
 
+/** Groups status entries into staged, unstaged, and untracked buckets. */
 export function groupStatusEntries(
   entries: readonly GitStatusEntry[]
 ): Record<'staged' | 'unstaged' | 'untracked', GitStatusEntry[]> {
@@ -39,6 +40,7 @@ export function groupStatusEntries(
   return groups
 }
 
+/** Renders one source-control file row with optional inline actions. */
 export function InlineFileRow({
   path,
   status,
@@ -171,6 +173,7 @@ export function InlineFileRow({
   )
 }
 
+/** Renders a collapsible directory row for tree-mode source control. */
 export function InlineTreeDirectoryRow({
   name,
   fileCount,
@@ -212,6 +215,7 @@ export function InlineTreeDirectoryRow({
   )
 }
 
+/** Renders a source-control section header with bulk action slots. */
 export function InlineSectionHeader({
   label,
   count,
@@ -251,6 +255,7 @@ export function InlineSectionHeader({
   )
 }
 
+/** Returns the localized label for a source-control section. */
 export function sectionLabel(area: 'staged' | 'unstaged' | 'untracked'): string {
   const label = SECTION_LABELS[area]
   return translate(label.key, label.fallback)

@@ -32,6 +32,7 @@ export type BranchCompareState =
   | { status: 'ready'; result: GitBranchCompareResult }
   | { status: 'error'; error: string }
 
+/** Loads status-adjacent data and branch actions for one folder git target. */
 export function useFolderSourceControlData({
   target,
   worktree,
@@ -96,8 +97,10 @@ export function useFolderSourceControlData({
     [target.repo?.gitRemoteIdentity?.remoteUrl]
   )
 
+  /** Loads branch compare, history, and upstream data for the target. */
   const loadDetails = useCallback(async () => {
     const runId = ++loadRunRef.current
+    /** Guards state writes to the latest load cycle. */
     const isCurrent = (): boolean => loadRunRef.current === runId
     setBranchCompare({ status: 'loading' })
     setHistory({ status: 'loading' })
@@ -178,6 +181,7 @@ export function useFolderSourceControlData({
     void loadDetails()
   }, [loadDetails])
 
+  /** Loads the target's local branch list. */
   const loadBranches = useCallback(async () => {
     const result = await listRuntimeGitLocalBranches(context).catch(() => null)
     if (result) {
@@ -189,6 +193,7 @@ export function useFolderSourceControlData({
     void loadBranches()
   }, [loadBranches])
 
+  /** Checks out a branch and refreshes target data. */
   const switchBranch = useCallback(
     async (branch: string) => {
       if (!branch || branch === status?.branch) {

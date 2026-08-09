@@ -36,6 +36,7 @@ type InlineRowActions = {
   onDiscard?: () => void
 }
 
+/** Builds per-row inline actions from shared eligibility rules. */
 function statusRowActions(
   entry: GitStatusEntry,
   onStageEntry: (entry: GitStatusEntry) => void,
@@ -46,12 +47,16 @@ function statusRowActions(
     canStage: canStageStatusEntry(entry),
     canUnstage: canUnstageStatusEntry(entry),
     canDiscard: canDiscardStatusEntry(entry),
+    /** Stages the entry from its row action. */
     onStage: () => onStageEntry(entry),
+    /** Unstages the entry from its row action. */
     onUnstage: () => onUnstageEntry(entry),
+    /** Discards the entry from its row action. */
     onDiscard: () => onDiscardEntry(entry)
   }
 }
 
+/** Renders a tree/list of source-control entries for one section. */
 function renderTreeNodes<Entry extends InlineChangeEntry, Area extends string>(
   nodes: readonly SourceControlTreeNode<Entry, Area>[],
   collapsed: ReadonlySet<string>,
@@ -87,6 +92,7 @@ function renderTreeNodes<Entry extends InlineChangeEntry, Area extends string>(
   })
 }
 
+/** Renders folder source-control file sections in list or tree mode. */
 export function FolderSourceControlSections({
   groupedEntries,
   branchEntries,
@@ -140,6 +146,7 @@ export function FolderSourceControlSections({
     [branchEntries]
   )
 
+  /** Toggles whether a tree directory is collapsed. */
   const toggleTreeDirectory = (key: string): void => {
     setCollapsedTreeDirs((current) => {
       const next = new Set(current)

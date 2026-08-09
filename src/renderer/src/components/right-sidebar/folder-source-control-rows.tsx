@@ -11,11 +11,13 @@ export type RepoStatusState = {
   loading: boolean
 }
 
+/** Returns a folder repo's display label relative to the parent path. */
 function getRepoLabel(parentPath: string, target: FolderGitTarget): string {
   const relativePath = relativePathInsideRoot(parentPath, target.path)
   return relativePath || target.displayName
 }
 
+/** Renders a collapsible row for one repo in the folder source control. */
 export function FolderRepoRow({
   target,
   parentPath,

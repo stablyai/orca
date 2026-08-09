@@ -449,6 +449,7 @@ export async function getRuntimeGitUpstreamStatus(
   )
 }
 
+/** Lists local branches on the active native or remote git runtime. */
 export async function listRuntimeGitLocalBranches(
   context: RuntimeGitContext
 ): Promise<RuntimeGitLocalBranches> {
@@ -467,6 +468,7 @@ export async function listRuntimeGitLocalBranches(
   )
 }
 
+/** Checks out a local branch on the active native or remote git runtime. */
 export async function checkoutRuntimeGitBranch(
   context: RuntimeGitContext,
   branch: string

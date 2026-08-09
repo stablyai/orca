@@ -62,6 +62,7 @@ describe('getDiscardAllPaths', () => {
     expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['clean.ts'])
   })
 
+  /** Verifies submodule-internal rows are excluded from bulk discard. */
   it('skips submodule-internal and nested-only submodule rows', () => {
     const entries: GitStatusEntry[] = [
       entry({ path: 'clean.ts', area: 'unstaged' }),
