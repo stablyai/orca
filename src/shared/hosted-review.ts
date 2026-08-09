@@ -36,6 +36,24 @@ export type HostedReviewInfo = {
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
   conflictSummary?: PRConflictSummary
+  /**
+   * Los otros PRs que alimenta la misma rama.
+   *
+   * Una rama puede ir a varios destinos a la vez —la base del repo, stage, una
+   * release— y `number`/`state` describen solo al que representa la rama. Estos
+   * vienen del mismo lookup, así que envejecen a la par y no hay nada que
+   * sincronizar aparte.
+   */
+  siblings?: HostedReviewSibling[]
+}
+
+/** Un PR hermano: lo mínimo para renderizarlo y abrirlo, sin sus checks. */
+export type HostedReviewSibling = {
+  number: number
+  url: string
+  title?: string
+  baseRef?: string
+  state: HostedReviewState
 }
 
 export type HostedReviewForBranchArgs = {

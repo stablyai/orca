@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
+import { normalizeAttachedReviews } from '../../shared/attached-reviews'
 import { getLinkedWorkItemMetadata } from './worktree-linked-work-item-metadata'
 
 /**
@@ -36,6 +37,11 @@ export function mergeWorktree(
     linkedLinearIssueWorkspaceId: meta?.linkedLinearIssueWorkspaceId ?? null,
     linkedLinearIssueOrganizationUrlKey: meta?.linkedLinearIssueOrganizationUrlKey ?? null,
     ...getLinkedWorkItemMetadata(meta),
+    // Why: omitted entirely when empty rather than sent as [], so a workspace
+    // with no attached reviews costs nothing in every worktree list payload.
+    ...(meta?.attachedReviews?.length
+      ? { attachedReviews: normalizeAttachedReviews(meta.attachedReviews) }
+      : {}),
     isArchived: meta?.isArchived ?? false,
     isUnread: meta?.isUnread ?? false,
     isPinned: meta?.isPinned ?? false,

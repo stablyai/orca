@@ -1,5 +1,6 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
+  AttachedReview,
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
   IssueInfo
@@ -36,6 +37,8 @@ export type WorktreeCardMetaBadgesProps = {
   linearIssue: WorktreeCardLinearIssueDisplay | null
   jiraIssue?: WorktreeCardJiraIssueDisplay | null
   review: WorktreeCardPrDisplay | null
+  /** Reviews attached by hand, beyond the one detected from the branch. */
+  attachedReviews?: readonly AttachedReview[]
   comment: string | null
   automationProvenance?: AutomationWorkspaceProvenance | null
   cliProvenance?: CliWorkspaceProvenance | null

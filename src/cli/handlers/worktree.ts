@@ -8,6 +8,7 @@ import type {
 import type { CommandHandler } from '../dispatch'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
+import { getAttachedReviewsUpdate } from './worktree-attached-reviews'
 import {
   getOptionalNullableNumberFlag,
   getOptionalNumberFlag,
@@ -264,8 +265,19 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })
+    const selector = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+    // Attaching is additive, so the current list has to be read before merging.
+    const attaching = flags.has('add-pr') || flags.get('clear-prs') === true
+    const existing = attaching
+      ? (
+          await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+            worktree: selector
+          })
+        ).result?.worktree?.attachedReviews
+      : undefined
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.set', {
-      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
+      worktree: selector,
+      ...getAttachedReviewsUpdate(flags, existing),
       displayName: getOptionalStringFlag(flags, 'display-name'),
       linkedIssue: getOptionalNullableNumberFlag(flags, 'issue'),
       ...linearIssueLink,

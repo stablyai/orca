@@ -219,6 +219,7 @@ import type {
   WorkspaceCreateTelemetrySource,
   WorkspaceSessionState,
   WorkspaceLinkedItem,
+  AttachedReview,
   DirEntry,
   FilesystemPathFlavor,
   GitHubIssueUpdate,
@@ -770,6 +771,7 @@ import {
   selectSite as selectJiraSite,
   testConnection as testJiraConnection
 } from '../jira/client'
+import { normalizeAttachedReviews } from '../../shared/attached-reviews'
 import {
   addIssueComment as addJiraIssueComment,
   createIssue as createJiraIssue,
@@ -2184,6 +2186,7 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     linkedGiteaPR: meta.linkedGiteaPR ?? null,
     linkedWorkItem: meta.linkedWorkItem ?? null,
     linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
+    attachedReviews: normalizeAttachedReviews(meta.attachedReviews),
     isArchived: meta.isArchived ?? false,
     isUnread: meta.isUnread ?? false,
     isPinned: meta.isPinned ?? false,
@@ -21721,6 +21724,7 @@ export class OrcaRuntimeService {
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
     linkedWorkItem?: WorkspaceLinkedItem | null
+    attachedReviews?: AttachedReview[]
     linkedTaskSourceContext?: TaskSourceContext | null
     comment?: string
     displayName?: string
@@ -21830,6 +21834,9 @@ export class OrcaRuntimeService {
           : {}),
         ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
         ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
+        ...(args.attachedReviews !== undefined
+          ? { attachedReviews: normalizeAttachedReviews(args.attachedReviews) }
+          : {}),
         ...(args.linkedTaskSourceContext !== undefined
           ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
           : {}),
@@ -22426,6 +22433,9 @@ export class OrcaRuntimeService {
         : {}),
       ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
       ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
+      ...(args.attachedReviews !== undefined
+        ? { attachedReviews: normalizeAttachedReviews(args.attachedReviews) }
+        : {}),
       ...(args.linkedTaskSourceContext !== undefined
         ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
         : {}),
@@ -22828,6 +22838,7 @@ export class OrcaRuntimeService {
       linkedAzureDevOpsPR?: number | null
       linkedGiteaPR?: number | null
       linkedWorkItem?: WorkspaceLinkedItem | null
+      attachedReviews?: AttachedReview[]
       linkedTaskSourceContext?: TaskSourceContext | null
       comment?: string
       displayName?: string
@@ -22889,6 +22900,9 @@ export class OrcaRuntimeService {
           : {}),
         ...(args.linkedGiteaPR != null ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
         ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
+        ...(args.attachedReviews !== undefined
+          ? { attachedReviews: normalizeAttachedReviews(args.attachedReviews) }
+          : {}),
         ...(args.linkedTaskSourceContext !== undefined
           ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
           : {}),

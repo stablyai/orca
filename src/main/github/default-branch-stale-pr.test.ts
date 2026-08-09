@@ -253,7 +253,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
 
     // The head-branch lookup still runs (state=all) and sees the closed PR…
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=1'],
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=30'],
       { cwd: '/repo-root', host: 'github.com' }
     )
     // …but the default-branch guard discards it: no PR on the trunk (#9171).

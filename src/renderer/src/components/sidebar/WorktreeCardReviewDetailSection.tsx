@@ -16,10 +16,13 @@ import {
 import { DetailHeader, MetadataActionIcon } from './WorktreeCardMetadataControls'
 import { ReviewChecksBadge, ReviewStateBadge } from './WorktreeCardMetadataStatusBadges'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import type { CardReviewList, CardReviewRow } from './worktree-card-attached-reviews'
 import { getProviderName, getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 
 type WorktreeCardReviewDetailSectionProps = {
   review: WorktreeCardPrDisplay | null
+  /** How this workspace's reviews should render: one detailed, or several as peers. */
+  reviewList?: CardReviewList
   reviewMenuOpen: boolean
   onReviewMenuOpenChange: (open: boolean) => void
   onOpenReviewInOrca?: (event: React.MouseEvent) => void
@@ -30,6 +33,7 @@ type WorktreeCardReviewDetailSectionProps = {
 
 export function WorktreeCardReviewDetailSection({
   review,
+  reviewList,
   reviewMenuOpen,
   onReviewMenuOpenChange,
   onOpenReviewInOrca,
@@ -37,6 +41,11 @@ export function WorktreeCardReviewDetailSection({
   onUnlinkReview,
   closeHover
 }: WorktreeCardReviewDetailSectionProps): React.JSX.Element | null {
+  // Several reviews render as peers: singling one out as the header would make
+  // the rest look secondary when they are the same branch going elsewhere.
+  if (reviewList?.kind === 'list') {
+    return <CardReviewListSection rows={reviewList.rows} />
+  }
   if (!review) {
     return null
   }
@@ -166,4 +175,79 @@ export function WorktreeCardReviewDetailSection({
       </WorktreeCardDetailSectionContent>
     </WorktreeCardDetailSection>
   )
+}
+
+function CardReviewListSection({ rows }: { rows: readonly CardReviewRow[] }): React.JSX.Element {
+  return (
+    <WorktreeCardDetailSection>
+      <DetailHeader
+        icon={<ReviewIcon review={toDisplay(rows[0])} className="size-3" />}
+        label={translate(
+          'auto.components.sidebar.WorktreeCardReviewDetailSection.reviewListHeader',
+          '{{value0}} reviews',
+          { value0: rows.length }
+        )}
+      />
+      <WorktreeCardDetailSectionContent className="space-y-1.5">
+        {rows.map((row) => (
+          <CardReviewRowItem key={row.url} row={row} />
+        ))}
+      </WorktreeCardDetailSectionContent>
+    </WorktreeCardDetailSection>
+  )
+}
+
+/**
+ * One row per review, all rendered the same.
+ *
+ * The base ref leads because it is what tells two reviews off the same branch
+ * apart. State and checks only show for the one Orca resolved on its own —
+ * absent badges mean "not polled", not "not passing".
+ */
+function CardReviewRowItem({ row }: { row: CardReviewRow }): React.JSX.Element {
+  const display = toDisplay(row)
+  const label = getReviewLabel(display)
+
+  return (
+    <a
+      href={row.url}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(event) => event.stopPropagation()}
+      className="group block rounded-sm px-1 py-1 -mx-1 hover:bg-accent"
+      title={row.title ?? row.url}
+    >
+      <div className="flex items-center gap-1.5 text-[12px]">
+        <ReviewIcon review={display} className="size-3 shrink-0" />
+        <span className="font-medium tabular-nums shrink-0 text-foreground">
+          {label} #{row.number}
+        </span>
+        {row.baseRef && (
+          <span className="truncate text-muted-foreground">&rarr; {row.baseRef}</span>
+        )}
+        <ExternalLink className="size-3 ml-auto shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground" />
+      </div>
+      {row.title && (
+        <div className="mt-0.5 text-[12px] leading-snug text-muted-foreground break-words">
+          {row.title}
+        </div>
+      )}
+      {(row.state || (row.status && row.status !== 'neutral')) && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          <ReviewStateBadge state={row.state} label={label} />
+          <ReviewChecksBadge status={row.status} />
+        </div>
+      )}
+    </a>
+  )
+}
+
+function toDisplay(row: CardReviewRow): WorktreeCardPrDisplay {
+  return {
+    provider: row.provider,
+    number: row.number,
+    title: row.title ?? '',
+    ...(row.state ? { state: row.state } : {}),
+    ...(row.status ? { status: row.status } : {})
+  }
 }
