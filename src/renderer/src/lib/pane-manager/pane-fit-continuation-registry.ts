@@ -126,13 +126,21 @@ export function pruneStaleSafeFitContinuations(pane: ManagedPane): void {
   }
 }
 
-export function failPendingSafeFitContinuations(pane: ManagedPane): void {
+/**
+ * Ends every pending continuation for a pane whose layout wait ran out.
+ *
+ * Why not a plain drop: the reattach grid push is the only client size the PTY
+ * will ever be told after a replay, so exhausting a frame budget must not be the
+ * thing that strands it. Opt-in continuations survive to the first measurable fit;
+ * everything else keeps the bounded-degradation contract and is discarded.
+ */
+export function releasePendingSafeFitContinuationsUntilMeasurable(pane: ManagedPane): void {
   const operations = pendingSafeFitContinuations.get(pane)
   if (!operations) {
     return
   }
   for (const [operationKey, pending] of Array.from(operations.entries())) {
-    settlePendingSafeFitContinuation(pane, operationKey, pending, false)
+    releaseSafeFitContinuationUntilMeasurable(pane, operationKey, pending)
   }
 }
 

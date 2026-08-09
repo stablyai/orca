@@ -25,7 +25,7 @@ import { flushDeferredPaneMetricOptions } from './pane-metric-options-deferral'
 import { canMeasurePaneForFit, getProposedPaneDimensions } from './pane-fit-measurability'
 import {
   cancelPendingSafeFitContinuation,
-  failPendingSafeFitContinuations,
+  releasePendingSafeFitContinuationsUntilMeasurable,
   flushPendingSafeFitContinuations,
   hasPendingSafeFitContinuations,
   isPendingSafeFitContinuationCurrent,
@@ -176,8 +176,9 @@ function armSafeFitContinuationRetry(pane: ManagedPane): void {
     },
     onExhausted: () => {
       // Why: a reveal transaction must degrade after its bounded layout wait;
-      // leaving completion pending forever blocks deferred output release.
-      failPendingSafeFitContinuations(pane)
+      // leaving completion pending forever blocks deferred output release. The
+      // reattach grid push still outlives the budget — it is the PTY's only size.
+      releasePendingSafeFitContinuationsUntilMeasurable(pane)
     }
   })
 }

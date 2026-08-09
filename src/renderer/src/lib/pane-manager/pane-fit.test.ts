@@ -210,6 +210,30 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     expect(continuation).not.toHaveBeenCalled()
   })
 
+  it('keeps an opt-in continuation alive past the exhausted frame budget', async () => {
+    // Why: the reattach grid push is the only client size the PTY is told after a replay,
+    // so running out of layout frames must not be what strands it. The bounded-degradation
+    // contract still holds for every caller that did not opt in (see the test above).
+    const pane = createPane({ rect: { width: 0, height: 0 } })
+    const continuation = vi.fn()
+
+    const handle = safeFitAndThen(pane, 'reattach-pty-resize', continuation, {
+      retryIfUnmeasurable: true,
+      deferIfHidden: true
+    })
+    for (let frame = 0; frame < 40; frame += 1) {
+      flushAnimationFrames(frame * 16)
+      vi.advanceTimersByTime(16)
+    }
+
+    await expect(handle.completion).resolves.toBe(false)
+    expect(continuation).not.toHaveBeenCalled()
+
+    pane.setRect({ width: 800, height: 600 })
+    safeFit(pane)
+    expect(continuation).toHaveBeenCalledTimes(1)
+  })
+
   it('runs a display:none pane continuation on the first fit after it is revealed', async () => {
     // Why: a restored floating-workspace pane is display:none for its whole reattach, so the
     // reattach grid push has to survive to the reveal — dropping it strands the PTY at the
