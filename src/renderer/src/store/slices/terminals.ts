@@ -58,6 +58,7 @@ import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
+import { resolveHydrationPtyOwnership } from './terminal-hydration-pty-ownership'
 import {
   getRecentlyClosedTabPosition,
   pushClosedTerminalTabSnapshot,
@@ -490,6 +491,17 @@ function equalStringSets(a: readonly string[], b: readonly string[]): boolean {
 
 function uniquePtyIds(ptyIds: readonly (string | null | undefined)[]): string[] {
   return [...new Set(ptyIds.filter((ptyId): ptyId is string => Boolean(ptyId)))]
+}
+
+function collectPersistedTerminalPtyIds(
+  session: WorkspaceSessionState,
+  tab: TerminalTab
+): string[] {
+  return uniquePtyIds([
+    tab.ptyId,
+    session.remoteSessionIdsByTabId?.[tab.id],
+    ...Object.values(session.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {})
+  ])
 }
 
 function resolvePrimaryLayoutPtyId(layout: TerminalLayoutSnapshot): string | null {
@@ -3938,6 +3950,27 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
       addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
+      // Why: PTY ids are globally unique, so resolve ownership across every restored workspace at once.
+      const ptyOwnership = resolveHydrationPtyOwnership(
+        Object.entries(session.tabsByWorktree)
+          .filter(([worktreeId]) => validWorktreeIds.has(worktreeId))
+          .flatMap(([worktreeId, tabs]) => {
+            const canonicalTerminalIds = new Set(
+              (session.unifiedTabs?.[worktreeId] ?? []).flatMap((tab) =>
+                tab.contentType === 'terminal' ? [tab.entityId] : []
+              )
+            )
+            return tabs
+              .filter((tab) => isValidTerminalTabId(tab.id))
+              .map((tab) => ({
+                tabId: tab.id,
+                isCanonical: canonicalTerminalIds.has(tab.id),
+                sortOrder: tab.sortOrder,
+                createdAt: tab.createdAt,
+                ptyIds: collectPersistedTerminalPtyIds(session, tab)
+              }))
+          })
+      )
       // Why: suppress restored mounts so only real activity updates Recent.
       const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
         Object.entries(session.tabsByWorktree)
@@ -4039,7 +4072,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       for (const worktreeId of pendingReconnectWorktreeIds) {
         const rawTabs = session.tabsByWorktree[worktreeId] ?? []
         const liveTabIds = rawTabs
-          .filter((t) => (t.ptyId || remoteSessionIds[t.id]) && validTabIds.has(t.id))
+          .filter(
+            (t) =>
+              (t.ptyId || remoteSessionIds[t.id]) &&
+              validTabIds.has(t.id) &&
+              // Why: a row whose every PTY id belongs to another row has nothing to reattach to.
+              ptyOwnership.ownsAnyPtyId(t.id)
+          )
           .map((t) => t.id)
         if (liveTabIds.length > 0) {
           pendingReconnectTabByWorktree[worktreeId] = liveTabIds
@@ -4060,7 +4099,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
         const rawTabs = session.tabsByWorktree[worktreeId] ?? []
         for (const tab of rawTabs) {
-          if (tab.ptyId && validTabIds.has(tab.id)) {
+          if (tab.ptyId && validTabIds.has(tab.id) && ptyOwnership.ownsPtyId(tab.id, tab.ptyId)) {
             pendingReconnectPtyIdByTabId[tab.id] = tab.ptyId
           }
         }
@@ -4068,7 +4107,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
       // Why: remote PTY reattach uses the relay's pty.attach RPC, not the local daemon; the loop above skips SSH repos, so no overlap.
       for (const [tabId, sessionId] of Object.entries(remoteSessionIds)) {
-        if (validTabIds.has(tabId)) {
+        if (validTabIds.has(tabId) && ptyOwnership.ownsPtyId(tabId, sessionId)) {
           pendingReconnectPtyIdByTabId[tabId] = sessionId
         }
       }
@@ -4191,7 +4230,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
                 )
               }
               const tab = tabById.get(tabId)
-              const sanitized = tab ? sanitizeTerminalLayoutPaneTitles(normalized, tab) : normalized
+              const titled = tab ? sanitizeTerminalLayoutPaneTitles(normalized, tab) : normalized
+              // Why: drop leaf bindings owned by another row so this layout cannot mirror-mount and resize a PTY it does not own.
+              const ownedLeafEntries = Object.entries(titled.ptyIdsByLeafId ?? {}).filter(
+                ([, ptyId]) => (ptyId ? ptyOwnership.ownsPtyId(tabId, ptyId) : true)
+              )
+              const sanitized =
+                ownedLeafEntries.length === Object.keys(titled.ptyIdsByLeafId ?? {}).length
+                  ? titled
+                  : { ...titled, ptyIdsByLeafId: Object.fromEntries(ownedLeafEntries) }
               const activeLeafId = sanitized.root
                 ? resolvePtyBoundActiveLeafId({
                     root: sanitized.root,
