@@ -38,14 +38,15 @@ export function useFolderSourceControlBulkActions({
 }): {
   stageAllArea: (area: 'unstaged' | 'untracked') => Promise<void>
   unstageAllArea: (area: 'staged') => Promise<void>
-  discardAllArea: (area: 'unstaged' | 'untracked') => Promise<void>
+  discardAllArea: (area: 'unstaged' | 'untracked', paths: readonly string[]) => Promise<void>
 } {
   const runBulk = useCallback(
     async (
       area: 'staged' | 'unstaged' | 'untracked',
-      operation: (ctx: RuntimeGitContext, paths: string[]) => Promise<void>
+      operation: (ctx: RuntimeGitContext, paths: string[]) => Promise<void>,
+      confirmedPaths?: readonly string[]
     ) => {
-      const paths = resolveFolderBulkPaths(entries, area, operation)
+      const paths = [...(confirmedPaths ?? resolveFolderBulkPaths(entries, area, operation))]
       if (paths.length === 0) {
         return
       }
@@ -67,7 +68,8 @@ export function useFolderSourceControlBulkActions({
   )
 
   const discardAllArea = useCallback(
-    (area: 'unstaged' | 'untracked') => runBulk(area, bulkDiscardRuntimeGitPaths),
+    (area: 'unstaged' | 'untracked', paths: readonly string[]) =>
+      runBulk(area, bulkDiscardRuntimeGitPaths, paths),
     [runBulk]
   )
 

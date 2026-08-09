@@ -166,7 +166,7 @@ export function useFolderSourceControlMutations({
     if (area === 'staged') {
       return
     }
-    void runOperation(() => discardAllArea(area))
+    void runOperation(() => discardAllArea(area, pending.paths))
   }, [context, discardAllArea, loadDetails, onBranchChanged, pendingDiscard, runOperation])
 
   const handleCommit = useCallback(async () => {
