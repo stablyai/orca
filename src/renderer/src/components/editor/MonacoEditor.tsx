@@ -35,6 +35,7 @@ import {
   type MarkdownDocLinkDecorationController
 } from './monaco-markdown-doc-link-decorations'
 import { buildGitConflictDecorations, hasGitConflictMarkers } from './monaco-conflict-decorations'
+import { BreakpointGutter } from './BreakpointGutter'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { formatMarkdownReviewNotes, type MarkdownReviewNote } from '@/lib/markdown-review-notes'
@@ -851,6 +852,9 @@ export default function MonacoEditor({
           fontFamily: editorFontFamily,
           lineNumbers: 'on',
           renderLineHighlight: 'line',
+          // Why: wide enough for a breakpoint dot's click target; Monaco's glyphMargin lane
+          // collapses to 0px until a decoration claims it, so breakpoints render here instead.
+          lineDecorationsWidth: 18,
           automaticLayout: true,
           tabSize: 2,
           readOnly,
@@ -874,6 +878,7 @@ export default function MonacoEditor({
       />
 
       {toastNode}
+      {!autoHeight && !liveTail && <BreakpointGutter editor={mountedEditor} filePath={filePath} />}
       <MonacoGutterContextMenu
         open={gutterMenuOpen}
         onOpenChange={setGutterMenuOpen}

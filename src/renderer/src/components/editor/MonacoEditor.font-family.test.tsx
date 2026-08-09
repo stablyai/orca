@@ -31,7 +31,11 @@ vi.mock('@/store', () => ({
       updateDiffComment: vi.fn(),
       scrollToDiffCommentId: null,
       setScrollToDiffCommentId: vi.fn(),
-      worktreeDiffComments: {}
+      worktreeDiffComments: {},
+      getBreakpointsForPath: () => [],
+      toggleLineBreakpoint: vi.fn(),
+      upsertLineBreakpoint: vi.fn(),
+      removeBreakpoint: vi.fn()
     })
 }))
 vi.mock('../diff-comments/useDiffCommentDecorator', () => ({

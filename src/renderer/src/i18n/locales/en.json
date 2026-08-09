@@ -15330,5 +15330,26 @@
       "settingsInstruction": "Change the model, dictation mode, or shortcut anytime in",
       "settingsLink": "Settings → Voice"
     }
+  },
+  "debug": {
+    "breakpointEditDialog": {
+      "title": "Edit Breakpoint · Line {{value0}}",
+      "description": "Break only when a condition is true, after a number of hits, or log a message instead of stopping.",
+      "conditionLabel": "Condition",
+      "conditionPlaceholder": "e.g. i === 10",
+      "hitCountLabel": "Hit Count",
+      "hitCountPlaceholder": "e.g. >= 5",
+      "logMessageLabel": "Log Message",
+      "logMessagePlaceholder": "e.g. value is {value}",
+      "cancel": "Cancel",
+      "save": "Save"
+    },
+    "breakpointGutter": {
+      "editBreakpoint": "Edit Breakpoint...",
+      "removeBreakpoint": "Remove Breakpoint",
+      "addBreakpoint": "Add Breakpoint",
+      "addConditionalBreakpoint": "Add Conditional Breakpoint...",
+      "addLogpoint": "Add Logpoint..."
+    }
   }
 }

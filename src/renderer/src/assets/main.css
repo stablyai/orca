@@ -2169,6 +2169,62 @@ html.native-shell .app-layout {
   opacity: 0.92;
 }
 
+/* Debug breakpoint glyphs: filled dot (line breakpoint), filled diamond
+   (conditional, same red), amber diamond (logpoint — distinct color so it
+   reads as "logs, doesn't stop"), and a hollow outline for any of the above
+   while unverified (no adapter has confirmed placement yet). Rendered via
+   linesDecorationsClassName into the always-reserved lineDecorationsWidth
+   lane — glyphMarginClassName was tried first, but Monaco collapses that
+   lane to 0px until a decoration claims a lane, which made an empty file's
+   gutter permanently unclickable. */
+.monaco-editor .orca-breakpoint-glyph {
+  position: relative;
+  cursor: pointer;
+}
+
+.monaco-editor .orca-breakpoint-glyph::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--destructive);
+  transform: translate(-50%, -50%);
+}
+
+.monaco-editor .orca-breakpoint-glyph--conditional::before,
+.monaco-editor .orca-breakpoint-glyph--logpoint::before {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.monaco-editor .orca-breakpoint-glyph--logpoint::before {
+  background: var(--git-decoration-modified);
+}
+
+.monaco-editor .orca-breakpoint-glyph--unverified::before {
+  background: transparent;
+  border: 1.5px solid var(--destructive);
+}
+
+.monaco-editor .orca-breakpoint-glyph--conditional.orca-breakpoint-glyph--unverified::before {
+  border-color: var(--destructive);
+}
+
+.monaco-editor .orca-breakpoint-glyph--logpoint.orca-breakpoint-glyph--unverified::before {
+  border-color: var(--git-decoration-modified);
+}
+
+.monaco-editor .orca-breakpoint-glyph--hint::before {
+  width: 8px;
+  height: 8px;
+  background: color-mix(in srgb, var(--destructive) 45%, transparent);
+}
+
 /* Why: Monaco's find-widget button tooltips (Close, Find in Selection, etc.)
    render inside a `.context-view` wrapper → `.workbench-hover-container` →
    `.workbench-hover.compact`, positioned above the target button. The wrapper's
