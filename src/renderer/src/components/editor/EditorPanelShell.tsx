@@ -22,6 +22,7 @@ type EditorPanelShellProps = {
   showMarkdownTableOfContents: boolean
   canShowMarkdownFrontmatterToggle: boolean
   markdownFrontmatterVisible: boolean
+  canReloadFromDisk: boolean
   sideBySide: boolean
   openFiles: OpenFile[]
   fileContents: Record<string, FileContent>
@@ -41,6 +42,7 @@ type EditorPanelShellProps = {
   onToggleMarkdownTableOfContents: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
+  onReloadFromDisk: () => void
   onContentChange: (content: string) => void
   onContentChangeForFile: (file: OpenFile, content: string) => void
   onDirtyStateHint: (dirty: boolean) => void
@@ -62,6 +64,7 @@ export function EditorPanelShell({
   showMarkdownTableOfContents,
   canShowMarkdownFrontmatterToggle,
   markdownFrontmatterVisible,
+  canReloadFromDisk,
   sideBySide,
   openFiles,
   fileContents,
@@ -81,6 +84,7 @@ export function EditorPanelShell({
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf,
+  onReloadFromDisk,
   onContentChange,
   onContentChangeForFile,
   onDirtyStateHint,
@@ -115,6 +119,7 @@ export function EditorPanelShell({
           showMarkdownTableOfContents={showMarkdownTableOfContents}
           canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
           markdownFrontmatterVisible={markdownFrontmatterVisible}
+          canReloadFromDisk={canReloadFromDisk}
           sideBySide={sideBySide}
           openFileState={model.openFileState}
           onCopyPath={onCopyPath}
@@ -127,6 +132,7 @@ export function EditorPanelShell({
           onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
           onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
           onExportMarkdownToPdf={onExportMarkdownToPdf}
+          onReloadFromDisk={onReloadFromDisk}
         />
       )}
       <Suspense fallback={<EditorLoadingFallback />}>

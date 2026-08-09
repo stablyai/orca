@@ -21,10 +21,12 @@ type EditorPanelMarkdownActionsMenuProps = {
   canExportMarkdownToPdf: boolean
   canShowMarkdownFrontmatterToggle: boolean
   markdownFrontmatterVisible: boolean
+  canReloadFromDisk: boolean
   onToggleDiffWordWrap: () => void
   onToggleEditorWordWrap: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
+  onReloadFromDisk: () => void
 }
 
 export function EditorPanelMarkdownActionsMenu({
@@ -36,10 +38,12 @@ export function EditorPanelMarkdownActionsMenu({
   canExportMarkdownToPdf,
   canShowMarkdownFrontmatterToggle,
   markdownFrontmatterVisible,
+  canReloadFromDisk,
   onToggleDiffWordWrap,
   onToggleEditorWordWrap,
   onToggleMarkdownFrontmatter,
-  onExportMarkdownToPdf
+  onExportMarkdownToPdf,
+  onReloadFromDisk
 }: EditorPanelMarkdownActionsMenuProps): React.JSX.Element | null {
   const hasMarkdownActions =
     isMarkdown && (shouldShowMarkdownExportAction || canShowMarkdownFrontmatterToggle)
@@ -72,6 +76,17 @@ export function EditorPanelMarkdownActionsMenu({
             'Word Wrap'
           )}
         </DropdownMenuCheckboxItem>
+        {canReloadFromDisk ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onReloadFromDisk}>
+              {translate(
+                'auto.components.editor.EditorPanelMarkdownActionsMenu.3fa2b8d417',
+                'Reload from Disk'
+              )}
+            </DropdownMenuItem>
+          </>
+        ) : null}
         {hasMarkdownActions ? <DropdownMenuSeparator /> : null}
         {canShowMarkdownFrontmatterToggle ? (
           <>

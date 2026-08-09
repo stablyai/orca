@@ -3,7 +3,6 @@ import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { openFilePreviewToSide } from '@/lib/file-preview'
-import { getEditorHeaderCopyState } from './editor-header'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
@@ -14,6 +13,8 @@ import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
 import { useClosedEditorTabCleanup } from './useClosedEditorTabCleanup'
 import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
+import { useEditorReloadShortcut } from './useEditorReloadShortcut'
+import { useEditorCopyPath } from './useEditorCopyPath'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
@@ -24,6 +25,7 @@ import {
 } from './editor-panel-git-entry-selector'
 import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
 import { attemptEditorFileSave } from './editor-file-save-attempt'
+import { reloadTabContentFromDisk } from './ExternalFileChangeBanner'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -69,30 +71,10 @@ function EditorPanelInner({
   const setEditorDraft = useAppStore((s) => s.setEditorDraft)
   const settings = useAppStore((s) => s.settings)
   const panelRef = useRef<HTMLDivElement>(null)
-  const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
-    null
-  )
-  const copiedPathToastResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after the editor panel unmounts; skip path
-  // toast feedback instead of starting a reset timer on a stale panel.
-  const pathCopyMountedRef = useRef(false)
-  const clearCopiedPathToastResetTimer = useCallback((): void => {
-    if (copiedPathToastResetTimerRef.current === null) {
-      return
-    }
-    window.clearTimeout(copiedPathToastResetTimerRef.current)
-    copiedPathToastResetTimerRef.current = null
+  const { copiedPathToast, handleCopyPath } = useEditorCopyPath(activeFile)
+  const setPanelRef = useCallback((node: HTMLDivElement | null) => {
+    panelRef.current = node
   }, [])
-  const setPanelRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      panelRef.current = node
-      pathCopyMountedRef.current = node !== null
-      if (!node) {
-        clearCopiedPathToastResetTimer()
-      }
-    },
-    [clearCopiedPathToastResetTimer]
-  )
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
 
@@ -203,34 +185,20 @@ function EditorPanelInner({
   )
   useEditorCmdSaveRequest({ activeFile, openFiles, fileContents, handleSave })
 
-  const handleCopyPath = useCallback(async (): Promise<void> => {
-    if (!activeFile) {
+  // Why: only editable file tabs can reload; exclude diff views and read-only tabs.
+  const canReloadFromDisk =
+    activeFile?.mode === 'edit' &&
+    !activeFile.isUntitled &&
+    !fileContents[activeFile.id]?.isBinary
+
+  const handleReloadFromDisk = useCallback((): void => {
+    if (!activeFile || !canReloadFromDisk) {
       return
     }
-    const copyState = getEditorHeaderCopyState(activeFile)
-    if (!copyState.copyText) {
-      return
-    }
-    try {
-      await window.api.ui.writeClipboardText(copyState.copyText)
-      if (!pathCopyMountedRef.current) {
-        return
-      }
-      clearCopiedPathToastResetTimer()
-      const nextToast = { fileId: activeFile.id, token: Date.now() }
-      setCopiedPathToast(nextToast)
-      copiedPathToastResetTimerRef.current = window.setTimeout(() => {
-        copiedPathToastResetTimerRef.current = null
-        setCopiedPathToast((current) => (current?.token === nextToast.token ? null : current))
-      }, 1500)
-    } catch {
-      if (!pathCopyMountedRef.current) {
-        return
-      }
-      clearCopiedPathToastResetTimer()
-      setCopiedPathToast(null)
-    }
-  }, [activeFile, clearCopiedPathToastResetTimer])
+    reloadTabContentFromDisk(activeFile, reloadContent)
+  }, [activeFile, canReloadFromDisk, reloadContent])
+
+  useEditorReloadShortcut({ activeFile, canReloadFromDisk, handleReloadFromDisk })
 
   if (!activeFile) {
     return null
@@ -361,6 +329,7 @@ function EditorPanelInner({
         showMarkdownTableOfContents={isMarkdownTableOfContentsVisible}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={isMarkdownFrontmatterVisible}
+        canReloadFromDisk={canReloadFromDisk}
         sideBySide={sideBySide}
         openFiles={openFiles}
         fileContents={fileContents}
@@ -389,6 +358,7 @@ function EditorPanelInner({
         onExportMarkdownToPdf={() =>
           void exportActiveMarkdownToPdf({ fileId: activeFile.id, root: panelRef.current })
         }
+        onReloadFromDisk={handleReloadFromDisk}
         onContentChange={handleContentChange}
         onContentChangeForFile={handleContentChangeForFile}
         onDirtyStateHint={handleDirtyStateHint}
