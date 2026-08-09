@@ -10326,8 +10326,10 @@ export class OrcaRuntimeService {
             ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
           })
           const changed = this.applyTrackedPtyTitle(ptyId, rawTitle, normalizedTitle, meta)
-          const isLiveCursorNativeTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
-          if (!changed && !isLiveCursorNativeTitle) {
+          // Why: an identity-only cursor title records nothing, so on a fresh pane `changed` is
+          // false — but the tracker title is that pane's only Cursor identity and still has to
+          // fan out to the sidebar and mobile (#10258).
+          if (!changed && !this.isLiveCursorNativeTitle(rawTitle, meta)) {
             return
           }
           const live = this.ptyTitleTrackersByPtyId.get(ptyId)
@@ -10417,33 +10419,33 @@ export class OrcaRuntimeService {
     // so working/idle transitions are unaffected by normalization; the records
     // store the NORMALIZED title so rotating Grok/Pi/Gemini frames collapse to
     // one stable stored label (#7880) instead of churning `ps`/mobile tabs.
-    const isLiveCursorNativeTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
-    const agentStatus = detectAgentStatusFromTitle(rawTitle)
+    //
+    // Why the identity-only case: the bare cursor-agent literal identifies the pane without
+    // asserting activity, so it records NO title/status evidence — only the tracker keeps it,
+    // for display (#10258). Nulling the status here rather than trusting the detector keeps
+    // that contract local, since every activity-gated effect below is keyed on status.
+    const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
+    const recordedTitle = identityOnlyTitle ? null : normalizedTitle
+    const agentStatus = identityOnlyTitle ? null : detectAgentStatusFromTitle(rawTitle)
     let ptyRecordChanged = false
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       const prevStatus = pty.lastAgentStatus
       const prevTitle = pty.lastOscTitle
-      const hadTitleEvidence =
-        prevTitle !== null || pty.lastOscTitleAt !== null || pty.lastOscTitleEpochMs !== null
-      const nextTitle = isLiveCursorNativeTitle ? null : normalizedTitle
-      const nextStatus = isLiveCursorNativeTitle ? null : agentStatus
       const observedAt = this.nextTitleObservationSequence()
-      pty.lastOscTitle = nextTitle
-      pty.lastOscTitleAt = isLiveCursorNativeTitle ? null : observedAt
-      pty.lastOscTitleEpochMs = isLiveCursorNativeTitle ? null : Date.now()
-      pty.lastAgentStatus = nextStatus
+      pty.lastOscTitle = recordedTitle
+      pty.lastOscTitleAt = identityOnlyTitle ? null : observedAt
+      pty.lastOscTitleEpochMs = identityOnlyTitle ? null : Date.now()
+      pty.lastAgentStatus = agentStatus
       pty.lastAgentStatusObservedLive = true
-      if (isLiveCursorNativeTitle) {
+      if (identityOnlyTitle) {
         pty.managementTitle = null
         pty.managementTitleAt = null
       } else {
         this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
       }
-      ptyRecordChanged = isLiveCursorNativeTitle
-        ? hadTitleEvidence || prevStatus !== null
-        : prevTitle !== normalizedTitle || prevStatus !== agentStatus
-      if (nextStatus === 'idle' && prevStatus !== 'idle') {
+      ptyRecordChanged = prevTitle !== recordedTitle || prevStatus !== agentStatus
+      if (agentStatus === 'idle' && prevStatus !== 'idle') {
         this.resolvePtyTuiIdleWaiters(pty, ptyId)
       }
       const shouldDelayMobileSnapshot =
@@ -10477,10 +10479,8 @@ export class OrcaRuntimeService {
       // the shell took over the title — the stuck-spinner bug in #1437.
       const prevStatus = leaf.lastAgentStatus
       const prevObservedLive = leaf.lastAgentStatusObservedLive
-      const prevTitle = leaf.lastOscTitle
-      const hadTitleEvidence = prevTitle !== null || leaf.lastOscTitleAt !== null
-      leaf.lastOscTitle = isLiveCursorNativeTitle ? null : normalizedTitle
-      leaf.lastOscTitleAt = isLiveCursorNativeTitle ? null : this.nextTitleObservationSequence()
+      leaf.lastOscTitle = recordedTitle
+      leaf.lastOscTitleAt = identityOnlyTitle ? null : this.nextTitleObservationSequence()
       // Why: when a new OSC title doesn't classify as an agent state (e.g.
       // bare shell title after the agent exits), clear lastAgentStatus so
       // it is no longer sticky. Tui-idle waiters that needed the previous
@@ -10488,22 +10488,15 @@ export class OrcaRuntimeService {
       // transition below; only fresh waiters registered after the agent
       // exits would observe the cleared value, and they correctly fall
       // back to title-based detection / polling.
-      leaf.lastAgentStatus = isLiveCursorNativeTitle ? null : agentStatus
+      leaf.lastAgentStatus = agentStatus
       leaf.lastAgentStatusObservedLive = true
-      if (
-        !ptyRecordChanged &&
-        isLiveCursorNativeTitle &&
-        (hadTitleEvidence || prevStatus !== null)
-      ) {
-        ptyRecordChanged = true
-      }
       // Why: resolve tui-idle on any transition TO idle (not just working→idle).
       // Claude Code may skip "working" entirely on fast tasks, going null→idle,
       // and the coordinator's tui-idle waiter would hang forever waiting for a
       // working→idle transition that never comes. Permission→idle is excluded:
       // it means the agent was blocked on user approval and the user said no,
       // which isn't a task-completion signal.
-      if (!isLiveCursorNativeTitle && agentStatus === 'idle' && prevStatus !== 'idle') {
+      if (agentStatus === 'idle' && prevStatus !== 'idle') {
         this.resolveTuiIdleWaiters(leaf)
       }
       // Why the second condition: push delivery is gated on LIVE idle, so its
@@ -10512,11 +10505,7 @@ export class OrcaRuntimeService {
       // an agent whose first live title is already idle (claude --resume at its
       // prompt) then shows no transition — the row would strand, which is
       // exactly #12536. Waiter semantics stay transition-only above.
-      if (
-        !isLiveCursorNativeTitle &&
-        agentStatus === 'idle' &&
-        (prevStatus !== 'idle' || !prevObservedLive)
-      ) {
+      if (agentStatus === 'idle' && (prevStatus !== 'idle' || !prevObservedLive)) {
         this.deliverPendingMessagesForLeaf(leaf)
       }
     }
@@ -30395,8 +30384,11 @@ export class OrcaRuntimeService {
       const hookAgentStatus = tab.agentStatus
         ? this.getHookAgentRowForPane(getHookRowsForPane(paneKey))
         : null
+      // Why not tab.ptyId: findPtyForMobileTerminalTab already rejected it when it returned
+      // null, because persisted ids can collide with an unrelated pane after restart — reading
+      // that pane's tracker would publish its title here, ahead of every other source.
       const trackerOnlyTitle = this.getUnpersistedTrackedTitleForPty(
-        liveLeafPtyId ?? livePty?.ptyId ?? pty?.ptyId ?? tab.ptyId ?? null
+        liveLeafPtyId ?? pty?.ptyId ?? null
       )
       const leafTitle = leaf
         ? getLatestAgentCandidateTitle(

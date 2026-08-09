@@ -5,7 +5,7 @@ import {
   createAgentStatusTracker,
   normalizeTerminalTitle,
   extractAllOscTitles,
-  isCursorAgentTitle,
+  isCursorNativeAgentTitle,
   shouldSuppressCursorNativeTitle
 } from '../../../../shared/agent-detection'
 import {
@@ -114,36 +114,27 @@ type PendingPtySideEffect = {
   suppressAttentionEvents: boolean
 }
 
-function isIgnoredCursorNativeTitle(title: string): boolean {
-  return title.trim().toLowerCase() === 'cursor agent'
-}
-
-// Why: mirrors main's applyObservedTitle — the first native literal survives as pane
-// identity while no Cursor-owned title owns the pane (#10258); the redraw repeats are
-// dropped here so they cost neither an allocation nor a drain slot.
-function removeIgnoredCursorNativeTitles(titles: string[], keepFirstNative: boolean): boolean {
+// Why: mirrors main's applyObservedTitle — the literal survives whenever the title before it
+// is not already Cursor-owned, which is how a pane re-establishes Cursor identity after the
+// shell prompt repaints the title (#10258). Only the redraw repeats are dropped, so they cost
+// neither an allocation nor a drain slot; `processObservedTitles` re-checks and stays
+// authoritative, so this must never drop a title that gate would have emitted.
+function removeSuppressedCursorNativeTitles(
+  titles: string[],
+  precedingTitle: string | null
+): boolean {
   let writeIndex = 0
-  let removed = false
-  let keepNative = keepFirstNative
-  for (let readIndex = 0; readIndex < titles.length; readIndex += 1) {
-    const title = titles[readIndex]
-    if (isIgnoredCursorNativeTitle(title)) {
-      if (!keepNative) {
-        removed = true
-        continue
-      }
-      keepNative = false
-    } else if (isCursorAgentTitle(title)) {
-      keepNative = false
+  let previousTitle = precedingTitle
+  for (const title of titles) {
+    if (isCursorNativeAgentTitle(title) && shouldSuppressCursorNativeTitle(previousTitle)) {
+      continue
     }
-    if (writeIndex !== readIndex) {
-      titles[writeIndex] = title
-    }
+    previousTitle = normalizeTerminalTitle(title)
+    titles[writeIndex] = title
     writeIndex += 1
   }
-  if (removed) {
-    titles.length = writeIndex
-  }
+  const removed = writeIndex < titles.length
+  titles.length = writeIndex
   return removed
 }
 
@@ -188,7 +179,7 @@ export function createPtyOutputProcessor({
   }
   const disposePendingSideEffectGauge = registerPtySideEffectPendingGauge(pendingSideEffectGauge)
   const initialAgentStatusTitle =
-    initialAgentTitle !== undefined && !isIgnoredCursorNativeTitle(initialAgentTitle)
+    initialAgentTitle !== undefined && !isCursorNativeAgentTitle(initialAgentTitle)
       ? initialAgentTitle
       : undefined
   const agentTracker =
@@ -303,9 +294,12 @@ export function createPtyOutputProcessor({
     const scannedForTitles = Boolean(onTitleChange && data.includes('\x1b]'))
     const titles = scannedForTitles ? extractAllOscTitles(data) : []
     // Why: Cursor emits this ignored title every redraw; keep one queue fact instead of an allocation and drain slot per frame.
-    const ignoredCursorNativeTitle = removeIgnoredCursorNativeTitles(
+    // Why the drained check: `lastEmittedTitle` only advances on drain, so while facts are
+    // still queued it is not the predecessor the drain will see — leave that call to the gate.
+    const drained = pendingSideEffectIndex >= pendingSideEffects.length
+    const ignoredCursorNativeTitle = removeSuppressedCursorNativeTitles(
       titles,
-      !shouldSuppressCursorNativeTitle(lastEmittedTitle)
+      drained ? lastEmittedTitle : null
     )
     const deliveredPayloads =
       onAgentStatus && !suppressAttentionEvents && payloads.length > 0 ? payloads : []
@@ -454,7 +448,7 @@ export function createPtyOutputProcessor({
     if (titles.length > 0) {
       clearStaleTitleTimer()
       for (const title of titles) {
-        if (isIgnoredCursorNativeTitle(title)) {
+        if (isCursorNativeAgentTitle(title)) {
           // Why: identity for a hookless Cursor pane (#10258), never activity — the literal's
           // null status would read as an agent exit, and a repeat must not stomp hook state.
           if (!shouldSuppressCursorNativeTitle(lastEmittedTitle)) {

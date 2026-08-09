@@ -101,12 +101,16 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
       'claude',
       '. claude',
       'Claude Code ready',
-      'Claude - action required'
+      'Claude - action required',
+      // A multiplexer prefix must not read as task text and cost Claude its identity.
+      'zsh | ⠋ Claude Code',
+      'tmux | dev | Claude Code ready'
     ]) {
       expect(isClaudeIdentityFrameTitle(title)).toBe(true)
     }
     for (const title of [
       '⠋ use Claude Sonnet',
+      'OC | ⠋ ask claude about this',
       '⠋ port the claude prompt',
       '. ship it with claude',
       '⠋ claude 스타일로 리팩터',

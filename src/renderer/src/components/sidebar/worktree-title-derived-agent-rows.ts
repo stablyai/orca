@@ -133,7 +133,10 @@ function buildTitleDerivedAgentRow(args: {
   now: number
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
-  const title = normalizeCompatibleAgentTitleForOwner(args.title, args.ownerAgentType)
+  // Why launchAgent, not ownerAgentType: this only rewrites a title within its own identity
+  // group (OMP wraps Pi and emits Pi frames), which stays correct in a split. Pane ownership
+  // is a separate, stricter question — it decides identity, so it uses ownerAgentType below.
+  const title = normalizeCompatibleAgentTitleForOwner(args.title, args.tab.launchAgent)
   const isClaudeAgentsTitle = isClaudeManagementTitle(title)
   // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
   // shared detector keeps it neutral so runtime liveness probes do not treat

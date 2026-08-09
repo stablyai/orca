@@ -7,6 +7,7 @@ import {
 import { isCursorAgentTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 import {
   getPiCompatibleSyntheticAgentLabel,
   isLegacyPiCompatibleTitle
@@ -253,8 +254,13 @@ const CLAUDE_IDENTITY_FRAME_RE =
  * keep using `resolveExplicitTerminalTitleAgentType`, whose token match is looser.
  */
 export function isClaudeIdentityFrameTitle(title: string): boolean {
-  const bare = stripLeadingAgentTitleDecorationOrEmpty(title).trim().toLowerCase()
-  return CLAUDE_IDENTITY_FRAME_RE.test(bare)
+  // Why segments: a multiplexer prefix (`zsh | ⠋ Claude Code`) would otherwise read as task
+  // text and cost a genuine Claude pane its identity.
+  return getWrapperTitleSegments(title).some((segment) =>
+    CLAUDE_IDENTITY_FRAME_RE.test(
+      stripLeadingAgentTitleDecorationOrEmpty(segment).trim().toLowerCase()
+    )
+  )
 }
 
 function isGenericClaudeStatusClaim(title: string, titleAgent: TuiAgent | null): boolean {
