@@ -114,7 +114,7 @@ export function ConfirmationDialogProvider({
                 className="text-sm font-normal text-foreground/80"
               >
                 {displayedRequest.options.dontAskAgain.label ??
-                  translate('auto.components.confirmation.dialog.dontAskAgain', "Don't ask again")}
+                  translate('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
               </Label>
             </div>
           ) : null}

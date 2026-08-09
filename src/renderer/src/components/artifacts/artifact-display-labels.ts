@@ -1,6 +1,6 @@
 import { FileCode2, FileText, type LucideIcon } from 'lucide-react'
 import type { ArtifactListItem } from '../../../../shared/artifacts'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { formatUiRelativeTime, formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 
 export function artifactName(item: ArtifactListItem): string {
@@ -8,9 +8,10 @@ export function artifactName(item: ArtifactListItem): string {
 }
 
 export function formatArtifactDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(value)
-  )
+  return new Intl.DateTimeFormat(getIntlLocale(), {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(new Date(value))
 }
 
 export function formatByteSize(value: number): string {

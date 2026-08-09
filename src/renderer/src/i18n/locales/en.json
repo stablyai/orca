@@ -6175,9 +6175,9 @@
           "0e9fc0eadc": "Workspace Directory",
           "e2955d9ccb": "Configure where new workspaces are created.",
           "7511097c5d": "Workspace",
-          "askBeforeDeletingArtifacts": "Ask Before Deleting Artifacts",
-          "askBeforeDeletingArtifactsSearch": "Show a confirmation dialog before deleting a shared artifact and breaking its public link.",
-          "askBeforeDeletingArtifactsDescription": "Show a confirmation before deleting a shared artifact. Anyone holding its public link loses access."
+          "31e300af1c": "Ask Before Deleting Artifacts",
+          "fb29a73a17": "Show a confirmation dialog before deleting a shared artifact and breaking its public link.",
+          "bf46474e33": "Show a confirmation before deleting a shared artifact. Anyone holding its public link loses access."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Apply Changes",
@@ -14462,12 +14462,15 @@
         "dialog": {
           "8490e5d36a": "Confirm",
           "56f5c60e0c": "Cancel",
-          "dontAskAgain": "Don't ask again"
+          "92bac3217e": "Don't ask again"
         },
         "skip": {
           "saved": "We'll skip this confirmation next time.",
           "savedDescription": "You can change this in Settings.",
-          "openSettings": "Open Settings"
+          "openSettings": "Open Settings",
+          "preference": {
+            "0b0cb6e3f9": "Could not save the confirmation preference."
+          }
         }
       },
       "jira": {

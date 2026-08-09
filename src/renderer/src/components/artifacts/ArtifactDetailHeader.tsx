@@ -36,6 +36,12 @@ export function ArtifactDetailHeader({
               )}
             </TooltipContent>
           </Tooltip>
+          <span className="sr-only">
+            {translate(
+              'auto.components.artifacts.ArtifactDetailHeader.publicLink',
+              'Anyone with this link can view it'
+            )}
+          </span>
           <p className="truncate font-mono text-xs text-muted-foreground">{item.shareUrl}</p>
         </div>
         <p className="truncate text-[11px] text-muted-foreground">
