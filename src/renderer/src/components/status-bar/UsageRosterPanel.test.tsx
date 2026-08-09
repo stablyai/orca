@@ -211,6 +211,7 @@ describe('UsageRow', () => {
     // fableWeekly falls back to the window-duration label when no reset time is
     // known; the window name is reserved for non-remaining display (#13041).
     expect(markup).not.toContain('Fable')
+    expect(markup).toContain('wk')
     expect(markup).toContain('75%')
     expect(markup).not.toContain('25%')
     expect(markup).not.toContain('60%')
