@@ -747,6 +747,14 @@ const api = {
     importNested: (args) => ipcRenderer.invoke('projectGroups:importNested', args)
   } satisfies PreloadApi['projectGroups'],
 
+  spaces: {
+    list: () => ipcRenderer.invoke('spaces:list'),
+    create: (args) => ipcRenderer.invoke('spaces:create', args),
+    update: (args) => ipcRenderer.invoke('spaces:update', args),
+    delete: (args) => ipcRenderer.invoke('spaces:delete', args),
+    moveProject: (args) => ipcRenderer.invoke('spaces:moveProject', args)
+  } satisfies PreloadApi['spaces'],
+
   folderWorkspaces: {
     list: () => ipcRenderer.invoke('folderWorkspaces:list'),
     getPathStatus: (args) => ipcRenderer.invoke('folderWorkspaces:getPathStatus', args),

@@ -9097,7 +9097,8 @@ describe('parked terminal recovery on repos:changed', () => {
       remountTerminalTabForRecovery,
       fetchRepos: vi.fn(() => Promise.resolve()),
       fetchProjectGroups: vi.fn(() => Promise.resolve()),
-      fetchFolderWorkspaces: vi.fn(() => Promise.resolve())
+      fetchFolderWorkspaces: vi.fn(() => Promise.resolve()),
+      loadSpaces: vi.fn(() => Promise.resolve())
     }
 
     vi.doMock('react', async () => {

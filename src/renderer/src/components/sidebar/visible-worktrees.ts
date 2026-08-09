@@ -21,6 +21,8 @@ import {
 } from './worktree-lineage-projection'
 import { computeRenderedSidebarWorktreeOrder } from './rendered-sidebar-worktree-order'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getActiveSpaceFilterId, isWorktreeInActiveSpace } from './worktree-list-space-filtering'
 
 /**
  * Whether a worktree represents the repo's default-branch row that the
@@ -199,6 +201,8 @@ export function computeVisibleWorktreeIds(
     // exact regression #8873 reports.
     alwaysShowDefaultBranchWorkspace?: boolean
     repoMap: Map<string, Repo>
+    repoByHostIdentity?: ReadonlyMap<string, Repo>
+    activeSpaceId?: string | null
     workspaceHostScope: ExecutionHostScope
     visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
     defaultHostId: ExecutionHostId
@@ -230,6 +234,14 @@ export function computeVisibleWorktreeIds(
 
   if (opts.hideDetachedHeadWorkspaces) {
     all = all.filter((w) => !isDetachedHeadWorkspace(w))
+  }
+
+  const spaceRepos = opts.repoByHostIdentity?.values() ?? opts.repoMap.values()
+  const activeSpaceFilterId = getActiveSpaceFilterId(opts.activeSpaceId, spaceRepos)
+  const inActiveSpace = (worktree: Worktree): boolean =>
+    isWorktreeInActiveSpace(worktree, opts.repoMap, activeSpaceFilterId, opts.repoByHostIdentity)
+  if (activeSpaceFilterId) {
+    all = all.filter(inActiveSpace)
   }
 
   const visibleHostIds =
@@ -273,7 +285,7 @@ export function computeVisibleWorktreeIds(
     const includedIds = new Set(all.map((worktree) => worktree.id))
     for (const worktreeId of opts.forcedVisibleWorktreeIds) {
       const worktree = lineageAncestorById.get(worktreeId)
-      if (worktree && !includedIds.has(worktreeId)) {
+      if (worktree && inActiveSpace(worktree) && !includedIds.has(worktreeId)) {
         includedIds.add(worktreeId)
         all.push(worktree)
       }
@@ -378,6 +390,9 @@ export function getVisibleWorktreeIds(): string[] {
 
   // Hoist repoMap so it's built once and reused across all branches below.
   const repoMap = getRepoMapFromState(state)
+  const repoByHostIdentity = new Map(
+    state.repos.map((repo) => [getRepoHostIdentity(repo), repo] as const)
+  )
 
   let sortedIds: string[]
 
@@ -418,6 +433,8 @@ export function getVisibleWorktreeIds(): string[] {
     hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
     alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
     repoMap,
+    repoByHostIdentity,
+    activeSpaceId: state.activeSpaceId,
     workspaceHostScope: state.workspaceHostScope,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
     defaultHostId: getSettingsFocusedExecutionHostId(state.settings),

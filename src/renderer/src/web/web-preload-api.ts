@@ -3396,7 +3396,8 @@ async function callRuntimeResultWithOwner<TResult>(
 }
 
 function withRuntimeRepoOwner(repo: Repo, hostId: ExecutionHostId): Repo {
-  return { ...repo, executionHostId: hostId }
+  // Spaces are desktop-local; paired clients retain the all-project view.
+  return { ...repo, spaceId: null, executionHostId: hostId }
 }
 
 function withRuntimeRepoMutationOwner(

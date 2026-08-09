@@ -423,7 +423,10 @@ function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Repo[]): 
 
 function repoWithFetchedOwner(repo: Repo, target: ReturnType<typeof getActiveRuntimeTarget>): Repo {
   if (target.kind === 'environment') {
-    return { ...repo, executionHostId: getRuntimeTargetHostId(target) }
+    const owned = { ...repo, executionHostId: getRuntimeTargetHostId(target) }
+    // Spaces stay desktop-local until runtime support is capability-negotiated.
+    delete owned.spaceId
+    return owned
   }
   if (repo.connectionId) {
     return { ...repo, executionHostId: getRepoExecutionHostId(repo) }

@@ -18658,7 +18658,7 @@ export class OrcaRuntimeService {
               }
             : {})
         }
-        this.store.addRepo(repo)
+        this.store.addRepo(repo, null)
         importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
         results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
       } catch (error) {
@@ -18790,7 +18790,7 @@ export class OrcaRuntimeService {
           }
         : {})
     }
-    this.store.addRepo(repo)
+    this.store.addRepo(repo, null)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repo.id)
@@ -18911,7 +18911,7 @@ export class OrcaRuntimeService {
           }
         : {})
     }
-    this.store.addRepo(repo)
+    this.store.addRepo(repo, null)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
     invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()
@@ -19080,7 +19080,7 @@ export class OrcaRuntimeService {
       externalWorktreeVisibility: 'hide',
       externalWorktreeVisibilityLegacy: false
     }
-    this.store.addRepo(repo)
+    this.store.addRepo(repo, null)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
     invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()

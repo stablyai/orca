@@ -4782,7 +4782,9 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "13e079ddac": "Move to Space",
+          "moveToSpaceFailed": "Couldn't move the project. Try again."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -5299,6 +5301,38 @@
           "connectName": "Connect to SSH host {{value0}}",
           "authFailedTooltip": "{{value0}} · authentication failed",
           "failedTooltip": "{{value0}} · connection failed"
+        },
+        "SidebarSpaceSwitcher": {
+          "switcherLabel": "Spaces",
+          "currentSwitcherLabel": "Spaces: {{value0}}",
+          "editSpace": "Edit Space",
+          "deleteSpace": "Delete Space",
+          "newSpace": "New Space"
+        },
+        "SpaceDeleteDialog": {
+          "title": "Delete Space",
+          "deletePrefix": "Delete",
+          "reassignSingular": "1 project moves to {{value0}}. Nothing on disk is removed.",
+          "reassignPlural": "{{value0}} projects move to {{value1}}. Nothing on disk is removed.",
+          "cancel": "Cancel",
+          "deleteFailed": "Couldn't delete the Space. Try again.",
+          "confirm": "Delete Space"
+        },
+        "SpaceEditorDialog": {
+          "editTitle": "Edit Space",
+          "createTitle": "New Space",
+          "description": "A Space decides which projects the sidebar shows.",
+          "nameLabel": "Name",
+          "namePlaceholder": "Space name",
+          "cancel": "Cancel",
+          "saveFailed": "Couldn't save the Space. Try again.",
+          "save": "Save",
+          "create": "Create Space"
+        },
+        "SpaceEmojiPickerPopover": {
+          "chooseEmoji": "Choose Space emoji",
+          "searchPlaceholder": "Search emoji",
+          "removeEmoji": "Remove emoji"
         }
       },
       "shared": {

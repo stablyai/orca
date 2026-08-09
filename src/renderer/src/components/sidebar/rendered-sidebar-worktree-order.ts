@@ -19,6 +19,12 @@ import {
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from './worktree-list-host-filtering'
+import {
+  filterFolderWorkspacesForActiveSpace,
+  filterProjectGroupsForActiveSpace,
+  getActiveSpaceFilterId,
+  getActiveSpaceProjectGroupIdSet
+} from './worktree-list-space-filtering'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
 const EMPTY_IMPORTED_BY_REPO = Object.freeze(new Map()) as never
@@ -46,6 +52,11 @@ export function computeRenderedSidebarWorktreeOrder(
     state.workspaceHostScope
   )
   const projectGroups = state.projectGroups ?? []
+  const activeSpaceProjectGroupIds = getActiveSpaceProjectGroupIdSet(
+    projectGroups,
+    state.repos,
+    getActiveSpaceFilterId(state.activeSpaceId, state.repos)
+  )
   const { prCache } = selectWorktreeListReviewCacheInputs(
     state,
     state.groupBy,
@@ -65,7 +76,11 @@ export function computeRenderedSidebarWorktreeOrder(
     getWorktreeMapFromState(state),
     true,
     state.settings,
-    filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
+    filterProjectGroupsForVisibleHosts(
+      filterProjectGroupsForActiveSpace(projectGroups, activeSpaceProjectGroupIds),
+      visibleHostIdSet,
+      defaultHostId
+    ),
     // Why empty: placeholder/imported/inbox/pending inputs never emit item or folder-workspace rows, the only two the order reads.
     EMPTY_REPO_ID_SET,
     EMPTY_IMPORTED_BY_REPO,
@@ -73,7 +88,7 @@ export function computeRenderedSidebarWorktreeOrder(
     EMPTY_PENDING_CREATIONS,
     { projects: projection.projects, projectHostSetups: projection.setups },
     filterFolderWorkspacesForVisibleHosts(
-      state.folderWorkspaces,
+      filterFolderWorkspacesForActiveSpace(state.folderWorkspaces, activeSpaceProjectGroupIds),
       projectGroups,
       visibleHostIdSet,
       defaultHostId

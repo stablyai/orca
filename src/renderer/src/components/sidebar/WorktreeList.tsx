@@ -15,6 +15,7 @@ import {
   FolderInput,
   FolderPlus,
   FolderX,
+  LayoutGrid,
   Loader2,
   Plus,
   Server,
@@ -50,6 +51,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -63,6 +66,7 @@ import type {
   FolderWorkspace,
   ProjectGroup,
   ProjectOrderBy,
+  Space,
   WorktreeLineage,
   WorktreeMeta,
   WorkspaceLineage,
@@ -239,6 +243,7 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { ProjectGroupDeleteDialog } from './ProjectGroupDeleteDialog'
 import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   effectiveExternalWorktreeVisibility,
@@ -306,6 +311,18 @@ import {
   getFolderPathStatusRouteOptionsForRows,
   getVisibleSidebarHostIdSet
 } from './worktree-list-host-filtering'
+import {
+  filterFolderWorkspacesForActiveSpace,
+  filterProjectGroupsForActiveSpace,
+  filterReposForActiveSpace,
+  getActiveSpaceFilterId,
+  getActiveSpaceProjectGroupIdSet
+} from './worktree-list-space-filtering'
+import { isRepoInSpace } from '../../../../shared/spaces'
+import {
+  getProjectSpaceMenuOptions,
+  type ProjectSpaceMenuOption
+} from './project-space-menu-options'
 import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
 import { getRenderedWorktreesInSidebarOrder } from './worktree-sidebar-row-preference'
 import { getCyclableWorktreeIds, resolveCycledWorktreeId } from './worktree-keyboard-cycle'
@@ -337,6 +354,8 @@ function useReusedArrayIdentity<T>(next: T[]): T[] {
 const SORT_SETTLE_MS = 3_000
 const USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 500
 const EMPTY_PROJECT_GROUPS: readonly ProjectGroup[] = []
+const EMPTY_SPACES: readonly Space[] = []
+const EMPTY_PROJECT_SPACE_MENU_OPTIONS: readonly ProjectSpaceMenuOption[] = []
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
@@ -656,6 +675,8 @@ type VirtualizedWorktreeViewportProps = {
   handleRemoveProject: (repo: Repo) => void
   handleCreateGroupFromRepo: (repo: Repo) => void
   handleMoveProjectToGroup: (repo: Repo, groupId: string) => void
+  spaces?: readonly Space[]
+  handleMoveProjectToSpace: (repo: Repo, spaceId: string | null) => void
   handleRemoveProjectFromGroup: (repo: Repo) => void
   handleRenameProjectGroup: (groupId: string, currentName: string) => void
   handleDeleteProjectGroup: (groupId: string, groupName: string) => void
@@ -1323,6 +1344,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   handleRemoveProject,
   handleCreateGroupFromRepo,
   handleMoveProjectToGroup,
+  spaces = EMPTY_SPACES,
+  handleMoveProjectToSpace,
   handleRemoveProjectFromGroup,
   handleRenameProjectGroup,
   handleDeleteProjectGroup,
@@ -4180,6 +4203,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       : null
                   })
                 : null
+              const projectSpaceOptions =
+                isRepoHeader && row.repo
+                  ? getProjectSpaceMenuOptions(
+                      spaces,
+                      row.repo.spaceId,
+                      getRepoExecutionHostId(row.repo)
+                    )
+                  : EMPTY_PROJECT_SPACE_MENU_OPTIONS
               const projectGroupPathStatus =
                 isProjectGroupHeader &&
                 row.projectGroup &&
@@ -4645,6 +4676,45 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                   'Remove from group'
                                 )}
                               </DropdownMenuItem>
+                            ) : null}
+                            {projectSpaceOptions.length > 0 ? (
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger>
+                                  <LayoutGrid className="size-3.5" />
+                                  {translate(
+                                    'auto.components.sidebar.WorktreeList.13e079ddac',
+                                    'Move to Space'
+                                  )}
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                  <DropdownMenuRadioGroup
+                                    value={
+                                      projectSpaceOptions.find((option) => option.selected)
+                                        ?.spaceId ?? ''
+                                    }
+                                    onValueChange={(value) => {
+                                      const option = projectSpaceOptions.find(
+                                        (candidate) => candidate.spaceId === value
+                                      )
+                                      if (row.repo && option) {
+                                        handleMoveProjectToSpace(row.repo, option.targetSpaceId)
+                                      }
+                                    }}
+                                  >
+                                    {projectSpaceOptions.map((option) => (
+                                      <DropdownMenuRadioItem
+                                        key={option.spaceId}
+                                        value={option.spaceId}
+                                      >
+                                        {option.emoji ? (
+                                          <span aria-hidden="true">{option.emoji}</span>
+                                        ) : null}
+                                        <span className="max-w-48 truncate">{option.name}</span>
+                                      </DropdownMenuRadioItem>
+                                    ))}
+                                  </DropdownMenuRadioGroup>
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
                             ) : null}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -5194,7 +5264,12 @@ const WorktreeList = React.memo(function WorktreeList({
 }: WorktreeListProps) {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const allWorktrees = useAllWorktrees()
+  const repos = useAppStore((s) => s.repos)
   const repoMap = useRepoMap()
+  const repoByHostIdentity = useMemo(
+    () => new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo] as const)),
+    [repos]
+  )
   const worktreeMap = useWorktreeMap()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
@@ -5210,6 +5285,8 @@ const WorktreeList = React.memo(function WorktreeList({
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
+  const activeSpaceId = useAppStore((s) => s.activeSpaceId)
+  const spaces = useAppStore((s) => s.spaces)
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
@@ -5512,6 +5589,8 @@ const WorktreeList = React.memo(function WorktreeList({
       hideDetachedHeadWorkspaces,
       alwaysShowDefaultBranchWorkspace,
       repoMap,
+      repoByHostIdentity,
+      activeSpaceId,
       workspaceHostScope,
       visibleWorkspaceHostIds,
       defaultHostId: getSettingsFocusedExecutionHostId(settings),
@@ -5520,6 +5599,7 @@ const WorktreeList = React.memo(function WorktreeList({
     })
     return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
+    activeSpaceId,
     agentSendTargetWorktreeId,
     agentStatusEpoch,
     filterRepoIds,
@@ -5533,6 +5613,7 @@ const WorktreeList = React.memo(function WorktreeList({
     visibleWorkspaceHostIds,
     settings,
     repoMap,
+    repoByHostIdentity,
     tabsByWorktree,
     ptyIdsByTabId,
     browserTabsByWorktree,
@@ -5550,8 +5631,6 @@ const WorktreeList = React.memo(function WorktreeList({
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
 
-  // Why: manual header order is bound to state.repos; Recent/Smart derive order from the sorted worktree stream.
-  const repos = useAppStore((s) => s.repos)
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const projectGrouping = useMemo(
     () => ({
@@ -5614,29 +5693,46 @@ const WorktreeList = React.memo(function WorktreeList({
     () => getVisibleSidebarHostIdSet(visibleWorkspaceHostIds, workspaceHostScope),
     [visibleWorkspaceHostIds, workspaceHostScope]
   )
+  const activeSpaceFilterId = useMemo(
+    () => getActiveSpaceFilterId(activeSpaceId, repos),
+    [activeSpaceId, repos]
+  )
+  const activeSpaceProjectGroupIds = useMemo(
+    () => getActiveSpaceProjectGroupIdSet(projectGroups, repos, activeSpaceFilterId),
+    [activeSpaceFilterId, projectGroups, repos]
+  )
+  const reposInActiveSpace = useMemo(
+    () => filterReposForActiveSpace(repos, activeSpaceFilterId),
+    [activeSpaceFilterId, repos]
+  )
   const visibleReposForRows = useMemo(() => {
     if (!visibleHostIdSet) {
-      return repos
+      return reposInActiveSpace
     }
-    return repos.filter((repo) => {
+    return reposInActiveSpace.filter((repo) => {
       const hostId =
         repo.connectionId || repo.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId
       return visibleHostIdSet.has(hostId)
     })
-  }, [defaultHostId, repos, visibleHostIdSet])
+  }, [defaultHostId, reposInActiveSpace, visibleHostIdSet])
   const visibleProjectGroupsForRows = useMemo(
-    () => filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
-    [defaultHostId, projectGroups, visibleHostIdSet]
+    () =>
+      filterProjectGroupsForVisibleHosts(
+        filterProjectGroupsForActiveSpace(projectGroups, activeSpaceProjectGroupIds),
+        visibleHostIdSet,
+        defaultHostId
+      ),
+    [activeSpaceProjectGroupIds, defaultHostId, projectGroups, visibleHostIdSet]
   )
   const visibleFolderWorkspacesForRows = useMemo(
     () =>
       filterFolderWorkspacesForVisibleHosts(
-        folderWorkspaces,
+        filterFolderWorkspacesForActiveSpace(folderWorkspaces, activeSpaceProjectGroupIds),
         projectGroups,
         visibleHostIdSet,
         defaultHostId
       ),
-    [defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet]
+    [activeSpaceProjectGroupIds, defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet]
   )
   const repoOrder = useMemo(() => {
     return getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
@@ -6165,6 +6261,7 @@ const WorktreeList = React.memo(function WorktreeList({
   )
 
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
+  const moveProjectToSpace = useAppStore((s) => s.moveProjectToSpace)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
   const deleteProjectGroupWithContainedProjects = useAppStore(
@@ -6194,6 +6291,23 @@ const WorktreeList = React.memo(function WorktreeList({
       void moveProjectToGroup(repo.id, null)
     },
     [moveProjectToGroup]
+  )
+
+  const handleMoveProjectToSpace = useCallback(
+    async (repo: Repo, spaceId: string | null) => {
+      if (isRepoInSpace(repo, spaceId)) {
+        return
+      }
+      if (!(await moveProjectToSpace(repo.id, spaceId, getRepoExecutionHostId(repo)))) {
+        toast.error(
+          translate(
+            'auto.components.sidebar.WorktreeList.moveToSpaceFailed',
+            "Couldn't move the project. Try again."
+          )
+        )
+      }
+    },
+    [moveProjectToSpace]
   )
 
   const handleRenameProjectGroup = useCallback((groupId: string, currentName: string) => {
@@ -6786,6 +6900,8 @@ const WorktreeList = React.memo(function WorktreeList({
         handleRemoveProject={handleRemoveProject}
         handleCreateGroupFromRepo={handleCreateGroupFromRepo}
         handleMoveProjectToGroup={handleMoveProjectToGroup}
+        spaces={spaces}
+        handleMoveProjectToSpace={handleMoveProjectToSpace}
         handleRemoveProjectFromGroup={handleRemoveProjectFromGroup}
         handleRenameProjectGroup={handleRenameProjectGroup}
         handleDeleteProjectGroup={handleDeleteProjectGroup}

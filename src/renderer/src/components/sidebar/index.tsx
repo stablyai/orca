@@ -7,6 +7,7 @@ import SidebarNav from './SidebarNav'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
+import { useRememberActiveSpaceWorkspace } from './use-remember-active-space-workspace'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/utils'
@@ -56,6 +57,7 @@ function Sidebar({
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
     [settings, systemPrefersDark]
   ) as React.CSSProperties | undefined
+  useRememberActiveSpaceWorkspace()
   const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
   const {
     workspaceBoardOpen,

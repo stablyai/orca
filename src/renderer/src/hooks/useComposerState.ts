@@ -121,6 +121,12 @@ import {
   resolveComposerActiveRepoId
 } from '@/lib/new-workspace-composer-repo'
 import {
+  filterProjectGroupsForActiveSpace,
+  filterReposForActiveSpace,
+  getActiveSpaceFilterId,
+  getActiveSpaceProjectGroupIdSet
+} from '@/components/sidebar/worktree-list-space-filtering'
+import {
   resolveWorkspaceCreationRepoId,
   resolveWorkspaceCreationTarget
 } from '@/lib/project-host-workspace-target'
@@ -647,9 +653,30 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     fetchSparsePresets
   } = actions
 
-  const repos = useAppStore((s) => s.repos)
+  const reposAcrossSpaces = useAppStore((s) => s.repos)
+  const activeSpaceId = useAppStore((s) => s.activeSpaceId)
+  const activeSpaceFilterId = useMemo(
+    () => getActiveSpaceFilterId(activeSpaceId, reposAcrossSpaces),
+    [activeSpaceId, reposAcrossSpaces]
+  )
+  const repos = useMemo(
+    () => filterReposForActiveSpace(reposAcrossSpaces, activeSpaceFilterId),
+    [activeSpaceFilterId, reposAcrossSpaces]
+  )
   const projects = useAppStore((s) => s.projects)
-  const projectGroups = useAppStore((s) => s.projectGroups)
+  const projectGroupsAcrossSpaces = useAppStore((s) => s.projectGroups)
+  const projectGroups = useMemo(
+    () =>
+      filterProjectGroupsForActiveSpace(
+        projectGroupsAcrossSpaces,
+        getActiveSpaceProjectGroupIdSet(
+          projectGroupsAcrossSpaces,
+          reposAcrossSpaces,
+          activeSpaceFilterId
+        )
+      ),
+    [activeSpaceFilterId, projectGroupsAcrossSpaces, reposAcrossSpaces]
+  )
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const settings = useAppStore((s) => s.settings)
@@ -868,7 +895,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             activeRepoId,
             activeWorktreeId: null,
             projects,
-            repos,
+            repos: reposAcrossSpaces,
             settings,
             worktreesByRepo
           },
@@ -876,7 +903,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           CLIENT_PLATFORM
         )
     return getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)
-  }, [activeRepoId, projects, repos, selectedRepo, settings, worktreesByRepo])
+  }, [activeRepoId, projects, reposAcrossSpaces, selectedRepo, settings, worktreesByRepo])
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only `orca-ide` rename must not apply to remote launch commands.
   const selectedRepoIsRemote = selectedRepo ? repoIsRemote(selectedRepo) : false
   const selectedRepoStartupShell = resolveLocalWindowsAgentStartupShell({

@@ -89,6 +89,7 @@ import {
   normalizeBrowserPageZoomLevel
 } from '../../../../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
+import { resolvePersistedSpaceUiState } from './spaces'
 import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
@@ -812,6 +813,8 @@ export type UISlice = {
     | 'feature-tips'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
+    | 'space-editor'
+    | 'delete-space'
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
@@ -2591,6 +2594,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
           ui.workspaceCleanup?.dismissals
         ),
+        ...resolvePersistedSpaceUiState(ui, s.spaces),
         // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
         activeView:
           source === 'startup'
