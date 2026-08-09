@@ -39,8 +39,25 @@ describe('locale-translation-policy ja relocalization', () => {
   it('keeps commands and identifiers in English so they still run', () => {
     expect(shouldPreserveEnglishValue('pnpm install')).toBe(true)
     expect(shouldPreserveEnglishValue('glab auth login')).toBe(true)
+    expect(shouldPreserveEnglishValue("gh pr list --json number -q '.[0].number'")).toBe(true)
+    expect(shouldPreserveEnglishValue('--model sonnet')).toBe(true)
+    expect(shouldPreserveEnglishValue('localhost, 127.0.0.1, *.internal')).toBe(true)
     expect(shouldPreserveEnglishValue('stale-agent-row-{{value0}}')).toBe(true)
     expect(shouldPreserveEnglishValue('text-foreground')).toBe(true)
+    expect(shouldPreserveEnglishValue('{basePrompt}')).toBe(true)
+    expect(shouldPreserveEnglishValue('{firstPrompt}')).toBe(true)
+    expect(shouldPreserveEnglishValue('{assistantMessage}')).toBe(true)
+    expect(shouldPreserveEnglishValue('/pricing')).toBe(true)
+    expect(shouldPreserveEnglishValue('/signup')).toBe(true)
+  })
+
+  it('repairs translated code examples back to executable values', () => {
+    expect(ja('--model sonnet', '--モデルソネット')).toBe('--model sonnet')
+    expect(
+      ja("gh pr list --json number -q '.[0].number'", "gh pr list --json 番号 -q '.[0].number'")
+    ).toBe("gh pr list --json number -q '.[0].number'")
+    expect(ja('{basePrompt}', '{ベースプロンプト}')).toBe('{basePrompt}')
+    expect(ja('/pricing', '/価格設定')).toBe('/pricing')
   })
 
   it('keeps style blocks in English because a translated selector breaks the view', () => {

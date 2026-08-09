@@ -5438,7 +5438,7 @@
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
           "0de9fda203": "破棄",
-          "c71770c455": "{ベースプロンプト}",
+          "c71770c455": "{basePrompt}",
           "f19a56498d": ";ブランチプレフィックス設定は引き続き適用されます。",
           "800edb1e54": "fix-login-flow",
           "5d569f5199": "。 Orca は次のような最後のセグメントのみを生成します。",
@@ -5457,8 +5457,8 @@
           "cfd82406dd": "保存中…",
           "40e7be7850": "保存済み",
           "7c7e34a66d": "未保存の変更",
-          "a4fa380b67": "{アシスタントメッセージ}",
-          "2ee2779c05": "{最初のプロンプト}"
+          "a4fa380b67": "{assistantMessage}",
+          "2ee2779c05": "{firstPrompt}"
         },
         "AutoRenameBranchPromptEditor": {
           "63121132c0": "破棄",
@@ -5844,7 +5844,7 @@
           "9b18de6eea": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。"
         },
         "AdvancedNetworkSettingsSection": {
-          "3e431564b5": "ローカルホスト、127.0.0.1、*.internal",
+          "3e431564b5": "localhost, 127.0.0.1, *.internal",
           "33ee3ca3af": "オプション。ホストはカンマ、セミコロン、または改行で区切ります。",
           "f6d76cc8f4": "プロキシバイパスルール",
           "fb7130dcb9": "構成された HTTP プロキシをバイパスする必要があるホスト。",
@@ -10610,7 +10610,7 @@
             "1bc0bdbb5e": "起動：",
             "7ec6abbf2a": "リセット",
             "f4f3c9ca4a": "コマンドテンプレート",
-            "fe119187bb": "--モデルソネット",
+            "fe119187bb": "--model sonnet",
             "bc8dc39f4b": "CLI 引数",
             "b99c33cec5": "設定",
             "15c5d85706": "Agent",
@@ -10641,7 +10641,7 @@
             "25fcd8e49a": "デフォルトを保存する",
             "d91b0a189d": "レシピの保存",
             "1f6fcfb6cf": "コマンドテンプレート",
-            "551ffd111b": "--モデルソネット",
+            "551ffd111b": "--model sonnet",
             "4eab815004": "CLI 引数",
             "914c8f6ac2": "カスタムコマンド",
             "cce2cbd01d": "Agent を選択",
@@ -12083,8 +12083,8 @@
             "051c97d15a": ".pp-card[data-card=\"starter\"] .pp-cta",
             "4fa59ca545": "✓ 更新されました",
             "1bec24acc1": "@keyframes browserFlash { 0% { opacity: 0; } 20% { opacity: 0.85; } 100% { opacity: 0; } } @keyframes browserTabIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes browserViewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }",
-            "73bbb46073": "/価格設定",
-            "f39be6ca14": "/サインアップ"
+            "73bbb46073": "/pricing",
+            "f39be6ca14": "/signup"
           },
           "BrowserUseSkillSetupCard": {
             "cbc45022d4": "Agent が Orca のブラウザでページに移動して確認できるようにします。",
@@ -13697,7 +13697,7 @@
           "c820119736": "1分",
           "51e28cdad9": "30秒",
           "bb2dfb3629": "タイムアウト",
-          "99a577306c": "gh pr list --json 番号 -q '.[0].number'",
+          "99a577306c": "gh pr list --json number -q '.[0].number'",
           "c2a762a180": "事前チェック"
         },
         "AutomationRunHistory": {

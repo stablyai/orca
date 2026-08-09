@@ -170,6 +170,9 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   // Commands, refs, class strings and code samples: a translated one no longer runs or matches.
   'pnpm install',
   'glab auth login',
+  "gh pr list --json number -q '.[0].number'",
+  '--model sonnet',
+  'localhost, 127.0.0.1, *.internal',
   'packages/web shared/ui',
   'stale-agent-row-{{value0}}',
   'text-foreground',
@@ -197,7 +200,12 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'throw src/auth',
   // Rendered inside <code> or a font-mono element, so they are code the user copies or types.
   '{prompt}',
+  '{basePrompt}',
+  '{firstPrompt}',
+  '{assistantMessage}',
   '/goal',
+  '/pricing',
+  '/signup',
   'npm run dev',
   'nbformat',
   'orca.yaml',
