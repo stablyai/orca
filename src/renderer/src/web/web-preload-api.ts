@@ -3136,6 +3136,8 @@ function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
     openInExternalEditor: () => Promise.resolve(openResult),
     openUrl: (url) => Promise.resolve(window.open(url, '_blank', 'noopener,noreferrer') as never),
     openFilePath: () => Promise.resolve(false),
+    // Why: the web client has no OS app picker; the menu entry stays inert.
+    pickApplication: () => Promise.resolve(null),
     openFileUri: (uri) =>
       Promise.resolve(window.open(uri, '_blank', 'noopener,noreferrer') as never),
     pathExists: async (path) => {

@@ -14645,6 +14645,33 @@
       "sent": "El contexto de la sesión se envió a {{agent}} en una sesión nueva.",
       "deliveryFailed": "La nueva sesión de {{agent}} se inició, pero no se pudo enviar su contexto.",
       "launchFailed": "No se pudo iniciar una sesión nueva de {{agent}}."
+    },
+    "right": {
+      "sidebar": {
+        "FileExplorerRow": {
+          "openWithDefaultApp": "Abrir con la app predeterminada",
+          "openFolderWithDefaultApp": "Abrir carpeta con la app predeterminada"
+        },
+        "fileExplorerSystemOpen": {
+          "failed": "No se pudo abrir «{{name}}» con la app predeterminada del sistema."
+        },
+        "fileExplorerOpenWith": {
+          "trigger": "Abrir con",
+          "systemDefault": "App predeterminada del sistema",
+          "choose": "Elegir app…",
+          "setDefault": "Abrir siempre {{type}} con",
+          "launchFailed": "No se pudo abrir el archivo con {{app}}."
+        }
+      }
+    },
+    "settings": {
+      "openWithApplications": {
+        "title": "Apps de «Abrir con»",
+        "description": "Apps registradas desde el explorador de archivos y los tipos de archivo asignados.",
+        "empty": "Las apps que elijas en el menú «Abrir con» del explorador aparecerán aquí.",
+        "pinned": "Predeterminada para {{types}}",
+        "remove": "Quitar {{app}}"
+      }
     }
   },
   "dashboardPopout": {

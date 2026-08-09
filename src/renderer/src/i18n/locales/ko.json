@@ -14656,6 +14656,33 @@
       "sent": "세션 컨텍스트를 새 {{agent}} 세션으로 보냈습니다.",
       "deliveryFailed": "새 {{agent}} 세션은 시작되었지만 컨텍스트를 보내지 못했습니다.",
       "launchFailed": "새 {{agent}} 세션을 시작할 수 없습니다."
+    },
+    "right": {
+      "sidebar": {
+        "FileExplorerRow": {
+          "openWithDefaultApp": "기본 앱으로 열기",
+          "openFolderWithDefaultApp": "기본 앱으로 폴더 열기"
+        },
+        "fileExplorerSystemOpen": {
+          "failed": "'{{name}}'을(를) 시스템 기본 앱으로 열 수 없습니다."
+        },
+        "fileExplorerOpenWith": {
+          "trigger": "연결 프로그램",
+          "systemDefault": "시스템 기본 앱",
+          "choose": "앱 선택…",
+          "setDefault": "{{type}}을(를) 항상 이 앱으로 열기",
+          "launchFailed": "{{app}}(으)로 파일을 열 수 없습니다."
+        }
+      }
+    },
+    "settings": {
+      "openWithApplications": {
+        "title": "연결 프로그램 앱",
+        "description": "파일 탐색기에서 등록한 앱과 고정된 파일 형식입니다.",
+        "empty": "파일 탐색기의 연결 프로그램 메뉴에서 선택한 앱이 여기에 표시됩니다.",
+        "pinned": "{{types}}의 기본 앱",
+        "remove": "{{app}} 제거"
+      }
     }
   },
   "dashboardPopout": {

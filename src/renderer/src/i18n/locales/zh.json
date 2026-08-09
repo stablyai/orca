@@ -14665,6 +14665,33 @@
       "sent": "已将会话上下文发送到新的 {{agent}} 会话。",
       "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文。",
       "launchFailed": "无法启动新的 {{agent}} 会话。"
+    },
+    "right": {
+      "sidebar": {
+        "FileExplorerRow": {
+          "openWithDefaultApp": "用默认应用打开",
+          "openFolderWithDefaultApp": "用默认应用打开文件夹"
+        },
+        "fileExplorerSystemOpen": {
+          "failed": "无法使用系统默认应用打开“{{name}}”。"
+        },
+        "fileExplorerOpenWith": {
+          "trigger": "打开方式",
+          "systemDefault": "系统默认应用",
+          "choose": "选择应用…",
+          "setDefault": "始终用此应用打开 {{type}}",
+          "launchFailed": "无法用 {{app}} 打开该文件。"
+        }
+      }
+    },
+    "settings": {
+      "openWithApplications": {
+        "title": "打开方式应用",
+        "description": "从资源管理器注册的应用，以及固定给它们的文件类型。",
+        "empty": "你在资源管理器「打开方式」里选择过的应用会出现在这里。",
+        "pinned": "{{types}} 的默认应用",
+        "remove": "移除 {{app}}"
+      }
     }
   },
   "dashboardPopout": {

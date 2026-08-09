@@ -27,3 +27,10 @@ export type ShellOpenExternalEditorResult =
   | { ok: true }
   | { ok: false; reason: Exclude<ShellOpenPathFailureReason, 'ssh-alias-required'> }
   | { ok: false; reason: 'ssh-alias-required'; host: string; port: number }
+
+/** What the OS app picker hands back after the user selects a bundle/executable. */
+export type ShellPickedApplication = {
+  applicationPath: string
+  command: string
+  label: string
+}

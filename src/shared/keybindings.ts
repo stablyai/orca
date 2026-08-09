@@ -99,6 +99,7 @@ export type KeybindingActionId =
   | 'fileExplorer.copyPath'
   | 'fileExplorer.copyRelativePath'
   | 'fileExplorer.delete'
+  | 'fileExplorer.openWithSystemDefault'
   | 'settings.search'
   | 'terminal.copySelection'
   | 'terminal.paste'
@@ -924,6 +925,26 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       win32: ['Delete']
     },
     allowBareKeybindings: true
+  },
+  {
+    id: 'fileExplorer.openWithSystemDefault',
+    title: 'Open with default app',
+    group: 'File Explorer',
+    scope: 'fileExplorer',
+    searchKeywords: [
+      'shortcut',
+      'file explorer',
+      'open',
+      'default',
+      'system',
+      'external',
+      'app',
+      'editor',
+      'browser'
+    ],
+    // Why: only fires with focus inside the explorer, so the conventional
+    // "open" chord stays free for the editor, terminal, and native menus.
+    defaultBindings: platformBindings(['Mod+O'])
   },
   {
     id: 'settings.search',

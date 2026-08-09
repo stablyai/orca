@@ -7,6 +7,7 @@ import type { InlineInput } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { formatFileExplorerPathsForClipboard } from './file-explorer-selection'
+import { openPathWithPreferredApplication } from './file-explorer-open-with-actions'
 import {
   fileExplorerHasRedo,
   fileExplorerHasUndo,
@@ -258,7 +259,13 @@ export function useFileExplorerKeys(opts: {
         platform,
         keybindings
       )
-      if (!wantsCopyRelativePath && !wantsCopyPath) {
+      const wantsOpenWithSystemDefault = keybindingMatchesAction(
+        'fileExplorer.openWithSystemDefault',
+        e,
+        platform,
+        keybindings
+      )
+      if (!wantsCopyRelativePath && !wantsCopyPath && !wantsOpenWithSystemDefault) {
         return
       }
 
@@ -269,6 +276,13 @@ export function useFileExplorerKeys(opts: {
       const selectedNodes = rowProjectionRef.current.getRowsByPaths(selectedPathsRef.current)
       const fallbackNodes = selectedNodes.length > 0 ? selectedNodes : node ? [node] : []
       if (fallbackNodes.length === 0) {
+        return
+      }
+      // ⌘O (Mac) / Ctrl+O — the type's pinned app, else the OS file association.
+      // Why: single target only; a multi-select would launch one app per file.
+      if (wantsOpenWithSystemDefault) {
+        e.preventDefault()
+        void openPathWithPreferredApplication((node ?? fallbackNodes[0]).path)
         return
       }
       // ⌥⇧⌘C (Mac) / Ctrl+Shift+Alt+C (Win) — Copy Relative Path

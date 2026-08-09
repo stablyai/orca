@@ -13,6 +13,7 @@ import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quic
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
+import { normalizeOpenWithSettings } from '../../../../shared/open-with-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import {
@@ -54,7 +55,7 @@ function createOpenInApplicationId(): string {
   )
 }
 
-function normalizeSettingsUpdates(
+export function normalizeSettingsUpdates(
   updates: Partial<GlobalSettings>,
   currentSettings: GlobalSettings | null
 ): Partial<GlobalSettings> {
@@ -89,6 +90,23 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications, {
       createId: createOpenInApplicationId
     })
+  }
+  if ('openWithApplications' in updates || 'openWithDefaults' in updates) {
+    // Why: the two fields are cross-validated, so an update touching only one
+    // must read the other from current settings — normalizing a missing app
+    // list as empty would drop every rule that names a still-installed app.
+    const merged = normalizeOpenWithSettings(
+      'openWithApplications' in updates
+        ? updates.openWithApplications
+        : currentSettings?.openWithApplications,
+      'openWithDefaults' in updates ? updates.openWithDefaults : currentSettings?.openWithDefaults
+    )
+    if ('openWithApplications' in updates) {
+      sanitizedUpdates.openWithApplications = merged.openWithApplications
+    }
+    if ('openWithDefaults' in updates) {
+      sanitizedUpdates.openWithDefaults = merged.openWithDefaults
+    }
   }
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)

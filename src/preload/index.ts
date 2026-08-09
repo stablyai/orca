@@ -124,7 +124,8 @@ import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellPickedApplication
 } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
@@ -2441,6 +2442,9 @@ const api = {
     openFileUri: (uri: string): Promise<void> => ipcRenderer.invoke('shell:openFileUri', uri),
 
     pathExists: (path: string): Promise<boolean> => ipcRenderer.invoke('shell:pathExists', path),
+
+    pickApplication: (): Promise<ShellPickedApplication | null> =>
+      ipcRenderer.invoke('shell:pickApplication'),
 
     pickAttachment: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAttachment'),
 

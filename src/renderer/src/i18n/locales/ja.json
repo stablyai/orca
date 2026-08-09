@@ -14645,6 +14645,33 @@
       "sent": "セッションコンテキストを新しい {{agent}} セッションに送信しました。",
       "deliveryFailed": "新しい {{agent}} セッションは開始しましたが、コンテキストを送信できませんでした。",
       "launchFailed": "新しい {{agent}} セッションを開始できませんでした。"
+    },
+    "right": {
+      "sidebar": {
+        "FileExplorerRow": {
+          "openWithDefaultApp": "既定のアプリで開く",
+          "openFolderWithDefaultApp": "既定のアプリでフォルダーを開く"
+        },
+        "fileExplorerSystemOpen": {
+          "failed": "「{{name}}」をシステムの既定アプリで開けませんでした。"
+        },
+        "fileExplorerOpenWith": {
+          "trigger": "このアプリケーションで開く",
+          "systemDefault": "システム既定のアプリ",
+          "choose": "アプリを選択…",
+          "setDefault": "{{type}} を常にこのアプリで開く",
+          "launchFailed": "{{app}} でファイルを開けませんでした。"
+        }
+      }
+    },
+    "settings": {
+      "openWithApplications": {
+        "title": "「このアプリで開く」のアプリ",
+        "description": "ファイルエクスプローラーから登録したアプリと、割り当てたファイルタイプ。",
+        "empty": "ファイルエクスプローラーの「このアプリケーションで開く」で選んだアプリがここに表示されます。",
+        "pinned": "{{types}} の既定アプリ",
+        "remove": "{{app}} を削除"
+      }
     }
   },
   "dashboardPopout": {

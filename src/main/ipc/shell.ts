@@ -5,8 +5,10 @@ import { fileURLToPath } from 'node:url'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellPickedApplication
 } from '../../shared/shell-open-types'
+import { pickApplicationForOpenWith } from './application-picker'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
 import type { Store } from '../persistence'
 import {
@@ -222,6 +224,11 @@ export function registerShellHandlers(store: Store): void {
       }
       return result.filePaths[0]
     }
+  )
+
+  ipcMain.handle(
+    'shell:pickApplication',
+    (): Promise<ShellPickedApplication | null> => pickApplicationForOpenWith()
   )
 
   // Why: window.prompt() and <input type="file"> are unreliable in Electron,
