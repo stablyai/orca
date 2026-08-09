@@ -123,6 +123,12 @@ export function isClaudeManagementTitle(title: string): boolean {
   return CLAUDE_MANAGEMENT_TITLE_RE.test(title)
 }
 
+/**
+ * Returns the display label of the agent that owns a terminal title, or null
+ * when the title names no agent. Order matters: agents whose names are also
+ * ordinary words (Cursor, Bullet) are matched as name tokens before the generic
+ * braille-spinner fallback hands the title to Claude.
+ */
 export function getAgentLabel(title: string): string | null {
   if (isClaudeManagementTitle(title)) {
     return null
