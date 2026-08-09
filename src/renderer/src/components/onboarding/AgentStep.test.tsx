@@ -5,6 +5,24 @@ import { AgentStep } from './AgentStep'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 describe('AgentStep', () => {
+  it('leaves every permission preset unselected for a mixed profile', () => {
+    const html = renderToStaticMarkup(
+      <TooltipProvider>
+        <AgentStep
+          selectedAgent={null}
+          onSelect={vi.fn()}
+          detectedSet={new Set([AGENT_CATALOG[0].id])}
+          isDetecting={false}
+          agentPermissionMode={null}
+          onAgentPermissionModeChange={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    expect(html).toContain('role="radiogroup"')
+    expect(html).not.toContain('aria-checked="true"')
+  })
+
   it('shows the collapsed fallback agents summary', () => {
     const html = renderToStaticMarkup(
       <TooltipProvider>

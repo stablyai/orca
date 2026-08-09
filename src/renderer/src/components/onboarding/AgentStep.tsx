@@ -21,7 +21,7 @@ type AgentStepProps = {
   onSelect: (agent: TuiAgent, fromCollapsedSection: boolean) => void
   detectedSet: Set<TuiAgent>
   isDetecting: boolean
-  agentPermissionMode?: SelectableAgentPermissionMode
+  agentPermissionMode?: SelectableAgentPermissionMode | null
   onAgentPermissionModeChange?: (mode: SelectableAgentPermissionMode) => void
 }
 
@@ -193,10 +193,7 @@ export function AgentStep({
           </div>
         </div>
       </section>
-      <AgentPermissionsControl
-        mode={agentPermissionMode}
-        onChange={onAgentPermissionModeChange}
-      />
+      <AgentPermissionsControl mode={agentPermissionMode} onChange={onAgentPermissionModeChange} />
     </div>
   )
 }
@@ -205,7 +202,7 @@ function AgentPermissionsControl({
   mode,
   onChange
 }: {
-  mode: SelectableAgentPermissionMode
+  mode: SelectableAgentPermissionMode | null
   onChange?: (mode: SelectableAgentPermissionMode) => void
 }): React.JSX.Element {
   return (
@@ -249,7 +246,10 @@ function AgentPermissionsControl({
         options={[
           {
             value: 'manual',
-            label: translate('auto.components.onboarding.AgentStep.agentPermissionsManual', 'Manual')
+            label: translate(
+              'auto.components.onboarding.AgentStep.agentPermissionsManual',
+              'Manual'
+            )
           },
           {
             value: 'auto',

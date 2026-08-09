@@ -69,6 +69,34 @@ describe('tui agent permissions', () => {
     expect(result.agentDefaultArgs.codex).toBe(AUTO_TUI_AGENT_ARGS.codex)
   })
 
+  it('preserves whitespace-only arguments when applying permission modes', () => {
+    const result = applyAgentPermissionMode({
+      mode: 'auto',
+      agentDefaultArgs: {
+        claude: '   ',
+        codex: '\t'
+      },
+      agentDefaultEnv: {}
+    })
+
+    expect(result.agentDefaultArgs.claude).toBe('   ')
+    expect(result.agentDefaultArgs.codex).toBe('\t')
+  })
+
+  it('preserves whitespace-padded presets when applying permission modes', () => {
+    const result = applyAgentPermissionMode({
+      mode: 'manual',
+      agentDefaultArgs: {
+        claude: ` ${YOLO_TUI_AGENT_ARGS.claude}`,
+        codex: `${AUTO_TUI_AGENT_ARGS.codex} `
+      },
+      agentDefaultEnv: {}
+    })
+
+    expect(result.agentDefaultArgs.claude).toBe(` ${YOLO_TUI_AGENT_ARGS.claude}`)
+    expect(result.agentDefaultArgs.codex).toBe(`${AUTO_TUI_AGENT_ARGS.codex} `)
+  })
+
   it('overwrites auto preset args when switching to yolo or manual', () => {
     const fromAuto = applyAgentPermissionMode({
       mode: 'yolo',

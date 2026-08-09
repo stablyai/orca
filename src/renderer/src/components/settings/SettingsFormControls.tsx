@@ -144,7 +144,7 @@ type SegmentedOption<T extends string | number> = {
 }
 
 type SettingsSegmentedControlProps<T extends string | number> = {
-  value: T
+  value: T | null | undefined
   onChange: (value: T) => void
   options: readonly SegmentedOption<T>[]
   ariaLabel?: string

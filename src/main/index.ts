@@ -313,10 +313,6 @@ import {
   type SyntheticAgentTitleProfile
 } from '../shared/synthetic-agent-title'
 import type { AgentStatusState } from '../shared/agent-status-types'
-import {
-  isAutoApprovingPermissionMode,
-  resolveTuiAgentPermissionMode
-} from '../shared/tui-agent-permissions'
 import { isAskUserQuestionTool } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import {
@@ -327,6 +323,7 @@ import { LocalPtyProvider } from './providers/local-pty-provider'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
+import { shouldSuppressCodexAutoApprovalSyntheticTitleFromHook } from './agent-hooks/codex-auto-approval-notification-suppression'
 import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
 import { reconcileManagedWslCliRegistrations } from './cli/wsl-cli-registration-reconciliation'
@@ -2033,32 +2030,6 @@ function driveSyntheticTitleFromHook(
   sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${needsUserInput ? '\x07' : ''}`, {
     force: true
   })
-}
-
-function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
-  agentType: string | null | undefined
-  state: AgentStatusState
-  launchConfig:
-    | {
-        agentArgs?: string | null
-        agentEnv?: Record<string, string> | null
-      }
-    | null
-    | undefined
-}): boolean {
-  if (args.agentType !== 'codex' || (args.state !== 'waiting' && args.state !== 'blocked')) {
-    return false
-  }
-  if (!args.launchConfig) {
-    return false
-  }
-  return isAutoApprovingPermissionMode(
-    resolveTuiAgentPermissionMode({
-      agent: 'codex',
-      agentArgs: args.launchConfig.agentArgs,
-      agentEnv: args.launchConfig.agentEnv
-    })
-  )
 }
 
 void app.whenReady().then(async () => {

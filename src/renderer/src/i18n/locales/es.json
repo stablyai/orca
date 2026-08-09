@@ -5378,7 +5378,7 @@
           "agentPermissions": "Permisos de Agents",
           "agentPermissionsInfo": "Información de permisos de Agents",
           "agentPermissionsTooltip": "No se aplica a agents con argumentos de lanzamiento sobrescritos.",
-          "agentPermissionsDescription": "Elige Manual, Auto o Yolo como permisos predeterminados al lanzar agents.",
+          "agentPermissionsDescription": "Elige Manual, Auto o Yolo como permisos predeterminados al lanzar agentes.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
           "3f1bdf3cb4": "El texto de entorno es demasiado grande para analizarlo de forma segura.",
@@ -11496,7 +11496,7 @@
           "showMoreAgents": "Mostrar {{value0}} agentes más→",
           "agentPermissionsLabel": "Permisos de Agents",
           "agentPermissionsInfo": "Información de permisos del agente",
-          "agentPermissionsTooltip": "Manual pide en cada check, Auto usa los defaults recomendados por el vendor, o Yolo omite los prompts de permisos.",
+          "agentPermissionsTooltip": "Manual solicita confirmación en cada comprobación, Auto usa valores predeterminados recomendados por el proveedor y Yolo omite las solicitudes de permiso.",
           "agentPermissionsManual": "Manual",
           "agentPermissionsAuto": "Auto",
           "agentPermissionsYolo": "Yolo"

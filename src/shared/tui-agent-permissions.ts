@@ -196,7 +196,8 @@ export function applyAgentPermissionMode(args: {
 
   for (const agent of PERMISSION_AGENT_IDS) {
     if (agent in YOLO_TUI_AGENT_ARGS) {
-      const currentArgs = normalizeArgs(nextArgs[agent])
+      // Why: overwrite only exact presets; whitespace changes are user-authored custom args.
+      const currentArgs = nextArgs[agent] ?? ''
       if (isKnownPermissionArgsPreset(agent, currentArgs)) {
         if (args.mode === 'yolo') {
           nextArgs[agent] = YOLO_TUI_AGENT_ARGS[agent] ?? ''

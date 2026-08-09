@@ -4,7 +4,10 @@ import { useAppStore } from '@/store'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../../shared/constants'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
-import { applyAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
+import {
+  applyAgentPermissionMode,
+  type AgentPermissionMode
+} from '../../../../shared/tui-agent-permissions'
 import type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export async function persistStep(
@@ -159,7 +162,7 @@ export function useCloseWith({
 type PersistCurrentStepDeps = {
   currentStepId: StepId
   selectedAgent: TuiAgent | null
-  agentPermissionMode: 'yolo' | 'auto' | 'manual'
+  agentPermissionMode: Exclude<AgentPermissionMode, 'mixed'> | null
   theme: GlobalSettings['theme']
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
@@ -190,13 +193,16 @@ export function usePersistCurrentStep({
     try {
       if (currentStepId === 'agent') {
         const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
+        const permissionModeUpdates = agentPermissionMode
+          ? applyAgentPermissionMode({
+              mode: agentPermissionMode,
+              agentDefaultArgs: settings.agentDefaultArgs,
+              agentDefaultEnv: settings.agentDefaultEnv
+            })
+          : {}
         await updateSettings({
           defaultTuiAgent,
-          ...applyAgentPermissionMode({
-            mode: agentPermissionMode,
-            agentDefaultArgs: settings.agentDefaultArgs,
-            agentDefaultEnv: settings.agentDefaultEnv
-          })
+          ...permissionModeUpdates
         })
         const choseAgent = defaultTuiAgent !== 'blank'
         const wasAlreadyChosen = onboardingChecklist.choseAgent

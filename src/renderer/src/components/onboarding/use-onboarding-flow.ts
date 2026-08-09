@@ -40,12 +40,14 @@ import {
 
 type SelectableAgentPermissionMode = Exclude<AgentPermissionMode, 'mixed'>
 
-function toSelectableAgentPermissionMode(mode: AgentPermissionMode): SelectableAgentPermissionMode {
+function toSelectableAgentPermissionMode(
+  mode: AgentPermissionMode
+): SelectableAgentPermissionMode | null {
   if (mode === 'manual' || mode === 'auto' || mode === 'yolo') {
     return mode
   }
-  // Why: mixed configs still show the permissive end of the scale in onboarding.
-  return 'yolo'
+  // Why: mixed configs must not silently choose a preset that rewrites existing overrides.
+  return null
 }
 
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
@@ -272,14 +274,15 @@ export function useOnboardingFlow(
       ? settings.defaultTuiAgent
       : null
   )
-  const [agentPermissionMode, setAgentPermissionMode] = useState<SelectableAgentPermissionMode>(
-    toSelectableAgentPermissionMode(
-      resolveAgentPermissionModeSummary({
-        agentDefaultArgs: settings?.agentDefaultArgs,
-        agentDefaultEnv: settings?.agentDefaultEnv
-      })
+  const [agentPermissionMode, setAgentPermissionMode] =
+    useState<SelectableAgentPermissionMode | null>(
+      toSelectableAgentPermissionMode(
+        resolveAgentPermissionModeSummary({
+          agentDefaultArgs: settings?.agentDefaultArgs,
+          agentDefaultEnv: settings?.agentDefaultEnv
+        })
+      )
     )
-  )
   // Why: hydrate theme from saved settings so users who already chose one see it preselected.
   const [theme, setTheme] = useState<GlobalSettings['theme']>(settings?.theme ?? 'dark')
   const [cloneUrl, setCloneUrl] = useState('')
