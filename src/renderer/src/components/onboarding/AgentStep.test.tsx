@@ -13,17 +13,21 @@ describe('AgentStep', () => {
           onSelect={vi.fn()}
           detectedSet={new Set([AGENT_CATALOG[0].id])}
           isDetecting={false}
-          yoloPermissions
-          onYoloPermissionsChange={vi.fn()}
+          agentPermissionMode="yolo"
+          onAgentPermissionModeChange={vi.fn()}
         />
       </TooltipProvider>
     )
 
     expect(html).toContain(`Show ${AGENT_CATALOG.length - 1} more agents→`)
     expect(html).toContain('data-agent-grid-scroll')
-    expect(html).toContain('data-slot="checkbox"')
-    expect(html).toContain('Yolo / Dangerously skip permissions')
-    expect(html).not.toContain('role="radiogroup"')
+    expect(html).toContain('Agent Permissions')
+    expect(html).toContain('Manual')
+    expect(html).toContain('Auto')
+    expect(html).toContain('Yolo')
+    expect(html).toContain('role="radiogroup"')
+    expect(html).not.toContain('data-slot="checkbox"')
+    expect(html).not.toContain('Yolo / Dangerously skip permissions')
   })
 
   it('labels the fallback agents summary as hide when expanded', () => {
@@ -34,8 +38,8 @@ describe('AgentStep', () => {
           onSelect={vi.fn()}
           detectedSet={new Set([AGENT_CATALOG[0].id])}
           isDetecting={false}
-          yoloPermissions
-          onYoloPermissionsChange={vi.fn()}
+          agentPermissionMode="yolo"
+          onAgentPermissionModeChange={vi.fn()}
         />
       </TooltipProvider>
     )

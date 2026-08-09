@@ -410,6 +410,7 @@ describe('AgentsPane', () => {
   it('includes agent permission search metadata', () => {
     expect(matchesSettingsSearch('permission', getAgentsPaneSearchEntries())).toBe(true)
     expect(matchesSettingsSearch('yolo', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('auto', getAgentsPaneSearchEntries())).toBe(true)
     expect(matchesSettingsSearch('manual', getAgentsPaneSearchEntries())).toBe(true)
   })
 
@@ -417,18 +418,26 @@ describe('AgentsPane', () => {
     const onChange = vi.fn()
     const element = AgentPermissionsSetting({ mode: 'mixed', onChange })
     const props = element.props.children.props.action.props as {
-      value: 'yolo'
-      onChange: (value: 'yolo' | 'manual' | 'mixed') => void
+      value: 'yolo' | 'auto' | 'manual' | 'mixed'
+      onChange: (value: 'yolo' | 'auto' | 'manual' | 'mixed') => void
       options: { value: string }[]
     }
 
     expect(props.value).toBe('yolo')
-    expect(props.options.map((option) => option.value)).toEqual(['yolo', 'manual'])
+    expect(props.options.map((option) => option.value)).toEqual(['manual', 'auto', 'yolo'])
     props.onChange('mixed')
     expect(onChange).not.toHaveBeenCalled()
 
     props.onChange('manual')
     expect(onChange).toHaveBeenCalledWith('manual')
+  })
+
+  it('displays auto mode without collapsing it to yolo', () => {
+    const element = AgentPermissionsSetting({ mode: 'auto', onChange: vi.fn() })
+    const props = element.props.children.props.action.props as {
+      value: 'yolo' | 'auto' | 'manual' | 'mixed'
+    }
+    expect(props.value).toBe('auto')
   })
 
   it('keeps catalog agent ids, labels, and commands discoverable in settings search', () => {

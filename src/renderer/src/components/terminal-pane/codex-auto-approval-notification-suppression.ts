@@ -1,7 +1,10 @@
 import { isAskUserQuestionTool } from '../../../../shared/agent-question-answered-intent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import { getSyntheticAgentTitleProfile } from '../../../../shared/synthetic-agent-title'
-import { resolveTuiAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
+import {
+  isAutoApprovingPermissionMode,
+  resolveTuiAgentPermissionMode
+} from '../../../../shared/tui-agent-permissions'
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import { useAppStore } from '@/store'
 
@@ -52,12 +55,12 @@ export function shouldSuppressCodexAutoApprovalStatus(
     return false
   }
 
-  return (
+  return isAutoApprovingPermissionMode(
     resolveTuiAgentPermissionMode({
       agent: 'codex',
       agentArgs: launchConfig.agentArgs,
       agentEnv: launchConfig.agentEnv
-    }) === 'yolo'
+    })
   )
 }
 

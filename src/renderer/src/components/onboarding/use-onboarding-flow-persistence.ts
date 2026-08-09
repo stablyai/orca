@@ -159,7 +159,7 @@ export function useCloseWith({
 type PersistCurrentStepDeps = {
   currentStepId: StepId
   selectedAgent: TuiAgent | null
-  yoloPermissions: boolean
+  agentPermissionMode: 'yolo' | 'auto' | 'manual'
   theme: GlobalSettings['theme']
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
@@ -175,7 +175,7 @@ export type PersistCurrentStepResult = {
 export function usePersistCurrentStep({
   currentStepId,
   selectedAgent,
-  yoloPermissions,
+  agentPermissionMode,
   theme,
   settings,
   updateSettings,
@@ -193,7 +193,7 @@ export function usePersistCurrentStep({
         await updateSettings({
           defaultTuiAgent,
           ...applyAgentPermissionMode({
-            mode: yoloPermissions ? 'yolo' : 'manual',
+            mode: agentPermissionMode,
             agentDefaultArgs: settings.agentDefaultArgs,
             agentDefaultEnv: settings.agentDefaultEnv
           })
@@ -253,7 +253,7 @@ export function usePersistCurrentStep({
     settings,
     theme,
     updateSettings,
-    yoloPermissions,
+    agentPermissionMode,
     setError
   ])
 }

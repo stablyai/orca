@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { YOLO_TUI_AGENT_ARGS } from '../../../../shared/tui-agent-permissions'
+import {
+  AUTO_TUI_AGENT_ARGS,
+  YOLO_TUI_AGENT_ARGS
+} from '../../../../shared/tui-agent-permissions'
 import { createTestStore, makeTab } from '../../store/slices/store-test-helpers'
 import type { AppState } from '../../store/types'
 import {
@@ -86,6 +89,39 @@ describe('Codex auto-approval status suppression', () => {
   it('preserves request_user_input question waits even under yolo attribution', () => {
     registerCodexLaunchConfig({
       agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
+      launchToken
+    })
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'pick a color',
+          agentType: 'codex',
+          toolName: 'request_user_input'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(false)
+  })
+
+  it('suppresses auto-approved Codex waiting status under approve-for-me auto mode', () => {
+    registerCodexLaunchConfig({
+      agentArgs: AUTO_TUI_AGENT_ARGS.codex ?? '',
+      launchToken
+    })
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        { state: 'waiting', prompt: 'implement notifications', agentType: 'codex' },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(true)
+  })
+
+  it('preserves request_user_input question waits under auto mode', () => {
+    registerCodexLaunchConfig({
+      agentArgs: AUTO_TUI_AGENT_ARGS.codex ?? '',
       launchToken
     })
 

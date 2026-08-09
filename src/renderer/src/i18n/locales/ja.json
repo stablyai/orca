@@ -5363,7 +5363,7 @@
           "agentPermissions": "エージェント権限",
           "agentPermissionsInfo": "エージェント権限情報",
           "agentPermissionsTooltip": "カスタムエージェント引数はモード切り替え時も変更されません。",
-          "agentPermissionsDescription": "Orcaが権限プロンプトの少ないエージェントを起動するか、手動チェックを含むエージェントを起動するかを選択します。",
+          "agentPermissionsDescription": "エージェント起動時の権限デフォルトを Manual / Auto / Yolo から選択します。",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "手動",
           "3f1bdf3cb4": "環境テキストが大きすぎるため安全に解析できません。",
@@ -5373,7 +5373,8 @@
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Re-detect agents installed on the active server",
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
-          "retryDetection": "Retry"
+          "retryDetection": "Retry",
+          "agentPermissionsAuto": "Auto"
         },
         "AppIconSelector": {
           "d5a112dc9b": "次へのアイコン",
@@ -7636,9 +7637,16 @@
             "a79d266f71": "セッション",
             "afbf35be68": "安定したセッション",
             "agentPermissions": "Agent Permissions",
-            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual.",
+            "agentPermissionsDescription": "エージェント権限のデフォルトを Manual / Auto / Yolo の間で切り替えます。",
             "agentRuntime": "Agent のランタイム",
-            "agentRuntimeDescription": "デフォルトで agents を Windows または WSL のどちらで検出および起動するかを選択します。"
+            "agentRuntimeDescription": "デフォルトで agents を Windows または WSL のどちらで検出および起動するかを選択します。",
+            "auto": "auto",
+            "permission": "権限",
+            "permissions": "権限",
+            "yolo": "yolo",
+            "manual": "手動",
+            "skip": "スキップ",
+            "checks": "チェック"
           }
         },
         "appearance": {
@@ -11486,9 +11494,12 @@
           "1eee1c7bd8": "PATH 上に agents が検出されませんでした。後でインストールするものを選択するか、空の terminal を使用して続行します。",
           "hideAgents": "agents を非表示にする",
           "showMoreAgents": "{{value0}} 件の agents をさらに表示→",
-          "yoloPermissionsLabel": "Yolo / 危険: 権限チェックをスキップ",
-          "yoloPermissionsInfo": "エージェント権限情報",
-          "yoloPermissionsTooltip": "エージェントの権限チェックをスキップして割り込みを減らす"
+          "agentPermissionsLabel": "エージェント権限",
+          "agentPermissionsInfo": "エージェント権限情報",
+          "agentPermissionsTooltip": "Manual は毎回確認、Auto はベンダー推奨の既定、Yolo は権限プロンプトをスキップします。",
+          "agentPermissionsManual": "手動",
+          "agentPermissionsAuto": "Auto",
+          "agentPermissionsYolo": "Yolo"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Agents は相互にメッセージを送信し、タスクを実行し、引き継ぎを調整できます。",

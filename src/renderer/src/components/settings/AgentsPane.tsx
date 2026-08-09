@@ -203,11 +203,21 @@ export function AgentAvailabilityControl({
   )
 }
 
+function visibleAgentPermissionMode(
+  mode: AgentPermissionMode
+): Exclude<AgentPermissionMode, 'mixed'> {
+  if (mode === 'manual' || mode === 'auto' || mode === 'yolo') {
+    return mode
+  }
+  // Why: mixed is custom; keep showing Yolo as the closest fully-permissive end of the scale.
+  return 'yolo'
+}
+
 export function AgentPermissionsSetting({
   mode,
   onChange
 }: AgentPermissionsSettingProps): React.JSX.Element {
-  const visibleMode: Exclude<AgentPermissionMode, 'mixed'> = mode === 'manual' ? 'manual' : 'yolo'
+  const visibleMode = visibleAgentPermissionMode(mode)
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader
@@ -238,7 +248,7 @@ export function AgentPermissionsSetting({
         }
         description={translate(
           'auto.components.settings.AgentsPane.agentPermissionsDescription',
-          'Choose whether Orca launches agents with fewer permission prompts or with manual checks.'
+          'Choose Manual, Auto, or Yolo permission defaults when launching agents.'
         )}
         action={
           <SettingsSegmentedControl<AgentPermissionMode>
@@ -255,15 +265,19 @@ export function AgentPermissionsSetting({
             size="sm"
             options={[
               {
-                value: 'yolo',
-                label: translate('auto.components.settings.AgentsPane.agentPermissionsYolo', 'Yolo')
-              },
-              {
                 value: 'manual',
                 label: translate(
                   'auto.components.settings.AgentsPane.agentPermissionsManual',
                   'Manual'
                 )
+              },
+              {
+                value: 'auto',
+                label: translate('auto.components.settings.AgentsPane.agentPermissionsAuto', 'Auto')
+              },
+              {
+                value: 'yolo',
+                label: translate('auto.components.settings.AgentsPane.agentPermissionsYolo', 'Yolo')
               }
             ]}
           />

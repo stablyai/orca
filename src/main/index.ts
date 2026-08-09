@@ -313,7 +313,10 @@ import {
   type SyntheticAgentTitleProfile
 } from '../shared/synthetic-agent-title'
 import type { AgentStatusState } from '../shared/agent-status-types'
-import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
+import {
+  isAutoApprovingPermissionMode,
+  resolveTuiAgentPermissionMode
+} from '../shared/tui-agent-permissions'
 import { isAskUserQuestionTool } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import {
@@ -2049,12 +2052,12 @@ function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
   if (!args.launchConfig) {
     return false
   }
-  return (
+  return isAutoApprovingPermissionMode(
     resolveTuiAgentPermissionMode({
       agent: 'codex',
       agentArgs: args.launchConfig.agentArgs,
       agentEnv: args.launchConfig.agentEnv
-    }) === 'yolo'
+    })
   )
 }
 

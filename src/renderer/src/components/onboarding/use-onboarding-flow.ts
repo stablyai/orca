@@ -33,7 +33,21 @@ import { buildOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 import { openProjectDefaultCheckout } from '../sidebar/project-added-default-checkout'
 import { translate } from '@/i18n/i18n'
-import { resolveAgentPermissionModeSummary } from '../../../../shared/tui-agent-permissions'
+import {
+  resolveAgentPermissionModeSummary,
+  type AgentPermissionMode
+} from '../../../../shared/tui-agent-permissions'
+
+type SelectableAgentPermissionMode = Exclude<AgentPermissionMode, 'mixed'>
+
+function toSelectableAgentPermissionMode(mode: AgentPermissionMode): SelectableAgentPermissionMode {
+  if (mode === 'manual' || mode === 'auto' || mode === 'yolo') {
+    return mode
+  }
+  // Why: mixed configs still show the permissive end of the scale in onboarding.
+  return 'yolo'
+}
+
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { buildWindowsTerminalSnapshotPayload } from './windows-terminal-onboarding-telemetry'
 
@@ -258,11 +272,13 @@ export function useOnboardingFlow(
       ? settings.defaultTuiAgent
       : null
   )
-  const [yoloPermissions, setYoloPermissions] = useState(
-    resolveAgentPermissionModeSummary({
-      agentDefaultArgs: settings?.agentDefaultArgs,
-      agentDefaultEnv: settings?.agentDefaultEnv
-    }) !== 'manual'
+  const [agentPermissionMode, setAgentPermissionMode] = useState<SelectableAgentPermissionMode>(
+    toSelectableAgentPermissionMode(
+      resolveAgentPermissionModeSummary({
+        agentDefaultArgs: settings?.agentDefaultArgs,
+        agentDefaultEnv: settings?.agentDefaultEnv
+      })
+    )
   )
   // Why: hydrate theme from saved settings so users who already chose one see it preselected.
   const [theme, setTheme] = useState<GlobalSettings['theme']>(settings?.theme ?? 'dark')
@@ -284,7 +300,7 @@ export function useOnboardingFlow(
   // Why: settings hydrate async after the lazy initializers run; re-sync once before commit unless the user edited the field.
   const themeInteractedRef = useRef(false)
   const agentInteractedRef = useRef(false)
-  const yoloPermissionsInteractedRef = useRef(false)
+  const agentPermissionModeInteractedRef = useRef(false)
   const [settingsHydrated, setSettingsHydrated] = useState(settings != null)
   const settingsHydration = resolveOnboardingSettingsHydration({
     settings,
@@ -303,14 +319,15 @@ export function useOnboardingFlow(
       setSelectedAgent(settingsHydration.selectedAgent)
     }
   }
-  if (settings && !yoloPermissionsInteractedRef.current) {
-    const nextYoloPermissions =
+  if (settings && !agentPermissionModeInteractedRef.current) {
+    const nextAgentPermissionMode = toSelectableAgentPermissionMode(
       resolveAgentPermissionModeSummary({
         agentDefaultArgs: settings.agentDefaultArgs,
         agentDefaultEnv: settings.agentDefaultEnv
-      }) !== 'manual'
-    if (nextYoloPermissions !== yoloPermissions) {
-      setYoloPermissions(nextYoloPermissions)
+      })
+    )
+    if (nextAgentPermissionMode !== agentPermissionMode) {
+      setAgentPermissionMode(nextAgentPermissionMode)
     }
   }
 
@@ -356,9 +373,9 @@ export function useOnboardingFlow(
     },
     []
   )
-  const setYoloPermissionsInteractive = useCallback((enabled: boolean) => {
-    yoloPermissionsInteractedRef.current = true
-    setYoloPermissions(enabled)
+  const setAgentPermissionModeInteractive = useCallback((mode: SelectableAgentPermissionMode) => {
+    agentPermissionModeInteractedRef.current = true
+    setAgentPermissionMode(mode)
   }, [])
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
@@ -583,7 +600,7 @@ export function useOnboardingFlow(
   const persistCurrentStep = usePersistCurrentStep({
     currentStepId: currentStep.id,
     selectedAgent,
-    yoloPermissions,
+    agentPermissionMode,
     theme,
     settings,
     updateSettings,
@@ -1228,8 +1245,8 @@ export function useOnboardingFlow(
     currentStep,
     selectedAgent,
     setSelectedAgent: setSelectedAgentInteractive,
-    yoloPermissions,
-    setYoloPermissions: setYoloPermissionsInteractive,
+    agentPermissionMode,
+    setAgentPermissionMode: setAgentPermissionModeInteractive,
     theme,
     setTheme: setThemeInteractive,
     cloneUrl,

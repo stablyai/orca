@@ -5577,13 +5577,14 @@
           "agentPermissions": "Agent Permissions",
           "agentPermissionsInfo": "Agent permissions info",
           "agentPermissionsTooltip": "Doesn't apply to agents where you've overridden launch arguments.",
-          "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
+          "agentPermissionsDescription": "Choose Manual, Auto, or Yolo permission defaults when launching agents.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
-          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."
+          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
+          "agentPermissionsAuto": "Auto"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -7900,9 +7901,16 @@
             "a79d266f71": "session",
             "afbf35be68": "stable session",
             "agentPermissions": "Agent Permissions",
-            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual.",
+            "agentPermissionsDescription": "Switch agent permission defaults between Manual, Auto, and Yolo.",
             "agentRuntime": "Agent Runtime",
-            "agentRuntimeDescription": "Choose whether agents are detected and launched on Windows or in WSL by default."
+            "agentRuntimeDescription": "Choose whether agents are detected and launched on Windows or in WSL by default.",
+            "auto": "auto",
+            "permission": "permission",
+            "permissions": "permissions",
+            "yolo": "yolo",
+            "manual": "manual",
+            "skip": "skip",
+            "checks": "checks"
           }
         },
         "appearance": {
@@ -11895,9 +11903,12 @@
           "1eee1c7bd8": "No agents detected on your PATH. Pick one to install later, or continue with a blank terminal.",
           "hideAgents": "Hide agents",
           "showMoreAgents": "Show {{value0}} more agents→",
-          "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
-          "yoloPermissionsInfo": "Agent permission info",
-          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
+          "agentPermissionsLabel": "Agent Permissions",
+          "agentPermissionsInfo": "Agent permission info",
+          "agentPermissionsTooltip": "Manual prompts for every check, Auto for vendor-recommended defaults, or Yolo to skip permission prompts.",
+          "agentPermissionsManual": "Manual",
+          "agentPermissionsAuto": "Auto",
+          "agentPermissionsYolo": "Yolo"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Agents can message each other, take tasks, and coordinate handoffs.",

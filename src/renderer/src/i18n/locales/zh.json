@@ -5375,7 +5375,7 @@
           "agentPermissions": "智能体权限",
           "agentPermissionsInfo": "智能体权限信息",
           "agentPermissionsTooltip": "切换模式时，自定义智能体参数保持不变。",
-          "agentPermissionsDescription": "选择 Orca 是以更少的权限提示启动智能体，还是手动检查。",
+          "agentPermissionsDescription": "选择启动智能体时的 Manual、Auto 或 Yolo 权限默认值。",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "手动",
           "3f1bdf3cb4": "环境文本过长，无法安全解析。",
@@ -5385,7 +5385,8 @@
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "重新检测活动服务器上安装的智能体",
           "remoteDetectionFailed": "无法检测已安装的智能体。请检查主机连接后重试。",
-          "retryDetection": "Retry"
+          "retryDetection": "Retry",
+          "agentPermissionsAuto": "Auto"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -7611,9 +7612,16 @@
             "a79d266f71": "会话",
             "afbf35be68": "稳定会话",
             "agentPermissions": "智能体权限",
-            "agentPermissionsDescription": "在 Yolo 和手动之间切换智能体权限默认值。",
+            "agentPermissionsDescription": "在 Manual、Auto 和 Yolo 之间切换智能体权限默认值。",
             "agentRuntime": "智能体运行时",
-            "agentRuntimeDescription": "选择默认在 Windows 还是 WSL 中检测并启动智能体。"
+            "agentRuntimeDescription": "选择默认在 Windows 还是 WSL 中检测并启动智能体。",
+            "auto": "auto",
+            "permission": "权限",
+            "permissions": "权限",
+            "yolo": "yolo",
+            "manual": "手动",
+            "skip": "跳过",
+            "checks": "检查"
           }
         },
         "appearance": {
@@ -11506,9 +11514,12 @@
           "1eee1c7bd8": "PATH 中未检测到智能体。可选择一个稍后安装，或使用空白终端继续。",
           "hideAgents": "隐藏智能体",
           "showMoreAgents": "显示另外 {{value0}} 个智能体→",
-          "yoloPermissionsLabel": "Yolo / 危险地跳过权限检查",
-          "yoloPermissionsInfo": "智能体权限信息",
-          "yoloPermissionsTooltip": "跳过智能体权限检查，减少打断"
+          "agentPermissionsLabel": "智能体权限",
+          "agentPermissionsInfo": "智能体权限信息",
+          "agentPermissionsTooltip": "Manual 每次都提示，Auto 使用厂商推荐默认值，Yolo 跳过权限提示。",
+          "agentPermissionsManual": "手动",
+          "agentPermissionsAuto": "Auto",
+          "agentPermissionsYolo": "Yolo"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "智能体可互相通信、领取任务并协调交接。",

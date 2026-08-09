@@ -5378,7 +5378,7 @@
           "agentPermissions": "Permisos de Agents",
           "agentPermissionsInfo": "Información de permisos de Agents",
           "agentPermissionsTooltip": "No se aplica a agents con argumentos de lanzamiento sobrescritos.",
-          "agentPermissionsDescription": "Elige si Orca lanza agents con menos prompts de permisos o con checks manuales.",
+          "agentPermissionsDescription": "Elige Manual, Auto o Yolo como permisos predeterminados al lanzar agents.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
           "3f1bdf3cb4": "El texto de entorno es demasiado grande para analizarlo de forma segura.",
@@ -5388,7 +5388,8 @@
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Re-detect agents installed on the active server",
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
-          "retryDetection": "Retry"
+          "retryDetection": "Retry",
+          "agentPermissionsAuto": "Auto"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
@@ -7614,9 +7615,16 @@
             "a79d266f71": "sesión",
             "afbf35be68": "sesión estable",
             "agentPermissions": "Permisos de agentes",
-            "agentPermissionsDescription": "Cambia los permisos predeterminados de los agentes entre Yolo y Manual.",
+            "agentPermissionsDescription": "Cambia los permisos predeterminados de los agentes entre Manual, Auto y Yolo.",
             "agentRuntime": "Runtime del agente",
-            "agentRuntimeDescription": "Elige si los agentes se detectan y ejecutan en Windows o en WSL de forma predeterminada."
+            "agentRuntimeDescription": "Elige si los agentes se detectan y ejecutan en Windows o en WSL de forma predeterminada.",
+            "auto": "auto",
+            "permission": "permiso",
+            "permissions": "permisos",
+            "yolo": "yolo",
+            "manual": "manual",
+            "skip": "omitir",
+            "checks": "comprobaciones"
           }
         },
         "appearance": {
@@ -11486,9 +11494,12 @@
           "1eee1c7bd8": "No se detectaron agentes en tu PATH. Elige uno para instalarlo más tarde o continúa con una terminal en blanco.",
           "hideAgents": "Ocultar agentes",
           "showMoreAgents": "Mostrar {{value0}} agentes más→",
-          "yoloPermissionsLabel": "Yolo / Omitir permisos de forma peligrosa",
-          "yoloPermissionsInfo": "Información de permisos del agente",
-          "yoloPermissionsTooltip": "Omite las comprobaciones de permisos de los agentes para reducir interrupciones"
+          "agentPermissionsLabel": "Permisos de Agents",
+          "agentPermissionsInfo": "Información de permisos del agente",
+          "agentPermissionsTooltip": "Manual pide en cada check, Auto usa los defaults recomendados por el vendor, o Yolo omite los prompts de permisos.",
+          "agentPermissionsManual": "Manual",
+          "agentPermissionsAuto": "Auto",
+          "agentPermissionsYolo": "Yolo"
         },
         "FeatureSetupChecklist": {
           "77f74946f5": "Los agentes pueden enviarse mensajes entre sí, tomar tareas y coordinar handoffs.",
