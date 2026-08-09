@@ -211,7 +211,7 @@ describe('ArtifactsSettingsPane', () => {
       />
     )
     expect(screen.queryByText('Allow publishing first')).not.toBeInTheDocument()
-    expect(screen.getByText('Ask your agent to share it')).toBeInTheDocument()
+    expect(screen.getByText('Share it from Orca or your agent')).toBeInTheDocument()
   })
 
   it('points web clients at the desktop app for the opt-in step', () => {

@@ -10449,7 +10449,7 @@
           "connected": "Connected",
           "reconnectRequired": "Your session expired. Sign in again to use cloud features.",
           "unavailable": "Orca sign-in is unavailable in this build.",
-          "signedOut": "Sign in to use Artifacts and Orca Relay.",
+          "signedOut": "Sign in to extend Orca with cloud features, including Artifacts and Orca Relay.",
           "checking": "Checking account status…",
           "account": "Orca account",
           "signOut": "Sign out",
