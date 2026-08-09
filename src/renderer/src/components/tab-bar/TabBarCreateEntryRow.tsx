@@ -1,5 +1,6 @@
 import React from 'react'
 import {
+  File,
   FilePlus,
   FileText,
   GitCompare,
@@ -138,6 +139,8 @@ function getActionPresentation(option: ActiveOption): {
         <Globe className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-markdown' ? (
         <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : option.option.kind === 'new-untitled-file' ? (
+        <File className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'open-markdown' ? (
         <FileText className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-simulator' || option.option.kind === 'go-to-simulator' ? (

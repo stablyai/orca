@@ -16,9 +16,46 @@ describe('tab create menu options', () => {
     terminalOnly: false,
     hasNewBrowser: true,
     hasNewMarkdown: true,
+    hasNewUntitledFile: true,
     hasOpenMarkdown: true,
     hasSimulator: true,
     simulatorIsGoTo: false
+  })
+
+  it('offers the untitled-file action only when the surface supports it', () => {
+    expect(defaultOptions.map((option) => option.kind)).toContain('new-untitled-file')
+
+    const withoutUntitledFile = buildTabCreateMenuOptions({
+      terminalOnly: false,
+      hasNewBrowser: true,
+      hasNewMarkdown: true,
+      hasNewUntitledFile: false,
+      hasOpenMarkdown: true,
+      hasSimulator: true,
+      simulatorIsGoTo: false
+    })
+    expect(withoutUntitledFile.map((option) => option.kind)).not.toContain('new-untitled-file')
+
+    expect(
+      buildTabCreateMenuOptions({
+        terminalOnly: true,
+        hasNewBrowser: true,
+        hasNewMarkdown: true,
+        hasNewUntitledFile: true,
+        hasOpenMarkdown: true,
+        hasSimulator: true,
+        simulatorIsGoTo: false
+      })
+    ).toEqual([])
+  })
+
+  it('ranks the untitled-file action first for its exact label', () => {
+    expect(
+      findMatchingTabCreateMenuOptions('new file', defaultOptions).map((option) => option.kind)[0]
+    ).toBe('new-untitled-file')
+    expect(
+      findMatchingTabCreateMenuOptions('untitled', defaultOptions).map((option) => option.kind)
+    ).toEqual(['new-untitled-file'])
   })
 
   it('matches mobile emulator aliases to the simulator menu action', () => {
@@ -34,6 +71,7 @@ describe('tab create menu options', () => {
       terminalOnly: false,
       hasNewBrowser: true,
       hasNewMarkdown: true,
+      hasNewUntitledFile: true,
       hasOpenMarkdown: false,
       hasSimulator: true,
       simulatorIsGoTo: true
@@ -58,6 +96,7 @@ describe('tab create menu options', () => {
       terminalOnly: false,
       hasNewBrowser: false,
       hasNewMarkdown: false,
+      hasNewUntitledFile: false,
       hasOpenMarkdown: false,
       hasSimulator: false,
       simulatorIsGoTo: false,

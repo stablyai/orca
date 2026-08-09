@@ -5,6 +5,7 @@ import { SortableContext } from '@dnd-kit/sortable'
 import {
   ChevronLeft,
   ChevronRight,
+  File,
   FilePlus,
   FileText,
   Globe,
@@ -122,6 +123,8 @@ type TabBarProps = {
   terminalOnly?: boolean
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
+  /** Opens an extensionless untitled buffer; separate from the markdown-specific `onNewFileTab`. */
+  onNewUntitledFileTab?: () => void
   onOpenFileTab?: () => void
   newTabMenuOrder?: 'default' | 'markdown-first'
   onSetCustomTitle: (tabId: string, title: string | null) => void
@@ -248,6 +251,7 @@ function TabBarInner({
   terminalOnly = false,
   showAgentLaunchItems = true,
   onNewFileTab,
+  onNewUntitledFileTab,
   onOpenFileTab,
   newTabMenuOrder = 'default',
   onSetCustomTitle,
@@ -541,6 +545,7 @@ function TabBarInner({
         windowsShellEntries,
         hasNewBrowser: !terminalOnly,
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
+        hasNewUntitledFile: !terminalOnly && Boolean(onNewUntitledFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
         hasSimulator: !terminalOnly && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
         simulatorIsGoTo: workspaceHasSimulatorTab
@@ -549,6 +554,7 @@ function TabBarInner({
       mobileEmulatorEnabled,
       onNewFileTab,
       onNewSimulatorTab,
+      onNewUntitledFileTab,
       onOpenFileTab,
       terminalOnly,
       windowsShellEntries,
@@ -579,6 +585,9 @@ function TabBarInner({
         break
       case 'new-markdown':
         onNewFileTab?.()
+        break
+      case 'new-untitled-file':
+        onNewUntitledFileTab?.()
         break
       case 'open-markdown':
         onOpenFileTab?.()
@@ -736,6 +745,16 @@ function TabBarInner({
         <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     ) : null
+  const newUntitledFileMenuItem =
+    !terminalOnly && onNewUntitledFileTab ? (
+      <DropdownMenuItem
+        onSelect={onNewUntitledFileTab}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <File className="size-4 text-muted-foreground" />
+        {translate('auto.components.tab.bar.TabBar.5f5c8cc8de', 'New File')}
+      </DropdownMenuItem>
+    ) : null
   const openMarkdownMenuItem =
     !terminalOnly && onOpenFileTab ? (
       <DropdownMenuItem
@@ -761,6 +780,7 @@ function TabBarInner({
     newTabMenuOrder === 'markdown-first' ? (
       <>
         {newMarkdownMenuItem}
+        {newUntitledFileMenuItem}
         {openMarkdownMenuItem}
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
@@ -772,6 +792,7 @@ function TabBarInner({
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
         {newMarkdownMenuItem}
+        {newUntitledFileMenuItem}
         {openMarkdownMenuItem}
         {newSimulatorMenuItem}
         {mobileEmulatorIntroMenuBlock}
