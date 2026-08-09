@@ -124,6 +124,72 @@ describe('DebugSessionStateMachine', () => {
     expect(machine.state).toBe('terminated')
   })
 
+  it('does not block launch() on its response, so an adapter that defers the launch response until configurationDone does not deadlock', async () => {
+    const transport = new FakeDapTransport()
+    let resolveLaunch: (() => void) | undefined
+    transport.request = vi.fn((command: string) => {
+      if (command === 'launch') {
+        return new Promise<void>((resolve) => {
+          resolveLaunch = resolve
+        })
+      }
+      if (command === 'configurationDone') {
+        // The adapter only lets the deferred launch response through once
+        // configurationDone has been processed — a real vscode-js-debug behavior.
+        resolveLaunch?.()
+        return Promise.resolve(undefined)
+      }
+      return Promise.resolve(undefined)
+    })
+    const machine = new DebugSessionStateMachine(transport)
+
+    await machine.initialize({})
+    await machine.launch({ request: 'launch', args: {} })
+    expect(machine.state).toBe('configuring')
+    await machine.configurationDone()
+    expect(machine.state).toBe('running')
+  })
+
+  it('surfaces a launch rejection that has already arrived by the time configurationDone() is called', async () => {
+    const transport = new FakeDapTransport()
+    transport.request = vi.fn((command: string) =>
+      command === 'launch' ? Promise.reject(new Error('spawn ENOENT')) : Promise.resolve(undefined)
+    )
+    const machine = new DebugSessionStateMachine(transport)
+    machine.on('error', () => {})
+
+    await machine.initialize({})
+    await machine.launch({ request: 'launch', args: {} })
+    await new Promise((resolve) => setImmediate(resolve))
+    await expect(machine.configurationDone()).rejects.toThrow(/ENOENT/)
+  })
+
+  it('emits an error event for a launch rejection that arrives after configurationDone already succeeded', async () => {
+    const transport = new FakeDapTransport()
+    let rejectLaunch: ((err: Error) => void) | undefined
+    transport.request = vi.fn((command: string) => {
+      if (command === 'launch') {
+        return new Promise((_resolve, reject) => {
+          rejectLaunch = reject
+        })
+      }
+      return Promise.resolve(undefined)
+    })
+    const machine = new DebugSessionStateMachine(transport)
+    const errors: Error[] = []
+    machine.on('error', (err: Error) => errors.push(err))
+
+    await machine.initialize({})
+    await machine.launch({ request: 'launch', args: {} })
+    await machine.configurationDone()
+    expect(machine.state).toBe('running')
+
+    rejectLaunch?.(new Error('late failure'))
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(errors).toHaveLength(1)
+    expect(errors[0]?.message).toBe('late failure')
+  })
+
   it('moves to terminated when the transport closes unexpectedly', async () => {
     const transport = new FakeDapTransport()
     const machine = new DebugSessionStateMachine(transport)

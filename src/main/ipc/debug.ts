@@ -78,6 +78,17 @@ export function registerDebugHandlers(mainWindow: BrowserWindow, store: Store): 
       machine.on('event', (msg: DapEventMessage) => {
         mainWindow.webContents.send('debug:event', { sessionId, type: 'adapterEvent', event: msg })
       })
+      // A launch/attach failure the adapter only reports after deferring its
+      // response past configurationDone (see DebugSessionStateMachine.launch)
+      // arrives here instead of rejecting a caller — EventEmitter throws on
+      // an unhandled 'error', so this listener is required, not optional.
+      machine.on('error', (err: Error) => {
+        mainWindow.webContents.send('debug:event', {
+          sessionId,
+          type: 'stderr',
+          text: `${err.message}\n`
+        })
+      })
       client.on('stderr', (text: string) => {
         mainWindow.webContents.send('debug:event', { sessionId, type: 'stderr', text })
       })

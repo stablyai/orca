@@ -140,3 +140,6 @@ tests/tools/benchmarks/results/terminal-pipeline-*.json
 
 # Old release trees the cross-version wire harness extracts on demand
 tests/e2e/.cross-version-checkouts/
+
+# vscode-js-debug DAP bundle, downloaded by config/scripts/vendor-js-debug-adapter.mjs
+resources/debug-adapters/
