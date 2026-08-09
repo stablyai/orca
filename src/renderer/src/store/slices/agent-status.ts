@@ -22,11 +22,15 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import {
+  resolveCorroboratedForegroundAgent,
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
 import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
@@ -1733,9 +1737,68 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         if (existing && updatedAt < existing.updatedAt) {
           return s
         }
+        const statusTabId =
+          routing?.tabId ?? existing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined
+        const statusWorktreeId =
+          routing?.worktreeId ??
+          existing?.worktreeId ??
+          findAgentPaneWorktreeId(s, paneKey) ??
+          undefined
+        const statusTab =
+          statusTabId && statusWorktreeId
+            ? s.tabsByWorktree[statusWorktreeId]?.find((tab) => tab.id === statusTabId)
+            : undefined
+        const statusPane = parsePaneKey(paneKey)
+        const statusLayout = statusTabId ? s.terminalLayoutsByTabId[statusTabId] : undefined
+        const addressedPtyId = statusPane
+          ? statusLayout?.ptyIdsByLeafId?.[statusPane.leafId]
+          : undefined
+        const hasRemoteRuntimePty = addressedPtyId
+          ? parseRemoteRuntimePtyId(addressedPtyId) !== null
+          : (statusTabId ? (s.ptyIdsByTabId[statusTabId] ?? []) : []).some(
+              (ptyId) => parseRemoteRuntimePtyId(ptyId) !== null
+            )
+        const paneLocalTitle =
+          terminalTitle ??
+          (statusPane ? statusLayout?.titlesByLeafId?.[statusPane.leafId] : undefined) ??
+          existing?.terminalTitle
+        const tabTitleBelongsToPane =
+          !statusPane ||
+          !statusLayout?.activeLeafId ||
+          statusLayout.activeLeafId === statusPane.leafId
+        const corroboratingTitle =
+          paneLocalTitle ?? (tabTitleBelongsToPane ? statusTab?.title : undefined) ?? ''
+        const foreground = s.paneForegroundAgentByPaneKey[paneKey]
+        const statusConnectionId =
+          routing?.connectionId !== undefined
+            ? routing.connectionId
+            : existing?.connectionId !== undefined
+              ? existing.connectionId
+              : getConnectionIdFromState(s, statusWorktreeId ?? null)
+        const hasTrustedLocalForeground =
+          foreground?.routingTrusted === true &&
+          !foreground.shellForeground &&
+          !hasRemoteRuntimePty &&
+          (statusConnectionId === null || statusConnectionId === undefined)
+        const corroboratedForegroundAgent = hasTrustedLocalForeground
+          ? resolveCorroboratedForegroundAgent({
+              processAgent: foreground?.agent,
+              title: corroboratingTitle,
+              ownerAgent: statusTab?.launchAgent
+            })
+          : null
+        const foregroundOverridesHookIdentity =
+          corroboratedForegroundAgent !== null &&
+          payload.agentType !== undefined &&
+          payload.agentType !== 'unknown' &&
+          payload.agentType !== corroboratedForegroundAgent
+        const incomingModel = foregroundOverridesHookIdentity ? undefined : payload.model
+        const incomingRestoredUnconfirmed =
+          !foregroundOverridesHookIdentity && payload.restoredUnconfirmed
         // Why: terminalTitle labels the pane itself, not the turn, so a missing title means "no update" —
         // preserve the prior value to avoid flicker (unlike tool/prompt fields, which clear on a fresh turn).
-        const effectiveTitle = terminalTitle ?? existing?.terminalTitle
+        const effectiveTitle =
+          (corroboratedForegroundAgent ? corroboratingTitle : undefined) ?? paneLocalTitle
 
         // Rolling log of state transitions for the dashboard's activity blocks; push only on
         // real state changes to avoid dupes from prompt-only pings within the same state.
@@ -1772,14 +1835,20 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         }
 
         const identity = resolveAgentStatusIdentity({
-          existing: existing
+          existing: corroboratedForegroundAgent
             ? {
-                agentType: existing.agentType,
-                state: existing.state,
-                updatedAt: existing.updatedAt,
-                restoredUnconfirmed: existing.restoredUnconfirmed
+                agentType: corroboratedForegroundAgent,
+                state: 'working',
+                updatedAt
               }
-            : undefined,
+            : existing
+              ? {
+                  agentType: existing.agentType,
+                  state: existing.state,
+                  updatedAt: existing.updatedAt,
+                  restoredUnconfirmed: existing.restoredUnconfirmed
+                }
+              : undefined,
           incoming: payload.agentType,
           now: updatedAt
         })
@@ -1808,7 +1877,6 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
               ? existing.stateStartedAt
               : updatedAt)
         if (
-          existing &&
           shouldSuppressInheritedTerminalStatus({
             inheritedFromActivePane: identity.inheritedFromActivePane,
             incomingState: payload.state
@@ -1844,21 +1912,22 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const canReuseExistingProviderSession =
           existing?.agentType === identity.agentType &&
           (existing.state !== 'done' || payload.state === 'done')
+        const incomingProviderSession = foregroundOverridesHookIdentity
+          ? undefined
+          : metadata?.providerSession
         const providerSession =
-          metadata?.providerSession ??
+          incomingProviderSession ??
           (canReuseExistingProviderSession ? existing.providerSession : undefined)
         const existingProviderSession = canReuseExistingProviderSession
           ? existing.providerSession
           : undefined
         const providerSessionChanged =
-          Boolean(metadata?.providerSession && existingProviderSession) &&
+          Boolean(incomingProviderSession && existingProviderSession) &&
           !agentProviderSessionsEqual(
             identity.agentType,
-            metadata?.providerSession,
+            incomingProviderSession,
             existingProviderSession
           )
-        const statusTabId =
-          routing?.tabId ?? existing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined
         const statusTerminalHandle = routing?.terminalHandle ?? existing?.terminalHandle
         const registryEntry = s.agentLaunchConfigByPaneKey[paneKey]
         const matchedRegistryLaunchConfig = registryEntryMatchesStatus({
@@ -1898,7 +1967,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : undefined
         // Why: on a reused pane key, once the provider session changes the old launch registry must not bleed options into the new session.
         const launchConfigSource =
-          (payload.state !== 'done' && !providerSessionChanged && metadata?.launchToken
+          (payload.state !== 'done' &&
+          !foregroundOverridesHookIdentity &&
+          !providerSessionChanged &&
+          metadata?.launchToken
             ? metadata?.launchConfig
             : undefined) ??
           matchedRegistryLaunchConfig ??
@@ -1910,15 +1982,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           stateStartedAt,
           agentType: identity.agentType,
           model:
-            payload.model ??
+            incomingModel ??
             (existing?.agentType === identity.agentType ? existing.model : undefined),
           paneKey,
           terminalHandle: statusTerminalHandle,
-          worktreeId:
-            routing?.worktreeId ??
-            existing?.worktreeId ??
-            findAgentPaneWorktreeId(s, paneKey) ??
-            undefined,
+          worktreeId: statusWorktreeId,
           ...(routing?.connectionId !== undefined
             ? { connectionId: routing.connectionId }
             : existing?.connectionId !== undefined
@@ -1942,7 +2010,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : payload.subagents,
           ...(providerSession ? { providerSession } : {}),
           ...(promptInteractionKey ? { promptInteractionKey } : {}),
-          ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+          ...(incomingRestoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
           // Why: `interrupted` is done-only; parseAgentStatusPayload already clamps it for non-done states, so write it through directly.
           interrupted: payload.interrupted,
           // Why: done→done repaints (OSC 9999, reconnect snapshot replays) re-deliver a

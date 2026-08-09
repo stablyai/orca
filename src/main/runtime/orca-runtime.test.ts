@@ -23969,6 +23969,60 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('corroborates a conflicting local hook from the exact OpenCode PTY', async () => {
+    const getForegroundProcess = vi.fn(async () => 'opencode')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-opencode' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess
+    })
+    runtime.attachWindow(1)
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      tabId: 'opencode-tab',
+      leafId: HEADLESS_LEAF_ID,
+      command: 'opencode',
+      launchAgent: 'opencode',
+      launchConfig: { agentCommand: 'opencode', agentArgs: '', agentEnv: {} },
+      launchToken: 'opencode-launch-token',
+      title: 'OpenCode',
+      activate: true
+    })
+    runtime.onPtyData(
+      'pty-opencode',
+      '\x1b]0;OC | Continue weighted SLO scheduling work\x07working\n',
+      100
+    )
+
+    const event = {
+      paneKey: makePaneKey('opencode-tab', HEADLESS_LEAF_ID),
+      tabId: 'opencode-tab',
+      worktreeId: TEST_WORKTREE_ID,
+      launchToken: 'opencode-launch-token',
+      connectionId: null,
+      payload: {
+        state: 'working' as const,
+        prompt: 'Continue weighted SLO scheduling work',
+        agentType: 'claude'
+      }
+    }
+    await expect(runtime.resolveCorroboratedLocalHookAgent(event)).resolves.toBe('opencode')
+    await expect(
+      runtime.resolveCorroboratedLocalHookAgent({
+        ...event,
+        launchToken: 'different-launch-token'
+      })
+    ).resolves.toBeNull()
+    await expect(
+      runtime.resolveCorroboratedLocalHookAgent({
+        ...event,
+        connectionId: 'ssh-connection-1'
+      })
+    ).resolves.toBeNull()
+    expect(getForegroundProcess).toHaveBeenCalledOnce()
+  })
+
   it('skips the foreground-process probe when the PTY launch agent is already known', async () => {
     // Why: foregroundAgent is only a fallback when launchAgent is unknown, so probing a launched agent burns a relay round-trip without changing the resolved owner.
     const getForegroundProcess = vi.fn(async () => 'omp')

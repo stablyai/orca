@@ -76,7 +76,7 @@ import {
   type AgentQuestionAnsweredInferenceRequest
 } from '../../shared/agent-question-answered-intent'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
-import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
+import type { LegacyPaneKeyAliasEntry, TuiAgent } from '../../shared/types'
 import {
   getAgentResumeArgv,
   normalizeAgentProviderSession,
@@ -154,6 +154,10 @@ type PaneKeyAliasEntry = {
   updatedAt: number
   authorityVerified: boolean
 }
+
+type LocalStatusIdentityResolver = (
+  event: Readonly<AgentHookEventPayload>
+) => Promise<TuiAgent | null>
 
 // Why: co-located with the endpoint file in userData/agent-hooks/ so hook-server cross-restart artifacts stay together.
 const LAST_STATUS_FILE_NAME = 'last-status.json'
@@ -634,6 +638,7 @@ export class AgentHookServer {
   private closedAgentStatusTabIds = new Set<string>()
   private closedAgentStatusPaneKeys = new Set<string>()
   private connectionTimestampWatermarkById = new Map<string, number>()
+  private localStatusIdentityResolver: LocalStatusIdentityResolver | null = null
   // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
 
@@ -651,6 +656,10 @@ export class AgentHookServer {
         console.error('[agent-hooks] replay listener threw', err)
       }
     }
+  }
+
+  setLocalStatusIdentityResolver(resolver: LocalStatusIdentityResolver | null): void {
+    this.localStatusIdentityResolver = resolver
   }
 
   // Why: statusline posts carry live Claude usage windows, not agent status; they feed RateLimitService directly.
@@ -1136,7 +1145,8 @@ export class AgentHookServer {
 
   private applyNormalizedStatus(
     payload: AgentHookEventPayload,
-    onAccepted?: () => void
+    onAccepted?: () => void,
+    corroboratedForegroundAgent?: TuiAgent | null
   ): EnrichedAgentHookEventPayload {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
@@ -1204,14 +1214,20 @@ export class AgentHookServer {
           }
         : stateReconciledPayload
     const identity = resolveAgentStatusIdentity({
-      existing: previous
+      existing: corroboratedForegroundAgent
         ? {
-            agentType: previous.payload.agentType,
-            state: previous.payload.state,
-            updatedAt: previous.receivedAt,
-            restoredUnconfirmed: previous.restoredUnconfirmed
+            agentType: corroboratedForegroundAgent,
+            state: 'working',
+            updatedAt: now
           }
-        : undefined,
+        : previous
+          ? {
+              agentType: previous.payload.agentType,
+              state: previous.payload.state,
+              updatedAt: previous.receivedAt,
+              restoredUnconfirmed: previous.restoredUnconfirmed
+            }
+          : undefined,
       incoming: rootContextPreservingPayload.payload.agentType,
       now
     })
@@ -1224,16 +1240,63 @@ export class AgentHookServer {
     ) {
       return previous
     }
-    const identityResolvedPayload =
-      identity.agentType === rootContextPreservingPayload.payload.agentType
-        ? rootContextPreservingPayload
-        : {
-            ...rootContextPreservingPayload,
-            payload: {
-              ...rootContextPreservingPayload.payload,
-              agentType: identity.agentType
-            }
-          }
+    const inheritedDifferentAgent =
+      identity.inheritedFromActivePane &&
+      identity.agentType !== rootContextPreservingPayload.payload.agentType
+    const parentContext = previous?.payload.agentType === identity.agentType ? previous : undefined
+    let identityResolvedPayload = rootContextPreservingPayload
+    if (inheritedDifferentAgent) {
+      const {
+        providerSession: _providerSession,
+        providerPromptId: _providerPromptId,
+        compactTrigger: _compactTrigger,
+        toolUseId: _toolUseId,
+        toolAgentId: _toolAgentId,
+        toolAgentType: _toolAgentType,
+        claudeRunningNonAgentTask: _claudeRunningNonAgentTask,
+        ...identityNeutralEnvelope
+      } = rootContextPreservingPayload
+      const {
+        model: _model,
+        subagents: _subagents,
+        ...identityNeutralStatus
+      } = rootContextPreservingPayload.payload
+      identityResolvedPayload = {
+        ...identityNeutralEnvelope,
+        ...(parentContext?.providerSession
+          ? { providerSession: parentContext.providerSession }
+          : {}),
+        ...(parentContext?.providerPromptId
+          ? { providerPromptId: parentContext.providerPromptId }
+          : {}),
+        ...(parentContext?.compactTrigger ? { compactTrigger: parentContext.compactTrigger } : {}),
+        payload: {
+          ...identityNeutralStatus,
+          agentType: identity.agentType,
+          ...(parentContext?.payload.model ? { model: parentContext.payload.model } : {}),
+          ...(parentContext?.payload.subagents
+            ? { subagents: parentContext.payload.subagents }
+            : {})
+        }
+      }
+      if (
+        rootContextPreservingPayload.payload.agentType === 'claude' &&
+        identity.agentType !== 'claude'
+      ) {
+        this.state.claudeSubagentRosterByPaneKey.delete(payload.paneKey)
+        this.state.claudeLeadStateByPaneKey.delete(payload.paneKey)
+        this.state.claudeRunningNonAgentTaskPaneKeys.delete(payload.paneKey)
+        this.state.claudeActiveSessionCronPaneKeys.delete(payload.paneKey)
+      }
+    } else if (identity.agentType !== rootContextPreservingPayload.payload.agentType) {
+      identityResolvedPayload = {
+        ...rootContextPreservingPayload,
+        payload: {
+          ...rootContextPreservingPayload.payload,
+          agentType: identity.agentType
+        }
+      }
+    }
     const effectivePayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
     if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
       return previous
@@ -1268,7 +1331,9 @@ export class AgentHookServer {
     ) {
       this.clearAssistantMessageRetry(effectivePayload.paneKey)
     }
-    onAccepted?.()
+    if (!inheritedDifferentAgent) {
+      onAccepted?.()
+    }
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
@@ -2158,9 +2223,57 @@ export class AgentHookServer {
               ? { ...normalized.event, launchToken: undefined }
               : normalized.event
           this.recordCurrentAuthorityObservation(event)
-          const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
-          this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-          this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
+          let corroboratedForegroundAgent: TuiAgent | null = null
+          const currentStatus = this.state.lastStatusByPaneKey.get(event.paneKey) as
+            | EnrichedAgentHookEventPayload
+            | undefined
+          const currentIdentityAlreadyProtectsPane = currentStatus
+            ? resolveAgentStatusIdentity({
+                existing: {
+                  agentType: currentStatus.payload.agentType,
+                  state: currentStatus.payload.state,
+                  updatedAt: currentStatus.receivedAt,
+                  restoredUnconfirmed: currentStatus.restoredUnconfirmed
+                },
+                incoming: event.payload.agentType,
+                now: Date.now()
+              }).inheritedFromActivePane
+            : false
+          if (
+            !currentIdentityAlreadyProtectsPane &&
+            event.connectionId === null &&
+            event.isReplay !== true
+          ) {
+            try {
+              corroboratedForegroundAgent =
+                (await this.localStatusIdentityResolver?.(event)) ?? null
+            } catch {
+              // Why: foreground inspection is advisory; a failed probe must not block the agent hook.
+            }
+          }
+          const incomingAgent =
+            event.payload.agentType && event.payload.agentType !== 'unknown'
+              ? event.payload.agentType
+              : null
+          const inheritedFromCorroboratedForeground =
+            corroboratedForegroundAgent !== null &&
+            incomingAgent !== null &&
+            incomingAgent !== corroboratedForegroundAgent
+          const firstInheritedCompletion =
+            inheritedFromCorroboratedForeground &&
+            event.payload.state === 'done' &&
+            !this.state.lastStatusByPaneKey.has(event.paneKey)
+          const inheritedProviderIdentityOnly =
+            inheritedFromCorroboratedForeground && event.providerSessionOnly === true
+          if (!firstInheritedCompletion && !inheritedProviderIdentityOnly) {
+            const enriched = this.applyNormalizedStatus(
+              event,
+              normalized.onAccepted,
+              corroboratedForegroundAgent
+            )
+            this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
+            this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
+          }
         }
 
         res.writeHead(204)
@@ -2233,6 +2346,7 @@ export class AgentHookServer {
     this.closedAgentStatusTabIds.clear()
     this.closedAgentStatusPaneKeys.clear()
     this.connectionTimestampWatermarkById.clear()
+    this.localStatusIdentityResolver = null
     this.legacyPaneKeyAliases.clear()
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()

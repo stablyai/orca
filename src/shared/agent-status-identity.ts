@@ -4,6 +4,9 @@ import {
   type AgentStatusState,
   type AgentType
 } from './agent-status-types'
+import { resolveCompatibleAgentTypeForOwner } from './agent-title-owner'
+import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
+import type { TuiAgent } from './types'
 
 type ExistingAgentIdentity = {
   agentType?: AgentType
@@ -15,6 +18,21 @@ type ExistingAgentIdentity = {
 type AgentIdentityResolution = {
   agentType: AgentType
   inheritedFromActivePane: boolean
+}
+
+export function resolveCorroboratedForegroundAgent(args: {
+  processAgent?: TuiAgent | null
+  title: string
+  ownerAgent?: TuiAgent | null
+}): TuiAgent | null {
+  const processAgent = resolveCompatibleAgentTypeForOwner(args.processAgent, args.ownerAgent) as
+    | TuiAgent
+    | undefined
+  const titleAgent = resolveCompatibleAgentTypeForOwner(
+    resolveExplicitTerminalTitleAgentType(args.title),
+    args.ownerAgent
+  ) as TuiAgent | undefined
+  return processAgent && processAgent === titleAgent ? processAgent : null
 }
 
 export function shouldSuppressInheritedTerminalStatus(args: {

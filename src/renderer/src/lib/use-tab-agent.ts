@@ -79,6 +79,7 @@ export function resolveTabAgentFromSignals(args: {
   focusedCompletedHookAgent?: TuiAgent | null
   siblingCompletedHookAgent?: TuiAgent | null
   processAgent?: TuiAgent | null
+  processAgentTrusted?: boolean
   processShellForeground?: boolean
   sleepingSessionAgent?: TuiAgent | null
   launchAgent?: TuiAgent
@@ -155,8 +156,12 @@ export function resolveTabAgentFromSignals(args: {
   const activeLaunchAgent = launchedAgentExited ? null : launchAgent
   // Why: re-own the foreground process within its title-identity group so OMP's nested pi (shell → omp → pi) can't flip an OMP-owned tab's icon.
   const processAgent = resolveSignalAgentForLaunchOwner(args.processAgent, owner)
-  // Identity-first precedence (see JSDoc): live hook > process > title > completed > sleeping > launch > sibling.
+  const processCanCorroborate =
+    !args.isRemote && Boolean(args.processAgentTrusted) && !processProvesShell
+  const corroboratedForegroundAgent =
+    processCanCorroborate && explicitTitleAgent === processAgent ? processAgent : null
   return (
+    corroboratedForegroundAgent ??
     liveFocusedIdentity ??
     processAgent ??
     titleAgent ??
@@ -174,13 +179,11 @@ export function resolveTabAgentFromSignals(args: {
  * already-computed state as the sidebar rows — no foreground probing.
  * Identity-first precedence:
  *
- * 1. Live focused hook — ground truth while the agent works; never title-overridden.
- * 2. Process identity — recognized foreground process (local only); re-owned within its title-identity group so OMP's nested `pi` (shell → omp → pi) can't flip the icon.
- * 3. Title — only a reuse override or legacy standalone identity; native OpenCode titles cannot displace durable ownership.
- * 4. Idle focused identity — the pane's completed hook or sidebar-retained completion; suppressed locally once OSC 133;D proves exit.
- * 5. Sleeping session identity — current provider-session ownership.
- * 6. launchAgent — bootstrap before any hook/process signal; cleared once exit evidence shows it left.
- * 7. Sibling-pane identity (live, then completed/retained) — split-tab fallback.
+ * 1. Corroborated local foreground identity — process and explicit title agree, so an inherited compatibility hook cannot re-own the pane.
+ * 2. Live focused hook — ground truth while the agent works.
+ * 3. Process identity — recognized foreground process (local only); re-owned within its title-identity group so OMP's nested `pi` (shell → omp → pi) can't flip the icon.
+ * 4. Title — only a reuse override or legacy standalone identity; native OpenCode titles cannot displace durable ownership.
+ * 5. Durable fallbacks — focused completion, sleeping session, launch intent, then sibling-pane identity.
  */
 export function useTabAgent(tab: TerminalTab): TuiAgent | null {
   const focusedHookAgent = useAppStore((s) =>
@@ -221,14 +224,12 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     const activeLeafId = s.terminalLayoutsByTabId[tab.id]?.activeLeafId
     return activeLeafId && isTerminalLeafId(activeLeafId) ? makePaneKey(tab.id, activeLeafId) : null
   })
-  const processAgent = useAppStore((s) =>
-    focusedPaneKey ? (s.paneForegroundAgentByPaneKey[focusedPaneKey]?.agent ?? null) : null
+  const foregroundProcess = useAppStore((s) =>
+    focusedPaneKey ? s.paneForegroundAgentByPaneKey[focusedPaneKey] : undefined
   )
-  const processShellForeground = useAppStore((s) =>
-    focusedPaneKey
-      ? Boolean(s.paneForegroundAgentByPaneKey[focusedPaneKey]?.shellForeground)
-      : false
-  )
+  const processAgent = foregroundProcess?.agent ?? null
+  const processAgentTrusted = foregroundProcess?.routingTrusted === true
+  const processShellForeground = Boolean(foregroundProcess?.shellForeground)
   // Why: a hibernated pane's session record is the freshest identity once PTY, hook, and process signals are all gone.
   const sleepingSessionAgent = useAppStore((s) =>
     focusedPaneKey ? (s.sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null) : null
@@ -342,6 +343,7 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     focusedCompletedHookAgent,
     siblingCompletedHookAgent,
     processAgent,
+    processAgentTrusted,
     processShellForeground,
     sleepingSessionAgent,
     launchAgent: tab.launchAgent
