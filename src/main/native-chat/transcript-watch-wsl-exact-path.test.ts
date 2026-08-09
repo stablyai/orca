@@ -9,11 +9,13 @@ const ROLLOUT_UNC =
 
 const mocks = vi.hoisted(() => ({
   install: vi.fn(),
-  resolve: vi.fn()
+  resolve: vi.fn(),
+  resolveHostOwned: vi.fn()
 }))
 
 vi.mock('./session-file-resolver', () => ({
-  resolveSessionFilePath: mocks.resolve
+  resolveSessionFilePath: mocks.resolve,
+  resolveHostOwnedTranscriptPath: mocks.resolveHostOwned
 }))
 vi.mock('./transcript-watch-engine', () => ({
   getActiveNativeChatWatcherCount: vi.fn(() => 0),
@@ -46,6 +48,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
     resetHostReadableTranscriptPathCacheForTests()
     mocks.install.mockReset().mockReturnValue(null)
     mocks.resolve.mockReset().mockResolvedValue(null)
+    mocks.resolveHostOwned.mockReset().mockResolvedValue(null)
   })
 
   afterEach(() => {
@@ -55,6 +58,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
 
   it('installs the watcher on the WSL UNC twin of the guest transcript path', async () => {
     setPlatform('win32')
+    mocks.resolveHostOwned.mockResolvedValue(ROLLOUT_UNC)
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'wsl-sess',
@@ -71,6 +75,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
 
   it('passes the raw path through untouched off Windows', async () => {
     setPlatform('darwin')
+    mocks.resolveHostOwned.mockResolvedValue(ROLLOUT_LINUX)
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'wsl-sess',

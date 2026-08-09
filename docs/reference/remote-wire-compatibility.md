@@ -75,6 +75,22 @@ Treat these as wire changes even though nothing in the codec moves:
 If old clients cannot interpret the new projection correctly, gate it behind a
 runtime capability the same way Rule 2 gates an opcode.
 
+## Native Chat — transcript storage is host-owned
+
+`nativeChat.readSession` and `nativeChat.subscribe` read and watch transcript
+storage on the serving runtime. `transcriptPath` is an optional client-supplied
+echo of a path previously reported by the agent hook; it is not an authority to
+read an arbitrary host file. The runtime accepts it only when its canonical
+existing path is an agent-owned transcript under the serving host's Claude,
+Codex, Grok, or omp transcript root, and otherwise falls back to the
+session-id-based resolver. Parent traversal, paths outside those roots, and
+symlink escapes must not be opened. OpenCode is different: its reader uses the
+host-owned SQLite database and does not use a client path.
+
+When changing this contract, keep the host-side root check or replace it with an
+equally authoritative host-side session mapping. Never make a remote client's
+path string sufficient permission to read a file on the host.
+
 ## Enforcement
 
 `tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts` runs the real
