@@ -54,7 +54,10 @@ export function FolderRepoRow({
         <AlertTriangle
           className="size-3 shrink-0 text-destructive"
           aria-label={statusState.error}
-        />
+          role="img"
+        >
+          <title>{statusState.error}</title>
+        </AlertTriangle>
       ) : null}
       {!statusState?.loading && count > 0 ? (
         <span className="shrink-0 text-[10px] font-bold tabular-nums text-muted-foreground/80">

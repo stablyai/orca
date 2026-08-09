@@ -6,8 +6,6 @@ import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/
 import { useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
   ContextMenu,
@@ -48,11 +46,13 @@ import { useMeasuredWidth } from './right-sidebar-measured-width'
 import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
 import { AgentSessionHistoryIcon } from './agent-session-history-icon'
 import { resolveRightSidebarEffectiveTab } from './right-sidebar-effective-tab'
+import { useFolderSourceControlScope } from './use-folder-source-control-scope'
 import {
   isPairedWebClientWindow,
   shouldRenderDesktopWindowChrome
 } from '@/lib/desktop-window-chrome'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { useInstalledPluginRouteReconciliation } from './use-installed-plugin-route-reconciliation'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
@@ -86,9 +86,8 @@ function RightSidebarInner(): React.JSX.Element {
     activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
   )
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
-  const activeWorkspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
-  const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
-  const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
+  const isFolder = useFolderSourceControlScope(activeWorktreeId, activeRepo)
+  const isFolderWorkspace = parseWorkspaceKey(activeWorktreeId ?? '')?.type === 'folder'
   const isSshRepo = Boolean(activeRepo?.connectionId)
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const pluginPanels = usePluginPanels()

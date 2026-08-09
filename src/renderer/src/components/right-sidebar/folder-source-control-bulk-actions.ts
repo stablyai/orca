@@ -22,43 +22,35 @@ export function useFolderSourceControlBulkActions({
   unstageAllArea: (area: 'staged') => Promise<void>
   discardAllArea: (area: 'unstaged' | 'untracked') => Promise<void>
 } {
-  const stageAllArea = useCallback(
-    async (area: 'unstaged' | 'untracked') => {
+  const runBulk = useCallback(
+    async (
+      area: 'staged' | 'unstaged' | 'untracked',
+      operation: (ctx: RuntimeGitContext, paths: string[]) => Promise<void>
+    ) => {
       const paths = entries.filter((entry) => entry.area === area).map((entry) => entry.path)
       if (paths.length === 0) {
         return
       }
-      await bulkStageRuntimeGitPaths(context, paths)
+      await operation(context, paths)
       onBranchChanged?.()
       await loadDetails()
     },
     [context, entries, loadDetails, onBranchChanged]
+  )
+
+  const stageAllArea = useCallback(
+    (area: 'unstaged' | 'untracked') => runBulk(area, bulkStageRuntimeGitPaths),
+    [runBulk]
   )
 
   const unstageAllArea = useCallback(
-    async (area: 'staged') => {
-      const paths = entries.filter((entry) => entry.area === area).map((entry) => entry.path)
-      if (paths.length === 0) {
-        return
-      }
-      await bulkUnstageRuntimeGitPaths(context, paths)
-      onBranchChanged?.()
-      await loadDetails()
-    },
-    [context, entries, loadDetails, onBranchChanged]
+    (area: 'staged') => runBulk(area, bulkUnstageRuntimeGitPaths),
+    [runBulk]
   )
 
   const discardAllArea = useCallback(
-    async (area: 'unstaged' | 'untracked') => {
-      const paths = entries.filter((entry) => entry.area === area).map((entry) => entry.path)
-      if (paths.length === 0) {
-        return
-      }
-      await bulkDiscardRuntimeGitPaths(context, paths)
-      onBranchChanged?.()
-      await loadDetails()
-    },
-    [context, entries, loadDetails, onBranchChanged]
+    (area: 'unstaged' | 'untracked') => runBulk(area, bulkDiscardRuntimeGitPaths),
+    [runBulk]
   )
 
   return { stageAllArea, unstageAllArea, discardAllArea }

@@ -44,6 +44,7 @@ export function FolderSourceControlBaseRefDialog({
           {target.repo ? (
             <BaseRefPicker
               repoId={target.repo.id}
+              hostId={target.executionHostId ?? undefined}
               currentBaseRef={currentBaseRef}
               onSelect={onSelect}
               onUsePrimary={onUsePrimary}

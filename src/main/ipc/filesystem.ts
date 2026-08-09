@@ -2232,13 +2232,9 @@ export function registerFilesystemHandlers(
         }
         return provider.discardChanges(args.worktreePath, args.filePath)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
       await discardChanges(worktreePath, filePath, gitOptions)
     }
   )
@@ -2256,13 +2252,9 @@ export function registerFilesystemHandlers(
         }
         return provider.bulkDiscardChanges(args.worktreePath, args.filePaths)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
       await bulkDiscardChanges(worktreePath, filePaths, gitOptions)
     }
   )

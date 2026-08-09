@@ -98,5 +98,18 @@ describe('getVisibleRightSidebarActivityItems', () => {
       'source-control',
       'plugin:orca-samples.my-plugin/dashboard'
     ])
+
+    expect(
+      getVisibleRightSidebarActivityItems(
+        items.map((item) =>
+          item.id === 'source-control' ? { ...item, folderGitOnly: true } : item
+        ),
+        {
+          isFolder: true,
+          isFolderWorkspace: false,
+          isSshRepo: false
+        }
+      ).map((item) => item.id)
+    ).toEqual(['explorer', 'source-control', 'plugin:orca-samples.my-plugin/dashboard'])
   })
 })

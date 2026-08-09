@@ -3,9 +3,8 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
+import { useFolderSourceControlScope } from './use-folder-source-control-scope'
 
 const FileExplorer = lazy(() => import('./FileExplorer'))
 const SourceControl = lazy(() => import('./SourceControl'))
@@ -21,10 +20,9 @@ function SourceControlPanelRoute(): React.JSX.Element {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
-  const isFolderWorkspace = parseWorkspaceKey(activeWorktreeId ?? '')?.type === 'folder'
-  const isFolderRepoActive = activeRepo ? isFolderRepo(activeRepo) : false
+  const isFolderScope = useFolderSourceControlScope(activeWorktreeId, activeRepo)
 
-  if (isFolderWorkspace || isFolderRepoActive) {
+  if (isFolderScope) {
     return <FolderSourceControl />
   }
   return <SourceControl />

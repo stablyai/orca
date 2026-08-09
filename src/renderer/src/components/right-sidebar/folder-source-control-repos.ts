@@ -53,6 +53,7 @@ function filterFolderRepoCandidates(args: {
       isGitRepoKind(repo) &&
       typeof repo.projectGroupId === 'string' &&
       groupIds.has(repo.projectGroupId) &&
+      isPathInsideOrEqual(args.target.path, repo.path) &&
       sameExecutionHost(repo, targetHostId)
   )
   const pathRepos = args.repos.filter(
@@ -121,12 +122,14 @@ export function mergeFolderGitTargets(args: {
   }))
 
   for (const scanned of args.scannedRepos) {
+    const normalizedScannedPath = normalizeRuntimePathForComparison(scanned.path)
     if (
       !isPathInsideOrEqual(args.parentPath, scanned.path) ||
-      knownPaths.has(normalizeRuntimePathForComparison(scanned.path))
+      knownPaths.has(normalizedScannedPath)
     ) {
       continue
     }
+    knownPaths.add(normalizedScannedPath)
     targets.push({
       key: `path:${scanned.path}`,
       path: scanned.path,

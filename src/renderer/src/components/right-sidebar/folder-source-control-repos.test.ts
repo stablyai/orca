@@ -38,12 +38,18 @@ describe('selectFolderSourceControlRepos', () => {
       projectGroupId: 'group-1'
     })
     const outside = repo({ id: 'outside', path: '/other', displayName: 'outside' })
+    const outsideGroup = repo({
+      id: 'outside-group',
+      path: '/outside-group',
+      displayName: 'outside-group',
+      projectGroupId: 'group-1'
+    })
 
     expect(
       selectFolderSourceControlRepos(
         {
           projectGroups: [{ id: 'group-1', parentGroupId: null } as ProjectGroup],
-          repos: [parent, first, second, outside]
+          repos: [parent, first, second, outside, outsideGroup]
         },
         'worktree:parent::/root',
         parent
@@ -90,6 +96,7 @@ describe('mergeFolderGitTargets', () => {
         scannedRepos: [
           { path: '/root/known', displayName: 'known', depth: 1 },
           { path: '/root/extra', displayName: 'extra', depth: 1 },
+          { path: '/root/extra', displayName: 'extra duplicate', depth: 1 },
           { path: '/outside', displayName: 'outside', depth: 1 }
         ],
         parentPath: '/root'

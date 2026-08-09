@@ -1047,6 +1047,15 @@ export function buildDiffEditorFileId(
     : legacyId
 }
 
+export function buildAllDiffsUncommittedTabId(
+  worktreeId: string,
+  areaFilter?: string | undefined
+): string {
+  return areaFilter
+    ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
+    : `${worktreeId}::all-diffs::uncommitted`
+}
+
 function withDiffContentReloadRequest(file: OpenFile): OpenFile {
   return {
     ...file,
@@ -3436,9 +3445,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   },
 
   openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter, entriesSnapshot) => {
-    const id = areaFilter
-      ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
-      : `${worktreeId}::all-diffs::uncommitted`
+    const id = buildAllDiffsUncommittedTabId(worktreeId, areaFilter)
     const label = areaFilter
       ? ({ staged: 'Staged Changes', unstaged: 'Changes', untracked: 'Untracked Files' }[
           areaFilter
@@ -3467,9 +3474,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         .map((entry) => ({ path: entry.path, conflictKind: entry.conflictKind! }))
       // Why: snapshot entries at open time so a later commit can't yank them and force a rebuild that loses loaded content + scroll position.
       const uncommittedEntriesSnapshot = relevantEntries
-      const id = areaFilter
-        ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
-        : `${worktreeId}::all-diffs::uncommitted`
+      const id = buildAllDiffsUncommittedTabId(worktreeId, areaFilter)
       const label = areaFilter
         ? ({ staged: 'Staged Changes', unstaged: 'Changes', untracked: 'Untracked Files' }[
             areaFilter

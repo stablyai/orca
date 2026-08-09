@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
+import { buildAllDiffsUncommittedTabId } from '@/store/slices/editor'
 import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import type {
@@ -117,7 +118,7 @@ export function useFolderSourceControlOpenActions({
     (area: 'staged' | 'unstaged' | 'untracked') => {
       const entries = statusEntries.filter((entry) => entry.area === area)
       openAllDiffs(diffWorktreeId, targetPath, undefined, area, entries)
-      showVisibleEditorTab(`${diffWorktreeId}::all-diffs::uncommitted::${area}`, 'diff', area)
+      showVisibleEditorTab(buildAllDiffsUncommittedTabId(diffWorktreeId, area), 'diff', area)
     },
     [diffWorktreeId, openAllDiffs, showVisibleEditorTab, statusEntries, targetPath]
   )

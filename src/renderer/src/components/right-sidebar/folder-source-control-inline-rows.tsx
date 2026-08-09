@@ -74,7 +74,15 @@ export function InlineFileRow({
     <div
       className="group flex min-w-0 cursor-pointer items-center gap-1 py-1 pr-3 text-xs hover:bg-accent/40"
       style={{ paddingLeft: `${depth * 14 + 12}px` }}
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpen()
+        }
+      }}
       data-source-control-path={path}
     >
       <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[status] }} />

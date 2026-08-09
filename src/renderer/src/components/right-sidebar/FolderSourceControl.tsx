@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -6,7 +6,6 @@ import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
-import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { translate } from '@/i18n/i18n'
 import type { NestedRepoCandidate, Worktree } from '../../../../shared/types'
@@ -16,8 +15,26 @@ import {
   mergeFolderGitTargets,
   selectFolderSourceControlRepos
 } from './folder-source-control-repos'
+import { useFolderSourceControlScope } from './use-folder-source-control-scope'
 
 const FOLDER_STATUS_POLL_MS = 30_000
+const FOLDER_STATUS_CONCURRENCY = 4
+
+async function runWithConcurrency<T>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T) => Promise<void>
+): Promise<void> {
+  let index = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (index < items.length) {
+      const item = items[index]
+      index += 1
+      await worker(item)
+    }
+  })
+  await Promise.all(workers)
+}
 
 function getPrimaryWorktree(
   worktreesByRepo: Record<string, Worktree[]>,
@@ -31,12 +48,17 @@ export default function FolderSourceControl(): React.JSX.Element | null {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const isFolderScope = useFolderSourceControlScope(activeWorktreeId, activeRepo)
   const candidateRepos = useAppStore(
     useShallow((state) => selectFolderSourceControlRepos(state, activeWorktreeId, activeRepo))
   )
   const settings = useAppStore((state) => state.settings)
   const worktreesByRepo = useAppStore((state) => state.worktreesByRepo)
   const scanNestedRepos = useAppStore((state) => state.scanNestedRepos)
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
+  const worktreesByRepoRef = useRef(worktreesByRepo)
+  worktreesByRepoRef.current = worktreesByRepo
   const [repoStatuses, setRepoStatuses] = useState<Record<string, RepoStatusState>>({})
   const [scannedRepos, setScannedRepos] = useState<NestedRepoCandidate[]>([])
   const [scanning, setScanning] = useState(false)
@@ -45,12 +67,12 @@ export default function FolderSourceControl(): React.JSX.Element | null {
   const workspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
-  const folderConnectionId = useMemo(() => {
-    if (folderWorkspaceId) {
-      return getFolderWorkspaceConnectionId(useAppStore.getState(), folderWorkspaceId) ?? null
-    }
-    return activeRepo?.connectionId ?? null
-  }, [activeRepo?.connectionId, folderWorkspaceId])
+  const workspaceConnectionId = useAppStore((state) =>
+    folderWorkspaceId ? (getFolderWorkspaceConnectionId(state, folderWorkspaceId) ?? null) : null
+  )
+  const folderConnectionId = folderWorkspaceId
+    ? workspaceConnectionId
+    : (activeRepo?.connectionId ?? null)
   const folderExecutionHostId = activeRepo?.executionHostId ?? null
   const targets = useMemo(
     () =>
@@ -66,15 +88,20 @@ export default function FolderSourceControl(): React.JSX.Element | null {
   const targetKey = targets.map((target) => target.key).join('\0')
   const totalChangeCount = useMemo(
     () =>
-      Object.values(repoStatuses).reduce(
-        (sum, state) => sum + (state.status?.statusLength ?? state.status?.entries.length ?? 0),
-        0
-      ),
-    [repoStatuses]
+      targets.reduce((sum, target) => {
+        const state = repoStatuses[target.key]
+        return sum + (state?.status?.statusLength ?? state?.status?.entries.length ?? 0)
+      }, 0),
+    [repoStatuses, targets]
   )
 
   useEffect(() => {
     setExpandedRepoKeys(new Set())
+    setRepoStatuses((current) => {
+      const allowed = new Set(targetKey.split('\0'))
+      const next = Object.fromEntries(Object.entries(current).filter(([key]) => allowed.has(key)))
+      return Object.keys(next).length === Object.keys(current).length ? current : next
+    })
   }, [targetKey])
 
   useEffect(() => {
@@ -102,56 +129,56 @@ export default function FolderSourceControl(): React.JSX.Element | null {
 
   const refreshStatuses = useCallback(
     async (signal?: AbortSignal) => {
-      await Promise.all(
-        targets.map(async (target) => {
-          const worktree = target.repo ? getPrimaryWorktree(worktreesByRepo, target.repo.id) : null
-          setRepoStatuses((current) => {
-            if (current[target.key]?.status) {
-              return current
-            }
-            return {
-              ...current,
-              [target.key]: { status: null, error: null, loading: true }
-            }
-          })
-          try {
-            const status = await getRuntimeGitStatus(
-              {
-                settings: getRepoOwnerRoutedSettings(settings, {
-                  id: target.key,
-                  connectionId: target.connectionId,
-                  executionHostId: target.executionHostId
-                }),
-                worktreeId: worktree?.id ?? null,
-                worktreePath: worktree?.path ?? target.path,
-                connectionId: target.connectionId ?? undefined
-              },
-              { signal }
-            )
-            if (signal?.aborted) {
-              return
-            }
-            setRepoStatuses((current) => ({
-              ...current,
-              [target.key]: { status, error: null, loading: false }
-            }))
-          } catch (error) {
-            if (signal?.aborted) {
-              return
-            }
-            setRepoStatuses((current) => ({
-              ...current,
-              [target.key]: {
-                status: current[target.key]?.status ?? null,
-                error: error instanceof Error ? error.message : String(error),
-                loading: false
-              }
-            }))
+      await runWithConcurrency(targets, FOLDER_STATUS_CONCURRENCY, async (target) => {
+        const worktree = target.repo
+          ? getPrimaryWorktree(worktreesByRepoRef.current, target.repo.id)
+          : null
+        setRepoStatuses((current) => {
+          if (current[target.key]?.status) {
+            return current
+          }
+          return {
+            ...current,
+            [target.key]: { status: null, error: null, loading: true }
           }
         })
-      )
+        try {
+          const status = await getRuntimeGitStatus(
+            {
+              settings: getRepoOwnerRoutedSettings(settingsRef.current, {
+                id: target.key,
+                connectionId: target.connectionId,
+                executionHostId: target.executionHostId
+              }),
+              worktreeId: worktree?.id ?? null,
+              worktreePath: worktree?.path ?? target.path,
+              connectionId: target.connectionId ?? undefined
+            },
+            { signal }
+          )
+          if (signal?.aborted) {
+            return
+          }
+          setRepoStatuses((current) => ({
+            ...current,
+            [target.key]: { status, error: null, loading: false }
+          }))
+        } catch (error) {
+          if (signal?.aborted) {
+            return
+          }
+          setRepoStatuses((current) => ({
+            ...current,
+            [target.key]: {
+              status: current[target.key]?.status ?? null,
+              error: error instanceof Error ? error.message : String(error),
+              loading: false
+            }
+          }))
+        }
+      })
     },
-    [settings, targets, worktreesByRepo]
+    [targets]
   )
 
   useEffect(() => {
@@ -178,13 +205,7 @@ export default function FolderSourceControl(): React.JSX.Element | null {
     })
   }, [])
 
-  if (!parentPath) {
-    return null
-  }
-  if (!activeRepo && workspaceScope?.type !== 'folder') {
-    return null
-  }
-  if (activeRepo && !isFolderRepo(activeRepo) && workspaceScope?.type !== 'folder') {
+  if (!parentPath || !isFolderScope) {
     return null
   }
 
@@ -192,7 +213,10 @@ export default function FolderSourceControl(): React.JSX.Element | null {
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <div className="flex min-w-0 items-center gap-1.5 border-b border-border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground">
         <span className="min-w-0 flex-1 truncate">
-          {translate('auto.components.right.sidebar.index.0314901467', 'Source Control')}
+          {translate(
+            'auto.components.right.sidebar.FolderSourceControl.e47ef8bc62',
+            'Source Control'
+          )}
         </span>
         {scanning ? (
           <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />

@@ -10957,7 +10957,9 @@
             "c7d4e2f801": "Change base ref: {{value0}}",
             "f3a1b8c204": "upstream",
             "createPrIntentEmptyGeneratedBody": "Generated review details did not include a description. Retry Create PR.",
-            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR."
+            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR.",
+            "b1a4f0c7d2": "Switch branch",
+            "5c2f9ab310": "No branch"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -11812,6 +11814,9 @@
             "mayBeSlower": "May be slower",
             "slowest": "Slowest",
             "unlimited": "Unlimited"
+          },
+          "FolderSourceControl": {
+            "e47ef8bc62": "Source Control"
           }
         }
       },

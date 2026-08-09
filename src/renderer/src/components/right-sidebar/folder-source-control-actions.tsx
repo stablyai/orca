@@ -3,6 +3,7 @@ import { ChevronDown, GitPullRequestArrow, Plus, RefreshCw, Search } from 'lucid
 import { translate } from '@/i18n/i18n'
 import type { RuntimeGitLocalBranches } from '../../../../shared/runtime-types'
 import type { SourceControlViewMode } from '../../../../shared/types'
+import type { LocalizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { SourceControlHeaderOverflowMenu } from './source-control-header-overflow-menu'
 
@@ -30,8 +31,15 @@ function BranchSwitcher({
           type="button"
           className="inline-flex h-6 min-w-0 max-w-[150px] items-center gap-1 rounded border border-border bg-background px-1.5 text-[11px] text-foreground"
           disabled={disabled}
+          aria-label={translate(
+            'auto.components.right.sidebar.SourceControl.b1a4f0c7d2',
+            'Switch branch'
+          )}
         >
-          <span className="min-w-0 flex-1 truncate">{branch ?? ''}</span>
+          <span className="min-w-0 flex-1 truncate">
+            {branch ??
+              translate('auto.components.right.sidebar.SourceControl.5c2f9ab310', 'No branch')}
+          </span>
           <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
@@ -92,7 +100,8 @@ export function FolderSourceControlToolbar({
   onToggleViewMode,
   onChangeBaseRef,
   onRefreshBranchCompare,
-  branchCompareReady
+  branchCompareReady,
+  reviewCopy
 }: {
   branch: string | null | undefined
   branches: RuntimeGitLocalBranches | null
@@ -109,6 +118,7 @@ export function FolderSourceControlToolbar({
   onChangeBaseRef: () => void
   onRefreshBranchCompare: () => void
   branchCompareReady: boolean
+  reviewCopy: LocalizedHostedReviewCopy
 }): React.JSX.Element {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground">
@@ -135,8 +145,9 @@ export function FolderSourceControlToolbar({
       >
         <GitPullRequestArrow className="size-3" />
         {translate(
-          'auto.components.right.sidebar.source.control.primary.action.8c6d15a07d',
-          'Create PR'
+          'auto.components.right.sidebar.source.control.primary.action.e7ffa46946',
+          'Create {{value0}}',
+          { value0: reviewCopy.shortLabel }
         )}
       </button>
       <label className="flex h-6 min-w-0 max-w-[130px] shrink items-center gap-1 rounded border border-border bg-background px-1.5">
@@ -155,6 +166,7 @@ export function FolderSourceControlToolbar({
         type="button"
         className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
         onClick={onRefreshBranchCompare}
+        disabled={!branchCompareReady}
         aria-label={translate(
           'auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2',
           'Refresh commits'
@@ -225,10 +237,18 @@ export function FolderBaseRefEditor({
   value: string
   onApply: (value: string) => void
 }): React.JSX.Element {
+  const applyIfChanged = (next: string): void => {
+    const trimmed = next.trim()
+    if (trimmed.length === 0 || trimmed === value.trim()) {
+      return
+    }
+    onApply(trimmed)
+  }
   return (
     <div className="flex items-center gap-1 px-3 pb-1">
       <input
         className="h-6 min-w-0 flex-1 rounded border border-border bg-background px-1.5 text-[11px] outline-none"
+        key={value}
         defaultValue={value}
         placeholder={translate(
           'auto.components.right.sidebar.SourceControl.476b77745b',
@@ -236,16 +256,20 @@ export function FolderBaseRefEditor({
         )}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
-            onApply((event.target as HTMLInputElement).value)
+            applyIfChanged((event.target as HTMLInputElement).value)
           }
         }}
-        onBlur={(event) => onApply(event.target.value)}
+        onBlur={(event) => applyIfChanged(event.target.value)}
       />
     </div>
   )
 }
 
-export function CreateReviewBlockedNotice(): React.JSX.Element {
+export function CreateReviewBlockedNotice({
+  reviewLabel
+}: {
+  reviewLabel: string
+}): React.JSX.Element {
   return (
     <div className="mx-3 mb-1 rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-[11px] text-destructive">
       <div className="font-medium">
@@ -258,7 +282,7 @@ export function CreateReviewBlockedNotice(): React.JSX.Element {
         {translate(
           'auto.components.right.sidebar.checks.panel.review.dirty.body',
           'Commit or stash your changes before creating a {{reviewLabel}}.',
-          { reviewLabel: 'Pull Request' }
+          { reviewLabel }
         )}
       </div>
     </div>
