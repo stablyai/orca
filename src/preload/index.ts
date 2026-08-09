@@ -4,6 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { DebugAdapterConfig, DebugSessionEvent } from '../shared/debug-session-types'
 import type {
   DashboardRevealAgentArgs,
   DashboardSleepWorkspaceArgs,
@@ -1267,6 +1268,42 @@ const api = {
       macTccAttribution: () => ipcRenderer.invoke('pty:management:macTccAttribution')
     }
   },
+
+  debug: {
+    start: (args: {
+      worktreeId: string
+      connectionId?: string | null
+      config: DebugAdapterConfig
+    }): Promise<string> => ipcRenderer.invoke('debug:start', args),
+    setBreakpoints: (sessionId: string, args: Record<string, unknown>): Promise<unknown> =>
+      ipcRenderer.invoke('debug:setBreakpoints', { sessionId, args }),
+    continue: (sessionId: string, threadId: number): Promise<void> =>
+      ipcRenderer.invoke('debug:continue', { sessionId, threadId }),
+    pause: (sessionId: string, threadId: number): Promise<void> =>
+      ipcRenderer.invoke('debug:pause', { sessionId, threadId }),
+    stepOver: (sessionId: string, threadId: number): Promise<void> =>
+      ipcRenderer.invoke('debug:stepOver', { sessionId, threadId }),
+    stepInto: (sessionId: string, threadId: number): Promise<void> =>
+      ipcRenderer.invoke('debug:stepInto', { sessionId, threadId }),
+    stepOut: (sessionId: string, threadId: number): Promise<void> =>
+      ipcRenderer.invoke('debug:stepOut', { sessionId, threadId }),
+    terminate: (sessionId: string): Promise<void> =>
+      ipcRenderer.invoke('debug:terminate', { sessionId }),
+    evaluate: (sessionId: string, args: Record<string, unknown>): Promise<unknown> =>
+      ipcRenderer.invoke('debug:evaluate', { sessionId, args }),
+    getStackTrace: (sessionId: string, threadId: number): Promise<unknown> =>
+      ipcRenderer.invoke('debug:getStackTrace', { sessionId, threadId }),
+    getVariables: (sessionId: string, variablesReference: number): Promise<unknown> =>
+      ipcRenderer.invoke('debug:getVariables', { sessionId, variablesReference }),
+    getThreads: (sessionId: string): Promise<unknown> =>
+      ipcRenderer.invoke('debug:getThreads', { sessionId }),
+    onEvent: (callback: (event: DebugSessionEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: DebugSessionEvent): void =>
+        callback(payload)
+      ipcRenderer.on('debug:event', listener)
+      return () => ipcRenderer.removeListener('debug:event', listener)
+    }
+  } satisfies PreloadApi['debug'],
 
   feedback: {
     submit: (args: {
