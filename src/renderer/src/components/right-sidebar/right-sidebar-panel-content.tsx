@@ -10,6 +10,7 @@ const PortsPanel = lazy(() => import('./PortsPanel'))
 const AiVaultPanel = lazy(() => import('./AiVaultPanel'))
 const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktreesPanel'))
 const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrChecksPanel'))
+const LinearPanel = lazy(() => import('./LinearPanel'))
 const PluginPanel = lazy(() => import('./PluginPanel'))
 
 type RightSidebarPanelContentProps = {
@@ -34,6 +35,11 @@ export function RightSidebarPanelContent({
           <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
         )}
         {effectiveTab === 'vault' && <AiVaultPanel />}
+        {/* Why isVisible: the panel stays mounted while the sidebar is closed,
+            so issue and comment fetches are gated on it being on screen. */}
+        {effectiveTab === 'linear' && (
+          <LinearPanel isVisible={rightSidebarOpen && effectiveTab === 'linear'} />
+        )}
         {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
         {effectiveTab === 'pr-checks' && (
           <FolderWorkspacePrChecksPanel

@@ -18,6 +18,10 @@ import {
   WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/worktree-card-properties'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
+import {
+  isStaticRightSidebarTab,
+  type StaticRightSidebarTab
+} from '../../../../shared/right-sidebar-tabs'
 import type { TaskProvider } from '../../../../shared/types'
 import { TaskResumeState } from './task-resume-state-schema'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance'
@@ -30,30 +34,17 @@ const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
 const FeatureTipIds = z.array(z.custom(isFeatureTipId, { message: 'Unknown feature tip id' }))
 const UnknownRecord = z.record(z.string(), z.unknown())
 const UnknownRecordArray = z.array(UnknownRecord)
-type StaticRightSidebarTab = (typeof STATIC_RIGHT_SIDEBAR_TABS)[number]
 // Derived from the shared union so a new card property cannot drift out of the
 // client schema — it previously omitted 'cli' and rejected the whole payload.
 const WorktreeCardPropertyParam = z.enum(WORKTREE_CARD_PROPERTIES)
 const WorktreeCardProperties = z
   .array(WorktreeCardPropertyParam)
   .transform((value) => normalizeWorktreeCardProperties(value))
-const STATIC_RIGHT_SIDEBAR_TABS = [
-  'explorer',
-  'search',
-  'vault',
-  'workspaces',
-  'pr-checks',
-  'source-control',
-  'checks',
-  'ports'
-] as const
 // Plugin panels are open-ended `plugin:<publisher>.<id>/<panel>` keys, so the
 // schema validates their shape rather than enumerating them.
 const RightSidebarTabParam = z.custom<StaticRightSidebarTab | `plugin:${string}`>(
   (value) =>
-    typeof value === 'string' &&
-    (STATIC_RIGHT_SIDEBAR_TABS.includes(value as StaticRightSidebarTab) ||
-      isPluginPanelTabKey(value)),
+    isStaticRightSidebarTab(value) || (typeof value === 'string' && isPluginPanelTabKey(value)),
   { message: 'Unknown right sidebar tab' }
 )
 const AgentActivityDisplayMode = z.enum(['compact', 'full'])

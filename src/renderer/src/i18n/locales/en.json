@@ -11341,7 +11341,8 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "linearIssue": "Linear issue"
           },
           "right": {
             "panel": {
@@ -11829,6 +11830,16 @@
             "mayBeSlower": "May be slower",
             "slowest": "Slowest",
             "unlimited": "Unlimited"
+          },
+          "LinearPanel": {
+            "issueUnavailable": "Linear issue details unavailable.",
+            "noLinkedIssue": "This workspace has no linked Linear issue.",
+            "notConnected": "Connect Linear in Settings to see this issue.",
+            "openInLinear": "Open in Linear",
+            "refresh": "Refresh",
+            "comments": "Comments",
+            "unknownAuthor": "Unknown",
+            "noComments": "No comments"
           }
         }
       },

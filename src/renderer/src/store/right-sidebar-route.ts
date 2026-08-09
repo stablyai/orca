@@ -1,5 +1,6 @@
 import type { ActiveRightSidebarTab, RightSidebarExplorerView } from '../../../shared/types'
 import { isPluginPanelTabKey } from '../../../shared/plugins/plugin-manifest'
+import { isActiveStaticRightSidebarTab } from '../../../shared/right-sidebar-tabs'
 
 export type RightSidebarRoute = {
   rightSidebarTab: ActiveRightSidebarTab
@@ -36,15 +37,8 @@ export function normalizeRightSidebarRoute(
     }
     return { rightSidebarTab: tab, rightSidebarExplorerView: 'files' }
   }
-  if (
-    tab === 'explorer' ||
-    tab === 'vault' ||
-    tab === 'workspaces' ||
-    tab === 'pr-checks' ||
-    tab === 'source-control' ||
-    tab === 'checks' ||
-    tab === 'ports'
-  ) {
+  // 'search' is handled above; every other static tab is a valid route.
+  if (isActiveStaticRightSidebarTab(tab)) {
     return {
       rightSidebarTab: tab,
       rightSidebarExplorerView:

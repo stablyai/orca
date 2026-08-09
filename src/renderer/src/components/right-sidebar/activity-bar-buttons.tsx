@@ -25,6 +25,8 @@ export type ActivityBarItem = {
   folderOnly?: boolean
   /** When true, shown only for worktrees that belong to an SSH repo. */
   sshOnly?: boolean
+  /** When true, shown only for workspaces that have a linked Linear issue. */
+  linearOnly?: boolean
   /** Host-owned health indicator; plugin content cannot style this chrome. */
   statusIndicator?: CheckStatus
 }

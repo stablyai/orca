@@ -47,6 +47,7 @@ import { RightSidebarPanelContent } from './right-sidebar-panel-content'
 import { useMeasuredWidth } from './right-sidebar-measured-width'
 import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
 import { AgentSessionHistoryIcon } from './agent-session-history-icon'
+import { LinearIcon } from '@/components/icons/LinearIcon'
 import { resolveRightSidebarEffectiveTab } from './right-sidebar-effective-tab'
 import {
   isPairedWebClientWindow,
@@ -90,6 +91,7 @@ function RightSidebarInner(): React.JSX.Element {
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
+  const hasLinkedLinearIssue = Boolean(activeWorktree?.linkedLinearIssue)
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const pluginPanels = usePluginPanels()
   const visiblePluginPanels = useMemo(
@@ -156,6 +158,13 @@ function RightSidebarInner(): React.JSX.Element {
         shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
         sshOnly: true
       },
+      {
+        id: 'linear',
+        icon: LinearIcon,
+        title: translate('auto.components.right.sidebar.index.linearIssue', 'Linear issue'),
+        shortcut: '',
+        linearOnly: true
+      },
       // Why: plugin panels append after the built-in tabs so core navigation
       // keeps stable positions regardless of which plugins are installed.
       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
@@ -175,9 +184,10 @@ function RightSidebarInner(): React.JSX.Element {
       getVisibleRightSidebarActivityItems(activityItems, {
         isFolder,
         isFolderWorkspace,
-        isSshRepo
+        isSshRepo,
+        hasLinkedLinearIssue
       }),
-    [activityItems, isFolder, isFolderWorkspace, isSshRepo]
+    [activityItems, isFolder, isFolderWorkspace, isSshRepo, hasLinkedLinearIssue]
   )
 
   const rememberedFolderTabByWorkspaceKeyRef = useRef<Record<string, ActiveRightSidebarTab>>({})
