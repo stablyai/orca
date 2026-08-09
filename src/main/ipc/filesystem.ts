@@ -28,6 +28,7 @@ import type {
   Repo,
   TuiAgent
 } from '../../shared/types'
+import type { RuntimeGitLocalBranches } from '../../shared/runtime-types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
@@ -61,6 +62,7 @@ import {
   getCommitDiff
 } from '../git/status'
 import { getHistory } from '../git/history'
+import { checkoutBranch, listLocalBranches } from '../git/checkout'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
@@ -90,7 +92,7 @@ import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
 import { validateGitPushTarget } from '../git/push-target-validation'
-import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
+import { getRemoteCommitUrl, getRemoteFileUrl, isGitRepo } from '../git/repo'
 import {
   resolveAuthorizedPath,
   resolveRegisteredWorktreePath,
@@ -497,6 +499,40 @@ async function isDirectoryEntry(
     return true
   }
   return false
+}
+
+async function resolveGitReadPath(worktreePath: string, store: Store): Promise<string> {
+  try {
+    return await resolveRegisteredWorktreePath(worktreePath, store)
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'Access denied: unknown repository or worktree path'
+    ) {
+      let authorizedPath: string
+      try {
+        authorizedPath = await resolveAuthorizedPath(worktreePath, store)
+      } catch {
+        throw error
+      }
+      if (isGitRepo(authorizedPath)) {
+        return authorizedPath
+      }
+    }
+    throw error
+  }
+}
+
+function getLocalGitOptionsForReadPath(
+  store: Store,
+  requestedPath: string,
+  resolvedPath: string
+): ReturnType<typeof getLocalGitOptionsForRegisteredWorktree> {
+  try {
+    return getLocalGitOptionsForRegisteredWorktree(store, requestedPath, resolvedPath)
+  } catch {
+    return {}
+  }
 }
 
 export function registerFilesystemHandlers(
@@ -1150,7 +1186,7 @@ export function registerFilesystemHandlers(
           // Why: await keeps the cancellation token registered until the remote request settles (an early finally would free it).
           return await provider.getStatus(args.worktreePath, options)
         }
-        const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+        const worktreePath = await resolveGitReadPath(args.worktreePath, store)
         // Why: one registered-worktree lookup feeds both — status polls this
         // handler, and the scan walks every repo's worktree meta.
         const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
@@ -1196,7 +1232,7 @@ export function registerFilesystemHandlers(
         }
         return provider.getSubmoduleStatus(args.worktreePath, args.submodulePath, args.area)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
@@ -1223,7 +1259,7 @@ export function registerFilesystemHandlers(
         }
         return provider.checkIgnoredPaths(args.worktreePath, paths)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
       const paths = args.paths.map((p) => validateGitRelativeFilePath(worktreePath, p))
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1238,7 +1274,7 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'git:findHugeFoldersToIgnore',
     async (_event, args: { worktreePath: string }): Promise<string[]> => {
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
@@ -1270,12 +1306,8 @@ export function registerFilesystemHandlers(
         }
         return provider.getHistory(args.worktreePath, options)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
       return getHistory(worktreePath, { ...options, ...gitOptions })
     }
   )
@@ -1363,13 +1395,9 @@ export function registerFilesystemHandlers(
           args.compareAgainstHead
         )
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
       return getDiff(worktreePath, filePath, args.staged, args.compareAgainstHead, gitOptions)
     }
   )
@@ -1391,12 +1419,8 @@ export function registerFilesystemHandlers(
         }
         return provider.commit(args.worktreePath, args.message)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
       return commitChanges(worktreePath, args.message, gitOptions)
     }
   )
@@ -1776,12 +1800,8 @@ export function registerFilesystemHandlers(
         }
         return provider.getBranchCompare(args.worktreePath, args.baseRef)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
       return getBranchCompare(worktreePath, args.baseRef, gitOptions)
     }
   )
@@ -1800,12 +1820,8 @@ export function registerFilesystemHandlers(
         }
         return provider.getCommitCompare(args.worktreePath, commitId)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
       return getCommitCompare(worktreePath, commitId, gitOptions)
     }
   )
@@ -1826,13 +1842,48 @@ export function registerFilesystemHandlers(
         }
         return provider.getUpstreamStatus(args.worktreePath, args.pushTarget)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
       return getUpstreamStatus(worktreePath, args.pushTarget, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:localBranches',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string }
+    ): Promise<RuntimeGitLocalBranches> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.listLocalBranches(args.worktreePath)
+      }
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
+      return listLocalBranches(worktreePath, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:checkout',
+    async (
+      _event,
+      args: { worktreePath: string; branch: string; connectionId?: string }
+    ): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        await provider.checkoutBranch(args.worktreePath, args.branch)
+        return
+      }
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
+      await checkoutBranch(worktreePath, args.branch, gitOptions)
     }
   )
 
@@ -2141,13 +2192,9 @@ export function registerFilesystemHandlers(
         }
         return provider.stageFile(args.worktreePath, args.filePath)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
       await stageFile(worktreePath, filePath, gitOptions)
     }
   )
@@ -2165,13 +2212,9 @@ export function registerFilesystemHandlers(
         }
         return provider.unstageFile(args.worktreePath, args.filePath)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
       await unstageFile(worktreePath, filePath, gitOptions)
     }
   )
@@ -2237,13 +2280,9 @@ export function registerFilesystemHandlers(
         }
         return provider.bulkStageFiles(args.worktreePath, args.filePaths)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
       await bulkStageFiles(worktreePath, filePaths, gitOptions)
     }
   )
@@ -2261,13 +2300,9 @@ export function registerFilesystemHandlers(
         }
         return provider.bulkUnstageFiles(args.worktreePath, args.filePaths)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const worktreePath = await resolveGitReadPath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
+      const gitOptions = getLocalGitOptionsForReadPath(store, args.worktreePath, worktreePath)
       await bulkUnstageFiles(worktreePath, filePaths, gitOptions)
     }
   )

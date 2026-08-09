@@ -134,6 +134,7 @@ import type {
 } from '../shared/skill-freshness'
 import type {
   RuntimeBrowserDriverState,
+  RuntimeGitLocalBranches,
   RuntimeMobileSessionTabMove,
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
@@ -3332,6 +3333,15 @@ const api = {
       connectionId?: string
       pushTarget?: GitPushTarget
     }): Promise<GitUpstreamStatus> => ipcRenderer.invoke('git:upstreamStatus', args),
+    localBranches: (args: {
+      worktreePath: string
+      connectionId?: string
+    }): Promise<RuntimeGitLocalBranches> => ipcRenderer.invoke('git:localBranches', args),
+    checkout: (args: {
+      worktreePath: string
+      branch: string
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:checkout', args),
     fetch: (args: {
       worktreePath: string
       connectionId?: string

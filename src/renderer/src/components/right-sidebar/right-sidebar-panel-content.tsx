@@ -1,16 +1,34 @@
-import { Suspense } from 'react'
+import React, { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
+import { useAppStore } from '@/store'
+import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import { isFolderRepo } from '../../../../shared/repo-kind'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
 
 const FileExplorer = lazy(() => import('./FileExplorer'))
 const SourceControl = lazy(() => import('./SourceControl'))
+const FolderSourceControl = lazy(() => import('./FolderSourceControl'))
 const ChecksPanel = lazy(() => import('./ChecksPanel'))
 const PortsPanel = lazy(() => import('./PortsPanel'))
 const AiVaultPanel = lazy(() => import('./AiVaultPanel'))
 const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktreesPanel'))
 const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrChecksPanel'))
 const PluginPanel = lazy(() => import('./PluginPanel'))
+
+function SourceControlPanelRoute(): React.JSX.Element {
+  const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
+  const activeWorktree = useActiveWorktree()
+  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const isFolderWorkspace = parseWorkspaceKey(activeWorktreeId ?? '')?.type === 'folder'
+  const isFolderRepoActive = activeRepo ? isFolderRepo(activeRepo) : false
+
+  if (isFolderWorkspace || isFolderRepoActive) {
+    return <FolderSourceControl />
+  }
+  return <SourceControl />
+}
 
 type RightSidebarPanelContentProps = {
   effectiveTab: ActiveRightSidebarTab
@@ -25,7 +43,7 @@ export function RightSidebarPanelContent({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <Suspense fallback={null}>
         {effectiveTab === 'explorer' && <FileExplorer />}
-        {effectiveTab === 'source-control' && <SourceControl />}
+        {effectiveTab === 'source-control' && <SourceControlPanelRoute />}
         {effectiveTab === 'checks' && <ChecksPanel />}
         {/* Why: SSH port forwarding still depends on the raw ports.detect data,
             which the workspace-scoped status bar popover intentionally does not

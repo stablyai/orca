@@ -140,7 +140,8 @@ function RightSidebarInner(): React.JSX.Element {
         icon: GitBranch,
         title: translate('auto.components.right.sidebar.index.0314901467', 'Source Control'),
         shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
-        gitOnly: true
+        gitOnly: true,
+        folderGitOnly: true
       },
       {
         id: 'checks',

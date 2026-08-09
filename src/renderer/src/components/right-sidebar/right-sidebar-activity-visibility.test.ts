@@ -78,4 +78,25 @@ describe('getVisibleRightSidebarActivityItems', () => {
       }).map((item) => item.id)
     ).toEqual(['explorer', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
   })
+
+  it('shows Source Control for folder scopes so nested repos can be discovered', () => {
+    expect(
+      getVisibleRightSidebarActivityItems(
+        items.map((item) =>
+          item.id === 'source-control' ? { ...item, folderGitOnly: true } : item
+        ),
+        {
+          isFolder: true,
+          isFolderWorkspace: true,
+          isSshRepo: false
+        }
+      ).map((item) => item.id)
+    ).toEqual([
+      'explorer',
+      'workspaces',
+      'pr-checks',
+      'source-control',
+      'plugin:orca-samples.my-plugin/dashboard'
+    ])
+  })
 })

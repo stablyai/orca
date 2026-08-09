@@ -379,6 +379,7 @@ import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-ques
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import type {
   RuntimeBrowserDriverState,
+  RuntimeGitLocalBranches,
   RuntimeMobileSessionTabMove,
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
@@ -2992,6 +2993,15 @@ export type PreloadApi = {
       connectionId?: string
       pushTarget?: GitPushTarget
     }) => Promise<GitUpstreamStatus>
+    localBranches: (args: {
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<RuntimeGitLocalBranches>
+    checkout: (args: {
+      worktreePath: string
+      branch: string
+      connectionId?: string
+    }) => Promise<void>
     fetch: (args: {
       worktreePath: string
       connectionId?: string
