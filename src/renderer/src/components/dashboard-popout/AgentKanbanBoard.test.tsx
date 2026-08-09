@@ -370,7 +370,7 @@ describe('AgentKanbanBoard', () => {
     renderBoard([card({ bucket: 'done' })])
 
     expect(screen.getByText('完了')).toBeInTheDocument()
-    expect(screen.getByLabelText('エージェントを検索')).toBeInTheDocument()
+    expect(screen.getByLabelText('Agent を検索')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^フィルター/ })).toBeInTheDocument()
   })
 
