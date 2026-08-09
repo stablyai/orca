@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
+import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, extname, join } from 'node:path'
+import { basename, extname, isAbsolute, join, relative, sep } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
@@ -11,7 +12,11 @@ import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
-import { toHostReadableTranscriptPath, wslCodexSessionsDirs } from './host-readable-transcript-path'
+import {
+  needsWslHostTranslation,
+  toHostReadableTranscriptPath,
+  wslCodexSessionsDirs
+} from './host-readable-transcript-path'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
 // run in the main process against the runtime's own home directory; over SSH
@@ -48,6 +53,83 @@ function ompSessionsDir(): string {
     process.env.OMP_CODING_AGENT_DIR?.trim() || join(homedir(), '.omp', 'agent', 'sessions'),
     '.omp'
   )
+}
+
+function hasParentPathSegment(path: string): boolean {
+  return path.split(/[\\/]/).includes('..')
+}
+
+function isPathWithinRoot(root: string, candidate: string): boolean {
+  const descendant = relative(root, candidate)
+  return (
+    descendant === '' ||
+    (descendant !== '..' && !descendant.startsWith(`..${sep}`) && !isAbsolute(descendant))
+  )
+}
+
+async function transcriptRoots(
+  agent: AgentType,
+  options: ResolveSessionFileOptions
+): Promise<string[]> {
+  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+  if (!transcriptAgent) {
+    return []
+  }
+  if (transcriptAgent === 'claude') {
+    return [options.claudeProjectsDir ?? claudeProjectsDir()]
+  }
+  if (transcriptAgent === 'codex') {
+    const roots = [...(options.codexSessionsDirs ?? codexSessionsDirs())]
+    // WSL hooks report guest paths; the host-readable path is a UNC path under
+    // one of these roots, so include them in the same containment check.
+    if (options.codexSessionsDirs === undefined) {
+      roots.push(...(await wslCodexSessionsDirs()))
+    }
+    return [...new Set(roots)]
+  }
+  if (transcriptAgent === 'grok') {
+    return [options.grokSessionsDir ?? grokSessionsDir()]
+  }
+  if (transcriptAgent === 'omp') {
+    return [options.ompSessionsDir ?? ompSessionsDir()]
+  }
+  return []
+}
+
+/** Accept only an existing, canonical transcript under this agent's storage root. */
+export async function resolveHostOwnedTranscriptPath(
+  agent: AgentType,
+  transcriptPath: string,
+  options: ResolveSessionFileOptions
+): Promise<string | null> {
+  // Windows' path module can reject a guest POSIX path before the WSL
+  // translator gets a chance to convert it to its host UNC path.
+  if (
+    (!isAbsolute(transcriptPath) && !needsWslHostTranslation(transcriptPath)) ||
+    hasParentPathSegment(transcriptPath)
+  ) {
+    return null
+  }
+  const hostReadablePath = await toHostReadableTranscriptPath(transcriptPath)
+  if (!hostReadablePath) {
+    return null
+  }
+  const roots = await transcriptRoots(agent, options)
+  if (roots.length === 0) {
+    return null
+  }
+  try {
+    const [canonicalPath, ...canonicalRoots] = await Promise.all([
+      realpath(hostReadablePath),
+      ...roots.map((root) => realpath(root))
+    ])
+    return canonicalRoots.some((root) => isPathWithinRoot(root, canonicalPath))
+      ? canonicalPath
+      : null
+  } catch {
+    // A missing or inaccessible root/path is handled by the id-based fallback.
+    return null
+  }
 }
 
 export type ResolveSessionFileOptions = {
@@ -95,9 +177,9 @@ export async function resolveSessionFilePath(
   // stale/missing paths fall through to the id-based search.
   const hookPath = options.transcriptPath?.trim()
   if (hookPath && extname(hookPath) === '.jsonl') {
-    const hostReadable = await toHostReadableTranscriptPath(hookPath)
-    if (hostReadable) {
-      return hostReadable
+    const hostOwnedPath = await resolveHostOwnedTranscriptPath(agent, hookPath, options)
+    if (hostOwnedPath) {
+      return hostOwnedPath
     }
   }
 
