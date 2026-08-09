@@ -49,14 +49,17 @@ export function buildTerminalIosTextEditPayload(step: TerminalIosTextEditStep): 
 
 export type TerminalIosTextEditMirror = IDisposable & {
   /**
-   * Drops mirrored state once xterm writes to the PTY itself, so the next edit
+   * Drops mirrored state once anything else writes to the PTY, so the next edit
    * diffs against an empty field instead of replaying text the PTY already has.
    */
   reset: () => void
+  /** True only while this mirror is the one writing to the PTY. */
+  isMirroring: () => boolean
 }
 
 const NO_OP_MIRROR: TerminalIosTextEditMirror = {
   reset: () => undefined,
+  isMirroring: () => false,
   dispose: () => undefined
 }
 
@@ -81,6 +84,8 @@ export function installTerminalIosTextEditMirror(args: {
 
   const terminalElement = args.terminalElement
   let sentText = ''
+  let composing = false
+  let mirroring = false
 
   const reset = (): void => {
     sentText = ''
@@ -90,7 +95,23 @@ export function installTerminalIosTextEditMirror(args: {
     }
   }
 
+  // Why: some iOS input sources (the on-screen keyboard, Japanese and Chinese
+  // IMEs) do run a composition session. xterm's CompositionHelper already
+  // handles those correctly, and it commits by reading the field itself — so
+  // the mirror must stand aside for the whole session or the text is sent
+  // twice. Only the session end clears `sentText`; the field belongs to xterm.
+  const beginComposition = (): void => {
+    composing = true
+  }
+  const endComposition = (): void => {
+    composing = false
+    sentText = ''
+  }
+
   const mirrorTextEdit = (event: Event): void => {
+    if (composing) {
+      return
+    }
     const textarea = asHelperTextarea(event.target)
     if (!textarea) {
       return
@@ -101,19 +122,36 @@ export function installTerminalIosTextEditMirror(args: {
     // syllable, so xterm must not also read it as fresh input.
     event.stopImmediatePropagation()
     const payload = buildTerminalIosTextEditPayload(step)
-    if (payload) {
+    if (!payload) {
+      return
+    }
+    mirroring = true
+    try {
       args.sendInput(payload)
+    } finally {
+      mirroring = false
+    }
+  }
+
+  const resetOnHelperTextareaBlur = (event: Event): void => {
+    if (asHelperTextarea(event.target)) {
+      reset()
     }
   }
 
   terminalElement.addEventListener('input', mirrorTextEdit, true)
-  terminalElement.addEventListener('blur', reset, true)
+  terminalElement.addEventListener('compositionstart', beginComposition, true)
+  terminalElement.addEventListener('compositionend', endComposition, true)
+  terminalElement.addEventListener('blur', resetOnHelperTextareaBlur, true)
 
   return {
     reset,
+    isMirroring: () => mirroring,
     dispose: () => {
       terminalElement.removeEventListener('input', mirrorTextEdit, true)
-      terminalElement.removeEventListener('blur', reset, true)
+      terminalElement.removeEventListener('compositionstart', beginComposition, true)
+      terminalElement.removeEventListener('compositionend', endComposition, true)
+      terminalElement.removeEventListener('blur', resetOnHelperTextareaBlur, true)
     }
   }
 }

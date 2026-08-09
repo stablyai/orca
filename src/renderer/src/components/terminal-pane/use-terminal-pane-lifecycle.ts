@@ -924,10 +924,19 @@ export function useTerminalPaneLifecycle({
               sendInput: (data) => pane.terminal.input(data)
             })
           : null
+        // Why: Ctrl+C, paste and xterm's own key handling all reach the PTY without a bypassed keydown; any of them makes mirrored field text stale.
+        const iosTextEditMirrorResync = iosTextEditMirror
+          ? pane.terminal.onData(() => {
+              if (!iosTextEditMirror.isMirroring()) {
+                iosTextEditMirror.reset()
+              }
+            })
+          : null
         imeCompositionDisposablesRef.current.set(pane.id, {
           dispose: () => {
             imeCompositionTracker.dispose()
             linuxImeCandidateState?.dispose()
+            iosTextEditMirrorResync?.dispose()
             iosTextEditMirror?.dispose()
           }
         })
@@ -1060,10 +1069,6 @@ export function useTerminalPaneLifecycle({
             hasSelection: pane.terminal.hasSelection(),
             kittyKeyboardFlags: paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
           })
-          if (!shouldBypass && e.type === 'keydown') {
-            // Why: xterm is about to write to the PTY itself, so any text mirrored from the field is already stale.
-            iosTextEditMirror?.reset()
-          }
           observeLinuxCandidateEvent()
           return !shouldBypass
         })

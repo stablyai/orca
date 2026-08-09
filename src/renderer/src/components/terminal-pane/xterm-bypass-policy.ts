@@ -134,6 +134,11 @@ export function shouldBypassXtermForIosTextEdit(
   if (!isIosWeb || event.ctrlKey || event.metaKey || event.altKey) {
     return false
   }
+  if (event.isComposing === true) {
+    // Why: input sources that do run a composition session stay with xterm's
+    // CompositionHelper, which already commits them correctly.
+    return false
+  }
   if (!isXtermHandledKeyEvent(event.type) && event.type !== 'keypress') {
     return false
   }

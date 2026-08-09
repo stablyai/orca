@@ -184,6 +184,60 @@ describe('installTerminalIosTextEditMirror', () => {
     expect(sent).toEqual(['한', '글'])
   })
 
+  it('stands aside for input sources that do run a composition session', () => {
+    // Why: the iPad on-screen keyboard and the Japanese/Chinese IMEs compose
+    // normally; xterm commits those by reading the field, so mirroring them
+    // would send the same text twice.
+    const { textarea, sent } = openMirror()
+    let reachedTextareaListener = false
+    textarea.addEventListener('input', () => {
+      reachedTextareaListener = true
+    })
+    textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+    typeIntoField(textarea, 'に')
+    typeIntoField(textarea, 'にほ')
+    expect(sent).toEqual([])
+    expect(reachedTextareaListener).toBe(true)
+  })
+
+  it('resumes mirroring after the composition session ends', () => {
+    const { textarea, sent } = openMirror()
+    textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+    typeIntoField(textarea, 'にほん')
+    textarea.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
+    // Why: xterm already sent the composed text, so the next diff must start empty.
+    typeIntoField(textarea, 'にほんㅎ')
+    expect(sent).toEqual(['にほんㅎ'])
+  })
+
+  it('reports when it is the one writing, so external PTY writes can be told apart', () => {
+    const container = document.createElement('div')
+    const textarea = document.createElement('textarea')
+    textarea.classList.add('xterm-helper-textarea')
+    container.appendChild(textarea)
+    document.body.appendChild(container)
+    openContainers.push(container)
+    const mirroringDuringSend: boolean[] = []
+    const mirror = installTerminalIosTextEditMirror({
+      terminalElement: container,
+      sendInput: () => mirroringDuringSend.push(mirror.isMirroring())
+    })
+    typeIntoField(textarea, 'ㅎ')
+    expect(mirroringDuringSend).toEqual([true])
+    expect(mirror.isMirroring()).toBe(false)
+  })
+
+  it('ignores blur from other elements in the pane', () => {
+    const { textarea, sent } = openMirror()
+    typeIntoField(textarea, '한')
+    const searchField = document.createElement('input')
+    textarea.parentElement?.appendChild(searchField)
+    searchField.dispatchEvent(new Event('blur', { bubbles: true }))
+    expect(textarea.value).toBe('한')
+    typeIntoField(textarea, '한글')
+    expect(sent).toEqual(['한', '글'])
+  })
+
   it('stops mirroring once disposed', () => {
     const { textarea, sent, mirror } = openMirror()
     mirror.dispose()

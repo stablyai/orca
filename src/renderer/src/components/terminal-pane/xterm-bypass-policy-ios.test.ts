@@ -47,6 +47,14 @@ describe('shouldBypassXtermForIosTextEdit', () => {
     ).toBe(false)
   })
 
+  it('leaves composing keystrokes to xterm, for iOS sources that do compose', () => {
+    // Why: the on-screen keyboard and the Japanese/Chinese IMEs run a real
+    // composition session, which xterm's CompositionHelper already commits.
+    expect(
+      shouldBypassXtermForIosTextEdit(event({ ...HANGUL_JAMO_KEYDOWN, isComposing: true }), true)
+    ).toBe(false)
+  })
+
   it('is inert off iOS web, leaving desktop IME handling untouched', () => {
     expect(shouldBypassXtermForIosTextEdit(event(HANGUL_JAMO_KEYDOWN), false)).toBe(false)
   })
