@@ -1,5 +1,4 @@
 import { LoaderCircle } from 'lucide-react'
-import { ImeEnterGuardedForm } from '@/components/ime-enter-guarded-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
@@ -38,7 +37,7 @@ export function SparseCheckoutPresetDraftForm({
   return (
     // Why: bg-popover matches the opaque surface the cmdk list (Command root) paints, so the draft
     // form doesn't show the translucent PopoverContent through it while the list looks solid.
-    <ImeEnterGuardedForm
+    <form
       className="rounded-md bg-popover text-popover-foreground"
       onSubmit={(event) => {
         event.preventDefault()
@@ -135,6 +134,6 @@ export function SparseCheckoutPresetDraftForm({
           </Button>
         </div>
       </div>
-    </ImeEnterGuardedForm>
+    </form>
   )
 }

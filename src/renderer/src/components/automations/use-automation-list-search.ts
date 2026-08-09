@@ -106,9 +106,6 @@ export function useAutomationListSearch({
     () =>
       externalAutomationEntries
         .map((entry) => {
-          if (entry.kind === 'source') {
-            return `${entry.key}\u0001${entry.manager.targetLabel}\u0001${getExternalProviderLabel(entry.manager)}\u0001`
-          }
           const prompt = truncateAutomationListSearchField(
             entry.job.prompt ?? entry.job.promptPreview ?? '',
             AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS
@@ -123,24 +120,17 @@ export function useAutomationListSearch({
     index: AutomationListSearchIndex
   }[] => {
     return externalAutomationEntries.map((entry) => {
-      const fields: AutomationListSearchFields =
-        entry.kind === 'source'
-          ? {
-              name: entry.manager.targetLabel,
-              project: `${getExternalProviderLabel(entry.manager)} ${entry.manager.targetLabel}`,
-              prompt: ''
-            }
-          : {
-              name: entry.job.name,
-              project: [
-                getExternalProviderLabel(entry.manager),
-                entry.manager.targetLabel,
-                entry.job.workdir
-              ]
-                .filter(Boolean)
-                .join(' '),
-              prompt: entry.job.prompt ?? entry.job.promptPreview ?? ''
-            }
+      const fields: AutomationListSearchFields = {
+        name: entry.job.name,
+        project: [
+          getExternalProviderLabel(entry.manager),
+          entry.manager.targetLabel,
+          entry.job.workdir
+        ]
+          .filter(Boolean)
+          .join(' '),
+        prompt: entry.job.prompt ?? entry.job.promptPreview ?? ''
+      }
       return { key: entry.key, index: buildAutomationListSearchIndex(fields) }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fingerprint is the rebuild gate

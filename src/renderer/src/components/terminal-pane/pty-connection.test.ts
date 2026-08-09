@@ -484,21 +484,6 @@ function createPaneContainer(): HTMLElement {
   return container
 }
 
-function makeInspectableBufferLine(text: string) {
-  const cells = Array.from(text)
-  return {
-    length: cells.length,
-    getCell: (column: number) => {
-      const char = cells[column]
-      return char === undefined ? undefined : { getChars: () => char, getWidth: () => 1 }
-    },
-    translateToString: (trimRight = false, start = 0, end = cells.length) => {
-      const value = cells.slice(start, end).join('')
-      return trimRight ? value.trimEnd() : value
-    }
-  }
-}
-
 function createPane(paneId: number) {
   const leafId = leafIdForPane(paneId)
   const activeBuffer = {
@@ -3723,29 +3708,6 @@ describe('connectPanePty', () => {
 
     sendTerminalInputThroughPane(pane, 'x')
     expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)
-  })
-
-  it('sends only while the terminal still owns its PTY transport generation', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('pty-pane-2')
-    transportFactoryQueue.push(transport)
-    const deps = createDeps()
-    const pane = createPane(2)
-
-    connectPanePty(pane as never, createManager(1) as never, deps as never)
-    await flushAsyncTicks()
-    transport.sendInput.mockClear()
-
-    sendTerminalInputThroughPane(pane, 'ordinary')
-    expect(transport.sendInput).toHaveBeenCalledWith('ordinary')
-
-    transport.sendInput.mockClear()
-    const replacement = createMockTransport('pty-replacement')
-    deps.paneTransportsRef.current.set(2, replacement)
-    sendTerminalInputThroughPane(pane, 'stale')
-
-    expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(replacement.sendInput).not.toHaveBeenCalled()
   })
 
   it('keeps a fresh split pane mounted when its newborn PTY exits before output or input', async () => {
@@ -16587,13 +16549,6 @@ describe('connectPanePty', () => {
     setReattachPaneTitle('renamed shell')
 
     const pane = createPane(1)
-    Object.assign(pane.terminal.buffer.active, {
-      cursorY: 39,
-      getLine: (row: number) =>
-        makeInspectableBufferLine(
-          row === 1 ? '  Cursor Agent' : row === 8 ? '  → Plan, search, build anything' : ''
-        )
-    })
     const textarea = {} as HTMLTextAreaElement
     configureTerminalFocusMode(pane, textarea)
     const manager = createManager(1)
@@ -16707,8 +16662,8 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     // Why: a buffer whose visible rows carry no Cursor Agent screen models a shell foreground after a dead run left its screen in scrollback.
     Object.assign(pane.terminal.buffer.active, {
-      cursorY: 39,
-      getLine: () => makeInspectableBufferLine('')
+      cursorX: 2,
+      getLine: () => undefined
     })
     const textarea = {} as HTMLTextAreaElement
     configureTerminalFocusMode(pane, textarea)
@@ -17972,6 +17927,51 @@ describe('connectPanePty', () => {
       // The full coalesce fallback still drains it so the frame is never lost.
       vi.advanceTimersByTime(1000)
       expect(pane.terminal.write).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+      restoreNavigator()
+    }
+  })
+
+  it('clears the synchronized latch when ConPTY splits the frame end marker', async () => {
+    // Why: issue #8754 — a split \x1b[?2026l left the foreground latch armed, so every later
+    // chunk was held as frame body and the visible pane froze until the tab was blurred.
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(6)
+
+      vi.useFakeTimers()
+      const repaintBody = 'codex spinner '.repeat(200)
+      capturedDataCallback.current?.(`\x1b[?2026h${repaintBody}`)
+      vi.advanceTimersByTime(300)
+      pane.terminal.write.mockClear()
+
+      // ConPTY splits the closing marker across two chunks.
+      capturedDataCallback.current?.(`${repaintBody}\x1b[?25l\x1b[13;14H\x1b[?25h\x1b[?202`)
+      capturedDataCallback.current?.('6l')
+      vi.advanceTimersByTime(1100)
+      expect(pane.terminal.write).toHaveBeenCalled()
+      pane.terminal.write.mockClear()
+
+      // The frame is closed, so ordinary output must paint instead of being held as frame body.
+      capturedDataCallback.current?.('command finished\r\n')
+      vi.advanceTimersByTime(20)
+      expect(pane.terminal.write).toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
       restoreNavigator()

@@ -6631,95 +6631,186 @@
     },
     {
       "id": "terminal-input.ime-and-synthetic-forwarding",
-      "title": "Native terminal composition commits once through stock xterm",
+      "title": "IME, native text, and synthetic input commit exactly once and do not leak preedit bytes",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "terminal-input",
       "layer": "renderer-unit-platform-soak",
-      "surfaces": ["IME", "paste", "keyboard bypass", "JIS yen"],
+      "surfaces": [
+        "IME",
+        "native text forwarding",
+        "synthetic input",
+        "paste",
+        "keyboard bypass",
+        "JIS yen"
+      ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos", "linux"],
-      "coveredProviders": ["local", "ssh", "remote-runtime"],
-      "coverageNotes": "Stock xterm owns preedit and commit derivation. Renderer tests cover same-task consecutive commits, commit-before-Enter, ordinary input, action refusal, and PTY-generation isolation. Native platform and rendering certification remains required.",
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, and Electron/CDP live-PTY Sogou-style repros. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/pull/11293",
-        "https://github.com/stablyai/orca/pull/12062"
+        "https://github.com/stablyai/orca/pull/6699",
+        "https://github.com/stablyai/orca/pull/6682",
+        "https://github.com/stablyai/orca/pull/6513",
+        "https://github.com/stablyai/orca/pull/6999"
       ],
-      "invariant": "The stock terminal composition owner emits committed text exactly once; Orca refuses IME-owned application actions and never reroutes terminal data to a replacement PTY generation.",
-      "oracle": "Real xterm onData bytes are asserted for consecutive composition, ordinary ASCII, and physical Enter. Marked and ordinary shortcut shapes are paired, and a replaced PTY transport receives no stale input.",
+      "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY.",
+      "oracle": "The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary and long-held letter-to-digit typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text, while the legacy orphaned-letter-keyup sequence sends no selector byte to the PTY. Real legacy IME commit preservation and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/terminal-stock-composition.test.ts src/renderer/src/components/dashboard-popout/preview-terminal-key-handler.test.ts src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts src/renderer/src/lib/ime-composition-keyboard-event.test.ts",
-        "pnpm run test:e2e:terminal-ime-native"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
+        "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts"
       ],
       "testFiles": [
-        "src/renderer/src/components/terminal-pane/terminal-stock-composition.test.ts",
-        "src/renderer/src/components/dashboard-popout/preview-terminal-key-handler.test.ts",
-        "src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts",
-        "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
-        "src/renderer/src/lib/ime-composition-keyboard-event.test.ts"
+        "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
+        "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
+        "src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+        "tests/e2e/chinese-ime-chat-input-repro.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-stock-composition.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
           "assertions": [
-            "a commit is delivered before a same-task next composition",
-            "ordinary typing and physical Enter are unchanged",
-            "the commit precedes physical Enter"
+            "native text commits route once to the intended PTY",
+            "composition/preedit bookkeeping does not leak premature text"
           ]
         },
         {
-          "file": "src/renderer/src/components/dashboard-popout/preview-terminal-key-handler.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts",
           "assertions": [
-            "a marked real key shape cannot trigger a copy action",
-            "the ordinary copy shortcut is unchanged"
+            "synthetic and native input-source paths are classified for covered fixtures"
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "file": "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
+          "assertions": ["paste/runtime forwarding avoids duplicate terminal payloads"]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
           "assertions": [
-            "ordinary input reaches the bound transport",
-            "a replaced transport generation receives no stale input"
+            "empty Sogou-style compositionupdate keeps composition active",
+            "stale composition state expires so editing keys cannot stay suppressed indefinitely",
+            "post-composition candidate guard is armed only by Sogou-style empty updates and clears after real typing"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts",
+          "assertions": [
+            "suppressed candidate keydown arms only the matching keypress/keyup release guard",
+            "held-key repeat keydowns stay guarded until their keyup, even past expiry",
+            "fresh keydowns, other keys, modified keys, and expired keypresses are not guarded, and a fresh press drops a stale pending release"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
+          "assertions": [
+            "an orphaned plain-letter keyup arms exactly the next bare digit guard",
+            "ordinary, overlapping, shifted, and long-held letter keydowns keep following digits available",
+            "physical letter tracking survives cross-pane focus handoff and clears on renderer-window blur"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
+          "assertions": [
+            "standalone Linux 229 keydowns reach xterm while Windows 229 keydowns stay suppressed",
+            "candidate Space/digit selectors are suppressed only while candidate guards are active"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+          "assertions": [
+            "macOS standalone Process key behavior and composition-owned key suppression stay intact"
+          ]
+        },
+        {
+          "file": "tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+          "assertions": [
+            "Sogou-style Space candidate selection submits only the committed Chinese character",
+            "Sogou-style digit candidate selection submits only the committed Chinese phrase",
+            "Post-composition Sogou-style digit selection stays out of the PTY after compositionend",
+            "Legacy orphaned-letter-keyup digit selection submits no selector byte to the PTY; real legacy candidate commit preservation remains a platform gap"
           ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-03",
+          "date": "2026-07-11",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/terminal-stock-composition.test.ts src/renderer/src/components/dashboard-popout/preview-terminal-key-handler.test.ts src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts src/renderer/src/lib/ime-composition-keyboard-event.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
           "result": "passed",
-          "durationSeconds": 20.43,
-          "summary": "Five files and 569 tests passed against the stock xterm composition path and PTY generation gate."
+          "durationSeconds": 0.619,
+          "summary": "1 state test file and 10 tests passed on macOS, including orphan-keyup, shifted/modifier-changed releases, intervening-key cancellation, cross-pane focus handoff, window/terminal blur cleanup, and long-held-letter coverage; the complete 8-file slice also passed 158 tests."
+        },
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "linux",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.747,
+          "summary": "1 state test file and 10 tests passed in Debian 12 arm64 Docker under Node 24, including orphan-keyup, shifted/modifier-changed releases, intervening-key cancellation, cross-pane focus handoff, window/terminal blur cleanup, and long-held-letter coverage; the complete 8-file slice also passed 158 tests."
+        },
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "linux",
+          "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+          "result": "passed",
+          "durationSeconds": 30.3,
+          "summary": "Debian 12 arm64 Docker with Node 24 and Xvfb passed both live Electron/PTY IME scenarios; the orphaned-letter-keyup candidate digit submitted no selector byte, and the real-Codex opt-in scenario was skipped."
+        },
+        {
+          "date": "2026-07-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.7,
+          "summary": "7 test file(s) passed, 144 tests passed on the Linux/Sogou candidate-key branch (includes held-key repeat guard coverage)."
+        },
+        {
+          "date": "2026-07-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+          "result": "passed",
+          "durationSeconds": 72.0,
+          "summary": "Electron/CDP IME repro passed: Sogou candidate selection, post-composition candidate selection, and existing Chinese IME harness passed; real Codex IME test was skipped behind ORCA_E2E_REAL_CODEX_IME."
         }
       ],
       "runtimeBudget": {
         "p95Seconds": 90,
-        "scope": "renderer unit plus native Linux IME E2E"
+        "scope": "renderer unit plus focused Electron/CDP IME repro"
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "The new stock-owner slice has one local run; native soak history is still required."
+        "evidence": "Focused renderer input tests and the Electron/CDP Sogou-style repro are now registered; needs soak history and true platform IME evidence before promotion."
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Removing the action guard triggers the marked action while the ordinary negative remains valid; bypassing the PTY-generation check sends stale input. Native platform mutations remain required."
+        "evidence": "Focused tests cover existing native-text, input-source, paste/runtime forwarding, Linux/Sogou candidate selector, post-composition guard contracts, and live-PTY Sogou-style candidate commits. Needs intentional-break proof for duplicate native text forwarding and composition preedit leakage, plus the broader language/platform matrix."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The change deletes per-pane trackers, timers, event buses, candidate registries, and native-text forwarding from the input hot path."
+        "evidence": "Terminal IME hot-path audit clean on 2026-07-11: candidate guards add O(1) boolean checks plus bounded per-pane Space/digit state and one renderer-scoped currently pressed physical-letter set; ref-counted renderer and pane blur listeners are disposed with pane lifecycle; no per-pane keyboard-event fan-out, polling, IPC, subprocess work, or SSH/remote transport cost added."
       },
       "promotionCriteria": [
-        "Complete the native OS and input-method matrix.",
-        "Add Windows fractional-scale rendering evidence.",
-        "Retain paired ordinary input and mutation checks."
+        "Cover deterministic byte/cell oracles first.",
+        "Mark true OS IME automation gaps explicitly by platform.",
+        "Pair with Windows ConPTY keyboard reset for Windows standard-key behavior."
       ],
       "knownGaps": [
-        "Windows Korean rendering, macOS Korean/Pinyin/Cangjie/Vietnamese, Wayland/Fcitx, and iOS/Android still require native evidence.",
-        "The retained Linux E2E must be rerun against this stock-owner head."
+        "Current commands include renderer-unit coverage and a CDP-driven Electron repro; real OS IME automation may need manual or soak evidence.",
+        "Backspace/Enter during composition, JIS yen, Arabic/RTL, paste edge cases, and Windows ConPTY post-agent key reset still need representative gate coverage."
       ],
-      "demotionRule": "Cannot promote while any required goalpost environment lacks native evidence."
+      "demotionRule": "Cannot promote if success is based only on DOM text without PTY byte/cell evidence."
     },
     {
       "id": "terminal-input.windows-conpty-keyboard-reset",

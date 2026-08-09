@@ -100,7 +100,7 @@ type TerminalMenuState = {
   onForkAgentSession: () => Promise<void>
   onContinueAgentSessionInNewSession: () => void
   onCopyAgentSessionContext: () => Promise<void>
-  onQuickCommand: (command: TerminalQuickCommand) => void
+  onQuickCommand: (command: TerminalQuickCommand, historyId: string) => void
   onToggleExpand: () => void
   onSetTitle: () => void
   onClearPaneTitle: () => void
@@ -450,9 +450,9 @@ export function useTerminalPaneContextMenu({
     await copyAgentSessionContextFromPane(pane)
   }
 
-  const onQuickCommand = (command: TerminalQuickCommand): void => {
+  const onQuickCommand = (command: TerminalQuickCommand, historyId: string): void => {
     if (isTerminalAgentQuickCommand(command)) {
-      runQuickCommandInNewTab({ command, worktreeId, groupId })
+      runQuickCommandInNewTab({ command, worktreeId, groupId, historyId })
       return
     }
 

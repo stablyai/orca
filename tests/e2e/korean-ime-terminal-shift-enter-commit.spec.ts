@@ -127,18 +127,13 @@ async function readReceived(page: Page): Promise<string | null> {
 
 type ImeKeyEvent = {
   type: string
-  key?: string
-  code?: string
-  keyCode?: number
-  isComposing?: boolean
-  repeat?: boolean
-  shiftKey?: boolean
-  ctrlKey?: boolean
-  data?: string | null
-  inputType?: string
-  value?: string
-  selectionStart?: number | null
-  selectionEnd?: number | null
+  key: string
+  code: string
+  keyCode: number
+  isComposing: boolean
+  repeat: boolean
+  shiftKey: boolean
+  ctrlKey: boolean
   timeStamp: number
 }
 
@@ -161,24 +156,6 @@ async function installImeKeyEventLog(page: Page): Promise<void> {
     }
     window.addEventListener('keydown', record, true)
     window.addEventListener('keyup', record, true)
-    const recordText = (event: Event): void => {
-      const textEvent = event as CompositionEvent & InputEvent
-      const textarea = event.target as HTMLTextAreaElement
-      target.__imeKeyEvents.push({
-        type: event.type,
-        data: textEvent.data,
-        inputType: textEvent.inputType,
-        isComposing: textEvent.isComposing,
-        value: textarea.value,
-        selectionStart: textarea.selectionStart,
-        selectionEnd: textarea.selectionEnd,
-        timeStamp: event.timeStamp
-      })
-    }
-    window.addEventListener('compositionstart', recordText, true)
-    window.addEventListener('compositionupdate', recordText, true)
-    window.addEventListener('compositionend', recordText, true)
-    window.addEventListener('input', recordText, true)
   })
 }
 
@@ -271,7 +248,9 @@ async function dispatchCommittingEnterChord(
   session: CDPSession,
   page: Page,
   modifiers: number,
-  redispatchAfterKeyup: boolean
+  redispatchedModifiers: number,
+  redispatchAfterKeyup: boolean,
+  redispatchTimestampOffset = 0
 ): Promise<void> {
   const timestamp = Date.now() / 1000
   const composingKeydown = session.send('Input.dispatchKeyEvent', {
@@ -291,8 +270,8 @@ async function dispatchCommittingEnterChord(
       type: 'rawKeyDown',
       key: 'Enter',
       code: 'Enter',
-      modifiers,
-      timestamp,
+      modifiers: redispatchedModifiers,
+      timestamp: timestamp + redispatchTimestampOffset,
       windowsVirtualKeyCode: 13,
       nativeVirtualKeyCode: 13,
       text: '',
@@ -303,8 +282,8 @@ async function dispatchCommittingEnterChord(
       type: 'keyUp',
       key: 'Enter',
       code: 'Enter',
-      modifiers,
-      timestamp,
+      modifiers: redispatchedModifiers,
+      timestamp: timestamp + redispatchTimestampOffset,
       windowsVirtualKeyCode: 13,
       nativeVirtualKeyCode: 13
     })
@@ -316,6 +295,28 @@ async function dispatchCommittingEnterChord(
   await Promise.all([composingKeydown, commit, balancingKeyup()])
   await page.waitForTimeout(80)
   await redispatch()
+}
+
+type HeldModifier = {
+  key: 'Shift' | 'Control'
+  code: 'ShiftLeft' | 'ControlLeft'
+  keyCode: 16 | 17
+  modifiers: number
+}
+
+async function dispatchHeldModifier(
+  session: CDPSession,
+  modifier: HeldModifier,
+  type: 'rawKeyDown' | 'keyUp'
+): Promise<void> {
+  await session.send('Input.dispatchKeyEvent', {
+    type,
+    key: modifier.key,
+    code: modifier.code,
+    modifiers: type === 'rawKeyDown' ? modifier.modifiers : 0,
+    windowsVirtualKeyCode: modifier.keyCode,
+    nativeVirtualKeyCode: modifier.keyCode
+  })
 }
 
 async function dispatchPlainEnter(session: CDPSession): Promise<void> {
@@ -348,6 +349,10 @@ type CommittingEnterChordCase = {
   name: string
   slug: string
   modifiers: number
+  redispatchedModifiers?: number
+  redispatchTimestampOffset?: number
+  preHeldModifier?: HeldModifier
+  windowsOnly?: boolean
   assertOutcome: (page: Page) => Promise<void>
   expectedAfterPlainEnter: {
     received: string
@@ -424,6 +429,45 @@ const COMMITTING_ENTER_CHORDS: CommittingEnterChordCase[] = [
       received: process.platform === 'win32' ? '하 하 하\r\r' : '하 하 하\u001b[13;5u\r',
       submitted: process.platform === 'win32' ? ['하 하 하', ''] : ['하 하 하\u001b[13;5u']
     }
+  },
+  {
+    name: 'Shift+Enter with modifier-lost redispatch',
+    slug: 'shift-enter-bare-redispatch',
+    modifiers: 8,
+    redispatchedModifiers: 0,
+    assertOutcome: assertShiftOutcome,
+    expectedAfterPlainEnter: {
+      received: '하 하 하\u001b\r\r',
+      submitted: ['하 하 하\u001b', '']
+    }
+  },
+  {
+    name: 'pre-held Shift+Enter with modifier-lost redispatch',
+    slug: 'pre-held-shift-enter-bare-redispatch',
+    modifiers: 8,
+    redispatchedModifiers: 0,
+    redispatchTimestampOffset: 0.01,
+    preHeldModifier: { key: 'Shift', code: 'ShiftLeft', keyCode: 16, modifiers: 8 },
+    windowsOnly: true,
+    assertOutcome: assertShiftOutcome,
+    expectedAfterPlainEnter: {
+      received: '하 하 하\u001b\r\r',
+      submitted: ['하 하 하\u001b', '']
+    }
+  },
+  {
+    name: 'pre-held Ctrl+Enter with modifier-lost redispatch',
+    slug: 'pre-held-ctrl-enter-bare-redispatch',
+    modifiers: 2,
+    redispatchedModifiers: 0,
+    redispatchTimestampOffset: 0.01,
+    preHeldModifier: { key: 'Control', code: 'ControlLeft', keyCode: 17, modifiers: 2 },
+    windowsOnly: true,
+    assertOutcome: assertCtrlOutcome,
+    expectedAfterPlainEnter: {
+      received: '하 하 하\r\r',
+      submitted: ['하 하 하', '']
+    }
   }
 ]
 
@@ -436,6 +480,7 @@ test.describe('Korean IME terminal committing Enter chords', () => {
         orcaPage,
         testRepoPath
       }, testInfo) => {
+        test.skip(chord.windowsOnly && process.platform !== 'win32', 'Windows IME ownership')
         await waitForSessionReady(orcaPage)
         await waitForActiveWorktree(orcaPage)
         await ensureTerminalVisible(orcaPage)
@@ -459,14 +504,22 @@ test.describe('Korean IME terminal committing Enter chords', () => {
           await commitSyllableAndSpace(session, orcaPage)
           await composeHangulSyllable(session, orcaPage)
           await commitSyllableAndSpace(session, orcaPage)
+          if (chord.preHeldModifier) {
+            await dispatchHeldModifier(session, chord.preHeldModifier, 'rawKeyDown')
+          }
           await composeHangulSyllable(session, orcaPage)
           await dispatchCommittingEnterChord(
             session,
             orcaPage,
             chord.modifiers,
-            redispatchAfterKeyup
+            chord.redispatchedModifiers ?? chord.modifiers,
+            redispatchAfterKeyup,
+            chord.redispatchTimestampOffset
           )
-          await attachEvidence(orcaPage, testInfo, `korean-${chord.slug}-${order}-events`)
+          if (chord.preHeldModifier) {
+            await dispatchHeldModifier(session, chord.preHeldModifier, 'keyUp')
+          }
+
           await chord.assertOutcome(orcaPage)
           await dispatchPlainEnter(session)
           await expect

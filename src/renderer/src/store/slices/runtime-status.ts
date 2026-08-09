@@ -148,6 +148,9 @@ export function getRuntimeEnvironmentConnectionGeneration(environmentId: string)
   return connectionGenerationByEnvironment.get(environmentId) ?? 0
 }
 
+export const clearRuntimeEnvironmentConnectionGenerationsForTests = (): void =>
+  connectionGenerationByEnvironment.clear()
+
 function advanceRuntimeEnvironmentConnectionGeneration(environmentId: string): number {
   const next = getRuntimeEnvironmentConnectionGeneration(environmentId) + 1
   connectionGenerationByEnvironment.set(environmentId, next)
@@ -234,6 +237,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     // Optional-chained: minimal store assemblies (some unit tests) omit the
     // detected-agents slice.
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
+    get().retainRuntimeTerminalQuickCommands?.(environments.map((environment) => environment.id))
     // A detached environment's mirrored SSH state must not outlive it.
     get().retainEnvironmentSshState?.(environments.map((environment) => environment.id))
     for (const id of replacedEnvironmentIds) {
@@ -263,17 +267,17 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         status.status !== null &&
         (previous?.status == null || previous.status.runtimeId !== status.status.runtimeId)
       const activeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
-      if (connectionChanged) {
-        advanceRuntimeEnvironmentConnectionGeneration(environmentId)
-      }
+      const connectionGeneration = connectionChanged
+        ? advanceRuntimeEnvironmentConnectionGeneration(environmentId)
+        : (previous?.connectionGeneration ??
+          status.connectionGeneration ??
+          getRuntimeEnvironmentConnectionGeneration(environmentId))
       if (activeEnvironmentId === environmentId && (sessionEnded || connectionChanged)) {
         bumpProviderRuntimeSessionGeneration()
       }
       next.set(environmentId, {
         ...status,
-        connectionGeneration: connectionChanged
-          ? (previous?.connectionGeneration ?? 0) + 1
-          : (previous?.connectionGeneration ?? status.connectionGeneration ?? 0)
+        connectionGeneration
       })
       return { runtimeStatusByEnvironmentId: next }
     })
