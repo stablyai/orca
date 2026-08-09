@@ -13,6 +13,8 @@ export type DraftPasteReadySignal =
   | 'render-quiet-after-bracketed-paste'
   | 'codex-composer-prompt'
   | 'render-cursor-after-bracketed-paste'
+  /** Kimi Code welcome banner — composer is ready after this renders (#10336). */
+  | 'kimi-welcome-banner'
 
 export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
 
@@ -248,7 +250,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'kimi',
     launchCmd: 'kimi',
     expectedProcess: 'kimi',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: Kimi's process is live long before the TUI composer accepts input; the
+    // welcome banner is the reliable "ready" marker (#10336).
+    draftPasteReadySignal: 'kimi-welcome-banner'
   },
   'mistral-vibe': {
     // Why: installer exposes binary `vibe` though the package is mistral-vibe; keep old name as alias for wrapped installs.

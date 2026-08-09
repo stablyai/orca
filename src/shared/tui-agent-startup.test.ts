@@ -747,6 +747,19 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
   })
 
+  it('waits for the Kimi welcome banner before stdin follow-up prompts (#10336)', () => {
+    expect(TUI_AGENT_CONFIG.kimi.promptInjectionMode).toBe('stdin-after-start')
+    expect(TUI_AGENT_CONFIG.kimi.draftPasteReadySignal).toBe('kimi-welcome-banner')
+    const plan = buildAgentStartupPlan({
+      agent: 'kimi',
+      prompt: 'Ship the migration',
+      cmdOverrides: {},
+      platform: 'darwin'
+    })
+    expect(plan?.followupPrompt).toBe('Ship the migration')
+    expect(plan?.launchCommand).toContain('kimi')
+  })
+
   it('keeps opencode and mimo-code on the cursor-gated paste draft route', () => {
     expect(TUI_AGENT_CONFIG.opencode.draftPasteReadySignal).toBe(
       'render-cursor-after-bracketed-paste'

@@ -12,6 +12,9 @@ const CODEX_COMPOSER_PROMPT = '›'
 // racing the composer mount under slow/noisy startup. mimo-code uses the same
 // signal by parity; the quiet-window fallback covers any agent that differs.
 const DECTCEM_SHOW_CURSOR = '\x1b[?25h'
+// Why: Kimi prints this after the TUI is mounted; stdin before it is echoed as
+// scrollback instead of landing in the composer (#10336).
+const KIMI_WELCOME_BANNER = 'Welcome to Kimi'
 
 export type DraftPasteReadyScanResult = {
   /** The agent-specific ready signal fired — caller should deliver the paste now. */
@@ -39,6 +42,9 @@ export type DraftPasteReadyScanResult = {
  *     the caller's hard timeout is the backstop if it never appears.
  *   - `render-quiet-after-bracketed-paste` (default): no signal marker; arms the
  *     quiet window once DECSET 2004 is seen.
+ *   - `kimi-welcome-banner`: ready when "Welcome to Kimi" renders. Does not wait
+ *     for DECSET 2004 (Kimi may not enable bracketed paste first) and does not
+ *     arm the quiet window.
  *
  * A 512-byte ring (`recent` / `postHandshakeRecent`) covers escape sequences
  * split across chunk boundaries without retaining terminal scrollback.
@@ -49,6 +55,19 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
   let recent = ''
   let postHandshakeRecent = ''
   let saw2004 = false
+
+  if (readySignal === 'kimi-welcome-banner') {
+    return {
+      observe(data: string): DraftPasteReadyScanResult {
+        const combined = recent + data
+        recent = combined.slice(-512)
+        if (combined.includes(KIMI_WELCOME_BANNER)) {
+          return { ready: true, armQuietTimer: false }
+        }
+        return { ready: false, armQuietTimer: false }
+      }
+    }
+  }
 
   const signalMarker =
     readySignal === 'codex-composer-prompt'

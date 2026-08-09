@@ -1289,6 +1289,10 @@ type RuntimePtyWorktreeRecord = {
   title: string | null
   titleUpdatedAt: number | null
   lastOutputAt: number | null
+  // Why: Kimi has no idle OSC; once "Welcome to Kimi" has been observed, quiet
+  // may mean composer-ready. Before that, process quiet alone is a false idle
+  // during TUI mount (#10336 / #10369).
+  kimiWelcomeBannerSeen: boolean
   tailBuffer: string[]
   tailTranscriptBuffer: string[]
   tailTranscriptChars: number
@@ -1732,6 +1736,8 @@ type WorktreeStartupDraftPaste = {
 type WorktreeStartupFollowup = {
   expectedProcess: string
   prompt: string
+  /** When set and the agent declares draftPasteReadySignal, wait for that too (#10336). */
+  agent?: TuiAgent
 }
 
 function getAgentLaunchPlatformForRepo(
@@ -1763,6 +1769,10 @@ const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
+// Why: post-paste quiet settle is ~8s; full TUI mount (e.g. Kimi welcome banner
+// on a loaded remote/headless host) regularly needs longer before stdin is safe
+// (#10336 / issuecomment-5204525896).
+const STARTUP_FOLLOWUP_DRAFT_READY_TIMEOUT_MS = 20_000
 const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
 const RECENT_PTY_PATH_CANDIDATE_LIMIT = 1024
@@ -10491,6 +10501,9 @@ export class OrcaRuntimeService {
       pty.lastAgentStatusObservedLive = false
       pty.managementTitle = null
       pty.managementTitleAt = null
+      // Why: welcome-banner readiness is per process generation; a reused ptyId
+      // must re-wait for the new Kimi mount (#10369 CodeRabbit).
+      pty.kimiWelcomeBannerSeen = false
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.lastOscTitle = null
@@ -21271,7 +21284,8 @@ export class OrcaRuntimeService {
         ? {
             followup: {
               expectedProcess: startupPlan.expectedProcess,
-              prompt: startupPlan.followupPrompt
+              prompt: startupPlan.followupPrompt,
+              agent
             }
           }
         : {})
@@ -21409,17 +21423,38 @@ export class OrcaRuntimeService {
   }
 
   private sendStartupFollowupWhenReady(handle: string, followup: WorktreeStartupFollowup): void {
-    void this.waitForStartupFollowupReady(handle, followup.expectedProcess)
-      .then((ptyId) => {
-        if (!ptyId) {
+    void (async () => {
+      try {
+        const processPtyId = await this.waitForStartupFollowupReady(
+          handle,
+          followup.expectedProcess
+        )
+        if (!processPtyId) {
           console.warn('[worktree-create] agent did not become ready for follow-up prompt')
           return
         }
+        // Why: process liveness alone is too early for agents whose TUI mounts
+        // later (Kimi); wait for the configured stream marker when present (#10336).
+        let ptyId = processPtyId
+        if (followup.agent && TUI_AGENT_CONFIG[followup.agent].draftPasteReadySignal) {
+          const draftReadyPtyId = await this.waitForStartupDraftReady(
+            handle,
+            followup.agent,
+            STARTUP_FOLLOWUP_DRAFT_READY_TIMEOUT_MS
+          )
+          if (!draftReadyPtyId) {
+            console.warn(
+              '[worktree-create] agent process started but draft-ready signal never fired; skipping follow-up prompt'
+            )
+            return
+          }
+          ptyId = draftReadyPtyId
+        }
         this.ptyController?.write(ptyId, `${followup.prompt}\r`)
-      })
-      .catch((error) => {
+      } catch (error) {
         console.warn('[worktree-create] failed to send startup follow-up prompt:', error)
-      })
+      }
+    })()
   }
 
   private async createDefaultTabTerminals(
@@ -21582,7 +21617,11 @@ export class OrcaRuntimeService {
     return null
   }
 
-  private waitForStartupDraftReady(handle: string, agent: TuiAgent): Promise<string | null> {
+  private waitForStartupDraftReady(
+    handle: string,
+    agent: TuiAgent,
+    timeoutMs: number = DRAFT_PASTE_READY_TIMEOUT_MS
+  ): Promise<string | null> {
     const livePty = this.getLivePtyForHandle(handle)
     const ptyId = livePty?.pty.ptyId
     if (!ptyId) {
@@ -21622,6 +21661,14 @@ export class OrcaRuntimeService {
       const observeData = (data: string): void => {
         const { ready, armQuietTimer: shouldArm } = scanner.observe(data)
         if (ready) {
+          // Why: stamp once when draft-ready sees Kimi's banner so later tui-idle
+          // quiet fallback does not depend on a tail that may have scrolled away.
+          if (readySignal === 'kimi-welcome-banner') {
+            const pty = this.ptysById.get(ptyId)
+            if (pty) {
+              pty.kimiWelcomeBannerSeen = true
+            }
+          }
           finish(ptyId)
           return
         }
@@ -21635,7 +21682,7 @@ export class OrcaRuntimeService {
       if (replay) {
         observeData(replay)
       }
-      hardTimer = setTimeout(() => finish(null), DRAFT_PASTE_READY_TIMEOUT_MS)
+      hardTimer = setTimeout(() => finish(null), timeoutMs)
     })
   }
 
@@ -29112,6 +29159,7 @@ export class OrcaRuntimeService {
         title: state.title ?? null,
         titleUpdatedAt: titleObservedAt,
         lastOutputAt: state.lastOutputAt ?? null,
+        kimiWelcomeBannerSeen: false,
         tailBuffer: [],
         tailTranscriptBuffer: [],
         tailTranscriptChars: 0,
@@ -31838,7 +31886,13 @@ export class OrcaRuntimeService {
           foregroundPollInFlight = true
           startedForegroundPoll = true
           const fg = await this.ptyController.getForegroundProcess(leaf.ptyId)
-          if (fg && !isShellProcess(fg)) {
+          const leafPty = this.ptysById.get(leaf.ptyId)
+          // Why: Kimi process quiet before "Welcome to Kimi" is not composer-ready;
+          // after the banner has been seen once, quiet is a normal later-turn idle.
+          const kimiOk =
+            !isExpectedAgentProcess(fg, 'kimi') ||
+            kimiAllowsQuietIdleFallback(leafPty, leafWaitText)
+          if (fg && !isShellProcess(fg) && kimiOk) {
             const quietMs = leaf.lastOutputAt ? Date.now() - leaf.lastOutputAt : 0
             if (quietMs >= TUI_IDLE_QUIESCENCE_MS) {
               if (waiter.pollInterval) {
@@ -31904,7 +31958,10 @@ export class OrcaRuntimeService {
           foregroundPollInFlight = true
           startedForegroundPoll = true
           const fg = await this.ptyController.getForegroundProcess(pty.ptyId)
-          if (fg && !isShellProcess(fg)) {
+          // Why: require welcome once, then allow quiet for later turns (#10336/#10369).
+          const kimiOk =
+            !isExpectedAgentProcess(fg, 'kimi') || kimiAllowsQuietIdleFallback(pty, ptyWaitText)
+          if (fg && !isShellProcess(fg) && kimiOk) {
             const quietMs = pty.lastOutputAt ? Date.now() - pty.lastOutputAt : 0
             if (quietMs >= TUI_IDLE_QUIESCENCE_MS) {
               if (waiter.pollInterval) {
@@ -36761,12 +36818,38 @@ function findDismissedStartupModalIndex(normalized: string): number | null {
 }
 
 function findKnownReadyPromptIndex(normalized: string): number | null {
+  // Why: do not include Kimi's welcome banner here — `isKnownReadyPromptPreview`
+  // satisfies every later `tui-idle` wait, and a sticky banner in the tail would
+  // resolve while Kimi is still generating. Kimi readiness is process-quiet
+  // gated on `kimiWelcomeBannerSeen` instead (#10369 CodeRabbit).
   const indexes = [
     findCodexReadyPromptIndex(normalized),
     findAntigravityReadyPromptIndex(normalized),
     findCursorReadyPromptIndex(normalized)
   ].filter((index): index is number => index !== null)
   return indexes.length > 0 ? Math.max(...indexes) : null
+}
+
+const KIMI_WELCOME_BANNER_PREVIEW = 'welcome to kimi'
+
+function noteKimiWelcomeBannerSeen(
+  pty: RuntimePtyWorktreeRecord | null | undefined,
+  waitText: string
+): void {
+  if (!pty || pty.kimiWelcomeBannerSeen) {
+    return
+  }
+  if (waitText.toLowerCase().includes(KIMI_WELCOME_BANNER_PREVIEW)) {
+    pty.kimiWelcomeBannerSeen = true
+  }
+}
+
+function kimiAllowsQuietIdleFallback(
+  pty: RuntimePtyWorktreeRecord | null | undefined,
+  waitText: string
+): boolean {
+  noteKimiWelcomeBannerSeen(pty, waitText)
+  return Boolean(pty?.kimiWelcomeBannerSeen)
 }
 
 // Why: match the banner's last occurrence to skip the trust dialog's own "Cursor Agent" text; "→" is cursor-agent's persistent input prompt.

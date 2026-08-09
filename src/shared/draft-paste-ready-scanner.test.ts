@@ -135,4 +135,33 @@ describe('createDraftPasteReadyScanner', () => {
       })
     })
   })
+
+  describe('kimi-welcome-banner (#10336)', () => {
+    it('is ready only after the Welcome to Kimi banner text appears', () => {
+      const scanner = createDraftPasteReadyScanner('kimi-welcome-banner')
+      expect(scanner.observe('starting kimi...\n')).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+      expect(scanner.observe('  Welcome to Kimi Code!\n')).toEqual({
+        ready: true,
+        armQuietTimer: false
+      })
+    })
+
+    it('does not arm the quiet window before or after the banner', () => {
+      const scanner = createDraftPasteReadyScanner('kimi-welcome-banner')
+      expect(scanner.observe(DECSET_BRACKETED_PASTE)).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+      expect(scanner.observe('Welcome to Kimi')).toEqual({ ready: true, armQuietTimer: false })
+    })
+
+    it('detects the banner split across chunks', () => {
+      const scanner = createDraftPasteReadyScanner('kimi-welcome-banner')
+      expect(scanner.observe('Welcome to Ki')).toEqual({ ready: false, armQuietTimer: false })
+      expect(scanner.observe('mi Code!')).toEqual({ ready: true, armQuietTimer: false })
+    })
+  })
 })
