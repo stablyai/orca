@@ -924,13 +924,28 @@ export function useTerminalPaneLifecycle({
               sendInput: (data) => pane.terminal.input(data)
             })
           : null
-        // Why: Ctrl+C, paste and xterm's own key handling all reach the PTY without a bypassed keydown; any of them makes mirrored field text stale.
+        // Why: Ctrl+C, paste, xterm's key handling, and PTY output writes (prompts/responses) all make mirrored field text stale.
         const iosTextEditMirrorResync = iosTextEditMirror
-          ? pane.terminal.onData(() => {
-              if (!iosTextEditMirror.isMirroring()) {
-                iosTextEditMirror.reset()
+          ? (() => {
+              const onDataSub = pane.terminal.onData(() => {
+                if (!iosTextEditMirror.isMirroring()) {
+                  iosTextEditMirror.reset()
+                }
+              })
+              const originalWrite = pane.terminal.write.bind(pane.terminal)
+              pane.terminal.write = (...args: Parameters<typeof pane.terminal.write>) => {
+                if (!iosTextEditMirror.isMirroring()) {
+                  iosTextEditMirror.reset()
+                }
+                return originalWrite(...args)
               }
-            })
+              return {
+                dispose: () => {
+                  onDataSub.dispose()
+                  pane.terminal.write = originalWrite
+                }
+              }
+            })()
           : null
         imeCompositionDisposablesRef.current.set(pane.id, {
           dispose: () => {

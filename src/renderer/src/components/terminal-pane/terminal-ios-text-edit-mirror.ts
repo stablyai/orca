@@ -11,8 +11,13 @@ import type { IDisposable } from '@xterm/xterm'
 
 const TERMINAL_DEL_BYTE = '\x7f'
 
+/**
+ * Represents a text edit step computed by diffing the field against sent text.
+ */
 export type TerminalIosTextEditStep = {
+  /** The number of code points to erase from the PTY. */
   readonly eraseCount: number
+  /** The text to append to the PTY after erasing. */
   readonly appendText: string
 }
 
@@ -43,10 +48,16 @@ export function computeTerminalIosTextEditStep(
   }
 }
 
+/**
+ * Builds the raw payload string (DEL bytes + appendText) for a text edit step.
+ */
 export function buildTerminalIosTextEditPayload(step: TerminalIosTextEditStep): string {
   return TERMINAL_DEL_BYTE.repeat(step.eraseCount) + step.appendText
 }
 
+/**
+ * Controller for the terminal iOS text edit mirror.
+ */
 export type TerminalIosTextEditMirror = IDisposable & {
   /**
    * Drops mirrored state once anything else writes to the PTY, so the next edit
@@ -74,6 +85,12 @@ function asHelperTextarea(target: EventTarget | null): HTMLTextAreaElement | nul
   return target.classList.contains('xterm-helper-textarea') ? target : null
 }
 
+/**
+ * Installs an edit mirror on the helper textarea inside the terminal element.
+ *
+ * Captures input events on iOS/iPadOS WebKit to diff text already sent against the field's
+ * current value, allowing hardware-keyboard Hangul input to reach the PTY.
+ */
 export function installTerminalIosTextEditMirror(args: {
   terminalElement: HTMLElement | null | undefined
   sendInput: (data: string) => void
@@ -99,13 +116,17 @@ export function installTerminalIosTextEditMirror(args: {
   // IMEs) do run a composition session. xterm's CompositionHelper already
   // handles those correctly, and it commits by reading the field itself — so
   // the mirror must stand aside for the whole session or the text is sent
-  // twice. Only the session end clears `sentText`; the field belongs to xterm.
+  // twice. Only after the session end clears `sentText`; the field belongs to xterm.
+  // We defer clearing `composing` via queueMicrotask so xterm can complete its
+  // deferred composition commit before the mirror resumes.
   const beginComposition = (): void => {
     composing = true
   }
   const endComposition = (): void => {
-    composing = false
-    sentText = ''
+    queueMicrotask(() => {
+      composing = false
+      sentText = ''
+    })
   }
 
   const mirrorTextEdit = (event: Event): void => {

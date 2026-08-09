@@ -16,6 +16,10 @@ export function isIosWebPlatform(userAgent: string, maxTouchPoints: number): boo
   return userAgent.includes('Mac') && maxTouchPoints > 1
 }
 
+/**
+ * Returns true if the current environment is an iOS or iPadOS web client browser.
+ * Safe to invoke in SSR or non-DOM environments where navigator is undefined.
+ */
 export function isCurrentPlatformIosWeb(): boolean {
   if (typeof navigator === 'undefined') {
     return false

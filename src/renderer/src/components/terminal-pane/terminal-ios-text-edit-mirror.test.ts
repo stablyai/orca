@@ -200,11 +200,12 @@ describe('installTerminalIosTextEditMirror', () => {
     expect(reachedTextareaListener).toBe(true)
   })
 
-  it('resumes mirroring after the composition session ends', () => {
+  it('resumes mirroring after the composition session ends', async () => {
     const { textarea, sent } = openMirror()
     textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
     typeIntoField(textarea, 'にほん')
     textarea.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
+    await Promise.resolve()
     // Why: xterm already sent the composed text, so the next diff must start empty.
     typeIntoField(textarea, 'にほんㅎ')
     expect(sent).toEqual(['にほんㅎ'])
