@@ -17,21 +17,22 @@ function wholeLineDecoration(
 export function buildGitGutterDecorations(
   hunks: readonly GitGutterHunk[]
 ): editor.IModelDeltaDecoration[] {
-  return hunks.map((hunk) => {
+  return hunks.flatMap((hunk) => {
     if (hunk.kind === 'deleted') {
       // Why: the wedge sits between two lines, so it rides the bottom edge of the line above —
       // except at the top of the file, where there is no line above to hang it on.
-      const className =
-        hunk.afterLine === 0
-          ? `${BASE_CLASS} ${BASE_CLASS}-deleted ${BASE_CLASS}-deleted-top`
-          : `${BASE_CLASS} ${BASE_CLASS}-deleted`
-      const line = Math.max(hunk.afterLine, 1)
-      return wholeLineDecoration(line, line, className)
+      const anchorsAboveFirstLine = hunk.afterLine <= 0
+      const className = anchorsAboveFirstLine
+        ? `${BASE_CLASS} ${BASE_CLASS}-deleted ${BASE_CLASS}-deleted-top`
+        : `${BASE_CLASS} ${BASE_CLASS}-deleted`
+      const line = anchorsAboveFirstLine ? 1 : hunk.afterLine
+      return [wholeLineDecoration(line, line, className)]
     }
-    return wholeLineDecoration(
-      hunk.startLine,
-      hunk.endLine,
-      `${BASE_CLASS} ${BASE_CLASS}-${hunk.kind}`
-    )
+    if (hunk.startLine < 1 || hunk.endLine < hunk.startLine) {
+      return []
+    }
+    return [
+      wholeLineDecoration(hunk.startLine, hunk.endLine, `${BASE_CLASS} ${BASE_CLASS}-${hunk.kind}`)
+    ]
   })
 }

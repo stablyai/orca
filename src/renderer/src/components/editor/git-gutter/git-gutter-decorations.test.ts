@@ -58,4 +58,26 @@ describe('buildGitGutterDecorations', () => {
     ])
     expect(decorations.map((d) => d.range.startLineNumber)).toEqual([1, 3, 7])
   })
+
+  it('anchors a negative deletion boundary above line 1 like afterLine 0', () => {
+    expect(buildGitGutterDecorations([{ kind: 'deleted', afterLine: -3 }])).toEqual(
+      buildGitGutterDecorations([{ kind: 'deleted', afterLine: 0 }])
+    )
+  })
+
+  it('drops hunks whose range is inverted', () => {
+    expect(buildGitGutterDecorations([{ kind: 'added', startLine: 5, endLine: 3 }])).toEqual([])
+  })
+
+  it('drops hunks with non-positive line numbers', () => {
+    expect(buildGitGutterDecorations([{ kind: 'modified', startLine: 0, endLine: 2 }])).toEqual([])
+  })
+
+  it('keeps valid hunks when dropping an invalid neighbour', () => {
+    const decorations = buildGitGutterDecorations([
+      { kind: 'added', startLine: 5, endLine: 3 },
+      { kind: 'added', startLine: 7, endLine: 8 }
+    ])
+    expect(decorations.map((d) => d.range.startLineNumber)).toEqual([7])
+  })
 })

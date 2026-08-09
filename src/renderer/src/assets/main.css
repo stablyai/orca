@@ -2169,9 +2169,9 @@ html.native-shell .app-layout {
   opacity: 0.92;
 }
 
-/* Why: git gutter marks share the lines-decorations lane with conflict markers, so they use the
-   same 4px-wide geometry. Colors come from the shared --git-decoration-* tokens, which are
-   already defined for both themes. */
+/* Why: thinner than the 4px conflict bar above — both can share this lane on a conflicted file,
+   and the conflict marker should win the eye. Colors come from the shared --git-decoration-*
+   tokens, already defined for both themes. */
 .monaco-editor .orca-git-gutter {
   width: 3px !important;
   margin-left: 3px;
