@@ -15000,7 +15000,21 @@
         "expired": "Link expired",
         "expires": "Link expires {{when}}",
         "ArtifactPublishButton": {
-          "a4a49da6af": "Share as artifact"
+          "a4a49da6af": "Share as artifact",
+          "capabilityUpdateFailed": "Could not update artifact sharing",
+          "confirmTitle": "Share as artifact",
+          "confirmDescription": "This publishes the current file at a link anyone with the URL can view.",
+          "accountTitle": "Orca account",
+          "accountDescription": "Sign in to create and manage this link.",
+          "signingIn": "Signing in…",
+          "signInAgain": "Sign in again",
+          "signIn": "Sign in",
+          "publishingTitle": "Public artifact links",
+          "publishingDescription": "Allow this device to publish HTML and Markdown files.",
+          "publishingWebDescription": "Enable this from the Orca desktop app on the host device.",
+          "publishingToggle": "Allow public artifact links",
+          "sharing": "Sharing…",
+          "sharePublicLink": "Share public link"
         },
         "artifact-publish-flow": {
           "9a078a0c65": "Artifact sharing is unavailable",
