@@ -31,6 +31,9 @@ export default function SpaceEditorDialog(): React.JSX.Element | null {
   const open = activeModal === 'space-editor'
   const spaceId = typeof modalData.spaceId === 'string' ? modalData.spaceId : null
   const editedSpace = spaceId ? (getSpaceById(spaces, spaceId) ?? null) : null
+  const editedSpaceId = editedSpace?.id ?? null
+  const editedSpaceName = editedSpace?.name ?? ''
+  const editedSpaceEmoji = editedSpace?.emoji ?? null
 
   const [draft, setDraft] = React.useState<SpaceDraft>(() =>
     editedSpace ? { name: editedSpace.name, emoji: editedSpace.emoji } : EMPTY_DRAFT
@@ -40,6 +43,14 @@ export default function SpaceEditorDialog(): React.JSX.Element | null {
   const inputRef = React.useRef<HTMLInputElement>(null)
   const mountedRef = React.useRef(true)
   const nameInputId = React.useId()
+
+  React.useEffect(() => {
+    if (!open) {
+      return
+    }
+    setDraft(editedSpaceId ? { name: editedSpaceName, emoji: editedSpaceEmoji } : EMPTY_DRAFT)
+    setSaveFailed(false)
+  }, [editedSpaceEmoji, editedSpaceId, editedSpaceName, open])
 
   const handleContentRef = React.useCallback((node: HTMLDivElement | null): void => {
     mountedRef.current = node !== null

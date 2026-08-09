@@ -131,4 +131,22 @@ describe('SpaceEditorDialog', () => {
       false
     )
   })
+
+  it('resets the draft and prior error each time it opens', async () => {
+    mocks.createSpace.mockResolvedValueOnce(false)
+    const user = userEvent.setup()
+    const view = render(<SpaceEditorDialog />)
+
+    await user.type(screen.getByLabelText('Name'), 'Stale draft')
+    await user.click(screen.getByRole('button', { name: 'Create Space' }))
+    expect(await screen.findByRole('alert')).toBeDefined()
+
+    mocks.state = { ...mocks.state, activeModal: undefined }
+    view.rerender(<SpaceEditorDialog />)
+    setModal('space-work')
+    view.rerender(<SpaceEditorDialog />)
+
+    await waitFor(() => expect(screen.getByLabelText<HTMLInputElement>('Name').value).toBe('Work'))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
 })
