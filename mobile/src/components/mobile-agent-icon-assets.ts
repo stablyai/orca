@@ -35,6 +35,8 @@ export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropT
   kimi: require('../../../src/shared/agent-icons/kimi.png'),
   'mistral-vibe': require('../../../src/shared/agent-icons/mistral-vibe.png'),
   'qwen-code': require('../../../src/shared/agent-icons/qwen-code.png'),
+  qodercli: require('../../../src/shared/agent-icons/qodercli.png'),
+  qoderclicn: require('../../../src/shared/agent-icons/qoderclicn.png'),
   rovo: require('../../../src/shared/agent-icons/rovo.png'),
   hermes: require('../../../src/shared/agent-icons/hermes.png'),
   devin: require('../../../src/shared/agent-icons/devin.png'),

@@ -35,6 +35,8 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'kimi',
   'mistral-vibe',
   'qwen-code',
+  'qodercli',
+  'qoderclicn',
   'rovo',
   'hermes',
   'devin',

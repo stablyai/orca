@@ -36,6 +36,8 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   kimi: 'Kimi',
   'mistral-vibe': 'Mistral Vibe',
   'qwen-code': 'Qwen Code',
+  qodercli: 'Qoder CLI',
+  qoderclicn: 'Qoder CLI CN',
   rovo: 'Rovo Dev',
   hermes: 'Hermes',
   openclaw: 'OpenClaw',

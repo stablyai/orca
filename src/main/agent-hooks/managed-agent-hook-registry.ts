@@ -14,6 +14,9 @@ import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { qoderCliHookService } from '../qodercli/hook-service'
+import { qoderCliCnHookService } from '../qoderclicn/hook-service'
+import { qwenCodeHookService } from '../qwen-code/hook-service'
 
 export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 export type ManagedAgentHookRemover = readonly [HookInstallAgent, () => AgentHookInstallStatus]
@@ -33,7 +36,10 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['copilot', () => copilotHookService.install()],
   ['hermes', () => hermesHookService.install()],
   ['devin', () => devinHookService.install()],
-  ['kimi', () => kimiHookService.install()]
+  ['kimi', () => kimiHookService.install()],
+  ['qwen-code', () => qwenCodeHookService.install()],
+  ['qodercli', () => qoderCliHookService.install()],
+  ['qoderclicn', () => qoderCliCnHookService.install()]
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
@@ -50,7 +56,10 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['copilot', () => copilotHookService.remove()],
   ['hermes', () => hermesHookService.remove()],
   ['devin', () => devinHookService.remove()],
-  ['kimi', () => kimiHookService.remove()]
+  ['kimi', () => kimiHookService.remove()],
+  ['qwen-code', () => qwenCodeHookService.remove()],
+  ['qodercli', () => qoderCliHookService.remove()],
+  ['qoderclicn', () => qoderCliCnHookService.remove()]
 ]
 
 export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusReader[] = [
@@ -67,5 +76,8 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['copilot', () => copilotHookService.getStatus()],
   ['hermes', () => hermesHookService.getStatus()],
   ['devin', () => devinHookService.getStatus()],
-  ['kimi', () => kimiHookService.getStatus()]
+  ['kimi', () => kimiHookService.getStatus()],
+  ['qwen-code', () => qwenCodeHookService.getStatus()],
+  ['qodercli', () => qoderCliHookService.getStatus()],
+  ['qoderclicn', () => qoderCliCnHookService.getStatus()]
 ]

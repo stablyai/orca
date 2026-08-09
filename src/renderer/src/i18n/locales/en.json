@@ -419,7 +419,9 @@
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
-          "mimo_code_label": "MiMo Code"
+          "mimo_code_label": "MiMo Code",
+          "21b68240dc": "Qoder CLI",
+          "d7712286cc": "Qoder CLI China"
         },
         "skill": {
           "cli": {

@@ -138,9 +138,10 @@ export class ClaudeHookService {
 
     // Why: report partial registration instead of a false installed state.
     const command = getManagedCommand(scriptPath)
+    const events = this.options.settings.events ?? CLAUDE_EVENTS
     const missing: string[] = []
     let presentCount = 0
-    for (const event of CLAUDE_EVENTS) {
+    for (const event of events) {
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
@@ -187,7 +188,8 @@ export class ClaudeHookService {
     let nextConfig = applyManagedHooks(
       config,
       command,
-      getManagedScriptFileName(this.options.settings)
+      getManagedScriptFileName(this.options.settings),
+      this.options.settings.events ?? CLAUDE_EVENTS
     )
     writeManagedScript(
       scriptPath,
@@ -246,7 +248,12 @@ export class ClaudeHookService {
 
       // Why: the POSIX wrapper is identical regardless of where the script lands; only the path differs.
       const command = getRemoteManagedCommand(remoteScriptPath)
-      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
+      const nextConfig = applyManagedHooks(
+        config,
+        command,
+        remoteScriptFileName,
+        this.options.settings.events ?? CLAUDE_EVENTS
+      )
 
       // Why: write scripts before settings to avoid settings pointing to missing scripts.
       // Why: SSH scripts always use POSIX .sh paths, regardless of the local OS.

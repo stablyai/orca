@@ -22,6 +22,9 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   kimi: '--yolo',
   'mistral-vibe': '--agent auto-approve',
   'qwen-code': '--approval-mode yolo',
+  // Why: Qoder CLI is Claude Code-derived; its bypass flag mirrors Claude's.
+  qodercli: '--dangerously-skip-permissions',
+  qoderclicn: '--dangerously-skip-permissions',
   rovo: '--yolo',
   hermes: '--yolo',
   copilot: '--yolo',

@@ -266,6 +266,19 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'qwen',
     promptInjectionMode: 'stdin-after-start'
   },
+  qodercli: {
+    detectCmd: 'qodercli',
+    launchCmd: 'qodercli',
+    expectedProcess: 'qodercli',
+    promptInjectionMode: 'stdin-after-start'
+  },
+  qoderclicn: {
+    // Why: the CN build installs as `qoderclicn` (binary under ~/.qoder-cn/bin).
+    detectCmd: 'qoderclicn',
+    launchCmd: 'qoderclicn',
+    expectedProcess: 'qoderclicn',
+    promptInjectionMode: 'stdin-after-start'
+  },
   rovo: {
     detectCmd: 'rovo',
     launchCmd: 'rovo',
