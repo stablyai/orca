@@ -40,7 +40,7 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('rejects blank external SSH file ownership', () => {
+  it('drops an open file with blank external SSH ownership, keeping the session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: 'wt',
@@ -60,7 +60,10 @@ describe('parseWorkspaceSession', () => {
       }
     })
 
-    expect(result.ok).toBe(false)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.openFilesByWorktree?.wt).toEqual([])
+    }
   })
 
   it('accepts a fully populated session with optional fields', () => {
@@ -194,7 +197,7 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('rejects a session where ptyId is a number (schema drift)', () => {
+  it('drops a tab where ptyId is a number (schema drift) without failing the session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: null,
@@ -215,9 +218,9 @@ describe('parseWorkspaceSession', () => {
       },
       terminalLayoutsByTabId: {}
     })
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.error).toContain('ptyId')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt).toEqual([])
     }
   })
 

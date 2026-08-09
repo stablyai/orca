@@ -12142,21 +12142,142 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(session.terminalTopologyRevisionByRepoId?.['repo-gone']).toBeUndefined()
   })
 
-  it('drops a corrupt host partition to defaults without failing the others', async () => {
+  it('resets only the corrupt required field of a host partition, not the partition', async () => {
+    const worktreeId = 'repo-1::/worktree'
     writeDataFile({
       schemaVersion: 1,
       workspaceSessionsByHostId: {
         'runtime:good': makeHostSession('good-repo'),
         // activeRepoId must be string|null; a number fails the zod parse.
-        'runtime:bad': { ...makeHostSession('x'), activeRepoId: 123 }
+        'runtime:bad': {
+          ...makeHostSession('x'),
+          activeRepoId: 123,
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'bad-host-tab', worktreeId })] }
+        }
       }
     })
 
     const store = await createStore()
 
     expect(store.getWorkspaceSession('runtime:good').activeRepoId).toBe('good-repo')
-    // Bad partition collapses to defaults rather than poisoning the map.
+    // The unsalvageable field falls back to its default; the partition's tabs survive.
     expect(store.getWorkspaceSession('runtime:bad').activeRepoId).toBeNull()
+    expect(
+      store.getWorkspaceSession('runtime:bad').tabsByWorktree[worktreeId]?.map((tab) => tab.id)
+    ).toEqual(['bad-host-tab'])
+  })
+
+  it('keeps every other worktree when the local session has a corrupt required field', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        // A projected/truncated write can leave a top-level field the wrong type;
+        // that must not cost every worktree's tabs the way a full reset did.
+        activeTabId: 42,
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'local-keep', worktreeId })]
+        }
+      }
+    })
+
+    const store = await createStore()
+
+    const session = store.getWorkspaceSession('local')
+    expect(session.activeTabId).toBeNull()
+    expect(session.tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual(['local-keep'])
+  })
+
+  type PersistedSessionsFile = {
+    workspaceSession?: { tabsByWorktree?: Record<string, { id: string }[]> }
+    workspaceSessionsByHostId?: Record<
+      string,
+      { tabsByWorktree?: Record<string, { id: string }[]> }
+    >
+  }
+
+  // Why: flush() writes whatever the state hash says is dirty, so it passes even
+  // when nothing scheduled a save — it cannot see the repair write at all. Loading
+  // once first canonicalizes the profile (a second load of a canonical file
+  // schedules nothing), so a later rewrite proves the salvage scheduled it.
+  async function loadAndAwaitScheduledSave(): Promise<void> {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      vi.advanceTimersByTime(10_000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+
+  async function canonicalize(fixture: Record<string, unknown>): Promise<PersistedSessionsFile> {
+    writeDataFile(fixture)
+    await loadAndAwaitScheduledSave()
+    const canonical = readFileSync(dataFile(), 'utf-8')
+    // Why: the save assertions below are only meaningful if a clean load schedules
+    // nothing. Prove that here rather than assume it — a future migration that
+    // dirtied every load would otherwise leave those tests silently vacuous.
+    await loadAndAwaitScheduledSave()
+    expect(readFileSync(dataFile(), 'utf-8')).toBe(canonical)
+    return JSON.parse(canonical) as PersistedSessionsFile
+  }
+
+  it('schedules a save for a salvaged local session instead of re-salvaging every launch', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    const profile = await canonicalize({
+      schemaVersion: 1,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'tab-keep', worktreeId })] }
+      }
+    })
+    const tabs = profile.workspaceSession?.tabsByWorktree?.[worktreeId]
+    expect(tabs).toBeDefined()
+    tabs!.push({ id: 'tab-corrupt' })
+    writeDataFile(profile)
+
+    await loadAndAwaitScheduledSave()
+
+    const persisted = readDataFile() as PersistedSessionsFile
+    expect(persisted.workspaceSession?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual([
+      'tab-keep'
+    ])
+  })
+
+  it('schedules a save for salvaged host partitions', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    const profile = await canonicalize({
+      schemaVersion: 1,
+      workspaceSessionsByHostId: {
+        'runtime:env-a': {
+          ...makeHostSession('runtime-repo'),
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'runtime-keep', worktreeId })] }
+        },
+        'ssh:target-b': {
+          ...makeHostSession('ssh-repo'),
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'ssh-keep', worktreeId })] }
+        }
+      }
+    })
+    const partitions = profile.workspaceSessionsByHostId
+    const runtimeTabs = partitions?.['runtime:env-a']?.tabsByWorktree?.[worktreeId]
+    const sshTabs = partitions?.['ssh:target-b']?.tabsByWorktree?.[worktreeId]
+    expect(runtimeTabs).toBeDefined()
+    expect(sshTabs).toBeDefined()
+    runtimeTabs!.push({ id: 'runtime-corrupt' })
+    sshTabs!.push({ id: 'ssh-corrupt' })
+    writeDataFile(profile)
+    await loadAndAwaitScheduledSave()
+
+    const persisted = (readDataFile() as PersistedSessionsFile).workspaceSessionsByHostId
+    expect(
+      persisted?.['runtime:env-a']?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)
+    ).toEqual(['runtime-keep'])
+    expect(persisted?.['ssh:target-b']?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual(
+      ['ssh-keep']
+    )
   })
 })
 
