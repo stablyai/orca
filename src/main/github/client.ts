@@ -21,7 +21,11 @@ import type {
   GitHubPRMergeMethod,
   GitHubPRMergeMethodSettings
 } from '../../shared/types'
-import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
+import type {
+  CreateHostedReviewInput,
+  CreateHostedReviewResult,
+  HostedReviewSibling
+} from '../../shared/hosted-review'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
@@ -2137,6 +2141,8 @@ export async function getWorkItemByOwnerRepo(
 }
 
 type PullRequestLookupData = {
+  /** Los otros PRs de la misma rama, tal como vinieron del mismo request. */
+  siblings?: RestPullRequest[]
   number: number
   title: string
   state: string
@@ -2186,6 +2192,10 @@ const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'SQUASH' 
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
+  // Why: the reused-branch guard compares against the caller's checked-out HEAD;
+  // a lookup for a branch nobody has checked out (tracked sibling) has no HEAD
+  // to compare, and its merged PR is the answer, not a stale leftover.
+  acceptMergedBranchPR?: boolean
   // Why: compare merged implicit PRs against the worktree HEAD, not main repo HEAD, without a worktree-scoped git call.
   currentHeadOid?: string | null
 }
@@ -2207,6 +2217,17 @@ function derivePullRequestMergeable(data: PullRequestLookupData): PRMergeableSta
     return 'CONFLICTING'
   }
   return mergeable ?? 'UNKNOWN'
+}
+
+/** A sibling only needs to identify itself, say where it goes, and whether it is still live. */
+function mapSiblingPR(pr: RestPullRequest): HostedReviewSibling {
+  return {
+    number: pr.number,
+    url: pr.html_url ?? pr.url ?? '',
+    ...(pr.title ? { title: pr.title } : {}),
+    ...(pr.base?.ref ? { baseRef: pr.base.ref } : {}),
+    state: mapPRState(pr.merged_at ? 'MERGED' : pr.state, pr.draft)
+  }
 }
 
 function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
@@ -2413,7 +2434,13 @@ async function hydrateBranchLookupWithExactPR(
     return null
   }
   try {
-    return (await getPRByNumber(ownerRepo, branchData.number, ghOptions)) ?? branchData
+    const exact = await getPRByNumber(ownerRepo, branchData.number, ghOptions)
+    if (!exact) {
+      return branchData
+    }
+    // The exact-number detail knows nothing about the branch, so siblings come
+    // from the branch lookup and must be restored or they are lost here.
+    return branchData.siblings ? { ...exact, siblings: branchData.siblings } : exact
   } catch {
     return branchData
   }
@@ -2425,14 +2452,63 @@ async function getRestPRForBranch(
   branchName: string,
   ghOptions: ReturnType<typeof ghRepoExecOptions>
 ): Promise<PullRequestLookupData | null> {
+  const list = await getRestPRsForBranch(prRepo, headOwner, branchName, ghOptions)
+  const pr = pickPrimaryPRForBranch(list)
+  if (!pr) {
+    return null
+  }
+  const others = list.filter((candidate) => candidate.number !== pr.number)
+  return {
+    ...mapRestPullRequest(pr),
+    ...(others.length > 0 ? { siblings: others } : {})
+  }
+}
+
+/**
+ * Every PR opened from a branch.
+ *
+ * A branch can feed more than one PR at a time — the same work aimed at the
+ * repo's base, at stage, and at a release — so requesting a single one was not
+ * a simplification: it hid the live PR behind a newer closed one.
+ *
+ * The cap is high because a long-lived branch accumulates closed PRs, but
+ * bounded: without it, a branch with hundreds of retries would paginate
+ * without control.
+ */
+const MAX_BRANCH_PRS = 30
+
+async function getRestPRsForBranch(
+  prRepo: GitHubApiRepository,
+  headOwner: string,
+  branchName: string,
+  ghOptions: ReturnType<typeof ghRepoExecOptions>
+): Promise<RestPullRequest[]> {
   const head = encodeURIComponent(`${headOwner}:${branchName}`)
   const { stdout } = await ghExecFileAsync(
-    ['api', `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=all&per_page=1`],
+    [
+      'api',
+      `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=all&per_page=${MAX_BRANCH_PRS}`
+    ],
     { ...ghOptions, ...githubHostExecOptions(prRepo) }
   )
-  const list = JSON.parse(stdout) as RestPullRequest[]
-  const pr = list[0]
-  return pr ? mapRestPullRequest(pr) : null
+  return JSON.parse(stdout) as RestPullRequest[]
+}
+
+/**
+ * Which of a branch's PRs represents that branch.
+ *
+ * GitHub returns them by descending number, so keeping the first one picks the
+ * newest even when it is closed. What the user looks at is what can still act:
+ * open wins, then merged, and only with nothing live the most recent.
+ *
+ * Picking the merged one does not make it visible by itself:
+ * `hideMergedImplicitPR` later decides whether an implicit lookup may show it.
+ * This only chooses which of the branch's PRs represents it.
+ */
+function pickPrimaryPRForBranch(list: readonly RestPullRequest[]): RestPullRequest | undefined {
+  return (
+    list.find((pr) => pr.state === 'open') ?? list.find((pr) => Boolean(pr.merged_at)) ?? list[0]
+  )
 }
 
 async function getFallbackPRListForBranch(
@@ -3079,6 +3155,9 @@ export async function getPRForBranchOutcome(
       candidate: PullRequestLookupData | null,
       candidateRepo: OwnerRepo | null
     ) => {
+      if (options.acceptMergedBranchPR === true) {
+        return false
+      }
       if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
         return false
       }
@@ -3257,6 +3336,7 @@ export async function getPRForBranchOutcome(
         ...(headDivergedFromMergedPRAtOid ? { headDivergedFromMergedPRAtOid } : {}),
         ...(data.baseRefName ? { baseRefName: data.baseRefName } : {}),
         ...(data.headRefName ? { headRefName: data.headRefName } : {}),
+        ...(data.siblings?.length ? { siblings: data.siblings.map(mapSiblingPR) } : {}),
         prRepo: dataRepo ?? undefined,
         headRepo: dataHeadRepo ?? undefined,
         conflictSummary

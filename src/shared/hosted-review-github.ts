@@ -101,6 +101,12 @@ export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
     ...(pr.confirmedContainedHeadOid
       ? { confirmedContainedHeadOid: pr.confirmedContainedHeadOid }
       : {}),
-    ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {})
+    ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {}),
+    // The destination is what tells two reviews off the same branch apart;
+    // without this the one row Orca actually polls was the only one missing it.
+    ...(pr.baseRefName ? { baseRefName: pr.baseRefName } : {}),
+    // Siblings come from the same lookup as the review. This mapper is the
+    // only bridge to the renderer, so not copying them here dropped them whole.
+    ...(pr.siblings?.length ? { siblings: pr.siblings } : {})
   }
 }

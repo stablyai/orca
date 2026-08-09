@@ -17,6 +17,7 @@ import { hasWorktreeCardDetails, WorktreeCardMetaBadges } from './WorktreeCardMe
 import { LinearStateBadge } from './WorktreeCardMetadataStatusBadges'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import { getReviewLabel } from './worktree-review-helpers'
+import { getCardReviewList } from './worktree-card-attached-reviews'
 import type {
   WorktreeCardIssueDisplay,
   WorktreeCardJiraIssueDisplay,
@@ -54,6 +55,8 @@ export function WorktreeCardDetailsHover({
   linearIssue,
   jiraIssue,
   review,
+  attachedReviews,
+  trackedBranchReviews,
   comment,
   automationProvenance,
   cliProvenance,
@@ -157,6 +160,11 @@ export function WorktreeCardDetailsHover({
     )
   }, [copyLinkedWorkItemLink, review])
 
+  const reviewList = React.useMemo(
+    () => getCardReviewList(attachedReviews, review, trackedBranchReviews),
+    [attachedReviews, review, trackedBranchReviews]
+  )
+
   const showIdentityHeader = Boolean(branchName || workspaceTitle)
 
   if (
@@ -166,6 +174,8 @@ export function WorktreeCardDetailsHover({
       linearIssue,
       jiraIssue,
       review,
+      attachedReviews,
+      trackedBranchReviews,
       comment,
       automationProvenance,
       cliProvenance
@@ -303,6 +313,7 @@ export function WorktreeCardDetailsHover({
 
           <WorktreeCardReviewDetailSection
             review={review}
+            reviewList={reviewList}
             reviewMenuOpen={reviewMenuOpen}
             onReviewMenuOpenChange={handleReviewMenuOpenChange}
             onOpenReviewInOrca={onOpenReviewInOrca}

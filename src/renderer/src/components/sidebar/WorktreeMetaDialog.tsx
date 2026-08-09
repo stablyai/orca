@@ -21,6 +21,7 @@ import {
 import { useWorktreeIssueLink } from './use-worktree-issue-link'
 import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
 import { WorktreeIssueLinkField } from './WorktreeIssueLinkField'
+import { WorktreeTrackedBranchesField } from './WorktreeTrackedBranchesField'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -89,6 +90,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const [issueInput, setIssueInput] = useState('')
   const [issueProvider, setIssueProvider] = useState<IssueLinkProvider>('github')
   const [prInput, setPrInput] = useState('')
+  const [trackedBranchesInput, setTrackedBranchesInput] = useState('')
   const [commentInput, setCommentInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -110,11 +112,13 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const prevIsOpenRef = useRef(false)
   const displayNameInputRef = useRef<HTMLInputElement>(null)
   const mountedRef = useMountedRef()
+  const currentTrackedBranches = (worktree?.trackedBranches ?? []).join(', ')
   if (isOpen && !prevIsOpenRef.current) {
     setDisplayNameInput(currentDisplayName)
     setIssueInput(currentIssue)
     setIssueProvider(currentProvider)
     setPrInput(currentPR)
+    setTrackedBranchesInput(currentTrackedBranches)
     setCommentInput(currentComment)
     // Why: the baseline is frozen with the seed instead of tracking the store.
     // A background `orca worktree set --linear-issue` while the dialog is open
@@ -125,6 +129,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
       comment: currentComment,
       issueInput: currentIssue,
       issueProvider: currentProvider,
+      trackedBranches: currentTrackedBranches,
       linkedLinearIssueOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null
     })
     setSaveError(null)
@@ -133,8 +138,15 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   prevIsOpenRef.current = isOpen
 
   const draft = useMemo<WorktreeMetaDraft>(
-    () => ({ displayNameInput, issueInput, issueProvider, prInput, commentInput }),
-    [displayNameInput, issueInput, issueProvider, prInput, commentInput]
+    () => ({
+      displayNameInput,
+      issueInput,
+      issueProvider,
+      prInput,
+      trackedBranchesInput,
+      commentInput
+    }),
+    [displayNameInput, issueInput, issueProvider, prInput, trackedBranchesInput, commentInput]
   )
 
   // Why: a URL names its provider unambiguously. A bare key does not — Linear
@@ -373,6 +385,12 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
               )}
             </p>
           </div>
+
+          <WorktreeTrackedBranchesField
+            value={trackedBranchesInput}
+            onValueChange={setTrackedBranchesInput}
+            onKeyDown={handleIssueKeyDown}
+          />
 
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-muted-foreground">

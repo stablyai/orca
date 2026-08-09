@@ -49,6 +49,26 @@ describe('hosted review RPC methods', () => {
     })
   })
 
+  it('carries the guard-exempt merged-branch flag through to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getHostedReviewForBranch: vi.fn().mockResolvedValue(null)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('hostedReview.forBranch', {
+        repo: '/repo',
+        branch: 'task-fix-stage',
+        acceptMergedBranchReview: true
+      })
+    )
+
+    expect(runtime.getHostedReviewForBranch).toHaveBeenCalledWith(
+      expect.objectContaining({ acceptMergedBranchReview: true })
+    )
+  })
+
   it('carries a selected-worktree claim through to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

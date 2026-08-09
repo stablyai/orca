@@ -1,4 +1,5 @@
 /* eslint-disable max-lines */
+import type { HostedReviewSibling } from './hosted-review'
 import type { ExecutionHostId } from './execution-host'
 import type {
   RemovedSshTargetTombstone,
@@ -355,6 +356,34 @@ export type FolderWorkspace = {
   updatedAt: number
 }
 
+/**
+ * A review explicitly attached to a workspace, on top of the one auto-detected
+ * from the branch.
+ *
+ * Why a separate list instead of turning `linkedPR` and friends into arrays:
+ * those scalars are read in ~57 files across renderer, main and CLI, and each
+ * provider has its own. Keeping them untouched means auto-detection, the card's
+ * primary review and every existing consumer behave exactly as before, and only
+ * code that wants the extras opts in.
+ *
+ * The common case for more than one is a single branch that ships to several
+ * destinations (a release branch plus trunk) or a feature split across repos.
+ */
+export type AttachedReview = {
+  provider: 'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'gitea'
+  number: number
+  url: string
+  /** Destination branch, when known. It is what distinguishes reviews that
+   *  share a head branch, so it is worth storing rather than re-fetching. */
+  baseRef?: string
+  title?: string
+  /** Whether the review is still live. Attached reviews are not polled, so this
+   *  is whatever the caller knew when it attached them — without it a merged
+   *  review and an open one render identically, which is the opposite of what
+   *  a stack of destinations is for. */
+  state?: 'open' | 'merged' | 'closed' | 'draft'
+}
+
 export type WorkspaceLinkedItem = {
   provider: 'github' | 'gitlab' | 'linear' | 'jira'
   type: 'issue' | 'pr' | 'mr'
@@ -514,6 +543,11 @@ export type Worktree = {
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
+  /** Reviews attached on top of the branch-detected one. */
+  attachedReviews?: AttachedReview[]
+  /** Sibling head branches whose reviews the card also surfaces (e.g. the
+   *  `-v1.15.0` / `-stage` cherry-pick branches of this worktree's change). */
+  trackedBranches?: string[]
   linkedTaskSourceContext?: TaskSourceContext | null
   isArchived: boolean
   isUnread: boolean
@@ -639,6 +673,10 @@ export type WorktreeMeta = {
   /** Optional for backward compatibility — see Worktree.linkedGiteaPR. */
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
+  /** Reviews attached on top of the branch-detected one. */
+  attachedReviews?: AttachedReview[]
+  /** See Worktree.trackedBranches. */
+  trackedBranches?: string[]
   linkedTaskSourceContext?: TaskSourceContext | null
   isArchived: boolean
   isUnread: boolean
@@ -1280,6 +1318,9 @@ export type PRInfo = {
   prRepo?: GitHubRepositoryIdentity
   headRepo?: GitHubRepositoryIdentity
   conflictSummary?: PRConflictSummary
+  /** The other PRs the same branch feeds. Only the branch-scoped REST lookup
+   *  fills it; an exact-number lookup knows nothing about siblings. */
+  siblings?: HostedReviewSibling[]
 }
 
 /**
@@ -2263,6 +2304,8 @@ export type CreateWorktreeArgs = {
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
+  /** Reviews attached on top of the branch-detected one. */
+  attachedReviews?: AttachedReview[]
   linkedTaskSourceContext?: TaskSourceContext | null
   pushTarget?: GitPushTarget
   workspaceStatus?: WorkspaceStatus

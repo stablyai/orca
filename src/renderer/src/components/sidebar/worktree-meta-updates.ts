@@ -6,6 +6,7 @@ import {
 import { parseIssueLinkInput, type IssueLinkProvider } from '../../../../shared/issue-link-input'
 import type { WorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
 import type { WorkspaceLinkedItem, WorktreeMeta } from '../../../../shared/types'
+import { normalizeTrackedBranches } from '../../../../shared/tracked-branches'
 
 export type WorktreeMetaSavedPayload = {
   worktreeId: string
@@ -19,6 +20,9 @@ export type WorktreeMetaDraft = {
   issueProvider: IssueLinkProvider
   prInput: string
   commentInput: string
+  /** Comma-separated sibling branches to track. Absent when the opening surface
+   *  does not expose the field, which must not read as "clear the list". */
+  trackedBranchesInput?: string
 }
 
 /** The persisted state the dialog was seeded from. Captured once when the
@@ -29,6 +33,8 @@ export type WorktreeMetaSnapshot = {
   comment: string
   issueInput: string
   issueProvider: IssueLinkProvider
+  /** Canonical `join(', ')` of the persisted tracked branches at open time. */
+  trackedBranches?: string
   /** Stands in for an org key the typed value omits, so re-saving a stored bare
    *  identifier does not read as a change. */
   linkedLinearIssueOrganizationUrlKey?: string | null
@@ -259,6 +265,23 @@ export function buildWorktreeMetaUpdates(
     ...buildCommentUpdate(draft, current),
     ...buildDisplayNameUpdate(draft, current),
     ...buildIssueLinkUpdates(draft, current, live),
-    ...buildPrLinkUpdate(draft)
+    ...buildPrLinkUpdate(draft),
+    ...buildTrackedBranchesUpdate(draft, current)
   }
+}
+
+function buildTrackedBranchesUpdate(
+  draft: WorktreeMetaDraft,
+  current: WorktreeMetaSnapshot
+): Partial<WorktreeMeta> {
+  if (draft.trackedBranchesInput === undefined) {
+    return {}
+  }
+  const next = normalizeTrackedBranches(draft.trackedBranchesInput.split(','))
+  // Why: compare canonical forms, so re-saving an untouched field (or one with
+  // only whitespace/dedupe noise) is not a metadata write.
+  if (next.join(', ') === (current.trackedBranches ?? '')) {
+    return {}
+  }
+  return { trackedBranches: next }
 }

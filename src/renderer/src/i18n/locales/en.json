@@ -4648,7 +4648,8 @@
         },
         "WorktreeCardReviewDetailSection": {
           "copyLink": "Copy link",
-          "reviewHeader": "{{value0}} #{{value1}}"
+          "reviewHeader": "{{value0}} #{{value1}}",
+          "reviewListHeader": "{{value0}} reviews"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "Workspace metadata",
@@ -4808,7 +4809,10 @@
           "382fd11a3e": "Edit Worktree Details",
           "2174f17011": "Save",
           "61d6f612cf": "Saving...",
-          "a0d191b7a7": "Edit issue links, pull request links, and notes for this workspace."
+          "a0d191b7a7": "Edit issue links, pull request links, and notes for this workspace.",
+          "trackedBranchesLabel": "Tracked Branches",
+          "trackedBranchesPlaceholder": "task/x-v1.15.0, task/x-stage",
+          "trackedBranchesHelp": "Comma-separated sibling branches whose pull requests also show on this card. Leave blank to track none."
         },
         "WorktreeOpenInMenu": {
           "localOnly": "Local only",

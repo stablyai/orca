@@ -6,6 +6,8 @@ const HostedReviewForBranch = z.object({
   repo: requiredString('Missing repo selector'),
   branch: requiredString('Missing branch'),
   currentHeadOid: z.string().nullable().optional(),
+  // Tracked sibling branches: merged reviews stay visible (no reused-branch guard).
+  acceptMergedBranchReview: z.boolean().optional(),
   // Only the caller's selected worktree; the host caps how many earn the fast tier.
   active: z.boolean().optional(),
   linkedGitHubPR: z.number().int().positive().nullable().optional(),
@@ -56,6 +58,7 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
         repoSelector: params.repo,
         branch: params.branch,
         currentHeadOid: params.currentHeadOid ?? null,
+        ...(params.acceptMergedBranchReview === true ? { acceptMergedBranchReview: true } : {}),
         ...(params.active === true ? { active: true } : {}),
         linkedGitHubPR: params.linkedGitHubPR ?? null,
         ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),

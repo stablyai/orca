@@ -1,7 +1,8 @@
 /* eslint-disable max-lines -- Why: the worktree card centralizes sidebar card state (selection, drag, agent status, git info, context menu) in one cohesive component so sidebar rendering doesn't fan out across files. */
 import React, { useEffect, useCallback, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
+import { getHostedReviewCacheKey, withAcceptedMergedBranchReview } from '@/store/slices/hosted-review'
 import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { Badge } from '@/components/ui/badge'
@@ -55,6 +56,7 @@ import {
   isCachedMergedBranchPRCurrentForWorktree
 } from './worktree-card-pr-display'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { getTrackedBranchReviewRows } from './worktree-card-tracked-branch-reviews'
 import {
   coerceWorktreeCardVisibleTitle,
   getWorktreeCardTitleDisplay
@@ -658,6 +660,42 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
 
+  // Why: mirror the primary review's visibility — always available to the new
+  // style's hover, gated by the pr card property in the legacy style.
+  const trackedBranchNames = React.useMemo(
+    () =>
+      newCardStyle || showPR
+        ? (worktree.trackedBranches ?? []).filter((name) => name !== branch)
+        : [],
+    [newCardStyle, showPR, worktree.trackedBranches, branch]
+  )
+  const trackedBranchCacheKeys = React.useMemo(
+    () =>
+      repo && !isFolder
+        ? trackedBranchNames.map((name) =>
+            withAcceptedMergedBranchReview(
+              getHostedReviewCacheKey(
+                repo.path,
+                name,
+                settings,
+                repo.id,
+                repo.connectionId,
+                repo.executionHostId,
+                true
+              )
+            )
+          )
+        : [],
+    [repo, isFolder, trackedBranchNames, settings]
+  )
+  const trackedBranchEntries = useAppStore(
+    useShallow((s) => trackedBranchCacheKeys.map((key) => s.hostedReviewCache[key]?.data ?? null))
+  )
+  const trackedBranchReviewRows = React.useMemo(
+    () => getTrackedBranchReviewRows(trackedBranchNames, branch, trackedBranchEntries),
+    [trackedBranchNames, branch, trackedBranchEntries]
+  )
+
   // Why: card surfaces are presentational, so skip hosted-review fetches when hidden to save rate-limit budget.
   useEffect(() => {
     // Why: paired web must not fan out per-card decoration RPCs during startup; host session/tab parity is critical.
@@ -757,6 +795,40 @@ const WorktreeCard = React.memo(function WorktreeCard({
     fetchHostedReviewForBranch,
     branch,
     hostedReviewCacheKey
+  ])
+
+  // Why: tracked sibling branches are only visible inside the details hover, so
+  // their lookups run on open instead of joining the always-on poll — N extra
+  // branches cost nothing until someone actually looks. No `active` hint: the
+  // active-branch fast lane is a global quota the worktree's own branch uses.
+  useEffect(() => {
+    if (
+      !hoverDetailsOpen ||
+      isWebClient() ||
+      !repo ||
+      isFolder ||
+      worktree.isBare ||
+      trackedBranchNames.length === 0 ||
+      isMacAppDataPath(repo.path)
+    ) {
+      return
+    }
+    for (const name of trackedBranchNames) {
+      void fetchHostedReviewForBranch(repo.path, name, {
+        repoId: repo.id,
+        staleWhileRevalidate: true,
+        // Why: nobody has this branch checked out here — its merged review is
+        // the row's answer, not a reused-branch leftover to hide.
+        acceptMergedBranchReview: true
+      })
+    }
+  }, [
+    hoverDetailsOpen,
+    repo,
+    isFolder,
+    worktree.isBare,
+    trackedBranchNames,
+    fetchHostedReviewForBranch
   ])
 
   // Why: same as above for issues — hidden-surface polling only burns GitHub calls for invisible data.
@@ -1075,6 +1147,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const metaLinearIssue = showLinearIssue ? hoverLinearIssue : null
   const metaJiraIssue = showJiraIssue ? hoverJiraIssue : null
   const metaReview = showPR ? hoverReview : null
+  // Why: gated by the same card property as the review itself — attached
+  // reviews are more of the same thing, not a separate opt-in.
+  const metaAttachedReviews = showPR ? worktree.attachedReviews : undefined
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
   const metaComment = showComment ? hoverComment : null
@@ -1178,6 +1253,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     linearIssue: metaLinearIssue,
     jiraIssue: metaJiraIssue,
     review: newCardStyle ? null : metaReview,
+    attachedReviews: metaAttachedReviews,
+    trackedBranchReviews: trackedBranchReviewRows,
     comment: metaComment,
     automationProvenance: metaAutomationProvenance,
     cliProvenance: metaCliProvenance
@@ -1252,6 +1329,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       linearIssue: hoverLinearIssue,
       jiraIssue: hoverJiraIssue,
       review: hoverReview,
+      trackedBranchReviews: trackedBranchReviewRows,
       comment: hoverComment,
       automationProvenance: metaAutomationProvenance,
       cliProvenance: metaCliProvenance
@@ -1270,6 +1348,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
             linearIssue={metaLinearIssue}
             jiraIssue={metaJiraIssue}
             review={metaReview}
+            attachedReviews={metaAttachedReviews}
+            trackedBranchReviews={trackedBranchReviewRows}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
             cliProvenance={metaCliProvenance}
@@ -1327,6 +1407,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             linearIssue={metaLinearIssue}
             jiraIssue={metaJiraIssue}
             review={newCardStyle ? null : metaReview}
+            trackedBranchReviews={trackedBranchReviewRows}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
             cliProvenance={metaCliProvenance}
@@ -1342,6 +1423,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
         linearIssue={metaLinearIssue}
         jiraIssue={metaJiraIssue}
         review={metaReview}
+        attachedReviews={metaAttachedReviews}
+        trackedBranchReviews={trackedBranchReviewRows}
         comment={metaComment}
         automationProvenance={metaAutomationProvenance}
         cliProvenance={metaCliProvenance}
@@ -1827,6 +1910,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         linearIssue={hoverLinearIssue}
         jiraIssue={hoverJiraIssue}
         review={hoverReview}
+        trackedBranchReviews={trackedBranchReviewRows}
         comment={hoverComment}
         automationProvenance={metaAutomationProvenance}
         cliProvenance={metaCliProvenance}

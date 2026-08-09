@@ -91,6 +91,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: args.linkedGiteaPR ?? null,
       currentHeadOid: args.currentHeadOid ?? null,
+      ...(args.acceptMergedBranchReview === true ? { acceptMergedBranchReview: true } : {}),
       ...(args.active === true ? { active: true } : {}),
       ...(Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : {})
     })

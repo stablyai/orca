@@ -161,6 +161,19 @@ describe('hosted review branch cache (#11532)', () => {
     expect(lookup).toHaveBeenCalledTimes(2)
   })
 
+  it('separates guard-exempt lookups from the checked-out-branch lookup', async () => {
+    const lookup = vi.fn(async () => null)
+
+    await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+    await withHostedReviewBranchCache(
+      { ...identity, acceptMergedBranchReview: true },
+      { headOid: null },
+      lookup
+    )
+
+    expect(lookup).toHaveBeenCalledTimes(2)
+  })
+
   it('backs a failing branch off instead of re-asking every poll', async () => {
     const lookup = vi.fn(async () => {
       throw new Error('rate limited')

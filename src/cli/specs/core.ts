@@ -143,12 +143,18 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'display-name',
       'issue',
       'linear-issue',
+      'add-pr',
+      'clear-prs',
+      'track-branch',
+      'clear-branches',
       'comment',
       'workspace-status',
       'parent-worktree',
       'no-parent'
     ],
     notes: [
+      'Use --add-pr with one or more pull/merge request URLs (comma-separated) to attach reviews beyond the one auto-detected from the branch — a branch shipping to several destinations has more than one. Pass a JSON array like \'[{"url":"...","baseRef":"stage","title":"..."}]\' to record where each one is headed, which is what tells them apart on the card. Calls are additive; --clear-prs drops them, and combining both replaces the list.',
+      'Use --track-branch with one or more branch names (comma-separated) to make the card also surface the reviews of sibling branches of the same change (a release cherry-pick, a stage variant). Unlike --add-pr, a tracked branch keeps resolving to whatever PR currently ships from it. Calls are additive; --clear-branches drops them, and combining both replaces the list.',
       'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
       'Pass --linear-issue null to clear the Linear issue link.'
     ],

@@ -1,10 +1,12 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
+  AttachedReview,
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
   IssueInfo
 } from '../../../../shared/types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import type { CardReviewRow } from './worktree-card-attached-reviews'
 import type { WorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 
 export type WorktreeCardIssueDisplay =
@@ -36,6 +38,10 @@ export type WorktreeCardMetaBadgesProps = {
   linearIssue: WorktreeCardLinearIssueDisplay | null
   jiraIssue?: WorktreeCardJiraIssueDisplay | null
   review: WorktreeCardPrDisplay | null
+  /** Reviews attached by hand, beyond the one detected from the branch. */
+  attachedReviews?: readonly AttachedReview[]
+  /** Reviews resolved live from the worktree's tracked sibling branches. */
+  trackedBranchReviews?: readonly CardReviewRow[]
   comment: string | null
   automationProvenance?: AutomationWorkspaceProvenance | null
   cliProvenance?: CliWorkspaceProvenance | null

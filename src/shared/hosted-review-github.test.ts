@@ -134,4 +134,35 @@ describe('hostedReviewSummaryFromGitHubPRInfo', () => {
       headSha: 'abc123'
     })
   })
+
+  it('keeps siblings and destination when crossing PRInfo → HostedReviewInfo', () => {
+    // Why: this mapper is the only bridge to the renderer. It copied field by
+    // field and swallowed `siblings` and `baseRefName`, so the lookup carried
+    // them and the card never saw them. The test above uses toMatchObject,
+    // which by definition cannot catch a missing field — hence this one.
+    const review = hostedReviewInfoFromGitHubPRInfo({
+      ...pr,
+      baseRefName: 'stage',
+      siblings: [
+        {
+          number: 251,
+          url: 'https://github.com/acme/orca/pull/251',
+          baseRef: 'RELEASE/v1.14.0',
+          state: 'open'
+        }
+      ]
+    })
+
+    expect(review.baseRefName).toBe('stage')
+    expect(review.siblings).toEqual([
+      {
+        number: 251,
+        url: 'https://github.com/acme/orca/pull/251',
+        baseRef: 'RELEASE/v1.14.0',
+        state: 'open'
+      }
+    ])
+    // Sin hermanos la clave no se agrega: una review sola no es una lista de una.
+    expect(hostedReviewInfoFromGitHubPRInfo(pr).siblings).toBeUndefined()
+  })
 })

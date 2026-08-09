@@ -5,7 +5,8 @@ import {
   createHostedReviewSlice,
   getHostedReviewCacheKey,
   HostedReviewCreationEligibilityTimeoutError,
-  refreshHostedReviewCard
+  refreshHostedReviewCard,
+  withAcceptedMergedBranchReview
 } from './hosted-review'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 
@@ -111,6 +112,38 @@ describe('hosted review slice', () => {
       linkedAzureDevOpsPR: null,
       linkedGiteaPR: null
     })
+  })
+
+  it('keys guard-exempt tracked-branch lookups apart from the checked-out-branch entry', async () => {
+    mockApi.hostedReview.forBranch.mockResolvedValue(githubReview)
+    const store = makeStore()
+
+    await store.getState().fetchHostedReviewForBranch('/repo', 'task-fix-stage', {
+      repoId: 'repo-1',
+      acceptMergedBranchReview: true
+    })
+
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith(
+      expect.objectContaining({ acceptMergedBranchReview: true })
+    )
+    const baseKey = getHostedReviewCacheKey(
+      '/repo',
+      'task-fix-stage',
+      null,
+      'repo-1',
+      null,
+      undefined,
+      true
+    )
+    const trackedKey = withAcceptedMergedBranchReview(baseKey)
+    expect(store.getState().hostedReviewCache[trackedKey]?.data).toEqual(githubReview)
+    expect(store.getState().hostedReviewCache[baseKey]).toBeUndefined()
+
+    // A later guard-sensitive lookup of the same branch must run its own request.
+    await store.getState().fetchHostedReviewForBranch('/repo', 'task-fix-stage', {
+      repoId: 'repo-1'
+    })
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
   })
 
   it('records branch provenance separately from a GitHub fallback request hint', async () => {

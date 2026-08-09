@@ -75,5 +75,12 @@
     "text": "ghostty",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/sidebar/WorktreeCardReviewDetailSection.tsx",
+    "kind": "jsx-text",
+    "text": "&rarr;",
+    "dynamic": false,
+    "count": 1
   }
 ]

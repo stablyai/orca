@@ -27,6 +27,13 @@ export function getHostedReviewCacheKey(
   return `${scope}::${repoId ?? repoPath}::${branch}`
 }
 
+// Why: guard-exempt lookups (tracked sibling branches) answer differently for
+// the same branch, so sharing an entry with the checked-out-branch lookup would
+// let either surface clobber the other's answer.
+export function withAcceptedMergedBranchReview(cacheKey: string): string {
+  return `${cacheKey}::merged-ok`
+}
+
 function getHostedReviewCacheHostScope(
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
   connectionId?: string | null,

@@ -56,6 +56,9 @@ export type ForgeReviewForBranchInput = ForgeProviderRepositoryContext & {
   // GitHub-only: lets the GitHub provider keep merged-at-head PRs visible using
   // the inspected worktree HEAD. Ignored by other providers.
   githubCurrentHeadOid?: string | null
+  // A merged review is a valid terminal answer for this branch — the lookup is
+  // not about a checked-out branch, so the reused-branch guard does not apply.
+  acceptMergedBranchReview?: boolean
 }
 
 export type ForgeReviewByNumberInput = ForgeProviderRepositoryContext & {
@@ -172,6 +175,7 @@ const gitHubForgeProvider = {
       {
         ...executionArgs[0],
         ...(fallbackReviewNumber !== null ? { acceptMergedFallbackPR: true } : {}),
+        ...(input.acceptMergedBranchReview === true ? { acceptMergedBranchPR: true } : {}),
         currentHeadOid: input.githubCurrentHeadOid ?? null
       }
     )

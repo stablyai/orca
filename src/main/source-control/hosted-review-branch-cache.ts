@@ -84,6 +84,9 @@ export type HostedReviewBranchCacheIdentity = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  // Guard-exempt lookups answer differently for the same branch, so they must
+  // not share entries with a worktree's own checked-out-branch lookup.
+  acceptMergedBranchReview?: boolean
   localGitExecOptions?: unknown
 }
 
@@ -110,6 +113,7 @@ export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIden
     identity.linkedBitbucketPR ?? '',
     identity.linkedAzureDevOpsPR ?? '',
     identity.linkedGiteaPR ?? '',
+    identity.acceptMergedBranchReview === true ? 'merged-ok' : '',
     identity.localGitExecOptions ? JSON.stringify(identity.localGitExecOptions) : ''
   ].join(KEY_SEPARATOR)
 }

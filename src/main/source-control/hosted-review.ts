@@ -40,6 +40,8 @@ export async function getHostedReviewForBranch(
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
     currentHeadOid?: string | null
+    // Tracked sibling branches: a merged review is the answer, not a stale leftover.
+    acceptMergedBranchReview?: boolean
     /**
      * Set by surfaces that only ever render the selected worktree, which is the
      * one branch cheap enough to re-check per minute (#11532).
@@ -92,6 +94,7 @@ export async function getHostedReviewForBranch(
         branch: branchName,
         ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {}),
         githubCurrentHeadOid: headOid,
+        ...(input.acceptMergedBranchReview === true ? { acceptMergedBranchReview: true } : {}),
         ...reviewLinkForProvider(input, provider.id)
       })
     }

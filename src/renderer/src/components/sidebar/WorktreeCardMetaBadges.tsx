@@ -20,6 +20,8 @@ export function hasWorktreeCardDetails({
   linearIssue,
   jiraIssue,
   review,
+  attachedReviews,
+  trackedBranchReviews,
   comment,
   automationProvenance,
   cliProvenance
@@ -29,6 +31,8 @@ export function hasWorktreeCardDetails({
     linearIssue ||
     jiraIssue ||
     review ||
+    attachedReviews?.length ||
+    trackedBranchReviews?.length ||
     hasComment(comment) ||
     automationProvenance ||
     cliProvenance

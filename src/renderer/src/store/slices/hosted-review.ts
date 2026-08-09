@@ -13,13 +13,18 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import type { AppState } from '../types'
 import {
   getHostedReviewCacheKey,
+  withAcceptedMergedBranchReview,
   linkedReviewHintKey,
   type LinkedReviewHints
 } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 
-export { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
+export {
+  getHostedReviewCacheKey,
+  linkedReviewHintKey,
+  withAcceptedMergedBranchReview
+} from './hosted-review-cache-identity'
 
 type CacheEntry<T> = {
   data: T | null
@@ -32,6 +37,9 @@ type FetchOptions = {
   repoId?: string
   staleWhileRevalidate?: boolean
   currentHeadOid?: string | null
+  // Tracked sibling branches: merged reviews are valid answers, and the entry
+  // is keyed apart so it cannot clobber the checked-out-branch lookup.
+  acceptMergedBranchReview?: boolean
   /**
    * Pass from surfaces that only render the selected worktree. The host re-checks
    * that branch per minute and paces the O(N) card list far slower (#11532).
@@ -351,7 +359,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     const ownerSettings = settingsForHostedReviewRepoOwner(settings, repo)
     const target = getActiveRuntimeTarget(ownerSettings)
     const repoId = options?.repoId ?? repo?.id
-    const cacheKey = getHostedReviewCacheKey(
+    const baseCacheKey = getHostedReviewCacheKey(
       repoPath,
       branch,
       ownerSettings,
@@ -360,6 +368,10 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       repo?.executionHostId,
       repo !== undefined
     )
+    const cacheKey =
+      options?.acceptMergedBranchReview === true
+        ? withAcceptedMergedBranchReview(baseCacheKey)
+        : baseCacheKey
     const cached = get().hostedReviewCache[cacheKey]
     const hintKey = linkedReviewHintKey(options)
     const linkedRefetch = shouldRefetchForLinkedHint(cached, hintKey)
@@ -392,6 +404,9 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
             branch,
             ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
             currentHeadOid: options?.currentHeadOid ?? null,
+            ...(options?.acceptMergedBranchReview === true
+              ? { acceptMergedBranchReview: true }
+              : {}),
             ...(options?.active === true ? { active: true } : {}),
             linkedGitHubPR: options?.linkedGitHubPR ?? null,
             ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
