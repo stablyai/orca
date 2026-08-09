@@ -103,6 +103,7 @@ import {
   ensureBrowserPageViewport,
   getBrowserOverlaySlotViewport,
   parkBrowserPageViewport,
+  setBrowserPageViewportPresetSize,
   subscribeBrowserOverlaySlotViewport,
   syncBrowserPageChromeInset
 } from './browser-page-viewport'
@@ -2470,6 +2471,8 @@ function BrowserPagePane({
   const pageViewport = ensureBrowserPageViewport(browserTab.id, workspaceId)
   const containerRef = useRef<HTMLDivElement | null>(null)
   containerRef.current = pageViewport?.container ?? null
+  const scrollerRef = useRef<HTMLDivElement | null>(null)
+  scrollerRef.current = pageViewport?.scroller ?? null
   const chromeHeaderRef = useRef<HTMLDivElement | null>(null)
   const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -2547,6 +2550,15 @@ function BrowserPagePane({
   // Why: CDP viewport emulation doesn't survive renderer process swaps, so reapply the preset from this ref on every dom-ready.
   const viewportPresetIdRef = useRef(browserTab.viewportPresetId ?? null)
   viewportPresetIdRef.current = browserTab.viewportPresetId ?? null
+  // Sole size writer: covers menu picks, mount, session rehydrate, and web-session sync
+  // (which sets viewportPresetId without going through the toolbar menu).
+  useLayoutEffect(() => {
+    const preset = getBrowserViewportPreset(browserTab.viewportPresetId ?? null)
+    setBrowserPageViewportPresetSize(
+      browserTab.id,
+      preset ? { width: preset.width, height: preset.height } : null
+    )
+  }, [browserTab.id, browserTab.viewportPresetId])
   const trackNextLoadingEventRef = useRef(false)
   // Most-recent observed webview URL; URL sync checks it to avoid force-navigating to an intermediate redirect (which would loop the redirect chain).
   const lastKnownWebviewUrlRef = useRef<string | null>(null)
@@ -2630,11 +2642,12 @@ function BrowserPagePane({
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
       const webview = webviewRef.current
-      const container = containerRef.current
-      if (!webview || !container) {
+      if (!webview) {
         return null
       }
-      const rect = container.getBoundingClientRect()
+      // Why: capturePage() frames the webview, which under a viewport preset is larger
+      // than the pane — measuring the container here would distort the composite.
+      const rect = webview.getBoundingClientRect()
       if (rect.width <= 0 || rect.height <= 0) {
         return null
       }
@@ -2859,19 +2872,24 @@ function BrowserPagePane({
       return
     }
 
+    const bumpOverlayViewportVersion = (): void => {
+      setBrowserOverlayViewport((current) => ({ ...current, version: current.version + 1 }))
+    }
     const observedContainer = containerRef.current
     const resizeObserver =
       typeof ResizeObserver === 'undefined' || !observedContainer
         ? null
-        : new ResizeObserver(() => {
-            setBrowserOverlayViewport((current) => ({ ...current, version: current.version + 1 }))
-          })
+        : new ResizeObserver(bumpOverlayViewportVersion)
     if (resizeObserver && observedContainer) {
       resizeObserver.observe(observedContainer)
     }
+    // Why: panning a viewport preset moves the webview under container-pinned anchors.
+    const scroller = scrollerRef.current
+    scroller?.addEventListener('scroll', bumpOverlayViewportVersion, { passive: true })
 
     return () => {
       resizeObserver?.disconnect()
+      scroller?.removeEventListener('scroll', bumpOverlayViewportVersion)
     }
   }, [browserAnnotations.length, isActive, pendingAnnotationPayload])
 
@@ -3422,23 +3440,28 @@ function BrowserPagePane({
   // Why: browserTab.url excluded from deps (changes every navigation → would destroy/recreate the webview); URL logic reads browserTabUrlRef.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- see comment above
   useEffect(() => {
-    let container = ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
-    if (!container) {
+    const content = ensureBrowserPageViewport(browserTab.id, workspaceId)?.content ?? null
+    if (!content) {
       return
     }
 
+    // Why: the webview mounts in the preset-sized content host so the pane can scroll
+    // the emulated viewport; pane-pinned overlays and drag/drop stay on the container.
     const ensuredWebview = ensureBrowserPageWebview({
       browserTabId: browserTab.id,
-      container,
+      container: content,
       inputLocked: inputLockedRef.current,
       webviewPartition,
-      resolveContainer: () =>
-        ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
+      resolveContainer: () => ensureBrowserPageViewport(browserTab.id, workspaceId)?.content ?? null
     })
     if (!ensuredWebview) {
       return
     }
-    container = ensuredWebview.container
+    // Why: re-resolve rather than reuse — drift repair inside ensure may have rebuilt the shell.
+    const container = ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
+    if (!container) {
+      return
+    }
     const webview = ensuredWebview.webview
     const needsInitialNavigation = ensuredWebview.created
 
@@ -5368,17 +5391,22 @@ function BrowserPagePane({
           </div>
         ) : null}
       </div>
+      {pageViewport?.content && markup.isActive && markup.baseImage
+        ? createPortal(
+            // Why: the content host matches the capture box exactly (preset-sized under
+            // emulation) and scrolls with the page, so drawn shapes stay aligned.
+            <MarkupOverlay
+              baseImage={markup.baseImage}
+              busy={markup.state === 'composing'}
+              onComplete={(input) => void markup.complete(input)}
+              onCancel={markup.cancel}
+            />,
+            pageViewport.content
+          )
+        : null}
       {pageViewport?.container
         ? createPortal(
             <>
-              {markup.isActive && markup.baseImage ? (
-                <MarkupOverlay
-                  baseImage={markup.baseImage}
-                  busy={markup.state === 'composing'}
-                  onComplete={(input) => void markup.complete(input)}
-                  onCancel={markup.cancel}
-                />
-              ) : null}
               <div
                 role="status"
                 aria-live="polite"

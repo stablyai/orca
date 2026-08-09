@@ -8,6 +8,7 @@ import {
   parkBrowserPageViewport,
   registerBrowserOverlaySlotViewport,
   removeBrowserPageViewport,
+  setBrowserPageViewportPresetSize,
   syncBrowserPageChromeInset
 } from './browser-page-viewport'
 
@@ -22,6 +23,7 @@ function mountSlotViewport(workspaceTabId: string): HTMLDivElement {
 afterEach(() => {
   for (const id of ['page-1', 'page-2']) {
     removeBrowserPageViewport(id)
+    setBrowserPageViewportPresetSize(id, null)
   }
   for (const id of ['workspace-1']) {
     getBrowserOverlaySlotViewport(id)?.remove()
@@ -141,6 +143,65 @@ describe('syncBrowserPageChromeInset', () => {
     const viewport = ensureBrowserPageViewport('page-2', 'workspace-1')!
 
     expect(viewport.chromeInset.style.height).toBe('40px')
+  })
+})
+
+describe('setBrowserPageViewportPresetSize', () => {
+  it('builds a scroller and content host between the container and the webview slot', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    expect(viewport.scroller.parentElement).toBe(viewport.container)
+    expect(viewport.content.parentElement).toBe(viewport.scroller)
+    expect(viewport.scroller.className).toContain('scrollbar-sleek')
+    expect(viewport.scroller.className).toContain('min-w-0')
+    expect(viewport.scroller.className).toContain('overflow-hidden')
+    expect(viewport.content.className).toContain('relative')
+    expect(viewport.content.className).toContain('mx-auto')
+    expect(viewport.content.style.width).toBe('100%')
+    expect(viewport.content.style.height).toBe('100%')
+  })
+
+  it('sizes the content host to the preset and lets the scroller pan it', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    setBrowserPageViewportPresetSize('page-1', { width: 1920, height: 1080 })
+
+    expect(viewport.content.style.width).toBe('1920px')
+    expect(viewport.content.style.height).toBe('1080px')
+    expect(viewport.scroller.style.overflow).toBe('auto')
+
+    setBrowserPageViewportPresetSize('page-1', null)
+
+    expect(viewport.content.style.width).toBe('100%')
+    expect(viewport.content.style.height).toBe('100%')
+    expect(viewport.scroller.style.overflow).toBe('')
+  })
+
+  it('restores the preset size when guest recovery rebuilds the shell', () => {
+    mountSlotViewport('workspace-1')
+    ensureBrowserPageViewport('page-1', 'workspace-1')
+    setBrowserPageViewportPresetSize('page-1', { width: 1024, height: 768 })
+    // Guest replacement tears the shell down; the recovery re-render rebuilds it.
+    removeBrowserPageViewport('page-1')
+
+    const rebuilt = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    expect(rebuilt.content.style.width).toBe('1024px')
+    expect(rebuilt.content.style.height).toBe('768px')
+    expect(rebuilt.scroller.style.overflow).toBe('auto')
+  })
+
+  it('applies a preset size recorded before the shell existed', () => {
+    setBrowserPageViewportPresetSize('page-2', { width: 375, height: 667 })
+    mountSlotViewport('workspace-1')
+
+    const viewport = ensureBrowserPageViewport('page-2', 'workspace-1')!
+
+    expect(viewport.content.style.width).toBe('375px')
+    expect(viewport.content.style.height).toBe('667px')
+    expect(viewport.scroller.style.overflow).toBe('auto')
   })
 })
 

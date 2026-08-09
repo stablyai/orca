@@ -10,6 +10,8 @@ type BrowserPageViewport = {
   shell: HTMLDivElement
   chromeInset: HTMLDivElement
   container: HTMLDivElement
+  scroller: HTMLDivElement
+  content: HTMLDivElement
 }
 
 const browserPageViewports = new Map<string, BrowserPageViewport>()
@@ -18,6 +20,9 @@ const browserPageViewports = new Map<string, BrowserPageViewport>()
 // re-measure (guest recovery/replacement, profile switch, slot remount). Remembering
 // the inset keeps geometry a property of attaching a guest, not of the first mount.
 const browserPageChromeInsetHeights = new Map<string, number>()
+
+// Why: like the chrome inset, the emulated-viewport size must survive shell rebuilds.
+const browserPageViewportPresetSizes = new Map<string, { width: number; height: number }>()
 
 const slotRootListeners = new Map<string, Set<() => void>>()
 
@@ -102,12 +107,54 @@ export function ensureBrowserPageViewport(
   container.dataset.browserPageContainer = ''
   container.className = 'relative flex min-h-0 flex-1 overflow-hidden bg-background'
 
+  // Why: the scroller pans the emulated viewport while overlays portaled into the
+  // container stay pinned to the pane. min-w-0 so oversized content scrolls instead
+  // of widening the pane; block layout so mx-auto centers a narrower preset and
+  // degrades to margin 0 (reachable scroll origin) when the preset is wider.
+  const scroller = document.createElement('div')
+  scroller.dataset.browserPageScroller = ''
+  scroller.className = 'scrollbar-sleek relative min-h-0 min-w-0 flex-1 overflow-hidden'
+
+  const content = document.createElement('div')
+  content.dataset.browserPageContent = ''
+  content.className = 'relative mx-auto'
+
+  scroller.appendChild(content)
+  container.appendChild(scroller)
   shell.append(chromeInset, container)
   root.appendChild(shell)
 
-  const viewport = { shell, chromeInset, container }
+  const viewport = { shell, chromeInset, container, scroller, content }
   browserPageViewports.set(browserPageId, viewport)
+  applyViewportPresetSizeStyles(viewport, browserPageViewportPresetSizes.get(browserPageId) ?? null)
   return viewport
+}
+
+function applyViewportPresetSizeStyles(
+  viewport: BrowserPageViewport,
+  size: { width: number; height: number } | null
+): void {
+  viewport.content.style.width = size ? `${size.width}px` : '100%'
+  viewport.content.style.height = size ? `${size.height}px` : '100%'
+  // Why: inline 'auto' beats the overflow-hidden class only while a preset is active.
+  viewport.scroller.style.overflow = size ? 'auto' : ''
+}
+
+// Why: the CDP override pins the guest layout viewport to the preset; sizing the
+// content host to match lets the pane scroll to all of it (the webview stays 100%).
+export function setBrowserPageViewportPresetSize(
+  browserPageId: string,
+  size: { width: number; height: number } | null
+): void {
+  if (size) {
+    browserPageViewportPresetSizes.set(browserPageId, size)
+  } else {
+    browserPageViewportPresetSizes.delete(browserPageId)
+  }
+  const viewport = browserPageViewports.get(browserPageId)
+  if (viewport) {
+    applyViewportPresetSizeStyles(viewport, size)
+  }
 }
 
 export function removeBrowserPageViewport(browserPageId: string): void {
