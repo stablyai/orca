@@ -33,8 +33,9 @@ function chunkData(chunk: GrokStartupTraceChunk): string {
  * the main-process path means the draft is dropped entirely.
  *
  * Mirrors the callers in agent-draft-readiness.ts and orca-runtime.ts: the quiet
- * timer is re-armed on every chunk that asks for it, and a chunk arriving before
- * the deadline cancels it.
+ * timer is re-armed on every chunk that asks for it, a chunk arriving before the
+ * deadline cancels it, and the hard timeout outranks both — a marker that lands
+ * after it is too late for the real waiters, which have already settled.
  */
 function replayReadyAtMs(
   signal: DraftPasteReadySignal,
@@ -43,8 +44,10 @@ function replayReadyAtMs(
   const scanner = createDraftPasteReadyScanner(signal)
   let quietDeadline: number | null = null
   for (const [index, chunk] of trace.entries()) {
-    if (quietDeadline !== null && chunk.t >= quietDeadline) {
-      return quietDeadline
+    const settledAt =
+      quietDeadline !== null ? Math.min(quietDeadline, HARD_TIMEOUT_MS) : HARD_TIMEOUT_MS
+    if (chunk.t >= settledAt) {
+      return quietDeadline !== null && quietDeadline <= HARD_TIMEOUT_MS ? quietDeadline : null
     }
     const scanned = scanner.observe(chunkData(chunk))
     if (scanned.ready) {
@@ -93,6 +96,16 @@ describe('grok startup trace replay (inline mode, no alternate screen)', () => {
     expect(replayReadyAtMs('grok-composer-prompt', GROK_INLINE_STARTUP_PTY_TRACE)).toBe(
       replayReadyAtMs('render-quiet-after-bracketed-paste', GROK_INLINE_STARTUP_PTY_TRACE)
     )
+  })
+
+  it('reports the hard timeout, not a late marker, once the waiters have settled', () => {
+    // Guards the model above: the real waiters resolve at 8s, so a marker landing
+    // after that must not be reported as a delivery time.
+    const lateMarker: GrokStartupTraceChunk[] = [
+      { t: 0, data: '\x1b[?1049h' },
+      { t: 8500, data: '\x1b[38;2;200;200;200m❯ ' }
+    ]
+    expect(replayReadyAtMs('grok-composer-prompt', lateMarker)).toBeNull()
   })
 
   it('records a startup with no alternate-screen switch', () => {

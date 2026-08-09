@@ -20,10 +20,13 @@ const DECTCEM_SHOW_CURSOR = '\x1b[?25h'
 // match; those fall back to the quiet window and the caller's hard timeout.
 const GROK_COMPOSER_PROMPT = '❯'
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
+const DECRST_ALT_SCREEN = '\x1b[?1049l'
 
 type DraftPasteReadySignalSpec = {
   /** Bytes that must precede `marker` for it to count; null when there is no marker. */
   markerAnchor: string | null
+  /** Bytes that revoke `markerAnchor` again, for anchors that describe a mode the agent can leave. */
+  markerAnchorEnd: string | null
   /** Composer-ready marker, or null for signals that only use the quiet window. */
   marker: string | null
   /** Bytes that arm the quiet-window fallback, or null when the signal has none. */
@@ -33,16 +36,23 @@ type DraftPasteReadySignalSpec = {
 const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySignalSpec> = {
   'codex-composer-prompt': {
     markerAnchor: DECSET_BRACKETED_PASTE,
+    markerAnchorEnd: null,
     marker: CODEX_COMPOSER_PROMPT,
     quietAnchor: null
   },
   'render-cursor-after-bracketed-paste': {
     markerAnchor: DECSET_BRACKETED_PASTE,
+    markerAnchorEnd: null,
     marker: DECTCEM_SHOW_CURSOR,
     quietAnchor: null
   },
   'grok-composer-prompt': {
     markerAnchor: DECSET_ALT_SCREEN,
+    // Why: leaving the alternate screen hands the terminal back to the shell, whose
+    // prompt may be `❯`. Without revoking the anchor, a grok that entered the alt
+    // screen and then died — or a pager run from the user's shell rc before grok even
+    // launched — would leave the glyph armed forever and paste into the shell.
+    markerAnchorEnd: DECRST_ALT_SCREEN,
     marker: GROK_COMPOSER_PROMPT,
     // Why: the quiet window stays on DECSET 2004, independent of the alt-screen
     // marker anchor. grok can be configured to render inline (`--no-alt-screen`,
@@ -53,10 +63,14 @@ const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySi
   },
   'render-quiet-after-bracketed-paste': {
     markerAnchor: null,
+    markerAnchorEnd: null,
     marker: null,
     quietAnchor: DECSET_BRACKETED_PASTE
   }
 }
+
+/** Longest anchor sequence minus one — the carry needed to rejoin one split across chunks. */
+const ANCHOR_CARRY_CHARS = 7
 
 export type DraftPasteReadyScanResult = {
   /** The agent-specific ready signal fired — caller should deliver the paste now. */
@@ -93,7 +107,9 @@ export type DraftPasteReadyScanResult = {
  *     anchors: grok can render inline (`--no-alt-screen`, `[ui] screen_mode =
  *     "minimal"`) and on legacy Windows consoles draws `> ` instead of `❯`, so
  *     the marker is best-effort and the 2004-anchored quiet window is the floor
- *     that keeps those launches on the pre-existing delivery path.
+ *     that keeps those launches on the pre-existing delivery path. The alt-screen
+ *     anchor is revoked on `\x1b[?1049l`: leaving it hands the terminal back to
+ *     the shell, so a glyph after that is the shell's prompt, not grok's composer.
  *   - `render-quiet-after-bracketed-paste` (default): no signal marker; arms the
  *     quiet window once DECSET 2004 is seen.
  *
@@ -105,10 +121,51 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
 } {
   let recent = ''
   let postAnchorRecent = ''
+  let anchorCarry = ''
   let sawMarkerAnchor = false
   let sawQuietAnchor = false
 
-  const { markerAnchor, marker: signalMarker, quietAnchor } = DRAFT_PASTE_READY_SIGNALS[readySignal]
+  const {
+    markerAnchor,
+    markerAnchorEnd,
+    marker: signalMarker,
+    quietAnchor
+  } = DRAFT_PASTE_READY_SIGNALS[readySignal]
+
+  /**
+   * Why: an anchor the agent can leave (the alternate screen) has to be tracked in
+   * stream ORDER, not as "seen once". Walk the chunk segment by segment so a marker
+   * only counts while the anchor is actually held, and re-entering re-arms it.
+   * Only reachable for signals that define `markerAnchorEnd`.
+   */
+  const scanRevocableAnchorSegments = (window: string, anchor: string, end: string): boolean => {
+    let cursor = 0
+    while (cursor < window.length) {
+      if (!sawMarkerAnchor) {
+        const enterIndex = window.indexOf(anchor, cursor)
+        if (enterIndex === -1) {
+          return false
+        }
+        sawMarkerAnchor = true
+        postAnchorRecent = ''
+        cursor = enterIndex + anchor.length
+        continue
+      }
+      const leaveIndex = window.indexOf(end, cursor)
+      const segment = leaveIndex === -1 ? window.slice(cursor) : window.slice(cursor, leaveIndex)
+      if ((postAnchorRecent + segment).includes(signalMarker ?? '')) {
+        return true
+      }
+      if (leaveIndex === -1) {
+        postAnchorRecent = (postAnchorRecent + segment).slice(-512)
+        return false
+      }
+      sawMarkerAnchor = false
+      postAnchorRecent = ''
+      cursor = leaveIndex + end.length
+    }
+    return false
+  }
 
   return {
     observe(data: string): DraftPasteReadyScanResult {
@@ -118,7 +175,15 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
         sawQuietAnchor = true
       }
       if (signalMarker !== null && markerAnchor !== null) {
-        if (!sawMarkerAnchor) {
+        if (markerAnchorEnd !== null) {
+          // Why: carry only the bytes an anchor could straddle, so already-scanned
+          // output is never re-walked into a second enter/leave transition.
+          const window = anchorCarry + data
+          anchorCarry = window.slice(-ANCHOR_CARRY_CHARS)
+          if (scanRevocableAnchorSegments(window, markerAnchor, markerAnchorEnd)) {
+            return { ready: true, armQuietTimer: false }
+          }
+        } else if (!sawMarkerAnchor) {
           const anchorIndex = combined.indexOf(markerAnchor)
           if (anchorIndex !== -1) {
             sawMarkerAnchor = true
