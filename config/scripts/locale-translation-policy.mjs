@@ -194,7 +194,17 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'login.spec.ts',
   'untitled.md',
   'review src/auth',
-  'throw src/auth'
+  'throw src/auth',
+  // Rendered inside <code> or a font-mono element, so they are code the user copies or types.
+  '{prompt}',
+  '/goal',
+  'npm run dev',
+  'nbformat',
+  'orca.yaml',
+  'upstream',
+  'LIN-329',
+  'GH #1799',
+  'orca · zsh'
 ])
 
 export const NATIVE_PICKER_LABELS = {
