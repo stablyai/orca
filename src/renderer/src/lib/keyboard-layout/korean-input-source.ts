@@ -47,10 +47,6 @@ const INPUT_TOGGLE_KEY_CODES: ReadonlySet<string> = new Set(['CapsLock', 'Lang1'
 
 const KEYBOARD_ACTIVITY_REFRESH_COOLDOWN_MS = 2000
 
-/** Bounded so a host that never reports an input source costs four probes, not
- *  one per keystroke — each probe spawns `defaults export | plutil | plutil`. */
-const INITIAL_PROBE_BACKOFF_MS: readonly number[] = [50, 200, 750]
-
 export function isKoreanInputSourceId(id: string | null | undefined): boolean {
   if (!id) {
     return false
@@ -105,13 +101,6 @@ async function refreshInputSourceId(readInputSourceId: InputSourceIdReader): Pro
     // misclassify the active input source until the next refresh.
     return
   }
-  if (id === null) {
-    // Why: the reader returns null for "no signal" (IPC not yet exposed at
-    // startup, transient rejection) as well as for a genuinely absent source.
-    // Caching that as false turns an unknown into a confirmed negative, which
-    // is what left the gate cold for the first keystrokes of a session.
-    return
-  }
   cachedIsKorean = isKoreanInputSourceId(id)
 }
 
@@ -158,35 +147,7 @@ export function prefetchKoreanInputSource(options: PrefetchKoreanInputSourceOpti
   // both keydown and keyup so a held toggle key still refreshes on release.
   target.addEventListener('keydown', keyboardActivityCallback, true)
   target.addEventListener('keyup', keyboardActivityCallback, true)
-  void runInitialProbe(readInputSourceId, target)
-}
-
-/** Why: a keystroke-triggered refresh is async, so it can never classify the
- *  press that triggered it — the cache has to be warm BEFORE the first key. At
- *  startup the IPC is not always exposed yet, so retry with backoff until the
- *  reader yields an ID rather than leaving the gate cold for the session. */
-async function runInitialProbe(
-  readInputSourceId: InputSourceIdReader,
-  target: Pick<Window, 'addEventListener' | 'removeEventListener'>
-): Promise<void> {
-  for (const delayMs of INITIAL_PROBE_BACKOFF_MS) {
-    // Why: a reset (or a prefetch onto another window) must stop this loop, or
-    // it repopulates the cache the reset just cleared.
-    if (!listenerAttached || focusTarget !== target) {
-      return
-    }
-    lastRefreshAt = Date.now()
-    await refreshInputSourceId(readInputSourceId)
-    if (cachedIsKorean !== null) {
-      return
-    }
-    await new Promise((resolve) => setTimeout(resolve, delayMs))
-  }
-  if (!listenerAttached || focusTarget !== target) {
-    return
-  }
-  lastRefreshAt = Date.now()
-  await refreshInputSourceId(readInputSourceId)
+  requestRefresh(readInputSourceId, true)
 }
 
 /** Strict gate: only true when the active macOS input source is known to be a
