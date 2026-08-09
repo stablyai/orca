@@ -15,6 +15,7 @@ export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-rea
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../runtime/mobile-session-terminal-persistence-retirement'
+import { findTerminalTabIdForLeaf } from '../runtime/workspace-session-terminal-membership-authority'
 import type { GlobalSettings, TuiAgent } from '../../shared/types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
@@ -521,6 +522,45 @@ function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
   ptyPaneKey.set(ptyId, normalizedPaneKey)
   paneKeyPtyId.set(normalizedPaneKey, ptyId)
   return normalizedPaneKey
+}
+
+/**
+ * The one producer of a pane -> shell binding: durable record and fence maps together, keyed by the
+ * tab holding the leaf *now* (a stored tabId names the tab a moved pane left). Splitting these let
+ * the superseded-PTY fence sit inert on reattach, the path it was built for.
+ *
+ * Returns false when a durable pane refuses. A throw is unknown rather than a refusal, so it
+ * propagates — only the caller that created the shell should clean it up.
+ */
+export function bindPaneShell(args: {
+  store: Pick<Store, 'persistPtyBinding' | 'getWorkspaceSession'> | undefined
+  worktreeId: string
+  tabId: string
+  leafId: string
+  ptyId: string
+  incarnationId?: string
+  startupCwd?: string
+  mayCreate?: boolean
+}): boolean {
+  const session =
+    typeof args.store?.getWorkspaceSession === 'function'
+      ? args.store.getWorkspaceSession()
+      : undefined
+  const tabId = findTerminalTabIdForLeaf(session, args.leafId) ?? args.tabId
+  const bound = args.store?.persistPtyBinding({
+    worktreeId: args.worktreeId,
+    tabId,
+    leafId: args.leafId,
+    ptyId: args.ptyId,
+    ...(args.incarnationId ? { incarnationId: args.incarnationId } : {}),
+    ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
+    ...(args.mayCreate === false ? { mayCreate: false } : {})
+  })
+  if (bound === false) {
+    return false
+  }
+  rememberPaneKeyForPty(args.ptyId, makePaneKey(tabId, args.leafId))
+  return true
 }
 
 function cleanupPendingPaneSerializersForSender(ownerWebContentsId: number): void {
@@ -5125,15 +5165,15 @@ export function registerPtyHandlers(
         })
         if (hostSessionBinding && !stablePaneBindingPersisted) {
           try {
-            const binding = {
+            bindPaneShell({
+              store: hostSessionBinding.store,
               worktreeId: hostSessionBinding.worktreeId,
               tabId: hostSessionBinding.tabId,
               leafId: hostSessionBinding.leafId,
               ptyId: result.id,
               ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
               ...(cwd ? { startupCwd: cwd } : {})
-            }
-            hostSessionBinding.store.persistPtyBinding(binding)
+            })
           } catch (err) {
             console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
             if (!result.isReattach) {
@@ -6497,15 +6537,15 @@ export function registerPtyHandlers(
           !stablePaneBindingPersisted
         ) {
           try {
-            const binding = {
+            bindPaneShell({
+              store,
               worktreeId: args.worktreeId,
               tabId: args.tabId,
               leafId: validatedLeafId,
               ptyId: result.id,
               ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
               ...(cwd ? { startupCwd: cwd } : {})
-            }
-            store.persistPtyBinding(binding)
+            })
           } catch (err) {
             console.error('[pty] failed to persist PTY binding after spawn:', err)
             if (!result.isReattach) {

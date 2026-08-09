@@ -151,8 +151,18 @@ function makeMainWindow() {
   return { isDestroyed: () => false, isVisible: () => true, isMinimized: () => false, webContents }
 }
 
-function makeStore(leases: unknown[]) {
+/** A live layout in which `leafId` sits in `tabId` — the tab the pane is in RIGHT NOW. */
+function sessionWithLeafInTab(tabId: string, leafId: string) {
   return {
+    terminalLayoutsByTabId: {
+      [tabId]: { root: { type: 'leaf' as const, leafId }, ptyIdsByLeafId: {} }
+    }
+  }
+}
+
+function makeStore(leases: unknown[], session?: ReturnType<typeof sessionWithLeafInTab>) {
+  return {
+    ...(session ? { getWorkspaceSession: vi.fn(() => session) } : {}),
     getRepos: vi.fn().mockReturnValue([]),
     getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
     upsertSshPtyConsumerRecovery: vi.fn(),
@@ -173,12 +183,15 @@ function makeStore(leases: unknown[]) {
  * One pane: spawned over SSH, then rebound by a reconnect whose durable lease
  * names a different remote PTY — the STA-3077 shape.
  */
-async function spawnThenReattachPane(leafId: string) {
+async function spawnThenReattachPane(leafId: string, currentTabId?: string) {
   const mainWindow = makeMainWindow()
   const predecessorPtyId = `ssh:${TARGET}@@pty-old-${leafId.slice(0, 4)}`
   const reattachedRelayPtyId = `pty-new-${leafId.slice(0, 4)}`
   const leases: unknown[] = []
-  const store = makeStore(leases)
+  const store = makeStore(
+    leases,
+    currentTabId ? sessionWithLeafInTab(currentTabId, leafId) : undefined
+  )
   const runtime = { onPtySpawned: vi.fn(), registerPty: vi.fn() }
   const session = new SshRelaySession(
     TARGET,
@@ -226,7 +239,7 @@ async function spawnThenReattachPane(leafId: string) {
     listeners.get('pty:write')!({ sender: mainWindow.webContents }, { id, data: 'x' })
   }
   return {
-    paneKey: makePaneKey(TAB_ID, leafId),
+    paneKey: makePaneKey(currentTabId ?? TAB_ID, leafId),
     predecessorPtyId,
     reattachedPtyId: `ssh:${TARGET}@@${reattachedRelayPtyId}`,
     provider,
@@ -278,6 +291,20 @@ describe('a relay reattach binds the pane through the same producer as spawn', (
     cleanup = pane.dispose
 
     expect(getPtyIdForPaneKey(pane.paneKey)).toBe(pane.reattachedPtyId)
+  })
+
+  // The lease's tabId is frozen at write time, but `detachTerminalPaneToTab` moves a live pane
+  // into a new tab without killing its PTY. A producer that forwarded `lease.tabId` would key the
+  // fence to the tab the pane LEFT — and every other clause here uses one tab on both sides, so
+  // nothing else in this file would notice.
+  it('keys the pane to the tab the leaf is in now, not the one its lease was written in', async () => {
+    const leafId = '44444444-4444-4444-8444-444444444444'
+    const pane = await spawnThenReattachPane(leafId, 'tab-moved-to')
+    cleanup = pane.dispose
+
+    expect(pane.paneKey).toBe(makePaneKey('tab-moved-to', leafId))
+    expect(getPtyIdForPaneKey(pane.paneKey)).toBe(pane.reattachedPtyId)
+    expect(getPtyIdForPaneKey(makePaneKey(TAB_ID, leafId))).not.toBe(pane.reattachedPtyId)
   })
 
   // Guards the clause above from a fence that simply refuses everything.

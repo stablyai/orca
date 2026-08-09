@@ -101,6 +101,8 @@ vi.mock('../providers/ssh-git-provider', () => ({
   SshGitProvider: class MockSshGitProvider {}
 }))
 vi.mock('../ipc/pty', () => ({
+  // Step F: the single pane->shell bind producer the relay now calls.
+  bindPaneShell: vi.fn(() => true),
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
   getSshPtyProvider: vi.fn(),
@@ -124,6 +126,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const {
+  bindPaneShell,
   registerSshPtyProvider,
   getSshPtyProvider,
   getPtyIdsForConnection,
@@ -435,8 +438,11 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId
     })
     expect(runtime.onPtySpawned).not.toHaveBeenCalled()
-    // mayCreate:false — reattach binds an existing pane and never grafts one back.
-    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith({
+    // Step F moved the observation point to the one bind producer; the intent is
+    // unchanged — exact incarnation proof, and mayCreate:false so reattach binds
+    // an existing pane and never grafts one back.
+    expect(bindPaneShell).toHaveBeenCalledWith({
+      store: expect.anything(),
       worktreeId: 'worktree-1',
       tabId: 'tab-1',
       leafId: INCARNATION_LEAF_ID,
@@ -444,7 +450,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId,
       mayCreate: false
     })
-    expect(vi.mocked(mockStore.persistPtyBinding).mock.invocationCallOrder[0]).toBeLessThan(
+    expect(vi.mocked(bindPaneShell).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(mockStore.markSshRemotePtyLeasesAttachedAsync).mock.invocationCallOrder[0]!
     )
   })
@@ -491,7 +497,8 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
     expect(runtime.registerPty).not.toHaveBeenCalled()
     expect(restorePtyIncarnation).toHaveBeenCalledWith(APP_PTY_ID, incarnationId)
     expect(setPtyOwnership).not.toHaveBeenCalled()
-    expect(mockStore.persistPtyBinding).not.toHaveBeenCalled()
+    // Step F: observed at the one bind producer, else this negative is vacuous.
+    expect(bindPaneShell).not.toHaveBeenCalled()
     expect(sourceActivationLease.rollback).toHaveBeenCalledOnce()
     expect(sourceActivationLease.commit).not.toHaveBeenCalled()
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
@@ -550,8 +557,14 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId: currentIncarnationId
     })
     expect(setPtyOwnership).toHaveBeenCalledWith(APP_PTY_ID, 'target-1')
-    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(
-      expect.objectContaining({ ptyId: APP_PTY_ID, incarnationId: currentIncarnationId })
+    // Step F moved the observation point to the one bind producer; the asserted
+    // intent — exact incarnation proof, mayCreate:false — is unchanged.
+    expect(bindPaneShell).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ptyId: APP_PTY_ID,
+        incarnationId: currentIncarnationId,
+        mayCreate: false
+      })
     )
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:replay', {
       id: APP_PTY_ID,
@@ -569,7 +582,9 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
     vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([detachedLease()] as ReturnType<
       typeof mockStore.getSshRemotePtyLeases
     >)
-    vi.mocked(mockStore.persistPtyBinding).mockImplementationOnce(() => {
+    // Step F: the durable write now happens inside the bind producer, so that is
+    // where the failure has to be injected.
+    vi.mocked(bindPaneShell).mockImplementationOnce(() => {
       throw new Error('disk full')
     })
     const runtime = { onPtySpawned: vi.fn(), registerPty: vi.fn() }

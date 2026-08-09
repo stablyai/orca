@@ -32,6 +32,7 @@ import {
 import { _internals as openCodeInternals } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import {
+  bindPaneShell,
   registerSshPtyProvider,
   unregisterSshPtyProvider,
   getSshPtyProvider,
@@ -2462,7 +2463,8 @@ export class SshRelaySession {
       // A thrown write is unknown, not a refusal, so it must not detach anything.
       let bound: boolean | null = null
       try {
-        bound = this.store.persistPtyBinding({
+        bound = bindPaneShell({
+          store: this.store,
           worktreeId: lease.worktreeId,
           tabId: lease.tabId,
           leafId: lease.leafId,

@@ -161,6 +161,24 @@ export function advanceTerminalTopologyRevision(
   }
 }
 
+/**
+ * The tab whose live layout holds this leaf. Only the leaf half of a pane key is stable — breaking
+ * a pane out into its own tab moves the leaf and leaves any stored tabId naming the tab it left.
+ */
+export function findTerminalTabIdForLeaf(
+  session: WorkspaceSessionState | undefined,
+  leafId: string
+): string | undefined {
+  for (const [tabId, layout] of Object.entries(session?.terminalLayoutsByTabId ?? {})) {
+    const leafIds = new Set<string>()
+    collectLeafIds(layout.root, leafIds)
+    if (leafIds.has(leafId)) {
+      return tabId
+    }
+  }
+  return undefined
+}
+
 export function hasHostAuthoritativeTerminalMembership(
   session: WorkspaceSessionState | undefined,
   worktreeId: string

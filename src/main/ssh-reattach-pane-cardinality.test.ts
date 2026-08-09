@@ -282,6 +282,8 @@ describe('STA-3077: the reattach path actually refuses to create', () => {
   // This is the oracle the store-level tests could not provide: `mayCreate`
   // existed and was correct, but no production caller passed it, so reattach
   // still grafted panes. Pin the wiring, not just the capability.
+  // The reattach bind now goes through the one `bindPaneShell` producer, and it
+  // still refuses to create.
   it('passes mayCreate:false from the SSH reattach binding write', async () => {
     const { readFileSync } = await import('node:fs')
     const source = readFileSync('src/main/ssh/ssh-relay-session.ts', 'utf-8')
@@ -289,16 +291,24 @@ describe('STA-3077: the reattach path actually refuses to create', () => {
       source.indexOf('restoreReattachedPtyRuntime'),
       source.indexOf('private async attachPtyWithRetry')
     )
-    expect(bindCall).toContain('persistPtyBinding')
+    expect(bindCall).toContain('bindPaneShell')
     expect(bindCall).toContain('mayCreate: false')
   })
 
+  // Strengthened, not relaxed: counting guards against calls went vacuous once
+  // the direct store calls disappeared, so pin both halves instead.
   it('has no production persistPtyBinding caller that can create during reattach', async () => {
     const { readFileSync } = await import('node:fs')
     const source = readFileSync('src/main/ssh/ssh-relay-session.ts', 'utf-8')
     // Every bind in the relay session is a reattach; none may grow topology.
-    const calls = source.split('persistPtyBinding(').length - 1
-    const guarded = source.split('mayCreate: false').length - 1
-    expect(guarded).toBeGreaterThanOrEqual(calls)
+    expect(source.split('persistPtyBinding(').length - 1).toBe(0)
+    const binds = source.split('bindPaneShell(').length - 1
+    expect(binds).toBeGreaterThan(0)
+    // Each `bindPaneShell(` call site must carry its own `mayCreate: false`.
+    const guardedBinds = source
+      .split('bindPaneShell(')
+      .slice(1)
+      .filter((tail) => tail.slice(0, tail.indexOf('})')).includes('mayCreate: false')).length
+    expect(guardedBinds).toBe(binds)
   })
 })

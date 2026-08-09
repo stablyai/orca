@@ -257,17 +257,27 @@ describe('STA-3077 step P: every production caller names that one home', () => {
   // A guard that behaves correctly is not evidence that both writers reach it,
   // and the defect IS that they disagree — so pin the call sites too.
   it('has no SSH pane binding write that selects the ssh partition', () => {
-    const writers = ['src/main/ipc/pty.ts', 'src/main/ssh/ssh-relay-session.ts']
+    const file = 'src/main/ipc/pty.ts'
+    const calls = callArgumentsIn(readFileSync(file, 'utf-8'), 'persistPtyBinding')
+    expect(calls.length, `${file} no longer writes pane bindings`).toBeGreaterThan(0)
 
-    const partitioned = writers.flatMap((file) => {
-      const calls = callArgumentsIn(readFileSync(file, 'utf-8'), 'persistPtyBinding')
-      expect(calls.length, `${file} no longer writes pane bindings`).toBeGreaterThan(0)
-      return calls
-        .filter((call) => call.includes('toSshExecutionHostId'))
-        .map((call) => `${file}: ${summarize(call)}`)
-    })
+    const partitioned = calls
+      .filter((call) => call.includes('toSshExecutionHostId'))
+      .map((call) => `${file}: ${summarize(call)}`)
 
     expect(partitioned).toEqual([])
+  })
+
+  // STRENGTHENED, not relaxed. This clause used to require the relay to hold a `persistPtyBinding`
+  // call of its own and merely forbid an ssh-partition argument on it. Step F removed that call:
+  // the relay binds through the one `bindPaneShell` producer, which is what makes the superseded-
+  // pane fence live on reattach. Requiring ZERO direct writes here is the stronger property — a
+  // second bind producer is exactly the defect that let spawn and reattach disagree.
+  it('has no pane binding write in the relay that bypasses the one bind producer', () => {
+    const source = readFileSync('src/main/ssh/ssh-relay-session.ts', 'utf-8')
+
+    expect(callArgumentsIn(source, 'persistPtyBinding').map(summarize)).toEqual([])
+    expect(source).toContain('bindPaneShell(')
   })
 
   // The readers must land in the same place; one that still consults
