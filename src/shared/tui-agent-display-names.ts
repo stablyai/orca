@@ -13,6 +13,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   devin: 'Devin',
   ante: 'Ante',
   trae: 'Trae',
+  qodercli: 'Qoder CLI',
   autohand: 'Autohand Code',
   opencode: 'OpenCode',
   'mimo-code': 'MiMo Code',

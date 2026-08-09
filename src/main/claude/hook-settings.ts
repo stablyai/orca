@@ -13,8 +13,8 @@ import {
 } from '../agent-hooks/installer-utils'
 
 export type ClaudeCompatibleHookSettings = {
-  configDirName: '.claude' | '.openclaude'
-  scriptBaseName: 'claude-hook' | 'openclaude-hook'
+  configDirName: '.claude' | '.openclaude' | '.qoder' | '.qoder-cn'
+  scriptBaseName: 'claude-hook' | 'openclaude-hook' | 'qodercli-hook' | 'qodercli-cn-hook'
 }
 
 export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
@@ -25,6 +25,21 @@ export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
 export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.openclaude',
   scriptBaseName: 'openclaude-hook'
+}
+
+// Why: qodercli implements every event in CLAUDE_EVENTS (including PermissionRequest) and reads the
+// same `{ matcher, hooks: [{ type: 'command', command }] }` settings shape, so it reuses
+// ClaudeHookService wholesale rather than carrying its own installer.
+export const QODERCLI_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
+  configDirName: '.qoder',
+  scriptBaseName: 'qodercli-hook'
+}
+
+// Why: the CN build is a separate artifact with its own config root. Managed only when that root
+// already exists — see qodercli/hook-service.ts.
+export const QODERCLI_CN_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
+  configDirName: '.qoder-cn',
+  scriptBaseName: 'qodercli-cn-hook'
 }
 
 export const CLAUDE_EVENTS = [

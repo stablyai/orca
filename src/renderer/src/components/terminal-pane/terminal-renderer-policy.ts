@@ -1,4 +1,4 @@
-import { isGeminiTerminalTitle } from '@/lib/agent-status'
+import { isGeminiTerminalTitle, isQoderCliTerminalTitle } from '@/lib/agent-status'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { GlobalSettings } from '../../../../shared/types'
 
@@ -28,12 +28,14 @@ export type ResolvePaneRendererPolicyInput = {
 
 // Why: an authoritative non-Gemini owner (OMP, Pi, Claude, a shell, …) outranks
 // raw title text. 'unknown' is not authoritative, so it does not veto the
-// title-derived Gemini fallback.
+// title-derived Gemini fallback. qodercli is excluded alongside gemini because it
+// renders with the same gemini-cli/Ink stack and needs the same fallback.
 function isKnownNonGeminiOwner(ownerAgentType: AgentType | null | undefined): boolean {
   return (
     typeof ownerAgentType === 'string' &&
     ownerAgentType !== '' &&
     ownerAgentType !== 'gemini' &&
+    ownerAgentType !== 'qodercli' &&
     ownerAgentType !== 'unknown'
   )
 }
@@ -50,13 +52,20 @@ function resolveGeminiCompatFallback(
   rawTitle: string | null,
   ownerAgentType: AgentType | null | undefined
 ): GeminiCompatFallback {
-  if (!isGeminiTerminalTitle(rawTitle ?? '')) {
+  // Why: qodercli is a gemini-cli fork on the same Ink renderer, so it needs the same compat
+  // fallback. Before qodercli was registered it matched isGeminiTerminalTitle by glyph and got
+  // this behavior implicitly; naming it here keeps that rather than silently opting it into WebGL.
+  if (!isGeminiTerminalTitle(rawTitle ?? '') && !isQoderCliTerminalTitle(rawTitle ?? '')) {
     return { disable: false, confidence: 'authoritative' }
   }
   if (isKnownNonGeminiOwner(ownerAgentType)) {
     return { disable: false, confidence: 'authoritative' }
   }
-  return { disable: true, confidence: ownerAgentType === 'gemini' ? 'authoritative' : 'fallback' }
+  return {
+    disable: true,
+    confidence:
+      ownerAgentType === 'gemini' || ownerAgentType === 'qodercli' ? 'authoritative' : 'fallback'
+  }
 }
 
 /**

@@ -144,6 +144,35 @@ describe('buildAgentStartupPlan', () => {
     ).toBe("traecli -- 'help me name this config'")
   })
 
+  it('passes the prompt to Qoder CLI via --prompt-interactive', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'qodercli',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'qodercli',
+      launchCommand: "qodercli --prompt-interactive 'Summarize the failing tests'",
+      expectedProcess: 'qodercli',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('qodercli')
+    })
+  })
+
+  // Why: the prompt is a flag VALUE, so subcommand- or flag-shaped text needs no `--` separator.
+  it('keeps flag-shaped Qoder CLI prompts as the prompt', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'qodercli',
+        prompt: '--print the release notes',
+        cmdOverrides: {},
+        platform: 'linux'
+      })?.launchCommand
+    ).toBe("qodercli --prompt-interactive '--print the release notes'")
+  })
+
   it('uses cursor-agent as the actual launch binary', () => {
     expect(
       buildAgentStartupPlan({

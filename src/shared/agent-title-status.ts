@@ -18,6 +18,9 @@ import {
   containsLegacyAgentName,
   isClaudeManagementTitle,
   isGeminiTerminalTitle,
+  isQoderCliTerminalTitle,
+  QODERCLI_LABEL,
+  QODERCLI_PERMISSION,
   isPiAgentTitle,
   isPiTerminalTitle
 } from './agent-title-core'
@@ -115,6 +118,23 @@ export function normalizeTerminalTitle(title: string): string {
     return title
   }
 
+  // Why: qodercli repaints its 80-char padded title on every stream tick, so collapse it the same
+  // way Gemini/Pi/Grok frames are collapsed — otherwise the tab label is a space-padded task
+  // string. Must precede the Gemini branch. isQoderCliTerminalTitle also matches the collapsed
+  // label so re-normalization is idempotent and the next read doesn't fall back to Gemini.
+  if (isQoderCliTerminalTitle(title)) {
+    const status = detectAgentStatusFromTitle(title)
+    if (status === 'permission') {
+      return `${QODERCLI_PERMISSION} ${QODERCLI_LABEL}`
+    }
+    if (status === 'working') {
+      return `${GEMINI_WORKING} ${QODERCLI_LABEL}`
+    }
+    if (status === 'idle') {
+      return `${GEMINI_IDLE} ${QODERCLI_LABEL}`
+    }
+  }
+
   if (isGeminiTerminalTitle(title)) {
     const status = detectAgentStatusFromTitle(title)
     if (status === 'permission') {
@@ -158,6 +178,14 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
     return null
   }
 
+  // Why: qodercli replaced Gemini's ✋ with ▲ for awaiting-confirmation. Without this its
+  // permission state falls through the name-token checks below and yields no status at all.
+  // Why anchored, unlike the inherited ✋/✦/◇ checks below: ▲ is ordinary text (deploy output,
+  // charts, log markers), so an unanchored `includes` would turn any title merely containing it
+  // into a spurious attention badge. qodercli only ever emits it as the leading status glyph.
+  if (title.trimStart().startsWith(`${QODERCLI_PERMISSION} `)) {
+    return 'permission'
+  }
   if (title.includes(GEMINI_PERMISSION)) {
     return 'permission'
   }

@@ -48,7 +48,10 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   devin: 'devin',
   ante: null,
   // Why: Orca detects trae by `traecli`, an alias only TRAE CN ships.
-  trae: 'trae-cn'
+  trae: 'trae-cn',
+  // Why: the skills CLI's own namespace carries `qoder` (see SKILLS_CLI_VALID_AGENT_KEYS); Orca's
+  // single qodercli entry covers both builds, so it maps to the global key.
+  qodercli: 'qoder'
 } satisfies Record<TuiAgent, string | null>
 
 /**

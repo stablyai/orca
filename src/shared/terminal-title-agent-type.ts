@@ -4,7 +4,7 @@ import {
   HERMES_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
-import { isCursorAgentTitle } from './agent-title-core'
+import { isCursorAgentTitle, isQoderCliTerminalTitle } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
@@ -21,6 +21,8 @@ export const GEMINI_SILENT_WORKING = '\u23F2' // ⏲
 export const GEMINI_IDLE = '\u25C7' // ◇
 export const GEMINI_PERMISSION = '\u270B' // ✋
 
+export { isQoderCliTerminalTitle }
+
 export function containsBrailleSpinner(title: string): boolean {
   for (const char of title) {
     const codePoint = char.codePointAt(0)
@@ -32,6 +34,12 @@ export function containsBrailleSpinner(title: string): boolean {
 }
 
 export function isGeminiTerminalTitle(title: string): boolean {
+  // Why: qodercli forked gemini-cli and reuses its status glyphs; rule out the fork's own title
+  // shape before the glyph test below claims the pane. The same guard lives in agent-title-core's
+  // copy, which is the one every module outside this file reaches via agent-detection.
+  if (isQoderCliTerminalTitle(title)) {
+    return false
+  }
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (
     title.includes(GEMINI_PERMISSION) ||
@@ -140,6 +148,10 @@ export function getAgentLabel(title: string): string | null {
   ) {
     return 'Claude Code'
   }
+  // Why: must precede the Gemini branch — qodercli reuses Gemini's status glyphs.
+  if (isQoderCliTerminalTitle(title)) {
+    return 'Qoder CLI'
+  }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
   }
@@ -217,6 +229,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   OpenClaude: 'openclaude',
   Codex: 'codex',
   'Gemini CLI': 'gemini',
+  'Qoder CLI': 'qodercli',
   'GitHub Copilot': 'copilot',
   Grok: 'grok',
   Devin: 'devin',

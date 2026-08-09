@@ -23,6 +23,39 @@ export const GEMINI_SILENT_WORKING = '\u23f2' // ⏲
 export const GEMINI_IDLE = '\u25c7' // ◇
 export const GEMINI_PERMISSION = '\u270b' // ✋
 
+// qodercli's OSC title label, and the glyph it uses for awaiting-confirmation. It forked gemini-cli
+// and kept ✦/◇, so glyph checks alone hand its panes to Gemini; ▲ replaces Gemini's ✋.
+export const QODERCLI_LABEL = 'Qoder CLI'
+export const QODERCLI_PERMISSION = '\u25b2' // ▲
+
+// Why: two structural differences separate qodercli from Gemini, and BOTH are needed.
+//   qodercli: "<glyph> <session title> | <status>" — ONE space, trailing " | status"
+//   Gemini:   "<glyph>  <Status> (context)"        — TWO spaces, parenthesized context, no pipe
+// The one-space lookahead is what rejects a raw upstream Gemini status containing " | " (e.g.
+// "✦  Running ls | grep foo (repo)"). Status words are deliberately not matched: qodercli changed
+// that vocabulary twice in three weeks, so Orca must key on shape, not wording.
+const QODERCLI_DYNAMIC_TITLE_RE = /^[\u2726\u25c7\u25b2] (?! ).*\s\|\s[^|]+$/
+// Why: the non-dynamic form, `Qoder CLI (<session title>)`.
+const QODERCLI_STATIC_TITLE_RE = /^Qoder CLI(?: CN)? \(/
+// Why: normalizeTerminalTitle collapses qodercli frames to "<glyph> Qoder CLI", which carries
+// neither a pipe nor parens. Without this the collapsed label falls straight back to Gemini on the
+// next read — the same trap GROK_COLLAPSED_WORKING_TITLE_RE exists to avoid.
+// Why the glyph is optional: clearWorkingIndicators strips ✦ from stale exit titles, leaving a bare
+// "Qoder CLI". Gemini's equivalent survives that via titleHasAgentName(…, 'gemini'); without this
+// qodercli would lose its identity where Gemini keeps it. Anchored, so it must be the whole title —
+// the same bet the repo already takes for 'MiMo Code'.
+const QODERCLI_COLLAPSED_TITLE_RE = /^(?:[\u2726\u25c7\u25b2] )?Qoder CLI(?: CN)?$/
+
+export function isQoderCliTerminalTitle(title: string): boolean {
+  // Why: qodercli pads its OSC title to 80 chars, so " | status" is not at end-of-string.
+  const trimmed = title.trimEnd()
+  return (
+    QODERCLI_STATIC_TITLE_RE.test(trimmed) ||
+    QODERCLI_COLLAPSED_TITLE_RE.test(trimmed) ||
+    QODERCLI_DYNAMIC_TITLE_RE.test(trimmed)
+  )
+}
+
 const STRONG_IDLE_KEYWORDS = ['ready', 'idle', 'done'] as const
 const STRONG_WORKING_KEYWORDS = ['working', 'thinking', 'running'] as const
 
@@ -48,6 +81,11 @@ export const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
 export const BRAILLE_SPINNER_RE = /[\u2800-\u28ff]/g
 
 export function isGeminiTerminalTitle(title: string): boolean {
+  // Why: qodercli forked gemini-cli and reuses its status glyphs, so its own title shape must be
+  // ruled out before the glyph test below claims the pane.
+  if (isQoderCliTerminalTitle(title)) {
+    return false
+  }
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (
     title.includes(GEMINI_PERMISSION) ||
