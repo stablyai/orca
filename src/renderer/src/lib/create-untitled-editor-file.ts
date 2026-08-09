@@ -29,8 +29,8 @@ export type CreateUntitledEditorFileOptions = {
    * Receives the resolved name (`untitled-3.md`), because templates interpolate it.
    */
   initialContent?: (fileName: string) => string
-  /** Names the file kind in the name-exhaustion error, e.g. `markdown file`. */
-  fileKind?: string
+  /** Interpolated into the name-exhaustion error, e.g. `markdown file`. */
+  exhaustionErrorLabel?: string
   operationProvenance?: EditorFileOperationProvenance
   expectedSshTargetId?: string
   expectedSshConnectionGeneration?: number
@@ -54,6 +54,11 @@ export async function createUntitledEditorFile(
 ): Promise<UntitledEditorFileInfo> {
   const baseName = options.baseName ?? 'untitled'
   const ext = options.ext
+  // Why: a dotless ext silently yields `untitledmd`, and the resulting file is
+  // already on disk by the time anyone notices; fail before touching the host.
+  if (ext && !ext.startsWith('.')) {
+    throw new Error(`Untitled file extension must start with a dot, received "${ext}".`)
+  }
   const MAX_ATTEMPTS = 100
   const context = {
     settings,
@@ -73,8 +78,8 @@ export async function createUntitledEditorFile(
   // Why: createFile uses the 'wx' flag, so pathExists is only a hint. Another
   // create can still win the race after our last probe, especially when the
   // user fires the shortcut repeatedly or two split groups create files at
-  // nearly the same time. Retrying EEXIST keeps "New Markdown" advancing to
-  // the next untitled-N name instead of surfacing a spurious error toast.
+  // nearly the same time. Retrying EEXIST keeps the action advancing to the
+  // next untitled-N name instead of surfacing a spurious error toast.
   //
   // Why: existence probing must go through the same runtime/SSH-aware file
   // surface as creation; the shell probe only sees the client filesystem.
@@ -122,7 +127,7 @@ export async function createUntitledEditorFile(
   }
 
   throw new Error(
-    `Unable to create untitled ${options.fileKind ?? 'file'} after ${MAX_ATTEMPTS} attempts.`
+    `Unable to create untitled ${options.exhaustionErrorLabel ?? 'file'} after ${MAX_ATTEMPTS} attempts.`
   )
 }
 

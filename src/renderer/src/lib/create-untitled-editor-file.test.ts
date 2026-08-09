@@ -57,6 +57,15 @@ describe('createUntitledEditorFile', () => {
     expect(info.relativePath).toBe('untitled-2')
   })
 
+  it('rejects a dotless extension before touching the host', async () => {
+    await expect(
+      createUntitledEditorFile('/repo', 'wt-1', undefined, null, { ext: 'md' })
+    ).rejects.toThrow('Untitled file extension must start with a dot, received "md".')
+
+    expect(runtimePathExistsMock).not.toHaveBeenCalled()
+    expect(createRuntimePathMock).not.toHaveBeenCalled()
+  })
+
   it('propagates non-EEXIST failures', async () => {
     createRuntimePathMock.mockRejectedValue(new Error('EACCES: permission denied'))
 

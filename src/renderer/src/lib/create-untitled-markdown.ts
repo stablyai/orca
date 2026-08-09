@@ -40,6 +40,8 @@ export async function createUntitledMarkdownFile(
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
   options: CreateUntitledMarkdownOptions = {}
 ): Promise<UntitledMarkdownFileInfo> {
+  // Why: must mirror the context the core builds, or the template read and the
+  // file write would route to different hosts.
   const context = {
     settings,
     worktreeId,
@@ -55,7 +57,7 @@ export async function createUntitledMarkdownFile(
 
   return createUntitledEditorFile(worktreePath, worktreeId, connectionId, settings, {
     ext: '.md',
-    fileKind: 'markdown file',
+    exhaustionErrorLabel: 'markdown file',
     // Why: placeholders interpolate the resolved name, which the collision loop
     // may bump to untitled-3.md, so the content cannot be built up front.
     initialContent:
