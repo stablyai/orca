@@ -45,6 +45,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useEditablePluginCommands } from '@/store/plugin-panels'
 import { buildShortcutDefinitionCatalog } from './shortcut-definition-catalog'
+import { SpaceShortcutPreset } from './SpaceShortcutPreset'
 
 const isMac = navigator.userAgent.includes('Mac')
 const platform: NodeJS.Platform = isMac
@@ -310,6 +311,8 @@ export function ShortcutsPane(): React.JSX.Element {
             updateSettings={updateSettings}
           />
         ) : null}
+
+        <SpaceShortcutPreset platform={platform} />
 
         <SettingsSubsectionHeader
           title={translate(

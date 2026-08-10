@@ -10502,6 +10502,14 @@
           "openAutomationsDescription": "Create schedules and inspect recent runs.",
           "title": "Automations",
           "description": "Schedule agent work and choose whether Automations appears in the sidebar."
+        },
+        "SpaceShortcutPreset": {
+          "02f36cf6fe": "Orca",
+          "2b73f91683": "Arc",
+          "733f0bf4c4": "Arc style puts Spaces on the primary number row and arrow chords, moving workspaces and worktree history to the freed ranges.",
+          "90589c47f0": "Custom",
+          "9d7aac5159": "Shortcut layout",
+          "cc2fc6b6c2": "Shortcut layout preset"
         }
       },
       "right": {
