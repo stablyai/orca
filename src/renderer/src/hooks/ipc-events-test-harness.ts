@@ -123,6 +123,8 @@ export type IpcEventsHarness = {
   requestTerminalCreate: (request: RequestTerminalCreateRequest) => void
   replyTerminalCreate: ReturnType<typeof vi.fn>
   /** Fire a main-process digit chord (zero-based index). */
+  jumpToSpaceIndex: (index: number) => void
+  navigateSpace: (direction: 'next' | 'previous') => void
   jumpToWorktreeIndex: (index: number) => void
   jumpToTabIndex: (index: number) => void
   /** Standard (non-palette) target of a workspace digit chord. */
@@ -147,6 +149,7 @@ export async function loadIpcEventsHarness(
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
   let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
   const indexJumpListeners = new Map<string, (index: number) => void>()
+  let spaceNavigateListener: ((direction: 'next' | 'previous') => void) | null = null
 
   vi.resetModules()
   vi.unstubAllGlobals()
@@ -209,6 +212,14 @@ export async function loadIpcEventsHarness(
             indexJumpListeners.set('worktree', listener)
             return () => {}
           },
+          onJumpToSpaceIndex: (listener: (index: number) => void) => {
+            indexJumpListeners.set('space', listener)
+            return () => {}
+          },
+          onSpaceNavigate: (listener: (direction: 'next' | 'previous') => void) => {
+            spaceNavigateListener = listener
+            return () => {}
+          },
           onJumpToTabIndex: (listener: (index: number) => void) => {
             indexJumpListeners.set('tab', listener)
             return () => {}
@@ -268,6 +279,8 @@ export async function loadIpcEventsHarness(
       requestTerminalCreateListener(request)
     },
     replyTerminalCreate,
+    jumpToSpaceIndex: (index) => fireIndexJump(indexJumpListeners, 'space', index),
+    navigateSpace: (direction) => spaceNavigateListener?.(direction),
     jumpToWorktreeIndex: (index) => fireIndexJump(indexJumpListeners, 'worktree', index),
     jumpToTabIndex: (index) => fireIndexJump(indexJumpListeners, 'tab', index),
     activateAndRevealWorkspace

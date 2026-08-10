@@ -1619,10 +1619,25 @@ describe('digit-index shortcuts', () => {
     shift: Boolean(modifiers.shift)
   })
 
-  it('flags the two ranged actions as digit-index rows', () => {
+  it('flags the ranged actions as digit-index rows', () => {
+    expect(isDigitIndexActionId('space.selectByIndex')).toBe(true)
     expect(isDigitIndexActionId('tab.selectByIndex')).toBe(true)
     expect(isDigitIndexActionId('workspace.selectByIndex')).toBe(true)
     expect(isDigitIndexActionId('tab.newTerminal')).toBe(false)
+  })
+
+  it('keeps Space number shortcuts opt-in and blocks collisions with tab numbers', () => {
+    expect(getEffectiveKeybindingsForAction('space.selectByIndex', 'darwin')).toEqual([])
+    expect(
+      findKeybindingConflicts('darwin', {
+        'space.selectByIndex': ['Ctrl+1']
+      })
+    ).toEqual([
+      {
+        binding: 'Ctrl+1',
+        actionIds: ['space.selectByIndex', 'tab.selectByIndex']
+      }
+    ])
   })
 
   it('resolves the default ranges per platform', () => {

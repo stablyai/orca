@@ -719,6 +719,12 @@ export function createMainWindow(
       case 'switchRecentTab':
         mainWindow.webContents.send('ui:switchRecentTab')
         return
+      case 'jumpToSpaceIndex':
+        mainWindow.webContents.send('ui:jumpToSpaceIndex', action.index)
+        return
+      case 'spaceNavigate':
+        mainWindow.webContents.send('ui:spaceNavigate', action.direction)
+        return
       case 'jumpToWorktreeIndex':
         mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
         return
@@ -746,7 +752,10 @@ export function createMainWindow(
       return false
     }
 
-    const isIndexJump = action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex'
+    const isIndexJump =
+      action.type === 'jumpToSpaceIndex' ||
+      action.type === 'jumpToWorktreeIndex' ||
+      action.type === 'jumpToTabIndex'
     if (isIndexJump && isAutoRepeat) {
       // Contain held-key repeats in main — every renderer index path skips e.repeat, so yielding a
       // repeat would leak a raw key to xterm/DOM, and re-firing the jump is never what a hold means.
@@ -756,7 +765,10 @@ export function createMainWindow(
 
     // While the floating panel owns the keyboard, yield indexed switch chords to the renderer
     // so L2 selects a floating tab instead of switching the main workspace behind the panel.
-    if (floatingPanelFocused && isIndexJump) {
+    if (
+      floatingPanelFocused &&
+      (action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex')
+    ) {
       return false
     }
 

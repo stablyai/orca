@@ -33,6 +33,9 @@ export type KeybindingActionId =
   | 'worktree.navigateDown'
   | 'app.settings'
   | 'app.forceReload'
+  | 'space.selectByIndex'
+  | 'space.next'
+  | 'space.previous'
   | 'workspace.create'
   | 'workspace.rename'
   | 'workspace.delete'
@@ -253,6 +256,34 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'next', 'down'],
     defaultBindings: platformBindings(['Mod+Shift+ArrowDown'])
+  },
+  {
+    id: 'space.selectByIndex',
+    title: 'Select Space 1–9',
+    group: 'Space Navigation',
+    scope: 'global',
+    conflictGroup: 'space-tab-index',
+    searchKeywords: ['shortcut', 'space', 'select', 'switch', 'number', 'digit', '1-9', 'index'],
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'space.next',
+    title: 'Next Space',
+    group: 'Space Navigation',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'space', 'next', 'switch', 'navigate'],
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'space.previous',
+    title: 'Previous Space',
+    group: 'Space Navigation',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'space', 'previous', 'switch', 'navigate'],
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
   },
   {
     id: 'workspace.create',
@@ -687,7 +718,8 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     title: 'Select Tab 1–9',
     group: 'Tab Navigation',
     scope: 'tabs',
-    // Why: no shared conflictGroup with workspace.selectByIndex so swapping their modifiers isn't a false conflict; safe because resolveWindowShortcutAction checks the workspace range first.
+    conflictGroup: 'space-tab-index',
+    // Why: shares a conflictGroup with space.selectByIndex (different scopes, so a collision would otherwise go unreported); still no group with workspace.selectByIndex, whose overlap resolveWindowShortcutAction settles by checking the workspace range first.
     searchKeywords: ['shortcut', 'tab', 'select', 'switch', 'number', 'digit', '1-9', 'index'],
     // Why: representative chord for the 1-9 range (see workspace.selectByIndex); each platform avoids the workspace-jump chord (Mod+1-9).
     defaultBindings: {
@@ -1119,6 +1151,7 @@ const DEFINITION_IDS = new Set<KeybindingActionId>(
 
 // Why: these ids are single remappable rows whose chord is a representative — the digit canonicalizes to 1 but the binding fires for any 1-9.
 export const DIGIT_INDEX_ACTION_IDS: readonly KeybindingActionId[] = [
+  'space.selectByIndex',
   'tab.selectByIndex',
   'workspace.selectByIndex'
 ]

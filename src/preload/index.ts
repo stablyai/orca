@@ -3564,6 +3564,17 @@ const api = {
       ipcRenderer.on('ui:openTasks', listener)
       return () => ipcRenderer.removeListener('ui:openTasks', listener)
     },
+    onJumpToSpaceIndex: (callback: (index: number) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)
+      ipcRenderer.on('ui:jumpToSpaceIndex', listener)
+      return () => ipcRenderer.removeListener('ui:jumpToSpaceIndex', listener)
+    },
+    onSpaceNavigate: (callback: (direction: 'next' | 'previous') => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 'next' | 'previous') =>
+        callback(direction)
+      ipcRenderer.on('ui:spaceNavigate', listener)
+      return () => ipcRenderer.removeListener('ui:spaceNavigate', listener)
+    },
     onJumpToWorktreeIndex: (callback: (index: number) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)
       ipcRenderer.on('ui:jumpToWorktreeIndex', listener)
