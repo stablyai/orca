@@ -160,6 +160,20 @@ fi
 `
 }
 
+// Why: fish has no ZDOTDIR-style wrapper dir, so the marker rides `--init-command`
+// and fires on fish_prompt — the earliest event fish exposes (STA-3417). Unlike zsh's
+// zle-line-init this lands just *before* fish arms `?2004h`, which PostReadyFlushGate
+// absorbs. `builtin printf` so a user-defined printf can't silently swallow the marker
+// and send every launch to the ready timeout.
+export function getFishShellReadyInitCommand(escapedMarker: string): string {
+  return `if test "$ORCA_SHELL_READY_MARKER" = 1
+  function __orca_shell_ready_marker --on-event fish_prompt
+    builtin printf "${escapedMarker}"
+    functions -e __orca_shell_ready_marker
+  end
+end`
+}
+
 export function getZshFinalZdotdirRestoreBlock(homeExpression = '"${ORCA_ORIG_ZDOTDIR:-$HOME}"') {
   return `_orca_home=${homeExpression}
 case "\${_orca_home%/}" in

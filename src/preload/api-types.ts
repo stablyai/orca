@@ -512,6 +512,10 @@ import type {
   AiVaultSubagentListResult
 } from '../shared/ai-vault-types'
 import type {
+  AiVaultSessionTitlesArgs,
+  AiVaultSessionTitlesResult
+} from '../shared/ai-vault-session-title'
+import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../shared/ai-vault-resume-preparation'
@@ -919,6 +923,7 @@ export type OpenCodeUsageApi = {
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+  resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
   cancelListSessions: (args: { requestToken: string }) => Promise<void>
   prepareSessionResume: (
     args: AiVaultPrepareSessionResumeArgs
@@ -3224,6 +3229,7 @@ export type PreloadApi = {
     onDictationKeyDown: (callback: () => void) => () => void
     onExportPdfRequested: (callback: () => void) => () => void
     onAppMenuPaste: (callback: () => void) => () => void
+    onAppMenuSelectionAction: (callback: (action: 'copy' | 'select-all') => void) => () => void
     onEditableContextPaste: (callback: (data: { plainTextOnly: boolean }) => void) => () => void
     onActivateWorktree: (
       callback: (data: {
@@ -3338,6 +3344,7 @@ export type PreloadApi = {
     writeSelectionClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
     performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }) => void
+    performNativeSelectionAction: (action: 'copy' | 'select-all') => void
     writeClipboardFile: (
       args:
         | {

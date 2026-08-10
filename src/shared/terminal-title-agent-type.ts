@@ -59,10 +59,6 @@ export function isGeminiTerminalTitle(title: string): boolean {
   return titleHasAgentName(title, 'gemini')
 }
 
-export function isPiTerminalTitle(title: string): boolean {
-  return isLegacyPiCompatibleTitle(title) && !containsBrailleSpinner(title)
-}
-
 // Why: Grok Build's working OSC titles use a fixed frame shape —
 // "spinner - <rotating phrase> - grok" — so every frame is a distinct title
 // that flips tab and sidebar labels. Require BOTH the post-spinner " - "

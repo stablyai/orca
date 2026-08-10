@@ -2,25 +2,22 @@ import { memo, useEffect, useRef, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { ArrowUp, ChevronDown, Copy, SquareChevronRight } from 'lucide-react-native'
-import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { MobileMarkdown } from '../components/MobileMarkdown'
-import { colors } from '../theme/mobile-theme'
-import {
-  isImageRefBlock,
-  isTextBlock,
-  pairToolBlocks,
-  splitNativeChatBlocks,
-  type ToolPair
-} from './mobile-native-chat-blocks'
-import { diffFromText, diffFromToolCall, type DiffLine } from './mobile-native-chat-diff'
-import { isRenderableImageUri } from './mobile-native-chat-image-preview'
-import { styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
-import { nativeChatMessageText } from './mobile-native-chat-message-text'
+import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
+import type { NativeChatDiffLine as DiffLine } from '../../../src/shared/native-chat-diff'
+import { pairToolBlocks, splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
+import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
 import {
   createToolInputDisplay,
   summarizeToolRun,
   truncateToolDetail
-} from './mobile-native-chat-tool-summary'
+} from '../../../src/shared/native-chat-tool-summary'
+import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { MobileMarkdown } from '../components/MobileMarkdown'
+import { colors } from '../theme/mobile-theme'
+import { isRenderableImageUri } from './mobile-native-chat-image-preview'
+import { styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
+import { nativeChatMessageText } from './mobile-native-chat-message-text'
 
 const MAX_VISIBLE_TOOL_PAIRS = 6
 const MAX_TOOL_RUN_DIFF_ROWS = 240

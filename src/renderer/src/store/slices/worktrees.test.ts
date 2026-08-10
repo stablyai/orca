@@ -5913,6 +5913,42 @@ describe('worktree remote runtime mutations', () => {
     )
   })
 
+  it('passes task startup drafts only to the owning remote runtime', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/task-draft',
+      repoId: 'repo1',
+      path: '/path/task-draft'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'task-draft', undefined, 'inherit']
+    args[10] = 'codex'
+    args[25] = { startupDraft: 'https://github.com/stablyai/orca/issues/12' }
+
+    await createWorktree(...args)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'worktree.create',
+        params: expect.objectContaining({
+          createdWithAgent: 'codex',
+          startupDraft: 'https://github.com/stablyai/orca/issues/12'
+        })
+      })
+    )
+    expect(mockApi.worktrees.create).not.toHaveBeenCalled()
+  })
+
   it('passes startup commands through local worktree creation IPC', async () => {
     const store = createTestStore()
     const wt = makeWorktree({

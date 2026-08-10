@@ -38,11 +38,7 @@ type Props = {
   onCreated: (url: string, warning?: string) => void
 }
 
-// PR compose form body: title/body/base/draft with AI prefill (git.generate
-// PullRequestFields), submitting via createMobilePr. Renders a plain View so it
-// can sit inline inside the PR sidebar's existing ScrollView (a BottomDrawer
-// overlay trapped in a ScrollView clips the form). The BottomDrawer wrapper
-// MobilePrComposeSheet reuses this body at full-screen roots.
+// A plain View keeps the compose form usable inside the PR sidebar ScrollView.
 export function MobilePrComposeForm({
   client,
   worktreeId,

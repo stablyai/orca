@@ -1,16 +1,18 @@
 import { isAnteHeadlessOneShotCommand } from './ante-headless-command'
+import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
 import { isQoderCliHeadlessOneShotCommand } from './qodercli-headless-command'
 import type { TuiAgent } from './types'
 
 // Why: a table (not an if-chain) so adding an agent is one entry; Claude and Trae share the same
-// `--print` one-shot contract, Ante's `--prompt` form and qodercli's extra `-o`/`--input-format`
-// forms each need their own matcher.
+// `--print` one-shot contract, while Ante's `--prompt` form, Prime Agent's `--mode` forms and
+// qodercli's extra `-o`/`--input-format` forms each need their own matcher.
 const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   Record<TuiAgent, (tokens: readonly string[]) => boolean>
 > = {
   claude: isPrintModeHeadlessOneShotCommand,
   trae: isPrintModeHeadlessOneShotCommand,
+  'prime-agent': isPrimeAgentHeadlessOneShotCommand,
   ante: isAnteHeadlessOneShotCommand,
   qodercli: isQoderCliHeadlessOneShotCommand
 }

@@ -49,14 +49,6 @@ function textWidth(text: string, fontPx: number, ratio = GLYPH_WIDTH_RATIO): num
   return text.length * fontPx * ratio
 }
 
-export function agentMapWorktreeLabelWidth(text: string): number {
-  return textWidth(text, WORKTREE_LABEL_FONT_PX)
-}
-
-export function agentMapCountLabelWidth(text: string): number {
-  return textWidth(text, COUNT_FONT_PX)
-}
-
 function boxesOverlap(a: LabelBox, b: LabelBox): boolean {
   return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
 }

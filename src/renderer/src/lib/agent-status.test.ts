@@ -864,6 +864,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('trae')).toBe('Trae')
   })
 
+  it("maps 'prime-agent' to 'Prime Agent'", () => {
+    expect(formatAgentTypeLabel('prime-agent')).toBe('Prime Agent')
+  })
+
   it("maps 'qodercli' to 'Qoder CLI'", () => {
     expect(formatAgentTypeLabel('qodercli')).toBe('Qoder CLI')
   })
@@ -893,6 +897,7 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
     expect(agentTypeToIconAgent('ante')).toBe('ante')
     expect(agentTypeToIconAgent('trae')).toBe('trae')
+    expect(agentTypeToIconAgent('prime-agent')).toBe('prime-agent')
     expect(agentTypeToIconAgent('qodercli')).toBe('qodercli')
   })
 

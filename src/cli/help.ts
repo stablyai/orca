@@ -109,7 +109,7 @@ Orchestration:
   orchestration worker-start Start a supervised worker locally or on a connected Orca server
   orchestration worker-show Inspect one supervised worker
   orchestration worker-read Read bounded output from one supervised worker
-  orchestration worker-stop Stop one supervised worker
+  orchestration worker-stop Fence one Dispatch; stop only its supervised worker
   orchestration worker-abandon Fence an uncertain worker without claiming it stopped
   orchestration worker-release Release a settled worker's terminal after archiving its output
   orchestration worker-retain Keep a worker terminal live for debugging

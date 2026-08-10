@@ -10,6 +10,7 @@ import {
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
@@ -126,6 +127,8 @@ import type {
   ArtifactListOptions,
   ArtifactListPage,
   ArtifactListItem,
+  ArtifactPublishedLink,
+  ArtifactPublishResult,
   ArtifactWriteRequest
 } from '../../shared/artifacts'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
@@ -486,12 +489,12 @@ import {
   configureAiVaultSessionSources,
   listAiVaultSessions
 } from '../ai-vault/cached-session-list'
-import {
-  readAiVaultSessionIdentity,
-  resolveAiVaultSessionLiveness
-} from '../ai-vault/session-liveness'
-import type { AiVaultAgent, AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
-import type { AiVaultSessionLiveness } from '../../shared/ai-vault-session-deletion'
+import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
+import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
+import type {
+  AiVaultSessionTitleRequest,
+  AiVaultSessionTitlesResult
+} from '../../shared/ai-vault-session-title'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
@@ -1135,6 +1138,7 @@ type RuntimeStore = {
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
+    artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     mobileAutoRestoreFitMs?: number | null
@@ -3562,6 +3566,9 @@ export class OrcaRuntimeService {
     | 'minimaxGroupId'
     | 'minimaxUsageModels'
     | 'prBotAuthorOverrides'
+    // Read-only on purpose: clients preflight the publish capability here, but SettingsUpdate
+    // still omits the key so no RPC caller can grant it to itself.
+    | 'artifactSharingEnabled'
   > {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
@@ -3584,7 +3591,8 @@ export class OrcaRuntimeService {
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
-      prBotAuthorOverrides: settings.prBotAuthorOverrides ?? []
+      prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
+      artifactSharingEnabled: isArtifactSharingEnabled(settings)
     }
   }
 
@@ -3599,7 +3607,7 @@ export class OrcaRuntimeService {
         return
       }
       await applyAgentStatusHooksEnabled(settings.agentStatusHooksEnabled !== false, settings, {
-        shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
+        shouldHydrateShellPath: app.isPackaged,
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
           const current = this.store?.getSettings()
@@ -4633,8 +4641,20 @@ export class OrcaRuntimeService {
     return this.requireArtifactService().list(options)
   }
 
+  getPublishedArtifactLink(
+    request: ArtifactCloudOptions & { sourceKey: string }
+  ): Promise<ArtifactCloudOperation<ArtifactPublishedLink | null>> {
+    return this.requireArtifactService().getPublishedLink(request)
+  }
+
   shareArtifact(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
     return this.requireArtifactService().share(request)
+  }
+
+  publishArtifact(
+    request: ArtifactWriteRequest
+  ): Promise<ArtifactCloudOperation<ArtifactPublishResult>> {
+    return this.requireArtifactService().publish(request)
   }
 
   updateArtifact(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
@@ -4958,72 +4978,11 @@ export class OrcaRuntimeService {
     return listAiVaultSessions(args)
   }
 
-  async getAiVaultSessionLiveness(target: {
-    agent: AiVaultAgent
-    sessionId: string | undefined
-    filePath: string
-  }): Promise<AiVaultSessionLiveness> {
-    const provider = this.getLocalProviderFn?.()
-    if (!provider || !this.getAgentProviderSessionSnapshotFn) {
-      return 'unknown'
-    }
-    const identity = await readAiVaultSessionIdentity(target)
-    if (identity.outcome !== 'found') {
-      return 'unknown'
-    }
-    const deadlineMs = Date.now() + 3_000
-    return await resolveAiVaultSessionLiveness(
-      {
-        agent: target.agent,
-        sessionId: identity.sessionId
-      },
-      {
-        deadlineMs,
-        listProcesses: async () => {
-          const result = await withTimeoutResult(
-            provider.listProcesses({ deadlineMs }),
-            Math.max(1, deadlineMs - Date.now())
-          )
-          if (!result.ok) {
-            throw new Error('agent_session_ownership_unknown')
-          }
-          return result.value
-        },
-        getStatusSnapshot: this.getAgentProviderSessionSnapshotFn,
-        inspectForegroundProcess: async (ptyId) => {
-          const result = await withTimeoutResult(
-            provider.getForegroundProcess(ptyId),
-            Math.max(1, deadlineMs - Date.now())
-          )
-          return result.ok
-            ? { available: true, process: result.value }
-            : { available: false, process: null }
-        },
-        getStatusPtyId: (status) => {
-          if (status.terminalHandle) {
-            const live = this.getLivePtyForHandle(status.terminalHandle)
-            if (live) {
-              return live.pty.ptyId
-            }
-            for (const [ptyId, handle] of this.handleByPtyId) {
-              if (handle === status.terminalHandle) {
-                return ptyId
-              }
-            }
-          }
-          return this.getPtyRecordForPaneKey(status.paneKey)?.ptyId ?? null
-        },
-        getAgentHint: (process) => {
-          const pty = this.ptysById.get(process.id)
-          const runtimeHint = pty?.foregroundAgent ?? pty?.launchAgent
-          if (runtimeHint) {
-            return runtimeHint
-          }
-          const ownerAgents = new Set(process.agentSessionOwners?.map((owner) => owner.claim.agent))
-          return ownerAgents.size === 1 ? ([...ownerAgents][0] ?? null) : null
-        }
-      }
-    )
+  resolveAiVaultSessionTitles(
+    requests: AiVaultSessionTitleRequest[],
+    signal?: AbortSignal
+  ): Promise<AiVaultSessionTitlesResult> {
+    return resolveLocalAiVaultSessionTitles(requests, signal)
   }
 
   prepareAiVaultSessionResume(

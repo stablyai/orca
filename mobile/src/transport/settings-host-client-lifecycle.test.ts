@@ -151,29 +151,13 @@ function TestApp({
   )
 }
 
-function suppressRendererWarning(): () => void {
-  const originalConsoleError = console.error
-  const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => spy.mockRestore()
-}
-
 async function renderScreen(screen: Screen, detailHostId?: string): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | null = null
-  const restore = suppressRendererWarning()
-  try {
-    await act(async () => {
-      renderer = create(createElement(TestApp, { screen, detailHostId }))
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-  } finally {
-    restore()
-  }
+  await act(async () => {
+    renderer = create(createElement(TestApp, { screen, detailHostId }))
+    await Promise.resolve()
+    await Promise.resolve()
+  })
   if (!renderer) {
     throw new Error('settings lifecycle harness did not render')
   }
@@ -203,7 +187,6 @@ function activeHostIds(): string[] {
 }
 
 beforeEach(() => {
-  globalThis.IS_REACT_ACT_ENVIRONMENT = true
   context = null
   routeFocus.effect = null
   connectMock.mockReset()
@@ -235,16 +218,11 @@ describe('settings host client lifecycle', () => {
     }
 
     let renderer: ReactTestRenderer | null = null
-    const restore = suppressRendererWarning()
-    try {
-      await act(async () => {
-        renderer = create(createElement(NavigationStack, { settingsVisible: false }))
-        await Promise.resolve()
-        await Promise.resolve()
-      })
-    } finally {
-      restore()
-    }
+    await act(async () => {
+      renderer = create(createElement(NavigationStack, { settingsVisible: false }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
     if (!renderer) {
       throw new Error('navigation stack harness did not render')
     }
@@ -354,20 +332,15 @@ describe('settings host client lifecycle', () => {
     }
 
     let renderer: ReactTestRenderer | null = null
-    const restore = suppressRendererWarning()
-    try {
-      await act(async () => {
-        renderer = create(
-          createElement(HostListApp, {
-            settingsHostIds: [retainedHostId, sharedHostId, removedHostId]
-          })
-        )
-        await Promise.resolve()
-        await Promise.resolve()
-      })
-    } finally {
-      restore()
-    }
+    await act(async () => {
+      renderer = create(
+        createElement(HostListApp, {
+          settingsHostIds: [retainedHostId, sharedHostId, removedHostId]
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
     if (!renderer) {
       throw new Error('host-list lifecycle harness did not render')
     }
@@ -451,14 +424,9 @@ describe('settings host client lifecycle', () => {
     }
 
     let renderer: ReactTestRenderer | null = null
-    const restore = suppressRendererWarning()
-    try {
-      act(() => {
-        renderer = create(createElement(RetryApp, { settingsVisible: true }))
-      })
-    } finally {
-      restore()
-    }
+    act(() => {
+      renderer = create(createElement(RetryApp, { settingsVisible: true }))
+    })
     if (!renderer || !resolveInitial || !resolveRetry) {
       throw new Error('retry lifecycle harness did not initialize')
     }
@@ -517,14 +485,9 @@ describe('settings host client lifecycle', () => {
     }
 
     let renderer: ReactTestRenderer | null = null
-    const restore = suppressRendererWarning()
-    try {
-      act(() => {
-        renderer = create(createElement(PendingApp, { visible: true }))
-      })
-    } finally {
-      restore()
-    }
+    act(() => {
+      renderer = create(createElement(PendingApp, { visible: true }))
+    })
     if (!renderer || !resolveFirst || !resolveSecond) {
       throw new Error('pending settings harness did not initialize')
     }
@@ -580,17 +543,12 @@ describe('settings host client lifecycle', () => {
     }
 
     let renderer: ReactTestRenderer | null = null
-    const restore = suppressRendererWarning()
-    try {
-      await act(async () => {
-        renderer = create(
-          createElement(ReplacementApp, { detailVisible: false, settingsVisible: false })
-        )
-        await Promise.resolve()
-      })
-    } finally {
-      restore()
-    }
+    await act(async () => {
+      renderer = create(
+        createElement(ReplacementApp, { detailVisible: false, settingsVisible: false })
+      )
+      await Promise.resolve()
+    })
     if (!renderer || !context) {
       throw new Error('replacement lifecycle harness did not initialize')
     }
@@ -665,14 +623,9 @@ describe('settings host client lifecycle', () => {
     }
 
     let renderer: ReactTestRenderer | null = null
-    const restore = suppressRendererWarning()
-    try {
-      act(() => {
-        renderer = create(createElement(ManualApp, { selected: false }))
-      })
-    } finally {
-      restore()
-    }
+    act(() => {
+      renderer = create(createElement(ManualApp, { selected: false }))
+    })
     if (!renderer || !context) {
       throw new Error('manual connection harness did not initialize')
     }
@@ -735,16 +688,11 @@ describe('settings host client lifecycle', () => {
     }
 
     let renderer: ReactTestRenderer | null = null
-    const restore = suppressRendererWarning()
-    try {
-      await act(async () => {
-        renderer = create(createElement(FocusStack))
-        await Promise.resolve()
-        await Promise.resolve()
-      })
-    } finally {
-      restore()
-    }
+    await act(async () => {
+      renderer = create(createElement(FocusStack))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
     if (!renderer || !routeFocus.effect) {
       throw new Error('settings focus harness did not initialize')
     }

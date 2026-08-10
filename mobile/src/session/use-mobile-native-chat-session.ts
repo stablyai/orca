@@ -3,10 +3,10 @@ import {
   createNativeChatTranscriptRetention,
   encodeNativeChatTranscriptIdentity
 } from '../../../src/shared/native-chat-transcript-retention'
+import { createNativeChatMerger, replaceList } from '../../../src/shared/native-chat-merge'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
-import { createNativeChatMerger, replaceList } from './mobile-native-chat-merge'
 import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame

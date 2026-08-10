@@ -91,7 +91,9 @@
     "openWorktreePalette": "Open Worktree Palette",
     "window": "Window",
     "help": "Help",
-    "paste": "Paste"
+    "paste": "Paste",
+    "copy": "Copy",
+    "selectAll": "Select All"
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -419,6 +421,7 @@
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
+          "d443a47995": "Prime Agent",
           "3d02cf42a4": "Qoder CLI",
           "mimo_code_label": "MiMo Code"
         },
@@ -2817,6 +2820,7 @@
             "ec85df5914": "Quick Commands",
             "0a917b591a": "Paste",
             "f3eeb1de13": "Copy",
+            "selectAll": "Select All",
             "c2f0b72b8d": "Insert",
             "925f49f210": "Expand Pane",
             "df766809e0": "Collapse Pane",
@@ -2835,6 +2839,19 @@
             "f984ab2a30": "Remove pane title: {{value0}}",
             "cc5a2dc706": "Edit pane title: {{value0}}",
             "7dbbfcbecc": "Pane title"
+          },
+          "TerminalLinkActionPopover": {
+            "openLink": "Open link",
+            "openFile": "Open file",
+            "switchWorkspace": "Switch workspace",
+            "openInFinder": "Open in Finder",
+            "openFolder": "Open folder",
+            "openWithDefaultApp": "Open with default app",
+            "switchTerminal": "Switch terminal",
+            "openTaskTerminal": "Open task terminal",
+            "systemBrowser": "System Browser",
+            "orcaBrowser": "Orca Browser",
+            "terminalLinkSettings": "Terminal link settings"
           },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Open Disk Space Analyzer",
@@ -6175,7 +6192,10 @@
           "5567191a6e": "Browse",
           "0e9fc0eadc": "Workspace Directory",
           "e2955d9ccb": "Configure where new workspaces are created.",
-          "7511097c5d": "Workspace"
+          "7511097c5d": "Workspace",
+          "31e300af1c": "Ask Before Deleting Artifacts",
+          "fb29a73a17": "Show a confirmation dialog before deleting a shared artifact and breaking its public link.",
+          "bf46474e33": "Show a confirmation before deleting a shared artifact. Anyone holding its public link loses access."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Apply Changes",
@@ -8104,6 +8124,14 @@
               "invert": "invert",
               "opposite": "opposite"
             },
+            "terminalLinkActions": {
+              "terminal": "terminal",
+              "click": "click",
+              "actions": "actions",
+              "popover": "popover",
+              "menu": "menu",
+              "disable": "disable"
+            },
             "72c58f7792": "webview",
             "82ba1c80ea": "localhost",
             "bea27bac4b": "links",
@@ -10017,6 +10045,10 @@
           "descriptionSystem": "Links open in Orca, so {{chord}}+click sends one to your system browser instead.",
           "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
         },
+        "BrowserTerminalLinkActionsSetting": {
+          "title": "Show terminal link actions",
+          "description": "Show available actions when you click a terminal link. Turn this off to require {{modifier}}-click."
+        },
         "PluginConsentDialog": {
           "workerTrust": "Background worker — runs its own process",
           "instructionalTrust": "Instructional content — runs later under user or agent authority",
@@ -10383,6 +10415,7 @@
           "devOnly": "Dev only",
           "channelAriaLabel": "Update channel",
           "hourlyWarning": "Hourly builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.",
+          "dailyWarning": "Daily builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.",
           "adhocWarning": "Adhoc builds are macOS-only and come from a branch that has not landed. Whoever cut one may abandon it — keep a stable build handy.",
           "loadingBuilds": "Loading builds…",
           "noBuilds": "No builds found",
@@ -10418,13 +10451,13 @@
           "title": "Artifacts",
           "description": "Share HTML and Markdown files with your team and manage their public links.",
           "howToTitle": "How to use Artifacts",
-          "howToDescription": "Ask your agent to share an HTML or Markdown file. Orca handles the upload with your account.",
-          "shareStepTitle": "Ask your agent to share it",
-          "shareStepDescription": "For example: “Share this HTML mock as an artifact.”",
-          "linkStepTitle": "Share the public link",
-          "linkStepDescription": "Your agent returns a link that anyone with the URL can view.",
+          "howToDescription": "Publish HTML or Markdown files as public links, then share them with your team.",
+          "shareStepTitle": "Choose a file to share",
+          "shareStepDescription": "Open an HTML or Markdown file and select Share as artifact, or ask an agent to share it.",
+          "linkStepTitle": "Copy the public link",
+          "linkStepDescription": "After publishing, copy the link and send it to your team.",
           "manageStepTitle": "Manage it in Orca",
-          "manageStepDescription": "Open Artifacts from the sidebar to revisit or delete links owned by your account.",
+          "manageStepDescription": "Open Artifacts from the sidebar to preview or remove links.",
           "openArtifacts": "Open Artifacts",
           "openArtifactsDescription": "View and delete links shared through your account.",
           "showButton": "Show Artifacts Button",
@@ -10432,13 +10465,21 @@
           "openArtifactsDescriptionV2": "Preview, copy, and manage links shared through your account.",
           "signInTitle": "Sign in to share artifacts",
           "signInDescription": "Use your Orca account to upload artifacts and manage their public links.",
-          "signInAgain": "Sign in again"
+          "signInAgain": "Sign in again",
+          "enableStepTitle": "Enable artifact sharing",
+          "enableStepWebDescription": "Open Settings → Artifacts in the Orca desktop app on the host device and enable publishing.",
+          "enableStepDescription": "Turn on “Allow publishing public artifact links” above.",
+          "allowPublishing": "Allow publishing public artifact links",
+          "allowPublishingWebDescription": "Desktop only. Open Settings → Artifacts on the host device to change this setting.",
+          "allowPublishingDescription": "Publish HTML and Markdown files as links anyone with the URL can open. Existing links remain until you delete them from Artifacts.",
+          "howToDescriptionDisabled": "Enable artifact sharing above to publish HTML or Markdown files as public links.",
+          "allowPublishingSearchDescription": "Allow Orca to publish HTML and Markdown files as public links."
         },
         "orcaAccount": {
           "connected": "Connected",
           "reconnectRequired": "Your session expired. Sign in again to use cloud features.",
           "unavailable": "Orca sign-in is unavailable in this build.",
-          "signedOut": "Sign in to use Artifacts and Orca Relay.",
+          "signedOut": "Sign in to extend Orca with cloud features, including Artifacts and Orca Relay.",
           "checking": "Checking account status…",
           "account": "Orca account",
           "signOut": "Sign out",
@@ -11724,8 +11765,7 @@
             "delete": "Delete",
             "deleteReasonNonLocalHost": "Only sessions on this device can be deleted.",
             "deleteReasonSyntheticPath": "This session can't be deleted from Orca.",
-            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca.",
-            "deleteReasonSessionLive": "This session is still running — wait for it to finish before deleting."
+            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca."
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Delete this session?",
@@ -14459,7 +14499,16 @@
       "confirmation": {
         "dialog": {
           "8490e5d36a": "Confirm",
-          "56f5c60e0c": "Cancel"
+          "56f5c60e0c": "Cancel",
+          "92bac3217e": "Don't ask again"
+        },
+        "skip": {
+          "saved": "We'll skip this confirmation next time.",
+          "savedDescription": "You can change this in Settings.",
+          "openSettings": "Open Settings",
+          "preference": {
+            "0b0cb6e3f9": "Could not save the confirmation preference."
+          }
         }
       },
       "jira": {
@@ -14937,12 +14986,23 @@
           "signingIn": "Signing in…",
           "signIn": "Sign in to Orca",
           "empty": "No shared artifacts",
-          "emptyCopy": "Ask your agent to share an HTML or Markdown file, and it will appear here.",
+          "emptyCopy": "Open an HTML or Markdown file and select Share as artifact, or ask your agent to share it.",
           "openArtifact": "Open artifact",
           "deleteArtifact": "Delete artifact",
           "moreAvailable": "More artifacts are available",
           "moreAvailableCopy": "Load the next page to continue.",
-          "loadMoreFailed": "Could not load more artifacts."
+          "loadMoreFailed": "Could not load more artifacts.",
+          "publishingOff": "Publishing is turned off",
+          "publishingOffCopy": "Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then share from an open HTML or Markdown file or ask your agent.",
+          "openArtifactsSettings": "Open Settings → Artifacts",
+          "loadedCountMore": "{{count}} loaded · more available",
+          "loadedCount": "{{count}} shared",
+          "retry": "Retry",
+          "reconnectHeading": "Sign in to Orca again",
+          "reconnectCopy": "Sign in again to view and manage the artifacts shared through your account.",
+          "signInAgainAction": "Sign in again",
+          "unconfiguredCopy": "Orca account sign-in is not configured on this machine yet.",
+          "openAccountSettings": "Open account settings"
         },
         "copySuccess": "Artifact link copied",
         "copyFailed": "Could not copy artifact link",
@@ -14954,6 +15014,57 @@
         "actions": "Artifact actions",
         "ArtifactCollection": {
           "loadMore": "Load more"
+        },
+        "ArtifactDetailHeader": {
+          "publicLink": "Anyone with this link can view it"
+        },
+        "ArtifactListPane": {
+          "search": "Search artifacts",
+          "listLabel": "Shared artifacts",
+          "noMatches": "No matches"
+        },
+        "updatedAt": "Updated {{when}}",
+        "updatedRecently": "recently",
+        "expiryUnknown": "Expiry unknown",
+        "expired": "Link expired",
+        "expires": "Link expires {{when}}",
+        "ArtifactPublishButton": {
+          "a4a49da6af": "Share as artifact",
+          "confirmTitle": "Share as artifact",
+          "confirmDescription": "This publishes the current file at a link anyone with the URL can view.",
+          "accountTitle": "Orca account",
+          "accountDescription": "Sign in to create and manage this link.",
+          "signingIn": "Signing in…",
+          "signInAgain": "Sign in again",
+          "signIn": "Sign in",
+          "publishingOffTitle": "Artifact sharing is off",
+          "publishingOffDescription": "Learn about public links and enable sharing in Settings.",
+          "openSettings": "Open Artifacts settings",
+          "sharing": "Sharing…",
+          "sharePublicLink": "Share public link",
+          "publishedDescription": "Anyone with this link can view the shared file.",
+          "checkingLink": "Checking for an existing link…",
+          "checkFailed": "Could not check for an existing link.",
+          "tryAgain": "Try again"
+        },
+        "artifact-publish-flow": {
+          "9a078a0c65": "Artifact sharing is unavailable",
+          "bba20daa6d": "Sign in to Orca and try again.",
+          "54b1805328": "Could not share artifact",
+          "430019efd0": "Artifact shared",
+          "2fc727c831": "Artifact updated",
+          "5cb4f5ec36": "Copy link",
+          "fbb5018602": "This file is empty.",
+          "6112db5a1c": "Artifacts shared from Orca must be smaller than 800 KB.",
+          "e2ed5acd8c": "Orca couldn't read this file. Open it from a workspace and try again.",
+          "6d475e9b25": "Only local HTML and Markdown files can be shared as artifacts.",
+          "29a406be09": "Artifacts must contain text."
+        },
+        "ArtifactPublishedLinkPanel": {
+          "copyLink": "Copy link",
+          "openLink": "Open link",
+          "updating": "Updating…",
+          "update": "Update shared content"
         }
       }
     },
