@@ -14402,11 +14402,11 @@
       "GitHubIssueWorkspaceLaunchButton": {
         "f20e260a05": "Issueからワークスペースを開始",
         "e4bb9f1ece": "開始",
-        "c8a6bec97e": "このワークスペースで使用するエージェントを選択",
-        "01be61ba14": "エージェントで開始",
-        "cf532aff14": "エージェントを検出中…",
-        "9635bbe266": "エージェントを読み込めません",
-        "89f202d990": "利用可能なエージェントがありません"
+        "c8a6bec97e": "このワークスペースで使用する Agent を選択",
+        "01be61ba14": "Agent で開始",
+        "cf532aff14": "Agent を検出中…",
+        "9635bbe266": "Agent を読み込めません",
+        "89f202d990": "利用可能な Agent がありません"
       },
       "pluginCatalog": {
         "PluginCatalogLayout": {
