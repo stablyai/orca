@@ -7,6 +7,7 @@ import {
 } from './pane-terminal-foreground-render-settle'
 import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { flattenRetainedSlice } from '@/lib/flatten-retained-slice'
 import {
   discardInFlightTerminalOutputAckCredits,
   registerTerminalOutputAckCredits
@@ -49,6 +50,8 @@ type WriteTerminalOutputOptions = {
 
 type QueueChunk = {
   data: string
+  // Why: `data` may be a V8 SlicedString pinning a much larger parent; this is what the queue really holds alive.
+  retainedChars: number
   foreground: boolean
   forceForegroundRefresh: boolean
   followupForegroundRefresh: boolean
@@ -631,6 +634,18 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
       data += chunk.data
       remaining -= chunk.data.length
       entry.queuedChars -= chunk.data.length
+      // Why: compaction only splices every 64 chunks, so without this a fully consumed chunk keeps
+      // its (possibly parent-pinning) string and callbacks alive while charging nothing. Nothing
+      // reads below chunkIndex, so the drained slot only has to stay type-shaped.
+      entry.chunks[entry.chunkIndex] = {
+        data: '',
+        retainedChars: 0,
+        foreground: chunk.foreground,
+        forceForegroundRefresh: false,
+        followupForegroundRefresh: false,
+        shouldRefreshForegroundSynchronously: ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
+        stripTransientCursorShows: false
+      }
       entry.chunkIndex += 1
       if (chunk.onParsed) {
         parsedCallbacks.push(chunk.onParsed)
@@ -642,9 +657,13 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
     }
 
     data += chunk.data.slice(0, remaining)
+    const residual = chunk.data.slice(remaining)
+    // Why: the residual is a SlicedString still pinning `retainedChars`; copy it flat once it pins 2x its own length so a drained 2MB chunk stops holding 2MB to serve a 1KB tail. Halving keeps total copying linear in the original chunk.
+    const flatten = residual.length * 2 <= chunk.retainedChars
     entry.chunks[entry.chunkIndex] = {
       ...chunk,
-      data: chunk.data.slice(remaining)
+      data: flatten ? flattenRetainedSlice(residual) : residual,
+      retainedChars: flatten ? residual.length : chunk.retainedChars
     }
     entry.queuedChars -= remaining
     remaining = 0
@@ -719,8 +738,14 @@ function enqueueChunk(
     ackCredit?: () => void
   }
 ): void {
+  // Why copy at the boundary: producers hand us slices and concatenations that pin far more than
+  // they measure - restore-overlap trims and OSC status stripping both do - and the queue holds
+  // this string long after the parent is otherwise dead. Owning our copy is what makes
+  // retainedChars true, and it costs ~0.1ms per 512KB against a ~30MB/s sustained drain.
+  const owned = flattenRetainedSlice(data)
   entry.chunks.push({
-    data,
+    data: owned,
+    retainedChars: owned.length,
     foreground: options?.foreground === true,
     forceForegroundRefresh: options?.forceForegroundRefresh === true,
     followupForegroundRefresh: options?.followupForegroundRefresh === true,
@@ -783,6 +808,7 @@ function replaceBacklogWithWarning(
   entry.chunks = [
     {
       data: warning,
+      retainedChars: warning.length,
       foreground: false,
       forceForegroundRefresh: false,
       followupForegroundRefresh: false,
