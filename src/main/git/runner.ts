@@ -458,7 +458,6 @@ function killSpawnedCommandTree(child: ChildProcess, killPosixProcessGroup = fal
         /* process group already exited */
       }
     }, PROCESS_TREE_TERMINATION_WAIT_MS)
-    child.once('close', () => clearTimeout(forceKillTimer))
     forceKillTimer.unref?.()
     return Promise.resolve()
   }

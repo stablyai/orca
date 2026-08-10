@@ -71,6 +71,7 @@ export async function callRuntimeRpc<TResult>(
   ) {
     await ensureRuntimeEnvironmentCompatible(target.environmentId, {
       ...options,
+      timeoutMs: options.compatibilityTimeoutMs ?? options.timeoutMs,
       expectedEnvironmentPairingRevision
     })
   }

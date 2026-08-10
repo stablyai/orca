@@ -29,7 +29,34 @@ function terminateGitProcessTree(child: ChildProcess): void {
         stdio: 'ignore',
         windowsHide: true
       })
-      killer.once('error', () => child.kill())
+      let settled = false
+      let fallbackTimer: NodeJS.Timeout | null = null
+      const fallback = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer)
+        }
+        child.kill()
+      }
+      fallbackTimer = setTimeout(() => {
+        killer.kill()
+        fallback()
+      }, FORCE_KILL_DELAY_MS)
+      killer.once('error', fallback)
+      killer.once('close', (code) => {
+        if (code !== 0) {
+          fallback()
+          return
+        }
+        settled = true
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer)
+        }
+      })
+      fallbackTimer.unref?.()
       killer.unref()
     } catch {
       child.kill()
@@ -51,7 +78,6 @@ function terminateGitProcessTree(child: ChildProcess): void {
       /* process group already exited */
     }
   }, FORCE_KILL_DELAY_MS)
-  child.once('close', () => clearTimeout(forceKillTimer))
   forceKillTimer.unref?.()
 }
 

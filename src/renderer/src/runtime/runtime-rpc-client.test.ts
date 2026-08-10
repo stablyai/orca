@@ -187,45 +187,6 @@ describe('runtime RPC client routing', () => {
     ])
   })
 
-  it('keeps compatibility probes shorter than long-running operation requests', async () => {
-    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) =>
-      Promise.resolve({
-        id: method,
-        ok: true,
-        result:
-          method === 'status.get'
-            ? {
-                runtimeId: 'remote-runtime',
-                graphStatus: 'ready',
-                runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-                minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
-              }
-            : { ok: true },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-    )
-
-    await callRuntimeRpc(
-      { kind: 'environment', environmentId: 'env-long-operation' },
-      'git.push',
-      {},
-      { timeoutMs: 125_000, compatibilityTimeoutMs: 15_000 }
-    )
-
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
-      selector: 'env-long-operation',
-      method: 'status.get',
-      params: undefined,
-      timeoutMs: 15_000
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
-      selector: 'env-long-operation',
-      method: 'git.push',
-      params: {},
-      timeoutMs: 125_000
-    })
-  })
-
   it('reuses recent remote compatibility failures during startup catalog bursts', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'status',

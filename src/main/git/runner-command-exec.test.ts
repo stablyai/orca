@@ -280,7 +280,7 @@ describe('runner execFile timeout handling', () => {
     })
   })
 
-  it('cancels POSIX force-kill escalation when the command tree closes', async () => {
+  it('keeps POSIX force-kill escalation armed when the group leader closes', async () => {
     await withPlatform('linux', async () => {
       const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)
       const child = createMockChildProcess(1234)
@@ -299,8 +299,9 @@ describe('runner execFile timeout handling', () => {
         child.emit('close', null, 'SIGTERM')
         await vi.advanceTimersByTimeAsync(2000)
 
-        expect(processKill).toHaveBeenCalledTimes(1)
+        expect(processKill).toHaveBeenCalledTimes(2)
         expect(processKill).toHaveBeenCalledWith(-1234, 'SIGTERM')
+        expect(processKill).toHaveBeenCalledWith(-1234, 'SIGKILL')
       } finally {
         processKill.mockRestore()
       }
