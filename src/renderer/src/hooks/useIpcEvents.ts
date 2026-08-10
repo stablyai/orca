@@ -10,6 +10,7 @@ import { activateAndRevealWorktree, activateAndRevealWorkspace } from '@/lib/wor
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
+import { requestAnimatedSpaceTransition } from '@/components/sidebar/space-transition-controller'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
 import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
@@ -1358,7 +1359,7 @@ export function useIpcEvents(): void {
         return
       }
       const target = pickTarget(store)
-      if (target) {
+      if (target && !requestAnimatedSpaceTransition(target.id)) {
         store.setActiveSpace(target.id)
       }
     }

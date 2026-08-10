@@ -5,7 +5,7 @@ import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
-import WorktreeList from './WorktreeList'
+import SidebarSpacePager from './SidebarSpacePager'
 import SidebarToolbar from './SidebarToolbar'
 import { useRememberActiveSpaceWorkspace } from './use-remember-active-space-workspace'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
@@ -119,7 +119,7 @@ function Sidebar({
             <SidebarNav />
             <SidebarHeader onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen} />
 
-            <WorktreeList
+            <SidebarSpacePager
               scrollOffsetRef={worktreeScrollOffsetRef}
               scrollAnchorRef={worktreeScrollAnchorRef}
               workspaceBoardOpen={workspaceBoardOpen}

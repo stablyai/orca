@@ -682,6 +682,7 @@ type VirtualizedWorktreeViewportProps = {
   handleDeleteProjectGroup: (groupId: string, groupName: string) => void
   handleCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   activeModal: string
+  inert?: boolean
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
   clearPendingRevealWorktreeId: () => void
@@ -1351,6 +1352,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   handleDeleteProjectGroup,
   handleCreateFolderWorkspace,
   activeModal,
+  inert = false,
   pendingRevealWorktree,
   pendingRevealSidebarRow,
   clearPendingRevealWorktreeId,
@@ -1933,6 +1935,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [folderWorkspaceByIdForFolderPathStatus, projectGroupByIdForFolderPathStatus]
   )
   useEffect(() => {
+    if (inert) {
+      return
+    }
     const requests = new Map<
       string,
       {
@@ -1963,6 +1968,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     folderWorkspaces,
     getFolderPathStatusRouteOptions,
     getFolderWorkspacePathStatusCacheKey,
+    inert,
     projectGroups
   ])
   const getCachedFolderWorkspacePathStatus = useCallback(
@@ -2122,7 +2128,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   }, [])
 
   React.useEffect(() => {
-    if (!pendingRevealWorktree) {
+    // Why: only the visible page may consume a pending reveal; an off-screen page would clear it first.
+    if (inert || !pendingRevealWorktree) {
       return
     }
 
@@ -2279,6 +2286,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       cancelPendingRevealFrames()
     }
   }, [
+    inert,
     pendingRevealWorktree,
     agentSendTargetWorktreeId,
     groupBy,
@@ -2307,7 +2315,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   ])
 
   React.useEffect(() => {
-    if (!pendingRevealSidebarRow) {
+    if (inert || !pendingRevealSidebarRow) {
       return
     }
 
@@ -2413,6 +2421,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       cancelPendingRevealFrames()
     }
   }, [
+    inert,
     pendingRevealSidebarRow,
     repoMap,
     projectGroups,
@@ -2551,6 +2560,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
 
   useEffect(() => {
+    if (inert) {
+      return
+    }
     const handleKeyDown = (e: KeyboardEvent) => {
       if (activeModal !== 'none' || isEditableTarget(e.target)) {
         return
@@ -2577,7 +2589,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [activeModal, keybindings, markDirectScrollInput, navigateWorktree])
+  }, [activeModal, inert, keybindings, markDirectScrollInput, navigateWorktree])
 
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -3727,6 +3739,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
 
   useEffect(() => {
+    if (inert) {
+      return
+    }
     if (document.visibilityState !== 'visible') {
       lastVisibleRefreshKeyRef.current = '__document_hidden__'
       return
@@ -3788,6 +3803,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     currentWorktreeId,
     documentVisibilityRevision,
     groupBy,
+    inert,
     renderRows,
     reportVisibleGitHubPRRefreshCandidates,
     prVisibleRefreshGeneration,
@@ -4032,8 +4048,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   return (
     <div
-      data-worktree-sidebar-container
-      data-contextual-tour-target="workspace-list"
+      // Why: these hooks are looked up with querySelector, so only the visible page may claim them.
+      data-worktree-sidebar-container={inert ? undefined : true}
+      data-contextual-tour-target={inert ? undefined : 'workspace-list'}
+      aria-hidden={inert || undefined}
+      inert={inert}
       className="relative min-h-0 flex-1"
     >
       <div
@@ -5243,6 +5262,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 type WorktreeListProps = {
   scrollOffsetRef: React.MutableRefObject<number>
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
+  /** Space this instance renders; defaults to the active Space. */
+  spaceId?: string
+  /** True for an off-screen Space page during a swipe: no app-global side effects, no singleton DOM hooks. */
+  inert?: boolean
   workspaceBoardOpen?: boolean
   onWorkspaceBoardDragPreviewStart?: () => void
   onWorkspaceBoardDragPreviewCommit?: () => void
@@ -5257,6 +5280,8 @@ export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => 
 const WorktreeList = React.memo(function WorktreeList({
   scrollOffsetRef,
   scrollAnchorRef,
+  spaceId: spaceIdProp,
+  inert = false,
   workspaceBoardOpen = false,
   onWorkspaceBoardDragPreviewStart = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
   onWorkspaceBoardDragPreviewCommit = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
@@ -5287,6 +5312,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const activeSpaceId = useAppStore((s) => s.activeSpaceId)
+  const spaceId = spaceIdProp ?? activeSpaceId
   const spaces = useAppStore((s) => s.spaces)
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
@@ -5488,6 +5514,9 @@ const WorktreeList = React.memo(function WorktreeList({
   const hasObservedSmartOnceRef = useRef<boolean>(false)
 
   useEffect(() => {
+    if (inert) {
+      return
+    }
     const attention = lastAttentionByWorktreeRef.current
     if (sortBy !== 'smart' || !attention) {
       // Why reset: leaving Smart drops the prior-class map (and first-observation gate) so re-entry doesn't fire stale promotions.
@@ -5506,11 +5535,14 @@ const WorktreeList = React.memo(function WorktreeList({
     }
     prevClassByWorktreeIdRef.current = next
     hasObservedSmartOnceRef.current = true
-  }, [sortBy, sortedIds])
+  }, [inert, sortBy, sortedIds])
 
   // Why retry on sortedIds: Smart may activate before attention hydrates; fire once, then stay quiet until the user leaves Smart.
   const hasTrackedSmartDistributionRef = useRef(false)
   useEffect(() => {
+    if (inert) {
+      return
+    }
     if (sortBy !== 'smart') {
       hasTrackedSmartDistributionRef.current = false
       return
@@ -5545,27 +5577,33 @@ const WorktreeList = React.memo(function WorktreeList({
       total_worktrees: attention.size
     })
     hasTrackedSmartDistributionRef.current = true
-  }, [sortBy, sortedIds])
+  }, [inert, sortBy, sortedIds])
 
   // Why fire on the transition: switching away from Smart is the signal; compare via ref so a round-trip doesn't double-fire.
   const prevSortByRef = useRef(sortBy)
   useEffect(() => {
+    if (inert) {
+      return
+    }
     const prev = prevSortByRef.current
     prevSortByRef.current = sortBy
     if (prev === 'smart' && sortBy === 'recent') {
       track('smart_to_recent_switch', {})
     }
-  }, [sortBy])
+  }, [inert, sortBy])
 
   // Why: only persist during live sessions so cold start reads the persisted order instead of overwriting it.
   useEffect(() => {
+    if (inert) {
+      return
+    }
     if (sortBy !== 'smart' || sortedIds.length === 0 || !sessionHasHadLiveSmartSignal.current) {
       return
     }
     // Why: sortOrder lives in each host's worktreeMeta, so persist each host's ids on that host.
     const state = useAppStore.getState()
     persistWorktreeSortOrderByHost(state, sortedIds)
-  }, [sortedIds, sortBy])
+  }, [inert, sortedIds, sortBy])
 
   // Flatten/filter/sort via the shared utility so card order matches Cmd+1–9 numbering.
   const recomputedVisibleWorktrees = useMemo(() => {
@@ -5591,7 +5629,7 @@ const WorktreeList = React.memo(function WorktreeList({
       alwaysShowDefaultBranchWorkspace,
       repoMap,
       repoByHostIdentity,
-      activeSpaceId,
+      activeSpaceId: spaceId,
       workspaceHostScope,
       visibleWorkspaceHostIds,
       defaultHostId: getSettingsFocusedExecutionHostId(settings),
@@ -5600,7 +5638,7 @@ const WorktreeList = React.memo(function WorktreeList({
     })
     return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
-    activeSpaceId,
+    spaceId,
     agentSendTargetWorktreeId,
     agentStatusEpoch,
     filterRepoIds,
@@ -5695,8 +5733,8 @@ const WorktreeList = React.memo(function WorktreeList({
     [visibleWorkspaceHostIds, workspaceHostScope]
   )
   const activeSpaceFilterId = useMemo(
-    () => getActiveSpaceFilterId(activeSpaceId, repos),
-    [activeSpaceId, repos]
+    () => getActiveSpaceFilterId(spaceId, repos),
+    [spaceId, repos]
   )
   const activeSpaceProjectGroupIds = useMemo(
     () => getActiveSpaceProjectGroupIdSet(projectGroups, repos, activeSpaceFilterId),
@@ -5993,7 +6031,7 @@ const WorktreeList = React.memo(function WorktreeList({
   )
 
   useEffect(() => {
-    if (selectedWorktreeIds.size === 0) {
+    if (inert || selectedWorktreeIds.size === 0) {
       return
     }
 
@@ -6011,7 +6049,7 @@ const WorktreeList = React.memo(function WorktreeList({
     return () => {
       document.removeEventListener('pointerdown', clearSelectionOutsideSidebar, { capture: true })
     }
-  }, [selectedWorktreeIds.size])
+  }, [inert, selectedWorktreeIds.size])
 
   const updateSelectionForGesture = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktreeId: string): boolean => {
@@ -6054,10 +6092,13 @@ const WorktreeList = React.memo(function WorktreeList({
 
   // Why layout effect: the Cmd/Ctrl+1–9 handler can fire right after commit; publishing after paint would leave the shortcut cache stale.
   useLayoutEffect(() => {
+    if (inert) {
+      return
+    }
     setVisibleWorktreeIds(renderedWorktreeIds)
     // Why null, not []: [] is a real rendered order (all collapsed/filtered); null tells shortcuts the list is unmounted.
     return () => setVisibleWorktreeIds(null)
-  }, [renderedWorktreeIds])
+  }, [inert, renderedWorktreeIds])
 
   const handleCreateForRepo = useCallback(
     (projectId: string) => {
@@ -6674,7 +6715,8 @@ const WorktreeList = React.memo(function WorktreeList({
   ])
 
   useEffect(() => {
-    if (!pendingRevealSidebarRow) {
+    // Why: a reveal targets the visible page; an off-screen page must not consume it or retune shared filters.
+    if (inert || !pendingRevealSidebarRow) {
       return
     }
     const rowKey = pendingRevealSidebarRow.rowKey
@@ -6693,6 +6735,7 @@ const WorktreeList = React.memo(function WorktreeList({
     clearFilters,
     groupBy,
     hasFilters,
+    inert,
     pendingRevealSidebarRow,
     renderedSidebarRowKeys,
     setGroupBy
@@ -6748,6 +6791,9 @@ const WorktreeList = React.memo(function WorktreeList({
   )
 
   useEffect(() => {
+    if (inert) {
+      return
+    }
     window.addEventListener(
       SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
       handleRevealCurrentWorkspaceRequest
@@ -6758,7 +6804,7 @@ const WorktreeList = React.memo(function WorktreeList({
         handleRevealCurrentWorkspaceRequest
       )
     }
-  }, [handleRevealCurrentWorkspaceRequest])
+  }, [handleRevealCurrentWorkspaceRequest, inert])
 
   const filtersHideAllRows =
     hasFilters &&
@@ -6769,8 +6815,11 @@ const WorktreeList = React.memo(function WorktreeList({
   if (rows.length === 0 || filtersHideAllRows) {
     return (
       <div
-        data-worktree-sidebar-container
-        data-contextual-tour-target="workspace-list"
+        // Why: these hooks are looked up with querySelector, so only the visible page may claim them.
+        data-worktree-sidebar-container={inert ? undefined : true}
+        data-contextual-tour-target={inert ? undefined : 'workspace-list'}
+        aria-hidden={inert || undefined}
+        inert={inert}
         className="relative min-h-0 flex-1"
       >
         <div className="worktree-sidebar-scrollbar flex h-full flex-col overflow-y-auto overflow-x-hidden pl-1 scrollbar-sleek pt-px">
@@ -6908,6 +6957,7 @@ const WorktreeList = React.memo(function WorktreeList({
         handleDeleteProjectGroup={handleDeleteProjectGroup}
         handleCreateFolderWorkspace={handleCreateFolderWorkspace}
         activeModal={activeModal}
+        inert={inert}
         pendingRevealWorktree={pendingRevealWorktree}
         pendingRevealSidebarRow={pendingRevealSidebarRow}
         clearPendingRevealWorktreeId={clearPendingRevealWorktreeId}

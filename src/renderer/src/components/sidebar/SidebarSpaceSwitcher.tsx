@@ -18,6 +18,7 @@ import {
   computeTabStripScrollMetrics,
   type TabStripScrollMetrics
 } from '../tab-bar/tab-strip-scroll-metrics'
+import { requestAnimatedSpaceTransition } from './space-transition-controller'
 import { isDefaultSpaceId } from '../../../../shared/spaces'
 import type { Space } from '../../../../shared/types'
 
@@ -112,6 +113,15 @@ export const SidebarSpaceSwitcher = React.memo(
     const setActiveSpace = useAppStore((s) => s.setActiveSpace)
     const openModal = useAppStore((s) => s.openModal)
 
+    const handleActivate = React.useCallback(
+      (spaceId: string) => {
+        if (!requestAnimatedSpaceTransition(spaceId)) {
+          setActiveSpace(spaceId)
+        }
+      },
+      [setActiveSpace]
+    )
+
     const handleEdit = React.useCallback(
       (spaceId: string) => openModal('space-editor', { spaceId }),
       [openModal]
@@ -204,7 +214,7 @@ export const SidebarSpaceSwitcher = React.memo(
               key={space.id}
               space={space}
               active={space.id === activeSpaceId}
-              onActivate={setActiveSpace}
+              onActivate={handleActivate}
               onEdit={handleEdit}
               onDelete={handleDelete}
             />
