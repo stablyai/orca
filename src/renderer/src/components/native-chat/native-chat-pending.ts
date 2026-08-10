@@ -179,6 +179,9 @@ export function pendingSendsAsMessages(
   pending: NativeChatPendingSend[],
   existingMessages: NativeChatMessage[] = []
 ): NativeChatMessage[] {
+  if (pending.length === 0) {
+    return []
+  }
   const consumed = new Map<string, number>()
   const exactVisible = pending.map((entry) => {
     const contentKey = nativeChatPendingContentKey(entry)

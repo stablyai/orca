@@ -978,6 +978,31 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
     })
 
+    it('translates a POSIX cwd through the preferred WSL distro', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        worktreeId: 'repo-1::C:\\Users\\jin\\repo',
+        cwd: '/home/jin/repo',
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Debian'
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe('wsl.exe')
+      expect(spawnCall[1]).toEqual([
+        '-d',
+        'Debian',
+        '--',
+        'sh',
+        '-c',
+        expect.stringContaining("cd '/home/jin/repo'")
+      ])
+      expect(spawnCall[2].cwd).not.toBe('/home/jin/repo')
+    })
+
     it('resolves and persists the default distro for Windows cwd WSL terminals', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const buildSpawnEnv = vi.fn(

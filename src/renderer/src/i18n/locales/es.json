@@ -64,7 +64,9 @@
     "openWorktreePalette": "Abrir paleta de worktrees",
     "window": "Ventana",
     "help": "Ayuda",
-    "paste": "Pegar"
+    "paste": "Pegar",
+    "copy": "Copiar",
+    "selectAll": "Seleccionar todo"
   },
   "tray": {
     "openOrca": "Abrir Orca",
@@ -344,6 +346,7 @@
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
+          "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code"
         },
         "skill": {
@@ -2716,6 +2719,7 @@
             "ec85df5914": "Comandos rápidos",
             "0a917b591a": "Pegar",
             "f3eeb1de13": "Copiar",
+            "selectAll": "Seleccionar todo",
             "c2f0b72b8d": "Insertar",
             "925f49f210": "Expandir panel",
             "df766809e0": "Contraer panel",
@@ -11322,8 +11326,7 @@
             "delete": "Eliminar",
             "deleteReasonNonLocalHost": "Solo se pueden eliminar las sesiones de este dispositivo.",
             "deleteReasonSyntheticPath": "Esta sesión no se puede eliminar desde Orca.",
-            "deleteReasonUnsupportedAgent": "Las sesiones de {{value0}} no se pueden eliminar desde Orca.",
-            "deleteReasonSessionLive": "Esta sesión aún se está ejecutando: espera a que termine antes de eliminarla."
+            "deleteReasonUnsupportedAgent": "Las sesiones de {{value0}} no se pueden eliminar desde Orca."
           },
           "AiVaultSessionDeleteDialog": {
             "title": "¿Eliminar esta sesión?",

@@ -50,15 +50,84 @@ export function relayWriterControlReserve(highWaterMark: number): number {
   return Math.min(64 * 1024, Math.max(1024, Math.floor(highWaterMark / 4)))
 }
 
+const LANE_QUEUE_COMPACTION_HEAD_THRESHOLD = 64
+
+class DispatcherWriterLaneQueue {
+  private entries: (DispatcherWriterEntry | undefined)[] = []
+  private head = 0
+
+  get length(): number {
+    return this.entries.length - this.head
+  }
+
+  push(entry: DispatcherWriterEntry): void {
+    this.entries.push(entry)
+  }
+
+  peek(): DispatcherWriterEntry | undefined {
+    return this.entries[this.head]
+  }
+
+  shift(): DispatcherWriterEntry | undefined {
+    const entry = this.entries[this.head]
+    if (!entry) {
+      return undefined
+    }
+    this.entries[this.head] = undefined
+    this.head++
+    this.compact()
+    return entry
+  }
+
+  pop(): DispatcherWriterEntry | undefined {
+    if (this.length === 0) {
+      return undefined
+    }
+    const entry = this.entries.pop()
+    if (this.entries.length === this.head) {
+      this.reset()
+    }
+    return entry
+  }
+
+  takeAll(): DispatcherWriterEntry[] {
+    const queued: DispatcherWriterEntry[] = []
+    for (let index = this.head; index < this.entries.length; index++) {
+      const entry = this.entries[index]
+      if (entry) {
+        queued.push(entry)
+      }
+    }
+    this.reset()
+    return queued
+  }
+
+  private compact(): void {
+    if (this.head === this.entries.length) {
+      this.reset()
+      return
+    }
+    if (this.head >= LANE_QUEUE_COMPACTION_HEAD_THRESHOLD && this.head * 2 >= this.entries.length) {
+      this.entries = this.entries.slice(this.head)
+      this.head = 0
+    }
+  }
+
+  private reset(): void {
+    this.entries.length = 0
+    this.head = 0
+  }
+}
+
 export class DispatcherWriterAdmission {
-  private readonly queues: Record<DispatcherWriterLane, DispatcherWriterEntry[]> = {
-    liveness: [],
-    control: [],
-    'legacy-response': [],
-    interactive: [],
-    ordinary: [],
-    'fixed-bulk': [],
-    bulk: []
+  private readonly queues: Record<DispatcherWriterLane, DispatcherWriterLaneQueue> = {
+    liveness: new DispatcherWriterLaneQueue(),
+    control: new DispatcherWriterLaneQueue(),
+    'legacy-response': new DispatcherWriterLaneQueue(),
+    interactive: new DispatcherWriterLaneQueue(),
+    ordinary: new DispatcherWriterLaneQueue(),
+    'fixed-bulk': new DispatcherWriterLaneQueue(),
+    bulk: new DispatcherWriterLaneQueue()
   }
   private controlBytes = 0
   private controlFrames = 0
@@ -115,7 +184,7 @@ export class DispatcherWriterAdmission {
   }
 
   peek(lane: DispatcherWriterLane): DispatcherWriterEntry | undefined {
-    return this.queues[lane][0]
+    return this.queues[lane].peek()
   }
 
   shift(lane: DispatcherWriterLane): DispatcherWriterEntry | undefined {
@@ -123,7 +192,7 @@ export class DispatcherWriterAdmission {
   }
 
   takeQueued(): DispatcherWriterEntry[] {
-    return Object.values(this.queues).flatMap((queue) => queue.splice(0))
+    return Object.values(this.queues).flatMap((queue) => queue.takeAll())
   }
 
   release(entry: DispatcherWriterEntry): void {

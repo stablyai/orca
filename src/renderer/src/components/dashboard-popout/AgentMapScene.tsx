@@ -12,6 +12,7 @@ import type {
 } from './agent-map-layout'
 import { AGENT_MAP_LINEAGE_RELATION, shouldAggregateAgentMapWorktree } from './agent-map-layout'
 import { selectVisibleAgentMapLabels } from './agent-map-label-declutter'
+import { agentMapDirectLineageChevronPath } from './agent-map-lineage-chevron-path'
 import { AgentMapWorktreeLabel } from './AgentMapWorktreeLabel'
 import { AgentMapWorktreeRingNode } from './AgentMapWorktreeRingNode'
 
@@ -52,15 +53,7 @@ type VisibleAgentLocation = {
 }
 
 function agentLineagePath(parent: AgentMapAgentNode, child: AgentMapAgentNode): string {
-  const dx = child.x - parent.x
-  const dy = child.y - parent.y
-  const distance = Math.hypot(dx, dy)
-  if (distance === 0) {
-    return `M ${parent.x} ${parent.y}`
-  }
-  const unitX = dx / distance
-  const unitY = dy / distance
-  return `M ${parent.x + unitX * parent.radius} ${parent.y + unitY * parent.radius} L ${child.x - unitX * child.radius} ${child.y - unitY * child.radius}`
+  return agentMapDirectLineageChevronPath(parent, child)
 }
 
 /** Memoization keeps pointer panning to one SVG viewBox write, not a map rerender. */
@@ -130,7 +123,11 @@ export const AgentMapScene = memo(function AgentMapScene({
               })
             )
         return (
-          <g key={project.id}>
+          <g
+            key={project.id}
+            className={`agent-map-project-node${project.motionState ? ` is-${project.motionState}` : ''}`}
+            aria-hidden={project.motionState === 'exiting' || undefined}
+          >
             <circle
               className="agent-map-project-ring"
               data-agent-map-project=""
@@ -153,7 +150,7 @@ export const AgentMapScene = memo(function AgentMapScene({
                 return !parent || child.y <= parent.y ? null : (
                   <path
                     key={child.id}
-                    className="agent-map-worktree-lineage-link"
+                    className={`agent-map-worktree-lineage-link${child.motionState === 'exiting' || parent.motionState === 'exiting' ? ' is-exiting' : child.motionState === 'entering' || parent.motionState === 'entering' ? ' is-entering' : ''}`}
                     data-agent-map-worktree-lineage-link=""
                     data-parent-worktree-id={parent.worktreeId}
                     data-child-worktree-id={child.worktreeId}
@@ -166,7 +163,7 @@ export const AgentMapScene = memo(function AgentMapScene({
               {crossWorktreeLineage.map(({ parent, child }) => (
                 <path
                   key={child.card.paneKey}
-                  className="agent-map-lineage-link is-cross-worktree"
+                  className={`agent-map-lineage-link is-cross-worktree${parent.motionState === 'exiting' || child.motionState === 'exiting' ? ' is-exiting' : parent.motionState === 'entering' || child.motionState === 'entering' ? ' is-entering' : ''}`}
                   data-agent-map-lineage-link=""
                   data-agent-map-cross-worktree-lineage-link=""
                   data-agent-map-lineage-relation={AGENT_MAP_LINEAGE_RELATION}

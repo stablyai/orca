@@ -71,6 +71,7 @@ import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
 } from '../window/clipboard-ipc-handlers'
+import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
@@ -88,6 +89,7 @@ import type {
 import {
   getSavedRuntimeAiVaultHostInfos,
   prepareRuntimeAiVaultSessionResume,
+  resolveRuntimeAiVaultSessionTitles,
   scanRuntimeAiVaultSessions
 } from '../ai-vault/runtime-session-scanner'
 import type { PluginService } from '../plugins/plugin-service'
@@ -200,7 +202,7 @@ export function registerCoreHandlers(
   registerShellHandlers(store)
   registerPetHandlers()
   registerSessionHandlers(store)
-  registerUIHandlers(store)
+  registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()
   registerEmulatorVideoStreamHandlers()
   registerWorkspaceSpaceHandlers(store)
@@ -222,9 +224,10 @@ export function registerCoreHandlers(
       getSavedRuntimeAiVaultHostInfos(app.getPath('userData')),
     scanRuntimeAiVaultSessions: async (environmentId, args, options) =>
       scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args, options),
+    resolveRuntimeAiVaultSessionTitles: async (environmentId, args) =>
+      resolveRuntimeAiVaultSessionTitles(app.getPath('userData'), environmentId, args),
     prepareRuntimeSessionResume: async (environmentId, args) =>
-      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args),
-    getSessionLiveness: (target) => runtime.getAiVaultSessionLiveness(target)
+      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
   })
   registerNativeChatHandlers()
   registerClipboardHandlers(store)

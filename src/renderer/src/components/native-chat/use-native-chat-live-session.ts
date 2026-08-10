@@ -16,8 +16,7 @@ import {
   reset as resetAssembler
 } from './native-chat-incremental-assembler'
 import { mergeNativeChatLiveSession } from './native-chat-live-status'
-import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
-import { surfaceSkillInvocationUserTurns } from '../../../../shared/native-chat-command-envelope'
+import { prepareNativeChatLiveMessages } from './native-chat-live-message-preparation'
 import {
   hasMoreNativeChatHistory,
   NATIVE_CHAT_INITIAL_LIMIT,
@@ -338,24 +337,21 @@ export function useNativeChatLiveSession(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseMessages, appended, sessionId, agent])
 
-  // Why: skill invocations are user turns but Claude records them as noise-filtered command envelopes, so surface them as the literal token here.
-  const surfacedMessages = useMemo(
-    () =>
-      surfaceSkillInvocationUserTurns(
-        assembledMessages,
-        new Set(getVerifiedNativeChatCommands(agent).map((command) => command.name))
-      ),
+  // Keep presentation transforms off the status-only render axis.
+  const normalizedMessages = useMemo(
+    () => prepareNativeChatLiveMessages(assembledMessages, agent),
     [assembledMessages, agent]
   )
 
   return useMemo<NativeChatLiveSession>(() => {
     const session = mergeNativeChatLiveSession({
-      sources: { transcript: surfacedMessages },
+      messages: normalizedMessages,
       sessionId,
       agent,
       hookState,
       stateStartedAt: hookStateStartedAt,
       transcriptLifecycle,
+      statusTailMessage: assembledMessages.at(-1),
       hookHasWorkingSubagents,
       // Why: show live watcher-append content over a spinner/stale error (#8401), so overrides apply only when nothing is appended.
       loading: read.phase === 'loading' && appended.length === 0,
@@ -363,7 +359,8 @@ export function useNativeChatLiveSession(
     })
     return { ...session, hasMore, loadingEarlier, loadEarlier, readPhase: read.phase }
   }, [
-    surfacedMessages,
+    normalizedMessages,
+    assembledMessages,
     read,
     sessionId,
     agent,

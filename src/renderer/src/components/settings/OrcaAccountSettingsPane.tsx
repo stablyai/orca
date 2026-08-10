@@ -28,7 +28,7 @@ function accountStatusCopy(
   if (state === 'local') {
     return translate(
       'auto.components.settings.orcaAccount.signedOut',
-      'Sign in to use Artifacts and Orca Relay.'
+      'Sign in to extend Orca with cloud features, including Artifacts and Orca Relay.'
     )
   }
   return translate('auto.components.settings.orcaAccount.checking', 'Checking account status…')

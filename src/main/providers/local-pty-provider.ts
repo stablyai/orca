@@ -68,6 +68,8 @@ import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-en
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
+import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
+import { readPtsName } from '../pty/node-pty-pts-name'
 import {
   createPtySlaveEchoProbe,
   readPtySlavePath
@@ -237,9 +239,9 @@ function getWslContextFromWorktreeId(
  */
 function getWslContextFromPreferredDistro(
   distro: string | null | undefined
-): { distro: string } | undefined {
+): { distro: string; treatPosixCwdAsWsl: true } | undefined {
   const trimmed = distro?.trim()
-  return trimmed ? { distro: trimmed } : undefined
+  return trimmed ? { distro: trimmed, treatPosixCwdAsWsl: true } : undefined
 }
 
 /**
@@ -1215,11 +1217,20 @@ export class LocalPtyProvider implements IPtyProvider {
     if (!proc) {
       return
     }
-    try {
-      process.kill(proc.pid, signal)
-    } catch {
-      /* Process may already be dead */
+    const signalRootPid = (): void => {
+      try {
+        process.kill(proc.pid, signal)
+      } catch {
+        /* Process may already be dead */
+      }
     }
+    // Why only SIGWINCH: see posix-pty-foreground-group — a real resize reaches the
+    // tty's foreground group, which proc.pid is never a member of.
+    if (signal === 'SIGWINCH') {
+      signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), signal, signalRootPid)
+      return
+    }
+    signalRootPid()
   }
 
   async getCwd(id: string): Promise<string> {

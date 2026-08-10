@@ -1,4 +1,5 @@
 import type { ClassifiedError } from '../../shared/types'
+import { GlabNonListResponseError } from './glab-api-response'
 
 // Why: glab CLI surfaces API errors as unstructured stderr. Map known
 // patterns to typed errors so callers can show user-friendly messages.
@@ -33,6 +34,8 @@ export function classifyGlabError(stderr: string): ClassifiedError {
   return { type: 'unknown', message: `Failed to update issue: ${stderr.trim()}` }
 }
 
+const LIST_READ_FAILURE = 'Failed to load issues'
+
 // Why: classifyGlabError's copy is phrased for edit/update operations; list
 // issues is a read op, so rewrite messages for read-context banners.
 export function classifyListIssuesError(stderr: string): ClassifiedError {
@@ -46,9 +49,18 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
     validation_error: `Invalid request — ${trimmed}`,
     rate_limited: 'GitLab rate limit hit. Try again in a few minutes.',
     network_error: 'Network error — check your connection.',
-    unknown: `Failed to load issues: ${trimmed}`
+    unknown: `${LIST_READ_FAILURE}: ${trimmed}`
   }
   return { type: c.type, message: readMessages[c.type] }
+}
+
+// Why: an opaque response body is content, not a diagnostic — substring-matching it would render
+// an MR titled "fix network timeout" as "check your connection" and discard the body.
+export function classifyListFetchError(err: unknown): ClassifiedError {
+  if (err instanceof GlabNonListResponseError) {
+    return { type: 'unknown', message: `${LIST_READ_FAILURE}: ${err.message}` }
+  }
+  return classifyListIssuesError(err instanceof Error ? err.message : String(err))
 }
 
 // Why: a job trace is a read on a pipeline job, so classifyGlabError's issue-edit

@@ -56,6 +56,7 @@ import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { parseAgentDefaultEnvDraft, stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 
 export { getAgentsPaneSearchEntries } from './agents-search'
 
@@ -205,12 +206,11 @@ export function AgentAvailabilityControl({
 
 function visibleAgentPermissionMode(
   mode: AgentPermissionMode
-): Exclude<AgentPermissionMode, 'mixed'> {
+): Exclude<AgentPermissionMode, 'mixed'> | null {
   if (mode === 'manual' || mode === 'auto' || mode === 'yolo') {
     return mode
   }
-  // Why: mixed is custom; keep showing Yolo as the closest fully-permissive end of the scale.
-  return 'yolo'
+  return null
 }
 
 export function AgentPermissionsSetting({
@@ -881,7 +881,9 @@ export function AgentsPane({
 
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
 
-      <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
+      {!isPairedWebClientWindow() ? (
+        <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
 
       <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
 

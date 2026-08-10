@@ -3849,7 +3849,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         submitCompareBaseRef,
         {
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
-          linkedTaskSourceContext: taskSourceContext
+          linkedTaskSourceContext: taskSourceContext,
+          ...(!backendStartup && startupPlan?.draftPrompt
+            ? { startupDraft: startupPlan.draftPrompt }
+            : {})
         }
       )
       const worktree = result.worktree
@@ -3877,6 +3880,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setup: result.setup,
         defaultTabs: result.defaultTabs,
         issueCommand,
+        ...(backendSpawnedStartup ? { backendStartupTerminalSpawned: true } : {}),
         ...(startupPlan && !backendSpawnedStartup
           ? {
               startup: {

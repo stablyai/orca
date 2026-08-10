@@ -185,11 +185,13 @@ describe('tui agent permissions', () => {
   it('keeps unsupported manual fallbacks inside the auto summary', () => {
     const applied = applyAgentPermissionMode({
       mode: 'auto',
-      agentDefaultArgs: YOLO_TUI_AGENT_ARGS,
+      agentDefaultArgs: { ...YOLO_TUI_AGENT_ARGS, 'prime-agent': '--model custom' },
       agentDefaultEnv: YOLO_TUI_AGENT_ENV
     })
 
     expect(applied.agentDefaultArgs.copilot).toBe('')
+    expect(applied.agentDefaultArgs['prime-agent']).toBe('--model custom')
+    expect(resolveTuiAgentPermissionMode({ agent: 'prime-agent' })).toBe('manual')
     expect(resolveAgentPermissionModeSummary(applied)).toBe('auto')
   })
 

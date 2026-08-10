@@ -119,6 +119,7 @@ export default function QuickOpen(): React.JSX.Element | null {
         placeholder={translate('auto.components.QuickOpen.1cb6ef47b7', 'Go to file...')}
         value={query}
         onValueChange={setQuery}
+        className="!h-9 !py-2"
       />
       <CommandList className="p-2">
         {loading ? (
@@ -155,13 +156,14 @@ export default function QuickOpen(): React.JSX.Element | null {
                 key={item.path}
                 value={item.path}
                 onSelect={() => handleSelect(item.path)}
-                className="min-w-0 p-0"
+                // Why: CommandDialog's descendant rule otherwise adds 24px of vertical padding.
+                className="min-w-0 !p-0"
               >
                 {/* Why: the trigger is this inner element, not the CommandItem.
                     cmdk sets its own onPointerMove after spreading props, which
                     drops the one Radix needs to open the tooltip. */}
                 <FilePathCursorTooltip path={item.path}>
-                  <div className="flex w-full min-w-0 items-center gap-2 px-3 py-1.5">
+                  <div className="flex w-full min-w-0 items-center gap-2 px-3 py-1">
                     <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
                     {/* shrink-0 + max-w-full: the directory gives up all of its
                         width before the filename loses a character. */}

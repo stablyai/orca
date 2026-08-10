@@ -25,11 +25,7 @@ import type {
 } from '../../shared/types'
 import { browserManager } from './browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
-import {
-  cleanElectronUserAgent,
-  isUnadvertisableChromeUserAgent,
-  setupClientHintsOverride
-} from './browser-session-ua'
+import { cleanElectronUserAgent, setupClientHintsOverride } from './browser-session-ua'
 import {
   clearBrowserSessionUserAgentMode,
   setBrowserSessionUserAgentMode
@@ -42,10 +38,12 @@ import {
   installBrowserWebAuthnAccessHandlers
 } from './browser-webauthn-access'
 
+// Why: no userAgent fields — the session UA is always derived from the running
+// engine at startup (clean or native), never persisted. Imports before Aug 2026
+// stored a synthesized source-browser UA here; persistMeta drops those legacy
+// keys on the next write because this loader no longer carries them.
 type BrowserSessionMeta = {
   defaultSource: BrowserSessionProfile['source']
-  userAgent: string | null
-  userAgentByPartition: Record<string, string>
   pendingCookieDbPath: string | null
   pendingCookieImports: Record<string, string>
   profiles: BrowserSessionProfile[]
@@ -122,11 +120,8 @@ class BrowserSessionRegistry {
     }
   }
 
-  private persistSource(source: BrowserSessionProfile['source'], userAgent?: string | null): void {
-    this.persistMeta({
-      defaultSource: source,
-      ...(userAgent !== undefined ? { userAgent } : {})
-    })
+  private persistSource(source: BrowserSessionProfile['source']): void {
+    this.persistMeta({ defaultSource: source })
   }
 
   // Why: non-default profiles are in-memory only; without this they vanish on restart.
@@ -139,15 +134,6 @@ class BrowserSessionRegistry {
     try {
       const raw = readFileSync(this.metadataPath, 'utf-8')
       const data = JSON.parse(raw)
-      const legacyUserAgent = typeof data?.userAgent === 'string' ? data.userAgent : null
-      const userAgentByPartition: Record<string, string> =
-        data && typeof data.userAgentByPartition === 'object' && data.userAgentByPartition
-          ? { ...data.userAgentByPartition }
-          : {}
-      if (legacyUserAgent && !userAgentByPartition[this.defaultPartition]) {
-        userAgentByPartition[this.defaultPartition] = legacyUserAgent
-      }
-
       const legacyPendingCookieDbPath =
         typeof data?.pendingCookieDbPath === 'string' ? data.pendingCookieDbPath : null
       const pendingCookieImports: Record<string, string> =
@@ -159,8 +145,6 @@ class BrowserSessionRegistry {
       }
       return {
         defaultSource: data?.defaultSource ?? null,
-        userAgent: legacyUserAgent,
-        userAgentByPartition,
         pendingCookieDbPath: legacyPendingCookieDbPath,
         pendingCookieImports,
         profiles: Array.isArray(data?.profiles) ? data.profiles : []
@@ -168,8 +152,6 @@ class BrowserSessionRegistry {
     } catch {
       return {
         defaultSource: null,
-        userAgent: null,
-        userAgentByPartition: {},
         pendingCookieDbPath: null,
         pendingCookieImports: {},
         profiles: []
@@ -200,20 +182,6 @@ class BrowserSessionRegistry {
         const sess = session.fromPartition(partition)
         const userAgentMode = profile.userAgentMode ?? 'clean'
         setBrowserSessionUserAgentMode(sess, userAgentMode)
-        const persistedUa = meta.userAgentByPartition[partition]
-        if (persistedUa) {
-          // Why: imports before the engine-version gate stored a fork's product version (Chrome/1.x);
-          // it is reapplied every launch, so drop it here or the profile stays blocked forever.
-          if (isUnadvertisableChromeUserAgent(persistedUa)) {
-            this.persistUserAgent(partition, null)
-          } else {
-            sess.setUserAgent(persistedUa)
-            setupClientHintsOverride(sess, persistedUa, {
-              googleAuthOverride: userAgentMode !== 'native'
-            })
-            continue
-          }
-        }
 
         if (profile.userAgentMode === 'native') {
           continue
@@ -334,20 +302,6 @@ class BrowserSessionRegistry {
     }
   }
 
-  persistUserAgent(partition: string, userAgent: string | null): void {
-    const meta = this.loadPersistedMeta()
-    const userAgentByPartition = { ...meta.userAgentByPartition }
-    if (userAgent) {
-      userAgentByPartition[partition] = userAgent
-    } else {
-      delete userAgentByPartition[partition]
-    }
-    this.persistMeta({
-      userAgentByPartition,
-      userAgent: userAgentByPartition[this.defaultPartition] ?? null
-    })
-  }
-
   getDefaultProfile(): BrowserSessionProfile {
     return this.profiles.get('default')!
   }
@@ -441,13 +395,9 @@ class BrowserSessionRegistry {
     const meta = this.loadPersistedMeta()
     const pendingCookieImports = { ...meta.pendingCookieImports }
     delete pendingCookieImports[profile.partition]
-    const userAgentByPartition = { ...meta.userAgentByPartition }
-    delete userAgentByPartition[profile.partition]
     this.persistMeta({
       pendingCookieImports,
-      pendingCookieDbPath: pendingCookieImports[this.defaultPartition] ?? null,
-      userAgentByPartition,
-      userAgent: userAgentByPartition[this.defaultPartition] ?? null
+      pendingCookieDbPath: pendingCookieImports[this.defaultPartition] ?? null
     })
 
     // Why: clear the partition's storage so deleting a profile doesn't leave orphaned cookies/cache behind.
@@ -474,12 +424,8 @@ class BrowserSessionRegistry {
       const meta = this.loadPersistedMeta()
       const pendingCookieImports = { ...meta.pendingCookieImports }
       delete pendingCookieImports[this.defaultPartition]
-      const userAgentByPartition = { ...meta.userAgentByPartition }
-      delete userAgentByPartition[this.defaultPartition]
       this.persistMeta({
         defaultSource: null,
-        userAgent: null,
-        userAgentByPartition,
         pendingCookieDbPath: null,
         pendingCookieImports
       })

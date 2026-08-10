@@ -64,7 +64,9 @@
     "openWorktreePalette": "打开工作树面板",
     "window": "窗口",
     "help": "帮助",
-    "paste": "粘贴"
+    "paste": "粘贴",
+    "copy": "复制",
+    "selectAll": "全选"
   },
   "tray": {
     "openOrca": "打开 Orca",
@@ -344,6 +346,7 @@
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
+          "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code"
         },
         "skill": {
@@ -2728,6 +2731,7 @@
             "ec85df5914": "快捷命令",
             "0a917b591a": "粘贴",
             "f3eeb1de13": "复制",
+            "selectAll": "全选",
             "c2f0b72b8d": "插入",
             "925f49f210": "展开窗格",
             "df766809e0": "折叠窗格",
@@ -2782,7 +2786,7 @@
             "agent": {
               "row": {
                 "ad991ece5c": "智能体的窗格不再可用。",
-                "090d607412": "陈旧智能体行-{{value0}}"
+                "090d607412": "stale-agent-row-{{value0}}"
               }
             }
           },
@@ -11342,8 +11346,7 @@
             "delete": "删除",
             "deleteReasonNonLocalHost": "只能删除此设备上的会话。",
             "deleteReasonSyntheticPath": "此会话无法在 Orca 中删除。",
-            "deleteReasonUnsupportedAgent": "{{value0}} 会话无法在 Orca 中删除。",
-            "deleteReasonSessionLive": "此会话仍在运行 — 请等待其完成后再删除。"
+            "deleteReasonUnsupportedAgent": "{{value0}} 会话无法在 Orca 中删除。"
           },
           "AiVaultSessionDeleteDialog": {
             "title": "要删除此会话吗？",

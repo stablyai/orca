@@ -25,7 +25,7 @@ export const AgentMapWorktreeLabel = memo(function AgentMapWorktreeLabel({
   )
   return (
     <g
-      className={`agent-map-worktree-label-group${visible ? ' is-visible' : ''}${active ? ' is-active' : ''}${showCount ? ' is-count-visible' : ''}`}
+      className={`agent-map-worktree-label-group${visible ? ' is-visible' : ''}${active ? ' is-active' : ''}${showCount ? ' is-count-visible' : ''}${worktree.motionState ? ` is-${worktree.motionState}` : ''}`}
       transform={`translate(${worktree.x} ${worktree.y - worktree.radius}) scale(${labelScale})`}
     >
       <text className="agent-map-worktree-label" y={18}>

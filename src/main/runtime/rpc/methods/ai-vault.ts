@@ -3,6 +3,7 @@ import { defineMethod, type RpcMethod } from '../core'
 import { OptionalBoolean } from '../schemas'
 import { restampAiVaultListResult } from '../../../ai-vault/session-list-results'
 import { AI_VAULT_AGENTS, AI_VAULT_SCOPE_PATHS_MAX_COUNT } from '../../../../shared/ai-vault-types'
+import { AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT } from '../../../../shared/ai-vault-session-title'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
 
 // Why: bound limit + scopePaths so a client cannot force an unbounded scan.
@@ -59,7 +60,25 @@ export const AiVaultPrepareSessionResumeParams = z.object({
   executionHostId: z.string().optional()
 })
 
+export const AiVaultSessionTitlesParams = z.object({
+  requests: z
+    .array(
+      z.object({
+        agent: z.enum(['claude', 'codex']),
+        sessionId: z.string().min(1).max(512),
+        transcriptPath: z.string().min(1).max(32_768).optional()
+      })
+    )
+    .max(AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT)
+})
+
 export const AI_VAULT_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: 'aiVault.resolveSessionTitles',
+    params: AiVaultSessionTitlesParams,
+    handler: (params, { runtime, signal }) =>
+      runtime.resolveAiVaultSessionTitles(params.requests, signal)
+  }),
   defineMethod({
     name: 'aiVault.listSessions',
     params: AiVaultListSessionsParams,
