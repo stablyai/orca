@@ -19,22 +19,13 @@ import {
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { Worktree } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
-
-type WorktreeBatchDeleteOptions = {
-  forceConfirm?: boolean
-  onDeleted?: (worktreeIds: string[]) => void
-}
-
-type WorktreeDeleteWithToastOptions = {
-  force?: boolean
-  onForceDeleted?: (worktreeId: string) => void
-  // Why: batch deletes suppress the per-delete focus handoff to focus one survivor after the batch (see runWorktreeDeletesInParallel).
-  focusSuccessorOnDelete?: boolean
-}
-
-type WorktreeDeleteOptions = {
-  expectedInstanceId?: string
-}
+import {
+  resolveWorktreeBatchDeleteTargets,
+  type WorktreeBatchDeleteOptions,
+  type WorktreeDeleteIdentity,
+  type WorktreeDeleteOptions,
+  type WorktreeDeleteWithToastOptions
+} from './worktree-delete-request'
 
 // Why: a failed delete usually means unresolved changes, so land on the diff panel, not just focus the worktree.
 function viewWorktreeDiff(worktreeId: string): void {
@@ -224,7 +215,8 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   const state = useAppStore.getState()
   const target = getWorktreeMapFromState(state).get(worktreeId) ?? null
   const instanceChanged =
-    options.expectedInstanceId !== undefined && target?.instanceId !== options.expectedInstanceId
+    Object.hasOwn(options, 'expectedInstanceId') &&
+    target?.instanceId !== options.expectedInstanceId
   if (!target || instanceChanged) {
     // Why: folder workspaces are never in the worktree map — their callers own that route, so a
     // miss there is a routing gap, not a stale list, and must not claim the workspace is gone.
@@ -284,14 +276,18 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
 }
 
 export function runWorktreeBatchDelete(
-  worktreeIds: readonly string[],
+  requestedWorktrees: readonly string[] | readonly WorktreeDeleteIdentity[],
   options: WorktreeBatchDeleteOptions = {}
 ): boolean {
   const state = useAppStore.getState()
-  const worktreeMap = getWorktreeMapFromState(state)
-  const targets = Array.from(new Set(worktreeIds))
-    .map((id) => worktreeMap.get(id) ?? null)
-    .filter((worktree): worktree is Worktree => worktree != null && !worktree.isMainWorktree)
+  const targets = resolveWorktreeBatchDeleteTargets(
+    requestedWorktrees,
+    getWorktreeMapFromState(state)
+  )
+  if (!targets) {
+    showWorkspaceListChangedToast()
+    return false
+  }
 
   if (targets.length === 0) {
     showNoDeletableWorkspacesToast()

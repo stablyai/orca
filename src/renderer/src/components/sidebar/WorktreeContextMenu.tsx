@@ -635,13 +635,15 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       ?.closest('[data-worktree-sidebar]')
       ?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
     const intent: WorktreeContextMenuDeleteIntent = isMultiContext
-      ? { kind: 'batch', worktreeIds: batchDeleteWorktrees.map((item) => item.id) }
+      ? {
+          kind: 'batch',
+          worktrees: batchDeleteWorktrees.map(({ id, instanceId }) => ({ id, instanceId }))
+        }
       : folderWorkspaceId
         ? { kind: 'folder', folderWorkspaceId }
         : {
             kind: 'worktree',
-            worktreeId: worktree.id,
-            worktreeInstanceId: worktree.instanceId
+            worktree: { id: worktree.id, instanceId: worktree.instanceId }
           }
     deferWorktreeContextMenuDeleteIntent(intent, restoreSidebarPosition)
     setMenuOpenState(false)

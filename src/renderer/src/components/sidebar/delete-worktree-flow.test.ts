@@ -152,6 +152,48 @@ describe('runWorktreeBatchDelete', () => {
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', { worktreeId: 'wt-1' })
   })
 
+  it('rejects the whole batch when a selected path belongs to a different instance', () => {
+    setWorktrees([
+      { id: 'wt-1', instanceId: 'instance-1' },
+      { id: 'wt-2', instanceId: 'instance-2' }
+    ])
+
+    const started = runWorktreeBatchDelete([
+      { id: 'wt-1', instanceId: 'instance-1' },
+      { id: 'wt-2', instanceId: 'replaced-instance' }
+    ])
+
+    expect(started).toBe(false)
+    expect(mocks.state.clearWorktreeDeleteState).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).not.toHaveBeenCalled()
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
+    expect(toast.info).toHaveBeenCalledWith(
+      'Workspace list changed',
+      expect.objectContaining({
+        description: 'Refresh Space and try again if the workspace list looks stale.'
+      })
+    )
+  })
+
+  it('opens batch confirmation when every selected instance is still current', () => {
+    setWorktrees([
+      { id: 'wt-1', instanceId: 'instance-1' },
+      { id: 'wt-2', instanceId: 'instance-2' }
+    ])
+
+    const started = runWorktreeBatchDelete([
+      { id: 'wt-1', instanceId: 'instance-1' },
+      { id: 'wt-2', instanceId: 'instance-2' }
+    ])
+
+    expect(started).toBe(true)
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
+      worktreeIds: ['wt-1', 'wt-2'],
+      allowSkipConfirm: false
+    })
+  })
+
   it('keeps batch deletes behind confirmation when confirmation is skipped', () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }
     setWorktrees([

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ runDelete: vi.fn(), runBatchDelete: vi.fn() }))
 
@@ -11,12 +11,20 @@ vi.mock('./delete-worktree-flow', () => ({
 import { deferWorktreeContextMenuDeleteIntent } from './worktree-context-menu-delete-intent'
 
 describe('deferWorktreeContextMenuDeleteIntent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
   it('dispatches the selected workspace identity after the menu event completes', () => {
     const defer = vi.fn<(callback: () => void) => void>()
     const intent = {
       kind: 'worktree' as const,
-      worktreeId: 'repo::/work/wt',
-      worktreeInstanceId: 'instance-1'
+      worktree: { id: 'repo::/work/wt', instanceId: 'instance-1' }
     }
     const onDispatched = vi.fn()
 
@@ -33,5 +41,36 @@ describe('deferWorktreeContextMenuDeleteIntent', () => {
       expectedInstanceId: 'instance-1'
     })
     expect(onDispatched).toHaveBeenCalledOnce()
+  })
+
+  it('preserves every selected workspace identity for batch validation', () => {
+    const intent = {
+      kind: 'batch' as const,
+      worktrees: [
+        { id: 'wt-1', instanceId: 'instance-1' },
+        { id: 'wt-2', instanceId: 'instance-2' }
+      ]
+    }
+
+    deferWorktreeContextMenuDeleteIntent(intent, undefined, (callback) => callback())
+
+    expect(mocks.runBatchDelete).toHaveBeenCalledWith(intent.worktrees)
+  })
+
+  it('dispatches on the next macrotask by default', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', { setTimeout })
+    const intent = {
+      kind: 'worktree' as const,
+      worktree: { id: 'wt-1', instanceId: 'instance-1' }
+    }
+
+    deferWorktreeContextMenuDeleteIntent(intent)
+
+    expect(mocks.runDelete).not.toHaveBeenCalled()
+    vi.runAllTimers()
+    expect(mocks.runDelete).toHaveBeenCalledWith('wt-1', {
+      expectedInstanceId: 'instance-1'
+    })
   })
 })
