@@ -1065,9 +1065,12 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const returnPreamble = flags.has('return-preamble') ? true : undefined
     // Why: --to is only required for non-dry-run; the RPC handler re-enforces.
     const to = dryRun ? getOptionalStringFlag(flags, 'to') : getRequiredStringFlag(flags, 'to')
+    const supervise = flags.has('supervise') ? true : undefined
     const result = await callMutation<{
       dispatch: { id: string; task_id: string; status: string } | null
       injected?: boolean
+      supervised?: boolean
+      superviseError?: string
       dryRun?: boolean
       preamble?: string
     }>(client, flags, 'orchestration.dispatch', {
@@ -1076,6 +1079,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       to,
       from,
       inject: flags.has('inject') ? true : undefined,
+      supervise,
       dryRun,
       returnPreamble,
       devMode: isDevCliInvocation()
@@ -1085,7 +1089,16 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         return r.preamble ?? ''
       }
       const base = `Dispatched ${r.dispatch?.task_id} -> ${r.dispatch?.id} [${r.dispatch?.status}]`
-      return r.preamble ? `${base}\n\n--- Preamble ---\n${r.preamble}` : base
+      // Why: an older Orca server accepts unknown params silently, so an unsupervised result for a
+      // --supervise request has to be reported or the coordinator learns it from a later worker-show.
+      const supervision = supervise
+        ? r.supervised
+          ? '\nSupervised: worker-show, worker-read, and worker-list now report this Dispatch.'
+          : `\nWarning: --supervise was not honored; the Dispatch is unsupervised.${r.superviseError ? ` ${r.superviseError}` : ''}`
+        : ''
+      return r.preamble
+        ? `${base}${supervision}\n\n--- Preamble ---\n${r.preamble}`
+        : `${base}${supervision}`
     })
   },
 

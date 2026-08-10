@@ -270,6 +270,8 @@ Recovery is conditional, never a fixed destructive sequence:
 
 Low-level `worktree create`, `terminal create`, and `dispatch --inject` remain valid recipes for custom argv or topology that `worker-start` does not express.
 
+Plain `dispatch --inject` delivers the task without supervision: `worker-show`, `worker-read`, `worker-list`, and `worker-retain` do not know the Dispatch. Add `--supervise` to record the same supervised worker `worker-start --terminal` records, so the whole `worker-*` set works on an adopted pane. The adopted terminal is recorded as external, so `worker-release` never closes a pane the coordinator did not create. Decide at dispatch time; an already-dispatched Task cannot be started or retried into supervision afterwards.
+
 ## Gates And Legacy Inspection
 
 ```bash

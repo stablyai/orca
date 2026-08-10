@@ -4105,6 +4105,77 @@ export class OrchestrationDb {
     }
   }
 
+  // Why: an adopted dispatch already proved agent presence and pane identity, so supervision is a
+  // pure record write — the agent terminal is never created, waited on, or written to here.
+  attachSupervisedWorkerToDispatch(params: {
+    dispatchId: string
+    terminalHandle: string
+    paneKey: string
+    processIncarnation: string
+    worktreeId: string | null
+    hostScope?: string | null
+  }): WorkerDispatchRow {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const dispatch = this.getDispatchContextById(params.dispatchId)
+      if (!dispatch) {
+        throw new OrchestrationError(
+          'dispatch_not_found',
+          `Dispatch ${params.dispatchId} was not found.`
+        )
+      }
+      if (this.getWorkerDispatch(params.dispatchId)) {
+        throw new OrchestrationError(
+          'dispatch_inactive',
+          `Dispatch ${params.dispatchId} already has a supervised worker record.`
+        )
+      }
+      const effects = [
+        { kind: 'terminal', role: 'agent', action: 'reused', id: params.terminalHandle },
+        { kind: 'dispatch_input', role: 'agent', id: params.terminalHandle, state: 'accepted' }
+      ]
+      this.db
+        .prepare(
+          `INSERT INTO worker_dispatches (
+             dispatch_id, state, stage, worktree_id, agent_terminal_handle,
+             setup_state, effects, start_options
+           ) VALUES (?, 'ready', 'input_accepted', ?, ?, 'not_applicable', ?, ?)`
+        )
+        .run(
+          params.dispatchId,
+          params.worktreeId,
+          params.terminalHandle,
+          JSON.stringify(effects),
+          JSON.stringify({
+            adoption: 'dispatch_inject',
+            terminal: params.terminalHandle,
+            worktree: 'existing',
+            resolvedWorktreeId: params.worktreeId,
+            agent: null,
+            setup: 'not_applicable',
+            setupSource: 'existing_worktree'
+          })
+        )
+      // 'external' ownership keeps release from ever closing a terminal the operator started.
+      if (!this.getWorkerTerminalResourceByOwner(params.dispatchId)) {
+        this.createWorkerTerminalResourceStatement({
+          dispatchId: params.dispatchId,
+          worktreeId: params.worktreeId,
+          terminalHandle: params.terminalHandle,
+          paneKey: params.paneKey,
+          processIncarnation: params.processIncarnation,
+          hostScope: params.hostScope,
+          ownership: 'external'
+        })
+      }
+      this.db.exec('COMMIT')
+      return this.getWorkerDispatch(params.dispatchId) as WorkerDispatchRow
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   recordWorkerStage(params: {
     dispatchId: string
     stage: string

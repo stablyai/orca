@@ -161,7 +161,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'dispatch'],
     summary: 'Dispatch a task to a terminal',
     usage:
-      'orca orchestration dispatch --task <task_id> --to <handle> [--from <handle>] [--run <run_id>] [--inject] [--dry-run] [--return-preamble] [--json]',
+      'orca orchestration dispatch --task <task_id> --to <handle> [--from <handle>] [--run <run_id>] [--inject] [--supervise] [--dry-run] [--return-preamble] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'task',
@@ -169,9 +169,17 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'from',
       'run',
       'inject',
+      'supervise',
       'dry-run',
       'return-preamble',
       'retry-request'
+    ],
+    notes: [
+      'Plain --inject delivers the task without supervision: worker-show, worker-read, worker-list, and worker-retain do not know the Dispatch, and worker-stop and worker-abandon fence it without touching the terminal process.',
+      '--supervise requires --inject and records the same supervised worker as worker-start --terminal, so the whole worker-* set works on an adopted pane. The terminal is recorded as external, so worker-release never closes a pane you started yourself.',
+      'The choice is made at dispatch time; an already-dispatched Task cannot be started or retried into supervision afterwards.',
+      'The response reports supervised so a --supervise request against an older Orca server that ignores the flag is visible instead of silent.',
+      'Use worker-start --terminal <handle> to adopt an idle agent pane through the composed start instead; it also injects the preamble and requires the pane to belong to the resolved worktree.'
     ]
   },
   {

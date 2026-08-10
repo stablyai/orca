@@ -197,6 +197,7 @@ const DispatchParams = z.object({
   to: OptionalString,
   from: OptionalString,
   inject: OptionalBoolean,
+  supervise: OptionalBoolean,
   dryRun: OptionalBoolean,
   returnPreamble: OptionalBoolean,
   devMode: OptionalBoolean,
@@ -1241,7 +1242,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(params.to) }
             : {})
         })
-        return { dispatch: null, injected: false, dryRun: true, preamble }
+        return { dispatch: null, injected: false, supervised: false, dryRun: true, preamble }
       }
 
       if (!params.to) {
@@ -1251,6 +1252,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
       if (task.status !== 'ready') {
         throw new Error(`Task ${params.task} is ${task.status}; only ready tasks can be dispatched`)
+      }
+
+      // Why: supervision records the injected pane as the worker's agent terminal, so it is only
+      // provable on the path that verified an agent is running there.
+      if (params.supervise && !params.inject) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          '--supervise requires --inject; an unadopted terminal has no proven agent to supervise.'
+        )
       }
 
       // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.
@@ -1318,11 +1328,45 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
       }
 
+      // Why: reported unconditionally so a new client can tell an ignored --supervise on an older
+      // host from an honored one — the params schema is permissive, so the flag would vanish silently.
+      let supervised = false
+      let superviseError: string | undefined
+      if (params.supervise && injected) {
+        const worktreeId = await runtime
+          .showTerminal(to)
+          .then((terminal) => terminal.worktreeId ?? null)
+          .catch(() => null)
+        try {
+          db.attachSupervisedWorkerToDispatch({
+            dispatchId: ctx.id,
+            terminalHandle: to,
+            paneKey: assigneePaneKey as string,
+            processIncarnation: processIncarnation as string,
+            worktreeId,
+            ...(dispatchAuthority?.hostScope
+              ? { hostScope: JSON.stringify(dispatchAuthority.hostScope) }
+              : {})
+          })
+          supervised = true
+        } catch (err) {
+          // Why: the task is already in the worker's input and cannot be recalled, so a failed
+          // record downgrades the lane to unsupervised instead of failing a delivered dispatch.
+          superviseError = err instanceof Error ? err.message : String(err)
+        }
+      }
+
       // Why: returnPreamble is opt-in because the preamble is several hundred bytes most callers don't need in the response.
       if (params.returnPreamble) {
-        return { dispatch: ctx, injected, preamble }
+        return {
+          dispatch: ctx,
+          injected,
+          supervised,
+          preamble,
+          ...(superviseError ? { superviseError } : {})
+        }
       }
-      return { dispatch: ctx, injected }
+      return { dispatch: ctx, injected, supervised, ...(superviseError ? { superviseError } : {}) }
     }
   }),
 
