@@ -31955,13 +31955,28 @@ export class OrcaRuntimeService {
     // still-blocked case; reservedTypes carries the notify-time snapshot for a
     // waiter resolved later in the same drain, which is already gone from the map.
     const waiters = this.messageWaitersByHandle.get(mailboxHandle)
+    // Why: a pane with a bound Run must only nag for that Run's mail. Counting every
+    // undelivered row for the terminal handle included other coordinators' Runs (#13563).
+    const boundRun = this._orchestrationDb.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
     const unread = this._orchestrationDb
       .getUndeliveredUnreadMessages(mailboxHandle)
-      .filter(
-        (message) =>
-          !options.reservedTypes?.has(message.type) &&
-          !messageTypeHasLiveWaiter(waiters, message.type)
-      )
+      .filter((message) => {
+        if (options.reservedTypes?.has(message.type)) {
+          return false
+        }
+        if (messageTypeHasLiveWaiter(waiters, message.type)) {
+          return false
+        }
+        if (
+          boundRun &&
+          !mailboxHandle.startsWith('run:') &&
+          message.run_id &&
+          message.run_id !== boundRun.id
+        ) {
+          return false
+        }
+        return true
+      })
     if (unread.length === 0) {
       return
     }

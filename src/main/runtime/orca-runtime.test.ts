@@ -1062,11 +1062,12 @@ class InMemoryOrchestrationMessages {
     priority?: MessagePriority
     threadId?: string
     payload?: string
+    runId?: string
   }): MessageRow {
     this.sequence += 1
     const row: MessageRow = {
       id: `msg_${this.sequence}`,
-      run_id: 'run_test',
+      run_id: msg.runId ?? 'run_test',
       from_handle: msg.from,
       to_handle: msg.to,
       subject: msg.subject,
@@ -34292,6 +34293,51 @@ describe('OrcaRuntimeService', () => {
     expect(write).toHaveBeenCalledWith(
       'pty-1',
       expect.stringContaining('You have 1 orchestration message')
+    )
+    db.close()
+  })
+
+  it('scopes the idle mail pointer count to the pane bound Run only', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const db = new InMemoryOrchestrationMessages()
+    const write = vi.fn().mockReturnValue(true)
+    setInMemoryOrchestrationMessages(runtime, db)
+    runtime.setPtyController({
+      write,
+      kill: vi.fn(),
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    db.setRun({
+      id: 'run_bound',
+      coordinator_handle: terminal.handle,
+      coordinator_pane_key: 'tab-1:pane:1'
+    })
+    runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+    db.insertMessage({
+      from: 'sender',
+      to: terminal.handle,
+      subject: 'other run',
+      runId: 'run_other'
+    })
+    db.insertMessage({
+      from: 'sender',
+      to: terminal.handle,
+      subject: 'bound run',
+      runId: 'run_bound'
+    })
+
+    runtime.deliverPendingMessagesForHandle(terminal.handle)
+
+    expect(write).toHaveBeenCalledWith(
+      'pty-1',
+      expect.stringContaining('You have 1 orchestration message')
+    )
+    expect(write).not.toHaveBeenCalledWith(
+      'pty-1',
+      expect.stringContaining('You have 2 orchestration messages')
     )
     db.close()
   })
