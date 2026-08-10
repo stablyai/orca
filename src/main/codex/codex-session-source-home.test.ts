@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { basename, join, sep } from 'node:path'
+import { basename, join, parse, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   resolveHostCodexSessionSourceHome,
@@ -32,19 +32,19 @@ describe('resolveHostCodexSessionSourceHome', () => {
     ).toBe(join(homedir(), '.codex-chatgpt'))
   })
 
-  // The home directory is never a Codex home, and the session backfill WRITES
-  // through this value — accepting it would put a `sessions` tree at the top of
-  // the user's home.
-  it('ignores a value that resolves to the home directory itself', () => {
+  // The session backfill writes through this value, so broad filesystem
+  // boundaries must never become implicit `sessions` targets.
+  it('ignores values resolving to the home directory or filesystem root', () => {
     for (const host of [
       '~',
       '~/',
       '~/.',
       `~/../${basename(homedir())}`,
       // No tilde, so expandHostHomePrefix returns it verbatim and only the
-      // resolve() inside isHostHomeDir can fold it back to the home dir.
+      // safety check's resolve() can fold it back to the home dir.
       `${homedir()}/../${basename(homedir())}`,
-      homedir()
+      homedir(),
+      parse(homedir()).root
     ]) {
       expect(
         resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host } })
@@ -59,6 +59,9 @@ describe('resolveHostCodexSessionSourceHome', () => {
       codexSessionSourceHome: { host: '\\codex' }
     })
     expect(driveless).toBeUndefined()
+    expect(
+      resolveHostCodexSessionSourceHome({ codexSessionSourceHome: { host: '\\\\server' } })
+    ).toBeUndefined()
     expect(
       resolveHostCodexSessionSourceHome({
         codexSessionSourceHome: { host: 'C:\\Users\\me\\.codex' }

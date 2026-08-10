@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { isAbsolute, join, resolve, sep } from 'node:path'
+import { isAbsolute, join, parse, resolve, sep } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import type { GlobalSettings } from '../../shared/types'
 
@@ -21,9 +21,11 @@ export function resolveHostCodexSessionSourceHome(
   // Why: consumers both scan and WRITE through this value (the session backfill
   // resolves <home>/sessions as its target). An unanchored value would mkdir
   // under whatever cwd the app happens to have, and the home directory itself is
-  // never a Codex home — accepting `~` would drop a `sessions` tree at the top of
-  // the user's home. Reject both; callers fall back to the system home.
-  return expanded && isAnchoredAbsolute(expanded) && !isHostHomeDir(expanded) ? expanded : undefined
+  // never a Codex home — accepting `~` or `/` would create a `sessions` tree at
+  // a broad filesystem boundary. Reject both; callers fall back to the system home.
+  return expanded && isAnchoredAbsolute(expanded) && !isUnsafeHostHomePath(expanded)
+    ? expanded
+    : undefined
 }
 
 // Why not plain isAbsolute: on win32 a rooted-but-driveless `\codex` passes it
@@ -34,16 +36,22 @@ function isAnchoredAbsolute(value: string): boolean {
   if (!isAbsolute(value)) {
     return false
   }
-  return sep !== '\\' || /^[A-Za-z]:[\\/]/.test(value) || /^[\\/]{2}/.test(value)
+  return (
+    sep !== '\\' ||
+    /^[A-Za-z]:[\\/]/.test(value) ||
+    /^[\\/]{2}[^\\/]+[\\/]+[^\\/]+(?:[\\/]|$)/.test(value)
+  )
 }
 
 // Callers prove the value is drive/UNC-anchored first, so resolve() only folds
 // `.`/`..` here and never reads the cwd. It is load-bearing for a RAW absolute
 // value carrying dot segments; `~/..` spellings were already folded by join().
-function isHostHomeDir(value: string): boolean {
+function isUnsafeHostHomePath(value: string): boolean {
+  const resolved = resolve(value)
+  const normalized = normalizeRuntimePathForComparison(resolved)
   return (
-    normalizeRuntimePathForComparison(resolve(value)) ===
-    normalizeRuntimePathForComparison(resolve(homedir()))
+    normalized === normalizeRuntimePathForComparison(resolve(homedir())) ||
+    normalized === normalizeRuntimePathForComparison(parse(resolved).root)
   )
 }
 
