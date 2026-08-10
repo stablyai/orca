@@ -375,16 +375,26 @@
 }
 
 /* Why: when the gutter is collapsed (no note, not composing), the block is
-   display:block and this controls div would flow BELOW the content, dragging
-   the add-note "+" down with it. Pin it to the block's top-left so the "+"
-   stays beside the block in the left margin instead of underneath it. */
+   display:block and this controls div would otherwise flow BELOW the content,
+   dragging the add-note "+" with it. Keep controls out of flow (static, so the
+   absolute "+" anchors to the position:relative block) and place the "+" in the
+   RIGHT margin — aligned with where the notes gutter opens once a block has a
+   note. */
 .markdown-annotation-block:not(.has-review-notes):not(.is-active) > .markdown-annotation-controls,
 .markdown-annotation-list-block:not(.has-review-notes):not(.is-active)
   > .markdown-annotation-controls {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 0;
+  position: static;
+}
+
+.markdown-annotation-block:not(.has-review-notes):not(.is-active)
+  > .markdown-annotation-controls
+  > .markdown-annotation-add,
+.markdown-annotation-list-block:not(.has-review-notes):not(.is-active)
+  > .markdown-annotation-controls
+  > .markdown-annotation-add {
+  top: 2px;
+  left: auto;
+  right: -26px;
 }
 
 .markdown-annotation-add {
@@ -490,14 +500,6 @@
 
   .markdown-annotation-controls {
     margin-top: 6px;
-  }
-
-  /* Undo the collapsed-gutter absolute pin so the stacked "+" flows normally. */
-  .markdown-annotation-block:not(.has-review-notes):not(.is-active) > .markdown-annotation-controls,
-  .markdown-annotation-list-block:not(.has-review-notes):not(.is-active)
-    > .markdown-annotation-controls {
-    position: static;
-    height: auto;
   }
 
   .markdown-annotation-add {
