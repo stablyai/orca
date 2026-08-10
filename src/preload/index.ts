@@ -752,7 +752,12 @@ const api = {
     create: (args) => ipcRenderer.invoke('spaces:create', args),
     update: (args) => ipcRenderer.invoke('spaces:update', args),
     delete: (args) => ipcRenderer.invoke('spaces:delete', args),
-    moveProject: (args) => ipcRenderer.invoke('spaces:moveProject', args)
+    moveProject: (args) => ipcRenderer.invoke('spaces:moveProject', args),
+    onChanged: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('spaces:changed', listener)
+      return () => ipcRenderer.removeListener('spaces:changed', listener)
+    }
   } satisfies PreloadApi['spaces'],
 
   folderWorkspaces: {

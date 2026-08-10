@@ -9189,6 +9189,78 @@ describe('parked terminal recovery on repos:changed', () => {
     expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
     clearTerminalTabsParkedOnUnresolvedHost()
   })
+
+  it('refreshes Spaces on spaces:changed rather than on every repos:changed', async () => {
+    vi.resetModules()
+    let reposChangedListener: (() => void) | undefined
+    let spacesChangedListener: (() => void) | undefined
+    const loadSpaces = vi.fn(() => Promise.resolve())
+
+    const state = {
+      settings: { activeRuntimeEnvironmentId: null },
+      repos: [],
+      worktreesByRepo: {},
+      folderWorkspaces: [],
+      projectGroups: [],
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      remountTerminalTabForRecovery: vi.fn(() => true),
+      fetchRepos: vi.fn(() => Promise.resolve()),
+      fetchProjectGroups: vi.fn(() => Promise.resolve()),
+      fetchFolderWorkspaces: vi.fn(() => Promise.resolve()),
+      loadSpaces
+    }
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return { ...actual, useEffect: (effect: () => void | (() => void)) => void effect() }
+    })
+    vi.doMock('../store', () => ({
+      useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => state }
+    }))
+
+    const noopListener = (): (() => void) => () => {}
+    const autoStubNamespace = new Proxy(
+      {},
+      {
+        get:
+          () =>
+          (...args: unknown[]) =>
+            typeof args[0] === 'function' ? noopListener() : new Promise(() => {})
+      }
+    )
+    const api = new Proxy(
+      {
+        repos: {
+          onChanged: (cb: () => void) => {
+            reposChangedListener = cb
+            return () => {}
+          }
+        },
+        spaces: {
+          onChanged: (cb: () => void) => {
+            spacesChangedListener = cb
+            return () => {}
+          }
+        }
+      } as Record<string, unknown>,
+      { get: (target, prop: string) => target[prop] ?? autoStubNamespace }
+    )
+    vi.stubGlobal('window', { api })
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    expect(spacesChangedListener).toBeDefined()
+
+    // A repo catalog refresh alone must not re-fetch the Space list.
+    reposChangedListener?.()
+    await Promise.resolve()
+    expect(loadSpaces).not.toHaveBeenCalled()
+
+    spacesChangedListener?.()
+    await Promise.resolve()
+    expect(loadSpaces).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('useIpcEvents silent terminal adoption (surfaceOwner: false)', () => {

@@ -1064,8 +1064,6 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.repos.onChanged(() => {
         const state = useAppStore.getState()
-        // Why: project Space membership rides the repo catalog, so the Space list refreshes with it.
-        void state.loadSpaces()
         if (isRuntimeEnvironmentActive()) {
           // Why: the all-host sidebar shows local repos even under a runtime; refresh the local slice, keep runtime slices.
           void (async () => {
@@ -1081,6 +1079,14 @@ export function useIpcEvents(): void {
         void state.fetchRepos().then(remountTerminalTabsAwaitingHostHydration)
       })
     )
+
+    // Why: the web client has no spaces namespace at all, so this stays optional.
+    const unsubscribeSpaces = window.api.spaces?.onChanged?.(() => {
+      void useAppStore.getState().loadSpaces()
+    })
+    if (unsubscribeSpaces) {
+      unsubs.push(unsubscribeSpaces)
+    }
 
     unsubs.push(
       window.api.worktrees.onChanged(

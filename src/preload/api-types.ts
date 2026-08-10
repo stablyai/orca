@@ -1377,6 +1377,7 @@ export type PreloadApi = {
       spaceId: string | null
       hostId: ExecutionHostId
     }) => Promise<Repo | null>
+    onChanged: (callback: () => void) => () => void
   }
   folderWorkspaces: {
     list: () => Promise<FolderWorkspace[]>

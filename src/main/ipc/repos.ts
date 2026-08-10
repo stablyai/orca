@@ -1656,7 +1656,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.handle('spaces:create', (_event, rawArgs: unknown): Space => {
     const args = parseProjectGroupIpcArgs(SpaceCreateArgs, rawArgs, 'invalid_space_create_args')
     const space = store.createSpace(args)
-    notifyReposChanged(mainWindow)
+    notifySpacesChanged(mainWindow)
     return space
   })
 
@@ -1664,7 +1664,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     const args = parseProjectGroupIpcArgs(SpaceUpdateArgs, rawArgs, 'invalid_space_update_args')
     const updated = store.updateSpace(args.spaceId, args.updates)
     if (updated) {
-      notifyReposChanged(mainWindow)
+      notifySpacesChanged(mainWindow)
     }
     return updated
   })
@@ -1673,6 +1673,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     const args = parseProjectGroupIpcArgs(SpaceSelectorArgs, rawArgs, 'invalid_space_delete_args')
     const deleted = store.deleteSpace(args.spaceId)
     if (deleted) {
+      // Why: deleting a Space also sends its projects back to Default, so repos really did change.
+      notifySpacesChanged(mainWindow)
       notifyReposChanged(mainWindow)
     }
     return deleted
@@ -2790,6 +2792,14 @@ function notifyReposChanged(mainWindow: BrowserWindow): void {
     console.error('[repos] failed to notify remote clients of repo change', err)
   }
   scheduleCurrentWorktreeBaseDirectoryWatcherSync()
+}
+
+// Why: a Space create/rename/delete touches no Repo, so it must not drag every host's catalog
+// refetch and the remote-client broadcast along with it.
+function notifySpacesChanged(mainWindow: BrowserWindow): void {
+  if (!mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('spaces:changed')
+  }
 }
 
 function notifySparsePresetsChanged(mainWindow: BrowserWindow, repoId: string): void {

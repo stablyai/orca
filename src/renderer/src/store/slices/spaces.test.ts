@@ -183,11 +183,35 @@ describe('spaces slice', () => {
     spacesApi.list.mockResolvedValue([createDefaultSpace()])
 
     await store.getState().deleteSpace(CUSTOM_SPACE_ID)
-    // Stands in for the repos:changed refresh the delete IPC handler broadcasts.
-    await store.getState().loadSpaces()
 
     expect(store.getState().activeSpaceId).toBe(DEFAULT_SPACE_ID)
     expect(store.getState().spaces.map((space) => space.id)).toEqual([DEFAULT_SPACE_ID])
+  })
+
+  it('drops a deleted Space without waiting on the spaces:changed broadcast', async () => {
+    // Why: the window that asked for the delete must not depend on a main -> renderer event to
+    // stop showing the row, or a dropped broadcast reads as "the Space cannot be deleted".
+    const store = createTestAppStore()
+    const doomed = makeSpace(CUSTOM_SPACE_ID)
+    await seedSpaces(store, [createDefaultSpace(), doomed])
+    spacesApi.delete.mockResolvedValue(true)
+    spacesApi.list.mockResolvedValue([createDefaultSpace()])
+
+    // An empty Space owns no projects, so nothing else refreshes the list on its behalf.
+    expect(await store.getState().deleteSpace(CUSTOM_SPACE_ID)).toBe(true)
+
+    expect(store.getState().spaces.map((space) => space.id)).toEqual([DEFAULT_SPACE_ID])
+  })
+
+  it('reflects a rename without waiting on the spaces:changed broadcast', async () => {
+    const store = createTestAppStore()
+    await seedSpaces(store, [createDefaultSpace(), makeSpace(CUSTOM_SPACE_ID, 'Work')])
+    spacesApi.update.mockResolvedValue(makeSpace(CUSTOM_SPACE_ID, 'Renamed'))
+    spacesApi.list.mockResolvedValue([createDefaultSpace(), makeSpace(CUSTOM_SPACE_ID, 'Renamed')])
+
+    expect(await store.getState().updateSpace(CUSTOM_SPACE_ID, { name: 'Renamed' })).toBe(true)
+
+    expect(store.getState().spaces.map((space) => space.name)).toContain('Renamed')
   })
 
   it('refreshes from the host after a mutation and switches into the new Space', async () => {

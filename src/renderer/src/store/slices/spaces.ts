@@ -91,19 +91,43 @@ function restoreRememberedWorkspace(state: AppState, spaceId: string): void {
   }
 }
 
+function spacesEqual(left: readonly Space[], right: readonly Space[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((space, index) => {
+      const other = right[index]
+      return (
+        space.id === other.id &&
+        space.name === other.name &&
+        space.emoji === other.emoji &&
+        space.createdAt === other.createdAt &&
+        space.updatedAt === other.updatedAt
+      )
+    })
+  )
+}
+
 export const createSpacesSlice: StateCreator<AppState, [], [], SpacesSlice> = (set, get) => {
+  // Why: repos:changed fires far more often than Spaces actually change, and a late list must not
+  // roll back a newer one — the fallback would drop the caller into Default.
+  let listGeneration = 0
+
   async function reload(): Promise<void> {
+    const generation = ++listGeneration
     const list = await spacesApi()?.list?.()
-    if (!list) {
+    if (!list || generation !== listGeneration) {
       return
     }
     set((state) => {
-      const spaces = normalizeSpaces(list)
+      const normalized = normalizeSpaces(list)
+      // Why: a fresh array identity re-renders every Space subscriber, sidebars included.
+      const spaces = spacesEqual(state.spaces, normalized) ? state.spaces : normalized
       const activeSpaceId = normalizeActiveSpaceId(state.activeSpaceId, spaces)
       if (activeSpaceId !== state.activeSpaceId) {
         persistSpaceUiState({ activeSpaceId })
+        return { spaces, activeSpaceId }
       }
-      return { spaces, activeSpaceId }
+      return spaces === state.spaces ? state : { spaces }
     })
   }
 
@@ -115,7 +139,8 @@ export const createSpacesSlice: StateCreator<AppState, [], [], SpacesSlice> = (s
     }
   }
 
-  // Why: every spaces:* IPC handler emits repos:changed, which refreshes the list; only ordering-sensitive callers reload inline.
+  // Why: spaces:changed refreshes the OTHER windows. The window that asked reloads inline instead
+  // of waiting on that round trip, so its own list never depends on the broadcast arriving.
   async function mutate<T>(
     action: () => Promise<T | null | undefined> | undefined
   ): Promise<T | null> {
@@ -168,8 +193,13 @@ export const createSpacesSlice: StateCreator<AppState, [], [], SpacesSlice> = (s
       return true
     },
 
-    updateSpace: async (spaceId, updates) =>
-      (await mutate(() => spacesApi()?.update?.({ spaceId, updates }))) !== null,
+    updateSpace: async (spaceId, updates) => {
+      if ((await mutate(() => spacesApi()?.update?.({ spaceId, updates }))) === null) {
+        return false
+      }
+      await load()
+      return true
+    },
 
     deleteSpace: async (spaceId) => {
       if (spaceId === DEFAULT_SPACE_ID) {
@@ -183,6 +213,7 @@ export const createSpacesSlice: StateCreator<AppState, [], [], SpacesSlice> = (s
         const { [spaceId]: _removed, ...rest } = state.lastWorkspaceKeyBySpaceId
         return { lastWorkspaceKeyBySpaceId: rest }
       })
+      await load()
       return true
     },
 
