@@ -6,6 +6,12 @@ import { join } from 'node:path'
 import type { Repo } from '../shared/types'
 
 import { describe, expect, it, vi } from 'vitest'
+import { getPosixRunnerFailureReportPrelude } from './setup-runner-failure-report'
+
+/** Expected POSIX runner content: Orca's header, then the script. */
+function posixRunnerContent(body: string): string {
+  return `#!/usr/bin/env bash\nset -e\n${getPosixRunnerFailureReportPrelude()}${body}`
+}
 
 const { execFileSyncMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn()
@@ -118,7 +124,7 @@ describe('createSetupRunnerScript', () => {
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
         'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
-        '#!/usr/bin/env bash\nset -e\npnpm install\n',
+        posixRunnerContent('pnpm install\n'),
         'utf-8'
       )
       // Why: chmod over a native Windows path is meaningless; only the WSL branch sets the bit.
@@ -240,6 +246,72 @@ describe('createSetupRunnerScript', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'reports the failing command and the PATH it ran with when a command is missing',
+    async () => {
+      // Regression: a version-manager tool that resolves in the user's terminal is absent in the
+      // runner, and the bare `command not found` says nothing about the PATH the runner had.
+      const { buildPosixRunnerScript } = await import('./hooks')
+      const { mkdtempSync, rmSync, writeFileSync } = await vi.importActual<typeof NodeFs>('node:fs')
+      const { execFileSync } = await vi.importActual<typeof NodeChildProcess>('node:child_process')
+
+      const dir = mkdtempSync(join(tmpdir(), 'orca-posix-runner-'))
+      try {
+        const runnerPath = join(dir, 'setup-runner.sh')
+        writeFileSync(
+          runnerPath,
+          buildPosixRunnerScript('orca-missing-tool install\necho NEVER\n'),
+          'utf-8'
+        )
+
+        const failure = (() => {
+          try {
+            execFileSync('bash', [runnerPath], {
+              encoding: 'utf-8',
+              env: { PATH: '/usr/bin:/bin' }
+            })
+            return null
+          } catch (error) {
+            return error as { status?: number; stdout?: string; stderr?: string }
+          }
+        })()
+
+        expect(failure?.status).toBe(127)
+        expect(failure?.stderr).toContain('Orca setup: command failed with status 127')
+        expect(failure?.stderr).toContain('orca-missing-tool install')
+        expect(failure?.stderr).toContain('/usr/bin:/bin')
+        expect(failure?.stdout).not.toContain('NEVER')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'stays silent while a runner script succeeds',
+    async () => {
+      const { buildPosixRunnerScript } = await import('./hooks')
+      const { mkdtempSync, rmSync, writeFileSync } = await vi.importActual<typeof NodeFs>('node:fs')
+      const { execFileSync } = await vi.importActual<typeof NodeChildProcess>('node:child_process')
+
+      const dir = mkdtempSync(join(tmpdir(), 'orca-posix-runner-'))
+      try {
+        const runnerPath = join(dir, 'setup-runner.sh')
+        writeFileSync(runnerPath, buildPosixRunnerScript('echo SETUP_RAN\n'), 'utf-8')
+
+        const output = execFileSync('bash', [runnerPath], {
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'pipe']
+        })
+
+        expect(output).toContain('SETUP_RAN')
+        expect(output).not.toContain('Orca setup:')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('derives ORCA_WORKSPACE_NAME from a POSIX worktree path', async () => {
     const originalPlatform = process.platform
 
@@ -301,7 +373,7 @@ describe('createSetupRunnerScript', () => {
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
         '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
-        '#!/usr/bin/env bash\nset -e\npnpm install\n',
+        posixRunnerContent('pnpm install\n'),
         'utf-8'
       )
       expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
@@ -347,7 +419,7 @@ describe('createSetupRunnerScript', () => {
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
         '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
-        '#!/usr/bin/env bash\nset -e\npnpm install\n',
+        posixRunnerContent('pnpm install\n'),
         'utf-8'
       )
       expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
@@ -402,7 +474,7 @@ describe('createIssueCommandRunnerScript', () => {
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
         '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh',
-        '#!/usr/bin/env bash\nset -e\ncodex exec "long command"\nclaude -p "review it"\n',
+        posixRunnerContent('codex exec "long command"\nclaude -p "review it"\n'),
         'utf-8'
       )
       expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(

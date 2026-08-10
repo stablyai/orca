@@ -5,6 +5,12 @@ import type * as GitRunner from './git/runner'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultTabsLaunch, parseOrcaYaml } from './hooks'
+import { getPosixRunnerFailureReportPrelude } from './setup-runner-failure-report'
+
+/** Expected POSIX runner content: Orca's header, any replayed shebang options, then the script. */
+function posixRunnerContent(body: string, declaredOptions = ''): string {
+  return `#!/usr/bin/env bash\nset -e\n${declaredOptions}${getPosixRunnerFailureReportPrelude()}${body}`
+}
 
 // Mock fs and path used by loadHooks
 vi.mock('fs', () => ({
@@ -567,7 +573,7 @@ describe('runner script builders', () => {
     try {
       const result = buildPosixRunnerScript(script)
 
-      expect(result.startsWith('#!/usr/bin/env bash\nset -e\necho setup\n')).toBe(true)
+      expect(result.startsWith(posixRunnerContent('echo setup\n'))).toBe(true)
       expect(result.endsWith('echo done\n')).toBe(true)
       const usedCrlfReplace = replaceSpy.mock.calls.some(
         ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n'
@@ -1181,7 +1187,7 @@ describe('runHook', () => {
       expect(mkdirSyncMock).toHaveBeenCalled()
       expect(writeFileSyncMock).toHaveBeenCalledWith(
         expect.stringContaining('setup-runner.sh'),
-        '#!/usr/bin/env bash\nset -e\necho hello\n',
+        posixRunnerContent('echo hello\n'),
         'utf-8'
       )
       expect(chmodSyncMock).toHaveBeenCalledWith(expect.stringContaining('setup-runner.sh'), 0o755)
@@ -1282,7 +1288,7 @@ describe('createSetupRunnerScript', () => {
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
         'C:\\repo\\.git\\orca\\setup-runner.sh',
-        '#!/usr/bin/env bash\nset -e\npnpm install\nnpm run build\n',
+        posixRunnerContent('pnpm install\nnpm run build\n'),
         'utf-8'
       )
       expect(chmodSyncMock).not.toHaveBeenCalled()
@@ -1389,7 +1395,7 @@ describe('createSetupRunnerScript', () => {
 
       expect(writeFileSyncMock).toHaveBeenCalledWith(
         'C:\\repo\\.git\\orca\\setup-runner.sh',
-        '#!/usr/bin/env bash\nset -e\nset -euo pipefail\nmake build | tee build.log\n',
+        posixRunnerContent('make build | tee build.log\n', 'set -euo pipefail\n'),
         'utf-8'
       )
     } finally {
@@ -1457,7 +1463,7 @@ describe('createSetupRunnerScript', () => {
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
         '/test/repo/.git/orca/setup-runner.sh',
-        '#!/usr/bin/env bash\nset -e\npnpm install\n',
+        posixRunnerContent('pnpm install\n'),
         'utf-8'
       )
       expect(chmodSyncMock).toHaveBeenCalledWith('/test/repo/.git/orca/setup-runner.sh', 0o755)
@@ -1536,7 +1542,7 @@ describe('createIssueCommandRunnerScript', () => {
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
         'C:\\repo\\.git\\orca\\issue-command-runner.sh',
-        '#!/usr/bin/env bash\nset -e\ngh issue view 42\n',
+        posixRunnerContent('gh issue view 42\n'),
         'utf-8'
       )
       expect(result.shell).toEqual({ family: 'posix' })

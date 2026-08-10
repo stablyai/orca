@@ -20,6 +20,7 @@ import { resolveWindowsGitBashShellPath } from './git-bash'
 import { gitExecFileSync, promptGuardShellEnv } from './git/runner'
 import { isWslPath, parseWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import { addWorktreeSetupWslInteropEnv } from './pty/wsl-orca-env'
+import { getPosixRunnerFailureReportPrelude } from './setup-runner-failure-report'
 import type {
   HookCommandSourcePolicy,
   OrcaHooks,
@@ -495,7 +496,7 @@ export function buildPosixRunnerScript(script: string): string {
     ? `set ${shebang.shellOptions.join(' ')}\n`
     : ''
   const body = shebang ? stripLeadingShebangLine(script) : script
-  return `#!/usr/bin/env bash\nset -e\n${declaredOptions}${normalizeCrlfScriptLineEndings(body)}\n`
+  return `#!/usr/bin/env bash\nset -e\n${declaredOptions}${getPosixRunnerFailureReportPrelude()}${normalizeCrlfScriptLineEndings(body)}\n`
 }
 
 function normalizeCrlfScriptLineEndings(script: string): string {
