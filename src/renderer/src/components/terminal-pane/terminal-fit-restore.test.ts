@@ -45,36 +45,48 @@ describe('terminal-fit-restore', () => {
   })
 
   it('restores remote terminals through the environment runtime RPC', async () => {
-    vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue('terminal-one')
-    vi.mocked(getRemoteRuntimePtyEnvironmentId).mockReturnValue('env-one')
-    vi.mocked(callRuntimeRpc).mockResolvedValue({ restored: true })
+    // Why: freeze Date.now so remaining deadline is exact (wall clock can drop 1ms).
+    vi.useFakeTimers()
+    try {
+      vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue('terminal-one')
+      vi.mocked(getRemoteRuntimePtyEnvironmentId).mockReturnValue('env-one')
+      vi.mocked(callRuntimeRpc).mockResolvedValue({ restored: true })
 
-    await expect(restoreTerminalFitToDesktop('remote:pty-1', undefined)).resolves.toBe(true)
+      await expect(restoreTerminalFitToDesktop('remote:pty-1', undefined)).resolves.toBe(true)
 
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-one' },
-      'terminal.restoreFit',
-      { terminal: 'terminal-one' },
-      { timeoutMs: 15_000 }
-    )
-    expect(restoreTerminalFit).not.toHaveBeenCalled()
+      expect(callRuntimeRpc).toHaveBeenCalledWith(
+        { kind: 'environment', environmentId: 'env-one' },
+        'terminal.restoreFit',
+        { terminal: 'terminal-one' },
+        { timeoutMs: 15_000 }
+      )
+      expect(restoreTerminalFit).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('uses the active runtime environment when the remote PTY has no encoded environment', async () => {
-    vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue('terminal-two')
-    vi.mocked(getRemoteRuntimePtyEnvironmentId).mockReturnValue(null)
-    vi.mocked(callRuntimeRpc).mockResolvedValue({ restored: true })
+    // Why: freeze Date.now so remaining deadline is exact (wall clock can drop 1ms).
+    vi.useFakeTimers()
+    try {
+      vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue('terminal-two')
+      vi.mocked(getRemoteRuntimePtyEnvironmentId).mockReturnValue(null)
+      vi.mocked(callRuntimeRpc).mockResolvedValue({ restored: true })
 
-    await expect(
-      restoreTerminalFitToDesktop('remote:pty-2', { activeRuntimeEnvironmentId: 'env-active' })
-    ).resolves.toBe(true)
+      await expect(
+        restoreTerminalFitToDesktop('remote:pty-2', { activeRuntimeEnvironmentId: 'env-active' })
+      ).resolves.toBe(true)
 
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-active' },
-      'terminal.restoreFit',
-      { terminal: 'terminal-two' },
-      { timeoutMs: 15_000 }
-    )
+      expect(callRuntimeRpc).toHaveBeenCalledWith(
+        { kind: 'environment', environmentId: 'env-active' },
+        'terminal.restoreFit',
+        { terminal: 'terminal-two' },
+        { timeoutMs: 15_000 }
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('deduplicates bulk restore PTYs and succeeds when any restore succeeds', async () => {

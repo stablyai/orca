@@ -144,6 +144,35 @@ describe('buildAgentStartupPlan', () => {
     ).toBe("traecli -- 'help me name this config'")
   })
 
+  it('passes the prompt to Prime Agent as a positional argv behind a `--` separator', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'prime-agent',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'prime-agent',
+      launchCommand: "prime-agent -- 'Summarize the failing tests'",
+      expectedProcess: 'prime-agent',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('prime-agent')
+    })
+  })
+
+  // Why: without the separator these dispatch to Prime Agent's `help`/`agents` subcommands instead.
+  it('keeps subcommand-shaped Prime Agent prompts as the positional prompt', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'prime-agent',
+        prompt: 'help me name this config',
+        cmdOverrides: {},
+        platform: 'linux'
+      })?.launchCommand
+    ).toBe("prime-agent -- 'help me name this config'")
+  })
+
   it('uses cursor-agent as the actual launch binary', () => {
     expect(
       buildAgentStartupPlan({

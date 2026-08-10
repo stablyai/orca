@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
@@ -73,17 +73,6 @@ type Overrides = {
   onSend?: (text: string) => Promise<boolean>
 }
 
-function suppressRendererWarning(): () => void {
-  const original = console.error
-  const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-      return
-    }
-    original(...args)
-  })
-  return () => spy.mockRestore()
-}
-
 function assistantTurn(id: string, text: string): NativeChatMessage {
   return { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 0, source: 'hook' }
 }
@@ -105,24 +94,15 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
 describe('MobileNativeChatView', () => {
   let renderer: ReactTestRenderer | null = null
 
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
-
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
   })
 
   async function render(overrides: Overrides = {}): Promise<void> {
-    const restore = suppressRendererWarning()
-    try {
-      await act(async () => {
-        renderer = create(chatViewElement(overrides))
-      })
-    } finally {
-      restore()
-    }
+    await act(async () => {
+      renderer = create(chatViewElement(overrides))
+    })
   }
 
   async function update(overrides: Overrides = {}): Promise<void> {

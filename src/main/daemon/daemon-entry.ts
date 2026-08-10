@@ -14,6 +14,10 @@ import { warmPwshAvailabilityCache } from '../pwsh'
 import { createDaemonFileLog, createNoopDaemonFileLog } from './daemon-file-log'
 import { PROTOCOL_VERSION } from './types'
 import {
+  DAEMON_EXIT_ENDPOINT_OCCUPIED,
+  DaemonEndpointUnavailableError
+} from './daemon-endpoint-ownership'
+import {
   prepareMacosTccLoginShell,
   probeMacosLoginSessionAlive
 } from '../providers/macos-tcc-login-shell'
@@ -29,6 +33,7 @@ export type ParsedDaemonArgs = {
   launchNonce?: string
   entryPath?: string
   appVersion?: string
+  spawnerExecPath?: string
   /** GUI-spawned daemons only — headless serve/SSH daemons must survive session loss. */
   loginSessionWatch?: boolean
   /** Optional — absent for adopted old daemons and tests, which log nothing. */
@@ -43,6 +48,7 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
   let launchNonce = ''
   let entryPath = ''
   let appVersion = ''
+  let spawnerExecPath = ''
   let loginSessionWatch = false
 
   for (let i = 0; i < argv.length; i++) {
@@ -67,6 +73,9 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     } else if (argv[i] === '--app-version' && argv[i + 1]) {
       appVersion = argv[i + 1]
       i++
+    } else if (argv[i] === '--spawner-exec-path' && argv[i + 1]) {
+      spawnerExecPath = argv[i + 1]
+      i++
     } else if (argv[i] === '--login-session-watch') {
       loginSessionWatch = true
     }
@@ -86,6 +95,7 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     ...(pidPath ? { pidPath, launchNonce } : {}),
     ...(entryPath ? { entryPath } : {}),
     ...(appVersion ? { appVersion } : {}),
+    ...(spawnerExecPath ? { spawnerExecPath } : {}),
     ...(loginSessionWatch ? { loginSessionWatch } : {}),
     ...(logFilePath ? { logFilePath } : {})
   }
@@ -106,6 +116,7 @@ async function main(): Promise<void> {
     launchNonce,
     entryPath,
     appVersion,
+    spawnerExecPath,
     loginSessionWatch,
     logFilePath
   } = parseArgs(process.argv.slice(2))
@@ -259,6 +270,7 @@ async function main(): Promise<void> {
     ...(pidPath ? { startedAtMs } : {}),
     ...(entryPath ? { entryPath } : {}),
     ...(appVersion ? { appVersion } : {}),
+    ...(spawnerExecPath ? { spawnerExecPath } : {}),
     ...(pidPath && launchNonce
       ? {
           publishEndpointOwnership: () =>
@@ -267,6 +279,7 @@ async function main(): Promise<void> {
               ...readyIdentity,
               ...(entryPath ? { entryPath } : {}),
               ...(appVersion ? { appVersion } : {}),
+              ...(spawnerExecPath ? { spawnerExecPath } : {}),
               launchNonce
             })
         }
@@ -319,6 +332,14 @@ const isDirectExecution = !process.env.VITEST
 if (isDirectExecution) {
   main().catch((err) => {
     console.error('[daemon] Fatal:', err)
+    if (err instanceof DaemonEndpointUnavailableError && err.reason === 'occupied') {
+      // Why an exit code and not the IPC message: process.send only proves the write left this
+      // process, not that the parent dispatched 'message' before it observed the exit — and the
+      // parent settles the launch on exit. A code rides the same event that ends the wait, so it
+      // cannot lose that race. The message is still sent best-effort for log detail.
+      process.send?.({ type: 'endpoint-unavailable', reason: err.reason })
+      process.exit(DAEMON_EXIT_ENDPOINT_OCCUPIED)
+    }
     process.exit(1)
   })
 }

@@ -23,7 +23,9 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
   })
 
-  it('uses a commit-oriented Source Control layout by default', () => {})
+  it('keeps Source Control changes first by default', () => {
+    expect(getDefaultSettings('/tmp').sourceControlGroupOrder).toBe('changes-first')
+  })
 
   it('defaults mobile pairing to discovered network addresses', () => {
     expect(getDefaultSettings('/tmp').mobilePairingCustomAddress).toBeNull()
@@ -67,6 +69,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').showMenuBarIcon).toBe(true)
   })
 
+  it('shows terminal link actions by default', () => {
+    expect(getDefaultSettings('/tmp').terminalLinkActionPopoverEnabled).toBe(true)
+  })
+
   it('confirms before closing pinned tabs by default', () => {
     expect(getDefaultSettings('/tmp').confirmClosePinnedTab).toBe(true)
   })
@@ -106,8 +112,8 @@ describe('getDefaultSettings', () => {
   })
 
   it('keeps the agent dashboard popout disabled by default', () => {
-    expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBe(false)
-    expect(getDefaultSettings('/tmp').experimentalAgentDashboardShowIdle).toBe(false)
+    expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBeUndefined()
+    expect(getDefaultSettings('/tmp').experimentalAgentDashboardShowIdle).toBeUndefined()
   })
 
   it('routes fresh Codex profiles through the real-home rollout by default', () => {})

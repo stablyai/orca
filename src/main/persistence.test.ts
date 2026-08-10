@@ -676,6 +676,7 @@ describe('Store', () => {
     const settings = store.getSettings()
     expect(settings.branchPrefix).toBe('git-username')
     expect(settings.refreshLocalBaseRefOnWorktreeCreate).toBe(false)
+    expect(settings.sourceControlGroupOrder).toBe('changes-first')
     expect(settings.theme).toBe('system')
     expect(settings.appIcon).toBe('classic')
     expect(settings.appFontFamily).toBe('Geist')
@@ -2783,6 +2784,21 @@ describe('Store', () => {
     expect(store.getSettings().terminalShortcutPolicy).toBe('orca-first')
   })
 
+  it('normalizes malformed source control group order on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { sourceControlGroupOrder: 'tracked-first' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().sourceControlGroupOrder).toBe('changes-first')
+  })
+
   it('repairs drifted task provider defaults on load', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -4601,6 +4617,43 @@ describe('Store', () => {
     expect(store.getRepos()[0]!.upstream).toBeUndefined()
   })
 
+  it('keeps the upstream host across reloads so it is never re-inferred from origin', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      upstream: { owner: ' acme ', repo: ' widgets ', host: ' GHE.example:8443 ' }
+    })
+    expect(updated!.upstream).toEqual({
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'GHE.example:8443'
+    })
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.upstream).toEqual({
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'GHE.example:8443'
+    })
+  })
+
+  it('leaves a hostless persisted upstream hostless rather than inventing one', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
+
+    expect(store.getRepo('r1')!.upstream).toEqual({ owner: 'stablyai', repo: 'orca' })
+    expect(store.getRepo('r1')!.upstream).not.toHaveProperty('host')
+  })
+
+  it('drops a blank upstream host instead of persisting an empty string', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'acme', repo: 'widgets', host: '   ' } }))
+
+    expect(store.getRepo('r1')!.upstream).toEqual({ owner: 'acme', repo: 'widgets' })
+  })
+
   it('updateRepo returns null for nonexistent id', async () => {
     const store = await createStore()
     expect(store.updateRepo('nope', { displayName: 'x' })).toBeNull()
@@ -5801,21 +5854,15 @@ describe('Store', () => {
     expect(store.getSettings().sourceControlViewMode).toBe('tree')
   })
 
-  it('drops retired Source Control order preferences', async () => {
-    writeDataFile({
-      ...getDefaultPersistedState(testState.dir),
-      settings: {
-        ...getDefaultPersistedState(testState.dir).settings,
-        sourceControlGroupOrder: 'changes-first',
-        sourceControlHierarchyDefaultedV2: true
-      }
-    } as never)
-
+  it('updateSettings persists sourceControlGroupOrder as a user setting', async () => {
     const store = await createStore()
-    store.flush()
-    const persisted = readDataFile() as { settings?: Record<string, unknown> }
-    expect(persisted.settings).not.toHaveProperty('sourceControlGroupOrder')
-    expect(persisted.settings).not.toHaveProperty('sourceControlHierarchyDefaultedV2')
+    expect(store.getSettings().sourceControlGroupOrder).toBe('changes-first')
+
+    store.updateSettings({ sourceControlGroupOrder: 'staged-first' })
+    expect(store.getSettings().sourceControlGroupOrder).toBe('staged-first')
+
+    store.updateSettings({ sourceControlGroupOrder: 'tracked-first' as never })
+    expect(store.getSettings().sourceControlGroupOrder).toBe('changes-first')
   })
 
   it('updateSettings normalizes terminal shortcut policy', async () => {
@@ -5873,15 +5920,18 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().sourceControlViewMode).toBe('list')
-    store.updateSettings({ sourceControlViewMode: 'tree' })
+    expect(store.getSettings().sourceControlGroupOrder).toBe('changes-first')
+
+    store.updateSettings({ sourceControlViewMode: 'tree', sourceControlGroupOrder: 'staged-first' })
     store.flush()
 
     const persisted = readDataFile() as {
-      settings?: { sourceControlViewMode?: string }
+      settings?: { sourceControlGroupOrder?: string; sourceControlViewMode?: string }
       workspaceSession?: typeof workspaceSession
       worktreeMeta?: Record<string, unknown>
     }
     expect(persisted.settings?.sourceControlViewMode).toBe('tree')
+    expect(persisted.settings?.sourceControlGroupOrder).toBe('staged-first')
     expect(persisted.workspaceSession).toEqual({
       ...getDefaultWorkspaceSession(),
       ...workspaceSession
@@ -5893,9 +5943,13 @@ describe('Store', () => {
     expect(collectPropertyPaths(persisted, 'sourceControlViewMode')).toEqual([
       'settings.sourceControlViewMode'
     ])
+    expect(collectPropertyPaths(persisted, 'sourceControlGroupOrder')).toEqual([
+      'settings.sourceControlGroupOrder'
+    ])
 
     const reloaded = await createStore()
     expect(reloaded.getSettings().sourceControlViewMode).toBe('tree')
+    expect(reloaded.getSettings().sourceControlGroupOrder).toBe('staged-first')
     expect(reloaded.getWorkspaceSession().activeWorktreeId).toBe('repo1::/worktree-a')
   })
 
@@ -12088,21 +12142,177 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(session.terminalTopologyRevisionByRepoId?.['repo-gone']).toBeUndefined()
   })
 
-  it('drops a corrupt host partition to defaults without failing the others', async () => {
+  it('resets only the corrupt required field of a host partition, not the partition', async () => {
+    const worktreeId = 'repo-1::/worktree'
     writeDataFile({
       schemaVersion: 1,
       workspaceSessionsByHostId: {
         'runtime:good': makeHostSession('good-repo'),
         // activeRepoId must be string|null; a number fails the zod parse.
-        'runtime:bad': { ...makeHostSession('x'), activeRepoId: 123 }
+        'runtime:bad': {
+          ...makeHostSession('x'),
+          activeRepoId: 123,
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'bad-host-tab', worktreeId })] }
+        }
       }
     })
 
     const store = await createStore()
 
     expect(store.getWorkspaceSession('runtime:good').activeRepoId).toBe('good-repo')
-    // Bad partition collapses to defaults rather than poisoning the map.
+    // The unsalvageable field falls back to its default; the partition's tabs survive.
     expect(store.getWorkspaceSession('runtime:bad').activeRepoId).toBeNull()
+    expect(
+      store.getWorkspaceSession('runtime:bad').tabsByWorktree[worktreeId]?.map((tab) => tab.id)
+    ).toEqual(['bad-host-tab'])
+  })
+
+  it('keeps every other worktree when the local session has a corrupt required field', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        // A projected/truncated write can leave a top-level field the wrong type;
+        // that must not cost every worktree's tabs the way a full reset did.
+        activeTabId: 42,
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'local-keep', worktreeId })]
+        }
+      }
+    })
+
+    const store = await createStore()
+
+    const session = store.getWorkspaceSession('local')
+    expect(session.activeTabId).toBeNull()
+    expect(session.tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual(['local-keep'])
+  })
+
+  type PersistedSessionsFile = {
+    workspaceSession?: {
+      tabsByWorktree?: Record<string, { id: string }[]>
+      sleepingAgentSessionsByPaneKey?: Record<string, unknown>
+    }
+    workspaceSessionsByHostId?: Record<
+      string,
+      { tabsByWorktree?: Record<string, { id: string }[]> }
+    >
+  }
+
+  // Why: flush() writes whatever the state hash says is dirty, so it passes even
+  // when nothing scheduled a save — it cannot see the repair write at all. Loading
+  // once first canonicalizes the profile (a second load of a canonical file
+  // schedules nothing), so a later rewrite proves the salvage scheduled it.
+  async function loadAndAwaitScheduledSave(): Promise<void> {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      vi.advanceTimersByTime(10_000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+
+  async function canonicalize(fixture: Record<string, unknown>): Promise<PersistedSessionsFile> {
+    writeDataFile(fixture)
+    await loadAndAwaitScheduledSave()
+    const canonical = readFileSync(dataFile(), 'utf-8')
+    // Why: the save assertions below are only meaningful if a clean load schedules
+    // nothing. Prove that here rather than assume it — a future migration that
+    // dirtied every load would otherwise leave those tests silently vacuous.
+    await loadAndAwaitScheduledSave()
+    expect(readFileSync(dataFile(), 'utf-8')).toBe(canonical)
+    return JSON.parse(canonical) as PersistedSessionsFile
+  }
+
+  it('schedules a save for a salvaged local session instead of re-salvaging every launch', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    const profile = await canonicalize({
+      schemaVersion: 1,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'tab-keep', worktreeId })] }
+      }
+    })
+    const tabs = profile.workspaceSession?.tabsByWorktree?.[worktreeId]
+    expect(tabs).toBeDefined()
+    tabs!.push({ id: 'tab-corrupt' })
+    writeDataFile(profile)
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await loadAndAwaitScheduledSave()
+      expect(warn).toHaveBeenCalledWith(
+        '[persistence] Salvaged workspace session; dropped corrupt entries:',
+        { count: 1, fields: ['tabsByWorktree'], detailsTruncated: false }
+      )
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(worktreeId)
+    } finally {
+      warn.mockRestore()
+    }
+
+    const persisted = readDataFile() as PersistedSessionsFile
+    expect(persisted.workspaceSession?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual([
+      'tab-keep'
+    ])
+  })
+
+  it('schedules a save for salvaged host partitions', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    const profile = await canonicalize({
+      schemaVersion: 1,
+      workspaceSessionsByHostId: {
+        'runtime:env-a': {
+          ...makeHostSession('runtime-repo'),
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'runtime-keep', worktreeId })] }
+        },
+        'ssh:target-b': {
+          ...makeHostSession('ssh-repo'),
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'ssh-keep', worktreeId })] }
+        }
+      }
+    })
+    const partitions = profile.workspaceSessionsByHostId
+    const runtimeTabs = partitions?.['runtime:env-a']?.tabsByWorktree?.[worktreeId]
+    const sshTabs = partitions?.['ssh:target-b']?.tabsByWorktree?.[worktreeId]
+    expect(runtimeTabs).toBeDefined()
+    expect(sshTabs).toBeDefined()
+    runtimeTabs!.push({ id: 'runtime-corrupt' })
+    sshTabs!.push({ id: 'ssh-corrupt' })
+    const mutablePartitions = partitions as Record<string, unknown>
+    mutablePartitions['runtime:broken'] = 'not a session'
+    writeDataFile(profile)
+    await loadAndAwaitScheduledSave()
+
+    const persisted = (readDataFile() as PersistedSessionsFile).workspaceSessionsByHostId
+    expect(
+      persisted?.['runtime:env-a']?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)
+    ).toEqual(['runtime-keep'])
+    expect(persisted?.['ssh:target-b']?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual(
+      ['ssh-keep']
+    )
+    expect(persisted).not.toHaveProperty('runtime:broken')
+  })
+
+  it('writes back sleeping-agent records dropped during salvage', async () => {
+    const profile = await canonicalize({
+      schemaVersion: 1,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        sleepingAgentSessionsByPaneKey: {}
+      }
+    })
+    profile.workspaceSession!.sleepingAgentSessionsByPaneKey = {
+      'tab-bad:leaf': { paneKey: 'different:leaf' }
+    }
+    writeDataFile(profile)
+
+    await loadAndAwaitScheduledSave()
+
+    const persisted = readDataFile() as PersistedSessionsFile
+    expect(persisted.workspaceSession?.sleepingAgentSessionsByPaneKey).toBeUndefined()
   })
 })
 

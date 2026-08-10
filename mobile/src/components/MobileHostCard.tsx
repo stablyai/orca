@@ -1,4 +1,4 @@
-import { ChevronRight, Monitor } from 'lucide-react-native'
+import { Monitor, MoreVertical } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import { verdictDisplayLabel } from '../transport/connection-health'
@@ -20,6 +20,7 @@ export function MobileHostCard(props: {
   worktreeInfo?: HostWorktreeInfo
   onPress: () => void
   onLongPress: () => void
+  onOpenActions: () => void
 }) {
   const credentialUnavailable = props.credentialStatus === 'temporarily-unavailable'
   const credentialMissing = props.credentialStatus === 'missing'
@@ -42,59 +43,90 @@ export function MobileHostCard(props: {
       ? { kind: 'warning', label: statusLabel }
       : props.verdict
   const worktreeSummary = homeHostWorktreeSummary(props.worktreeInfo)
+  const connectionPathLabel =
+    !credentialMissing && !credentialUnavailable && (connected || dialingPath)
+      ? mobileConnectionPathLabel(props.path)
+      : null
+  const discoveryHint =
+    props.verdict.kind === 'unreachable' && !props.host.relay
+      ? 'Update desktop Orca and sign in to connect from anywhere'
+      : null
+  const credentialHint = credentialMissing
+    ? 'Tap to re-pair with your desktop'
+    : credentialUnavailable
+      ? 'Unlock your phone, then tap to retry'
+      : null
+  const accessibilityLabel = [
+    `Open ${props.host.name}`,
+    statusLabel,
+    connectionPathLabel?.replace(' · ', ' via '),
+    connected ? worktreeSummary?.replace(' · ', ', ') : null,
+    discoveryHint,
+    credentialHint
+  ]
+    .filter(Boolean)
+    .join(', ')
   return (
-    <Pressable
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      onPress={props.onPress}
-      onLongPress={props.onLongPress}
-      delayLongPress={400}
-    >
-      <View style={styles.icon}>
-        <Monitor size={20} color={connected ? colors.textPrimary : colors.textSecondary} />
-      </View>
-      <View style={styles.main}>
-        <Text
-          style={[styles.name, !connected && { color: colors.textSecondary }]}
-          numberOfLines={1}
-        >
-          {props.host.name}
-        </Text>
-        <View style={styles.meta}>
-          <StatusDot state={props.state} verdict={statusVerdict} />
+    <View style={styles.card}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        style={({ pressed }) => [styles.cardMain, pressed && styles.cardPressed]}
+        onPress={props.onPress}
+        onLongPress={props.onLongPress}
+        delayLongPress={400}
+      >
+        <View style={styles.icon}>
+          <Monitor size={20} color={connected ? colors.textPrimary : colors.textSecondary} />
+        </View>
+        <View style={styles.main}>
           <Text
-            style={[
-              styles.metaText,
-              isError && { color: colors.statusRed },
-              credentialUnavailable && { color: colors.statusAmber }
-            ]}
+            style={[styles.name, !connected && { color: colors.textSecondary }]}
             numberOfLines={1}
           >
-            {statusLabel}
-            {!credentialMissing && !credentialUnavailable && (connected || dialingPath)
-              ? ` · ${mobileConnectionPathLabel(props.path)}`
-              : ''}
+            {props.host.name}
           </Text>
+          <View style={styles.meta}>
+            <StatusDot state={props.state} verdict={statusVerdict} />
+            <Text
+              style={[
+                styles.metaText,
+                isError && { color: colors.statusRed },
+                credentialUnavailable && { color: colors.statusAmber }
+              ]}
+              numberOfLines={1}
+            >
+              {statusLabel}
+              {connectionPathLabel ? ` · ${connectionPathLabel}` : ''}
+            </Text>
+          </View>
+          {connected && worktreeSummary ? (
+            <Text style={styles.worktreeMetaText} numberOfLines={1}>
+              {worktreeSummary}
+            </Text>
+          ) : null}
+          {discoveryHint ? (
+            <Text style={styles.discoveryHint} numberOfLines={2}>
+              {discoveryHint}
+            </Text>
+          ) : null}
+          {credentialHint ? (
+            <Text style={styles.discoveryHint} numberOfLines={2}>
+              {credentialHint}
+            </Text>
+          ) : null}
         </View>
-        {connected && worktreeSummary ? (
-          <Text style={styles.worktreeMetaText} numberOfLines={1}>
-            {worktreeSummary}
-          </Text>
-        ) : null}
-        {props.verdict.kind === 'unreachable' && !props.host.relay ? (
-          <Text style={styles.discoveryHint} numberOfLines={2}>
-            Update desktop Orca and sign in to connect from anywhere
-          </Text>
-        ) : null}
-        {credentialMissing || credentialUnavailable ? (
-          <Text style={styles.discoveryHint} numberOfLines={2}>
-            {credentialMissing
-              ? 'Tap to re-pair with your desktop'
-              : 'Unlock your phone, then tap to retry'}
-          </Text>
-        ) : null}
-      </View>
-      <ChevronRight size={16} color={colors.textMuted} />
-    </Pressable>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Actions for ${props.host.name}`}
+        hitSlop={8}
+        style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+        onPress={props.onOpenActions}
+      >
+        <MoreVertical size={18} color={colors.textSecondary} />
+      </Pressable>
+    </View>
   )
 }
 
@@ -102,12 +134,19 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
     borderRadius: radii.card,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
-    borderColor: colors.borderSubtle
+    borderColor: colors.borderSubtle,
+    overflow: 'hidden'
+  },
+  cardMain: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: spacing.md,
+    paddingVertical: 12
   },
   cardPressed: { backgroundColor: colors.bgRaised },
   icon: {
@@ -134,5 +173,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     color: colors.textMuted
+  },
+  actionButton: {
+    width: 40,
+    height: 40,
+    marginHorizontal: spacing.xs,
+    borderRadius: radii.row,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  actionButtonPressed: {
+    backgroundColor: colors.bgRaised
   }
 })

@@ -17,7 +17,7 @@ import {
   type DaemonPidFile,
   type DaemonProcessHandle
 } from './daemon-spawner'
-import { sweepAbandonedDaemonClaims } from './daemon-endpoint-ownership'
+import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
 import { DaemonPtyAdapter, type DaemonRespawnReason } from './daemon-pty-adapter'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { DaemonClient } from './client'
@@ -29,11 +29,13 @@ import {
 } from './types'
 import {
   getMacDaemonSystemResolverHealth,
+  getMacDaemonTccAttributionHealth,
   getDaemonLaunchIdentity,
   checkDaemonHealth,
   isDaemonStaleForCurrentBundle,
   killStaleDaemon,
-  parseDaemonPidFile
+  parseDaemonPidFile,
+  type MacDaemonTccAttributionHealth
 } from './daemon-health'
 import {
   collectPinnedDaemonVersions,
@@ -279,6 +281,9 @@ async function readDaemonOwnerMetadata(
   }
   if (identity.appVersion) {
     metadata.appVersion = identity.appVersion
+  }
+  if (identity.spawnerExecPath) {
+    metadata.spawnerExecPath = identity.spawnerExecPath
   }
   const incarnation = await readDaemonProcessIncarnation(identity.pid)
   if (incarnation) {
@@ -544,8 +549,31 @@ function createOutOfProcessLauncher(
             confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION))
               .cleaned
           } else {
-            // Why: healthy daemon from a previous session answered a protocol ping — safe to reuse.
-            return preserveDaemon()
+            const attributionHealth = await getMacDaemonTccAttributionHealth(
+              runtimeDir,
+              socketPath,
+              tokenPath,
+              app.isPackaged ? app.getVersion() : null
+            )
+            if (attributionHealth === 'severed') {
+              // Why: replacing with live sessions would kill them; Settings → Developer
+              // Permissions surfaces the Manage Sessions → Restart remedy instead.
+              const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+              if (liveSessionCount === 0) {
+                console.warn(
+                  '[daemon] Replacing daemon whose macOS TCC attribution is severed (spawning app binary no longer exists)'
+                )
+                pendingReplacement = { reason: 'severed_tcc_attribution', liveSessionCount }
+                confirmedReplacement = (
+                  await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+                ).cleaned
+              } else {
+                return preserveDaemon()
+              }
+            } else {
+              // Why: healthy daemon from a previous session answered a protocol ping — safe to reuse.
+              return preserveDaemon()
+            }
           }
         }
       } else {
@@ -655,6 +683,8 @@ function createOutOfProcessLauncher(
           entryPath,
           '--app-version',
           app.getVersion(),
+          '--spawner-exec-path',
+          process.execPath,
           ...(macosLoginSessionWatch ? ['--login-session-watch'] : []),
           ...daemonLogArgs()
         ],
@@ -699,7 +729,8 @@ function createOutOfProcessLauncher(
 
       // Wait for the daemon to signal readiness via IPC
       let launchedIdentity: DaemonEndpointIdentity | null = null
-      await new Promise<void>((resolve, reject) => {
+      let endpointUnavailableReason: string | null = null
+      const startupSignal = new Promise<void>((resolve, reject) => {
         let timer: ReturnType<typeof setTimeout> | undefined
         let settled = false
         function cleanupStartupListeners(): void {
@@ -742,6 +773,17 @@ function createOutOfProcessLauncher(
           reject(startupError)
         }
         function onReadyMessage(msg: unknown): void {
+          if (
+            msg &&
+            typeof msg === 'object' &&
+            (msg as { type?: string }).type === 'endpoint-unavailable'
+          ) {
+            // Why: the child lost the endpoint race rather than crashing. Record it so the
+            // launcher can adopt the winner instead of reporting a generic startup failure.
+            endpointUnavailableReason = (msg as { reason?: string }).reason ?? 'occupied'
+            void fail(new Error(`Daemon could not take the endpoint: ${endpointUnavailableReason}`))
+            return
+          }
           if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
             if (settled) {
               return
@@ -772,6 +814,11 @@ function createOutOfProcessLauncher(
         }
 
         function onStartupExit(code: number | null): void {
+          if (code === DAEMON_EXIT_ENDPOINT_OCCUPIED) {
+            // Why here and not only on the IPC message: the exit is the event this wait settles
+            // on, so keying off it cannot lose to a notification still in the channel.
+            endpointUnavailableReason = 'occupied'
+          }
           void fail(new Error(`Daemon exited during startup with code ${code}`))
         }
 
@@ -783,6 +830,32 @@ function createOutOfProcessLauncher(
         child.on('error', onStartupError)
         child.on('exit', onStartupExit)
       })
+
+      try {
+        await startupSignal
+      } catch (error) {
+        if (endpointUnavailableReason !== 'occupied') {
+          throw error
+        }
+        // Why adopt rather than retry: another daemon proved it owns the endpoint and is
+        // answering on it. Forking again would lose the same race, and reporting a startup
+        // failure strands this app on local non-persistent PTYs beside a healthy daemon.
+        console.warn(
+          '[daemon] Endpoint was taken by another daemon during startup — adopting it instead'
+        )
+        // Why pidPath: adopting reconciles the PID record against the identity the daemon
+        // reports over hello, repairing a record that names the wrong incarnation. Every other
+        // adoption path passes it; this one skipped it, so the incumbent we adopt here was the
+        // only one whose record never got that repair.
+        return await holdDaemonAdoptionLease(
+          createPreservedDaemonHandle(runtimeDir),
+          socketPath,
+          tokenPath,
+          undefined,
+          undefined,
+          pidPath
+        )
+      }
 
       try {
         if (!launchedIdentity) {
@@ -825,6 +898,23 @@ function createOutOfProcessLauncher(
       }
     } catch (error) {
       adoptionClient?.disconnect()
+      adoptionClient = null
+      // Why: the launcher may now fork onto an endpoint it could not classify, because the
+      // publisher is the real guard — and that guard works by refusing to overwrite what it
+      // cannot prove dead, so the child exits instead of splitting the brain. Correct, but
+      // giving up here costs the user every persistent session for the whole run. Something
+      // answering the endpoint now is a daemon worth adopting, not a reason to fall back to
+      // local PTYs.
+      if (await probeSocket(socketPath)) {
+        console.warn(
+          '[daemon] DEGRADED MODE: adopting the daemon that owns the endpoint after a replacement could not publish onto it. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).'
+        )
+        try {
+          return await preserveDaemon('degraded-new-pty-fallback')
+        } catch {
+          // It stopped answering between the probe and the adoption; report the launch failure.
+        }
+      }
       throw error
     }
   }
@@ -841,11 +931,6 @@ export async function initDaemonPtyProvider(
     await new Promise((resolve) => setTimeout(resolve, e2eInitDelayMs))
   }
   const runtimeDir = getRuntimeDir()
-
-  // Why: rename-claim and bind scratch names are unlinked by their owner, but a failed unlink
-  // leaves one behind forever. Sweep before launching so a failed launch is still reclaimed;
-  // age-gated so a claim still in flight is never disturbed.
-  sweepAbandonedDaemonClaims(runtimeDir)
 
   const newSpawner = new DaemonSpawner({
     runtimeDir,
@@ -981,6 +1066,18 @@ async function reconcileSeededClaudeLivePtys(provider: DaemonProvider): Promise<
 // Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
 export function getDaemonProvider(): DaemonProvider | null {
   return adapter
+}
+
+// Why: computed from the pid record on demand (not cached at adoption) so the Settings
+// remedy surface always reflects the daemon actually serving terminals right now.
+export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaemonTccAttributionHealth> {
+  const runtimeDir = getRuntimeDir()
+  return getMacDaemonTccAttributionHealth(
+    runtimeDir,
+    getDaemonSocketPath(runtimeDir),
+    getDaemonTokenPath(runtimeDir),
+    app.isPackaged ? app.getVersion() : null
+  )
 }
 
 /** Returns null unless every daemon generation supplied an authoritative inventory. */
@@ -1201,14 +1298,6 @@ export async function cleanupDaemonForProtocol(
       // Endpoint absence doesn't prove the PID record belongs to the current protocol; leave artifact cleanup to the owning daemon.
       return { cleaned: false, killedCount: 0 }
     }
-    // Best-effort remove a stale socket so a future launch doesn't hit EADDRINUSE on bind.
-    if (process.platform !== 'win32' && existsSync(socketPath)) {
-      try {
-        unlinkSync(socketPath)
-      } catch {
-        // Best-effort
-      }
-    }
     try {
       unlinkSync(pidPath)
     } catch {
@@ -1235,8 +1324,16 @@ export async function cleanupDaemonForProtocol(
     didRequestShutdown = true
   } catch {
     // Previous-protocol daemons may be wedged or too old for the RPC path; fall back to PID cleanup (only unlinks a live socket after proving the process is killed).
-    didKillStaleDaemon = (await killStaleDaemon(runtimeDir, socketPath, tokenPath, protocolVersion))
-      .killed
+    const killOutcome = await killStaleDaemon(runtimeDir, socketPath, tokenPath, protocolVersion)
+    didKillStaleDaemon = killOutcome.killed
+    if (killOutcome.liveOwnerSurvived) {
+      // Why: something still owns the endpoint. Returning as if it were cleaned lets restart
+      // fork a replacement that cannot publish onto the held name, leaving the user with no
+      // daemon instead of the one still running.
+      throw new DaemonEndpointOwnershipError(
+        'Daemon cleanup aborted: the existing daemon could not be confirmed stopped'
+      )
+    }
   } finally {
     client.disconnect()
   }
@@ -1249,14 +1346,6 @@ export async function cleanupDaemonForProtocol(
     return { cleaned: true, killedCount }
   }
 
-  // Defensively unlink the socket: the daemon normally removes it after `shutdown`, but on some crash paths it lingers and blocks a later rebind.
-  if (didRequestShutdown && process.platform !== 'win32' && existsSync(socketPath)) {
-    try {
-      unlinkSync(socketPath)
-    } catch {
-      // Best-effort
-    }
-  }
   try {
     unlinkSync(pidPath)
   } catch {
@@ -1310,13 +1399,6 @@ export async function createLegacyDaemonAdapters(
         ]) {
           try {
             unlinkSync(stalePath)
-          } catch {
-            // Best-effort
-          }
-        }
-        if (process.platform !== 'win32' && existsSync(socketPath)) {
-          try {
-            unlinkSync(socketPath)
           } catch {
             // Best-effort
           }

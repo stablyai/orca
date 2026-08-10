@@ -19,7 +19,6 @@ describe('useMobileFileTapHandlers', () => {
   let handlers: Handlers | null = null
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     push.mockClear()
   })
 

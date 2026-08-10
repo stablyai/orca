@@ -78,6 +78,20 @@ describe('native preload SSH authority forwarding', () => {
     expect(invoke).toHaveBeenCalledWith('worktrees:listKnownForExecutionHost', args)
   })
 
+  it('forwards metadata retirement for authoritatively removed worktrees', async () => {
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
+    const args = {
+      repoId: 'repo-1',
+      executionHostId: 'ssh:ssh-1' as const,
+      worktreeIds: ['repo-1::/remote/deleted']
+    }
+
+    await api.worktrees.forgetRemovedForExecutionHost?.(args)
+
+    expect(invoke).toHaveBeenCalledWith('worktrees:forgetRemovedForExecutionHost', args)
+  })
+
   it('forwards full-pair get and push states without cloning away authority', async () => {
     const state: SshConnectionState = {
       targetId: 'ssh-1',

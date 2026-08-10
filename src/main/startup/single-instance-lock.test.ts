@@ -85,6 +85,25 @@ describe('shouldActivateDesktopForSecondInstance', () => {
     expect(shouldActivateDesktopForSecondInstance(['/Applications/Orca.app/orca'])).toBe(true)
   })
 
+  it('ignores a duplicate CLI-form serve launch the CLI redirect never rewrote', () => {
+    // Why: the documented systemd unit is `<binary> serve --port 6768 …`; an extracted AppRun/binary
+    // start reaches Electron in that shape, so a flag-only check would open a window on the live server.
+    expect(
+      shouldActivateDesktopForSecondInstance([
+        '/opt/orca/squashfs-root/orca-ide',
+        'serve',
+        '--port',
+        '6768',
+        '--pairing-address',
+        '100.64.1.20'
+      ])
+    ).toBe(false)
+    // A path argument that merely contains `serve` is still a desktop launch.
+    expect(
+      shouldActivateDesktopForSecondInstance(['/opt/orca/orca-ide', '/home/u/serve-repo'])
+    ).toBe(true)
+  })
+
   it('fails open when no argv is available', () => {
     expect(shouldActivateDesktopForSecondInstance([])).toBe(true)
     expect(shouldActivateDesktopForSecondInstance()).toBe(true)

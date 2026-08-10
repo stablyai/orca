@@ -3,13 +3,10 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
+import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { readBranchRenameFailureOutputForDisplay } from '../agent-hooks/branch-rename-failure-output'
-import {
-  isWorkspaceKey,
-  parseWorkspaceKey,
-  worktreeWorkspaceKey
-} from '../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
 import { TaskSourceContextSchema } from '../../shared/task-source-context-schema'
@@ -49,6 +46,8 @@ import {
 import {
   PROVIDER_REQUEST_ID_MAX_UTF8_BYTES,
   type DirectSshDetectedWorktreeRequest,
+  type ForgetRemovedWorktreesForExecutionHostArgs,
+  type ForgetRemovedWorktreesForExecutionHostResult,
   type HostQualifiedKnownWorktreeResult,
   type HostQualifiedDetectedWorktreeResult,
   type ListKnownWorktreesForExecutionHostArgs,
@@ -722,58 +721,6 @@ function rememberLocalWorktreeRoots(
     repo.path,
     ...gitWorktrees.map((worktree) => worktree.path)
   ])
-}
-
-function pruneLineageForMissingRepoWorktrees(
-  store: Store,
-  repo: Repo,
-  gitWorktrees: GitWorktreeInfo[]
-): void {
-  if (
-    typeof store.getAllWorktreeLineage !== 'function' ||
-    typeof store.removeWorktreeLineage !== 'function'
-  ) {
-    return
-  }
-  const liveIds = new Set(gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`))
-  const repoPrefix = `${repo.id}::`
-  const expectedHostId = getRepoExecutionHostId(repo)
-  const repoOwners = store.getRepos().filter((candidate) => candidate.id === repo.id)
-  const canMutateWorktree = (worktreeId: string): boolean => {
-    const hostId = store.getWorktreeMeta(worktreeId)?.hostId
-    return hostId ? hostId === expectedHostId : repoOwners.length === 1
-  }
-  for (const childWorkspaceKey of Object.keys(store.getAllWorkspaceLineage?.() ?? {})) {
-    const childScope = parseWorkspaceKey(childWorkspaceKey)
-    if (
-      childScope?.type === 'worktree' &&
-      childScope.worktreeId.startsWith(repoPrefix) &&
-      canMutateWorktree(childScope.worktreeId) &&
-      !liveIds.has(childScope.worktreeId)
-    ) {
-      if (isWorkspaceKey(childWorkspaceKey)) {
-        store.removeWorkspaceLineage?.(childWorkspaceKey)
-      }
-    }
-  }
-  for (const [childId, lineage] of Object.entries(store.getAllWorktreeLineage())) {
-    if (childId.startsWith(repoPrefix) && canMutateWorktree(childId) && !liveIds.has(childId)) {
-      // Why: path-derived IDs can be reused; once a scan proves the child is gone, drop its lineage so a future same-path worktree can't inherit it.
-      store.removeWorktreeLineage(childId)
-      store.removeWorkspaceLineage?.(worktreeWorkspaceKey(childId))
-    }
-    if (
-      lineage.parentWorktreeId.startsWith(repoPrefix) &&
-      canMutateWorktree(lineage.parentWorktreeId) &&
-      !liveIds.has(lineage.parentWorktreeId)
-    ) {
-      const parentMeta = store.getWorktreeMeta(lineage.parentWorktreeId)
-      if (!parentMeta || parentMeta.instanceId === lineage.parentWorktreeInstanceId) {
-        // Why: keep child lineage for the "Missing parent" UI, but rotate the absent parent's identity once so a path reuse can't inherit it.
-        store.setWorktreeMeta(lineage.parentWorktreeId, { instanceId: randomUUID() })
-      }
-    }
-  }
 }
 
 type SshWorktreeMetaCandidate = {
@@ -1847,6 +1794,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:list')
   ipcMain.removeHandler('worktrees:listDetected')
   ipcMain.removeHandler('worktrees:listKnownForExecutionHost')
+  ipcMain.removeHandler('worktrees:forgetRemovedForExecutionHost')
   ipcMain.removeHandler('worktrees:cancelListDetected')
   ipcMain.removeHandler('worktrees:create')
   ipcMain.removeHandler('worktrees:prefetchCreateBase')
@@ -2048,6 +1996,51 @@ export function registerWorktreeHandlers(
           listDisconnectedSshWorktrees(store, repo, metaIndex)
         )
       )
+    }
+  )
+
+  // Why: gcStaleWorktreeMeta cannot stat a remote path, so SSH metadata outlives the worktree and the fallback
+  // above re-lists a worktree deleted outside Orca on every launch. An authoritative scan is the only proof of
+  // absence, so the renderer reports what it retired here and the row is dropped like a local GC would.
+  ipcMain.handle(
+    'worktrees:forgetRemovedForExecutionHost',
+    (
+      _event,
+      args: ForgetRemovedWorktreesForExecutionHostArgs
+    ): ForgetRemovedWorktreesForExecutionHostResult => {
+      const nothingForgotten: ForgetRemovedWorktreesForExecutionHostResult = {
+        forgottenWorktreeIds: []
+      }
+      const requestedExecutionHostId = args?.executionHostId ?? 'ssh:'
+      const worktreeIds = Array.isArray(args?.worktreeIds) ? args.worktreeIds : []
+      const parsedHost = parseExecutionHostId(requestedExecutionHostId)
+      if (parsedHost?.kind !== 'ssh' || worktreeIds.length === 0) {
+        return nothingForgotten
+      }
+      const repo = findExactRepoOwner(store, args?.repoId ?? '', requestedExecutionHostId)
+      if (!repo || repo.connectionId !== parsedHost.targetId) {
+        return nothingForgotten
+      }
+      // Why: a folder workspace's meta IS the workspace record, not a checkout row — gcStaleWorktreeMeta skips
+      // those keys for the same reason, and no remote scan can retire one.
+      if (isFolderRepo(repo)) {
+        return nothingForgotten
+      }
+      const allMeta = store.getAllWorktreeMeta()
+      const forgottenWorktreeIds: string[] = []
+      for (const worktreeId of worktreeIds) {
+        const meta = typeof worktreeId === 'string' ? allMeta[worktreeId] : undefined
+        if (!meta || getRepoIdFromWorktreeId(worktreeId) !== repo.id) {
+          continue
+        }
+        // An unhosted meta belongs to this repo's only owner; a foreign hostId needs that host's own scan.
+        if (meta.hostId && meta.hostId !== requestedExecutionHostId) {
+          continue
+        }
+        store.removeWorktreeMeta(worktreeId, requestedExecutionHostId)
+        forgottenWorktreeIds.push(worktreeId)
+      }
+      return { forgottenWorktreeIds }
     }
   )
 

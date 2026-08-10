@@ -1,5 +1,6 @@
 import React from 'react'
 import { DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
+import { SwitchIndicator } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 
 /**
@@ -51,23 +52,12 @@ export function FilterToggleRow({
       </span>
       <span className="inline-flex items-center gap-2">
         {shortcutLabel ? <DropdownMenuShortcut>{shortcutLabel}</DropdownMenuShortcut> : null}
-        <span
-          aria-hidden
-          className={cn(
-            'relative h-3.5 w-6 shrink-0 rounded-full transition-colors',
-            checked ? 'bg-primary' : 'bg-muted-foreground/30'
-          )}
-        >
-          <span
-            className={cn(
-              'absolute top-0.5 left-0.5 size-2.5 rounded-full bg-background shadow-sm transition-transform',
-              checked && 'translate-x-2.5'
-            )}
-          />
-        </span>
+        <SwitchIndicator
+          checked={checked}
+          size="compact"
+          className="data-[state=checked]:bg-primary"
+        />
       </span>
     </button>
   )
 }
-
-export default FilterToggleRow

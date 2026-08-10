@@ -67,6 +67,7 @@ import { leaveHostRoute } from '../../../src/host-route-exit'
 import { loadPinnedIds, savePinnedIds } from '../../../src/storage/preferences'
 import {
   createInitialHostRouteActionState,
+  hostNewWorktreeSessionRoute,
   resolveHostRouteActionState,
   setHostRouteNewWorktreeVisible
 } from '../../../src/host-route-action-state'
@@ -1403,10 +1404,7 @@ export function HostScreen({
         }}
         onCreated={(worktreeId, worktreeName) => {
           void fetchWorktrees({ allowDuringModal: true })
-          const params = new URLSearchParams({ name: worktreeName, created: '1' })
-          navigateFromHostList(
-            `/h/${hostId}/session/${encodeURIComponent(worktreeId)}?${params.toString()}`
-          )
+          navigateFromHostList(hostNewWorktreeSessionRoute(hostId, worktreeId, worktreeName))
         }}
         onRouteVisibleChange={setShowNewWorktreeVisible}
       />

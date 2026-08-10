@@ -198,6 +198,8 @@ export type WorktreeSlice = {
       automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
       linkedWorkItem?: WorkspaceLinkedItem | null
       linkedTaskSourceContext?: TaskSourceContext | null
+      /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
+      startupDraft?: string
     }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */

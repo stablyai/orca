@@ -4,11 +4,14 @@ import { basename, extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
+import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
+import { normalizeAgentSessionsDir } from '../ai-vault/session-scanner-values'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
+import { toHostReadableTranscriptPath, wslCodexSessionsDirs } from './host-readable-transcript-path'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
 // run in the main process against the runtime's own home directory; over SSH
@@ -25,6 +28,7 @@ function claudeProjectsDir(): string {
 // first (that's where this main process's Codex sessions actually live), then
 // fall back to CODEX_HOME/~/.codex so a non-Orca Codex transcript still resolves.
 // Duplicates are filtered so a managed-home symlink to ~/.codex isn't scanned twice.
+// WSL roots are a separate lazy tier — see resolveCodexSessionFile.
 function codexSessionsDirs(): string[] {
   const candidates = [
     join(getOrcaManagedCodexHomePath(), 'sessions'),
@@ -37,6 +41,15 @@ function grokSessionsDir(): string {
   return resolveGrokSessionsDir(process.env, homedir())
 }
 
+/** Mirrors the AI Vault scanner so an OMP_CODING_AGENT_DIR override resolves the
+ *  same root for both, rather than leaving native chat pointed at the default. */
+function ompSessionsDir(): string {
+  return normalizeAgentSessionsDir(
+    process.env.OMP_CODING_AGENT_DIR?.trim() || join(homedir(), '.omp', 'agent', 'sessions'),
+    '.omp'
+  )
+}
+
 export type ResolveSessionFileOptions = {
   /** Override the Claude projects root (used by tests / isolated scans). */
   claudeProjectsDir?: string
@@ -45,6 +58,8 @@ export type ResolveSessionFileOptions = {
   codexSessionsDirs?: string[]
   /** Override the Grok sessions root (`~/.grok/sessions`). */
   grokSessionsDir?: string
+  /** Override the omp sessions root (`~/.omp/agent/sessions`). */
+  ompSessionsDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -72,12 +87,15 @@ export async function resolveSessionFilePath(
     return null
   }
   // Why: the hook's transcript_path is the exact file the agent is writing, so it
-  // beats reconstructing a path from the session id. Guard with existsSync so a
-  // stale/remote path falls through to the id-based search rather than returning
-  // a non-existent file.
+  // beats reconstructing a path from the session id. Route it through the host
+  // readability check so a WSL guest path becomes an openable UNC on Windows;
+  // stale/missing paths fall through to the id-based search.
   const hookPath = options.transcriptPath?.trim()
-  if (hookPath && extname(hookPath) === '.jsonl' && existsSync(hookPath)) {
-    return hookPath
+  if (hookPath && extname(hookPath) === '.jsonl') {
+    const hostReadable = await toHostReadableTranscriptPath(hookPath)
+    if (hostReadable) {
+      return hostReadable
+    }
   }
 
   const trimmedId = sessionId.trim()
@@ -89,10 +107,20 @@ export async function resolveSessionFilePath(
     return resolveClaudeSessionFile(trimmedId, options.claudeProjectsDir ?? claudeProjectsDir())
   }
   if (transcriptAgent === 'codex') {
-    return resolveCodexSessionFile(trimmedId, options.codexSessionsDirs ?? codexSessionsDirs())
+    const overrideDirs = options.codexSessionsDirs
+    return resolveCodexSessionFile(
+      trimmedId,
+      overrideDirs ?? codexSessionsDirs(),
+      // Why: enumerating WSL homes spawns wsl.exe per distro, which boots ones the
+      // user left stopped. Only pay that after this host's own Codex roots miss.
+      overrideDirs ? undefined : wslCodexSessionsDirs
+    )
   }
   if (transcriptAgent === 'grok') {
     return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir())
+  }
+  if (transcriptAgent === 'omp') {
+    return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir())
   }
   return null
 }
@@ -111,11 +139,29 @@ async function resolveClaudeSessionFile(
 
 async function resolveCodexSessionFile(
   sessionId: string,
-  sessionsDirs: string[]
+  sessionsDirs: string[],
+  loadFallbackDirs?: () => Promise<string[]>
 ): Promise<string | null> {
   // Codex rollout file names embed the session id (rollout-<ts>-<id>.jsonl), so
   // match the id as a suffix of the file's base name rather than an exact name.
   // Search each candidate root (managed home first) and stop at the first match.
+  const hit = await findCodexRolloutInDirs(sessionId, sessionsDirs)
+  if (hit) {
+    return hit
+  }
+  if (!loadFallbackDirs) {
+    return null
+  }
+  // Why: a WSL-hosted session's rollout only exists inside the distro, so fall
+  // back to each distro's Codex homes when the host's own roots came up empty (#10326).
+  const fallbackDirs = (await loadFallbackDirs()).filter((dir) => !sessionsDirs.includes(dir))
+  return findCodexRolloutInDirs(sessionId, fallbackDirs)
+}
+
+async function findCodexRolloutInDirs(
+  sessionId: string,
+  sessionsDirs: string[]
+): Promise<string | null> {
   for (const sessionsDir of sessionsDirs) {
     if (!existsSync(sessionsDir)) {
       continue
@@ -142,4 +188,31 @@ async function resolveGrokSessionFile(
   // lookup instead of blocking, then repeating, a recursive full-tree scan.
   const history = await findGrokChatHistoryBySessionId(sessionsDir, sessionId)
   return history
+}
+
+// omp keeps one directory per working directory (`-Documents-dog-app`) with the
+// transcript inside it, named `<ISO timestamp>_<session id>.jsonl` — so match the
+// id as a base-name suffix, the way Codex rollout files are matched, and let the
+// walk cover the per-cwd subdirectories.
+async function resolveOmpSessionFile(
+  sessionId: string,
+  sessionsDir: string
+): Promise<string | null> {
+  const files = await walkSessionFiles(sessionsDir, 'omp', [], {
+    extensions: new Set(['.jsonl']),
+    // Why: a session's task-subagent transcripts live in its same-named
+    // `<stamp>_<uuid>/` artifact dir, and a label-named child can still end in
+    // `_<session id>` — so descending would let a subagent transcript win the
+    // suffix match over its own parent. Prune the subtree exactly as the AI
+    // Vault scanner does (session-scanner-source-discovery.ts): it keeps the
+    // walk at one readdir per workspace dir regardless of how much the session
+    // delegated. Depth 0 is the workspace dir, which is never an artifact dir.
+    directoryPredicate: (name, depth) =>
+      depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name),
+    filePredicate: (path) => {
+      const name = basename(path, extname(path))
+      return name === sessionId || name.endsWith(`_${sessionId}`)
+    }
+  })
+  return files[0] ?? null
 }

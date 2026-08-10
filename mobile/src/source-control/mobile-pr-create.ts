@@ -2,7 +2,6 @@ import { hostedReviewCopy } from './hosted-review-copy'
 import {
   buildMobileHostedReviewCreateParams,
   createMobileHostedReview,
-  fetchMobileHostedReviewEligibility,
   mobileRepoSelectorFromWorktreeId,
   resolveMobileHostedReviewPrefill,
   shouldPushBeforeMobileHostedReviewCreate,
@@ -20,7 +19,6 @@ export type MobilePrCreateOutcome = MobileHostedReviewCreateOutcome
 export {
   buildMobileHostedReviewCreateParams as buildMobilePrCreateParams,
   createMobileHostedReview as createMobilePr,
-  fetchMobileHostedReviewEligibility as fetchMobilePrEligibility,
   mobileRepoSelectorFromWorktreeId,
   resolveMobileHostedReviewPrefill as resolveMobilePrPrefill,
   shouldPushBeforeMobileHostedReviewCreate as shouldPushBeforeMobilePrCreate

@@ -280,7 +280,14 @@ export async function ensureWslCliAvailableForAgentSkillTerminal(
           'auto.components.settings.CliSkillRuntimeSetup.windowsPathUnknown',
           'WSL shell command PATH could not be checked'
         ),
-        { description: status.detail ?? 'Refresh CLI registration status and try again.' }
+        {
+          description:
+            status.detail ??
+            translate(
+              'auto.components.settings.CliSkillRuntimeSetup.refreshCliRegistration',
+              'Refresh CLI registration status and try again.'
+            )
+        }
       )
       return status
     }

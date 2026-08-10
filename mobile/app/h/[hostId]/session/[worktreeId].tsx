@@ -106,7 +106,7 @@ import type {
   TerminalModes,
   TerminalWebViewHandle
 } from '../../../../src/terminal/terminal-webview-contract'
-import { isTerminalOscLinkRanges } from '../../../../src/terminal/terminal-osc-link-ranges'
+import { isTerminalOscLinkRanges } from '../../../../../src/shared/terminal-osc-link-ranges'
 import { computeActiveTerminalKeyboardLift } from '../../../../src/terminal/terminal-keyboard-avoidance-lift'
 import { useTerminalViewportRefit } from '../../../../src/terminal/terminal-viewport-refit'
 import {

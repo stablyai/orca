@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { nativeChatRequiresLocalTranscript } from '@/lib/native-chat-supported-agent'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 
 export function resolveBackendDraftStartup(
@@ -19,7 +20,7 @@ export function resolveBackendDraftStartup(
       agent: request.agent,
       promptDelivery: 'draft',
       launchDraftText: request.launchDraftPrompt,
-      ...(request.agent === 'grok'
+      ...(nativeChatRequiresLocalTranscript(request.agent)
         ? {
             nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
           }

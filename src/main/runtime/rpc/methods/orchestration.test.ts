@@ -298,6 +298,8 @@ describe('orchestration RPC methods', () => {
   describe('orchestration.send', () => {
     it('sends a message', async () => {
       setup()
+      // Why: send notifies arrival so already-idle recipients get push-on-idle
+      // delivery without waiting for a status transition (#12536).
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
       const result = (await call('orchestration.send', {
         from: 'term_coord',
@@ -308,7 +310,7 @@ describe('orchestration RPC methods', () => {
       expect(result.message.id).toMatch(/^msg_/)
       expect(result.message.from_handle).toBe('term_coord')
       expect(result.message.run_id).toBe(activeRunId)
-      expect(runtime.deliverPendingMessagesForHandle).not.toHaveBeenCalled()
+      expect(runtime.deliverPendingMessagesForHandle).toHaveBeenCalled()
     })
 
     it('routes exact Dispatch mail independently of terminal handles', async () => {

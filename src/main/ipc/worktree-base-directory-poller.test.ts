@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { writeFileSync } from 'node:fs'
 import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   createWorktreePollerWindowVisibility,
   startWorktreeBaseDirectoryPoller,
+  WORKTREE_BASE_BACKSTOP_TICKS,
   type WorktreeBasePollEvent,
   type WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
@@ -202,6 +204,65 @@ describe('worktree base directory poller', () => {
       )
     )
     expect(fullScans.length).toBeGreaterThan(0)
+  })
+
+  it('retires stale marker probes while preserving backstop detection and path reuse', async () => {
+    const root = await makeRoot()
+    const ordinaryFolder = join(root, 'ordinary-folder')
+    const markerPath = join(ordinaryFolder, '.git')
+    await mkdir(ordinaryFolder)
+
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('base', root)
+    let fullScans = 0
+    let pendingMarkerProbes = 0
+    let writeMarkerOnNextProbe = false
+    const pendingMarkerMaxTicks = WORKTREE_BASE_BACKSTOP_TICKS * 2
+    const markerCreationTick = pendingMarkerMaxTicks * 2 + WORKTREE_BASE_BACKSTOP_TICKS * 4
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      {
+        pollIntervalMs: 0,
+        pendingMarkerMaxTicks,
+        onFullScan: () => {
+          fullScans += 1
+          if (fullScans * WORKTREE_BASE_BACKSTOP_TICKS === markerCreationTick) {
+            writeFileSync(markerPath, 'gitdir: elsewhere')
+          }
+        },
+        onPendingMarkerProbe: (path) => {
+          pendingMarkerProbes += 1
+          if (writeMarkerOnNextProbe && path === markerPath) {
+            writeMarkerOnNextProbe = false
+            writeFileSync(markerPath, 'gitdir: elsewhere')
+          }
+        }
+      }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === markerPath)
+    )
+
+    await rm(ordinaryFolder, { recursive: true })
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'delete' && event.path === ordinaryFolder)
+    )
+    writeMarkerOnNextProbe = true
+    await mkdir(ordinaryFolder)
+    const events = await waitForEvents(
+      received,
+      (flat) =>
+        flat.filter((event) => event.type === 'create' && event.path === markerPath).length === 2
+    )
+
+    expect(pendingMarkerProbes).toBeLessThanOrEqual(pendingMarkerMaxTicks)
+    expect(
+      events.filter((event) => event.type === 'create' && event.path === markerPath)
+    ).toHaveLength(2)
   })
 
   it('parks base scans while hidden and losslessly detects changes on resume', async () => {

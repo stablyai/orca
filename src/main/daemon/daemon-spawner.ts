@@ -24,6 +24,8 @@ export type DaemonPidFile = {
   launchNonce?: string
   linuxStartTicks?: string
   bootId?: string
+  /** Forking app's binary — macOS pins the daemon's TCC responsible process to it (STA-3491). */
+  spawnerExecPath?: string
 }
 
 export type DaemonProcessHandle = {
@@ -130,8 +132,25 @@ export function publishDaemonPidFile(pidPath: string, pidFile: DaemonPidFile): v
   })
 }
 
+/**
+ * Scratch names for the two claim protocols.
+ *
+ * Why `.swap`/`.hold` and not the `.cleanup`/`.replace` these once were: released builds carry a
+ * sweeper matching `\.(?:cleanup|replace)-\d+-<uuid>$` that deletes on age alone, with no
+ * liveness or ownership check. A claim briefly holds the ONLY copy of a live daemon's token or
+ * PID record, so an old build starting while a claimant is paused would destroy it with no way
+ * to restore. Exported so a test can pin them against that released pattern.
+ */
+export function getDaemonPidSwapClaimPath(pidPath: string): string {
+  return `${pidPath}.swap-${process.pid}-${randomUUID()}`
+}
+
+export function getDaemonArtifactHoldClaimPath(filePath: string): string {
+  return `${filePath}.hold-${process.pid}-${randomUUID()}`
+}
+
 export function replaceDaemonPidFile(pidPath: string, pidFile: DaemonPidFile): boolean {
-  const claimedPath = `${pidPath}.replace-${process.pid}-${randomUUID()}`
+  const claimedPath = getDaemonPidSwapClaimPath(pidPath)
   let claimedExisting = false
   try {
     renameSync(pidPath, claimedPath)
@@ -172,19 +191,45 @@ export function replaceDaemonPidFile(pidPath: string, pidFile: DaemonPidFile): b
 export function unlinkOwnedDaemonPidFile(
   pidPath: string,
   expectedPid: number,
-  expectedLaunchNonce: string
+  // Why: records written before launch nonces existed carry none. Matching on PID alone is
+  // weaker, but it still fences against removing a replacement's record, which is the point.
+  expectedLaunchNonce: string | null
 ): boolean {
   return claimAndUnlinkOwnedFile(pidPath, (content) => {
     try {
-      const parsed = JSON.parse(content) as {
-        pid?: unknown
-        launchNonce?: unknown
+      const parsed: unknown = JSON.parse(content.trim())
+      // Why: the oldest records are a bare integer, not an object. Rejecting them left the
+      // file in place, and the replacement's exclusive publish then failed with EEXIST —
+      // trading a stale record for a daemon that cannot start at all.
+      if (typeof parsed === 'number') {
+        return expectedLaunchNonce === null && parsed === expectedPid
       }
-      return parsed.pid === expectedPid && parsed.launchNonce === expectedLaunchNonce
+      if (!parsed || typeof parsed !== 'object') {
+        return false
+      }
+      const record = parsed as { pid?: unknown; launchNonce?: unknown }
+      if (record.pid !== expectedPid) {
+        return false
+      }
+      return expectedLaunchNonce === null
+        ? record.launchNonce === undefined || record.launchNonce === null
+        : record.launchNonce === expectedLaunchNonce
     } catch {
       return false
     }
   })
+}
+
+/**
+ * Removes a PID record whose content still satisfies `matches`, under the same rename claim
+ * used for owned records. Lets an unparseable record be reclaimed without risking a valid
+ * replacement record that appeared in the meantime.
+ */
+export function unlinkDaemonPidFileWhen(
+  pidPath: string,
+  matches: (content: string) => boolean
+): boolean {
+  return claimAndUnlinkOwnedFile(pidPath, matches)
 }
 
 export function unlinkOwnedDaemonTokenFile(tokenPath: string, expectedToken: string): boolean {
@@ -195,7 +240,7 @@ function claimAndUnlinkOwnedFile(
   filePath: string,
   ownsContent: (content: string) => boolean
 ): boolean {
-  const claimedPath = `${filePath}.cleanup-${process.pid}-${randomUUID()}`
+  const claimedPath = getDaemonArtifactHoldClaimPath(filePath)
   try {
     // Why: rename claims one exact directory entry before inspection, so a replacement
     // installed afterward stays at the canonical path and cannot be unlinked by us.

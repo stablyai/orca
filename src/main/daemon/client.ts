@@ -515,6 +515,7 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
     launchNonce?: unknown
     entryPath?: unknown
     appVersion?: unknown
+    spawnerExecPath?: unknown
   }
   if (
     !Number.isSafeInteger(identity.pid) ||
@@ -536,6 +537,9 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
       : {}),
     ...(typeof identity.appVersion === 'string' && identity.appVersion.length > 0
       ? { appVersion: identity.appVersion }
+      : {}),
+    ...(typeof identity.spawnerExecPath === 'string' && identity.spawnerExecPath.length > 0
+      ? { spawnerExecPath: identity.spawnerExecPath }
       : {})
   }
 }

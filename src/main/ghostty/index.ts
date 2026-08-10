@@ -107,29 +107,37 @@ export async function previewGhosttyImport(store: Store): Promise<GhosttyImportP
   }
 
   const parsed: Record<string, string | string[]> = {}
+  const readPaths: string[] = []
+  let firstError: string | null = null
   for (const configPath of configPaths) {
     let content: string
     try {
       const info = await stat(configPath)
       if (info.size > MAX_CONFIG_BYTES) {
-        return {
-          found: false,
-          diff: {},
-          unsupportedKeys: [],
-          error: `Config file is too large to import (${info.size} bytes, limit ${MAX_CONFIG_BYTES}).`
+        if (firstError === null) {
+          firstError = `Config file is too large to import (${info.size} bytes, limit ${MAX_CONFIG_BYTES}).`
         }
+        continue
       }
       content = await readFile(configPath, 'utf-8')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not read config file'
-      return {
-        found: false,
-        diff: {},
-        unsupportedKeys: [],
-        error: `Could not read config: ${message}`
+      if (firstError === null) {
+        firstError = `Could not read config: ${message}`
       }
+      continue
     }
     mergeParsedConfig(parsed, parseGhosttyConfig(content))
+    readPaths.push(configPath)
+  }
+
+  if (readPaths.length === 0) {
+    return {
+      found: false,
+      diff: {},
+      unsupportedKeys: [],
+      error: firstError ?? 'Could not read config'
+    }
   }
 
   const themeUnsupportedKeys = await applyThemeReference(parsed)
@@ -153,8 +161,8 @@ export async function previewGhosttyImport(store: Store): Promise<GhosttyImportP
 
   return {
     found: true,
-    configPath: configPaths[0],
-    configPaths,
+    configPath: readPaths[0],
+    configPaths: readPaths,
     diff: actualDiff,
     unsupportedKeys
   }

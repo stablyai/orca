@@ -5,6 +5,7 @@ import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed
 import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { nativeChatRequiresLocalTranscript } from '@/lib/native-chat-supported-agent'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { toWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -63,7 +64,7 @@ function applyBackendSpawnedDraftViewMode(args: {
       agent,
       promptDelivery: 'draft',
       launchDraftText: request.launchDraftPrompt,
-      ...(agent === 'grok'
+      ...(nativeChatRequiresLocalTranscript(agent)
         ? {
             nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
               getConnectionIdFromState(state, worktreeId)
