@@ -25,7 +25,6 @@ import {
 import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
 import { attemptEditorFileSave } from './editor-file-save-attempt'
 import { createCurrentMarkdownArtifactRequest } from './markdown-artifact-upload'
-import { createEditorPopoutAction } from '@/components/editor-popout/editor-popout-action'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -358,15 +357,6 @@ function EditorPanelInner({
         activeMarkdownContent ?? ''
       )
     )
-  const openMarkdownInNewWindow = createEditorPopoutAction({
-    getState: useAppStore.getState,
-    file: activeFile,
-    fileContent: fileContents[activeFile.id],
-    content: editorDrafts[activeFile.id],
-    viewMode: model.mdViewMode,
-    showFrontmatter: isMarkdownFrontmatterVisible
-  })
-
   return (
     // Why: each split pane needs an isolated bridge between its diff editor and header controls.
     <DiffNavigationProvider>
@@ -410,7 +400,6 @@ function EditorPanelInner({
         createMarkdownArtifactRequest={
           activeMarkdownContent === null ? undefined : createActiveMarkdownArtifactRequest
         }
-        onOpenMarkdownInNewWindow={openMarkdownInNewWindow}
         onContentChange={handleContentChange}
         onContentChangeForFile={handleContentChangeForFile}
         onDirtyStateHint={handleDirtyStateHint}
