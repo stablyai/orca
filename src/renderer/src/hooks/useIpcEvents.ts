@@ -184,6 +184,7 @@ import {
   subscribeDirectSshRemoteWorkspaceApplyIdle,
   type RemoteWorkspaceTargetSync
 } from './remote-workspace-target-sync'
+import type { DirectSshTabMutationReconciliation } from './direct-ssh-tab-mutation-ledger'
 import {
   registerDirectSshWakeRouting,
   routeDirectSshConnectedState,
@@ -618,7 +619,12 @@ function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined):
   return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
 
-export function useIpcEvents(): void {
+export function useIpcEvents(
+  options: {
+    tabMutations?: DirectSshTabMutationReconciliation
+  } = {}
+): void {
+  const { tabMutations } = options
   useEffect(() => {
     const unsubs: (() => void)[] = []
     const reconnectAuthorityByTarget = new Map<string, DirectSshAuthority>()
@@ -729,6 +735,7 @@ export function useIpcEvents(): void {
         capturePreparationInput: (authority, reason, snapshotRevision) =>
           hostHydration.capturePreparationInput(authority, reason, snapshotRevision),
         prepareOnly: reconnectCoordinator.prepareOnly,
+        tabMutations,
         finalizeHydratedTerminals: (authority) =>
           directSshAuthoritiesEqual(reconnectAuthorityByTarget.get(authority.targetId), authority)
             ? reconnectCoordinator.finalizeHydratedTerminals(authority)
@@ -3853,7 +3860,7 @@ export function useIpcEvents(): void {
       reconnectAuthorityByTarget.clear()
       resetAgentHookCompletionNotificationCoordinators()
     }
-  }, [])
+  }, [tabMutations])
 }
 
 function hasRuntimeBackedWorktreeAttribution(data: AgentStatusIpcPayload): boolean {

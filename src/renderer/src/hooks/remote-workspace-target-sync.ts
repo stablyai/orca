@@ -16,6 +16,7 @@ import type {
 import { buildDirectSshSnapshotApplyToken } from './direct-ssh-reconnect-coordinator'
 import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
 import { applyDirectSshRemoteWorkspaceSnapshot } from './remote-workspace-snapshot-apply'
+import type { DirectSshTabMutationReconciliation } from './direct-ssh-tab-mutation-ledger'
 export {
   isDirectSshRemoteWorkspaceApplyInProgress,
   subscribeDirectSshRemoteWorkspaceApplyIdle
@@ -43,6 +44,7 @@ export type RemoteWorkspaceTargetSyncDeps = {
   ) => Promise<DirectSshPreparationInput | null>
   prepareOnly: (input: DirectSshPreparationInput) => Promise<DirectSshPreparationOutcome>
   finalizeHydratedTerminals: (authority: DirectSshAuthority) => number
+  tabMutations?: DirectSshTabMutationReconciliation
 }
 
 export type RemoteWorkspaceTargetSync = {
@@ -193,7 +195,8 @@ export function createRemoteWorkspaceTargetSync(
           isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
           waitForWorkspaceSessionReady,
           finalizeHydratedTerminals: deps.finalizeHydratedTerminals,
-          preexistingLocalTabIds
+          preexistingLocalTabIds,
+          tabMutations: deps.tabMutations
         })
       }
       return
@@ -219,6 +222,9 @@ export function createRemoteWorkspaceTargetSync(
       return
     }
     const result = results.find((entry) => entry.targetId === authority.targetId)?.result
+    if (result?.snapshot) {
+      deps.tabMutations?.acknowledgeSnapshot(authority.targetId, result.snapshot)
+    }
     applyPatchStatus(deps.store.getState(), authority.targetId, result)
   }
 
@@ -259,7 +265,8 @@ export function createRemoteWorkspaceTargetSync(
         isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
         waitForWorkspaceSessionReady,
         finalizeHydratedTerminals: deps.finalizeHydratedTerminals,
-        preexistingLocalTabIds
+        preexistingLocalTabIds,
+        tabMutations: deps.tabMutations
       })
     }
   }

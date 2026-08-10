@@ -3,8 +3,9 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import {
   graftLocalTabsIntoRemoteSession,
+  omitPendingLocalTabDeletions,
   postBoundaryLocalTabIds
-} from './remote-workspace-snapshot-apply'
+} from './remote-workspace-tab-presence-reconciliation'
 
 const WT = 'repo-1::/home/user/worktree-a'
 const OTHER_WT = 'repo-1::/home/user/worktree-b'
@@ -116,5 +117,47 @@ describe('graftLocalTabsIntoRemoteSession', () => {
     )
     expect(grafted.tabsByWorktree[OTHER_WT].map((t) => t.id)).toEqual(['tab-other'])
     expect(grafted.tabsByWorktree[WT]).toBeUndefined()
+  })
+})
+
+describe('omitPendingLocalTabDeletions', () => {
+  it('removes the tab and its active, layout, and remote-session references', () => {
+    const remote = {
+      activeRepoId: null,
+      activeWorktreeId: WT,
+      activeTabId: 'tab-deleted',
+      tabsByWorktree: { [WT]: [tab('tab-deleted', WT), tab('tab-kept', WT)] },
+      terminalLayoutsByTabId: {
+        'tab-deleted': {
+          root: { type: 'leaf', leafId: 'leaf-deleted' },
+          activeLeafId: 'leaf-deleted',
+          expandedLeafId: null
+        },
+        'tab-kept': {
+          root: { type: 'leaf', leafId: 'leaf-kept' },
+          activeLeafId: 'leaf-kept',
+          expandedLeafId: null
+        }
+      },
+      activeTabIdByWorktree: { [WT]: 'tab-deleted' },
+      remoteSessionIdsByTabId: {
+        'tab-deleted': 'session-deleted',
+        'tab-kept': 'session-kept'
+      }
+    } as WorkspaceSessionState
+
+    const reconciled = omitPendingLocalTabDeletions(remote, new Set(['tab-deleted']))
+
+    expect(reconciled.activeTabId).toBeNull()
+    expect(reconciled.tabsByWorktree[WT].map((item) => item.id)).toEqual(['tab-kept'])
+    expect(reconciled.terminalLayoutsByTabId).toEqual({
+      'tab-kept': {
+        root: { type: 'leaf', leafId: 'leaf-kept' },
+        activeLeafId: 'leaf-kept',
+        expandedLeafId: null
+      }
+    })
+    expect(reconciled.activeTabIdByWorktree?.[WT]).toBeNull()
+    expect(reconciled.remoteSessionIdsByTabId).toEqual({ 'tab-kept': 'session-kept' })
   })
 })
