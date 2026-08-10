@@ -3165,6 +3165,11 @@ export type PreloadApi = {
       operationId: string
       connectionId?: string
     }) => Promise<GitStagedDiscardReceipt>
+    getStagedDiscardReceipt: (args: {
+      worktreePath: string
+      operationId: string
+      connectionId?: string
+    }) => Promise<GitStagedDiscardReceipt | null>
     remoteFileUrl: (args: {
       worktreePath: string
       relativePath: string

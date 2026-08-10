@@ -49,10 +49,10 @@ import {
   unstageFile
 } from '../git/status'
 import {
-  GitStagedDiscardReceiptLedger,
   pendingGitStagedDiscardReceipt,
   type GitStagedDiscardReceipt
 } from '../../shared/git-staged-discard-receipt'
+import { GitStagedDiscardReceiptLedger } from '../../shared/git-staged-discard-receipt-ledger'
 import { checkoutBranch, listLocalBranches } from '../git/checkout'
 import type { RuntimeGitCheckoutResult, RuntimeGitLocalBranches } from '../../shared/runtime-types'
 import { getHistory as getGitHistory } from '../git/history'
@@ -185,9 +185,14 @@ export type RuntimeGitCommandHost = {
 }
 
 export class RuntimeGitCommands {
-  private readonly stagedDiscardReceipts = new GitStagedDiscardReceiptLedger()
+  private readonly stagedDiscardReceipts: GitStagedDiscardReceiptLedger
 
-  constructor(private readonly host: RuntimeGitCommandHost) {}
+  constructor(
+    private readonly host: RuntimeGitCommandHost,
+    stagedDiscardReceipts = new GitStagedDiscardReceiptLedger()
+  ) {
+    this.stagedDiscardReceipts = stagedDiscardReceipts
+  }
 
   private linkedIssueForTarget(target: RuntimeGitTarget): number | null | undefined {
     const live = this.host.getWorktreeLinkedIssue?.(target.worktree.id)
@@ -1001,7 +1006,22 @@ export class RuntimeGitCommands {
   ): Promise<GitStagedDiscardReceipt | null> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const scope = `${target.connectionId ?? 'local'}\0${target.worktree.path}`
-    return this.stagedDiscardReceipts.get(scope, operationId)
+    const receipt = this.stagedDiscardReceipts.get(scope, operationId)
+    if (receipt?.state !== 'pending' || !target.connectionId) {
+      return receipt
+    }
+    const provider = getSshGitProvider(target.connectionId)
+    if (!provider) {
+      return receipt
+    }
+    const authoritative = await provider.getStagedDiscardReceipt(
+      target.worktree.path,
+      operationId,
+      receipt.affectedPaths
+    )
+    return authoritative === null
+      ? receipt
+      : this.stagedDiscardReceipts.update(scope, operationId, authoritative)
   }
 
   async discardRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {

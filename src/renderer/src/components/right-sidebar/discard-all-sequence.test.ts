@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   getDiscardAllPaths,
+  getStagedDiscardEditorPaths,
   getStageAllPaths,
   getUnstageAllPaths,
   isStageableStatusEntry,
@@ -63,6 +64,20 @@ describe('getDiscardAllPaths', () => {
   it('returns an empty array when nothing matches', () => {
     expect(getDiscardAllPaths([], 'staged')).toEqual([])
     expect(getDiscardAllPaths([entry({ path: 'a.ts', area: 'staged' })], 'unstaged')).toEqual([])
+  })
+})
+
+describe('getStagedDiscardEditorPaths', () => {
+  it('includes selected rename sources without expanding unrelated rows', () => {
+    const entries = [
+      entry({ path: 'renamed.ts', oldPath: 'original.ts', area: 'staged', status: 'renamed' }),
+      entry({ path: 'other.ts', oldPath: 'old-other.ts', area: 'staged', status: 'renamed' })
+    ]
+
+    expect(getStagedDiscardEditorPaths(entries, ['renamed.ts'])).toEqual([
+      'renamed.ts',
+      'original.ts'
+    ])
   })
 })
 

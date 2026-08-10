@@ -36,6 +36,7 @@ import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
 import { installRelayLogRotation } from './rotating-log-writer'
 import { GitHandler } from './git-handler'
+import { createRelayGitStagedDiscardReceiptLedger } from './git-staged-discard-receipt-ledger'
 import { PreflightHandler } from './preflight-handler'
 import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
@@ -711,7 +712,12 @@ async function main(): Promise<void> {
   const watchRegistry = fsHandler.getWatchRegistry()
   ptyHandler.setWorktreeRemovalCoordinator(watchRegistry)
   watchRegistry.setWorktreePtyTeardown((rootPath) => ptyHandler.shutdownForWorktreePath(rootPath))
-  const gitHandler = new GitHandler(dispatcher, context, watchRegistry)
+  const gitHandler = new GitHandler(
+    dispatcher,
+    context,
+    watchRegistry,
+    createRelayGitStagedDiscardReceiptLedger(sockPath)
+  )
 
   const _preflightHandler = new PreflightHandler(dispatcher)
   const _externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)

@@ -2935,24 +2935,63 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('routes staged discard to one SSH owner operation', async () => {
-    const sshBulkDiscardStagedMock = vi.fn().mockResolvedValue(undefined)
+    const pending = {
+      operationId: 'op-ssh',
+      state: 'pending' as const,
+      mutation: 'possible' as const,
+      affectedPaths: ['a.ts', 'b.ts'],
+      completedPaths: [],
+      uncertainPaths: ['a.ts', 'b.ts'],
+      remainingPaths: []
+    }
+    const succeeded = {
+      operationId: 'op-ssh',
+      state: 'succeeded' as const,
+      mutation: 'complete' as const,
+      affectedPaths: ['a.ts', 'b.ts'],
+      completedPaths: ['a.ts', 'b.ts'],
+      uncertainPaths: [],
+      remainingPaths: []
+    }
+    const sshBulkDiscardStagedMock = vi.fn().mockResolvedValue(pending)
+    const sshGetStagedDiscardReceiptMock = vi.fn().mockResolvedValue(succeeded)
     getSshGitProviderMock.mockReturnValue({
-      bulkDiscardStagedChanges: sshBulkDiscardStagedMock
+      bulkDiscardStagedChanges: sshBulkDiscardStagedMock,
+      getStagedDiscardReceipt: sshGetStagedDiscardReceiptMock
     })
     registerFilesystemHandlers(store as never)
 
-    await handlers.get('git:bulkDiscardStaged')!(null, {
-      worktreePath: '/remote/repo',
-      filePaths: ['a.ts', 'b.ts'],
-      operationId: 'op-ssh',
-      connectionId: 'conn-1'
-    })
+    await expect(
+      handlers.get('git:bulkDiscardStaged')!(null, {
+        worktreePath: '/remote/repo',
+        filePaths: ['a.ts', 'b.ts'],
+        operationId: 'op-ssh',
+        connectionId: 'conn-1'
+      })
+    ).resolves.toEqual(pending)
+    await expect(
+      handlers.get('git:getStagedDiscardReceipt')!(null, {
+        worktreePath: '/remote/repo',
+        operationId: 'op-ssh',
+        connectionId: 'conn-1'
+      })
+    ).resolves.toEqual(succeeded)
+    await expect(
+      handlers.get('git:bulkDiscardStaged')!(null, {
+        worktreePath: '/remote/repo',
+        filePaths: ['a.ts', 'b.ts'],
+        operationId: 'op-ssh',
+        connectionId: 'conn-1'
+      })
+    ).resolves.toEqual(succeeded)
 
     expect(sshBulkDiscardStagedMock).toHaveBeenCalledWith(
       '/remote/repo',
       ['a.ts', 'b.ts'],
       'op-ssh'
     )
+    expect(sshBulkDiscardStagedMock).toHaveBeenCalledTimes(1)
+    expect(sshGetStagedDiscardReceiptMock).toHaveBeenCalledTimes(1)
     expect(bulkDiscardStagedChangesMock).not.toHaveBeenCalled()
   })
 

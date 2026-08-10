@@ -846,7 +846,7 @@ describe('SshGitProvider', () => {
     })
   })
 
-  it('recovers the authoritative relay receipt after a lost mutation acknowledgement', async () => {
+  it('propagates a pending relay receipt for outer-layer settlement', async () => {
     mux.request
       .mockResolvedValueOnce({
         stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
@@ -861,14 +861,58 @@ describe('SshGitProvider', () => {
         uncertainPaths: ['a.ts'],
         remainingPaths: []
       })
+      .mockResolvedValueOnce({
+        operationId: 'op-lost-ack',
+        state: 'succeeded',
+        mutation: 'complete',
+        affectedPaths: ['a.ts'],
+        completedPaths: ['a.ts'],
+        uncertainPaths: [],
+        remainingPaths: []
+      })
 
     await expect(
       provider.bulkDiscardStagedChanges('/home/user/repo', ['a.ts'], 'op-lost-ack')
     ).resolves.toMatchObject({ state: 'pending', mutation: 'possible' })
+    await expect(
+      provider.getStagedDiscardReceipt('/home/user/repo', 'op-lost-ack', ['a.ts'])
+    ).resolves.toMatchObject({ state: 'succeeded', mutation: 'complete' })
+    expect(mux.request).toHaveBeenCalledTimes(4)
     expect(mux.request).toHaveBeenLastCalledWith('git.getStagedDiscardReceipt', {
       worktreePath: '/home/user/repo',
       operationId: 'op-lost-ack'
     })
+  })
+
+  it('keeps transport-uncertain operations pending when no receipt is readable yet', async () => {
+    mux.request
+      .mockResolvedValueOnce({
+        stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+      })
+      .mockRejectedValueOnce(new Error('connection lost'))
+      .mockResolvedValueOnce(null)
+
+    await expect(
+      provider.bulkDiscardStagedChanges('/home/user/repo', ['a.ts'], 'op-disconnected')
+    ).resolves.toMatchObject({
+      operationId: 'op-disconnected',
+      state: 'pending',
+      mutation: 'possible'
+    })
+  })
+
+  it('propagates an authoritative relay rejection when no operation was recorded', async () => {
+    const rejection = Object.assign(new Error('invalid_staged_discard_path'), { code: -32602 })
+    mux.request
+      .mockResolvedValueOnce({
+        stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+      })
+      .mockRejectedValueOnce(rejection)
+      .mockResolvedValueOnce(null)
+
+    await expect(
+      provider.bulkDiscardStagedChanges('/home/user/repo', ['a.ts'], 'op-rejected')
+    ).rejects.toThrow('invalid_staged_discard_path')
   })
 
   it('discardChanges sends git.discard request', async () => {

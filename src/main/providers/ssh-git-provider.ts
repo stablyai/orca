@@ -36,6 +36,7 @@ import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../../shared/protocol-vers
 import { SshGitStagedDiscardCapability } from './ssh-git-staged-discard-capability'
 import {
   assertGitStagedDiscardReceipt,
+  pendingGitStagedDiscardReceipt,
   type GitStagedDiscardReceipt
 } from '../../shared/git-staged-discard-receipt'
 
@@ -467,6 +468,7 @@ export class SshGitProvider implements IGitProvider {
       )
     }
     this.gitDiffReadDedupe.clear()
+    let authoritativeReceipt: GitStagedDiscardReceipt
     try {
       try {
         const receipt = await this.mux.request('git.bulkDiscardStaged', {
@@ -475,19 +477,38 @@ export class SshGitProvider implements IGitProvider {
           operationId,
           stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
         })
-        return assertGitStagedDiscardReceipt(receipt, operationId)
+        authoritativeReceipt = assertGitStagedDiscardReceipt(receipt, operationId, filePaths)
       } catch (error) {
         const receipt = await this.mux
           .request('git.getStagedDiscardReceipt', { worktreePath, operationId })
           .catch(() => null)
-        if (receipt !== null) {
-          return assertGitStagedDiscardReceipt(receipt, operationId)
+        if (receipt === null) {
+          if (isJsonRpcApplicationError(error)) {
+            throw error
+          }
+          authoritativeReceipt = pendingGitStagedDiscardReceipt(operationId, filePaths)
+        } else {
+          authoritativeReceipt = assertGitStagedDiscardReceipt(receipt, operationId, filePaths)
         }
-        throw error
       }
+      return authoritativeReceipt
     } finally {
       this.gitDiffReadDedupe.clear()
     }
+  }
+
+  async getStagedDiscardReceipt(
+    worktreePath: string,
+    operationId: string,
+    affectedPaths: readonly string[]
+  ): Promise<GitStagedDiscardReceipt | null> {
+    const receipt = await this.mux.request('git.getStagedDiscardReceipt', {
+      worktreePath,
+      operationId
+    })
+    return receipt === null
+      ? null
+      : assertGitStagedDiscardReceipt(receipt, operationId, affectedPaths)
   }
 
   async discardChanges(worktreePath: string, filePath: string): Promise<void> {
@@ -995,4 +1016,12 @@ export class SshGitProvider implements IGitProvider {
     }
     return buildHostedRemoteCommitUrl(remoteUrl, sha)
   }
+}
+
+function isJsonRpcApplicationError(error: unknown): boolean {
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    typeof (error as { code?: unknown }).code === 'number'
+  )
 }

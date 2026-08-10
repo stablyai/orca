@@ -8,6 +8,7 @@ import {
 import { clampNumber } from '@/lib/terminal-theme'
 
 export const ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT = 'orca:editor-quiesce-file-saves'
+export const ORCA_EDITOR_HOLD_FILE_SAVES_EVENT = 'orca:editor-hold-file-saves'
 export const ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT = 'orca:editor-external-file-change'
 export const ORCA_EDITOR_SAVE_FILE_EVENT = 'orca:editor-save-file'
 export const ORCA_EDITOR_SAVE_AND_CLOSE_EVENT = 'orca:save-and-close'
@@ -27,6 +28,11 @@ export type EditorSaveQuiesceTarget = { fileId: string } | EditorPathMutationTar
 export type EditorSaveQuiesceDetail = EditorSaveQuiesceTarget & {
   claim: () => void
   resolve: () => void
+}
+
+export type EditorSaveHoldDetail = EditorSaveQuiesceTarget & {
+  claim: () => void
+  resolve: (release: () => void) => void
 }
 
 export type EditorSaveFileTarget = {
@@ -165,6 +171,28 @@ export async function requestEditorSaveQuiesce(target: EditorSaveQuiesceTarget):
     // waiting on a quiesce listener that does not exist in that UI state.
     if (!claimed) {
       resolve()
+    }
+  })
+}
+
+export async function holdEditorSaveQuiescence(
+  target: EditorSaveQuiesceTarget
+): Promise<() => void> {
+  return new Promise((resolve) => {
+    let claimed = false
+    window.dispatchEvent(
+      new CustomEvent<EditorSaveHoldDetail>(ORCA_EDITOR_HOLD_FILE_SAVES_EVENT, {
+        detail: {
+          ...target,
+          claim: () => {
+            claimed = true
+          },
+          resolve
+        }
+      })
+    )
+    if (!claimed) {
+      resolve(() => undefined)
     }
   })
 }

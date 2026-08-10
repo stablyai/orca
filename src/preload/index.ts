@@ -3480,6 +3480,11 @@ const api = {
       operationId: string
       connectionId?: string
     }) => ipcRenderer.invoke('git:bulkDiscardStaged', args),
+    getStagedDiscardReceipt: (args: {
+      worktreePath: string
+      operationId: string
+      connectionId?: string
+    }) => ipcRenderer.invoke('git:getStagedDiscardReceipt', args),
     remoteFileUrl: (args: {
       worktreePath: string
       relativePath: string

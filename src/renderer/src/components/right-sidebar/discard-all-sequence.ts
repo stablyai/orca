@@ -21,6 +21,20 @@ export function getDiscardAllPaths(
     .map((entry) => entry.path)
 }
 
+export function getStagedDiscardEditorPaths(
+  entries: readonly GitStatusEntry[],
+  requestedPaths: readonly string[]
+): string[] {
+  const requested = new Set(requestedPaths)
+  const paths = new Set(requestedPaths)
+  for (const entry of entries) {
+    if (requested.has(entry.path) && entry.oldPath) {
+      paths.add(entry.oldPath)
+    }
+  }
+  return [...paths]
+}
+
 export type StageAllArea = 'unstaged' | 'untracked'
 
 /**

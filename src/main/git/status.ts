@@ -1,7 +1,6 @@
 /* eslint-disable max-lines */
 import { existsSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
 import * as path from 'node:path'
 import type {
   GitBranchChangeEntry,
@@ -58,6 +57,8 @@ import {
 } from '../../shared/git-staged-discard-operation'
 import {
   failedGitStagedDiscardReceipt,
+  createGitStagedDiscardOperationId,
+  projectGitStagedDiscardReceiptPaths,
   runGitStagedDiscardBatches,
   throwIfGitStagedDiscardFailed,
   type GitStagedDiscardReceipt
@@ -2236,7 +2237,7 @@ export async function bulkDiscardStagedChanges(
   const receipt = await bulkDiscardStagedChangesWithReceipt(
     worktreePath,
     filePaths,
-    randomUUID(),
+    createGitStagedDiscardOperationId(),
     options
   )
   throwIfGitStagedDiscardFailed(receipt)
@@ -2278,16 +2279,19 @@ export async function bulkDiscardStagedChangesWithReceipt(
     if (selection.hasConflict) {
       throw new Error('Cannot discard staged changes for conflicted paths')
     }
-    return await runGitStagedDiscardBatches(
-      operationId,
-      selection.paths,
-      BULK_CHUNK_SIZE,
-      async (chunk) => {
-        await gitExecFileAsync(
-          gitStagedDiscardArgs(chunk.map((filePath) => literalPathspec(filePath, options))),
-          gitOptionsForWorktree(worktreePath, options)
-        )
-      }
+    return projectGitStagedDiscardReceiptPaths(
+      await runGitStagedDiscardBatches(
+        operationId,
+        selection.paths,
+        BULK_CHUNK_SIZE,
+        async (chunk) => {
+          await gitExecFileAsync(
+            gitStagedDiscardArgs(chunk.map((filePath) => literalPathspec(filePath, options))),
+            gitOptionsForWorktree(worktreePath, options)
+          )
+        }
+      ),
+      filePaths
     )
   } catch (error) {
     return failedGitStagedDiscardReceipt(operationId, filePaths, error)

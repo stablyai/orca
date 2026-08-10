@@ -9,13 +9,20 @@ export type GitStagedDiscardReceipt = {
   error?: string
 }
 
-type ReceiptEntry = {
-  fingerprint: string
-  receipt: GitStagedDiscardReceipt
-  promise: Promise<GitStagedDiscardReceipt>
+const OPERATION_ID_SEPARATOR = ':'
+
+export function createGitStagedDiscardOperationId(now = Date.now()): string {
+  return `${now}${OPERATION_ID_SEPARATOR}${globalThis.crypto.randomUUID()}`
 }
 
-const DEFAULT_MAX_RECEIPTS = 256
+export function gitStagedDiscardOperationTimestamp(operationId: string): number | null {
+  const separator = operationId.indexOf(OPERATION_ID_SEPARATOR)
+  if (separator < 1) {
+    return null
+  }
+  const timestamp = Number(operationId.slice(0, separator))
+  return Number.isSafeInteger(timestamp) && timestamp >= 0 ? timestamp : null
+}
 
 export function pendingGitStagedDiscardReceipt(
   operationId: string,
@@ -85,17 +92,78 @@ export async function runGitStagedDiscardBatches(
   }
 }
 
+export function projectGitStagedDiscardReceiptPaths(
+  receipt: GitStagedDiscardReceipt,
+  requestedPaths: readonly string[]
+): GitStagedDiscardReceipt {
+  if (sameUniquePathSet(receipt.affectedPaths, requestedPaths)) {
+    return receipt
+  }
+  if (receipt.state === 'succeeded') {
+    return {
+      ...receipt,
+      affectedPaths: [...requestedPaths],
+      completedPaths: [...requestedPaths]
+    }
+  }
+  return {
+    ...receipt,
+    mutation: 'possible',
+    affectedPaths: [...requestedPaths],
+    completedPaths: [],
+    uncertainPaths: [...requestedPaths],
+    remainingPaths: []
+  }
+}
+
 export function assertGitStagedDiscardReceipt(
   value: unknown,
-  expectedOperationId?: string
+  expectedOperationId?: string,
+  expectedAffectedPaths?: readonly string[]
 ): GitStagedDiscardReceipt {
   if (
     !isGitStagedDiscardReceipt(value) ||
-    (expectedOperationId !== undefined && value.operationId !== expectedOperationId)
+    (expectedOperationId !== undefined && value.operationId !== expectedOperationId) ||
+    (expectedAffectedPaths !== undefined &&
+      !sameUniquePathSet(value.affectedPaths, expectedAffectedPaths)) ||
+    !hasExactPathPartition(value)
   ) {
     throw new Error('The Git owner returned an invalid staged discard receipt')
   }
   return value
+}
+
+export async function awaitTerminalGitStagedDiscardReceipt(
+  initialReceipt: GitStagedDiscardReceipt,
+  expectedOperationId: string,
+  expectedAffectedPaths: readonly string[],
+  getReceipt: () => Promise<unknown>,
+  wait?: () => Promise<void>
+): Promise<GitStagedDiscardReceipt> {
+  let receipt = assertGitStagedDiscardReceipt(
+    initialReceipt,
+    expectedOperationId,
+    expectedAffectedPaths
+  )
+  let delayMs = 250
+  while (receipt.state === 'pending') {
+    await (wait ? wait() : waitForReceiptPoll(delayMs))
+    delayMs = Math.min(delayMs * 2, 5_000)
+    let next: unknown
+    try {
+      next = await getReceipt()
+    } catch {
+      continue
+    }
+    if (next !== null) {
+      try {
+        receipt = assertGitStagedDiscardReceipt(next, expectedOperationId, expectedAffectedPaths)
+      } catch {
+        continue
+      }
+    }
+  }
+  return receipt
 }
 
 export function throwIfGitStagedDiscardFailed(receipt: GitStagedDiscardReceipt): void {
@@ -111,74 +179,58 @@ export class GitStagedDiscardReceiptError extends Error {
   }
 }
 
-export class GitStagedDiscardReceiptLedger {
-  private readonly entries = new Map<string, ReceiptEntry>()
-
-  constructor(private readonly maxReceipts = DEFAULT_MAX_RECEIPTS) {}
-
-  run(
-    scope: string,
-    operationId: string,
-    fingerprint: string,
-    pending: GitStagedDiscardReceipt,
-    operation: () => Promise<GitStagedDiscardReceipt>
-  ): Promise<GitStagedDiscardReceipt> {
-    const key = receiptKey(scope, operationId)
-    const existing = this.entries.get(key)
-    if (existing) {
-      if (existing.fingerprint !== fingerprint) {
-        return Promise.reject(new Error('Staged discard operation ID was reused'))
-      }
-      return existing.promise
-    }
-    this.ensureCapacity()
-    const promise = operation().then(
-      (receipt) => {
-        const entry = this.entries.get(key)
-        if (entry) {
-          entry.receipt = receipt
-        }
-        return receipt
-      },
-      (error) => {
-        const receipt = failedGitStagedDiscardReceipt(operationId, pending.affectedPaths, error)
-        const entry = this.entries.get(key)
-        if (entry) {
-          entry.receipt = receipt
-        }
-        return receipt
-      }
-    )
-    this.entries.set(key, { fingerprint, receipt: pending, promise })
-    return promise
-  }
-
-  get(scope: string, operationId: string): GitStagedDiscardReceipt | null {
-    return this.entries.get(receiptKey(scope, operationId))?.receipt ?? null
-  }
-
-  clear(): void {
-    this.entries.clear()
-  }
-
-  private ensureCapacity(): void {
-    if (this.entries.size < this.maxReceipts) {
-      return
-    }
-    const settled = [...this.entries].find(([, entry]) => entry.receipt.state !== 'pending')
-    if (!settled) {
-      throw new Error('Too many staged discard operations are still pending')
-    }
-    this.entries.delete(settled[0])
-  }
-}
-
-function receiptKey(scope: string, operationId: string): string {
-  return `${scope}\0${operationId}`
-}
-
 function describeGitStagedDiscardError(error: unknown): string {
   return error instanceof Error ? error.message : 'Staged discard failed'
+}
+
+function waitForReceiptPoll(delayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, delayMs))
+}
+
+function sameUniquePathSet(actual: readonly string[], expected: readonly string[]): boolean {
+  const actualSet = new Set(actual)
+  const expectedSet = new Set(expected)
+  if (actualSet.size !== actual.length || expectedSet.size !== expected.length) {
+    return false
+  }
+  return (
+    actualSet.size === expectedSet.size && [...actualSet].every((path) => expectedSet.has(path))
+  )
+}
+
+function hasExactPathPartition(receipt: GitStagedDiscardReceipt): boolean {
+  const partitions = [receipt.completedPaths, receipt.uncertainPaths, receipt.remainingPaths]
+  const combined = partitions.flat()
+  if (!sameUniquePathSet(combined, receipt.affectedPaths)) {
+    return false
+  }
+  if (receipt.state === 'pending') {
+    return (
+      receipt.mutation === 'possible' &&
+      receipt.completedPaths.length === 0 &&
+      receipt.remainingPaths.length === 0 &&
+      sameUniquePathSet(receipt.uncertainPaths, receipt.affectedPaths)
+    )
+  }
+  if (receipt.state === 'succeeded') {
+    return (
+      receipt.uncertainPaths.length === 0 &&
+      receipt.remainingPaths.length === 0 &&
+      sameUniquePathSet(receipt.completedPaths, receipt.affectedPaths) &&
+      receipt.mutation === (receipt.affectedPaths.length === 0 ? 'none' : 'complete')
+    )
+  }
+  if (receipt.mutation === 'none') {
+    return (
+      receipt.completedPaths.length === 0 &&
+      receipt.uncertainPaths.length === 0 &&
+      sameUniquePathSet(receipt.remainingPaths, receipt.affectedPaths)
+    )
+  }
+  if (receipt.mutation === 'partial') {
+    return receipt.completedPaths.length > 0
+  }
+  return receipt.mutation === 'possible' && receipt.uncertainPaths.length > 0
 }
 
 function isGitStagedDiscardReceipt(value: unknown): value is GitStagedDiscardReceipt {

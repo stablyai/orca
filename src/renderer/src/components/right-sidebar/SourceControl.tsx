@@ -74,6 +74,7 @@ import { BulkActionBar } from './BulkActionBar'
 import { useSourceControlSelection, type FlatEntry } from './useSourceControlSelection'
 import {
   getDiscardAllPaths,
+  getStagedDiscardEditorPaths,
   getStageAllPaths,
   getUnstageAllPaths,
   isStageableStatusEntry,
@@ -166,6 +167,7 @@ import {
 } from '@/lib/source-control-launch-agent-selection'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
+  holdEditorSaveQuiescence,
   notifyEditorExternalFileChange,
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
@@ -5390,9 +5392,10 @@ function SourceControlInner(): React.JSX.Element {
       }
       const runtimeEnvironmentId =
         useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
-      await Promise.all(
-        filePaths.map((relativePath) =>
-          requestEditorSaveQuiesce({
+      const editorPaths = getStagedDiscardEditorPaths(grouped.staged, filePaths)
+      const releaseSaveHolds = await Promise.all(
+        editorPaths.map((relativePath) =>
+          holdEditorSaveQuiescence({
             worktreeId: activeWorktreeId,
             worktreePath,
             relativePath,
@@ -5400,7 +5403,6 @@ function SourceControlInner(): React.JSX.Element {
           })
         )
       )
-      let affectedPaths = filePaths
       try {
         const receipt = await bulkDiscardStagedRuntimeGitPaths(
           {
@@ -5412,20 +5414,25 @@ function SourceControlInner(): React.JSX.Element {
           },
           filePaths
         )
-        affectedPaths = receipt.affectedPaths
         throwIfGitStagedDiscardFailed(receipt)
       } finally {
-        for (const relativePath of affectedPaths) {
-          notifyEditorExternalFileChange({
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            relativePath,
-            runtimeEnvironmentId
-          })
+        try {
+          for (const relativePath of editorPaths) {
+            notifyEditorExternalFileChange({
+              worktreeId: activeWorktreeId,
+              worktreePath,
+              relativePath,
+              runtimeEnvironmentId
+            })
+          }
+        } finally {
+          for (const release of releaseSaveHolds) {
+            release()
+          }
         }
       }
     },
-    [activeRepoSettings, activeWorktreeId, worktreePath]
+    [activeRepoSettings, activeWorktreeId, grouped.staged, worktreePath]
   )
 
   const handleDiscard = useCallback(

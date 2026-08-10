@@ -6,7 +6,11 @@ import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT
 } from '../../../../shared/editor-save-events'
-import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
+import {
+  holdEditorSaveQuiescence,
+  requestEditorFileSave,
+  requestEditorSaveQuiesce
+} from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
 import { registerPendingEditorFlush } from './editor-pending-flush'
 import { __clearSelfWriteRegistryForTests, hasRecentSelfWrite } from './editor-self-write-registry'
@@ -506,6 +510,41 @@ describe('attachEditorAutosaveController', () => {
       expect(writeFile).not.toHaveBeenCalled()
       expect(store.getState().openFiles[0]?.isDirty).toBe(true)
       expect(store.getState().editorDrafts['/repo/file.ts']).toBe('edited')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('holds new autosaves until an external operation releases quiescence', async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: { fs: { writeFile } }
+    } satisfies WindowStub)
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      const release = await holdEditorSaveQuiescence({ fileId: '/repo/file.ts' })
+      store.getState().setEditorDraft('/repo/file.ts', 'edited during discard')
+      store.getState().markFileDirty('/repo/file.ts', true)
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(writeFile).not.toHaveBeenCalled()
+
+      release()
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(writeFile).toHaveBeenCalledOnce()
     } finally {
       cleanup()
     }

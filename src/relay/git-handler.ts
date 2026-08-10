@@ -79,10 +79,11 @@ import {
 } from '../shared/git-staged-discard-operation'
 import {
   failedGitStagedDiscardReceipt,
-  GitStagedDiscardReceiptLedger,
   pendingGitStagedDiscardReceipt,
+  projectGitStagedDiscardReceiptPaths,
   runGitStagedDiscardBatches
 } from '../shared/git-staged-discard-receipt'
+import { GitStagedDiscardReceiptLedger } from '../shared/git-staged-discard-receipt-ledger'
 import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../shared/protocol-version'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
 import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
@@ -196,7 +197,7 @@ export class GitHandler {
   private readonly gitCapabilities = new GitCapabilityCache()
   // Why: use the bulk lane so large responses do not block interactive PTY echo.
   private readonly responseStreams = new GitResponseStreamRegistry()
-  private readonly stagedDiscardReceipts = new GitStagedDiscardReceiptLedger()
+  private readonly stagedDiscardReceipts: GitStagedDiscardReceiptLedger
 
   // Why: cache .gitmodules per instance to avoid SSH reads and test leakage.
   private submodulePathsCache: SubmodulePathsCache = createSubmodulePathsCache()
@@ -205,9 +206,11 @@ export class GitHandler {
   constructor(
     dispatcher: RelayDispatcher,
     _context: RelayContext,
-    private readonly watcherRegistry?: Pick<RelayFilesystemWatchRegistry, 'runWithRemovalFence'>
+    private readonly watcherRegistry?: Pick<RelayFilesystemWatchRegistry, 'runWithRemovalFence'>,
+    stagedDiscardReceipts = new GitStagedDiscardReceiptLedger()
   ) {
     this.dispatcher = dispatcher
+    this.stagedDiscardReceipts = stagedDiscardReceipts
     this.registerHandlers()
     // Why: a detached client's git.responseAck frames never arrive; wake any pump parked on the ack window so it re-checks staleness and exits.
     this.dispatcher.onClientDetached?.(() => this.responseStreams.wakeAll())
@@ -215,7 +218,6 @@ export class GitHandler {
 
   dispose(): void {
     this.responseStreams.disposeAll()
-    this.stagedDiscardReceipts.clear()
     this.clearGitMutationReadCaches()
   }
 
@@ -630,16 +632,19 @@ export class GitHandler {
           }
           this.clearGitMutationReadCaches()
           try {
-            return await runGitStagedDiscardBatches(
-              operationId,
-              selection.paths,
-              BULK_CHUNK_SIZE,
-              async (chunk) => {
-                await this.git(
-                  gitStagedDiscardArgs(chunk.map((filePath) => this.literalPathspec(filePath))),
-                  worktreePath
-                )
-              }
+            return projectGitStagedDiscardReceiptPaths(
+              await runGitStagedDiscardBatches(
+                operationId,
+                selection.paths,
+                BULK_CHUNK_SIZE,
+                async (chunk) => {
+                  await this.git(
+                    gitStagedDiscardArgs(chunk.map((filePath) => this.literalPathspec(filePath))),
+                    worktreePath
+                  )
+                }
+              ),
+              filePaths
             )
           } finally {
             this.clearGitMutationReadCaches()

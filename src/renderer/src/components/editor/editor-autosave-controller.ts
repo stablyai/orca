@@ -14,12 +14,14 @@ import {
   normalizeAutoSaveDelayMs,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   ORCA_EDITOR_FILE_SAVED_EVENT,
+  ORCA_EDITOR_HOLD_FILE_SAVES_EVENT,
   ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT,
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   ORCA_EDITOR_SAVE_FILE_EVENT,
   type EditorFileSavedDetail,
   type EditorPathMutationTarget,
   type EditorSaveFileDetail,
+  type EditorSaveHoldDetail,
   type EditorSaveQuiesceDetail
 } from './editor-autosave'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
@@ -51,6 +53,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   const autoSaveScheduledContent = new Map<string, string>()
   const saveQueue = new Map<string, Promise<void>>()
   const saveGeneration = new Map<string, number>()
+  const saveHoldDepth = new Map<string, number>()
 
   const clearAutoSaveTimer = (fileId: string): void => {
     const timerId = autoSaveTimers.get(fileId)
@@ -85,6 +88,13 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         const liveFile = state.openFiles.find((openFile) => openFile.id === file.id) ?? null
         if (!liveFile) {
           return
+        }
+
+        if ((saveHoldDepth.get(file.id) ?? 0) > 0) {
+          if (trigger === 'autosave') {
+            return
+          }
+          throw new Error('This file is waiting for an external operation to settle.')
         }
 
         // Why: read-only tabs (AI Vault View Log) must never write the agent-owned artifact through editor paths.
@@ -191,6 +201,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         file &&
         file.isDirty &&
         canAutoSaveOpenFile(file) &&
+        (saveHoldDepth.get(file.id) ?? 0) === 0 &&
         // Why: suspension holds until the user picks a side via the banner (or saves manually).
         !isAutosaveSuspendedForFile(file) &&
         draft !== undefined
@@ -210,6 +221,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         !file.isDirty ||
         draft === undefined ||
         !canAutoSaveOpenFile(file) ||
+        (saveHoldDepth.get(file.id) ?? 0) > 0 ||
         isAutosaveSuspendedForFile(file)
       ) {
         clearAutoSaveTimer(file.id)
@@ -384,6 +396,38 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     detail.resolve()
   }
 
+  const handleSaveHold = async (event: Event): Promise<void> => {
+    const detail = (event as CustomEvent<EditorSaveHoldDetail>).detail
+    if (!detail) {
+      return
+    }
+    detail.claim()
+    const matchingFiles =
+      'fileId' in detail
+        ? store.getState().openFiles.filter((file) => file.id === detail.fileId)
+        : getOpenFilesForExternalFileChange(store.getState().openFiles, detail)
+    for (const file of matchingFiles) {
+      saveHoldDepth.set(file.id, (saveHoldDepth.get(file.id) ?? 0) + 1)
+    }
+    await Promise.all(matchingFiles.map((file) => quiesceFileSave(file.id)))
+    let released = false
+    detail.resolve(() => {
+      if (released) {
+        return
+      }
+      released = true
+      for (const file of matchingFiles) {
+        const nextDepth = (saveHoldDepth.get(file.id) ?? 1) - 1
+        if (nextDepth === 0) {
+          saveHoldDepth.delete(file.id)
+        } else {
+          saveHoldDepth.set(file.id, nextDepth)
+        }
+      }
+      syncAutoSave()
+    })
+  }
+
   const handleExternalFileChange = (event: Event): void => {
     const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
     if (!detail) {
@@ -437,6 +481,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   window.addEventListener(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, handleSaveAndClose as EventListener)
   window.addEventListener(ORCA_EDITOR_SAVE_FILE_EVENT, handleSaveFile as EventListener)
   window.addEventListener(ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT, handleQuiesce as EventListener)
+  window.addEventListener(ORCA_EDITOR_HOLD_FILE_SAVES_EVENT, handleSaveHold as EventListener)
   window.addEventListener(
     ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
     handleExternalFileChange as EventListener
@@ -458,6 +503,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     )
     window.removeEventListener(ORCA_EDITOR_SAVE_FILE_EVENT, handleSaveFile as EventListener)
     window.removeEventListener(ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT, handleQuiesce as EventListener)
+    window.removeEventListener(ORCA_EDITOR_HOLD_FILE_SAVES_EVENT, handleSaveHold as EventListener)
     window.removeEventListener(
       ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
       handleExternalFileChange as EventListener
@@ -468,6 +514,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     autoSaveTimers.clear()
     autoSaveScheduledContent.clear()
     saveQueue.clear()
+    saveHoldDepth.clear()
     saveGeneration.clear()
   }
 }

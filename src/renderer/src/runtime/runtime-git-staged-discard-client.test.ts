@@ -13,6 +13,7 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const gitBulkDiscardStaged = vi.fn()
+const gitGetStagedDiscardReceipt = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 
@@ -23,6 +24,7 @@ function paramsOf(args: RuntimeEnvironmentCallRequest): unknown {
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   gitBulkDiscardStaged.mockReset()
+  gitGetStagedDiscardReceipt.mockReset()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -30,7 +32,10 @@ beforeEach(() => {
   })
   vi.stubGlobal('window', {
     api: {
-      git: { bulkDiscardStaged: gitBulkDiscardStaged },
+      git: {
+        bulkDiscardStaged: gitBulkDiscardStaged,
+        getStagedDiscardReceipt: gitGetStagedDiscardReceipt
+      },
       runtime: { call: vi.fn() },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
@@ -66,6 +71,44 @@ describe('runtime staged discard client', () => {
       connectionId: 'ssh-1'
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('polls direct SSH IPC until the outer receipt settles', async () => {
+    gitBulkDiscardStaged.mockImplementation(async ({ operationId }) => ({
+      operationId,
+      state: 'pending',
+      mutation: 'possible',
+      affectedPaths: ['staged.txt'],
+      completedPaths: [],
+      uncertainPaths: ['staged.txt'],
+      remainingPaths: []
+    }))
+    gitGetStagedDiscardReceipt.mockImplementation(async ({ operationId }) => ({
+      operationId,
+      state: 'succeeded',
+      mutation: 'complete',
+      affectedPaths: ['staged.txt'],
+      completedPaths: ['staged.txt'],
+      uncertainPaths: [],
+      remainingPaths: []
+    }))
+
+    await expect(
+      bulkDiscardStagedRuntimeGitPaths(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          connectionId: 'ssh-1'
+        },
+        ['staged.txt']
+      )
+    ).resolves.toMatchObject({ state: 'succeeded' })
+    expect(gitGetStagedDiscardReceipt).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      operationId: expect.any(String),
+      connectionId: 'ssh-1'
+    })
   })
 
   it.each([
@@ -160,6 +203,7 @@ describe('runtime staged discard client', () => {
   })
 
   it('returns the host receipt after a timed-out mutation acknowledgement', async () => {
+    let receiptReads = 0
     runtimeEnvironmentTransportCall.mockImplementation(
       async (args: RuntimeEnvironmentCallRequest) => {
         if (args.method === 'status.get') {
@@ -182,18 +226,30 @@ describe('runtime staged discard client', () => {
       if (args.method === 'git.bulkDiscardStaged') {
         throw new Error('request timed out')
       }
+      receiptReads += 1
       return {
         id: 'receipt',
         ok: true,
-        result: {
-          operationId: (paramsOf(args) as { operationId: string }).operationId,
-          state: 'pending',
-          mutation: 'possible',
-          affectedPaths: ['staged.txt'],
-          completedPaths: [],
-          uncertainPaths: ['staged.txt'],
-          remainingPaths: []
-        },
+        result:
+          receiptReads === 1
+            ? {
+                operationId: (paramsOf(args) as { operationId: string }).operationId,
+                state: 'pending',
+                mutation: 'possible',
+                affectedPaths: ['staged.txt'],
+                completedPaths: [],
+                uncertainPaths: ['staged.txt'],
+                remainingPaths: []
+              }
+            : {
+                operationId: (paramsOf(args) as { operationId: string }).operationId,
+                state: 'succeeded',
+                mutation: 'complete',
+                affectedPaths: ['staged.txt'],
+                completedPaths: ['staged.txt'],
+                uncertainPaths: [],
+                remainingPaths: []
+              },
         _meta: { runtimeId: 'remote-runtime' }
       }
     })
@@ -207,7 +263,7 @@ describe('runtime staged discard client', () => {
         },
         ['staged.txt']
       )
-    ).resolves.toMatchObject({ state: 'pending', mutation: 'possible' })
+    ).resolves.toMatchObject({ state: 'succeeded', mutation: 'complete' })
 
     const mutation = runtimeEnvironmentCall.mock.calls[0]?.[0] as RuntimeEnvironmentCallRequest
     const recovery = runtimeEnvironmentCall.mock.calls[1]?.[0] as RuntimeEnvironmentCallRequest
@@ -215,5 +271,6 @@ describe('runtime staged discard client', () => {
     expect(paramsOf(recovery)).toMatchObject({
       operationId: (paramsOf(mutation) as { operationId: string }).operationId
     })
+    expect(receiptReads).toBe(2)
   })
 })

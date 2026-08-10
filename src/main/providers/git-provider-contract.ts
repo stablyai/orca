@@ -45,6 +45,11 @@ export type IGitProvider = {
     filePaths: string[],
     operationId: string
   ): Promise<GitStagedDiscardReceipt>
+  getStagedDiscardReceipt(
+    worktreePath: string,
+    operationId: string,
+    affectedPaths: readonly string[]
+  ): Promise<GitStagedDiscardReceipt | null>
   discardChanges(worktreePath: string, filePath: string): Promise<void>
   bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void>
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>

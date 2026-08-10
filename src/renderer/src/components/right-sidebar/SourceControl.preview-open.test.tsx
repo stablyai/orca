@@ -51,6 +51,7 @@ const mocks = vi.hoisted(() => {
     bulkStageRuntimeGitPaths: vi.fn(),
     refreshGitStatusForWorktree: vi.fn(),
     requestEditorSaveQuiesce: vi.fn(),
+    holdEditorSaveQuiescence: vi.fn(),
     notifyEditorExternalFileChange: vi.fn()
   }
   return {
@@ -95,6 +96,7 @@ vi.mock('@/runtime/runtime-git-client', async (importOriginal) => {
 
 vi.mock('@/components/editor/editor-autosave', () => ({
   requestEditorSaveQuiesce: mocks.calls.requestEditorSaveQuiesce,
+  holdEditorSaveQuiescence: mocks.calls.holdEditorSaveQuiescence,
   notifyEditorExternalFileChange: mocks.calls.notifyEditorExternalFileChange
 }))
 
@@ -158,6 +160,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
   mocks.calls.bulkStageRuntimeGitPaths.mockResolvedValue(undefined)
   mocks.calls.refreshGitStatusForWorktree.mockResolvedValue(undefined)
   mocks.calls.requestEditorSaveQuiesce.mockResolvedValue(undefined)
+  mocks.calls.holdEditorSaveQuiescence.mockResolvedValue(vi.fn())
   mocks.state = {
     activeWorktreeId: mocks.activeWorktree.id,
     activeGroupIdByWorktree: { [mocks.activeWorktree.id]: 'group-1' },
@@ -462,7 +465,7 @@ describe('SourceControl preview row opens', () => {
       await Promise.resolve()
     })
 
-    expect(mocks.calls.requestEditorSaveQuiesce).toHaveBeenCalledWith({
+    expect(mocks.calls.holdEditorSaveQuiescence).toHaveBeenCalledWith({
       worktreeId: mocks.activeWorktree.id,
       worktreePath: '/repo/wt',
       relativePath: 'src/staged.ts',
@@ -482,7 +485,7 @@ describe('SourceControl preview row opens', () => {
       relativePath: 'src/staged.ts',
       runtimeEnvironmentId: 'runtime-remote'
     })
-    expect(mocks.calls.requestEditorSaveQuiesce.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(mocks.calls.holdEditorSaveQuiescence.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.calls.bulkDiscardStagedRuntimeGitPaths.mock.invocationCallOrder[0]
     )
     expect(mocks.calls.bulkDiscardStagedRuntimeGitPaths.mock.invocationCallOrder[0]).toBeLessThan(
@@ -527,6 +530,73 @@ describe('SourceControl preview row opens', () => {
       expect.objectContaining({ relativePath: 'src/staged.ts' })
     )
     expect(mocks.calls.refreshGitStatusForWorktree).toHaveBeenCalled()
+  })
+
+  it('keeps staged discard and editor saves quiesced until delayed settlement', async () => {
+    let settle!: (receipt: {
+      operationId: string
+      state: 'succeeded'
+      mutation: 'complete'
+      affectedPaths: string[]
+      completedPaths: string[]
+      uncertainPaths: string[]
+      remainingPaths: string[]
+    }) => void
+    const delayed = new Promise<Parameters<typeof settle>[0]>((resolve) => {
+      settle = resolve
+    })
+    const release = vi.fn()
+    mocks.calls.holdEditorSaveQuiescence.mockResolvedValueOnce(release)
+    mocks.calls.bulkDiscardStagedRuntimeGitPaths.mockReturnValueOnce(delayed)
+    resetState({
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({ path: 'src/staged.ts', area: 'staged', status: 'modified' })
+        ]
+      }
+    })
+    renderSourceControl()
+
+    act(() =>
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Discard all"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    const confirmButton = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Discard all'
+    )
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(mocks.calls.bulkDiscardStagedRuntimeGitPaths).toHaveBeenCalled()
+    expect(mocks.calls.notifyEditorExternalFileChange).not.toHaveBeenCalled()
+    expect(mocks.calls.refreshGitStatusForWorktree).not.toHaveBeenCalled()
+    expect(release).not.toHaveBeenCalled()
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Discard all"]')
+        ?.getAttribute('aria-disabled')
+    ).toBe('true')
+
+    await act(async () => {
+      settle({
+        operationId: 'op-delayed',
+        state: 'succeeded',
+        mutation: 'complete',
+        affectedPaths: ['src/staged.ts'],
+        completedPaths: ['src/staged.ts'],
+        uncertainPaths: [],
+        remainingPaths: []
+      })
+      await delayed
+      await Promise.resolve()
+    })
+
+    expect(mocks.calls.notifyEditorExternalFileChange).toHaveBeenCalled()
+    expect(mocks.calls.refreshGitStatusForWorktree).toHaveBeenCalled()
+    expect(release).toHaveBeenCalledOnce()
   })
 
   it('keeps nested-only submodule rows non-stageable from the parent repo', () => {
