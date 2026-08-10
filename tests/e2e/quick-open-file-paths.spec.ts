@@ -25,6 +25,9 @@ test('cmd+p quick open prioritizes the filename and reveals the full path on hov
   })
   const dialog = orcaPage.getByRole('dialog', { name: 'Go to file' })
   await expect(dialog).toBeVisible()
+  const inputBox = await dialog.locator('[data-cmdk-input-wrapper]').boundingBox()
+  expect(inputBox).not.toBeNull()
+  expect(inputBox!.height).toBeLessThanOrEqual(45)
   const input = dialog.locator('input[placeholder="Go to file..."]')
   await input.fill('QuickOpenTarget')
 

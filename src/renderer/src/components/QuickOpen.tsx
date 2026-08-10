@@ -119,6 +119,7 @@ export default function QuickOpen(): React.JSX.Element | null {
         placeholder={translate('auto.components.QuickOpen.1cb6ef47b7', 'Go to file...')}
         value={query}
         onValueChange={setQuery}
+        className="!h-9 !py-2"
       />
       <CommandList className="p-2">
         {loading ? (
