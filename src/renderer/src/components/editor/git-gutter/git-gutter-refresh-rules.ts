@@ -8,17 +8,6 @@ function entriesForPath(
   return statusEntries.filter((candidate) => candidate.path === relativePath)
 }
 
-// Why: these all mean HEAD has no blob at this path, so a diff would report the whole file
-// as new. `renamed` deliberately stays skipped rather than resolved through `oldPath` — VS
-// Code diffs a rename against its source blob, but threading `oldPath` through is out of
-// scope here.
-const STATUSES_ABSENT_FROM_HEAD_AT_PATH: readonly GitStatusEntry['status'][] = [
-  'untracked',
-  'added',
-  'copied',
-  'renamed'
-]
-
 export function isGitGutterEligible(args: {
   enabled: boolean
   mode: OpenFile['mode']
@@ -29,20 +18,19 @@ export function isGitGutterEligible(args: {
   if (!args.enabled || !args.isGitBackedWorktree || args.mode !== 'edit') {
     return false
   }
-  // Why: without status we cannot tell "clean and tracked" from "untracked", and guessing
-  // paints a brand-new file entirely green.
-  if (!args.statusEntries) {
-    return false
-  }
-  const entries = entriesForPath(args.statusEntries, args.relativePath)
-  // Why: conflict decorations already occupy this gutter lane (monaco-conflict-decorations.ts);
-  // stacking both is unreadable. Git's own conflict status is the signal — scanning the buffer for
-  // marker text costs a full pass per keystroke and reads a markdown `=======` setext underline as
-  // a conflict, silently killing the gutter for the rest of the file.
-  if (entries.some((candidate) => candidate.conflictStatus === 'unresolved')) {
-    return false
-  }
-  return !entries.some((candidate) => STATUSES_ABSENT_FROM_HEAD_AT_PATH.includes(candidate.status))
+  // Why tracking is not a gate: a file HEAD has never seen (untracked, staged-add, renamed,
+  // copied) diffs against an empty baseline and reads as entirely added. That green block is
+  // the point — "none of this is committed yet" — so it is shown rather than suppressed.
+  // Why no status check: the git-backed gate above already proves this is a repo, so an
+  // unloaded status only means "not polled yet".
+  //
+  // Why conflicts still are a gate: conflict decorations own this same gutter lane
+  // (monaco-conflict-decorations.ts) and stacking both is unreadable. Git's own conflict status
+  // is the signal — scanning the buffer for marker text costs a full pass per keystroke and
+  // reads a markdown `=======` setext underline as a conflict, killing the gutter for the file.
+  return !entriesForPath(args.statusEntries ?? [], args.relativePath).some(
+    (candidate) => candidate.conflictStatus === 'unresolved'
+  )
 }
 
 /**

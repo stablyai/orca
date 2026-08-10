@@ -335,13 +335,23 @@ describe('useEditorGitGutter', () => {
     expect(decorationsCollection.set).not.toHaveBeenCalled()
   })
 
-  it('does not read git for an untracked file', async () => {
+  it('paints an untracked file as entirely added', async () => {
+    // Why: HEAD has no blob at the path, so git returns an empty original and every line is new.
     setStore({ statusEntries: [{ path: 'src/a.ts', status: 'untracked', area: 'untracked' }] })
-    render(<GutterHarness content={MODIFIED} />)
+    getRuntimeGitDiffMock.mockResolvedValue(textDiffResult(''))
+    render(<GutterHarness content={'a\nb\nc'} />)
     await settle()
 
-    expect(getRuntimeGitDiffMock).not.toHaveBeenCalled()
-    expect(decorationsCollection.set).not.toHaveBeenCalled()
+    expect(getRuntimeGitDiffMock).toHaveBeenCalledTimes(1)
+    expect(decorationsCollection.set).toHaveBeenLastCalledWith([
+      {
+        range: { startLineNumber: 1, startColumn: 1, endLineNumber: 3, endColumn: 1 },
+        options: {
+          isWholeLine: true,
+          linesDecorationsClassName: 'orca-git-gutter orca-git-gutter-added'
+        }
+      }
+    ])
   })
 
   it('does not read git while the path is an unresolved conflict', async () => {

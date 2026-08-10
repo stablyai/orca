@@ -32,13 +32,13 @@ describe('isGitGutterEligible', () => {
     expect(isGitGutterEligible({ ...base, mode: 'markdown-preview' })).toBe(false)
   })
 
-  it('refuses untracked files so a new file is not a wall of green', () => {
+  it('allows untracked files, which read as entirely added against an empty HEAD', () => {
     expect(
       isGitGutterEligible({
         ...base,
         statusEntries: [entry({ status: 'untracked', area: 'untracked' })]
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('ignores status entries belonging to other files', () => {
@@ -86,36 +86,40 @@ describe('isGitGutterEligible', () => {
     ).toBe(true)
   })
 
-  it('refuses when status has not loaded yet', () => {
-    expect(isGitGutterEligible({ ...base, statusEntries: undefined })).toBe(false)
+  // Why allowed: the git-backed gate already proves this is a repo, so an unloaded status is
+  // just "not polled yet" — waiting for it would delay the marks on every cold open.
+  it('allows a file whose status has not loaded yet', () => {
+    expect(isGitGutterEligible({ ...base, statusEntries: undefined })).toBe(true)
   })
 
   it('refuses when the worktree is not git-backed', () => {
     expect(isGitGutterEligible({ ...base, isGitBackedWorktree: false })).toBe(false)
   })
 
-  it('refuses a staged-added file so a brand-new staged file is not a wall of green', () => {
+  // Why these are allowed: HEAD has no blob at the path, so the whole file reads as added.
+  // That is the intended signal — "none of this is committed yet" — not noise to suppress.
+  it('allows a staged-added file', () => {
     expect(
       isGitGutterEligible({
         ...base,
         statusEntries: [entry({ status: 'added', area: 'staged' })]
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
-  it('refuses renamed and copied files because HEAD has no blob at the current path', () => {
+  it('allows renamed and copied files', () => {
     expect(
       isGitGutterEligible({
         ...base,
         statusEntries: [entry({ status: 'renamed', area: 'staged', oldPath: 'src/old.ts' })]
       })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       isGitGutterEligible({
         ...base,
         statusEntries: [entry({ status: 'copied', area: 'staged', oldPath: 'src/source.ts' })]
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('refuses on conflict-review and check-details tabs', () => {
