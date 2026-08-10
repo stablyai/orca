@@ -14766,6 +14766,27 @@
       "showIdleCopy": "包括已安静 30 分钟且未报告完成的智能体。默认隐藏。"
     }
   },
+  "editorPopout": {
+    "openInNewWindow": "在新窗口中打开",
+    "openFailed": "无法在新窗口中打开此文件。",
+    "externalChange": "此文件已在独立编辑器外部发生更改。请在保存前重新打开窗口。",
+    "binarySaveUnsupported": "无法在此处保存二进制文件。",
+    "binaryEditUnsupported": "无法在此处编辑二进制文件。",
+    "saveFailed": "无法保存此文件。如果远程连接发生变化，请重新打开窗口后再试。",
+    "reloadDirty": "重新加载此文件前，请保存或放弃更改。",
+    "reloadFailed": "无法重新加载此文件。如果远程连接发生变化，请重新打开窗口后再试。",
+    "save": "保存",
+    "discard": "不保存",
+    "cancel": "取消",
+    "unsavedChanges": "未保存的更改",
+    "closeConfirmTitle": "要保存对 {{name}} 的更改吗？",
+    "closeConfirmMessage": "如果不保存就关闭此窗口，你的更改将丢失。",
+    "stateUnavailable": "无法获取独立编辑器状态。",
+    "recoverableError": {
+      "title": "Orca 编辑器遇到错误。",
+      "description": "独立编辑器无法完成渲染。请重新打开文件后再试。"
+    }
+  },
   "dashboard": {
     "sidebar": {
       "label": "智能体仪表盘"

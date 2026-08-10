@@ -1,0 +1,226 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { EditorPopoutOpenRequest } from '../../shared/editor-popout'
+
+const { instances, BrowserWindowMock, showMessageBoxMock, translateMainMock } = vi.hoisted(() => {
+  const created: FakeWindow[] = []
+  let nextWebContentsId = 100
+
+  class FakeWindow {
+    options: Electron.BrowserWindowConstructorOptions
+    private handlers = new Map<string, ((...args: unknown[]) => void)[]>()
+    destroyed = false
+    minimized = false
+    webContents = {
+      id: nextWebContentsId++,
+      session: {
+        setPermissionRequestHandler: vi.fn(),
+        setPermissionCheckHandler: vi.fn()
+      },
+      send: vi.fn(),
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false)
+    }
+    focus = vi.fn()
+    restore = vi.fn(() => {
+      this.minimized = false
+    })
+    show = vi.fn()
+    loadFile = vi.fn()
+    loadURL = vi.fn()
+
+    constructor(options: Electron.BrowserWindowConstructorOptions) {
+      this.options = options
+      created.push(this)
+    }
+
+    on(event: string, handler: (...args: unknown[]) => void): this {
+      const handlers = this.handlers.get(event) ?? []
+      handlers.push(handler)
+      this.handlers.set(event, handlers)
+      return this
+    }
+
+    once(event: string, handler: (...args: unknown[]) => void): this {
+      return this.on(event, handler)
+    }
+
+    emit(event: string, ...args: unknown[]): void {
+      for (const handler of this.handlers.get(event) ?? []) {
+        handler(...args)
+      }
+    }
+
+    isDestroyed(): boolean {
+      return this.destroyed
+    }
+
+    isMinimized(): boolean {
+      return this.minimized
+    }
+
+    close = vi.fn(() => {
+      this.emit('close', { preventDefault: vi.fn() })
+      this.destroyed = true
+      this.emit('closed')
+    })
+  }
+
+  return {
+    instances: created,
+    BrowserWindowMock: FakeWindow,
+    showMessageBoxMock: vi.fn(),
+    translateMainMock: vi.fn((key: string) => `translated:${key}`)
+  }
+})
+
+vi.mock('electron', () => ({
+  BrowserWindow: BrowserWindowMock,
+  dialog: { showMessageBox: showMessageBoxMock },
+  nativeTheme: { shouldUseDarkColors: true }
+}))
+
+vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
+vi.mock('../i18n/main-i18n', () => ({ translateMain: translateMainMock }))
+vi.mock('./privileged-window-navigation', () => ({
+  installPrivilegedWindowNavigationPolicy: vi.fn()
+}))
+
+import {
+  closeAllEditorPopouts,
+  completeEditorPopoutSaveAndClose,
+  createOrFocusEditorPopout,
+  getEditorPopoutRequest,
+  setEditorPopoutDirty
+} from './editor-popout-window'
+
+const request = {
+  document: {
+    id: '/workspace/note.md',
+    filePath: '/workspace/note.md',
+    relativePath: 'note.md',
+    worktreeId: 'repo:main',
+    language: 'markdown'
+  },
+  content: '# Draft\n',
+  savedContent: '# Saved\n',
+  viewMode: 'source',
+  showFrontmatter: true,
+  operationContext: {
+    settings: { activeRuntimeEnvironmentId: null },
+    worktreeId: 'repo:main',
+    worktreePath: '/workspace',
+    expectedExecutionHostId: 'local'
+  }
+} satisfies EditorPopoutOpenRequest
+
+describe('editor popout window', () => {
+  beforeEach(() => {
+    instances.length = 0
+    vi.clearAllMocks()
+    vi.stubEnv('ELECTRON_RENDERER_URL', '')
+  })
+
+  afterEach(() => {
+    closeAllEditorPopouts()
+    vi.unstubAllEnvs()
+  })
+
+  it('creates a native detached editor and exposes state only to its renderer', () => {
+    createOrFocusEditorPopout(request)
+    const window = instances[0]
+
+    expect(instances).toHaveLength(1)
+    expect(window.options.title).toBe('note.md - Orca')
+    expect(window.options.webPreferences?.partition).toBe('orca-editor-popout')
+    expect(window.loadFile).toHaveBeenCalledWith(expect.stringContaining('popout.html'), {
+      search: 'surface=editor'
+    })
+    expect(getEditorPopoutRequest(window.webContents as never)).toEqual(request)
+    expect(getEditorPopoutRequest({ id: 999 } as never)).toBeNull()
+  })
+
+  it('focuses the existing window for the same owned document', () => {
+    createOrFocusEditorPopout(request)
+    const first = instances[0]
+    const second = createOrFocusEditorPopout(request)
+
+    expect(second).toBe(first)
+    expect(instances).toHaveLength(1)
+    expect(first.focus).toHaveBeenCalledOnce()
+  })
+
+  it('asks the detached renderer to save before closing a dirty document', async () => {
+    showMessageBoxMock.mockResolvedValue({ response: 0 })
+    createOrFocusEditorPopout(request)
+    const window = instances[0]
+    setEditorPopoutDirty(window.webContents as never, true)
+    const closeEvent = { preventDefault: vi.fn() }
+
+    window.emit('close', closeEvent)
+    await Promise.resolve()
+
+    expect(closeEvent.preventDefault).toHaveBeenCalledOnce()
+    expect(showMessageBoxMock).toHaveBeenCalledWith(window, {
+      type: 'warning',
+      buttons: [
+        'translated:editorPopout.save',
+        'translated:editorPopout.cancel',
+        'translated:editorPopout.discard'
+      ],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+      title: 'translated:editorPopout.unsavedChanges',
+      message: 'translated:editorPopout.closeConfirmTitle',
+      detail: 'translated:editorPopout.closeConfirmMessage'
+    })
+    expect(window.webContents.send).toHaveBeenCalledWith('editorPopout:saveAndClose')
+  })
+
+  it('keeps one close dialog open until the requested save finishes', async () => {
+    showMessageBoxMock.mockResolvedValue({ response: 0 })
+    createOrFocusEditorPopout(request)
+    const window = instances[0]
+    const closeEvent = { preventDefault: vi.fn() }
+
+    window.emit('close', closeEvent)
+    await Promise.resolve()
+    window.emit('close', closeEvent)
+    await Promise.resolve()
+
+    expect(showMessageBoxMock).toHaveBeenCalledOnce()
+
+    completeEditorPopoutSaveAndClose(window.webContents as never, false)
+    window.emit('close', closeEvent)
+    await Promise.resolve()
+
+    expect(showMessageBoxMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('closes after the renderer confirms the requested save', async () => {
+    showMessageBoxMock.mockResolvedValue({ response: 0 })
+    createOrFocusEditorPopout(request)
+    const window = instances[0]
+
+    window.emit('close', { preventDefault: vi.fn() })
+    await Promise.resolve()
+    completeEditorPopoutSaveAndClose(window.webContents as never, true)
+
+    expect(window.close).toHaveBeenCalledOnce()
+    expect(window.destroyed).toBe(true)
+  })
+
+  it('cleans up without reading destroyed window contents', () => {
+    createOrFocusEditorPopout(request)
+    const window = instances[0]
+    const sender = window.webContents
+    Object.defineProperty(window, 'webContents', {
+      get: () => {
+        throw new TypeError('Object has been destroyed')
+      }
+    })
+
+    expect(() => window.emit('closed')).not.toThrow()
+    expect(getEditorPopoutRequest(sender as never)).toBeNull()
+  })
+})

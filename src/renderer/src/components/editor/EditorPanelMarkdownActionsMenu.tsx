@@ -25,6 +25,7 @@ type EditorPanelMarkdownActionsMenuProps = {
   onToggleEditorWordWrap: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
+  onOpenMarkdownInNewWindow?: () => void
 }
 
 export function EditorPanelMarkdownActionsMenu({
@@ -39,10 +40,14 @@ export function EditorPanelMarkdownActionsMenu({
   onToggleDiffWordWrap,
   onToggleEditorWordWrap,
   onToggleMarkdownFrontmatter,
-  onExportMarkdownToPdf
+  onExportMarkdownToPdf,
+  onOpenMarkdownInNewWindow
 }: EditorPanelMarkdownActionsMenuProps): React.JSX.Element | null {
   const hasMarkdownActions =
-    isMarkdown && (shouldShowMarkdownExportAction || canShowMarkdownFrontmatterToggle)
+    isMarkdown &&
+    (shouldShowMarkdownExportAction ||
+      canShowMarkdownFrontmatterToggle ||
+      Boolean(onOpenMarkdownInNewWindow))
   // Why: normal files always get Word Wrap so long/structured lines can unwrap without Settings (#9974).
   const wordWrapChecked = isDiffSurface ? diffWordWrap : editorWordWrap
   const onToggleWordWrap = isDiffSurface ? onToggleDiffWordWrap : onToggleEditorWordWrap
@@ -73,6 +78,17 @@ export function EditorPanelMarkdownActionsMenu({
           )}
         </DropdownMenuCheckboxItem>
         {hasMarkdownActions ? <DropdownMenuSeparator /> : null}
+        {isMarkdown && !isDiffSurface && onOpenMarkdownInNewWindow ? (
+          <DropdownMenuItem onSelect={onOpenMarkdownInNewWindow}>
+            {translate('editorPopout.openInNewWindow', 'Open in New Window')}
+          </DropdownMenuItem>
+        ) : null}
+        {isMarkdown &&
+        !isDiffSurface &&
+        onOpenMarkdownInNewWindow &&
+        (canShowMarkdownFrontmatterToggle || shouldShowMarkdownExportAction) ? (
+          <DropdownMenuSeparator />
+        ) : null}
         {canShowMarkdownFrontmatterToggle ? (
           <>
             <DropdownMenuItem

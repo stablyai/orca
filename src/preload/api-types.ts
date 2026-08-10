@@ -16,6 +16,7 @@ import type {
   DashboardSnapshot,
   DashboardSpawnAgentArgs
 } from '../shared/dashboard-snapshot'
+import type { EditorPopoutOpenRequest } from '../shared/editor-popout'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -2541,6 +2542,13 @@ export type PreloadApi = {
     ackAgent: (paneKey: string) => Promise<void>
     spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
     sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>
+  }
+  editorPopout: {
+    open: (request: EditorPopoutOpenRequest) => Promise<void>
+    getState: () => Promise<EditorPopoutOpenRequest | null>
+    setDirty: (dirty: boolean) => Promise<void>
+    completeSaveAndClose: (saved: boolean) => Promise<void>
+    onSaveAndClose: (callback: () => void) => () => void
   }
   terminalPreview: {
     connect: (

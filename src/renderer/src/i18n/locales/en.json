@@ -15387,6 +15387,27 @@
     },
     "settingsLabel": "Agent Dashboard settings"
   },
+  "editorPopout": {
+    "openInNewWindow": "Open in New Window",
+    "openFailed": "Could not open this file in a new window.",
+    "externalChange": "This file changed outside the detached editor. Reopen it before saving.",
+    "binarySaveUnsupported": "Binary files cannot be saved here.",
+    "binaryEditUnsupported": "Binary files cannot be edited here.",
+    "saveFailed": "Could not save this file. If its remote connection changed, reopen the window and try again.",
+    "reloadDirty": "Save or discard your changes before reloading this file.",
+    "reloadFailed": "Could not reload this file. If its remote connection changed, reopen the window and try again.",
+    "save": "Save",
+    "discard": "Don't Save",
+    "cancel": "Cancel",
+    "unsavedChanges": "Unsaved Changes",
+    "closeConfirmTitle": "Save changes to {{name}}?",
+    "closeConfirmMessage": "Your changes will be lost if you close this window without saving.",
+    "stateUnavailable": "The detached editor state is unavailable.",
+    "recoverableError": {
+      "title": "Orca editor hit an error.",
+      "description": "The detached editor could not finish rendering. Reopen the file and try again."
+    }
+  },
   "dashboard": {
     "sidebar": {
       "label": "Agent Dashboard"

@@ -43,6 +43,7 @@ type EditorPanelShellProps = {
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
   createMarkdownArtifactRequest?: () => Promise<ArtifactWriteRequest>
+  onOpenMarkdownInNewWindow?: () => void
   onContentChange: (content: string) => void
   onContentChangeForFile: (file: OpenFile, content: string) => void
   onDirtyStateHint: (dirty: boolean) => void
@@ -84,6 +85,7 @@ export function EditorPanelShell({
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf,
   createMarkdownArtifactRequest,
+  onOpenMarkdownInNewWindow,
   onContentChange,
   onContentChangeForFile,
   onDirtyStateHint,
@@ -131,6 +133,7 @@ export function EditorPanelShell({
           onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
           onExportMarkdownToPdf={onExportMarkdownToPdf}
           createMarkdownArtifactRequest={createMarkdownArtifactRequest}
+          onOpenMarkdownInNewWindow={onOpenMarkdownInNewWindow}
         />
       )}
       <Suspense fallback={<EditorLoadingFallback />}>

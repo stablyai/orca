@@ -10,6 +10,7 @@ import type {
   DashboardSnapshot,
   DashboardSpawnAgentArgs
 } from '../shared/dashboard-snapshot'
+import type { EditorPopoutOpenRequest } from '../shared/editor-popout'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -2360,6 +2361,21 @@ const api = {
       ipcRenderer.invoke('dashboardPopout:spawnAgent', args),
     sleepWorkspace: (args: DashboardSleepWorkspaceArgs): Promise<void> =>
       ipcRenderer.invoke('dashboardPopout:sleepWorkspace', args)
+  },
+
+  editorPopout: {
+    open: (request: EditorPopoutOpenRequest): Promise<void> =>
+      ipcRenderer.invoke('editorPopout:open', request),
+    getState: (): Promise<EditorPopoutOpenRequest | null> =>
+      ipcRenderer.invoke('editorPopout:getState'),
+    setDirty: (dirty: boolean): Promise<void> => ipcRenderer.invoke('editorPopout:setDirty', dirty),
+    completeSaveAndClose: (saved: boolean): Promise<void> =>
+      ipcRenderer.invoke('editorPopout:completeSaveAndClose', saved),
+    onSaveAndClose: (callback: () => void): (() => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('editorPopout:saveAndClose', listener)
+      return () => ipcRenderer.removeListener('editorPopout:saveAndClose', listener)
+    }
   },
 
   terminalPreview: {
