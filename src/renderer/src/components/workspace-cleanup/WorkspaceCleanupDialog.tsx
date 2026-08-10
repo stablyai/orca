@@ -681,13 +681,15 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
         removalInFlightRef.current = false
       },
       onLateResult: (result) => {
+        if (!mountedRef.current || removalBatchIdRef.current !== removalBatchId) {
+          return
+        }
         for (const failure of result.failures) {
           // Why: a late failure can come from a hung preflight whose row never
           // reached 'deleting'; clear its queued overlay like every other path.
+          // Guarded by the batch-id check above so a stale batch's late failure
+          // cannot clear a newer batch's re-queued delete state for the same id.
           clearQueuedDeleteState(failure.worktreeId)
-        }
-        if (!mountedRef.current || removalBatchIdRef.current !== removalBatchId) {
-          return
         }
         setRowFailures((current) => {
           const next = { ...current }
