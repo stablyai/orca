@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
+  UI_LANGUAGE_PORTUGUESE,
   UI_LANGUAGE_SPANISH
 } from '../../../shared/ui-language'
 import { i18n, setRendererPluginLanguagePacks, setRendererUiLanguage } from './i18n'
@@ -30,6 +31,12 @@ describe('renderer i18n lazy locale loading', () => {
     await setRendererUiLanguage(UI_LANGUAGE_SPANISH)
     expect(i18n.language).toBe('es')
     expect(i18n.t('menu.file', { defaultValue: 'File' })).toBe('Archivo')
+  })
+
+  it('lazy-loads Brazilian Portuguese via setRendererUiLanguage before it resolves', async () => {
+    await setRendererUiLanguage(UI_LANGUAGE_PORTUGUESE)
+    expect(i18n.language).toBe('pt')
+    expect(i18n.t('menu.file', { defaultValue: 'File' })).toBe('Arquivo')
   })
 
   it('lazy-loads a catalog through a direct changeLanguage call', async () => {

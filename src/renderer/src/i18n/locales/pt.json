@@ -345,7 +345,7 @@
           "28810273af": "Kimi",
           "739a930554": "Droid",
           "667c104cff": "Cursor",
-          "9e2a9bb87b": "Continuar",
+          "9e2a9bb87b": "Continue",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
           "cbaf0c2e0b": "Cline",
@@ -836,11 +836,6 @@
         "83ac703dda": "Responsáveis",
         "00ccdf9b5a": "Status",
         "2aa9acdf34": "Editar rótulos no GitHub",
-        "d23bbb6416": "{{value0}} ignoradas",
-        "18f80e1329": "{{value0}} pendentes",
-        "b1ac991806": "{{value0}} falhando",
-        "checksNeedActionChip": "{{value0}} exigem ação",
-        "311d0cee55": "{{value0}} passando",
         "e52bed9264": "Nenhuma verificação reportada ainda",
         "90020cc1f3": "Este pull request ainda não tem verificações reportadas.",
         "ecffebc251": "Nenhuma verificação encontrada",
@@ -983,7 +978,7 @@
         "68796dafa0": "pr",
         "b1157c78ff": "sheet",
         "04539beb48": "issue",
-        "773ff70035": "unknown",
+        "773ff70035": "desconhecido",
         "88fd82474d": "page",
         "d0a05e73f5": "compacto",
         "ce8a85d209": "padrão",
@@ -1334,11 +1329,6 @@
         "bc215fea4d": "+ Rótulo",
         "b936cc51a4": "Fechado",
         "7b8f6bf6d8": "Aberto",
-        "e6ad0a8d06": "{{value0}} ignoradas",
-        "88267924d5": "{{value0}} pendentes",
-        "ae2a34c7b8": "{{value0}} falhando",
-        "checksNeedActionChip": "{{value0}} exigem ação",
-        "7c5035931a": "{{value0}} passando",
         "a18d01cda3": "Nenhuma verificação reportada ainda",
         "3912daf310": "Este pull request ainda não tem verificações reportadas.",
         "45877f5089": "Nenhuma verificação encontrada",
@@ -1466,7 +1456,7 @@
         "1ff5d979df": "Ninguém atribuído",
         "checkActionRequiredHint": "Esta verificação precisa de uma ação manual no GitHub (por exemplo, aprovar a execução do workflow) para liberar o merge.",
         "791ddede19": "comentário L",
-        "77d9388fb0": "unknown",
+        "77d9388fb0": "desconhecido",
         "b6bda618cf": "compacto",
         "61a8c69a33": "page",
         "6568ae8ece": "padrão",
@@ -1784,7 +1774,7 @@
         "closeAsCompleted": "Fechar como concluída",
         "closeAsCompletedDescription": "Pronta, fechada, corrigida, resolvida",
         "closeAsNotPlanned": "Fechar como não planejada",
-        "closeAsNotPlannedDescription": "Não será corrigida, não reproduz, obsoleta",
+        "closeAsNotPlannedDescription": "Não será corrigida, não reproduzível, obsoleta",
         "closeAsDuplicate": "Fechar como duplicada",
         "closeAsDuplicateDescription": "Duplicada de outra issue neste repositório",
         "duplicateIssueNumberPlaceholder": "Número da issue",
@@ -1914,8 +1904,6 @@
         "556e7232ca": "Atual",
         "684e8d7bc2": "Reunindo seus worktrees recentes e abas abertas.",
         "ff908adfe9": "Carregando destinos de salto",
-        "1ebe225fee": "Buscar worktrees, configurações, abas e ações...",
-        "4e4ff044d5": "Buscar worktrees, configurações, abas e ações",
         "4ee378034d": "Ir para...",
         "f7fda8d562": "Crie um worktree ou abra uma aba no Orca para começar.",
         "1628fd7dfa": "Nenhum worktree ativo, configuração, ação ou aba aberta",
@@ -2247,7 +2235,7 @@
           },
           "notPlanned": {
             "label": "Fechar como não planejada",
-            "description": "Não será corrigida, não reproduz, obsoleta"
+            "description": "Não será corrigida, não reproduzível, obsoleta"
           },
           "duplicate": {
             "label": "Fechar como duplicada",
@@ -2906,8 +2894,7 @@
             "d62d63b807": "Criar arquivo",
             "25dc1cd653": "Abrir arquivo",
             "7cdf8ee0c8": "Abrir URL",
-            "b27864279e": "Iniciar agente",
-            "39676a184c": "Abrir qualquer arquivo, URL, agente, ..."
+            "b27864279e": "Iniciar agente"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "Comando",
@@ -2941,7 +2928,6 @@
                 "classifier": {
                   "42e6262ae9": "Nenhuma ação disponível.",
                   "097a982ee0": "Carregando arquivos...",
-                  "5a9c83c04b": "Abrir qualquer arquivo, URL, agente, ...",
                   "90eb94dc48": "Informe uma URL http:// ou https://.",
                   "5553b283ce": "Informe uma URL ou caminho de arquivo.",
                   "queryTooLarge": "O texto de busca é grande demais.",
@@ -3760,7 +3746,7 @@
           "chipCurrent": "Atual",
           "chipUnrecognized": "Não reconhecido",
           "chipInaccessible": "Inacessível",
-          "chipDuplicate": "Duplicar",
+          "chipDuplicate": "Duplicado",
           "chipExternalLink": "Link externo",
           "chipBrokenLink": "Link quebrado",
           "chipReadOnly": "Somente leitura",
@@ -3785,11 +3771,6 @@
           "updateMany": "{{value0}} skills podem ser atualizadas com segurança",
           "success": "Todas as skills do Orca instaladas estão atualizadas.",
           "attention": "Algumas skills do Orca instaladas ficaram fora da atualização.",
-          "attentionDescription": "Abra os detalhes da atualização para ver por que cada uma foi pulada.",
-          "details": "Detalhes da atualização",
-          "terminalTitle": "Atualizar as skills do Orca",
-          "terminalDescription": "Revise o comando pré-preenchido e pressione Enter para executá-lo.",
-          "terminalAria": "Terminal de atualização de skills do Orca",
           "checkNow": "Verificar de novo",
           "close": "Fechar"
         },
@@ -4273,19 +4254,6 @@
           "folderPathIdentity": "Branch / caminho da pasta",
           "cli": "CLI do Orca"
         },
-        "SshDisconnectedDialog": {
-          "ca4a7892af": "Conectando...",
-          "89385db176": "Dispensar",
-          "656368f3a2": "A reconexão falhou",
-          "376bed88e5": "A conexão com o host remoto encontrou um erro.",
-          "4afcca1d24": "Reconectar",
-          "11552bf786": "SSH desconectado",
-          "cb5938ae79": "Reconectando...",
-          "disconnected": "Este host SSH não está conectado.",
-          "reconnecting": "Reconectando ao host remoto...",
-          "reconnectionFailed": "A reconexão ao host remoto falhou.",
-          "authFailed": "A autenticação no host remoto falhou."
-        },
         "SshTargetRow": {
           "4677394048": "Conectando…",
           "75ad429b5d": "Conectar"
@@ -4591,8 +4559,8 @@
               "ead7b8ee15": "Ele tem arquivos alterados. Use Forçar exclusão para excluir mesmo assim.",
               "905fc8efac": "O Git já removeu este workspace. Use Forçar exclusão para limpá-lo do Orca.",
               "0899ebdb28": "O Git já esqueceu este workspace, mas o diretório dele continua em disco. Use Forçar exclusão para remover o diretório órfão.",
-              "locked": "Este workspace está travado pelo Git. Rode git worktree unlock <caminho-do-worktree> a partir do repositório dele e tente excluir de novo.",
-              "lockedReason": "Este workspace está travado pelo Git. O Git reportou: {{value0}}. Rode git worktree unlock <caminho-do-worktree> a partir do repositório dele e tente excluir de novo."
+              "locked": "Este workspace está travado pelo Git. Rode git worktree unlock <worktree-path> a partir do repositório dele e tente excluir de novo.",
+              "lockedReason": "Este workspace está travado pelo Git. O Git reportou: {{value0}}. Rode git worktree unlock <worktree-path> a partir do repositório dele e tente excluir de novo."
             }
           }
         },
@@ -4907,8 +4875,6 @@
           "sshImportAlreadySynced": "~/.ssh/config já está sincronizado.",
           "sshImportSynced": "{{value0}} host{{value1}} sincronizado(s).",
           "sshImportFailed": "Falha ao importar a configuração SSH.",
-          "importing": "Importando...",
-          "importSshConfig": "Importar ~/.ssh/config",
           "advanced": "Avançado"
         },
         "ForgetSshWorkspaceDialog": {
@@ -5501,7 +5467,7 @@
           "34d0348e34": "gerar",
           "8cd2be0948": "mensagem",
           "ca433708cb": "commit",
-          "0b7eafe55f": "ia",
+          "0b7eafe55f": "ai",
           "2c5436c018": "abrir",
           "6c84ba6de3": "modelo",
           "ebed4d2a29": "rascunho",
@@ -5528,7 +5494,7 @@
           "5c45349665": "Não foi possível abrir as permissões de Uso do computador",
           "7801ac08ec": "As permissões de Uso do computador só são necessárias no macOS",
           "740766c291": "A configuração do Uso do computador já está concluída",
-          "697005758f": "Privacidade e Segurança do macOS aberto",
+          "697005758f": "As configurações de Privacidade e Segurança do macOS foram abertas.",
           "2168fa5ab0": "Não foi possível carregar as permissões de Uso do computador",
           "0c9a33f468": "Capturar janelas de aplicativos para que os agentes inspecionem o estado visual.",
           "07bbe4c4cb": "Capturas de tela",
@@ -5544,7 +5510,7 @@
           "6f011b9bf6": "As ferramentas de terminal herdam o envelope de privacidade do Orca no macOS.",
           "bfa3402305": "Não foi possível solicitar a permissão",
           "66e94d6cf3": "Solicitação de permissão enviada",
-          "fa809e8ada": "Privacidade e Segurança do macOS aberto",
+          "fa809e8ada": "As configurações de Privacidade e Segurança do macOS foram abertas.",
           "48d87edcd2": "Permissão concedida",
           "a552887288": "Não foi possível carregar as permissões de desenvolvedor",
           "4cfaa7e98a": "Ferramentas de dispositivos Bluetooth e experimentos com hardware local.",
@@ -5736,7 +5702,7 @@
           "31fd7150cf": "Verificando atualizações...",
           "3394d1f663": "verificando",
           "d69a09b672": "As atualizações são verificadas automaticamente na inicialização.",
-          "7173352632": "ocioso"
+          "7173352632": "idle"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Escolha os apps disponíveis no menu Abrir em de um workspace.",
@@ -6938,17 +6904,10 @@
           "53e9aabfc0": "Usa multiplexação do OpenSSH quando disponível. Desligue para hosts com restrições SSH personalizadas."
         },
         "TasksPane": {
-          "3a72b9745e": "Escolha quais provedores de tarefas aparecem na página Tarefas e nos atalhos da barra lateral.",
           "f71d8a9dd3": "Provedores de tarefas",
-          "71644aba56": "Escolha quais provedores de tarefas aparecem no seletor de origem da página Tarefas e nos atalhos da barra lateral. Pelo menos um provedor precisa continuar visível.",
-          "93e72ef659": "Fontes de tarefas",
-          "8e1305fcc6": "Mostrar o Jira no seletor de origem de Tarefas e nos atalhos da barra lateral.",
           "6b23a34f6d": "Jira",
-          "e4170c9615": "Mostrar o Linear no seletor de origem de Tarefas e nos atalhos da barra lateral.",
           "09ae2d7c51": "Linear",
-          "dd67a1b6e1": "Mostrar o GitLab no seletor de origem de Tarefas e nos atalhos da barra lateral.",
           "7c5d7fdc20": "GitLab",
-          "1db47236cd": "Mostrar o GitHub no seletor de origem de Tarefas e nos atalhos da barra lateral.",
           "e14063e727": "GitHub"
         },
         "TerminalAppearanceSection": {
@@ -7232,7 +7191,7 @@
           "901985625d": "alternar",
           "ad5d036ecc": "Não foi possível solicitar a permissão de microfone. O ditado por voz não foi ativado.",
           "f9a9cf6928": "A permissão de microfone é necessária antes de ativar o ditado por voz.",
-          "1eac933202": "Privacidade e Segurança do macOS aberto. Ative o ditado de novo depois de conceder o acesso.",
+          "1eac933202": "As configurações de Privacidade e Segurança do macOS foram abertas. Ative o ditado de novo depois de conceder o acesso.",
           "cd9fe37556": "Permissão de microfone concedida"
         },
         "WorktreeSymlinksSection": {
@@ -7712,7 +7671,7 @@
                 "542e1a00a7": "codex",
                 "f121bec167": "claude",
                 "93e5210da8": "mensagem",
-                "c33cb1b982": "ia",
+                "c33cb1b982": "ai",
                 "0b946b2abe": "Adiciona recipes de ação para commit, pull request, nome de branch e correções no controle de versão.",
                 "24dbdfca78": "Mostrar as ações de IA do controle de versão"
               }
@@ -8308,7 +8267,7 @@
             "d3f1c48677": "Notificar quando um terminal em segundo plano emitir um caractere de sino.",
             "a5edee1d99": "Sino do terminal",
             "193e1f107c": "tarefa",
-            "dd9d3e5f0f": "ocioso",
+            "dd9d3e5f0f": "idle",
             "5f7472d3fb": "concluído",
             "7fa07e9600": "agente",
             "10d83ef8dc": "Notificar quando um agente de código passar de trabalhando para ocioso.",
@@ -8461,7 +8420,7 @@
             "8068d8d0f1": "pr",
             "5ff7fe1ade": "pull request",
             "eec39b3de6": "mensagem de commit",
-            "cfad7ce5f3": "ia",
+            "cfad7ce5f3": "ai",
             "a47f51127e": "controle de versão",
             "6cc5c65e64": "Substituições de geração por Git específicas do projeto.",
             "eec3995dc6": "Git AI Author",
@@ -8588,7 +8547,6 @@
             "3d81c26d78": "origem",
             "cf0e3e0c2f": "provedor",
             "2ec54bee51": "tarefas",
-            "765f0c544d": "Escolha quais provedores de tarefas aparecem na página Tarefas e nos atalhos da barra lateral.",
             "5b8e4aace5": "Provedores de tarefas"
           }
         },
@@ -9035,8 +8993,7 @@
           "unavailableDescription": "As permissões de Uso do computador estão indisponíveis porque {{value0}}.",
           "readyTitle": "O Uso do computador está pronto.",
           "readyDescription": "Os agentes podem inspecionar e operar janelas de aplicativos quando você pedir.",
-          "permissionsTitle": "Conclua a configuração para usar apps locais.",
-          "permissionsRequired": "{{value0}} permissão{{value1}} necessária antes de os agentes poderem operar janelas de aplicativos."
+          "permissionsTitle": "Conclua a configuração para usar apps locais."
         },
         "providerAccountScope": {
           "remoteServer": "Servidor remoto: {{value0}}",
@@ -9253,14 +9210,12 @@
         },
         "ephemeralVms": {
           "search": {
-            "title": "Ambientes por workspace",
             "description": "Veja como as recipes do repositório dão a cada workspace um ambiente próprio, sob demanda e descartável."
           }
         },
         "EphemeralVmsPane": {
           "loadError": "Não foi possível carregar as recipes.",
           "copyError": "Não foi possível copiar o prompt.",
-          "skillTitle": "Skill de ambientes por workspace",
           "skillDescription": "Configura, constrói, autentica e valida as recipes de ambiente pertencentes ao repositório.",
           "whatTitle": "O que a skill faz, junto com você",
           "whatScaffold": "Escreve a recipe e os scripts do seu provedor — conectado por um servidor Orca ou SSH.",
@@ -9271,13 +9226,11 @@
           "copied": "Copiado",
           "recipes": "Recipes",
           "recipesHelp": "As recipes do orca.yaml e dos plugins ativos aparecem aqui, prontas para iniciar um workspace.",
-          "refresh": "Atualizar as recipes de VM efêmera",
           "checking": "Verificando recipes...",
           "none": "Nenhuma recipe encontrada ainda."
         },
         "ephemeralVmsExperimentalSetting": {
-          "description": "Mostra os controles de configuração e os destinos de execução para ambientes sob demanda que pertencem ao repositório.",
-          "toggleLabel": "Alternar os ambientes por workspace"
+          "description": "Mostra os controles de configuração e os destinos de execução para ambientes sob demanda que pertencem ao repositório."
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agente",
@@ -9351,11 +9304,6 @@
           "instructionalTitle": "Revisar o conteúdo do plugin",
           "subtitle": "{{value0}} v{{value1}} · {{value2}}",
           "reconsent": "As permissões, o nível de confiança do worker ou o conteúdo instrucional mudaram desde a sua última revisão deste plugin. Revise de novo antes de ele poder rodar.",
-          "source": "Origem",
-          "unknownSource": "Indisponível",
-          "commit": "Commit",
-          "localCommit": "Indisponível (pasta local)",
-          "trust": "Nível de confiança",
           "capabilities": "Este plugin pode",
           "warning": "Estas permissões limitam como o plugin usa a API do Orca. O worker dele ainda roda como um processo normal no seu computador, com acesso total aos seus arquivos, rede e outros processos.",
           "enable": "Ativar plugin",
@@ -9371,7 +9319,6 @@
             "eventsSubscribe": "Receber notificação quando worktrees forem criados ou removidos e quando o status dos agentes mudar",
             "settingsOwn": "Ler e alterar as próprias configurações do plugin"
           },
-          "skillWarning": "Este plugin instala skills instrucionais. Os agentes leem essas instruções e podem agir com base nelas, com toda a autoridade que você der ao agente.",
           "instructionalTrust": "Conteúdo instrucional — executa depois, sob a autoridade do usuário ou do agente",
           "declarativeTrust": "Conteúdo declarativo — sem código de plugin",
           "reviewTitle": "Revisar plugin",
@@ -9425,13 +9372,10 @@
           "disabled": "Desativado",
           "running": "Em execução",
           "enabled": "Ativado",
-          "workerTier": "worker em segundo plano",
-          "panelTier": "somente painel",
           "loadingLogs": "Carregando os logs…",
           "noLogs": "Nenhuma linha de log registrada.",
           "logCount": "Últimas {{value0}} de até 200 linhas retidas",
           "dev": "Dev",
-          "review": "Revisar permissões",
           "moreActions": "Mais ações para {{value0}}",
           "hideLogs": "Ocultar logs",
           "viewLogs": "Ver logs",
@@ -9462,9 +9406,6 @@
           "systemDescription": "Descobre os plugins instalados e permite ativá-los individualmente. Nada roda até você revisar e ativar. Os workers sempre rodam neste computador; as ações de workspace SSH passam pelo Orca.",
           "featureOff": "Ative o sistema de plugins para ver e gerenciar os plugins instalados. O que já estiver instalado continua em disco e desativado enquanto o sistema estiver desligado.",
           "loading": "Carregando os plugins…",
-          "installed": "Instalado",
-          "refresh": "Atualizar",
-          "tryAgain": "Tentar novamente",
           "empty": "Nenhum plugin instalado. Use Instalar plugin para adicionar um a partir de uma pasta local ou de uma ref git fixada.",
           "settingsUpdateFailed": "Não foi possível salvar as configurações do plugin.",
           "rollbackFailed": "Não foi possível reverter este plugin. Pode não haver uma versão imutável anterior disponível.",
@@ -9499,12 +9440,10 @@
           "suspend": "Suspender",
           "resume": "Retomar",
           "destroy": "Destruir",
-          "warning": "Este plugin instala recipes de VM. O Orca executa os comandos abaixo no seu desktop local quando você usa a ação de ciclo de vida correspondente.",
           "commandLabel": "{{value0}} · comando {{value1}}",
           "heading": "Comandos da recipe de VM"
         },
         "PluginKeybindingConsentPreview": {
-          "warning": "Este plugin adiciona atalhos de teclado. Os atalhos do plugin têm prioridade sobre os atalhos equivalentes do Orca enquanto ele estiver ativo.",
           "heading": "Atalhos de teclado",
           "worktree": "Só roda enquanto um workspace estiver ativo.",
           "global": "Roda no app sem precisar de um workspace ativo.",
@@ -9515,13 +9454,10 @@
           "refreshFailed": "Não foi possível atualizar os marketplaces. As listagens em cache continuam disponíveis.",
           "previewFailed": "Não foi possível preparar este plugin para revisão. Atualize o marketplace e tente novamente.",
           "installFailed": "Não foi possível instalar este plugin. A origem revisada pode ter mudado.",
-          "heading": "Marketplace",
           "manageSources": "Gerenciar origens",
           "refreshing": "Atualizando…",
           "refresh": "Atualizar",
           "loading": "Carregando os plugins do marketplace…",
-          "searchLabel": "Buscar plugins do marketplace",
-          "searchPlaceholder": "Buscar plugins, categorias ou publicadores",
           "tryAgain": "Tentar novamente",
           "noSources": "Adicione um marketplace Git oficial, da comunidade ou privado para navegar por plugins.",
           "addSource": "Adicionar marketplace",
@@ -9536,14 +9472,10 @@
         },
         "PluginMarketplaceListingRow": {
           "official": "Oficial",
-          "bundled": "Empacotado",
           "installed": "Instalado",
-          "marketplace": "{{value0}} · {{value1}}",
           "blocked": "Bloqueado pela lista de segurança do Orca: {{value0}}",
           "blockedAction": "Bloqueado",
           "checkUpdate": "Verificar atualização",
-          "installedAction": "Instalado",
-          "review": "Revisão",
           "noDescription": "Nenhuma descrição fornecida.",
           "install": "Instalar"
         },
@@ -9555,12 +9487,6 @@
           "panels": "{{value0}} painéis",
           "events": "{{value0}} inscrições em eventos",
           "worker": "Worker em segundo plano",
-          "official": "Oficial",
-          "bundled": "Empacotado",
-          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
-          "source": "Origem do plugin",
-          "commit": "Commit fixado",
-          "marketplaceCommit": "Commit do índice",
           "includes": "Inclui",
           "noContributions": "Apenas metadados do manifesto",
           "capabilities": "Acesso solicitado",
@@ -9570,9 +9496,7 @@
           "cancel": "Cancelar",
           "update": "Atualizar plugin",
           "install": "Instalar plugin",
-          "provenance": "Origem revisada",
           "close": "Fechar",
-          "upToDate": "Atualizado",
           "languagePacksOne": "1 pacote de idioma",
           "commandsOne": "1 comando",
           "keybindingsOne": "1 atalho de teclado",
@@ -9680,7 +9604,6 @@
           "title": "Linear",
           "description": "Dê aos agentes a skill de ler e atualizar os tickets do Linear vinculados.",
           "skillTitle": "Skill do Linear",
-          "skillDescription": "Permite que os agentes leiam tickets vinculados e publiquem atualizações no Linear pelo Orca.",
           "howToUse": "Como usar",
           "howToUseDescription": "Peça a um agente que trabalha em um worktree vinculado ao Linear para ler o contexto, publicar atualizações, mover o ticket ou anexar o PR.",
           "terminalTitle": "Configuração da skill do Linear",
@@ -9790,8 +9713,8 @@
             "f316a8ca2b": "Nenhum comentário não resolvido selecionado.",
             "d00ebdc402": "Resolver comentários de {{value0}} com IA",
             "ed3f79c031": "Revise o prompt antes de iniciar um agente. As threads selecionadas são marcadas como resolvidas após o início.",
-            "f273f2271c": "Agente iniciado. {{value0}} marcados como resolvidos, {{value1}} ignorados, {{value2}} com falha.",
-            "aa95b81a3a": "Agente iniciado. {{value0}} marcados como resolvidos, {{value1}} ignorados, {{value2}} com falha.",
+            "f273f2271c": "Agente iniciado. Resolvidos: {{value0}}; respondidos: {{value1}}; ignorados: {{value2}}; falhas: {{value3}}.{{value4}}",
+            "aa95b81a3a": "Agente iniciado. Resolvidos: {{value0}}; respondidos: {{value1}}; ignorados: {{value2}}; falhas: {{value3}}.",
             "495b2f8c4b": "O agente foi iniciado, mas não foi possível marcar os comentários selecionados como resolvidos.",
             "3c3ad3a1d2": "Agente iniciado. Nenhum comentário selecionado pode ser marcado como resolvido no host.",
             "review": {
@@ -9902,7 +9825,7 @@
             "d836037d02": "Commits",
             "8232c8b2f2": "Abrir commit {{value0}}: {{value1}}",
             "9a8b85882d": "carregando",
-            "62e685d5ec": "ocioso",
+            "62e685d5ec": "idle",
             "111e1d0db4": "erro",
             "e5e81e59a6": "Redimensionar commits",
             "6d1e0a7c3b": "Falha ao carregar os arquivos do commit"
@@ -10119,7 +10042,7 @@
             "8cde1a2fb0": "Preparar",
             "d54dd48b0b": "Descartar alterações",
             "989f3d5e34": "Restaurar arquivo",
-            "2830dd64a2": "deleted",
+            "2830dd64a2": "excluído",
             "11463f7a98": "Excluir arquivo não rastreado",
             "d62bc0c7d8": "não rastreado",
             "ab31221779": "Tirar pasta do stage",
@@ -10152,7 +10075,7 @@
             "48a003c1b1": "Alterações preparadas",
             "d4ef4bafc5": "Alterações",
             "522f44dce5": "Arquivos não rastreados",
-            "3636d0f686": "ready",
+            "3636d0f686": "pronto",
             "d2e9189866": "todos",
             "a0cc0e6b4e": "carregando",
             "9339382454": "Tirar tudo do stage",
@@ -10162,7 +10085,7 @@
             "9bb062a886": "sem commit",
             "9febd8ab5f": "create_pr",
             "f62ce91ade": "origin",
-            "3a231c845b": "unknown",
+            "3a231c845b": "desconhecido",
             "3baf6c77b4": "Copiar todas as notas para a área de transferência",
             "72f2bea3f4": "Expandir notas",
             "d13edef890": "Recolher notas",
@@ -10274,7 +10197,7 @@
             "b99c33cec5": "Configurações",
             "15c5d85706": "Agente",
             "3e8f21954f": "erro",
-            "74168d7ada": "ocioso",
+            "74168d7ada": "idle",
             "1d47db9bf0": "Nenhum agente ativo",
             "c7ff8cef11": "Detectando agentes...",
             "b0da3a4d3e": "Recipe de inicialização já salva",
@@ -10330,9 +10253,9 @@
                 "cbcc4ab3db": "Exibindo as 100 primeiras verificações",
                 "0dca6bfab5": "Abrir detalhes da verificação",
                 "991f50c7e4": "Nenhuma verificação configurada",
-                "9ad98f2a17": "pending",
-                "5e52f4ef7f": "failing",
-                "02ca4f9074": "passing",
+                "9ad98f2a17": "pendente",
+                "5e52f4ef7f": "falhando",
+                "02ca4f9074": "passando",
                 "e15a8b77ef": "Não há detalhes inline disponíveis para esta verificação.",
                 "679bf2093c": "Copiar trecho do log",
                 "d713f500b2": "Trecho do log",
@@ -10348,7 +10271,6 @@
                 "a54ae21c6f": "Status:",
                 "e4e3af15ee": "Ver detalhes completos",
                 "b8c4e2a1f7": "Ver logs completos",
-                "2524d1fb83": "O fim do log está disponível nos detalhes completos.",
                 "a2fb3f4408": "Exibindo os 100 primeiros jobs",
                 "df137989b3": "Exibindo as 20 primeiras anotações",
                 "1f2b980522": "Carregando detalhes da verificação…",
@@ -10372,7 +10294,7 @@
                 "95ad090b01": "thread",
                 "365254cc1b": "Reabrir",
                 "7f793b571d": "Arraste para redimensionar as verificações",
-                "ee07b33924": "unknown",
+                "ee07b33924": "desconhecido",
                 "cdbfda4dec": "Anotação",
                 "066fedd446": "Jobs que falharam",
                 "ae8a04ef17": "Os detalhes do arquivo em conflito estão indisponíveis",
@@ -11056,7 +10978,7 @@
           "icon": {
             "0ad395d475": "Caixa",
             "857977b901": "Formas",
-            "b1b8d99fc4": "IA",
+            "b1b8d99fc4": "AI",
             "137bdb1856": "Métricas",
             "d202c659a3": "Design",
             "c4fd14299d": "Empresa",
@@ -11354,7 +11276,6 @@
             "placeholder": "Escolher host"
           },
           "ProjectCombobox": {
-            "search": "Buscar projetos...",
             "empty": "Nenhum projeto corresponde à sua busca.",
             "addProject": "Adicionar um novo projeto"
           }
@@ -11377,7 +11298,6 @@
           "2f077ef4eb": ", e escaneie o código.",
           "3aa7bb2d8b": "Parear desktop",
           "d1495e5e64": "Abra o Orca Mobile, toque em",
-          "901c98bb93": "Parear este",
           "3960f5c339": "Passo 2 de 2",
           "3241f3c26a": "QR de instalação",
           "7af266b80d": "QR code de instalação",
@@ -11719,7 +11639,7 @@
           "FeatureTourPreview": {
             "1170621527": ">",
             "304ad0dfc1": "Pensando...",
-            "ef8b164dd1": "revisar src/auth",
+            "ef8b164dd1": "review src/auth",
             "952d3ddd9a": "sessão iniciada",
             "771d8881c2": "claude",
             "6ed43cb0e0": "dashboard.spec.ts",
@@ -12027,7 +11947,7 @@
             "bbb3f1e404": "Verificando",
             "48d87edcd2": "Concedido",
             "6db9a69f4e": "Recomendado",
-            "fa809e8ada": "Privacidade e Segurança do macOS aberto",
+            "fa809e8ada": "As configurações de Privacidade e Segurança do macOS foram abertas.",
             "bfa3402305": "Não foi possível solicitar a permissão",
             "c566bca278": "Acesso total ao disco",
             "0d6efe9cf4": "Recomendado no macOS quando projetos ou worktrees ficam em pastas protegidas.",
@@ -12524,7 +12444,7 @@
           "36536ad539": "Java",
           "8c4a3fa02d": "HTML",
           "706fd85738": "GraphQL",
-          "edfcc64182": "Ir",
+          "edfcc64182": "Go",
           "bf6ee5caaa": "Diff",
           "026653f21f": "CSS",
           "4daed43ae3": "C++",
@@ -12747,7 +12667,7 @@
           "5e2a9c3f88": "Abrir o arquivo nesta linha",
           "066fedd446": "Jobs que falharam",
           "49731703ea": "Jobs",
-          "ee07b33924": "unknown",
+          "ee07b33924": "desconhecido",
           "07eccfa397": "Não há detalhes disponíveis para esta verificação.",
           "a916648574": "Abrir detalhes",
           "834cb3f23d": "Corrigir com IA",
@@ -12761,7 +12681,7 @@
         "CheckRunJobs": {
           "1c0a4d7e02": "concluído com sucesso",
           "2d3b8f1a55": "ignorado",
-          "3e6c9a2b71": "pending",
+          "3e6c9a2b71": "pendente",
           "4f7d0c3e88": "passos falharam",
           "5a8e1d4f23": " · "
         },
@@ -13091,7 +13011,7 @@
             "b733a91bd9": "Adicione um comentário sobre o elemento selecionado.",
             "4328a0a062": "A captura falhou: {{value0}}",
             "26615e116b": "erro",
-            "8aec5bc044": "ocioso",
+            "8aec5bc044": "idle",
             "759f32af29": "Baixando",
             "c8bc7f1f9e": "solicitado",
             "4300f38145": "Baixando de {{value0}}{{value1}}",
@@ -13275,10 +13195,7 @@
           "6b802ecc99": "Hora",
           "d90981f766": "Tempo",
           "6b914c5fbb": "Dia",
-          "233b8c94b6": "Cadência",
-          "b08ccb4d06": "por hora",
-          "8cc026fd73": "semanal",
-          "c3e39e17cf": "personalizado"
+          "233b8c94b6": "Cadência"
         },
         "AutomationSessionField": {
           "f3c76dce51": "Reutilizar",
@@ -13906,7 +13823,6 @@
       "pluginCatalog": {
         "PluginCatalogLayout": {
           "title": "Plugins",
-          "description": "Navegue pelos plugins disponíveis ou gerencie os já instalados no Orca.",
           "filter": "Filtro de plugins",
           "all": "Todos",
           "installed": "Instalado",
@@ -14166,7 +14082,6 @@
     "title": "Agentes",
     "total": "{{count}} no total",
     "close": "Fechar o painel",
-    "settings": "Configurações do painel de agentes",
     "settingsTooltip": "Configurações do quadro",
     "card": {
       "you": "Você",

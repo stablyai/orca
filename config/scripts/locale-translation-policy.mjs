@@ -216,11 +216,20 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'orca · zsh'
 ])
 
+const NATIVE_LANGUAGE_ENDONYMS = {
+  chinese: '中文（简体）',
+  korean: '한국어',
+  japanese: '日本語',
+  spanish: 'Español',
+  portuguese: 'Português (Brasil)'
+}
+
 export const NATIVE_PICKER_LABELS = {
-  zh: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  ko: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  ja: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  es: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' }
+  zh: NATIVE_LANGUAGE_ENDONYMS,
+  ko: NATIVE_LANGUAGE_ENDONYMS,
+  ja: NATIVE_LANGUAGE_ENDONYMS,
+  es: NATIVE_LANGUAGE_ENDONYMS,
+  pt: NATIVE_LANGUAGE_ENDONYMS
 }
 
 const CJK_LATIN_SPACED_TERM_PATTERN = CJK_LATIN_SPACED_TERMS.join('|')
