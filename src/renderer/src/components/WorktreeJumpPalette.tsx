@@ -169,6 +169,8 @@ import { resolvePaletteFocusRestoreTarget } from '@/components/cmd-j/palette-foc
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { buildPluginQuickActions } from '@/components/cmd-j/plugin-quick-actions'
+import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
+import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { usePluginCommands } from '@/store/plugin-panels'
 import {
   getComposerEligibleRepos,
@@ -1893,6 +1895,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     setSelectedItemId('')
     listRef.current?.scrollTo(0, 0)
   }, [])
+  const emojiInput = useWorkspaceEmojiShortcodeInput({
+    inputRef,
+    onValueChange: handleQueryChange,
+    value: query
+  })
 
   const cancelFallbackFocusFrames = useCallback((): void => {
     if (fallbackFocusOuterFrameRef.current !== null) {
@@ -2455,7 +2462,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           'Search chats, terminals, worktrees, settings, and actions...'
         )}
         value={query}
-        onValueChange={handleQueryChange}
+        onValueChange={emojiInput.handleValueChange}
+        onClick={(event) => emojiInput.syncCursor(event.currentTarget)}
+        onSelect={(event) => emojiInput.syncCursor(event.currentTarget)}
+        onKeyDown={(event) => emojiInput.handleKeyDown(event)}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
         className="h-12 text-[14px] placeholder:text-muted-foreground/75"
@@ -2470,6 +2480,19 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             />
           </div>
         }
+      />
+      <WorkspaceEmojiSuggestionPopover
+        anchorRef={inputRef}
+        open={emojiInput.open}
+        commandValue={emojiInput.commandValue}
+        heading={translate('auto.components.new.workspace.SmartWorkspaceNameField.emoji', 'Emoji')}
+        suggestions={emojiInput.suggestions}
+        onCommandValueChange={emojiInput.onCommandValueChange}
+        onSelect={emojiInput.selectSuggestion}
+        onOpenChange={(open) => !open && emojiInput.close()}
+        portalContainer={dialogElement}
+        side="bottom"
+        contentClassName="w-80"
       />
       <PaletteFilterChips model={filterModel} filter={filter} onFilterChange={setRawFilter} />
       <CommandList

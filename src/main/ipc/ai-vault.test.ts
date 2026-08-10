@@ -800,8 +800,7 @@ describe('deleteAiVaultSession', () => {
         sessionId: args.sessionId,
         filePath: args.filePath,
         executionHostId: 'local'
-      }),
-      expect.objectContaining({ getSessionLiveness: expect.any(Function) })
+      })
     )
     expect(mocks.invalidateAiVaultSessionListCache).toHaveBeenCalledTimes(1)
     expect(mocks.invalidateSessionParseCacheEntry).toHaveBeenCalledWith(args.filePath)
@@ -850,8 +849,7 @@ describe('deleteAiVaultSession', () => {
       reason: 'invalid-path'
     })
     expect(mocks.deleteAiVaultSessionFile).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '' }),
-      expect.objectContaining({ getSessionLiveness: expect.any(Function) })
+      expect.objectContaining({ filePath: '' })
     )
     expect(mocks.invalidateAiVaultSessionListCache).not.toHaveBeenCalled()
   })

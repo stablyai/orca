@@ -104,6 +104,13 @@ describe('RepositoryPane search entries', () => {
     expect(matchesSettingsSearch('worktree path', entries)).toBe(true)
   })
 
+  it('includes each project search section once', () => {
+    const entries = getRepositoryPaneSearchEntries(repo)
+
+    expect(entries.filter(({ title }) => title === 'Project Icon')).toHaveLength(1)
+    expect(entries.filter(({ title }) => title === 'Default Worktree Base')).toHaveLength(1)
+  })
+
   it('omits project runtime search for remote or unsupported repos', () => {
     expect(matchesSettingsSearch('project runtime', getRepositoryPaneSearchEntries(repo))).toBe(
       false

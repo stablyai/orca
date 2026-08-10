@@ -1,27 +1,34 @@
-import type { RefObject } from 'react'
+import type { ComponentProps, RefObject } from 'react'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
+import { cn } from '@/lib/utils'
 import type { WorkspaceEmojiSuggestion } from '@/lib/workspace-emoji-shortcodes'
 
 type WorkspaceEmojiSuggestionPopoverProps = {
   anchorRef: RefObject<HTMLInputElement | null>
   commandValue: string
+  contentClassName?: string
   heading: string
   onCommandValueChange: (value: string) => void
   onOpenChange: (open: boolean) => void
   onSelect: (suggestion: WorkspaceEmojiSuggestion) => void
   open: boolean
+  portalContainer?: HTMLElement | null
+  side?: ComponentProps<typeof PopoverContent>['side']
   suggestions: readonly WorkspaceEmojiSuggestion[]
 }
 
 export function WorkspaceEmojiSuggestionPopover({
   anchorRef,
   commandValue,
+  contentClassName,
   heading,
   onCommandValueChange,
   onOpenChange,
   onSelect,
   open,
+  portalContainer,
+  side = 'top',
   suggestions
 }: WorkspaceEmojiSuggestionPopoverProps): React.JSX.Element {
   return (
@@ -30,11 +37,16 @@ export function WorkspaceEmojiSuggestionPopover({
       <PopoverContent
         data-workspace-emoji-suggestions="true"
         align="start"
-        side="top"
+        side={side}
         sideOffset={4}
         avoidCollisions={false}
-        className="popover-scroll-content flex max-h-56 w-[var(--radix-popover-trigger-width)] flex-col p-0"
+        portalContainer={portalContainer}
+        className={cn(
+          'popover-scroll-content flex max-h-56 w-[var(--radix-popover-trigger-width)] flex-col p-0',
+          contentClassName
+        )}
         onOpenAutoFocus={(event) => event.preventDefault()}
+        onPointerDown={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => {
           if (anchorRef.current?.contains(event.target as Node)) {
             event.preventDefault()

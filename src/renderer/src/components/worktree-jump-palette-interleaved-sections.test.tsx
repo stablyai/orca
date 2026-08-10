@@ -52,6 +52,8 @@ vi.mock('@/components/cmd-j/palette-host-badge', () => ({
 vi.mock('@/components/ui/command', async () => {
   const React = await import('react')
   return {
+    Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     CommandDialog: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
       open ? <div data-command-dialog="true">{children}</div> : null,
     CommandInput: ({

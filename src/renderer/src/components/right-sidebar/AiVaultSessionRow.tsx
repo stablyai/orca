@@ -85,7 +85,7 @@ export function VaultSessionRow({
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
   // Computed once so the dropdown menu and the context menu never disagree.
-  const deleteBlockedReason = aiVaultSessionDeleteBlockedReason(session, liveState)
+  const deleteBlockedReason = aiVaultSessionDeleteBlockedReason(session)
   const requestDelete = (): void => onRequestDelete(session)
   const detailsTooltip = detailsExpanded
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')

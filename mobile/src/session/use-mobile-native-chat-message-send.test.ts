@@ -80,7 +80,6 @@ describe('useMobileNativeChatMessageSend', () => {
     (clearInputWrite.mock.calls[0]?.[0] ?? {}) as { clearInput?: string }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     sendWithOutcome.mockReset()
     sendWithOutcome.mockResolvedValue('accepted')
     clearInputWrite.mockReset()

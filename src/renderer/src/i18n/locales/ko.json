@@ -11318,8 +11318,7 @@
             "delete": "삭제",
             "deleteReasonNonLocalHost": "이 기기에 있는 세션만 삭제할 수 있습니다.",
             "deleteReasonSyntheticPath": "이 세션은 Orca에서 삭제할 수 없습니다.",
-            "deleteReasonUnsupportedAgent": "{{value0}} 세션은 Orca에서 삭제할 수 없습니다.",
-            "deleteReasonSessionLive": "이 세션은 아직 실행 중입니다 — 삭제하려면 완료될 때까지 기다리세요."
+            "deleteReasonUnsupportedAgent": "{{value0}} 세션은 Orca에서 삭제할 수 없습니다."
           },
           "AiVaultSessionDeleteDialog": {
             "title": "이 세션을 삭제할까요?",

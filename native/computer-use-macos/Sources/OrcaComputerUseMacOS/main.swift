@@ -1044,11 +1044,7 @@ private func screenCaptureTrusted() -> Bool {
 }
 
 private func screenCaptureTrustedSettled() -> Bool {
-    PermissionTrustSettling.settleWithFallback(
-        finalTimeoutMs: 500,
-        probe: screenCaptureTrusted,
-        fallbackProbe: screenCaptureTrustedByCaptureProbe
-    )
+    PermissionTrustSettling.settle(timeoutMs: 2_000, probe: screenCaptureTrusted).settled
 }
 
 private func permissionStatusSnapshotSettled() -> PermissionStatusSnapshot {
@@ -1056,40 +1052,6 @@ private func permissionStatusSnapshotSettled() -> PermissionStatusSnapshot {
         accessibilityProbe: accessibilityTrustedSettled,
         screenshotsProbe: screenCaptureTrustedSettled
     )
-}
-
-private func screenCaptureTrustedByCaptureProbe() -> Bool {
-    guard let infos = CGWindowListCopyWindowInfo(
-        [.optionOnScreenOnly],
-        kCGNullWindowID
-    ) as? [[String: Any]] else {
-        return false
-    }
-    let windows = infos.compactMap { info -> ScreenCaptureProbeWindow? in
-        guard let layer = info[kCGWindowLayer as String] as? Int,
-              let ownerPid = info[kCGWindowOwnerPID as String] as? NSNumber,
-              let number = info[kCGWindowNumber as String] as? NSNumber
-        else {
-            return nil
-        }
-        return ScreenCaptureProbeWindow(
-            layer: layer,
-            ownerPid: ownerPid.int32Value,
-            windowId: number.uint32Value
-        )
-    }
-    guard let windowId = ScreenCaptureProbeWindowSelection.firstCrossProcessNormalWindow(
-        ownPid: ProcessInfo.processInfo.processIdentifier,
-        windows: windows
-    ) else {
-        return false
-    }
-    return CGWindowListCreateImage(
-        .null,
-        [.optionIncludingWindow],
-        CGWindowID(windowId),
-        [.boundsIgnoreFraming]
-    ) != nil
 }
 
 private func requestScreenCaptureAccess() -> Bool {

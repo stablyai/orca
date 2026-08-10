@@ -92,6 +92,10 @@ import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-t
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
+import {
+  computerAwakeSettingsForMode,
+  normalizeComputerAwakeMode
+} from '../../../shared/computer-awake-mode'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import { assertFileMutationOwnershipCapability } from '../../../shared/file-mutation-ownership'
@@ -289,6 +293,7 @@ type WebGitHubRouteKey =
   | 'prCheckDetails'
   | 'rerunPRChecks'
   | 'prComments'
+  | 'setPRCommentReaction'
   | 'resolveReviewThread'
   | 'setPRFileViewed'
   | 'updatePRTitle'
@@ -337,6 +342,7 @@ type WebGitHubRuntimeMethod =
   | 'github.prCheckDetails'
   | 'github.rerunPRChecks'
   | 'github.prComments'
+  | 'github.setPRCommentReaction'
   | 'github.resolveReviewThread'
   | 'github.setPRFileViewed'
   | 'github.updatePRTitle'
@@ -438,6 +444,7 @@ export const GITHUB_WEB_RPC_METHODS = {
   prCheckDetails: 'github.prCheckDetails',
   rerunPRChecks: 'github.rerunPRChecks',
   prComments: 'github.prComments',
+  setPRCommentReaction: 'github.setPRCommentReaction',
   resolveReviewThread: 'github.resolveReviewThread',
   setPRFileViewed: 'github.setPRFileViewed',
   updatePRTitle: 'github.updatePRTitle',
@@ -677,6 +684,24 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       set: async (updates) => {
         const sanitizedUpdates = { ...updates }
         delete sanitizedUpdates.activeRuntimeEnvironmentId
+        if ('computerAwakeMode' in sanitizedUpdates) {
+          Object.assign(
+            sanitizedUpdates,
+            computerAwakeSettingsForMode(
+              normalizeComputerAwakeMode(
+                sanitizedUpdates.computerAwakeMode,
+                sanitizedUpdates.keepComputerAwakeWhileAgentsRun
+              )
+            )
+          )
+        } else if ('keepComputerAwakeWhileAgentsRun' in sanitizedUpdates) {
+          Object.assign(
+            sanitizedUpdates,
+            computerAwakeSettingsForMode(
+              sanitizedUpdates.keepComputerAwakeWhileAgentsRun ? 'auto' : 'off'
+            )
+          )
+        }
         if ('autoRenameBranchFromWorkDefaultedOn' in sanitizedUpdates) {
           sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
         }
@@ -701,6 +726,19 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
+    agentAwake: {
+      getStatus: async () => {
+        const settings = getStoredSettings()
+        return {
+          mode: normalizeComputerAwakeMode(
+            settings.computerAwakeMode,
+            settings.keepComputerAwakeWhileAgentsRun
+          ),
+          active: false
+        }
+      },
+      onChanged: () => noopUnsubscribe
+    },
     keybindings: createWebKeybindingsApi(),
     ui: createWebUiApi(),
     crashReports: {
@@ -2385,6 +2423,11 @@ function createGitHubApi(): WebGitHubApi {
       route<WebGitHubResult<'rerunPRChecks'>>(GITHUB_WEB_RPC_METHODS.rerunPRChecks, args),
     prComments: (args) =>
       route<WebGitHubResult<'prComments'>>(GITHUB_WEB_RPC_METHODS.prComments, args),
+    setPRCommentReaction: (args) =>
+      route<WebGitHubResult<'setPRCommentReaction'>>(
+        GITHUB_WEB_RPC_METHODS.setPRCommentReaction,
+        args
+      ),
     resolveReviewThread: (args) =>
       route<WebGitHubResult<'resolveReviewThread'>>(
         GITHUB_WEB_RPC_METHODS.resolveReviewThread,

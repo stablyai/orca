@@ -11338,8 +11338,7 @@
             "delete": "删除",
             "deleteReasonNonLocalHost": "只能删除此设备上的会话。",
             "deleteReasonSyntheticPath": "此会话无法在 Orca 中删除。",
-            "deleteReasonUnsupportedAgent": "{{value0}} 会话无法在 Orca 中删除。",
-            "deleteReasonSessionLive": "此会话仍在运行 — 请等待其完成后再删除。"
+            "deleteReasonUnsupportedAgent": "{{value0}} 会话无法在 Orca 中删除。"
           },
           "AiVaultSessionDeleteDialog": {
             "title": "要删除此会话吗？",

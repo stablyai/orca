@@ -53,6 +53,7 @@ import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt
 import type { TaskSourceContext } from './task-source-context'
 import type { SetupRunnerShell } from './setup-runner-command'
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
+import type { ComputerAwakeMode } from './computer-awake-mode'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -1485,6 +1486,7 @@ export type GitHubReactionContent =
 export type GitHubReaction = {
   content: GitHubReactionContent
   count: number
+  viewerHasReacted?: boolean
 }
 
 export type PRComment = {
@@ -1495,6 +1497,8 @@ export type PRComment = {
   createdAt: string
   url: string
   reactions?: GitHubReaction[]
+  /** GraphQL node ID for GitHub comments that support reaction mutations. */
+  reactionSubjectId?: string
   /** File path for inline review comments (absent for top-level conversation comments). */
   path?: string
   /** GraphQL node ID of the review thread — present only for inline review comments.
@@ -2878,6 +2882,8 @@ export type GlobalSettings = {
   openLinksInAppPreferencePrompted: boolean
   /** Opt-in: Shift+modifier click inverts openLinksInApp instead of always forcing the system browser. Off keeps the historical one-way escape hatch. */
   openLinksInAppModifierInverts?: boolean
+  /** Show terminal link actions on plain click; off restores modifier-click-only terminal links. */
+  terminalLinkActionPopoverEnabled?: boolean
   /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */
   openAgentTabsInChatByDefault?: boolean
   /** Experimental native chat surface for Claude/Codex sessions; off by default. */
@@ -3045,6 +3051,8 @@ export type GlobalSettings = {
   confirmClosePinnedTab: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
+  /** Optional for mixed-version compatibility; the legacy boolean maps true to Auto. */
+  computerAwakeMode?: ComputerAwakeMode
   /** macOS Option key: compose layout chars (@ German, € French) vs act as Meta/Esc for readline.
    *  'auto' (default) = layout-aware via navigator.keyboard.getLayoutMap() (US → Meta, else compose);
    *  'false' = compose; 'true' = Meta on both Option keys; 'left'/'right' = only that key is Meta.

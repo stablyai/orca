@@ -69,5 +69,3 @@ export function FilterToggleRow({
     </button>
   )
 }
-
-export default FilterToggleRow

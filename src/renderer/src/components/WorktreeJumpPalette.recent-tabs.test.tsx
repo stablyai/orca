@@ -69,6 +69,8 @@ vi.mock('@/lib/workspace-tab-palette-activation', () => ({
 vi.mock('@/components/ui/command', async () => {
   const React = await import('react')
   return {
+    Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     // Why the commandProps passthrough: cmdk resolves Enter against its `value`, so the controlled
     // value is the only honest stand-in for "what would Enter activate" without mounting real cmdk.
     CommandDialog: ({

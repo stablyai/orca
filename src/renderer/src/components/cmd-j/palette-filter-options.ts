@@ -51,14 +51,6 @@ export type PaletteFilterModel = {
   defaultHostId: ExecutionHostId
 }
 
-export const EMPTY_PALETTE_FILTER_MODEL: PaletteFilterModel = {
-  hosts: [],
-  projects: [],
-  repoIdsByProjectKey: new Map(),
-  hostIdByRepoId: new Map(),
-  defaultHostId: LOCAL_EXECUTION_HOST_ID
-}
-
 /**
  * Precomputes only the repos that actually carry a host stamp so the lookup miss
  * below stays equivalent to getWorktreeExecutionHostId's `defaultHostId` branch.
