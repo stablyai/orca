@@ -1311,6 +1311,7 @@ type RuntimePtyWorktreeRecord = {
   launchToken: string | null
   launchAgent: TuiAgent | null
   providerSession: AgentProviderSessionMetadata | null
+  providerSessionBoundAt: number | null
   foregroundAgent: TuiAgent | null
   connected: boolean
   disconnectedAt: number | null
@@ -10461,6 +10462,7 @@ export class OrcaRuntimeService {
       pty.lastAgentStatusStartedAtEpochMs = null
       pty.lastAgentStatusRichInvalidatedAtEpochMs = Date.now()
       pty.providerSession = null
+      pty.providerSessionBoundAt = null
       pty.managementTitle = null
       pty.managementTitleAt = null
     }
@@ -25730,6 +25732,16 @@ export class OrcaRuntimeService {
             pty.launchAgent = launchOpts.launchAgent ?? null
           }
           if (launchOpts.resumeProviderSession) {
+            const previousProviderSession = pty.providerSession
+            if (
+              !previousProviderSession ||
+              previousProviderSession.key !== launchOpts.resumeProviderSession.key ||
+              previousProviderSession.id !== launchOpts.resumeProviderSession.id ||
+              previousProviderSession.transcriptPath !==
+                launchOpts.resumeProviderSession.transcriptPath
+            ) {
+              pty.providerSessionBoundAt = Date.now()
+            }
             pty.providerSession = launchOpts.resumeProviderSession
           }
           pty.tabId = tabId
@@ -29229,6 +29241,7 @@ export class OrcaRuntimeService {
         launchToken: null,
         launchAgent: null,
         providerSession: null,
+        providerSessionBoundAt: null,
         foregroundAgent: null,
         connected: state.connected ?? true,
         disconnectedAt: state.connected === false ? Date.now() : null,
@@ -30790,12 +30803,13 @@ export class OrcaRuntimeService {
     let launchResumeIdentityOnly = false
     if (nonAgentTitle) {
       // Why: non-agent title = shell reclaimed the pane; suppress to clear stuck spinners (#1437), though a live hook signal survives.
-      const hasLiveHookSignal =
+      const hasLiveAgentSignal =
         retained?.payload.interactivePrompt != null ||
         retained?.payload.toolName != null ||
         // Why: a pending question is never inherited across hook events (unlike
         // `toolName`), so it proves the agent is parked on a selector right now.
         hookRow.live?.payload.interactivePrompt != null ||
+        (pty?.lastAgentStatusObservedLive === true && pty.lastAgentStatus != null) ||
         // Why: headless serve has no renderer to retain an OSC row, so a fresh hook
         // agentType is the only live signal a hook-only pane can offer — and an agent
         // that reports over HTTP need never set a title this gate would recognize.
@@ -30807,8 +30821,8 @@ export class OrcaRuntimeService {
             pty?.providerSession != null))
       // Codex can replace its agent title with the workspace name while retaining the pane.
       launchResumeIdentityOnly =
-        !hasLiveHookSignal && pty?.providerSession != null && pty.launchAgent != null
-      if (!hasLiveHookSignal && !launchResumeIdentityOnly) {
+        !hasLiveAgentSignal && pty?.providerSession != null && pty.launchAgent != null
+      if (!hasLiveAgentSignal && !launchResumeIdentityOnly) {
         return {}
       }
     }
@@ -30858,7 +30872,11 @@ export class OrcaRuntimeService {
     // Why not lastOutputAt: this state is title-derived, so it must be dated by
     // its evidence. Stamping it with the byte stream made the frame advance on
     // every output byte, so a paired client's live status could never outrank it.
-    const evidenceAt = pty?.lastOscTitleEpochMs ?? hookRow.providerSessionReceivedAt ?? Date.now()
+    const evidenceAt =
+      pty?.lastOscTitleEpochMs ??
+      hookRow.providerSessionReceivedAt ??
+      pty?.providerSessionBoundAt ??
+      Date.now()
     const agentType = ownerAgent ?? undefined
     return {
       agentStatus: {

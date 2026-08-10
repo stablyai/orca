@@ -24563,6 +24563,84 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('keeps launch-bound identity snapshots stable without title or hook timestamps', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-08T00:00:00.000Z'))
+    try {
+      const providerSession = {
+        key: 'session_id' as const,
+        id: '019fc599-4666-7f50-a226-da46428d1d0c',
+        transcriptPath: '/home/ada/.codex/sessions/stable-rollout.jsonl'
+      }
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-codex-stable-resume' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        tabId: 'codex-stable-resume-tab',
+        leafId: HEADLESS_LEAF_ID,
+        title: 'agent-context-t40',
+        command: `codex resume ${providerSession.id}`,
+        launchAgent: 'codex',
+        resumeProviderSession: providerSession
+      })
+
+      const first = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+      vi.advanceTimersByTime(10_000)
+      const second = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+      expect(second.tabs[0]).toHaveProperty(
+        'agentStatus.updatedAt',
+        (first.tabs[0] as { agentStatus?: { updatedAt?: number } }).agentStatus?.updatedAt
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves live-observed working status under a workspace-like Codex title', async () => {
+    const providerSession = {
+      key: 'session_id' as const,
+      id: '019fc599-4666-7f50-a226-da46428d1d0d'
+    }
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-codex-live-resume' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'codex-live-resume-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'agent-context-t40',
+      command: `codex resume ${providerSession.id}`,
+      launchAgent: 'codex',
+      resumeProviderSession: providerSession
+    })
+    const pty = (
+      runtime as unknown as {
+        ptysById: Map<
+          string,
+          { lastAgentStatus: 'working' | 'idle' | null; lastAgentStatusObservedLive: boolean }
+        >
+      }
+    ).ptysById.get('pty-codex-live-resume')
+    expect(pty).toBeDefined()
+    if (!pty) {
+      throw new Error('expected resumed Codex PTY record')
+    }
+    pty.lastAgentStatus = 'working'
+    pty.lastAgentStatusObservedLive = true
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs[0]).toHaveProperty('agentStatus.state', 'working')
+  })
+
   it('recovers the agent type from the hook row when the pane was launched without an agent hint', async () => {
     // A user who types `claude` in a plain terminal leaves no launchAgent, and headless
     // has no renderer to publish one; without the hook's agentType mobile treats the tab
