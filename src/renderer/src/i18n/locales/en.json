@@ -4772,7 +4772,19 @@
           "deleteWorktree": "Delete Worktree",
           "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
-          "deleteWithDescendants": "Delete with Descendants…"
+          "deleteWithDescendants": "Delete with Descendants…",
+          "copySuccess": "{{value0}} copied",
+          "copyFailure": "Failed to copy {{value0}}",
+          "copyPathLabel": "Path",
+          "copyBranchLabel": "Branch name",
+          "copyMergeRequestLabel": "MR URL",
+          "copyPullRequestLabel": "PR URL",
+          "copySection": "Copy",
+          "copyBranchName": "Copy branch name",
+          "copyNoBranch": "No branch",
+          "copyMergeRequestUrl": "Copy MR URL",
+          "copyPullRequestUrl": "Copy PR URL",
+          "copyNoReviewLink": "Not linked"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",

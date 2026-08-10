@@ -19,6 +19,8 @@ import {
   Bell,
   BellOff,
   CircleX,
+  GitBranch,
+  Link2,
   Pencil,
   Pin,
   PinOff,
@@ -30,6 +32,7 @@ import {
   FolderPlus,
   FolderTree
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
@@ -61,6 +64,8 @@ import {
 } from './workspace-lineage-menu-actions'
 import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
+import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { getWorktreeCopyTargets } from './worktree-copy-targets'
 import { translate } from '@/i18n/i18n'
 import {
   folderWorkspaceKey,
@@ -72,6 +77,10 @@ type Props = {
   worktree: Worktree
   children: React.ReactNode
   contentClassName?: string
+  /** Branch already stripped by the owning card, so menu and row never disagree. */
+  branchName?: string | null
+  /** Review the owning card resolved (`null` = resolved to none, omitted = no owner). */
+  review?: WorktreeCardPrDisplay | null
   selectedWorktrees?: readonly Worktree[]
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
@@ -109,6 +118,27 @@ const EMPTY_CYCLIC_LINEAGE_IDS: ReadonlySet<string> = new Set()
 // data. Extracted as a pure function so the stable-reference contract is unit-testable.
 export function selectMenuScopedMap<T>(menuOpen: boolean, live: T, empty: T): T {
   return menuOpen ? live : empty
+}
+
+// Why: clipboard IPC rejects in the web runtime when browser clipboard activation is lost
+// (menu items sit inside a portal overlay), so every copy must report instead of vanishing.
+async function announceClipboardWrite(write: Promise<void>, label: string): Promise<void> {
+  try {
+    await write
+    toast.success(
+      translate('auto.components.sidebar.WorktreeContextMenu.copySuccess', '{{value0}} copied', {
+        value0: label
+      })
+    )
+  } catch {
+    toast.error(
+      translate(
+        'auto.components.sidebar.WorktreeContextMenu.copyFailure',
+        'Failed to copy {{value0}}',
+        { value0: label }
+      )
+    )
+  }
 }
 
 // Why: the Developer submenu is hidden by default and revealed only by holding
@@ -317,6 +347,8 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
   children,
   contentClassName,
+  branchName,
+  review,
   selectedWorktrees,
   onContextMenuSelect,
   onAssignWorkspaceStatus,
@@ -549,9 +581,41 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     []
   )
 
+  const copyTargets = useMemo(
+    () => getWorktreeCopyTargets({ worktree, branchName, review }),
+    [branchName, review, worktree]
+  )
+  const copyBranchName = copyTargets.branchName
+  const copyReviewUrl = copyTargets.reviewUrl
+
   const handleCopyPath = useCallback(() => {
-    window.api.ui.writeClipboardText(worktree.path)
-  }, [worktree.path])
+    void announceClipboardWrite(
+      window.api.ui.writeClipboardText(copyTargets.path),
+      translate('auto.components.sidebar.WorktreeContextMenu.copyPathLabel', 'Path')
+    )
+  }, [copyTargets.path])
+
+  const handleCopyBranchName = useCallback(() => {
+    if (!copyBranchName) {
+      return
+    }
+    void announceClipboardWrite(
+      window.api.ui.writeClipboardText(copyBranchName),
+      translate('auto.components.sidebar.WorktreeContextMenu.copyBranchLabel', 'Branch name')
+    )
+  }, [copyBranchName])
+
+  const handleCopyReviewUrl = useCallback(() => {
+    if (!copyReviewUrl) {
+      return
+    }
+    void announceClipboardWrite(
+      window.api.ui.writeClipboardText(copyReviewUrl),
+      copyTargets.reviewLabel === 'MR'
+        ? translate('auto.components.sidebar.WorktreeContextMenu.copyMergeRequestLabel', 'MR URL')
+        : translate('auto.components.sidebar.WorktreeContextMenu.copyPullRequestLabel', 'PR URL')
+    )
+  }, [copyReviewUrl, copyTargets.reviewLabel])
 
   const handleToggleRead = useCallback(() => {
     updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
@@ -913,9 +977,58 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}
               />
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                {translate('auto.components.sidebar.WorktreeContextMenu.copySection', 'Copy')}
+              </DropdownMenuLabel>
               <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
                 <Copy className="size-3.5" />
                 {translate('auto.components.sidebar.WorktreeContextMenu.3350101edb', 'Copy Path')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={handleCopyBranchName}
+                disabled={isDeleting || !copyBranchName}
+              >
+                <GitBranch className="size-3.5" />
+                <span className="min-w-0 truncate">
+                  {translate(
+                    'auto.components.sidebar.WorktreeContextMenu.copyBranchName',
+                    'Copy branch name'
+                  )}
+                </span>
+                {copyBranchName ? null : (
+                  <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
+                    {translate(
+                      'auto.components.sidebar.WorktreeContextMenu.copyNoBranch',
+                      'No branch'
+                    )}
+                  </span>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={handleCopyReviewUrl}
+                disabled={isDeleting || !copyReviewUrl}
+              >
+                <Link2 className="size-3.5" />
+                <span className="min-w-0 truncate">
+                  {copyTargets.reviewLabel === 'MR'
+                    ? translate(
+                        'auto.components.sidebar.WorktreeContextMenu.copyMergeRequestUrl',
+                        'Copy MR URL'
+                      )
+                    : translate(
+                        'auto.components.sidebar.WorktreeContextMenu.copyPullRequestUrl',
+                        'Copy PR URL'
+                      )}
+                </span>
+                {copyReviewUrl ? null : (
+                  <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
+                    {translate(
+                      'auto.components.sidebar.WorktreeContextMenu.copyNoReviewLink',
+                      'Not linked'
+                    )}
+                  </span>
+                )}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={handleTogglePin} disabled={isDeleting}>
