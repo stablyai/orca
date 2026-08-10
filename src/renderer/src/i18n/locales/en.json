@@ -2293,8 +2293,8 @@
             "cf7f3699e4": "Drop items here",
             "e34607e0cd": "PR"
           },
-          "ProjectFieldsSection": {
-            "projectFields": "Project fields"
+          "ProjectFieldsGrid": {
+            "968c29dcd0": "Project fields"
           }
         },
         "GitHubMarkdownComposer": {

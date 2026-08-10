@@ -37,7 +37,7 @@ export function ProjectFieldsGrid({
       <section className="col-span-full border-t border-border/40 pt-4">
         <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/60">
           {translate(
-            'auto.components.github.project.ProjectFieldsSection.projectFields',
+            'auto.components.github.project.ProjectFieldsGrid.968c29dcd0',
             'Project fields'
           )}
         </span>
