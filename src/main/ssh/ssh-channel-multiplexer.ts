@@ -256,7 +256,10 @@ export class SshChannelMultiplexer {
         }
         // Why: Space scans can run long on SSH hosts. Let the relay stop its
         // local filesystem work instead of only dropping the client promise.
-        this.notify('rpc.cancel', { id })
+        this.notify('rpc.cancel', {
+          id,
+          ...(options?.waitForRemoteCancellation ? { awaitSettlement: true } : {})
+        })
         if (options?.waitForRemoteCancellation) {
           return
         }
@@ -272,7 +275,10 @@ export class SshChannelMultiplexer {
           pending.cleanup()
           // Why: request timeouts should stop relay-side long-running work,
           // not just detach the client from the eventual response.
-          this.notify('rpc.cancel', { id })
+          this.notify('rpc.cancel', {
+            id,
+            ...(options?.waitForRemoteCancellation ? { abandonSettlement: true } : {})
+          })
         }
         this.pendingRequests.delete(id)
         reject(sshMuxRequestTimeoutError(method, timeoutMs))

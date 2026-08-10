@@ -1,52 +1,174 @@
-import { posix, win32 } from 'node:path'
+import { realpath } from 'node:fs/promises'
+import * as path from 'node:path'
+import {
+  remainingGitWorktreeCreateMs,
+  runWithinGitWorktreeDeadline,
+  type GitWorktreeCreateDeadline
+} from './git-worktree-create-timeout'
 
-const createLockTails = new Map<string, Promise<void>>()
+export type GitWorktreeCreateLockIdentity = Readonly<{
+  repository: string
+  target: string
+}>
+
+type LockWaiter = {
+  grant: () => void
+  cancel: (error: Error) => void
+}
+
+type CreateLockState = {
+  waiters: Set<LockWaiter>
+}
+
+type GitWorktreeCreateLockExec = (
+  args: string[],
+  cwd: string
+) => Promise<{ stdout: string; stderr?: string }>
+
+type ResolveGitOutputPath = (cwd: string, outputPath: string) => string
+
+const createLocks = new Map<string, CreateLockState>()
+
+function getErrorCode(error: unknown): string | undefined {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : undefined
+}
 
 function looksLikeWindowsPath(value: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\')
 }
 
+function pathApi(value: string): typeof path.posix | typeof path.win32 {
+  return process.platform === 'win32' || looksLikeWindowsPath(value) ? path.win32 : path.posix
+}
+
 function normalizePath(value: string): string {
-  if (process.platform === 'win32' || looksLikeWindowsPath(value)) {
-    return win32.resolve(value).toLowerCase()
-  }
-  return posix.resolve(value)
+  const api = pathApi(value)
+  const normalized = api.normalize(api.resolve(value))
+  return api === path.win32 ? normalized.toLowerCase() : normalized
 }
 
-function createLockKeys(repoPath: string, branchName: string, targetDir: string): string[] {
-  const repo = normalizePath(repoPath)
-  const branch = branchName.replace(/^refs\/heads\//, '')
-  return [`${repo}\0branch\0${branch}`, `${repo}\0target\0${normalizePath(targetDir)}`].sort()
-}
-
-async function acquireCreateLock(key: string): Promise<() => void> {
-  const previous = createLockTails.get(key) ?? Promise.resolve()
-  let releaseGate!: () => void
-  const gate = new Promise<void>((resolve) => {
-    releaseGate = resolve
-  })
-  const tail = previous.catch(() => {}).then(() => gate)
-  createLockTails.set(key, tail)
-  await previous.catch(() => {})
-
-  return () => {
-    releaseGate()
-    if (createLockTails.get(key) === tail) {
-      createLockTails.delete(key)
+async function canonicalizePath(
+  value: string,
+  deadline: GitWorktreeCreateDeadline
+): Promise<string> {
+  const api = pathApi(value)
+  const resolved = api.resolve(value)
+  try {
+    return normalizePath(
+      await runWithinGitWorktreeDeadline(deadline, `filesystem realpath of "${resolved}"`, () =>
+        realpath(resolved)
+      )
+    )
+  } catch (error) {
+    if (getErrorCode(error) !== 'ENOENT' && getErrorCode(error) !== 'ENOTDIR') {
+      throw error
     }
+    const parent = api.dirname(resolved)
+    if (parent === resolved) {
+      return normalizePath(resolved)
+    }
+    return normalizePath(api.join(await canonicalizePath(parent, deadline), api.basename(resolved)))
   }
+}
+
+export async function resolveGitWorktreeCreateLockIdentity(
+  git: GitWorktreeCreateLockExec,
+  repoPath: string,
+  targetDir: string,
+  deadline: GitWorktreeCreateDeadline,
+  resolveGitPath: ResolveGitOutputPath = (cwd, output) => path.resolve(cwd, output.trim())
+): Promise<GitWorktreeCreateLockIdentity> {
+  const { stdout } = await git(['rev-parse', '--git-common-dir'], repoPath)
+  const commonDir = resolveGitPath(repoPath, stdout)
+  const targetPath = pathApi(repoPath).resolve(repoPath, targetDir)
+  const [repository, target] = await Promise.all([
+    canonicalizePath(commonDir, deadline),
+    canonicalizePath(targetPath, deadline)
+  ])
+  return { repository, target }
+}
+
+function createLockKeys(identity: GitWorktreeCreateLockIdentity, branchName: string): string[] {
+  const branch = branchName.replace(/^refs\/heads\//, '')
+  return [
+    `${identity.repository}\0branch\0${branch}`,
+    `${identity.repository}\0target\0${identity.target}`
+  ].sort()
+}
+
+function releaseCreateLock(key: string, state: CreateLockState): void {
+  const next = state.waiters.values().next().value as LockWaiter | undefined
+  if (next) {
+    state.waiters.delete(next)
+    next.grant()
+    return
+  }
+  if (createLocks.get(key) === state) {
+    createLocks.delete(key)
+  }
+}
+
+async function acquireCreateLock(
+  key: string,
+  deadline: GitWorktreeCreateDeadline
+): Promise<() => void> {
+  let state = createLocks.get(key)
+  if (!state) {
+    const acquiredState: CreateLockState = { waiters: new Set() }
+    createLocks.set(key, acquiredState)
+    return () => releaseCreateLock(key, acquiredState)
+  }
+
+  const timeoutMs = remainingGitWorktreeCreateMs(deadline, 'worktree create lock queue')
+  return new Promise<() => void>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout>
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      deadline.signal?.removeEventListener('abort', onAbort)
+    }
+    const rejectWait = (error: Error): void => {
+      if (!state.waiters.delete(waiter)) {
+        return
+      }
+      cleanup()
+      reject(error)
+    }
+    const onAbort = (): void => {
+      const error = new Error('Git worktree creation was cancelled during lock queue.')
+      error.name = 'AbortError'
+      rejectWait(error)
+    }
+    const waiter: LockWaiter = {
+      grant: () => {
+        cleanup()
+        resolve(() => releaseCreateLock(key, state))
+      },
+      cancel: rejectWait
+    }
+    timer = setTimeout(
+      () => waiter.cancel(new Error('Git worktree creation timed out during lock queue.')),
+      timeoutMs
+    )
+    deadline.signal?.addEventListener('abort', onAbort, { once: true })
+    state.waiters.add(waiter)
+    if (deadline.signal?.aborted) {
+      onAbort()
+    }
+  })
 }
 
 export async function withGitWorktreeCreateLock<T>(
-  repoPath: string,
+  identity: GitWorktreeCreateLockIdentity,
   branchName: string,
-  targetDir: string,
+  deadline: GitWorktreeCreateDeadline,
   operation: () => Promise<T>
 ): Promise<T> {
   const releases: (() => void)[] = []
   try {
-    for (const key of createLockKeys(repoPath, branchName, targetDir)) {
-      releases.push(await acquireCreateLock(key))
+    for (const key of createLockKeys(identity, branchName)) {
+      releases.push(await acquireCreateLock(key, deadline))
     }
     return await operation()
   } finally {
@@ -57,5 +179,5 @@ export async function withGitWorktreeCreateLock<T>(
 }
 
 export function resetGitWorktreeCreateLocksForTests(): void {
-  createLockTails.clear()
+  createLocks.clear()
 }

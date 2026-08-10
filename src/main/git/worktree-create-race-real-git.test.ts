@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { GitExec } from '../../relay/git-handler-ops'
@@ -45,11 +45,13 @@ describe('same-target worktree create race against real Git', () => {
   it('keeps the local winner registered after the serialized loser fails', async () => {
     const target = join(root, 'winner-local')
     const branch = 'race/local'
-    const winner = addWorktree(repo, target, branch)
-    const loser = addWorktree(repo, target, branch)
+    const attempts = await Promise.allSettled([
+      addWorktree(repo, target, branch),
+      addWorktree(repo, target, branch)
+    ])
 
-    await expect(winner).resolves.toEqual({})
-    await expect(loser).rejects.toThrow()
+    expect(attempts.filter((attempt) => attempt.status === 'fulfilled')).toHaveLength(1)
+    expect(attempts.filter((attempt) => attempt.status === 'rejected')).toHaveLength(1)
     await expectWinnerPreserved(target, branch)
   })
 
@@ -63,11 +65,47 @@ describe('same-target worktree create race against real Git', () => {
         timeout: options?.timeout
       })
     const params = { repoPath: repo, targetDir: target, branchName: branch }
-    const winner = addWorktreeOp(relayGit, params)
-    const loser = addWorktreeOp(relayGit, params)
+    const attempts = await Promise.allSettled([
+      addWorktreeOp(relayGit, params),
+      addWorktreeOp(relayGit, params)
+    ])
 
-    await expect(winner).resolves.toBeUndefined()
-    await expect(loser).rejects.toThrow()
+    expect(attempts.filter((attempt) => attempt.status === 'fulfilled')).toHaveLength(1)
+    expect(attempts.filter((attempt) => attempt.status === 'rejected')).toHaveLength(1)
+    await expectWinnerPreserved(target, branch)
+  })
+
+  it('serializes main, linked, repository-symlink, and target-symlink aliases', async () => {
+    const source = join(root, 'linked-source')
+    await git(['worktree', 'add', '-q', '-b', 'race/source', source])
+    const repoAlias = join(root, 'repo-alias')
+    await symlink(repo, repoAlias, process.platform === 'win32' ? 'junction' : 'dir')
+    const targetParent = join(root, 'targets')
+    const targetParentAlias = join(root, 'targets-alias')
+    await mkdir(targetParent)
+    await symlink(
+      targetParent,
+      targetParentAlias,
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
+    const target = join(targetParent, 'winner-alias')
+    const repoAliasRelative = relative(process.cwd(), repoAlias)
+    const targetAliasRelative = `${relative(repoAlias, targetParentAlias)}${sep}unused${sep}..${sep}winner-alias`
+    const branch = 'race/common-dir-alias'
+    const relayGit: GitExec = async (args, cwd, options) =>
+      execFileAsync('git', args, {
+        cwd,
+        signal: options?.signal,
+        timeout: options?.timeout
+      })
+
+    const attempts = await Promise.allSettled([
+      addWorktree(repoAliasRelative, targetAliasRelative, branch),
+      addWorktreeOp(relayGit, { repoPath: source, targetDir: target, branchName: branch })
+    ])
+
+    expect(attempts.filter((attempt) => attempt.status === 'fulfilled')).toHaveLength(1)
+    expect(attempts.filter((attempt) => attempt.status === 'rejected')).toHaveLength(1)
     await expectWinnerPreserved(target, branch)
   })
 })

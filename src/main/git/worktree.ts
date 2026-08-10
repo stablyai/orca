@@ -38,7 +38,10 @@ import {
   resolveGitWorktreeCreateTimeoutMs,
   type GitWorktreeCreateDeadline
 } from '../../shared/git-worktree-create-timeout'
-import { withGitWorktreeCreateLock } from '../../shared/git-worktree-create-lock'
+import {
+  resolveGitWorktreeCreateLockIdentity,
+  withGitWorktreeCreateLock
+} from '../../shared/git-worktree-create-lock'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedRevParsePathFormatError,
@@ -119,11 +122,18 @@ function gitExecOptions(
   cwd: string,
   options: GitWorktreeExecOptions = {}
 ): { cwd: string; wslDistro?: string; signal?: AbortSignal; timeout?: number } {
+  return { cwd, ...gitChildExecOptions(options) }
+}
+
+function gitChildExecOptions(options: GitWorktreeExecOptions = {}): {
+  wslDistro?: string
+  signal?: AbortSignal
+  timeout?: number
+} {
   const timeout = options.deadline
     ? remainingGitWorktreeCreateMs(options.deadline, 'Git command')
     : options.timeout
   return {
-    cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
     ...(timeout ? { timeout } : {})
@@ -1033,20 +1043,31 @@ export async function addWorktree(
   noCheckout = false,
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
+  const worktreeCreateTimeout = options.timeout ?? resolveWorktreeAddTimeoutMs()
+  const deadline = createGitWorktreeDeadline(worktreeCreateTimeout, options.signal)
+  const deadlineOptions: AddWorktreeOptions = { ...options, deadline }
   try {
-    return await runWithGitReadCacheInvalidation(() =>
-      withGitWorktreeCreateLock(repoPath, branch, worktreePath, () =>
+    return await runWithGitReadCacheInvalidation(async () => {
+      const identity = await resolveGitWorktreeCreateLockIdentity(
+        (args, cwd) => gitExecFileAsync(args, gitExecOptions(cwd, deadlineOptions)),
+        repoPath,
+        worktreePath,
+        deadline,
+        (cwd, outputPath) => resolveGitOutputPath(cwd, outputPath, options)
+      )
+      return withGitWorktreeCreateLock(identity, branch, deadline, () =>
         performAddWorktree(
           repoPath,
-          worktreePath,
+          identity.target,
           branch,
           baseBranch,
           refreshLocalBaseRef,
           noCheckout,
-          options
+          deadlineOptions,
+          identity.repository
         )
       )
-    )
+    })
   } finally {
     bumpWorktreeScanGeneration(repoPath)
   }
@@ -1059,12 +1080,14 @@ async function performAddWorktree(
   baseBranch?: string,
   refreshLocalBaseRef = false,
   noCheckout = false,
-  options: AddWorktreeOptions = {}
+  options: AddWorktreeOptions = {},
+  commonGitDir?: string
 ): Promise<AddWorktreeResult> {
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
   const worktreeCreateTimeout = options.timeout ?? resolveWorktreeAddTimeoutMs()
-  const deadline = createGitWorktreeDeadline(worktreeCreateTimeout, options.signal)
+  const deadline =
+    options.deadline ?? createGitWorktreeDeadline(worktreeCreateTimeout, options.signal)
   const deadlineOptions: AddWorktreeOptions = { ...options, deadline }
   // Why: git-crypt resolves state through the per-worktree Git dir, so setup
   // must happen before checkout or its smudge filter aborts worktree creation.
@@ -1076,9 +1099,10 @@ async function performAddWorktree(
     runGitCryptCommand,
     repoPath,
     resolveGitCryptPath,
-    deadline
+    deadline,
+    commonGitDir
   )
-  const createOptions = gitCryptDir ? deadlineOptions : options
+  const createOptions = deadlineOptions
   const deferCheckoutForGitCrypt = gitCryptDir !== null && !noCheckout
   const args = ['worktree', 'add']
   let effectiveBase: string | undefined
@@ -1093,7 +1117,7 @@ async function performAddWorktree(
     args.push('--no-track', '-b', branch, worktreePath)
     if (baseBranch) {
       effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
-        hasWorktreeBaseCommitRef(repoPath, qualifiedRef, createOptions)
+        hasWorktreeBaseCommitRef(repoPath, qualifiedRef, gitChildExecOptions(createOptions))
       )
       // Why: resolve the creation base first to distinguish remote-tracking refs from slash-containing local branches (mutation gated behind the explicit setting).
       if (refreshLocalBaseRef) {
@@ -1147,10 +1171,7 @@ async function performAddWorktree(
       )
     }
   } else {
-    await gitExecFileAsync(args, {
-      ...gitExecOptions(repoPath, createOptions),
-      timeout: worktreeCreateTimeout
-    })
+    await gitExecFileAsync(args, gitExecOptions(repoPath, createOptions))
   }
 
   if (options.checkoutExistingBranch) {

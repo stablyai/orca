@@ -3,6 +3,7 @@ import {
   GIT_WORKTREE_CREATE_CLEANUP_TIMEOUT_MS,
   GIT_WORKTREE_CREATE_TIMEOUT_MAX_MS,
   GIT_WORKTREE_CREATE_TIMEOUT_MS,
+  clampGitWorktreeCreateTimeoutMs,
   createGitWorktreeCleanupDeadline,
   createGitWorktreeDeadline,
   gitWorktreeCreateTransportTimeoutMs,
@@ -38,6 +39,10 @@ describe('git worktree create timeout policy', () => {
 
     expect(remainingGitWorktreeCreateMs(deadline, 'first child')).toBe(400)
     expect(remainingGitWorktreeCreateMs(deadline, 'later child')).toBe(250)
+  })
+
+  it('preserves a remaining transport budget below the configurable minimum', () => {
+    expect(clampGitWorktreeCreateTimeoutMs(250)).toBe(250)
   })
 
   it('starts cleanup with a fresh reserve after the operation deadline expired', () => {

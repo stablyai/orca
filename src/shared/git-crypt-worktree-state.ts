@@ -50,8 +50,13 @@ export async function findGitCryptStateDirectory(
   git: GitCryptWorktreeExec,
   repoPath: string,
   resolveGitPath: ResolveGitOutputPath = resolvePathFromGit,
-  deadline?: GitWorktreeCreateDeadline
+  deadline?: GitWorktreeCreateDeadline,
+  commonGitDir?: string
 ): Promise<string | null> {
+  if (commonGitDir) {
+    const candidate = path.join(commonGitDir, 'git-crypt')
+    return (await isDirectory(candidate, deadline)) ? candidate : null
+  }
   const dotGitPath = path.join(repoPath, '.git')
   try {
     const dotGit = deadline

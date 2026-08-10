@@ -193,7 +193,7 @@ describe('SshChannelMultiplexer', () => {
     it('waits for the relay cleanup response after forwarding cancellation', async () => {
       const controller = new AbortController()
       const promise = mux.request(
-        'git.addWorktreeWithCleanup',
+        'git.addWorktreeWithCleanupSettlement',
         {},
         { signal: controller.signal, waitForRemoteCancellation: true }
       )
@@ -214,7 +214,10 @@ describe('SshChannelMultiplexer', () => {
       const cancelPayload = JSON.parse(
         cancelFrame.subarray(HEADER_LENGTH, HEADER_LENGTH + cancelFrame.readUInt32BE(9)).toString()
       )
-      expect(cancelPayload).toMatchObject({ method: 'rpc.cancel', params: { id: 1 } })
+      expect(cancelPayload).toMatchObject({
+        method: 'rpc.cancel',
+        params: { id: 1, awaitSettlement: true }
+      })
 
       transport.dataCallbacks[0](makeErrorResponseFrame(1, -32000, 'cleanup complete', 1))
       await expect(promise).rejects.toThrow('cleanup complete')

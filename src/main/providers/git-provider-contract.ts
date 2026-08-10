@@ -82,6 +82,7 @@ export type IGitProvider = {
       checkoutExistingBranch?: boolean
       noCheckout?: boolean
       signal?: AbortSignal
+      timeoutMs?: number
     }
   ): Promise<void>
   removeWorktree(

@@ -44,6 +44,7 @@ export type RequestContext = {
   signal?: AbortSignal
   sessionIdentity?: RelayClientSessionIdentity
   onResponseSettled?: (handler: (result: SinkWriteSettlement) => void) => void
+  allowCancellationSettlement?: () => void
 }
 
 export type RelayClientSessionIdentity = {
@@ -1006,9 +1007,13 @@ export class RelayDispatcher {
     const context: RequestContext = {
       clientId: client.id,
       isStale: () =>
-        client.generation !== gen || !this.clients.has(client.id) || abortController.signal.aborted,
+        client.generation !== gen ||
+        !this.clients.has(client.id) ||
+        (abortController.signal.aborted &&
+          !this.requestAborts.shouldPublishCancellationSettlement(abortKey)),
       signal: abortController.signal,
       sessionIdentity: client.sessionIdentity,
+      allowCancellationSettlement: () => this.requestAborts.allowCancellationSettlement(abortKey),
       onResponseSettled: (handler) => {
         if (responseSettled) {
           throw new Error('Response settlement callback registered after settlement')
@@ -1054,8 +1059,12 @@ export class RelayDispatcher {
   private handleNotification(client: RelayClient, notif: JsonRpcNotification): void {
     if (notif.method === 'rpc.cancel') {
       const id = Number((notif.params ?? {}).id)
-      const controller = this.requestAborts.get(client.id, id)
-      controller?.abort()
+      this.requestAborts.cancel(
+        client.id,
+        id,
+        (notif.params ?? {}).awaitSettlement === true,
+        (notif.params ?? {}).abandonSettlement === true
+      )
       return
     }
     const handler = this.notificationHandlers.get(notif.method)

@@ -247,9 +247,14 @@ export class GitHandler {
     this.dispatcher.onRequest('git.branchDiff', (p, context) => this.branchDiff(p, context))
     this.dispatcher.onRequest('git.commitDiff', (p, context) => this.commitDiff(p, context))
     this.dispatcher.onRequest('git.listWorktrees', (p, context) => this.listWorktrees(p, context))
-    this.dispatcher.onRequest('git.addWorktree', (p, context) => this.addWorktree(p, context))
+    this.dispatcher.onRequest('git.addWorktree', (p, context) =>
+      this.addWorktree(p, context, false)
+    )
     this.dispatcher.onRequest('git.addWorktreeWithCleanup', (p, context) =>
-      this.addWorktree(p, context)
+      this.addWorktree(p, context, true)
+    )
+    this.dispatcher.onRequest('git.addWorktreeWithCleanupSettlement', (p, context) =>
+      this.addWorktree(p, context, true)
     )
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
     this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
@@ -1435,7 +1440,14 @@ export class GitHandler {
       .catch(() => [])
   }
 
-  private async addWorktree(params: Record<string, unknown>, context: RequestContext) {
+  private async addWorktree(
+    params: Record<string, unknown>,
+    context: RequestContext,
+    settleCancellation: boolean
+  ) {
+    if (settleCancellation) {
+      context.allowCancellationSettlement?.()
+    }
     return this.runWithGitReadCacheClear(() =>
       addWorktreeOp(this.git.bind(this), params, { signal: context.signal })
     )

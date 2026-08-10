@@ -55,6 +55,7 @@ describe('SshGitProvider', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
+    vi.restoreAllMocks()
   })
 
   it('returns the connectionId', () => {
@@ -1438,12 +1439,13 @@ describe('SshGitProvider', () => {
   })
 
   it('addWorktree uses the cleanup-aware relay request', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
     await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
       base: 'main',
       noCheckout: true
     })
     expect(mux.request).toHaveBeenCalledWith(
-      'git.addWorktreeWithCleanup',
+      'git.addWorktreeWithCleanupSettlement',
       {
         repoPath: '/home/user/repo',
         branchName: 'feature',
@@ -1457,6 +1459,7 @@ describe('SshGitProvider', () => {
   })
 
   it('aligns cancellation and the slow-checkout override with the relay deadline', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
     vi.stubEnv('ORCA_WORKTREE_ADD_TIMEOUT_MS', '600000')
     const controller = new AbortController()
 
@@ -1465,7 +1468,7 @@ describe('SshGitProvider', () => {
     })
 
     expect(mux.request).toHaveBeenCalledWith(
-      'git.addWorktreeWithCleanup',
+      'git.addWorktreeWithCleanupSettlement',
       {
         repoPath: '/home/user/repo',
         branchName: 'feature',
@@ -1480,9 +1483,25 @@ describe('SshGitProvider', () => {
     )
   })
 
+  it('subtracts elapsed queue time from relay and SSH transport budgets', async () => {
+    vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValue(1_025)
+
+    await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
+      timeoutMs: 200
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.addWorktreeWithCleanupSettlement',
+      expect.objectContaining({ timeoutMs: 175 }),
+      expect.objectContaining({ timeoutMs: 35_175 })
+    )
+  })
+
   it('fails safely before mutation when an old relay lacks cleanup-aware creation', async () => {
     mux.request.mockRejectedValue(
-      Object.assign(new Error('Method not found: git.addWorktreeWithCleanup'), { code: -32601 })
+      Object.assign(new Error('Method not found: git.addWorktreeWithCleanupSettlement'), {
+        code: -32601
+      })
     )
 
     await expect(
@@ -1491,7 +1510,7 @@ describe('SshGitProvider', () => {
 
     expect(mux.request).toHaveBeenCalledOnce()
     expect(mux.request).toHaveBeenCalledWith(
-      'git.addWorktreeWithCleanup',
+      'git.addWorktreeWithCleanupSettlement',
       expect.any(Object),
       expect.any(Object)
     )

@@ -33,7 +33,9 @@ import {
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
 import {
+  createGitWorktreeDeadline,
   gitWorktreeCreateTransportTimeoutMs,
+  remainingGitWorktreeCreateMs,
   resolveGitWorktreeCreateTimeoutMs
 } from '../../shared/git-worktree-create-timeout'
 
@@ -726,15 +728,26 @@ export class SshGitProvider implements IGitProvider {
       checkoutExistingBranch?: boolean
       noCheckout?: boolean
       signal?: AbortSignal
+      timeoutMs?: number
     }
   ): Promise<void> {
+    const operationTimeoutMs = options?.timeoutMs ?? resolveGitWorktreeCreateTimeoutMs()
+    const deadline = createGitWorktreeDeadline(operationTimeoutMs, options?.signal)
     await this.runWithDiffDedupeClear(async () => {
-      const timeoutMs = resolveGitWorktreeCreateTimeoutMs()
+      const timeoutMs = remainingGitWorktreeCreateMs(deadline, 'SSH transport queue')
       const transportTimeoutMs = gitWorktreeCreateTransportTimeoutMs(timeoutMs)
-      const { signal, ...params } = options ?? {}
+      const signal = options?.signal
+      const params = {
+        ...(options?.base !== undefined ? { base: options.base } : {}),
+        ...(options?.checkoutExistingBranch !== undefined
+          ? { checkoutExistingBranch: options.checkoutExistingBranch }
+          : {}),
+        ...(options?.noCheckout !== undefined ? { noCheckout: options.noCheckout } : {})
+      }
       try {
+        // Why: the versioned method proves the relay can publish post-cancel cleanup settlement.
         await this.mux.request(
-          'git.addWorktreeWithCleanup',
+          'git.addWorktreeWithCleanupSettlement',
           {
             repoPath,
             branchName,

@@ -10,7 +10,10 @@ import {
   remainingGitWorktreeCreateMs,
   type GitWorktreeCreateDeadline
 } from '../shared/git-worktree-create-timeout'
-import { withGitWorktreeCreateLock } from '../shared/git-worktree-create-lock'
+import {
+  resolveGitWorktreeCreateLockIdentity,
+  withGitWorktreeCreateLock
+} from '../shared/git-worktree-create-lock'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 import type { GitExec } from './git-handler-ops'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
@@ -119,7 +122,7 @@ export async function addWorktreeOp(
 ): Promise<void> {
   const repoPath = params.repoPath as string
   const branchName = params.branchName as string
-  const targetDir = params.targetDir as string
+  let targetDir = params.targetDir as string
   const base = params.base as string | undefined
   const checkoutExistingBranch = params.checkoutExistingBranch === true
   const noCheckout = params.noCheckout === true
@@ -130,19 +133,26 @@ export async function addWorktreeOp(
     throw new Error('Branch name and base ref must not start with "-"')
   }
 
-  return withGitWorktreeCreateLock(repoPath, branchName, targetDir, async () => {
-    const timeoutMs = clampGitWorktreeCreateTimeoutMs(params.timeoutMs)
-    const deadline = createGitWorktreeDeadline(timeoutMs, request.signal)
-    const runWithDeadline =
-      (operationDeadline: GitWorktreeCreateDeadline): GitExec =>
-      (args, cwd, options) =>
-        git(args, cwd, {
-          ...options,
-          signal: operationDeadline.signal,
-          timeout: remainingGitWorktreeCreateMs(operationDeadline, `Git ${args.join(' ')}`)
-        })
-    const runWorktreeGit = runWithDeadline(deadline)
+  const timeoutMs = clampGitWorktreeCreateTimeoutMs(params.timeoutMs)
+  const deadline = createGitWorktreeDeadline(timeoutMs, request.signal)
+  const runWithDeadline =
+    (operationDeadline: GitWorktreeCreateDeadline): GitExec =>
+    (args, cwd, options) =>
+      git(args, cwd, {
+        ...options,
+        signal: operationDeadline.signal,
+        timeout: remainingGitWorktreeCreateMs(operationDeadline, `Git ${args.join(' ')}`)
+      })
+  const runWorktreeGit = runWithDeadline(deadline)
+  const identity = await resolveGitWorktreeCreateLockIdentity(
+    runWorktreeGit,
+    repoPath,
+    targetDir,
+    deadline
+  )
+  targetDir = identity.target
 
+  return withGitWorktreeCreateLock(identity, branchName, deadline, async () => {
     // Why: mirror local --no-track semantics so create has the same push UX over SSH.
     const effectiveBase =
       base && !checkoutExistingBranch
@@ -165,7 +175,8 @@ export async function addWorktreeOp(
       runWorktreeGit,
       repoPath,
       undefined,
-      deadline
+      deadline,
+      identity.repository
     )
     const deferCheckoutForGitCrypt = gitCryptDir !== null && !noCheckout
 

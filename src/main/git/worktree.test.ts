@@ -730,6 +730,22 @@ branch refs/heads/main
 })
 
 describe('addWorktree', () => {
+  const rawOperationCalls = () =>
+    gitExecFileAsyncMock.mock.calls.filter(
+      ([args]) => !(args[0] === 'rev-parse' && args[1] === '--git-common-dir')
+    )
+
+  const operationCalls = () =>
+    rawOperationCalls().map(([args, options]) => {
+      const { timeout: _timeout, ...stableOptions } = options
+      return [
+        args,
+        args[0] === 'worktree' && args[1] === 'add'
+          ? { ...stableOptions, timeout: WORKTREE_ADD_TIMEOUT_MS }
+          : stableOptions
+      ]
+    })
+
   const resolveRemoteBase = () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
   }
@@ -742,6 +758,7 @@ describe('addWorktree', () => {
     gitExecFileAsyncMock.mockReset()
     gitExecFileSyncMock.mockReset()
     translateWslOutputPathsMock.mockClear()
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '/repo/.git\n' })
   })
 
   it('creates the worktree without touching the local base ref by default', async () => {
@@ -753,7 +770,7 @@ describe('addWorktree', () => {
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
 
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+    expect(operationCalls()).toEqual([
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
@@ -789,7 +806,7 @@ describe('addWorktree', () => {
       checkoutExistingBranch: true
     })
 
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+    expect(operationCalls()).toEqual([
       [
         ['worktree', 'add', '/repo-feature', 'feature/test'],
         { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
@@ -807,10 +824,11 @@ describe('addWorktree', () => {
       checkoutExistingBranch: true
     })
 
-    const worktreeAddCall = gitExecFileAsyncMock.mock.calls.find(
+    const worktreeAddCall = rawOperationCalls().find(
       ([argv]) => Array.isArray(argv) && argv[0] === 'worktree' && argv[1] === 'add'
     )
-    expect(worktreeAddCall?.[1]).toMatchObject({ timeout: WORKTREE_ADD_TIMEOUT_MS })
+    expect(worktreeAddCall?.[1]?.timeout).toBeGreaterThan(0)
+    expect(worktreeAddCall?.[1]?.timeout).toBeLessThanOrEqual(WORKTREE_ADD_TIMEOUT_MS)
     expect(WORKTREE_ADD_TIMEOUT_MS).toBeGreaterThan(0)
   })
 
@@ -820,7 +838,7 @@ describe('addWorktree', () => {
 
     await addWorktree('/repo', '/repo-feature', 'feature/no-base')
 
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+    expect(operationCalls()).toEqual([
       [
         ['worktree', 'add', '--no-track', '-b', 'feature/no-base', '/repo-feature'],
         { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
@@ -845,7 +863,7 @@ describe('addWorktree', () => {
       'addWorktree: failed to set branch.feature/test.base for /repo-feature',
       expect.any(Error)
     )
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
+    expect(operationCalls().map((call) => call[0])).toContainEqual([
       'config',
       '--local',
       '--unset-all',
@@ -893,7 +911,7 @@ describe('addWorktree', () => {
       expect.any(Error)
     )
     // No --local set was attempted: only worktree add + the failing --get.
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+    expect(operationCalls()).toEqual([
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
@@ -931,7 +949,7 @@ describe('addWorktree', () => {
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
 
     // No --local set: --get succeeded so we preserve the user's value.
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+    expect(operationCalls()).toEqual([
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
@@ -970,7 +988,7 @@ describe('addWorktree', () => {
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
 
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+    expect(operationCalls()).toEqual([
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
@@ -1010,7 +1028,7 @@ describe('addWorktree', () => {
       addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
     ).rejects.toThrow('worktree add failed')
 
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+    expect(operationCalls()).toEqual([
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
@@ -1048,7 +1066,7 @@ describe('addWorktree', () => {
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+    expect(operationCalls()).toEqual([
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
@@ -1110,15 +1128,15 @@ describe('addWorktree', () => {
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
-    expect(gitExecFileAsyncMock.mock.calls[6]).toEqual([
+    expect(operationCalls()[6]).toEqual([
       ['status', '--porcelain', '--untracked-files=no'],
       expect.objectContaining({ cwd: '/repo-main-wt' })
     ])
-    expect(gitExecFileAsyncMock.mock.calls[8]).toEqual([
+    expect(operationCalls()[8]).toEqual([
       ['status', '--porcelain', '--untracked-files=no'],
       expect.objectContaining({ cwd: '/repo-main-wt' })
     ])
-    expect(gitExecFileAsyncMock.mock.calls[9]).toEqual([
+    expect(operationCalls()[9]).toEqual([
       ['reset', '--hard', 'remote-main'],
       expect.objectContaining({ cwd: '/repo-main-wt' })
     ])
@@ -1147,14 +1165,14 @@ describe('addWorktree', () => {
       localBranch: 'main'
     })
     // Compare-and-swap form (expected old OID) so a concurrent ref move is a no-op.
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
+    expect(operationCalls().map((call) => call[0])).toContainEqual([
       'update-ref',
       'refs/heads/main',
       'remote-main',
       'old-main'
     ])
     // No worktree owns the branch, so no working tree is reset.
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+    expect(operationCalls().map((call) => call[0])).not.toContainEqual([
       'reset',
       '--hard',
       'remote-main'
@@ -1186,13 +1204,13 @@ describe('addWorktree', () => {
       localBranch: 'main',
       ownerWorktreePath: '/repo'
     })
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+    expect(operationCalls().map((call) => call[0])).not.toContainEqual([
       'update-ref',
       'refs/heads/main',
       'remote-main',
       'old-main'
     ])
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+    expect(operationCalls().map((call) => call[0])).not.toContainEqual([
       'reset',
       '--hard',
       'refs/heads/main'
@@ -1223,13 +1241,13 @@ describe('addWorktree', () => {
       baseRef: 'origin/main',
       localBranch: 'main'
     })
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+    expect(operationCalls().map((call) => call[0])).not.toContainEqual([
       'update-ref',
       'refs/heads/main',
       'remote-main',
       'old-main'
     ])
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+    expect(operationCalls().map((call) => call[0])).not.toContainEqual([
       'reset',
       '--hard',
       'refs/heads/main'
@@ -1259,7 +1277,7 @@ describe('addWorktree', () => {
       baseRef: 'origin/main',
       localBranch: 'main'
     })
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+    expect(operationCalls().map((call) => call[0])).not.toContainEqual([
       'update-ref',
       'refs/heads/main',
       'remote-main',
@@ -1293,14 +1311,14 @@ describe('addWorktree', () => {
 
     // No reset --hard or update-ref — just base resolution, drift check, local/remote
     // OIDs, ancestry check, worktree list, status, worktree add, and config writes.
-    expect(gitExecFileAsyncMock.mock.calls).toHaveLength(11)
-    expect(gitExecFileAsyncMock.mock.calls[0]?.[0]).toEqual([
+    expect(operationCalls()).toHaveLength(11)
+    expect(operationCalls()[0]?.[0]).toEqual([
       'rev-parse',
       '--verify',
       '--quiet',
       'refs/remotes/origin/main^{commit}'
     ])
-    expect(gitExecFileAsyncMock.mock.calls[7]?.[0]).toEqual([
+    expect(operationCalls()[7]?.[0]).toEqual([
       'worktree',
       'add',
       '--no-track',
@@ -1309,24 +1327,15 @@ describe('addWorktree', () => {
       '/repo-feature',
       'refs/remotes/origin/main'
     ])
-    expect(gitExecFileAsyncMock.mock.calls[8]?.[0]).toEqual([
+    expect(operationCalls()[8]?.[0]).toEqual([
       'config',
       '--local',
       '--replace-all',
       'branch.feature/test.base',
       'refs/remotes/origin/main'
     ])
-    expect(gitExecFileAsyncMock.mock.calls[9]?.[0]).toEqual([
-      'config',
-      '--get',
-      'push.autoSetupRemote'
-    ])
-    expect(gitExecFileAsyncMock.mock.calls[10]?.[0]).toEqual([
-      'config',
-      '--local',
-      'push.autoSetupRemote',
-      'true'
-    ])
+    expect(operationCalls()[9]?.[0]).toEqual(['config', '--get', 'push.autoSetupRemote'])
+    expect(operationCalls()[10]?.[0]).toEqual(['config', '--local', 'push.autoSetupRemote', 'true'])
   })
 
   it('skips updating the local branch when it has diverged', async () => {
@@ -1339,7 +1348,7 @@ describe('addWorktree', () => {
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+    expect(operationCalls()).toEqual([
       [
         ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
         expect.objectContaining({ cwd: '/repo' })
@@ -1399,7 +1408,7 @@ describe('addWorktree', () => {
       baseRef: 'origin/main',
       localBranch: 'main'
     })
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+    expect(operationCalls()).toEqual([
       [
         ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
         expect.objectContaining({ cwd: '/repo' })
@@ -1483,7 +1492,7 @@ describe('addWorktree', () => {
       localBranch: 'main',
       behind: 2
     })
-    expect(gitExecFileAsyncMock.mock.calls[1]).toEqual([
+    expect(operationCalls()[1]).toEqual([
       ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
       { cwd: '/repo' }
     ])
@@ -1503,7 +1512,7 @@ describe('addWorktree', () => {
       })
     ).resolves.toEqual({})
 
-    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+    expect(operationCalls().map(([args]) => args)).toEqual([
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
       ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
       [
@@ -1563,7 +1572,7 @@ describe('addWorktree', () => {
       localBranch: 'main',
       behind: 2
     })
-    expect(gitExecFileAsyncMock.mock.calls[1]).toEqual([
+    expect(operationCalls()[1]).toEqual([
       ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/foo/bar/main'],
       { cwd: '/repo' }
     ])
@@ -1609,11 +1618,11 @@ describe('addWorktree', () => {
 
     await addWorktree('/repo', '/repo-feature', 'feature/disambig', 'main')
 
-    expect(gitExecFileAsyncMock.mock.calls[0]).toEqual([
+    expect(operationCalls()[0]).toEqual([
       ['rev-parse', '--verify', '--quiet', 'refs/heads/main^{commit}'],
       { cwd: '/repo' }
     ])
-    expect(gitExecFileAsyncMock.mock.calls[1]).toEqual([
+    expect(operationCalls()[1]).toEqual([
       [
         'worktree',
         'add',
@@ -1637,7 +1646,7 @@ describe('addWorktree', () => {
 
     await addWorktree('/repo', '/repo-feature', 'feature/release', 'release/main')
 
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
+    expect(operationCalls().map((call) => call[0])).toEqual([
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/release/main^{commit}'],
       ['rev-parse', '--verify', '--quiet', 'refs/heads/release/main^{commit}'],
       [
@@ -1678,7 +1687,7 @@ describe('addWorktree', () => {
     )
 
     expect(result).toEqual({})
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
+    expect(operationCalls().map((call) => call[0])).toEqual([
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/release/main^{commit}'],
       ['rev-parse', '--verify', '--quiet', 'refs/heads/release/main^{commit}'],
       [
@@ -1722,17 +1731,13 @@ describe('addWorktree', () => {
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'upstream/main', true)
 
-    expect(gitExecFileAsyncMock.mock.calls[1]?.[0]).toEqual([
+    expect(operationCalls()[1]?.[0]).toEqual([
       'rev-list',
       '--left-right',
       '--count',
       'refs/heads/main...refs/remotes/upstream/main'
     ])
-    expect(gitExecFileAsyncMock.mock.calls[9]?.[0]).toEqual([
-      'reset',
-      '--hard',
-      'remote-upstream-main'
-    ])
+    expect(operationCalls()[9]?.[0]).toEqual(['reset', '--hard', 'remote-upstream-main'])
   })
 
   it('unsets branch base config during sparse setup cleanup after creation succeeds', async () => {
@@ -1752,7 +1757,7 @@ describe('addWorktree', () => {
       addSparseWorktree('/repo', '/repo-feature', 'feature/test', ['src'], 'origin/main')
     ).rejects.toThrow('sparse setup failed')
 
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
+    expect(operationCalls().map((call) => call[0])).toContainEqual([
       'config',
       '--local',
       '--unset-all',

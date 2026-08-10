@@ -33,10 +33,7 @@ export function clampGitWorktreeCreateTimeoutMs(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return resolveGitWorktreeCreateTimeoutMs()
   }
-  return Math.min(
-    Math.max(Math.floor(value), GIT_WORKTREE_CREATE_TIMEOUT_MS),
-    GIT_WORKTREE_CREATE_TIMEOUT_MAX_MS
-  )
+  return Math.min(Math.max(Math.floor(value), 1), GIT_WORKTREE_CREATE_TIMEOUT_MAX_MS)
 }
 
 export function createGitWorktreeDeadline(
