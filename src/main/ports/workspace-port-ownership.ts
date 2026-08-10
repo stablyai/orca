@@ -8,7 +8,7 @@ import type {
   WorkspacePortProbe,
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
-import { scanWorkspacePorts } from './local-workspace-port-scanner'
+import { scanWorkspacePorts, type WorkspacePortScanOptions } from './local-workspace-port-scanner'
 
 export type WorkspacePortProbeInput = WorkspacePortProbe & {
   connectionId?: string | null
@@ -82,7 +82,9 @@ export async function killWorkspacePort(
     return { ok: false, reason: 'Invalid process or port.' }
   }
 
-  const scan = await scanWorkspacePorts([...worktrees])
+  // Why (#11161): this re-scan is the authorization check for SIGTERM, so it
+  // must never land on a cycle that skipped the owner-attribution metadata.
+  const scan = await scanWorkspacePorts([...worktrees], undefined, { requireMetadata: true })
   const port = scan.ports.find(
     (candidate) => candidate.pid === args.pid && candidate.port === args.port
   )
@@ -113,7 +115,8 @@ export async function killWorkspacePort(
 }
 
 export async function scanWorkspacePortProbes(
-  worktrees: readonly WorkspacePortProbe[]
+  worktrees: readonly WorkspacePortProbe[],
+  options?: WorkspacePortScanOptions
 ): Promise<WorkspacePortScanResult> {
-  return scanWorkspacePorts([...worktrees])
+  return scanWorkspacePorts([...worktrees], undefined, options)
 }

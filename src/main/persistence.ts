@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: persistence keeps schema defaults, migration, and load/save/flush in one file so the storage contract reviews as a unit. */
-import { app, safeStorage } from 'electron'
+import { app } from 'electron'
 import {
   readFileSync,
   writeFileSync,
@@ -11,8 +11,13 @@ import {
   statSync,
   realpathSync
 } from 'node:fs'
-import { rename, mkdir, rm, copyFile, open, stat, access } from 'node:fs/promises'
-import { renameDurable, writeFileDurableSync } from './durable-file-write'
+import { rename, mkdir, rm, copyFile, open, stat, access, writeFile } from 'node:fs/promises'
+import {
+  durableWriteTempPath,
+  removeStaleDurableWriteTempFiles,
+  renameDurable,
+  writeFileDurableSync
+} from './durable-file-write'
 import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
@@ -33,6 +38,8 @@ import {
 } from '../shared/automation-schedules'
 import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
+import { normalizeProxyUrl } from '../shared/network-proxy'
+import { normalizeKagiSessionLink } from '../shared/browser-url'
 import type {
   PersistedState,
   Project,
@@ -267,39 +274,30 @@ import {
   readTerminalScrollbackSnapshotSync,
   type TerminalScrollbackSnapshotStorage
 } from './terminal-scrollback-snapshots'
+import {
+  deleteRemovedTerminalScrollbackSnapshotsAsync,
+  migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync
+} from './terminal-scrollback-snapshot-async-migration'
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
+import {
+  PROTECTED_SECRET_SLOT,
+  ProtectedSecretPersistence,
+  sshPtyOwnerLeaseSecretSlot,
+  type ProtectedSecretRetentionUpdate
+} from './protected-secret-persistence'
 
-function encrypt(plaintext: string): string {
-  if (!plaintext || !safeStorage.isEncryptionAvailable()) {
-    return plaintext
-  }
-  try {
-    return safeStorage.encryptString(plaintext).toString('base64')
-  } catch (err) {
-    console.error('[persistence] Encryption failed:', err)
-    return plaintext
-  }
+function isLegacyOpenCodeSessionCookie(value: string): boolean {
+  const trimmed = value.trim()
+  return (
+    trimmed.startsWith('Fe26.2**') ||
+    trimmed.split(';').some((pair) => /^(?:auth|__Host-auth)=\S+$/i.test(pair.trim()))
+  )
 }
 
-function decrypt(ciphertext: string): string {
-  if (!ciphertext || !safeStorage.isEncryptionAvailable()) {
-    return ciphertext
-  }
-  try {
-    return safeStorage.decryptString(Buffer.from(ciphertext, 'base64'))
-  } catch {
-    // Why: decrypt failure usually means plaintext (pre-encryption) or a changed keychain; return raw so the cookie survives upgrade.
-    console.warn(
-      '[persistence] safeStorage decryption failed — returning ciphertext as-is. Possible keychain reset.'
-    )
-    return ciphertext
-  }
-}
-
-function decryptOptionalSecret(value: string | null | undefined): string | null {
-  return value ? decrypt(value) : null
+function isLegacySshPtyOwnerLease(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
 function retireLegacyInstructionsForClearedTextActionRecipes(
@@ -372,6 +370,7 @@ function getGithubCacheFile(dataFile = getDataFile()): string {
 // Why: worktrees deleted outside Orca orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
 // GC stays narrow: local-host entries only (a local existsSync would falsely condemn SSH/WSL remote paths) and only after a 30-day idle grace.
 const WORKTREE_META_GC_GRACE_MS = 30 * 24 * 60 * 60 * 1000
+const STALE_DURABLE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 function gcStaleWorktreeMeta(state: PersistedState): number {
   // Why: a hand-corrupted "worktreeMeta": null overrides the defaults merge; normalize here instead of throwing.
@@ -1389,10 +1388,18 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   if (!value || typeof value !== 'object') {
     return undefined
   }
-  const candidate = value as { owner?: unknown; repo?: unknown }
+  const candidate = value as { owner?: unknown; repo?: unknown; host?: unknown }
   const owner = typeof candidate.owner === 'string' ? candidate.owner.trim() : ''
   const repo = typeof candidate.repo === 'string' ? candidate.repo.trim() : ''
-  return owner && repo ? { owner, repo } : undefined
+  if (!owner || !repo) {
+    return undefined
+  }
+  // Why: an `upstream` remote may live on a different server than `origin`, so
+  // dropping the host forced consumers to re-infer it from origin and could bind
+  // a GHES parent to a same-named github.com repo. Absent host stays absent so
+  // records written before this survive unchanged.
+  const host = typeof candidate.host === 'string' ? candidate.host.trim() : ''
+  return host ? { owner, repo, host } : { owner, repo }
 }
 
 function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | null | undefined {
@@ -2604,6 +2611,20 @@ function deleteScannedSessionFieldsForOwners(
   )
 }
 
+// Remote (ssh:/runtime:) workspace state can exist in both the renderer's local blob and main's host
+// partition, because the renderer falls back to 'local' whenever worktree ownership is unresolved.
+function workspaceSessionPartitionIdsForHost(hostId: string | null | undefined): ExecutionHostId[] {
+  const parsed = parseExecutionHostId(hostId)
+  return parsed && parsed.id !== LOCAL_EXECUTION_HOST_ID
+    ? [LOCAL_EXECUTION_HOST_ID, parsed.id]
+    : [LOCAL_EXECUTION_HOST_ID]
+}
+
+/** The partition the host actually owns; the others are only spill surfaces for it. */
+function workspaceSessionOwnerPartitionForHost(hostId: string | null | undefined): ExecutionHostId {
+  return parseExecutionHostId(hostId)?.id ?? LOCAL_EXECUTION_HOST_ID
+}
+
 function removeWorkspaceSessionOwner(
   session: WorkspaceSessionState | undefined,
   ownerKey: string,
@@ -2749,16 +2770,27 @@ export class Store {
   private readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
+  private pendingSnapshotFileWork: Promise<void> | null = null
+  private readonly staleTempCleanup: Promise<void>
   private writeGeneration = 0
+  private inFlightAsyncTmpFile: string | null = null
   // Prevent a sync flush from interleaving a second rotation with awaited ring mutations.
   private backupRotationInFlight = false
   // Why: after a profile transfer rewrites this file on disk, a late flush of stale in-memory state would resurrect the moved project.
   private writesFrozen = false
+  /** Set by flushAsync so the quit flush is the final write; see scheduleSave. */
+  private quitFlushStarted = false
+  private quitFlushPromise: Promise<void> | null = null
   // Content hash at last write, to skip no-op writes; derived from the payload with encrypted blobs normalized back to plaintext (see buildStateToSave), since encrypt() uses a random IV per call.
   private lastWrittenStateHash: string | null = null
+  private lastDurableWriteGeneration = -1
   private firstPendingSaveAt: number | null = null
   private githubCacheDirty = false
+  private githubCacheGeneration = 0
+  private pendingGithubCacheWrite: Promise<void> | null = null
+  private readonly staleGithubCacheTempCleanup: Promise<void>
   private gitUsernameCache = new Map<string, string>()
+  private readonly protectedSecrets = new ProtectedSecretPersistence()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
     (
@@ -2772,6 +2804,13 @@ export class Store {
   constructor(options: StoreOptions = {}) {
     // Why: profile switching yields multiple state paths; capture per Store so late async writes can't follow a global path.
     this.dataFile = options.dataFile ?? getDataFile()
+    this.staleTempCleanup = removeStaleDurableWriteTempFiles(this.dataFile, {
+      minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS
+    })
+    this.staleGithubCacheTempCleanup = removeStaleDurableWriteTempFiles(
+      getGithubCacheFile(this.dataFile),
+      { minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS }
+    )
     const profileSnapshotRoot = getProfileTerminalScrollbackSnapshotRoot(this.dataFile)
     const legacySnapshotRoot = getProfileTerminalScrollbackSnapshotRoot(getDataFile())
     this.terminalScrollbackSnapshotStorage = {
@@ -3014,13 +3053,43 @@ export class Store {
 
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
-          parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
+          parsed.settings.opencodeSessionCookie = this.protectedSecrets.decrypt(
+            PROTECTED_SECRET_SLOT.opencodeSessionCookie,
+            parsed.settings.opencodeSessionCookie,
+            isLegacyOpenCodeSessionCookie
+          )
         }
         if (parsed.settings?.httpProxyUrl) {
-          parsed.settings.httpProxyUrl = decrypt(parsed.settings.httpProxyUrl)
+          const decryptedProxy = this.protectedSecrets.decryptWithStatus(
+            PROTECTED_SECRET_SLOT.httpProxyUrl,
+            parsed.settings.httpProxyUrl,
+            (value) => normalizeProxyUrl(value).ok
+          )
+          // Why (STA-3442): after a keychain reset decrypt returns raw ciphertext; a non-URL
+          // value must not masquerade as a configured proxy (silent DIRECT fallback) or
+          // re-persist as garbage. Plaintext URLs still pass, preserving the upgrade path.
+          if (
+            decryptedProxy.status === 'unavailable' ||
+            (decryptedProxy.status === 'failed' && !decryptedProxy.plaintext)
+          ) {
+            parsed.settings.httpProxyUrl = ''
+          } else if (normalizeProxyUrl(decryptedProxy.plaintext).ok) {
+            parsed.settings.httpProxyUrl = decryptedProxy.plaintext
+          } else {
+            console.warn(
+              '[persistence] httpProxyUrl could not be decrypted — clearing the stored proxy URL. Re-enter it in Settings > Advanced > Network.'
+            )
+            parsed.settings.httpProxyUrl = ''
+            this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
+            this.loadNeedsSave = true
+          }
         }
         if (parsed.ui?.browserKagiSessionLink) {
-          parsed.ui.browserKagiSessionLink = decryptOptionalSecret(parsed.ui.browserKagiSessionLink)
+          parsed.ui.browserKagiSessionLink = this.protectedSecrets.decrypt(
+            PROTECTED_SECRET_SLOT.browserKagiSessionLink,
+            parsed.ui.browserKagiSessionLink,
+            (value) => normalizeKagiSessionLink(value) !== null
+          )
         }
         parsed.sshPtyConsumerRecoveries = (
           Array.isArray(parsed.sshPtyConsumerRecoveries) ? parsed.sshPtyConsumerRecoveries : []
@@ -3029,8 +3098,23 @@ export class Store {
             normalizeSshPtyConsumerRecovery(record, ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH)
           )
           .filter((record): record is SshPtyConsumerRecovery => record !== null)
-          .map((record) => ({ ...record, ownerLease: decrypt(record.ownerLease) }))
-          .map((record) => normalizeSshPtyConsumerRecovery(record))
+          .map((record) => {
+            const slot = sshPtyOwnerLeaseSecretSlot(record.targetId)
+            const decrypted = this.protectedSecrets.decryptWithStatus(
+              slot,
+              record.ownerLease,
+              isLegacySshPtyOwnerLease
+            )
+            const normalized =
+              decrypted.status === 'unavailable' ||
+              (decrypted.status === 'failed' && !decrypted.plaintext)
+                ? record
+                : normalizeSshPtyConsumerRecovery({ ...record, ownerLease: decrypted.plaintext })
+            if (!normalized) {
+              this.protectedSecrets.removeRetainedBlob(slot)
+            }
+            return normalized
+          })
           .filter((record): record is SshPtyConsumerRecovery => record !== null)
 
         // Merge with defaults in case new fields were added
@@ -3780,6 +3864,13 @@ export class Store {
   private static SAVE_MAX_WAIT_MS = 5_000
 
   private scheduleSave(): void {
+    // Why: once the quit flush has snapshotted, a newly debounced write would fire during
+    // teardown with nothing awaiting it, and the process can exit mid-rename. The quit
+    // flush is the last write by construction.
+    if (this.quitFlushStarted) {
+      return
+    }
+    this.writeGeneration += 1
     const now = Date.now()
     this.firstPendingSaveAt ??= now
     if (this.writeTimer) {
@@ -3790,20 +3881,27 @@ export class Store {
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
       this.firstPendingSaveAt = null
-      // Why (issue #1158): serialize async writes so backup rotation can't race two callers over the same paths.
-      const prev = this.pendingWrite ?? Promise.resolve()
-      const next = prev
-        .then(() => this.writeToDiskAsync())
-        .catch((err) => {
-          console.error('[persistence] Failed to write state:', err)
-        })
-        .finally(() => {
-          if (this.pendingWrite === next) {
-            this.pendingWrite = null
-          }
-        })
-      this.pendingWrite = next
+      void this.enqueueWrite()
     }, delay)
+  }
+
+  private enqueueWrite(): Promise<void> {
+    const previousWrite = Promise.all([
+      this.pendingWrite ?? this.staleTempCleanup,
+      this.pendingSnapshotFileWork ?? Promise.resolve()
+    ]).then(() => {})
+    const write = previousWrite.then(() => this.writeToDiskAsync())
+    const trackedWrite = write
+      .catch((err) => {
+        console.error('[persistence] Failed to write state:', err)
+      })
+      .finally(() => {
+        if (this.pendingWrite === trackedWrite) {
+          this.pendingWrite = null
+        }
+      })
+    this.pendingWrite = trackedWrite
+    return write
   }
 
   /** Wait for any in-flight async disk write to complete. Used in tests. */
@@ -3817,8 +3915,12 @@ export class Store {
     return durable
   }
 
-  // Why: build payload synchronously so hash and serialized bytes reflect the same state tick (no await interleave). One full-state stringify serves both the on-disk payload and the no-op-write guard hash: each secret slot is serialized as a fresh unguessable sentinel, then sentinels are substituted to ciphertext for the payload and to plaintext for the hash. The hash is thus a pure function of plaintext state (skips a byte-identical rewrite) without a second stringify.
-  private buildStateToSave(): { payload: string; stateHash: string } {
+  // Why: build payload synchronously so hash and bytes reflect one state tick. A degraded prefix makes the first healthy retry durable even when plaintext state is unchanged.
+  private buildStateToSave(): {
+    payload: string
+    stateHash: string
+    protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
+  } {
     // Why sentinels (not a blob/key string match): the substitution must be
     // position-exact. A plain search for the ciphertext — or even for a
     // `"key":"blob"` token — can be mimicked by user-controlled state (e.g. an
@@ -3828,54 +3930,79 @@ export class Store {
     // on deterministic-IV platforms (macOS/legacy-Linux OSCrypt). A per-slot
     // random UUID can't occur anywhere else in the serialized state (the user
     // sets their data before it is minted), so it appears exactly once.
-    const secretSubs: { sentinel: string; blob: string; plaintext: string }[] = []
-    const encryptToSentinel = (plaintext: string): string => {
-      const blob = encrypt(plaintext)
-      // Deterministic already (empty secret / safeStorage unavailable / encrypt
-      // failure): blob === plaintext, so no normalization — and no sentinel,
-      // which also avoids substituting an empty or plaintext-shaped slot.
-      if (blob === plaintext) {
+    const secretSubs: { sentinel: string; blob: string; hashValue: string }[] = []
+    const protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
+    let protectedStorageDegraded = false
+    const encryptToSentinel = (slot: string, plaintext: string): string => {
+      const encrypted = this.protectedSecrets.encrypt(slot, plaintext)
+      if (encrypted.retentionUpdate) {
+        protectedSecretUpdates.push(encrypted.retentionUpdate)
+      }
+      protectedStorageDegraded ||= encrypted.degraded
+      const { blob, hashValue = plaintext } = encrypted
+      // Values already identical in payload and hash need no sentinel substitution.
+      if (blob === plaintext && hashValue === plaintext) {
         return blob
       }
       const sentinel = `orca-secret-slot-${randomUUID()}`
-      secretSubs.push({ sentinel, blob, plaintext })
+      secretSubs.push({ sentinel, blob, hashValue })
       return sentinel
+    }
+    const encryptOptionalToSentinel = (
+      slot: string,
+      plaintext: string | null | undefined
+    ): string | null => {
+      const encrypted = encryptToSentinel(slot, plaintext ?? '')
+      return encrypted || null
     }
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
       sshPtyConsumerRecoveries: (this.state.sshPtyConsumerRecoveries ?? []).map((record) => ({
         ...record,
-        ownerLease: encryptToSentinel(record.ownerLease)
+        ownerLease: encryptToSentinel(
+          sshPtyOwnerLeaseSecretSlot(record.targetId),
+          record.ownerLease
+        )
       })),
       settings: {
         ...this.state.settings,
-        opencodeSessionCookie: encryptToSentinel(this.state.settings.opencodeSessionCookie),
-        httpProxyUrl: encryptToSentinel(this.state.settings.httpProxyUrl ?? '')
+        opencodeSessionCookie: encryptToSentinel(
+          PROTECTED_SECRET_SLOT.opencodeSessionCookie,
+          this.state.settings.opencodeSessionCookie
+        ),
+        httpProxyUrl: encryptToSentinel(
+          PROTECTED_SECRET_SLOT.httpProxyUrl,
+          this.state.settings.httpProxyUrl ?? ''
+        )
       },
       ui: {
         ...this.state.ui,
-        browserKagiSessionLink: this.state.ui.browserKagiSessionLink
-          ? encryptToSentinel(this.state.ui.browserKagiSessionLink)
-          : null
+        browserKagiSessionLink: encryptOptionalToSentinel(
+          PROTECTED_SECRET_SLOT.browserKagiSessionLink,
+          this.state.ui.browserKagiSessionLink
+        )
       }
     }
     // Why compact: ~20% fewer bytes and less serialize time; all readers JSON.parse so formatting is irrelevant.
     // One full-state stringify; secret slots currently hold sentinels.
     const serialized = JSON.stringify(stateToSave)
     // Substitute each unique sentinel exactly once: ciphertext for the on-disk
-    // payload, plaintext for the guard hash. Function-form replacement keeps
-    // `$` in blob/plaintext inert; both sides read the sentinel as JSON-escaped
+    // payload, a stable normalized value for the guard hash. Function-form
+    // replacement keeps `$` inert; both sides read the sentinel as JSON-escaped
     // in `serialized`, so each replace is byte-for-byte position-exact.
     let payload = serialized
     let hashInput = serialized
-    for (const { sentinel, blob, plaintext } of secretSubs) {
+    for (const { sentinel, blob, hashValue } of secretSubs) {
       const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
-      payload = payload.replace(escapedSentinel, () => blob)
-      hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(plaintext).slice(1, -1))
+      payload = payload.replace(escapedSentinel, () => JSON.stringify(blob).slice(1, -1))
+      hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(hashValue).slice(1, -1))
     }
-    const stateHash = createHash('sha1').update(hashInput).digest('hex')
-    return { payload, stateHash }
+    const stateHash = createHash('sha1')
+      .update(protectedStorageDegraded ? 'safeStorage-degraded\0' : '')
+      .update(hashInput)
+      .digest('hex')
+    return { payload, stateHash, protectedSecretUpdates }
   }
 
   // Why: async writes avoid blocking the main Electron thread on every debounced save.
@@ -3884,15 +4011,16 @@ export class Store {
       return
     }
     const gen = this.writeGeneration
-    const { payload, stateHash } = this.buildStateToSave()
+    const { payload, stateHash, protectedSecretUpdates } = this.buildStateToSave()
     // Why: don't rewrite a byte-identical multi-MB file when state nets out to already-persisted.
     if (stateHash === this.lastWrittenStateHash) {
+      this.lastDurableWriteGeneration = Math.max(this.lastDurableWriteGeneration, gen)
       return
     }
     const dataFile = this.dataFile
     const dir = dirname(dataFile)
     await mkdir(dir, { recursive: true }).catch(() => {})
-    const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+    const tmpFile = durableWriteTempPath(dataFile)
 
     // Why: on any write/rename failure, remove the tmp file so it doesn't leave a multi-MB orphan.
     let renamed = false
@@ -3909,16 +4037,36 @@ export class Store {
       if (this.writeGeneration !== gen) {
         return
       }
-      await renameDurable(tmpFile, dataFile)
-      renamed = true
-      // Why re-check gen: a sync flush during the rename await may have written fresher state; don't record a stale hash over it.
-      if (this.writeGeneration === gen) {
+      this.inFlightAsyncTmpFile = tmpFile
+      try {
+        await renameDurable(tmpFile, dataFile)
+        renamed = true
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || this.writeGeneration === gen) {
+          throw error
+        }
+      } finally {
+        if (this.inFlightAsyncTmpFile === tmpFile) {
+          this.inFlightAsyncTmpFile = null
+        }
+      }
+      // Why re-check gen: a mutation or sync flush during rename makes the installed hash ambiguous; invalidate the no-op guard.
+      if (renamed && this.writeGeneration === gen) {
         this.lastWrittenStateHash = stateHash
+        this.protectedSecrets.commitRetentionUpdates(protectedSecretUpdates)
+      } else if (renamed) {
+        this.lastWrittenStateHash = null
+      }
+      if (renamed) {
+        this.lastDurableWriteGeneration = Math.max(this.lastDurableWriteGeneration, gen)
       }
     } finally {
       if (!renamed) {
         await rm(tmpFile).catch(() => {})
       }
+    }
+    if (!renamed) {
+      return
     }
     // Why (#1158): rotate only after the primary rename while this write still owns its generation.
     if (this.writeGeneration !== gen) {
@@ -3932,7 +4080,7 @@ export class Store {
     if (this.writesFrozen) {
       return
     }
-    const { payload, stateHash } = this.buildStateToSave()
+    const { payload, stateHash, protectedSecretUpdates } = this.buildStateToSave()
     // Why: matching hash means the file already holds this state; force overrides when an async rename may be racing past the gen check.
     if (!opts.force && stateHash === this.lastWrittenStateHash) {
       return
@@ -3952,6 +4100,11 @@ export class Store {
       writeFileDurableSync(tmpFile, dataFile, payload)
       renamed = true
       this.lastWrittenStateHash = stateHash
+      this.protectedSecrets.commitRetentionUpdates(protectedSecretUpdates)
+      this.lastDurableWriteGeneration = Math.max(
+        this.lastDurableWriteGeneration,
+        this.writeGeneration
+      )
     } finally {
       if (!renamed) {
         try {
@@ -3968,6 +4121,9 @@ export class Store {
   }
 
   flushOrThrow(): void {
+    if (this.quitFlushStarted) {
+      throw new Error('Cannot synchronously flush after final persistence has started')
+    }
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
       this.writeTimer = null
@@ -3976,7 +4132,18 @@ export class Store {
     const asyncWriteWasInFlight = this.pendingWrite !== null
     // Why: bump writeGeneration so an in-flight async write skips its rename and can't overwrite this sync write.
     this.writeGeneration++
-    this.pendingWrite = null
+    if (this.inFlightAsyncTmpFile) {
+      try {
+        unlinkSync(this.inFlightAsyncTmpFile)
+        this.inFlightAsyncTmpFile = null
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          void this.enqueueWrite().catch(() => {})
+          throw error
+        }
+      }
+    }
+    // Why: later async flushes must remain serialized behind the invalidated writer.
     this.writeToDiskSync({
       force: asyncWriteWasInFlight,
       skipBackupRotation: this.backupRotationInFlight
@@ -4115,11 +4282,16 @@ export class Store {
     if (!project) {
       return null
     }
+    // Why: the same repo id can exist on multiple execution hosts, so match this setup's own host
+    // row and never fall back to a sibling host's row — a stale repoId/hostId would delete that host's
+    // registration. With no exact match the setup is stale, and the path below drops just the setup.
     const repo = setup.repoId
-      ? this.state.repos.find((entry) => entry.id === setup.repoId)
+      ? this.state.repos.find(
+          (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
+        )
       : undefined
     if (repo) {
-      this.removeProject(repo.id)
+      this.removeProjectForHost(repo.id, setup.hostId)
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
     this.state.projectHostSetups = this.state.projectHostSetups.filter(
@@ -5264,15 +5436,34 @@ export class Store {
     return updated
   }
 
-  removeWorktreeMeta(worktreeId: string): void {
+  removeWorktreeMeta(worktreeId: string, hostId?: ExecutionHostId | null): void {
+    // Persisted ownership beats stale live routing; hostId is only an ownerless fallback.
+    const owner = this.state.worktreeMeta[worktreeId]?.hostId ?? hostId
+    // Skip partitions main never wrote: materializing one fences every sibling worktree of the repo.
+    const partitions = new Set<ExecutionHostId>(
+      workspaceSessionPartitionIdsForHost(owner).filter((partition) =>
+        this.hasPersistedWorkspaceSession(partition)
+      )
+    )
+    // A repo-wide fence must not rebase a sibling's unpersisted tabs onto main's copy, and a spill
+    // partition that never held this worktree has no claim on the repo at all.
+    const ownerPartition = workspaceSessionOwnerPartitionForHost(owner)
+    const fencedPartitions = new Set(
+      [...partitions].filter(
+        (partition) =>
+          this.partitionOwnsWorktreeTabs(worktreeId, partition) ||
+          (partition === ownerPartition &&
+            !this.partitionHasOtherRepoWorktreeTabs(worktreeId, partition))
+      )
+    )
     delete this.state.worktreeMeta[worktreeId]
     delete this.state.worktreeLineageById[worktreeId]
     delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
-    this.state.workspaceSession = removeWorkspaceSessionOwner(
-      this.state.workspaceSession,
-      worktreeId,
-      { advanceTerminalTopologyRevision: true }
-    )!
+    for (const partition of partitions) {
+      this.removeWorkspaceSessionOwnerInPartition(worktreeId, partition, {
+        advanceTerminalTopologyRevision: fencedPartitions.has(partition)
+      })
+    }
     this.scheduleSave()
   }
 
@@ -5575,12 +5766,22 @@ export class Store {
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
     const sanitizedUpdates = stripLegacyTerminalScrollbackBytes(updates)
+    if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
+      this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
+    }
+    if ('httpProxyUrl' in updates && !updates.httpProxyUrl) {
+      this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
+    }
     // Why: coerce to boolean here (not the IPC edge) so every write path is covered and a truthy non-bool can't persist as "tray-minimize on".
     if ('minimizeToTrayOnClose' in updates) {
       sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
     }
     if ('showMenuBarIcon' in updates) {
       sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
+    }
+    // Why: the artifact publish capability must be an exact boolean on disk; no truthy value grants it.
+    if ('artifactSharingEnabled' in updates) {
+      sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
     }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
@@ -5799,6 +6000,9 @@ export class Store {
   }
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
+    if ('browserKagiSessionLink' in updates && !updates.browserKagiSessionLink) {
+      this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.browserKagiSessionLink)
+    }
     const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
     const { activeView, ...durableUpdates } = sanitizedUpdates
     const activeViewChanged = this.activeViewPreference.set(activeView)
@@ -6021,6 +6225,7 @@ export class Store {
     // Why no scheduleSave: cache is memory-only and snapshotted to a sidecar at flush; persisting here rewrote the whole state file every poll cycle.
     this.state.githubCache = cache
     this.githubCacheDirty = true
+    this.githubCacheGeneration += 1
   }
 
   // ── Workspace Session ─────────────────────────────────────────────
@@ -6036,6 +6241,14 @@ export class Store {
       return this.state.workspaceSession ?? getDefaultWorkspaceSession()
     }
     return this.state.workspaceSessionsByHostId?.[resolved] ?? getDefaultWorkspaceSession()
+  }
+
+  /** Whether a partition was ever written; `getWorkspaceSession` defaults absent ones and cannot tell them apart. */
+  private hasPersistedWorkspaceSession(hostId: ExecutionHostId): boolean {
+    return (
+      hostId === LOCAL_EXECUTION_HOST_ID ||
+      this.state.workspaceSessionsByHostId?.[hostId] !== undefined
+    )
   }
 
   getWorkspaceSessionHostIds(): ExecutionHostId[] {
@@ -6067,6 +6280,70 @@ export class Store {
     this.setHostWorkspaceSession(resolved, session)
   }
 
+  removeWorkspaceSessionStateForWorktree(
+    worktreeId: string,
+    hostId?: ExecutionHostId | null,
+    options: { advanceTerminalTopologyRevision?: boolean } = {}
+  ): void {
+    for (const resolved of workspaceSessionPartitionIdsForHost(hostId)) {
+      this.removeWorkspaceSessionOwnerInPartition(worktreeId, resolved, options)
+    }
+  }
+
+  private removeWorkspaceSessionOwnerInPartition(
+    worktreeId: string,
+    resolved: ExecutionHostId,
+    options: { advanceTerminalTopologyRevision?: boolean }
+  ): void {
+    if (!this.hasPersistedWorkspaceSession(resolved)) {
+      return
+    }
+    const current = this.getWorkspaceSession(resolved)
+    const session = removeWorkspaceSessionOwner(current, worktreeId, {
+      advanceTerminalTopologyRevision: options.advanceTerminalTopologyRevision ?? true
+    })
+    if (!session) {
+      return
+    }
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      this.state.workspaceSession = session
+    } else {
+      // Host scoping matters because identical repo/path ids may exist on two servers.
+      this.state.workspaceSessionsByHostId = {
+        ...this.state.workspaceSessionsByHostId,
+        [resolved]: session
+      }
+    }
+    this.scheduleSave()
+  }
+
+  /** Whether a partition still holds terminal membership for `worktreeId`. */
+  private partitionOwnsWorktreeTabs(worktreeId: string, hostId: ExecutionHostId): boolean {
+    return this.getWorkspaceSession(hostId).tabsByWorktree?.[worktreeId] !== undefined
+  }
+
+  /** Whether fencing this partition would rebase a sibling worktree of the same repo. */
+  private partitionHasOtherRepoWorktreeTabs(worktreeId: string, hostId: ExecutionHostId): boolean {
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    const tabsByWorktree = this.getWorkspaceSession(hostId).tabsByWorktree ?? {}
+    return Object.entries(tabsByWorktree).some(
+      ([id, tabs]) =>
+        id !== worktreeId && getRepoIdFromWorktreeId(id) === repoId && (tabs?.length ?? 0) > 0
+    )
+  }
+
+  stageWorkspaceSessionBeforeUnload(
+    session: PersistedState['workspaceSession'],
+    hostId?: string | null
+  ): void {
+    const resolved = this.resolveHostId(hostId)
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      this.setLocalWorkspaceSession(session, true)
+      return
+    }
+    this.setHostWorkspaceSession(resolved, session)
+  }
+
   /** Persist a non-'local' host partition; remote hosts skip setLocalWorkspaceSession's local-daemon PTY-binding race guards. */
   private setHostWorkspaceSession(hostId: ExecutionHostId, session: WorkspaceSessionState): void {
     // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
@@ -6084,7 +6361,10 @@ export class Store {
     this.scheduleSave()
   }
 
-  private setLocalWorkspaceSession(session: PersistedState['workspaceSession']): void {
+  private setLocalWorkspaceSession(
+    session: PersistedState['workspaceSession'],
+    deferSnapshotFiles = false
+  ): void {
     const prior = this.state.workspaceSession
     session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
     session = pruneWorkspaceSessionBrowserHistory(
@@ -6213,14 +6493,74 @@ export class Store {
       }
     }
     session = pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
-    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
-      session,
-      this.terminalScrollbackSnapshotStorage
-    )
-    session = migratedScrollback.session
-    deleteRemovedTerminalScrollbackSnapshots(prior, session, this.terminalScrollbackSnapshotStorage)
+    if (!deferSnapshotFiles) {
+      const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
+        session,
+        this.terminalScrollbackSnapshotStorage
+      )
+      session = migratedScrollback.session
+      deleteRemovedTerminalScrollbackSnapshots(
+        prior,
+        session,
+        this.terminalScrollbackSnapshotStorage
+      )
+    }
     this.state.workspaceSession = session
+    if (deferSnapshotFiles) {
+      this.enqueueTerminalScrollbackSnapshotWork(prior, session)
+    }
     this.scheduleSave()
+  }
+
+  private enqueueTerminalScrollbackSnapshotWork(
+    prior: WorkspaceSessionState | undefined,
+    staged: WorkspaceSessionState
+  ): void {
+    const previous = this.pendingSnapshotFileWork ?? Promise.resolve()
+    const work = previous
+      .then(async () => {
+        if (this.state.workspaceSession !== staged) {
+          if (this.state.workspaceSession) {
+            await deleteRemovedTerminalScrollbackSnapshotsAsync(
+              prior,
+              this.state.workspaceSession,
+              this.terminalScrollbackSnapshotStorage
+            )
+          }
+          return
+        }
+        const migrated = await migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync(
+          staged,
+          this.terminalScrollbackSnapshotStorage
+        )
+        const current =
+          this.state.workspaceSession === staged ? migrated : this.state.workspaceSession
+        if (this.state.workspaceSession === staged) {
+          this.state.workspaceSession = migrated
+        } else if (current) {
+          await deleteRemovedTerminalScrollbackSnapshotsAsync(
+            migrated,
+            current,
+            this.terminalScrollbackSnapshotStorage
+          )
+        }
+        if (current) {
+          await deleteRemovedTerminalScrollbackSnapshotsAsync(
+            prior,
+            current,
+            this.terminalScrollbackSnapshotStorage
+          )
+        }
+      })
+      .catch((error) => {
+        console.error('[terminal-scrollback] Failed to prepare unload snapshots:', error)
+      })
+      .finally(() => {
+        if (this.pendingSnapshotFileWork === work) {
+          this.pendingSnapshotFileWork = null
+        }
+      })
+    this.pendingSnapshotFileWork = work
   }
 
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
@@ -6374,11 +6714,26 @@ export class Store {
       ptyId: string
       incarnationId?: string
       startupCwd?: string
+      expectedBinding?: { ptyId: string; incarnationId?: string }
     },
     hostId?: string | null
-  ): void {
+  ): boolean {
     const resolvedHostId = this.resolveHostId(hostId)
     const session = this.getWorkspaceSession(resolvedHostId)
+    const paneKey = `${args.tabId}:${args.leafId}`
+    if (args.expectedBinding) {
+      const tab = session.tabsByWorktree?.[args.worktreeId]?.find(
+        (candidate) => candidate.id === args.tabId && candidate.worktreeId === args.worktreeId
+      )
+      const boundPtyId = session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
+      if (
+        !tab ||
+        boundPtyId !== args.expectedBinding.ptyId ||
+        session.terminalPtyIncarnationsByPaneKey?.[paneKey] !== args.expectedBinding.incarnationId
+      ) {
+        return false
+      }
+    }
     if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
       this.state.workspaceSessionsByHostId = {
         ...this.state.workspaceSessionsByHostId,
@@ -6386,15 +6741,17 @@ export class Store {
       }
     }
     const sessionBeforeBinding = cloneWorkspaceSessionState(session)
-    const paneKey = `${args.tabId}:${args.leafId}`
+    const reconciledIncarnation =
+      args.expectedBinding !== undefined &&
+      args.incarnationId !== args.expectedBinding.incarnationId
     let terminalMembershipChanged = false
-    const advanceTopologyAfterMembershipChange = (): void => {
+    const advanceTopologyFence = (): void => {
       const repoId = getRepoIdFromWorktreeId(args.worktreeId)
       const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-      if (!terminalMembershipChanged || currentRevision <= 0) {
+      if (!reconciledIncarnation && (!terminalMembershipChanged || currentRevision <= 0)) {
         return
       }
-      // Why: a real host-admitted spawn after a retirement must be distinguishable from a stale renderer replay.
+      // Why: host-admitted membership or incarnation changes must outrank a stale renderer replay.
       session.terminalTopologyRevisionByRepoId = {
         ...session.terminalTopologyRevisionByRepoId,
         [repoId]: currentRevision + 1
@@ -6449,14 +6806,14 @@ export class Store {
     }
     if (!isTerminalLeafId(args.leafId)) {
       // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
-      advanceTopologyAfterMembershipChange()
+      advanceTopologyFence()
       try {
         this.flushOrThrow()
       } catch (err) {
         restoreSession()
         throw err
       }
-      return
+      return true
     }
     const layout = session.terminalLayoutsByTabId?.[args.tabId]
     if (layout) {
@@ -6497,13 +6854,14 @@ export class Store {
         }
       }
     }
-    advanceTopologyAfterMembershipChange()
+    advanceTopologyFence()
     try {
       this.flushOrThrow()
     } catch (err) {
       restoreSession()
       throw err
     }
+    return true
   }
 
   // ── SSH Targets ────────────────────────────────────────────────────
@@ -6550,6 +6908,7 @@ export class Store {
     }
     this.state.sshTargets = nextTargets
     this.state.sshPtyConsumerRecoveries = nextRecoveries
+    this.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(id))
     this.scheduleSave()
   }
 
@@ -6700,6 +7059,7 @@ export class Store {
     const retainedRecoveries = recoveries.filter((record) => record.targetId !== oldTargetId)
     if (retainedRecoveries.length !== recoveries.length) {
       this.state.sshPtyConsumerRecoveries = retainedRecoveries
+      this.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(oldTargetId))
       carrierChanged = true
     }
     let setupsChanged = false
@@ -6742,10 +7102,16 @@ export class Store {
     const record = (this.state.sshPtyConsumerRecoveries ?? []).find(
       (candidate) => candidate.targetId === targetId
     )
+    if (
+      record &&
+      this.protectedSecrets.isSealed(sshPtyOwnerLeaseSecretSlot(record.targetId), record.ownerLease)
+    ) {
+      return null
+    }
     return record ? structuredClone(record) : null
   }
 
-  upsertSshPtyConsumerRecovery(record: SshPtyConsumerRecovery): void {
+  async upsertSshPtyConsumerRecovery(record: SshPtyConsumerRecovery): Promise<void> {
     const normalized = normalizeSshPtyConsumerRecovery(record)
     if (!normalized) {
       throw new Error('Invalid SSH PTY consumer recovery record')
@@ -6755,26 +7121,25 @@ export class Store {
       ...recoveries.filter((candidate) => candidate.targetId !== normalized.targetId),
       normalized
     ]
-    this.flushSshPtyConsumerRecovery()
+    await this.flushSshPtyConsumerRecovery()
   }
 
-  removeSshPtyConsumerRecovery(targetId: string): void {
+  async removeSshPtyConsumerRecovery(targetId: string): Promise<void> {
     const recoveries = this.state.sshPtyConsumerRecoveries ?? []
     const next = recoveries.filter((record) => record.targetId !== targetId)
     if (next.length === recoveries.length) {
       return
     }
     this.state.sshPtyConsumerRecoveries = next
-    this.flushSshPtyConsumerRecovery()
+    this.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(targetId))
+    await this.flushSshPtyConsumerRecovery()
   }
 
-  private flushSshPtyConsumerRecovery(): void {
-    try {
-      // Why: ownership must be durable before relay setup continues, but active-view and GitHub sidecars are unrelated startup work.
-      this.flushOrThrow()
-    } catch (err) {
-      console.error('[persistence] Failed to flush SSH PTY consumer recovery:', err)
-    }
+  private async flushSshPtyConsumerRecovery(): Promise<void> {
+    // Why: ownership must be durable before relay setup continues, but this runs on the live
+    // establish/reconnect path — a sync flush would park the main thread on a stalled profile mount.
+    // Why not caught here: the failure must reach the awaiting caller.
+    await this.flushDurableStateOrThrowAsync()
   }
 
   // ── SSH Remote PTY Leases ──────────────────────────────────────────
@@ -6819,13 +7184,54 @@ export class Store {
   }
 
   markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {
+    if (this.updateSshRemotePtyLeaseStates(targetId, state)) {
+      this.flush()
+    }
+  }
+
+  // Why no write of its own: the committed quit path calls this immediately before the final store
+  // flush, and that flush is what persists it. A durable write here would race the flush and be
+  // rejected the moment it latches, which is exactly how an attached lease used to survive quit.
+  markSshRemotePtyLeasesForShutdown(targetId: string, state: SshRemotePtyLease['state']): void {
+    this.updateSshRemotePtyLeaseStates(targetId, state)
+  }
+
+  async markSshRemotePtyLeasesAsync(
+    targetId: string,
+    state: SshRemotePtyLease['state']
+  ): Promise<void> {
+    if (this.updateSshRemotePtyLeaseStates(targetId, state)) {
+      await this.flushDurableStateOrThrowAsync()
+    }
+  }
+
+  async markSshRemotePtyLeasesAttachedAsync(
+    targetId: string,
+    ptyIds: readonly string[]
+  ): Promise<void> {
+    const relayPtyIds = new Set(
+      ptyIds.map((ptyId) => this.getRelayPtyIdForSshLeaseStorage(targetId, ptyId))
+    )
+    if (this.updateSshRemotePtyLeaseStates(targetId, 'attached', relayPtyIds)) {
+      await this.flushDurableStateOrThrowAsync()
+    }
+  }
+
+  private updateSshRemotePtyLeaseStates(
+    targetId: string,
+    state: SshRemotePtyLease['state'],
+    ptyIds?: ReadonlySet<string>
+  ): boolean {
     const now = Date.now()
     let changed = false
     const shouldClearBindings = state === 'terminated' || state === 'expired'
     const leasesToClear: SshRemotePtyLease[] = []
     this.state.sshRemotePtyLeases ??= []
     for (const lease of this.state.sshRemotePtyLeases) {
-      if (lease.targetId !== targetId) {
+      if (lease.targetId !== targetId || (ptyIds && !ptyIds.has(lease.ptyId))) {
+        continue
+      }
+      if (state === 'attached' && (lease.state === 'terminated' || lease.state === 'expired')) {
         continue
       }
       if (state === 'detached' && lease.state !== 'attached') {
@@ -6848,9 +7254,7 @@ export class Store {
     const bindingsChanged = shouldClearBindings
       ? this.clearSshRemotePtyBindingsForLeases(targetId, leasesToClear)
       : false
-    if (changed || bindingsChanged) {
-      this.flush()
-    }
+    return changed || bindingsChanged
   }
 
   markSshRemotePtyLease(targetId: string, ptyId: string, state: SshRemotePtyLease['state']): void {
@@ -6984,6 +7388,9 @@ export class Store {
   // ── Flush (for shutdown) ───────────────────────────────────────────
 
   flush(): void {
+    if (this.quitFlushStarted) {
+      return
+    }
     try {
       this.flushOrThrow()
     } catch (err) {
@@ -6995,6 +7402,160 @@ export class Store {
       console.error('[active-view] Failed to flush preference:', err)
     }
     this.writeGithubCacheSnapshotSync()
+  }
+
+  /**
+   * Async twin of flush() for the quit path.
+   *
+   * Why the quit path needs one: writeToDiskSync fsyncs a multi-MB file from the Electron
+   * main thread. On a stalled network profile mount that syscall is uninterruptible, so the
+   * app stops repainting and Force Quit stops working — and no main-thread deadline can
+   * bound it, because the deadline's own timer is stuck behind the same block.
+   *
+   * Never throws — it joins the quit teardown barrier, where a rejection is noise.
+   */
+  flushAsync(): Promise<void> {
+    if (this.quitFlushPromise) {
+      return this.quitFlushPromise
+    }
+    this.quitFlushStarted = true
+    this.quitFlushPromise = this.flushCurrentStateAsync(true).catch(() => {})
+    return this.quitFlushPromise
+  }
+
+  flushPendingAsync(): Promise<void> {
+    // Best-effort callers must not livelock while the live app keeps mutating state.
+    return this.flushCurrentStateAsync(false, undefined, false).catch(() => {})
+  }
+
+  flushPendingOrThrowAsync(
+    options: { signal?: AbortSignal; drainToStableGeneration?: boolean } = {}
+  ): Promise<void> {
+    if (this.writesFrozen || this.quitFlushStarted) {
+      return Promise.reject(new Error('Cannot flush while persistence is finalized'))
+    }
+    return this.flushCurrentStateAsync(false, options.signal, options.drainToStableGeneration, true)
+  }
+
+  // Async twin of flushOrThrow: durable state only. Active-view and GitHub sidecars are
+  // quit/startup work and must not be snapshotted on the live SSH establish/reconnect path.
+  private async flushDurableStateOrThrowAsync(): Promise<void> {
+    if (this.writesFrozen || this.quitFlushStarted) {
+      throw new Error('Cannot flush while persistence is finalized')
+    }
+    for (;;) {
+      if (this.writeTimer) {
+        clearTimeout(this.writeTimer)
+        this.writeTimer = null
+      }
+      this.firstPendingSaveAt = null
+      const generation = this.writeGeneration
+      await this.enqueueWrite()
+      if (generation === this.writeGeneration) {
+        break
+      }
+    }
+  }
+
+  private async flushCurrentStateAsync(
+    final: boolean,
+    signal?: AbortSignal,
+    drainToStableGeneration = true,
+    requireInitialGenerationDurable = false
+  ): Promise<void> {
+    const requiredDurableGeneration = requireInitialGenerationDurable ? this.writeGeneration : null
+    for (;;) {
+      if (signal?.aborted) {
+        throw new Error('Persistence flush aborted')
+      }
+      if (this.writeTimer) {
+        clearTimeout(this.writeTimer)
+        this.writeTimer = null
+      }
+      this.firstPendingSaveAt = null
+      const generation = this.writeGeneration
+      try {
+        await this.enqueueWrite()
+      } catch (error) {
+        await (final
+          ? this.activeViewPreference.flushAsync()
+          : this.activeViewPreference.flushPendingAsync(signal))
+        await this.writeGithubCacheSnapshotAsync(final, signal)
+        throw error
+      }
+      await (final
+        ? this.activeViewPreference.flushAsync()
+        : this.activeViewPreference.flushPendingAsync(signal))
+      await this.writeGithubCacheSnapshotAsync(final, signal)
+      if (signal?.aborted) {
+        throw new Error('Persistence flush aborted')
+      }
+      if (!drainToStableGeneration) {
+        if (
+          requiredDurableGeneration === null ||
+          this.lastDurableWriteGeneration >= requiredDurableGeneration
+        ) {
+          break
+        }
+        continue
+      }
+      if (generation === this.writeGeneration) {
+        break
+      }
+    }
+  }
+
+  // Why best-effort: the sidecar is a refetchable cache; a failed write only costs a cold badge paint next launch, never data.
+  private async writeGithubCacheSnapshotAsync(
+    drainToStableGeneration = true,
+    signal?: AbortSignal
+  ): Promise<void> {
+    if (!this.githubCacheDirty) {
+      return
+    }
+    const previousWrite = this.pendingGithubCacheWrite ?? this.staleGithubCacheTempCleanup
+    const nextWrite = previousWrite
+      .then(async () => {
+        while (this.githubCacheDirty) {
+          if (signal?.aborted) {
+            throw new Error('GitHub cache flush aborted')
+          }
+          const generation = this.githubCacheGeneration
+          const cacheFile = getGithubCacheFile(this.dataFile)
+          const tmpFile = durableWriteTempPath(cacheFile)
+          let renamed = false
+          try {
+            await writeFile(tmpFile, JSON.stringify(this.state.githubCache), 'utf-8')
+            if (generation === this.githubCacheGeneration) {
+              await rename(tmpFile, cacheFile)
+              renamed = true
+              if (generation === this.githubCacheGeneration) {
+                this.githubCacheDirty = false
+              }
+            }
+          } finally {
+            if (!renamed) {
+              await rm(tmpFile).catch(() => {})
+            }
+          }
+          if (signal?.aborted) {
+            throw new Error('GitHub cache flush aborted')
+          }
+          if (!drainToStableGeneration) {
+            break
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('[persistence] Failed to write github cache snapshot:', err)
+      })
+      .finally(() => {
+        if (this.pendingGithubCacheWrite === nextWrite) {
+          this.pendingGithubCacheWrite = null
+        }
+      })
+    this.pendingGithubCacheWrite = nextWrite
+    await nextWrite
   }
 
   // Why: a project move rewrote the data file directly; in-memory state is now stale and any write would undo the transfer.
@@ -7011,12 +7572,19 @@ export class Store {
     if (!this.githubCacheDirty) {
       return
     }
+    if (this.pendingGithubCacheWrite) {
+      void this.writeGithubCacheSnapshotAsync()
+      return
+    }
     const cacheFile = getGithubCacheFile(this.dataFile)
-    const tmpFile = `${cacheFile}.${process.pid}.tmp`
+    const generation = this.githubCacheGeneration
+    const tmpFile = durableWriteTempPath(cacheFile)
     try {
       writeFileSync(tmpFile, JSON.stringify(this.state.githubCache), 'utf-8')
       renameSync(tmpFile, cacheFile)
-      this.githubCacheDirty = false
+      if (generation === this.githubCacheGeneration) {
+        this.githubCacheDirty = false
+      }
     } catch (err) {
       try {
         unlinkSync(tmpFile)

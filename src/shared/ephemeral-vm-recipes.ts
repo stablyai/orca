@@ -1,10 +1,6 @@
 import { z } from 'zod'
 import { parsePairingCode } from './pairing'
-import {
-  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
-} from './ssh-types'
+import { MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from './ssh-types'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
 const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
@@ -67,8 +63,6 @@ export const EphemeralVmRecipeSshTargetSchema = z
   })
   .strict()
 
-export type EphemeralVmRecipeSshTarget = z.infer<typeof EphemeralVmRecipeSshTargetSchema>
-
 const EphemeralVmRecipeOrcaServerConnectionSchema = z
   .object({
     type: z.literal('orca-server'),
@@ -114,10 +108,6 @@ export const EphemeralVmRecipeResultSchema = z.union([
   EphemeralVmRecipeConnectionResultSchema
 ])
 
-export type EphemeralVmRecipeLegacyResult = z.infer<typeof EphemeralVmRecipeLegacyResultSchema>
-export type EphemeralVmRecipeConnectionResult = z.infer<
-  typeof EphemeralVmRecipeConnectionResultSchema
->
 export type EphemeralVmRecipeResult = z.infer<typeof EphemeralVmRecipeResultSchema>
 
 export type EphemeralVmRecipeResultParseResult =
@@ -188,16 +178,6 @@ export function getEphemeralVmRecipeResultPairingCode(
 ): string | null {
   const connection = getEphemeralVmRecipeResultConnection(result)
   return connection.type === 'orca-server' ? connection.pairingCode : null
-}
-
-export function getEphemeralVmRecipeResultUserData(
-  result: EphemeralVmRecipeResult
-): Record<string, JsonValue> | undefined {
-  return result.userData
-}
-
-export function getDefaultSshRelayGracePeriodSeconds(): number {
-  return DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
 }
 
 export function isAbsoluteRuntimePath(path: string): boolean {

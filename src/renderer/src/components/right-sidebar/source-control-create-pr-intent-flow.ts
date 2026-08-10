@@ -40,6 +40,21 @@ export type CreatePrIntentCurrentTarget = {
   baseRef?: string | null
 }
 
+type CreatePrIntentReviewFields = {
+  base: string
+  title: string
+  body: string
+  draft: boolean
+}
+
+type CreatePrIntentReviewGeneration =
+  | { success: true; fields: CreatePrIntentReviewFields }
+  | { success: false; error: string }
+
+export type CreatePrIntentGeneratedReviewFields =
+  | { ok: true; fields: CreatePrIntentReviewFields }
+  | { ok: false; error: string | null }
+
 export function createCreatePrIntentRunToken(input: Omit<CreatePrIntentRunToken, 'startedAt'>) {
   return { ...input, startedAt: Date.now() }
 }
@@ -182,7 +197,30 @@ export function shouldAttemptCreateHostedReviewForIntent(
 export function shouldGenerateHostedReviewDetailsForIntent(
   eligibility: HostedReviewCreationEligibility
 ): boolean {
-  return eligibility.canCreate
+  // Why: main rechecks an unavailable lookup immediately before creation; generate first so a recovered create never submits fallback fields.
+  return shouldAttemptCreateHostedReviewForIntent(eligibility)
+}
+
+export function resolveCreatePrIntentGeneratedReviewFields(
+  current: CreatePrIntentReviewFields,
+  generated: CreatePrIntentReviewGeneration
+): CreatePrIntentGeneratedReviewFields {
+  if (!generated.success) {
+    return { ok: false, error: generated.error }
+  }
+  if (!generated.fields.body.trim()) {
+    return { ok: false, error: null }
+  }
+  return {
+    ok: true,
+    fields: {
+      // Why: intent auto-submits, so generated details must not retarget the review without confirmation.
+      base: current.base,
+      title: generated.fields.title.trim() || current.title,
+      body: generated.fields.body,
+      draft: generated.fields.draft
+    }
+  }
 }
 
 export function getCreatePrIntentCommitFailureNoticeMessage(

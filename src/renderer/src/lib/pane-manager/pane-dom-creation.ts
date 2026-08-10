@@ -72,16 +72,16 @@ export function createPaneDOM(
   const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
 
   const webLinksAddon = new WebLinksAddon(
-    options.onLinkClick ? (event, uri) => options.onLinkClick!(event, uri) : undefined,
+    options.onLinkClick ? (event, uri) => options.onLinkClick!(id, event, uri) : undefined,
     {
       hover: (_event, uri) => {
         if (uri) {
           linkTooltipHoverToken += 1
           const hoverToken = linkTooltipHoverToken
-          const openLinkHint = options.linkOpenHint()
+          const openLinkHint = options.linkOpenHint(id)
           linkTooltip.textContent = defaultLinkTooltipText(uri, openLinkHint)
           linkTooltip.style.display = ''
-          const formatted = options.formatLinkTooltip?.(uri, openLinkHint)
+          const formatted = options.formatLinkTooltip?.(id, uri, openLinkHint)
           if (formatted && typeof formatted === 'object' && 'then' in formatted) {
             void formatted.then(
               (nextText) => {

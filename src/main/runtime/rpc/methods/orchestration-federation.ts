@@ -1,4 +1,3 @@
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
@@ -18,6 +17,7 @@ import {
 } from './orchestration-federation-setup'
 import { FederationAttachStartParams } from './orchestration-federation-start-schema'
 import { failFederatedAttachmentWithReceipt } from './orchestration-federation-start-receipt'
+import { prepareFederationAttachmentWorkerStart } from './orchestration-worker-start-validation'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
   defineMethod({
@@ -37,43 +37,11 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
         )
       }
       const createsWorktree = params.worktree === 'new-top-level'
-      if (createsWorktree && (!params.name || !params.repo)) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          'A remote new-top-level worktree requires --name and an explicit --repo.'
-        )
-      }
-      if (createsWorktree && params.terminal) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          '--terminal cannot combine with remote new-worktree creation.'
-        )
-      }
-      if (
-        !createsWorktree &&
-        (params.name || params.repo || params.baseBranch || params.setup || params.setupSource)
-      ) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          'Creation and setup options apply only to remote new-top-level worktrees.'
-        )
-      }
-      if (params.terminal && params.agent) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          '--terminal reuses an existing agent and cannot combine with --agent.'
-        )
-      }
-      const agent = params.agent
-      if (!params.terminal && (!agent || !isTuiAgent(agent))) {
-        throw new OrchestrationError(
-          'agent_unconfigured',
-          'A configured --agent is required when federated worker-start creates a terminal.'
-        )
-      }
-      if (agent) {
-        runtime.validateOrchestrationAgentLauncher(agent as TuiAgent)
-      }
+      const { agent, launch } = prepareFederationAttachmentWorkerStart({
+        params,
+        createsWorktree,
+        runtime
+      })
       if (createsWorktree) {
         await assertOrchestrationWorktreeCreationSupported({
           runtime,
@@ -126,6 +94,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             observeSetupCompletion: true,
             createdWithAgent: agent as TuiAgent,
             startupAgent: agent as TuiAgent,
+            ...(launch.preferences ? { startupLaunchPreferences: launch.preferences } : {}),
             activate: false,
             lineage: { noParent: true }
           })
@@ -149,7 +118,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
               created.warning ?? 'Agent-first worktree creation returned no terminal.'
             )
           }
-          const listed = await runtime.listTerminals(`id:${created.worktree.id}`)
+          const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {
+            includeVisualLayouts: false
+          })
           appendFederationTerminalEffects(
             effects,
             listed.terminals,
@@ -191,7 +162,10 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           } else {
             failedStage = 'terminal_create'
             const terminal = await runtime.createTerminal(`id:${worktree.id}`, {
-              command: agent,
+              // Why: agent ids are not shell commands (`cursor` is the desktop app,
+              // its CLI is `cursor-agent`); resolve through the TUI agent config.
+              startupAgent: agent as TuiAgent,
+              ...(launch.preferences ? { launchPreferences: launch.preferences } : {}),
               title: `worker-${params.taskId}`,
               presentation: 'background'
             })
@@ -280,6 +254,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           worktreeId: worktree.id,
           terminalHandle,
           setup,
+          launch: launch.receipt,
           effects,
           residualResources: []
         }
@@ -290,7 +265,8 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           runtimeEpoch: runtime.getRuntimeId(),
           failedStage,
           error,
-          setup
+          setup,
+          launch: launch.receipt
         })
       }
     }

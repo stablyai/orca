@@ -12,7 +12,7 @@ import {
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { getWorkspaceFileBrowserOpenTarget } from '@/lib/file-preview'
@@ -84,9 +84,18 @@ import {
 } from '../../../../shared/browser-viewport-presets'
 import { rememberLiveBrowserUrl } from './browser-runtime'
 import { ensureBrowserPageWebview } from './browser-page-webview'
+import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
+import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
+import type {
+  RemoteBrowserOperationToken,
+  RemoteBrowserStreamToken,
+  RemoteBrowserViewportSize
+} from './remote-browser-stream-tokens'
 import {
   destroyPersistentWebview,
+  isBrowserPageRendererRecoveryPending,
   moveFocusToRendererBeforeWebviewDetach,
+  replacePersistentWebview,
   registeredWebContentsIds
 } from './webview-registry'
 import {
@@ -155,7 +164,6 @@ import {
 import {
   callRuntimeRpc,
   runtimeEnvironmentSupportsCapability,
-  RuntimeRpcCallError,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -163,15 +171,12 @@ import type {
   BrowserBackResult,
   BrowserGotoResult,
   BrowserReloadResult,
-  BrowserScreencastResult,
-  BrowserTabInfo,
-  RuntimeStatus
+  BrowserTabInfo
 } from '../../../../shared/runtime-types'
 import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrameMetadata
 } from '../../../../shared/browser-screencast-protocol'
-import { withBrowserPaneUiRuntimeRpcSource } from '../../../../shared/runtime-rpc-feature-interaction-source'
 import { formatByteCount, formatPermissionNotice, formatPopupNotice } from './browser-notices'
 import {
   getDriverForBrowserPage,
@@ -188,6 +193,30 @@ import { MarkupOverlay } from './markup/MarkupOverlay'
 import { MarkupDrawButton } from './markup/MarkupDrawButton'
 import { deliverMarkupToClipboard } from './markup/markup-clipboard-delivery'
 import { BrowserLoadFailureOverlay } from './browser-load-failure-overlay'
+import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
+import {
+  browserFileUrlToAbsolutePath,
+  getShareableBrowserArtifactFile,
+  readBrowserHtmlArtifactRequest
+} from './browser-artifact-upload'
+import {
+  BROWSER_GUEST_RECOVERY_ERROR_CODE,
+  createBrowserPageGuestRecovery
+} from './browser-page-guest-recovery'
+import { subscribeBrowserSystemResume } from './browser-system-resume'
+import {
+  canReconnectRemoteBrowserStream,
+  isRemoteBrowserStreamBusy,
+  REMOTE_BROWSER_STREAM_IDLE,
+  remoteBrowserStreamNotice,
+  type RemoteBrowserStreamStatus
+} from './remote-browser-stream-status'
+import {
+  type BrowserReloadTrigger,
+  reloadBrowserPageWebview,
+  resolveBrowserReloadButtonLabelKind,
+  resolveBrowserReloadIntent
+} from './browser-reload-action'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -195,6 +224,12 @@ type BrowserTabPageState = Partial<
     'title' | 'loading' | 'faviconUrl' | 'canGoBack' | 'canGoForward' | 'loadError'
   >
 >
+
+type BrowserPageUrlSetter = (
+  tabId: string,
+  url: string,
+  options?: { preserveLoadError?: boolean }
+) => void
 
 type BrowserDownloadState = Omit<BrowserDownloadRequestedEvent, 'status' | 'savePath'> & {
   receivedBytes: number
@@ -262,37 +297,12 @@ function decodeRemoteBrowserFrameUrl(url: string): Promise<void> {
   })
 }
 
-type RemoteBrowserStreamToken = {
-  tabId: string
-  environmentId: string
-  remotePageId: string
-  generation: number
-  operationGeneration: number
-}
-
-type RemoteBrowserStreamSubscription = {
-  token: RemoteBrowserStreamToken
-  unsubscribe: () => void
-}
-
-type RemoteBrowserOperationToken = {
-  tabId: string
-  environmentId: string
-  remotePageId: string | null
-  generation: number
-}
-
 type RemoteBrowserContextMenu = {
   x: number
   y: number
   linkUrl: string | null
   pageUrl: string
   selectionText: string
-}
-
-type RemoteBrowserViewportSize = {
-  width: number
-  height: number
 }
 
 function getBrowserPageRuntimeEnvironmentId(
@@ -528,24 +538,30 @@ function PendingBrowserAnnotationCard({
   )
 }
 
+// The pane-owned effects the stream lifecycle calls back into: frame paint, viewport measurement,
+// and the store/tab-close decision for a page that is gone.
+type RemoteBrowserStreamBridge = {
+  applyTabInfo: (tab: Pick<BrowserTabInfo, 'url' | 'title'>) => void
+  clearFrame: () => void
+  handleFrameBytes: (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>) => void
+  closeMissingRemotePage: (remotePageId: string | null) => void
+  waitForViewportSize: () => Promise<RemoteBrowserViewportSize | null>
+  syncViewport: (pageId: string) => Promise<void>
+}
+
+const NO_REMOTE_BROWSER_STREAM_BRIDGE: RemoteBrowserStreamBridge = {
+  applyTabInfo: () => {},
+  clearFrame: () => {},
+  handleFrameBytes: () => {},
+  closeMissingRemotePage: () => {},
+  waitForViewportSize: async () => null,
+  syncViewport: async () => {}
+}
+
 function browserPageExists(tabId: string): boolean {
   return Object.values(useAppStore.getState().browserPagesByWorkspace).some((pages) =>
     pages.some((page) => page.id === tabId)
   )
-}
-
-function isRemoteBrowserPageMissingError(error: unknown): boolean {
-  if (error instanceof RuntimeRpcCallError) {
-    return isRemoteBrowserPageMissingCode(error.code)
-  }
-  if (!error || typeof error !== 'object' || !('code' in error)) {
-    return false
-  }
-  return isRemoteBrowserPageMissingCode((error as { code: unknown }).code)
-}
-
-function isRemoteBrowserPageMissingCode(code: unknown): boolean {
-  return code === 'browser_tab_not_found' || code === 'browser_no_tab'
 }
 
 function buildLoadError(event: {
@@ -581,26 +597,8 @@ function isChromiumErrorPage(url: string): boolean {
   return url.startsWith('chrome-error://')
 }
 
-function fileUrlToAbsolutePath(url: string): string | null {
-  try {
-    const parsed = new URL(url)
-    if (parsed.protocol !== 'file:') {
-      return null
-    }
-    const hostPrefix =
-      parsed.hostname && parsed.hostname !== 'localhost' ? `//${parsed.hostname}` : ''
-    let absolutePath = `${hostPrefix}${decodeURIComponent(parsed.pathname)}`
-    if (/^\/[A-Za-z]:\//.test(absolutePath)) {
-      absolutePath = absolutePath.slice(1)
-    }
-    return absolutePath
-  } catch {
-    return null
-  }
-}
-
 function getNotebookPathFromBrowserUrl(url: string): string | null {
-  const filePath = fileUrlToAbsolutePath(url)
+  const filePath = browserFileUrlToAbsolutePath(url)
   return filePath?.toLowerCase().endsWith('.ipynb') ? filePath : null
 }
 
@@ -680,16 +678,6 @@ function readRemoteCssViewportSize(result: unknown): RemoteBrowserViewportSize |
 
 function getPositiveFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
-}
-
-function areRemoteViewportSizesNear(
-  a: RemoteBrowserViewportSize | null,
-  b: RemoteBrowserViewportSize | null
-): boolean {
-  if (!a || !b) {
-    return false
-  }
-  return Math.abs(a.width - b.width) <= 3 && Math.abs(a.height - b.height) <= 3
 }
 
 function getRemoteBrowserDeviceScaleFactor(): number {
@@ -903,7 +891,7 @@ function RemoteBrowserPagePane({
   worktreeId: string
   isActive: boolean
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
-  onSetUrl: (tabId: string, url: string) => void
+  onSetUrl: BrowserPageUrlSetter
 }): React.JSX.Element {
   const activeRuntimeEnvironmentId = runtimeEnvironmentId
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
@@ -912,41 +900,59 @@ function RemoteBrowserPagePane({
   const [addressBarValue, setAddressBarValue] = useState(toDisplayUrl(browserTab.url))
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(null)
-  const [remoteError, setRemoteError] = useState<string | null>(null)
+  // Pane-owned notices, split by what they are ABOUT, because that decides who outranks whom:
+  //
+  //   'direct'      — feedback on what the user just did (URL validation). Always shown: it is the
+  //                   only response to their action, and suppressing it makes Enter look broken.
+  //   'consequence' — an operation that failed BECAUSE the stream is down (input, navigation RPCs).
+  //                   Outranked by the stream's own notice, which explains the cause; otherwise
+  //                   these repaint raw transport text over it on every stray click.
+  //
+  // Kept as one slot so the newest notice replaces the previous one, as a single toast should.
+  const [paneNotice, setPaneNotice] = useState<{
+    kind: 'direct' | 'consequence'
+    text: string
+  } | null>(null)
+  // The single source for what the stream is doing. busy, the notice, and whether the reconnect
+  // control renders are all derived below, so they cannot disagree — see
+  // remote-browser-stream-status.ts for the four ways they used to.
+  const [streamStatus, setStreamStatus] = useState<RemoteBrowserStreamStatus>(
+    REMOTE_BROWSER_STREAM_IDLE
+  )
+  // Bumped by Reconnect to re-run the open effect from scratch. See reconnectRemoteStream.
+  const [reopenNonce, setReopenNonce] = useState(0)
   const [contextMenu, setContextMenu] = useState<RemoteBrowserContextMenu | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [paneBusy, setPaneBusy] = useState(false)
+  // Derived, never stored. The stream's own notice wins over an incidental one: while the stream is
+  // down every input RPC fails as a matter of course, and those failures must not overwrite the
+  // message that explains why — nor can the reconnect control depend on one of them being present.
+  // A stopped stream delivers no frames that could clear paneBusy, so it must force busy off.
+  const busy =
+    streamStatus.kind === 'stopped' ? false : paneBusy || isRemoteBrowserStreamBusy(streamStatus)
+  const streamNotice = remoteBrowserStreamNotice(streamStatus)
+  const remoteError =
+    paneNotice?.kind === 'direct' ? paneNotice.text : (streamNotice ?? paneNotice?.text ?? null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
-  const remotePageIdRef = useRef<string | null>(null)
   const remoteViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
   const remoteCssViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
-  const remoteStreamViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
   const remoteViewportTimerRef = useRef<number | null>(null)
   const streamFrameUrlRef = useRef<string | null>(null)
-  const streamSubscriptionRef = useRef<RemoteBrowserStreamSubscription | null>(null)
-  const streamRestartTimerRef = useRef<number | null>(null)
-  const remoteTabRefreshTimerRef = useRef<number | null>(null)
   const remoteInputQueueRef = useRef<Promise<unknown>>(Promise.resolve())
   const pendingRemoteWheelRef = useRef<PendingRemoteBrowserWheel | null>(null)
   const remoteWheelFrameRef = useRef<number | null>(null)
   const remoteWheelInFlightRef = useRef(false)
   const pendingFrameDecodeRef = useRef(0)
-  const streamGenerationRef = useRef(0)
-  const remoteOperationGenerationRef = useRef(0)
-  const activeStreamTokenRef = useRef<RemoteBrowserStreamToken | null>(null)
   const mountedRef = useRef(true)
   const isActiveRef = useRef(isActive)
   const currentBrowserTabIdRef = useRef(browserTab.id)
   const currentBrowserTabUrlRef = useRef(browserTab.url)
   const runtimeWorktree = useMemo(() => toRuntimeWorktreeSelector(worktreeId), [worktreeId])
+  const runtimeWorktreeRef = useRef(runtimeWorktree)
   const activeRuntimeEnvironmentIdRef = useRef<string | null>(activeRuntimeEnvironmentId)
-  const startRemoteStreamRef = useRef<
-    (pageId: string) => Promise<RemoteBrowserStreamSubscription | null>
-  >(async () => null)
-  const restartRemoteStreamForViewportRef = useRef<(pageId: string) => void>(() => {})
-  const fetchRemoteTabInfoRef = useRef<
-    (token: RemoteBrowserOperationToken) => Promise<BrowserTabInfo | null>
-  >(async () => null)
-  const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
+  // Why: the stream lifecycle is built once per pane, before the callbacks it needs exist. It
+  // reaches them through this bridge so it never captures a render's stale closure.
+  const streamBridgeRef = useRef<RemoteBrowserStreamBridge>(NO_REMOTE_BROWSER_STREAM_BRIDGE)
+  const lifecycleRef = useRef<RemoteBrowserStreamLifecycle | null>(null)
   const certificateFailure = useAppStore(
     (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
   )
@@ -987,10 +993,60 @@ function RemoteBrowserPagePane({
     }
   }, [remoteCertificateEnvironmentId, certificateChallengeId])
 
-  currentBrowserTabIdRef.current = browserTab.id
-  currentBrowserTabUrlRef.current = browserTab.url
-  activeRuntimeEnvironmentIdRef.current = activeRuntimeEnvironmentId
-  isActiveRef.current = isActive
+  useLayoutEffect(() => {
+    currentBrowserTabIdRef.current = browserTab.id
+    currentBrowserTabUrlRef.current = browserTab.url
+    activeRuntimeEnvironmentIdRef.current = activeRuntimeEnvironmentId
+    isActiveRef.current = isActive
+    runtimeWorktreeRef.current = runtimeWorktree
+  }, [activeRuntimeEnvironmentId, browserTab.id, browserTab.url, isActive, runtimeWorktree])
+
+  if (!lifecycleRef.current) {
+    lifecycleRef.current = new RemoteBrowserStreamLifecycle({
+      identity: {
+        isMounted: () => mountedRef.current,
+        isActive: () => isActiveRef.current,
+        getTabId: () => currentBrowserTabIdRef.current,
+        getEnvironmentId: () => activeRuntimeEnvironmentIdRef.current,
+        browserPageExists
+      },
+      callRpc: callRuntimeRpc,
+      subscribeScreencast: (args, callbacks) =>
+        window.api.runtimeEnvironments.subscribe(args, callbacks),
+      getWorktreeSelector: () => runtimeWorktreeRef.current,
+      getCurrentUrl: () => currentBrowserTabUrlRef.current,
+      readStoredHandle: () =>
+        useAppStore.getState().remoteBrowserPageHandlesByPageId[currentBrowserTabIdRef.current] ??
+        null,
+      writeStoredHandle: (handle) =>
+        useAppStore.getState().setRemoteBrowserPageHandle(currentBrowserTabIdRef.current, handle),
+      removeStoredHandle: (remotePageId) => {
+        useAppStore
+          .getState()
+          .removeRemoteBrowserPageHandle(currentBrowserTabIdRef.current, remotePageId)
+      },
+      getDeviceScaleFactor: getRemoteBrowserDeviceScaleFactor,
+      setStatus: (status) => {
+        setStreamStatus(status)
+        // Why every status change clears the pane's notice, not just the recovering ones: a pane
+        // notice describes the situation the PREVIOUS status described, so any transition makes it
+        // stale. Clearing only on live/opening left a 'direct' notice — which outranks the stream's
+        // own — on screen after the stream stopped, so a stranded pane showed "Enter a valid http(s)
+        // or localhost URL." beside its Reconnect button and never showed the actual cause.
+        // It also has no other owner: nothing else would dismiss it.
+        setPaneNotice(null)
+      },
+      applyTabInfo: (tab) => streamBridgeRef.current.applyTabInfo(tab),
+      clearFrame: () => streamBridgeRef.current.clearFrame(),
+      handleFrameBytes: (token, bytes) => streamBridgeRef.current.handleFrameBytes(token, bytes),
+      closeMissingRemotePage: (remotePageId) =>
+        streamBridgeRef.current.closeMissingRemotePage(remotePageId),
+      waitForViewportSize: () => streamBridgeRef.current.waitForViewportSize(),
+      readViewportSize: () => remoteViewportSizeRef.current,
+      syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId)
+    })
+  }
+  const lifecycle = lifecycleRef.current
 
   const runtimeTarget = useCallback(() => {
     return activeRuntimeEnvironmentId
@@ -1006,13 +1062,13 @@ function RemoteBrowserPagePane({
     const prevUrl = streamFrameUrlRef.current
     streamFrameUrlRef.current = null
     remoteCssViewportSizeRef.current = null
-    remoteStreamViewportSizeRef.current = null
+    lifecycle.forgetStreamViewportSize()
     setFrameMetadata(null)
     setFrameUrl(null)
     if (prevUrl) {
       URL.revokeObjectURL(prevUrl)
     }
-  }, [])
+  }, [lifecycle])
 
   const clearPendingRemoteWheel = useCallback((): void => {
     pendingRemoteWheelRef.current = null
@@ -1024,33 +1080,20 @@ function RemoteBrowserPagePane({
   }, [])
 
   const closeMissingRemotePage = useCallback(
-    (remotePageId: string | null = remotePageIdRef.current): void => {
+    (remotePageId: string | null = lifecycle.tokens.remotePage): void => {
       const state = useAppStore.getState()
       if (remotePageId) {
         state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
       }
-      remotePageIdRef.current = null
-      remoteOperationGenerationRef.current += 1
-      streamGenerationRef.current += 1
-      activeStreamTokenRef.current = null
-      streamSubscriptionRef.current?.unsubscribe()
-      streamSubscriptionRef.current = null
-      if (streamRestartTimerRef.current !== null) {
-        window.clearTimeout(streamRestartTimerRef.current)
-        streamRestartTimerRef.current = null
-      }
+      lifecycle.abandonRemotePage()
       if (remoteViewportTimerRef.current !== null) {
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null
       }
-      if (remoteTabRefreshTimerRef.current !== null) {
-        window.clearTimeout(remoteTabRefreshTimerRef.current)
-        remoteTabRefreshTimerRef.current = null
-      }
       remoteInputQueueRef.current = Promise.resolve()
       clearStreamFrame()
-      setRemoteError(null)
-      setBusy(false)
+      setPaneNotice(null)
+      setPaneBusy(false)
       // Why: a runtime-side tab close mirrors closing the visible tab; don't leave a dead pane behind.
       const workspacePageCount = state.browserPagesByWorkspace[browserTab.workspaceId]?.length ?? 0
       if (workspacePageCount <= 1) {
@@ -1059,7 +1102,14 @@ function RemoteBrowserPagePane({
       }
       closeBrowserPage(browserTab.id)
     },
-    [browserTab.id, browserTab.workspaceId, clearStreamFrame, closeBrowserPage, closeBrowserTab]
+    [
+      browserTab.id,
+      browserTab.workspaceId,
+      clearStreamFrame,
+      closeBrowserPage,
+      closeBrowserTab,
+      lifecycle
+    ]
   )
 
   const rememberRemoteViewportSize = useCallback(
@@ -1159,57 +1209,14 @@ function RemoteBrowserPagePane({
   }, [])
 
   const createRemoteOperationToken = useCallback(
-    (remotePageId: string | null = null): RemoteBrowserOperationToken | null => {
-      const target = runtimeTarget()
-      if (!target) {
-        return null
-      }
-      return {
-        tabId: browserTab.id,
-        environmentId: target.environmentId,
-        remotePageId,
-        generation: remoteOperationGenerationRef.current
-      }
-    },
-    [browserTab.id, runtimeTarget]
+    (remotePageId: string | null = null): RemoteBrowserOperationToken | null =>
+      lifecycle.tokens.createOperationToken(remotePageId),
+    [lifecycle]
   )
 
   const isCurrentRemoteOperationToken = useCallback(
-    (token: RemoteBrowserOperationToken): boolean =>
-      mountedRef.current &&
-      isActiveRef.current &&
-      browserPageExists(token.tabId) &&
-      currentBrowserTabIdRef.current === token.tabId &&
-      activeRuntimeEnvironmentIdRef.current === token.environmentId &&
-      remoteOperationGenerationRef.current === token.generation &&
-      (token.remotePageId === null || remotePageIdRef.current === token.remotePageId),
-    []
-  )
-
-  const isCurrentRemoteStreamOperation = useCallback(
-    (token: RemoteBrowserStreamToken): boolean =>
-      isCurrentRemoteOperationToken({
-        tabId: token.tabId,
-        environmentId: token.environmentId,
-        remotePageId: token.remotePageId,
-        generation: token.operationGeneration
-      }),
-    [isCurrentRemoteOperationToken]
-  )
-
-  const isCurrentRemoteStreamToken = useCallback(
-    (token: RemoteBrowserStreamToken): boolean => {
-      const activeToken = activeStreamTokenRef.current
-      return (
-        activeToken?.generation === token.generation &&
-        activeToken.operationGeneration === token.operationGeneration &&
-        activeToken.tabId === token.tabId &&
-        activeToken.environmentId === token.environmentId &&
-        activeToken.remotePageId === token.remotePageId &&
-        isCurrentRemoteStreamOperation(token)
-      )
-    },
-    [isCurrentRemoteStreamOperation]
+    (token: RemoteBrowserOperationToken): boolean => lifecycle.tokens.isCurrent(token),
+    [lifecycle]
   )
 
   useEffect(() => {
@@ -1217,38 +1224,32 @@ function RemoteBrowserPagePane({
     mountedRef.current = true
     return () => {
       mountedRef.current = false
-      remoteOperationGenerationRef.current += 1
-      streamGenerationRef.current += 1
       pendingFrameDecodeRef.current += 1
-      activeStreamTokenRef.current = null
-      remoteStreamViewportSizeRef.current = null
-      if (streamRestartTimerRef.current !== null) {
-        window.clearTimeout(streamRestartTimerRef.current)
-        streamRestartTimerRef.current = null
-      }
+      lifecycle.dispose()
       if (remoteViewportTimerRef.current !== null) {
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null
       }
-      if (remoteTabRefreshTimerRef.current !== null) {
-        window.clearTimeout(remoteTabRefreshTimerRef.current)
-        remoteTabRefreshTimerRef.current = null
-      }
       clearPendingRemoteWheel()
-      restartRemoteStreamForViewportRef.current = () => {}
       if (streamFrameUrlRef.current) {
         URL.revokeObjectURL(streamFrameUrlRef.current)
         streamFrameUrlRef.current = null
       }
     }
-  }, [clearPendingRemoteWheel])
+  }, [clearPendingRemoteWheel, lifecycle])
 
   useEffect(() => {
     // Why: only reset frame/wheel on identity change; bumping the stream/operation generations here races the streaming effect and wedges the pane.
-    remoteStreamViewportSizeRef.current = null
+    lifecycle.forgetStreamViewportSize()
     clearPendingRemoteWheel()
     clearStreamFrame()
-  }, [activeRuntimeEnvironmentId, browserTab.id, clearPendingRemoteWheel, clearStreamFrame])
+  }, [
+    activeRuntimeEnvironmentId,
+    browserTab.id,
+    clearPendingRemoteWheel,
+    clearStreamFrame,
+    lifecycle
+  ])
 
   useEffect(() => {
     if (!isActive) {
@@ -1265,12 +1266,12 @@ function RemoteBrowserPagePane({
       }
       remoteViewportTimerRef.current = window.setTimeout(() => {
         remoteViewportTimerRef.current = null
-        const pageId = remotePageIdRef.current
+        const pageId = lifecycle.tokens.remotePage
         if (!pageId || !isActiveRef.current) {
           return
         }
         void syncRemoteViewport(pageId)
-          .then(() => restartRemoteStreamForViewportRef.current(pageId))
+          .then(() => lifecycle.restartForViewport(pageId))
           .catch(() => {})
       }, 150)
     }
@@ -1284,7 +1285,7 @@ function RemoteBrowserPagePane({
         remoteViewportTimerRef.current = null
       }
     }
-  }, [isActive, readRemoteViewportSize, syncRemoteViewport])
+  }, [isActive, lifecycle, readRemoteViewportSize, syncRemoteViewport])
 
   useEffect(() => {
     if (document.activeElement === addressBarInputRef.current) {
@@ -1334,7 +1335,7 @@ function RemoteBrowserPagePane({
       return
     }
     return () => {
-      const remotePageId = remotePageIdRef.current
+      const remotePageId = lifecycle.tokens.remotePage
       if (!remotePageId) {
         return
       }
@@ -1345,7 +1346,7 @@ function RemoteBrowserPagePane({
         return
       }
       const removedHandle = state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
-      remotePageIdRef.current = null
+      lifecycle.tokens.setRemotePage(null)
       if (!removedHandle) {
         return
       }
@@ -1357,7 +1358,7 @@ function RemoteBrowserPagePane({
         { timeoutMs: 15_000, suppressFeatureInteraction: true }
       ).catch(() => {})
     }
-  }, [activeRuntimeEnvironmentId, browserTab.id, runtimeWorktree, worktreeId])
+  }, [activeRuntimeEnvironmentId, browserTab.id, lifecycle, runtimeWorktree, worktreeId])
 
   const applyRemoteTabInfo = useCallback(
     (tab: Pick<BrowserTabInfo, 'url' | 'title'>): void => {
@@ -1377,7 +1378,7 @@ function RemoteBrowserPagePane({
 
   const updateStreamFrame = useCallback(
     (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>): void => {
-      if (!isCurrentRemoteStreamToken(token)) {
+      if (!lifecycle.tokens.isCurrentStreamToken(token)) {
         return
       }
       const frame = decodeBrowserScreencastFrame(bytes)
@@ -1397,7 +1398,7 @@ function RemoteBrowserPagePane({
         .then(() => {
           if (
             pendingFrameDecodeRef.current !== decodeGeneration ||
-            !isCurrentRemoteStreamToken(token)
+            !lifecycle.tokens.isCurrentStreamToken(token)
           ) {
             URL.revokeObjectURL(nextUrl)
             return
@@ -1406,7 +1407,7 @@ function RemoteBrowserPagePane({
           streamFrameUrlRef.current = nextUrl
           setFrameMetadata(frame.metadata)
           setFrameUrl(nextUrl)
-          setBusy(false)
+          setPaneBusy(false)
           if (prevUrl) {
             URL.revokeObjectURL(prevUrl)
           }
@@ -1415,7 +1416,7 @@ function RemoteBrowserPagePane({
           URL.revokeObjectURL(nextUrl)
         })
     },
-    [isCurrentRemoteStreamToken]
+    [lifecycle]
   )
 
   const getRemoteImagePoint = useCallback(
@@ -1447,467 +1448,64 @@ function RemoteBrowserPagePane({
     [frameMetadata]
   )
 
-  const ensureRemotePage = useCallback(
-    async (token: RemoteBrowserOperationToken): Promise<string | null> => {
-      if (!isCurrentRemoteOperationToken(token)) {
-        return null
-      }
-      const target = { kind: 'environment' as const, environmentId: token.environmentId }
-      const createRemotePage = async (): Promise<string | null> => {
-        const currentUrl = currentBrowserTabUrlRef.current
-        const initialUrl =
-          currentUrl === ORCA_BROWSER_BLANK_URL ? 'about:blank' : currentUrl || 'about:blank'
-        const created = await callRuntimeRpc<{ browserPageId: string }>(
-          target,
-          'browser.tabCreate',
-          { worktree: runtimeWorktree, url: initialUrl },
-          { timeoutMs: 30_000, suppressFeatureInteraction: true }
-        )
-        if (!isCurrentRemoteOperationToken(token)) {
-          void callRuntimeRpc(
-            target,
-            'browser.tabClose',
-            { worktree: runtimeWorktree, page: created.browserPageId },
-            { timeoutMs: 15_000, suppressFeatureInteraction: true }
-          ).catch(() => {})
-          return null
-        }
-        remotePageIdRef.current = created.browserPageId
-        setRemoteBrowserPageHandle(browserTab.id, {
-          environmentId: target.environmentId,
-          remotePageId: created.browserPageId
-        })
-        return created.browserPageId
-      }
-
-      const existingHandle = useAppStore.getState().remoteBrowserPageHandlesByPageId[browserTab.id]
-      if (existingHandle?.environmentId === target.environmentId) {
-        const cachedToken = { ...token, remotePageId: existingHandle.remotePageId }
-        remotePageIdRef.current = existingHandle.remotePageId
-        try {
-          const cachedTab = await fetchRemoteTabInfoRef.current(cachedToken)
-          if (!cachedTab) {
-            return null
-          }
-          return existingHandle.remotePageId
-        } catch (error) {
-          if (!isRemoteBrowserPageMissingError(error)) {
-            throw error
-          }
-          useAppStore
-            .getState()
-            .removeRemoteBrowserPageHandle(browserTab.id, existingHandle.remotePageId)
-          if (remotePageIdRef.current === existingHandle.remotePageId) {
-            remotePageIdRef.current = null
-          }
-          if (!isCurrentRemoteOperationToken(token)) {
-            return null
-          }
-          closeMissingRemotePage(existingHandle.remotePageId)
-          return null
-        }
-      }
-      return createRemotePage()
-    },
-    [
-      browserTab.id,
-      closeMissingRemotePage,
-      isCurrentRemoteOperationToken,
-      setRemoteBrowserPageHandle,
-      runtimeWorktree
-    ]
-  )
-
-  const fetchRemoteTabInfo = useCallback(
-    async (token: RemoteBrowserOperationToken): Promise<BrowserTabInfo | null> => {
-      if (!isCurrentRemoteOperationToken(token) || !token.remotePageId) {
-        return null
-      }
-      const shown = await callRuntimeRpc<{ tab: BrowserTabInfo }>(
-        { kind: 'environment', environmentId: token.environmentId },
-        'browser.tabShow',
-        { worktree: runtimeWorktree, page: token.remotePageId },
-        { timeoutMs: 15_000, suppressFeatureInteraction: true }
-      )
-      return shown.tab
-    },
-    [isCurrentRemoteOperationToken, runtimeWorktree]
-  )
-  fetchRemoteTabInfoRef.current = fetchRemoteTabInfo
-
   const scheduleRemoteTabInfoRefresh = useCallback(
     (token: RemoteBrowserOperationToken, delayMs = 250): void => {
-      if (!isCurrentRemoteOperationToken(token)) {
-        return
-      }
-      if (remoteTabRefreshTimerRef.current !== null) {
-        window.clearTimeout(remoteTabRefreshTimerRef.current)
-      }
-      remoteTabRefreshTimerRef.current = window.setTimeout(() => {
-        remoteTabRefreshTimerRef.current = null
-        if (!isCurrentRemoteOperationToken(token)) {
-          return
-        }
-        void fetchRemoteTabInfo(token)
-          .then((tab) => {
-            if (tab && isCurrentRemoteOperationToken(token)) {
-              applyRemoteTabInfo(tab)
-            }
-          })
-          .catch((error: unknown) => {
-            if (isCurrentRemoteOperationToken(token) && isRemoteBrowserPageMissingError(error)) {
-              closeMissingRemotePage(token.remotePageId)
-            }
-          })
-      }, delayMs)
+      lifecycle.session.scheduleTabInfoRefresh(token, delayMs)
     },
-    [applyRemoteTabInfo, closeMissingRemotePage, fetchRemoteTabInfo, isCurrentRemoteOperationToken]
+    [lifecycle]
   )
 
-  const scheduleRemoteStreamRestart = useCallback(
-    (token: RemoteBrowserStreamToken): void => {
-      if (!isCurrentRemoteStreamOperation(token) || streamRestartTimerRef.current !== null) {
-        return
-      }
-      streamRestartTimerRef.current = window.setTimeout(() => {
-        streamRestartTimerRef.current = null
-        if (!isCurrentRemoteStreamOperation(token)) {
-          return
-        }
-        setBusy(true)
-        const operationToken: RemoteBrowserOperationToken = {
-          tabId: token.tabId,
-          environmentId: token.environmentId,
-          remotePageId: token.remotePageId,
-          generation: token.operationGeneration
-        }
-        void fetchRemoteTabInfo(operationToken)
-          .then((tab) => {
-            if (!tab || !isCurrentRemoteStreamOperation(token)) {
-              return
-            }
-            applyRemoteTabInfo(tab)
-          })
-          .catch(() => {})
-          .then(() => {
-            if (!isCurrentRemoteStreamOperation(token)) {
-              return null
-            }
-            return startRemoteStreamRef.current(token.remotePageId)
-          })
-          .then((subscription) => {
-            if (!subscription) {
-              return
-            }
-            if (!isCurrentRemoteStreamToken(subscription.token)) {
-              subscription?.unsubscribe()
-              return
-            }
-            streamSubscriptionRef.current = subscription
-          })
-          .catch((error: unknown) => {
-            if (!isCurrentRemoteStreamOperation(token)) {
-              return
-            }
-            if (isRemoteBrowserPageMissingError(error)) {
-              closeMissingRemotePage(token.remotePageId)
-              return
-            }
-            setRemoteError(
-              error instanceof Error ? error.message : 'Failed to restart remote browser stream.'
-            )
-            setBusy(false)
-          })
-      }, 500)
-    },
-    [
-      applyRemoteTabInfo,
+  // Publish only callbacks from a committed render.
+  useLayoutEffect(() => {
+    streamBridgeRef.current = {
+      applyTabInfo: applyRemoteTabInfo,
+      clearFrame: clearStreamFrame,
+      handleFrameBytes: updateStreamFrame,
       closeMissingRemotePage,
-      fetchRemoteTabInfo,
-      isCurrentRemoteStreamOperation,
-      isCurrentRemoteStreamToken
-    ]
-  )
+      waitForViewportSize: waitForRemoteViewportSize,
+      syncViewport: syncRemoteViewport
+    }
+  }, [
+    applyRemoteTabInfo,
+    clearStreamFrame,
+    closeMissingRemotePage,
+    syncRemoteViewport,
+    updateStreamFrame,
+    waitForRemoteViewportSize
+  ])
 
-  const handleRemoteStreamClosed = useCallback(
-    (token: RemoteBrowserStreamToken, restart: boolean): void => {
-      if (!isCurrentRemoteStreamToken(token)) {
-        return
-      }
-      setBusy(restart)
-      const current = streamSubscriptionRef.current
-      streamSubscriptionRef.current = null
-      activeStreamTokenRef.current = null
-      remoteStreamViewportSizeRef.current = null
-      // Why: navigation recreates the screencast stream; keep the last frame during restart so panes don't flash the loading placeholder.
-      if (!restart) {
-        clearStreamFrame()
-      }
-      current?.unsubscribe()
-      if (restart) {
-        scheduleRemoteStreamRestart(token)
-      }
-    },
-    [clearStreamFrame, isCurrentRemoteStreamToken, scheduleRemoteStreamRestart]
-  )
-
-  const startRemoteStream = useCallback(
-    async (pageId: string): Promise<RemoteBrowserStreamSubscription | null> => {
-      const target = runtimeTarget()
-      if (!target) {
-        return null
-      }
-      const operationToken = createRemoteOperationToken(pageId)
-      if (!operationToken || !isCurrentRemoteOperationToken(operationToken)) {
-        return null
-      }
-      const status = await callRuntimeRpc<RuntimeStatus>(target, 'status.get', undefined, {
-        timeoutMs: 15_000
-      })
-      if (!status.capabilities?.includes('browser.screencast.v1')) {
-        throw new Error('The selected runtime does not support remote browser streaming.')
-      }
-      if (!isCurrentRemoteOperationToken(operationToken)) {
-        return null
-      }
-      const viewportSize = await waitForRemoteViewportSize()
-      remoteStreamViewportSizeRef.current = viewportSize
-      const token: RemoteBrowserStreamToken = {
-        tabId: browserTab.id,
-        environmentId: target.environmentId,
-        remotePageId: pageId,
-        generation: streamGenerationRef.current + 1,
-        operationGeneration: operationToken.generation
-      }
-      streamGenerationRef.current = token.generation
-      activeStreamTokenRef.current = token
-      try {
-        const subscription = await window.api.runtimeEnvironments.subscribe(
-          {
-            selector: target.environmentId,
-            method: 'browser.screencast',
-            params: withBrowserPaneUiRuntimeRpcSource({
-              worktree: runtimeWorktree,
-              page: pageId,
-              format: 'jpeg',
-              quality: 70,
-              maxWidth: 3840,
-              maxHeight: 2160,
-              viewportWidth: viewportSize?.width,
-              viewportHeight: viewportSize?.height,
-              deviceScaleFactor: getRemoteBrowserDeviceScaleFactor(),
-              everyNthFrame: 2
-            }),
-            timeoutMs: 15_000
-          },
-          {
-            onResponse: (response) => {
-              if (!isCurrentRemoteStreamToken(token)) {
-                return
-              }
-              if (response.ok === false) {
-                if (isRemoteBrowserPageMissingCode(response.error.code)) {
-                  closeMissingRemotePage(pageId)
-                  return
-                }
-                setRemoteError(response.error.message)
-                handleRemoteStreamClosed(token, false)
-                return
-              }
-              const event = response.result as BrowserScreencastResult
-              if (event.type === 'ready') {
-                applyRemoteTabInfo(event.tab)
-                void syncRemoteViewport(event.browserPageId).catch(() => {})
-                setBusy(false)
-              } else if (event.type === 'end') {
-                handleRemoteStreamClosed(token, true)
-              } else if (event.type === 'error') {
-                setRemoteError(event.message)
-                handleRemoteStreamClosed(token, false)
-              }
-            },
-            onBinary: (bytes) => updateStreamFrame(token, bytes),
-            onError: (error) => {
-              if (!isCurrentRemoteStreamToken(token)) {
-                return
-              }
-              if (isRemoteBrowserPageMissingError(error)) {
-                closeMissingRemotePage(pageId)
-                return
-              }
-              setRemoteError(error.message)
-              setBusy(false)
-            },
-            onClose: () => {
-              handleRemoteStreamClosed(token, true)
-            }
-          }
-        )
-        return { token, unsubscribe: subscription.unsubscribe }
-      } catch (error) {
-        if (isCurrentRemoteStreamToken(token)) {
-          activeStreamTokenRef.current = null
-        }
-        throw error
-      }
-    },
-    [
-      applyRemoteTabInfo,
-      browserTab.id,
-      closeMissingRemotePage,
-      createRemoteOperationToken,
-      handleRemoteStreamClosed,
-      isCurrentRemoteOperationToken,
-      isCurrentRemoteStreamToken,
-      runtimeTarget,
-      syncRemoteViewport,
-      updateStreamFrame,
-      waitForRemoteViewportSize,
-      runtimeWorktree
-    ]
-  )
-
-  const restartRemoteStreamForViewport = useCallback(
-    (pageId: string): void => {
-      const current = streamSubscriptionRef.current
-      const nextViewportSize = remoteViewportSizeRef.current
-      if (
-        !current ||
-        current.token.remotePageId !== pageId ||
-        !nextViewportSize ||
-        areRemoteViewportSizesNear(remoteStreamViewportSizeRef.current, nextViewportSize) ||
-        !isCurrentRemoteStreamToken(current.token)
-      ) {
-        return
-      }
-
-      // Why: the runtime stream validates frames against its start viewport, so restart media after resize or new-size frames get rejected.
-      streamGenerationRef.current += 1
-      activeStreamTokenRef.current = null
-      streamSubscriptionRef.current = null
-      remoteStreamViewportSizeRef.current = null
-      if (streamRestartTimerRef.current !== null) {
-        window.clearTimeout(streamRestartTimerRef.current)
-        streamRestartTimerRef.current = null
-      }
-      setBusy(true)
-      current.unsubscribe()
-      void startRemoteStreamRef
-        .current(pageId)
-        .then((subscription) => {
-          if (!subscription) {
-            if (mountedRef.current && isActiveRef.current && remotePageIdRef.current === pageId) {
-              setBusy(false)
-            }
-            return
-          }
-          if (!isCurrentRemoteStreamToken(subscription.token)) {
-            subscription.unsubscribe()
-            return
-          }
-          streamSubscriptionRef.current = subscription
-        })
-        .catch((error: unknown) => {
-          if (!mountedRef.current || !isActiveRef.current || remotePageIdRef.current !== pageId) {
-            return
-          }
-          if (isRemoteBrowserPageMissingError(error)) {
-            closeMissingRemotePage(pageId)
-            return
-          }
-          setRemoteError(
-            error instanceof Error ? error.message : 'Failed to resize remote browser stream.'
-          )
-          setBusy(false)
-        })
-    },
-    [closeMissingRemotePage, isCurrentRemoteStreamToken]
-  )
-
-  useEffect(() => {
-    startRemoteStreamRef.current = startRemoteStream
-    restartRemoteStreamForViewportRef.current = restartRemoteStreamForViewport
-  }, [restartRemoteStreamForViewport, startRemoteStream])
+  const reconnectRemoteStream = useCallback((): void => {
+    // No status write here: bumping the nonce re-runs the open effect, and open() publishes
+    // 'opening'. Setting it from two places is how the old three-variable version drifted.
+    setPaneNotice(null)
+    // Why re-run the whole open effect rather than resume the stream: reconnect has to work in the
+    // cases where there is nothing to resume — the remote page was never created, or the very first
+    // open failed. Resuming a token only covers a stream that once existed.
+    setReopenNonce((nonce) => nonce + 1)
+  }, [])
 
   useEffect(() => {
     if (!isActive) {
       return
     }
-    let cancelled = false
-    setBusy(true)
-    setRemoteError(null)
-    remoteOperationGenerationRef.current += 1
-    streamGenerationRef.current += 1
-    activeStreamTokenRef.current = null
-    streamSubscriptionRef.current?.unsubscribe()
-    streamSubscriptionRef.current = null
-    if (streamRestartTimerRef.current !== null) {
-      window.clearTimeout(streamRestartTimerRef.current)
-      streamRestartTimerRef.current = null
-    }
-    const operationToken = createRemoteOperationToken()
-    if (!operationToken) {
-      setBusy(false)
-      return
-    }
-    void ensureRemotePage(operationToken)
-      .then(async (pageId) => {
-        if (!pageId || cancelled || !isCurrentRemoteOperationToken(operationToken)) {
-          return
-        }
-        const pageToken = { ...operationToken, remotePageId: pageId }
-        const tab = await fetchRemoteTabInfo(pageToken)
-        if (tab && !cancelled && isCurrentRemoteOperationToken(pageToken)) {
-          applyRemoteTabInfo(tab)
-        }
-        if (cancelled || !isCurrentRemoteOperationToken(pageToken)) {
-          return
-        }
-        const subscription = await startRemoteStream(pageId)
-        if (cancelled || !subscription) {
-          subscription?.unsubscribe()
-          return
-        }
-        if (!isCurrentRemoteStreamToken(subscription.token)) {
-          subscription.unsubscribe()
-          return
-        }
-        streamSubscriptionRef.current = subscription
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          if (isRemoteBrowserPageMissingError(error)) {
-            closeMissingRemotePage()
-            return
-          }
-          setRemoteError(error instanceof Error ? error.message : 'Failed to open remote browser.')
-          setBusy(false)
-        }
-      })
+    const closeStream = lifecycle.open()
     return () => {
-      cancelled = true
-      remoteOperationGenerationRef.current += 1
-      streamGenerationRef.current += 1
-      activeStreamTokenRef.current = null
+      closeStream()
       clearPendingRemoteWheel()
-      streamSubscriptionRef.current?.unsubscribe()
-      streamSubscriptionRef.current = null
-      if (streamRestartTimerRef.current !== null) {
-        window.clearTimeout(streamRestartTimerRef.current)
-        streamRestartTimerRef.current = null
-      }
     }
+    // Why: the lifecycle reads tab/environment/worktree live, so it only needs to reopen when the
+    // pane's identity actually changes — not when an unrelated callback identity does.
+    //
+    // browserTab.id is load-bearing because lifecycle.open() reads tab identity through refs.
+    // reopenNonce re-runs the full open path for an explicit reconnect.
   }, [
+    activeRuntimeEnvironmentId,
+    browserTab.id,
     clearPendingRemoteWheel,
-    createRemoteOperationToken,
-    ensureRemotePage,
-    fetchRemoteTabInfo,
     isActive,
-    closeMissingRemotePage,
-    isCurrentRemoteOperationToken,
-    isCurrentRemoteStreamToken,
-    applyRemoteTabInfo,
-    startRemoteStream
+    lifecycle,
+    reopenNonce,
+    runtimeWorktree
   ])
 
   useEffect(() => {
@@ -1959,7 +1557,7 @@ function RemoteBrowserPagePane({
       if (!operationToken) {
         return
       }
-      const pageId = await ensureRemotePage(operationToken)
+      const pageId = await lifecycle.session.ensureRemotePage(operationToken)
       if (!pageId) {
         return
       }
@@ -1967,8 +1565,8 @@ function RemoteBrowserPagePane({
       if (!isCurrentRemoteOperationToken(pageToken)) {
         return
       }
-      setBusy(true)
-      setRemoteError(null)
+      setPaneBusy(true)
+      setPaneNotice(null)
       onUpdatePageState(browserTab.id, { loading: true, loadError: null })
       try {
         const params =
@@ -1990,7 +1588,7 @@ function RemoteBrowserPagePane({
           return
         }
         const message = error instanceof Error ? error.message : 'Remote browser command failed.'
-        setRemoteError(message)
+        setPaneNotice({ kind: 'consequence', text: message })
         onUpdatePageState(browserTab.id, {
           loading: false,
           // Why: validatedUrl is persisted, so redact the Kagi session token like the main-process failure path does.
@@ -2002,7 +1600,7 @@ function RemoteBrowserPagePane({
         })
       } finally {
         if (isCurrentRemoteOperationToken(pageToken)) {
-          setBusy(false)
+          setPaneBusy(false)
         }
       }
     },
@@ -2011,7 +1609,7 @@ function RemoteBrowserPagePane({
       browserTab.id,
       browserTab.url,
       createRemoteOperationToken,
-      ensureRemotePage,
+      lifecycle,
       closeMissingRemotePage,
       isCurrentRemoteOperationToken,
       onUpdatePageState,
@@ -2059,7 +1657,9 @@ function RemoteBrowserPagePane({
     })
     if (!nextUrl) {
       const message = 'Enter a valid http(s) or localhost URL.'
-      setRemoteError(message)
+      // 'direct': the only response to what the user just typed. With an empty address bar no
+      // load-error overlay renders either, so outranking this would make Enter do nothing visible.
+      setPaneNotice({ kind: 'direct', text: message })
       onUpdatePageState(browserTab.id, {
         loadError: {
           code: 0,
@@ -2077,7 +1677,7 @@ function RemoteBrowserPagePane({
       return
     }
     const target = runtimeTarget()
-    const pageId = remotePageIdRef.current
+    const pageId = lifecycle.tokens.remotePage
     const image = imageRef.current
     const operationToken = pageId ? createRemoteOperationToken(pageId) : null
     const point = getRemoteImagePoint(event)
@@ -2091,7 +1691,7 @@ function RemoteBrowserPagePane({
     event.preventDefault()
     image.focus()
     setContextMenu(null)
-    setRemoteError(null)
+    setPaneNotice(null)
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
@@ -2116,7 +1716,10 @@ function RemoteBrowserPagePane({
             closeMissingRemotePage(pageId)
             return
           }
-          setRemoteError(error instanceof Error ? error.message : 'Remote mouse input failed.')
+          setPaneNotice({
+            kind: 'consequence',
+            text: error instanceof Error ? error.message : 'Remote mouse input failed.'
+          })
         }
       }
     })
@@ -2127,7 +1730,7 @@ function RemoteBrowserPagePane({
       return
     }
     const target = runtimeTarget()
-    const pageId = remotePageIdRef.current
+    const pageId = lifecycle.tokens.remotePage
     const operationToken = pageId ? createRemoteOperationToken(pageId) : null
     const point = getRemoteImagePoint(event)
     const button = getRemoteBrowserMouseButton(event.button)
@@ -2138,7 +1741,7 @@ function RemoteBrowserPagePane({
       return
     }
     event.preventDefault()
-    setRemoteError(null)
+    setPaneNotice(null)
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
@@ -2164,7 +1767,10 @@ function RemoteBrowserPagePane({
             closeMissingRemotePage(pageId)
             return
           }
-          setRemoteError(error instanceof Error ? error.message : 'Remote mouse input failed.')
+          setPaneNotice({
+            kind: 'consequence',
+            text: error instanceof Error ? error.message : 'Remote mouse input failed.'
+          })
         }
       }
     })
@@ -2175,14 +1781,14 @@ function RemoteBrowserPagePane({
       return
     }
     const target = runtimeTarget()
-    const pageId = remotePageIdRef.current
+    const pageId = lifecycle.tokens.remotePage
     const point = getRemoteImagePoint(event)
     if (!target || !pageId || !point) {
       return
     }
     event.preventDefault()
     imageRef.current?.focus()
-    setRemoteError(null)
+    setPaneNotice(null)
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
@@ -2237,7 +1843,7 @@ function RemoteBrowserPagePane({
       return
     }
     const target = runtimeTarget()
-    const pageId = remotePageIdRef.current
+    const pageId = lifecycle.tokens.remotePage
     const operationToken = pageId ? createRemoteOperationToken(pageId) : null
     if (!target || !pageId || !operationToken) {
       return
@@ -2248,7 +1854,7 @@ function RemoteBrowserPagePane({
       return
     }
     event.preventDefault()
-    setRemoteError(null)
+    setPaneNotice(null)
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
@@ -2275,7 +1881,10 @@ function RemoteBrowserPagePane({
             closeMissingRemotePage(pageId)
             return
           }
-          setRemoteError(error instanceof Error ? error.message : 'Remote keyboard input failed.')
+          setPaneNotice({
+            kind: 'consequence',
+            text: error instanceof Error ? error.message : 'Remote keyboard input failed.'
+          })
         }
       }
     })
@@ -2323,7 +1932,10 @@ function RemoteBrowserPagePane({
               closeMissingRemotePage(pageId)
               return
             }
-            setRemoteError(error instanceof Error ? error.message : 'Remote scroll failed.')
+            setPaneNotice({
+              kind: 'consequence',
+              text: error instanceof Error ? error.message : 'Remote scroll failed.'
+            })
           }
         }
       }).finally(() => {
@@ -2348,14 +1960,14 @@ function RemoteBrowserPagePane({
         return
       }
       const target = runtimeTarget()
-      const pageId = remotePageIdRef.current
+      const pageId = lifecycle.tokens.remotePage
       const operationToken = pageId ? createRemoteOperationToken(pageId) : null
       const point = getRemoteImagePoint(event)
       if (!target || !pageId || !operationToken || !point) {
         return
       }
       event.preventDefault()
-      setRemoteError(null)
+      setPaneNotice(null)
       const deltaMultiplier =
         event.deltaMode === WHEEL_DELTA_LINE
           ? 16
@@ -2393,6 +2005,7 @@ function RemoteBrowserPagePane({
       busy,
       createRemoteOperationToken,
       getRemoteImagePoint,
+      lifecycle,
       runtimeTarget,
       schedulePendingRemoteWheel
     ]
@@ -2439,7 +2052,12 @@ function RemoteBrowserPagePane({
   })
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
+    // The testid scopes E2E queries to this pane: a workspace can hold more than one browser pane,
+    // and controls like the address bar are otherwise ambiguous across them.
+    <div
+      data-testid="remote-browser-pane"
+      className="relative flex h-full min-h-0 flex-1 flex-col bg-background"
+    >
       {contextMenu
         ? createPortal(
             <>
@@ -2600,18 +2218,31 @@ function RemoteBrowserPagePane({
         >
           <ArrowRight className="size-4" />
         </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => void runRemoteNavigation('browser.reload')}
-        >
-          {busy || browserTab.loading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RefreshCw className="size-4" />
-          )}
-        </Button>
+        {/* Why: no ignore-cache RPC exists for remote pages, and this pane binds no reload chord, so there is
+            nothing truthful to put in a menu or a shortcut hint here — tooltip only. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              aria-label={translate(
+                'auto.components.browser.pane.BrowserPane.0e080d820e',
+                'Reload'
+              )}
+              onClick={() => void runRemoteNavigation('browser.reload')}
+            >
+              {busy || browserTab.loading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+          </TooltipContent>
+        </Tooltip>
         <BrowserAddressBar
           value={addressBarValue}
           onChange={setAddressBarValue}
@@ -2667,6 +2298,7 @@ function RemoteBrowserPagePane({
         ) : null}
         {frameUrl ? (
           <img
+            data-testid="remote-browser-frame"
             ref={imageRef}
             src={frameUrl}
             alt=""
@@ -2745,9 +2377,31 @@ function RemoteBrowserPagePane({
             }}
           />
         ) : null}
-        {remoteError ? (
-          <div className="absolute bottom-4 left-1/2 max-w-md -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
-            {remoteError}
+        {/* Why the reconnect control also opens this toast: the control renders inside it, so
+            gating the toast on the message alone made an empty message ('' from a host that failed
+            with no text) swallow the user's only way back — the original stranding bug, reachable
+            through three sites that forward host-supplied text into `stopped`. */}
+        {remoteError || canReconnectRemoteBrowserStream(streamStatus) ? (
+          <div
+            data-testid="remote-browser-stream-error"
+            role="status"
+            aria-live="polite"
+            // Why z-30: the load-failure overlay is a z-20 full-pane sheet, so without this the
+            // Reconnect control renders beneath it and silently swallows every click — the user's
+            // only way back, present but unusable, whenever the page also failed to load.
+            className="absolute bottom-4 left-1/2 z-30 flex max-w-md -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
+          >
+            <span>{remoteError}</span>
+            {canReconnectRemoteBrowserStream(streamStatus) ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-6 shrink-0 px-2 text-xs"
+                onClick={reconnectRemoteStream}
+              >
+                {translate('auto.components.browser.pane.BrowserPane.b71dc3d930', 'Reconnect')}
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -2794,7 +2448,7 @@ function BrowserPagePane({
   isMobileDriven: boolean
   inputLocked: boolean
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
-  onSetUrl: (tabId: string, url: string) => void
+  onSetUrl: BrowserPageUrlSetter
 }): React.JSX.Element {
   const isPaintable = isBrowserPagePanePaintable({
     isActive,
@@ -2818,6 +2472,11 @@ function BrowserPagePane({
   const [slotViewportReady, setSlotViewportReady] = useState(
     () => getBrowserOverlaySlotViewport(workspaceId) !== null
   )
+  const [guestRecoveryGeneration, setGuestRecoveryGeneration] = useState(0)
+  const guestRecoveryPendingRef = useRef(false)
+  const validateVisibleGuestRegistrationRef = useRef<() => void>(() => {})
+  const retryGuestRecoveryRef = useRef<() => void>(() => {})
+  const wasPaintableForGuestValidationRef = useRef(isPaintable)
   useLayoutEffect(() => {
     if (getBrowserOverlaySlotViewport(workspaceId)) {
       setSlotViewportReady(true)
@@ -2846,6 +2505,7 @@ function BrowserPagePane({
   const handleInternalFileDragOverRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
   const handleInternalFileDropRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
   const keybindings = useAppStore((state) => state.keybindings)
+  const workspaceConnectionId = useAppStore((state) => getConnectionIdFromState(state, worktreeId))
   const browserDefaultZoomLevel = useAppStore(
     (state) => state.browserDefaultZoomLevel ?? DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
   )
@@ -2861,10 +2521,18 @@ function BrowserPagePane({
     getExplicitBrowserPageZoomLevel(browserTab.id) ?? normalizedBrowserDefaultZoomLevel
   )
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
+  const reloadShortcut = useShortcutLabel('browser.reload')
+  const hardReloadShortcut = useShortcutLabel('browser.hardReload')
+  const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
   const faviconUrlRef = useRef<string | null>(browserTab.faviconUrl)
   const initialBrowserUrlRef = useRef(browserTab.url)
   const browserTabUrlRef = useRef(browserTab.url)
   const activeLoadFailureRef = useRef<BrowserLoadError | null>(browserTab.loadError)
+  const recoveryNavigationValidationRef = useRef<{
+    committed: boolean
+    started: boolean
+    targetUrl: string
+  } | null>(null)
   // Why: CDP viewport emulation doesn't survive renderer process swaps, so reapply the preset from this ref on every dom-ready.
   const viewportPresetIdRef = useRef(browserTab.viewportPresetId ?? null)
   viewportPresetIdRef.current = browserTab.viewportPresetId ?? null
@@ -2892,6 +2560,61 @@ function BrowserPagePane({
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [findOpen, setFindOpen] = useState(false)
   const grab = useGrabMode(browserTab.id)
+
+  const reloadState = useMemo(
+    () => ({ loading: browserTab.loading, loadErrorCode: browserTab.loadError?.code ?? null }),
+    [browserTab.loading, browserTab.loadError]
+  )
+  const reloadWebviewOrRecoverGuest = useCallback(
+    (ignoreCache: boolean) => {
+      const webview = webviewRef.current
+      if (!webview) {
+        return
+      }
+      if (reloadBrowserPageWebview(webview, { ignoreCache }) === 'guest-missing') {
+        // Why: reload cannot revive a destroyed guest (STA-3448) — recreate it instead.
+        onUpdatePageStateRef.current(browserTab.id, { loading: true })
+        retryGuestRecoveryRef.current()
+      }
+    },
+    [browserTab.id]
+  )
+  const runReloadTrigger = useCallback(
+    (trigger: BrowserReloadTrigger) => {
+      const webview = webviewRef.current
+      if (!webview) {
+        return
+      }
+      switch (resolveBrowserReloadIntent(trigger, reloadState)) {
+        case 'stop':
+          webview.stop()
+          break
+        case 'retry-guest-recovery':
+          onUpdatePageStateRef.current(browserTab.id, { loading: true })
+          retryGuestRecoveryRef.current()
+          break
+        case 'retry-load':
+          retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+          break
+        case 'hard-reload':
+          reloadWebviewOrRecoverGuest(true)
+          break
+        case 'reload':
+          reloadWebviewOrRecoverGuest(false)
+          break
+      }
+    },
+    [browserTab, reloadState, reloadWebviewOrRecoverGuest]
+  )
+
+  // Keep the accessible name honest: the same button is Stop mid-load and Retry after a failure.
+  const reloadButtonLabelKind = resolveBrowserReloadButtonLabelKind(reloadState)
+  const reloadButtonLabel =
+    reloadButtonLabelKind === 'stop'
+      ? translate('auto.components.browser.pane.BrowserPane.b7e4d9c1a2', 'Stop')
+      : reloadButtonLabelKind === 'retry'
+        ? translate('auto.components.browser.pane.BrowserPane.781d6459ad', 'Retry')
+        : translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')
 
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
@@ -2927,6 +2650,10 @@ function BrowserPagePane({
   })
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
+  const isPaintableRef = useRef(isPaintable)
+  useLayoutEffect(() => {
+    isPaintableRef.current = isPaintable
+  }, [isPaintable])
   const annotationViewportBridgeTokenRef = useRef(createBrowserUuid().replaceAll('-', ''))
   const browserAnnotations = useAppStore(
     (s) => s.browserAnnotationsByPageId[browserTab.id] ?? EMPTY_BROWSER_ANNOTATIONS
@@ -3365,7 +3092,12 @@ function BrowserPagePane({
       return false
     }
     addressBarInputRef.current?.blur()
-    webview.focus()
+    try {
+      webview.focus()
+    } catch {
+      // Why: WebViewElement.focus() reads null internals once the guest is destroyed (STA-3448).
+      return false
+    }
     return document.activeElement === webview
   }, [])
 
@@ -3571,15 +3303,11 @@ function BrowserPagePane({
       }
       e.preventDefault()
       e.stopPropagation()
-      if (isHardReload) {
-        webviewRef.current?.reloadIgnoringCache()
-      } else {
-        webviewRef.current?.reload()
-      }
+      reloadWebviewOrRecoverGuest(isHardReload)
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive, keybindings])
+  }, [isActive, keybindings, reloadWebviewOrRecoverGuest])
 
   // Cmd/Ctrl+R — reload (IPC path: focus inside webview guest)
   // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
@@ -3588,9 +3316,9 @@ function BrowserPagePane({
       return
     }
     return window.api.ui.onReloadBrowserPage(() => {
-      webviewRef.current?.reload()
+      reloadWebviewOrRecoverGuest(false)
     })
-  }, [isActive])
+  }, [isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     if (!isActive) {
@@ -3627,9 +3355,9 @@ function BrowserPagePane({
       return
     }
     return window.api.ui.onHardReloadBrowserPage(() => {
-      webviewRef.current?.reloadIgnoringCache()
+      reloadWebviewOrRecoverGuest(true)
     })
-  }, [isActive])
+  }, [isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     onUpdatePageStateRef.current = onUpdatePageState
@@ -3693,7 +3421,6 @@ function BrowserPagePane({
       container,
       inputLocked: inputLockedRef.current,
       webviewPartition,
-      allowWindowClose: browserTab.allowWindowClose === true,
       resolveContainer: () =>
         ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
     })
@@ -3730,11 +3457,16 @@ function BrowserPagePane({
       dismissAddressBarSuggestionsRef.current?.()
     }
 
-    let registrationInFlight: { webContentsId: number; promise: Promise<boolean> } | null = null
-    const registerGuest = (): Promise<boolean> => {
-      const webContentsId = webview.getWebContentsId()
-      if (registeredWebContentsIds.get(browserTab.id) === webContentsId) {
-        return Promise.resolve(true)
+    let registrationInFlight: {
+      webContentsId: number
+      promise: Promise<boolean | null>
+    } | null = null
+    const registerGuest = (): Promise<boolean | null> => {
+      let webContentsId: number
+      try {
+        webContentsId = webview.getWebContentsId()
+      } catch {
+        return Promise.resolve(null)
       }
       if (registrationInFlight?.webContentsId === webContentsId) {
         return registrationInFlight.promise
@@ -3750,11 +3482,12 @@ function BrowserPagePane({
         .then((registered) => {
           if (registered) {
             registeredWebContentsIds.set(browserTab.id, webContentsId)
+            return true
           }
-          return registered
+          return null
         })
-        // Why: normalize IPC rejection to false so the dom-ready fallback can retry attach-policy races.
-        .catch(() => false)
+        // Why: registration rejection can be an attach-policy race; only validation of an identified guest proves loss.
+        .catch(() => null)
         .finally(() => {
           if (registrationInFlight?.promise === promise) {
             registrationInFlight = null
@@ -3764,16 +3497,110 @@ function BrowserPagePane({
       return promise
     }
 
+    const clearGuestRecoveryError = (): void => {
+      if (activeLoadFailureRef.current?.code !== BROWSER_GUEST_RECOVERY_ERROR_CODE) {
+        return
+      }
+      activeLoadFailureRef.current = null
+      onUpdatePageStateRef.current(browserTab.id, { loading: false, loadError: null })
+    }
+
+    const guestRecovery = createBrowserPageGuestRecovery({
+      webview,
+      browserPageExists: () => browserPageExists(browserTab.id),
+      shouldValidate: () => isPaintableRef.current,
+      isCurrentWebview: () => webviewRef.current === webview,
+      isPending: () => guestRecoveryPendingRef.current,
+      setPending: (pending) => {
+        guestRecoveryPendingRef.current = pending
+      },
+      validateRegistration: async () => {
+        let webContentsId: number
+        try {
+          webContentsId = webview.getWebContentsId()
+        } catch {
+          // Why: a reused webview can remount before dom-ready; only an identified guest can be declared missing.
+          return null
+        }
+        if (registeredWebContentsIds.get(browserTab.id) !== webContentsId) {
+          return registerGuest()
+        }
+        const registered = await window.api.browser.isGuestRegistered({
+          browserPageId: browserTab.id,
+          webContentsId
+        })
+        if (registered) {
+          return true
+        }
+        return window.api.browser.repairGuestRegistration({
+          browserPageId: browserTab.id,
+          workspaceId,
+          worktreeId,
+          sessionProfileId,
+          webContentsId
+        })
+      },
+      replaceGuest: () => replacePersistentWebview(browserTab.id),
+      onReplacementReady: () => setGuestRecoveryGeneration((generation) => generation + 1),
+      onRecoveryFailed: () => {
+        const loadError = {
+          code: BROWSER_GUEST_RECOVERY_ERROR_CODE,
+          description: translate(
+            'browser.guestRecovery.failed',
+            'The browser page stopped unexpectedly. Retry to restore it.'
+          ),
+          validatedUrl: redactKagiSessionToken(
+            browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
+          )
+        }
+        activeLoadFailureRef.current = loadError
+        onUpdatePageStateRef.current(browserTab.id, { loading: false, loadError })
+      },
+      onRecoverySucceeded: clearGuestRecoveryError
+    })
+
     const handleDidAttach = (): void => {
       // Why: register at attach since cert failures can precede dom-ready; the dom-ready path stays an idempotent fallback.
-      void registerGuest().finally(() => syncBrowserAnnotationViewportBridge())
+      void registerGuest().then((registered) => {
+        if (registered === true) {
+          guestRecovery.confirmRegistration()
+        }
+        syncBrowserAnnotationViewportBridge()
+      })
     }
 
     const handleDomReady = (): void => {
+      const validateRecoveryAfterNavigation =
+        recoveryNavigationValidationRef.current?.committed === true
+      if (validateRecoveryAfterNavigation) {
+        recoveryNavigationValidationRef.current = null
+      }
+      let liveWebContentsId: number | null = null
+      try {
+        liveWebContentsId = webview.getWebContentsId()
+      } catch {
+        // Why: the guest can detach between dom-ready and registration.
+      }
       const queuedAnnotationViewportBridgeSync =
-        registeredWebContentsIds.get(browserTab.id) !== webview.getWebContentsId()
+        liveWebContentsId === null ||
+        registeredWebContentsIds.get(browserTab.id) !== liveWebContentsId
       if (queuedAnnotationViewportBridgeSync) {
-        void registerGuest().finally(() => syncBrowserAnnotationViewportBridge())
+        void registerGuest().then((registered) => {
+          const completedRecovery = guestRecovery.finish()
+          if (registered === true) {
+            guestRecovery.confirmRegistration()
+            clearGuestRecoveryError()
+          }
+          if (registered === null || completedRecovery || validateRecoveryAfterNavigation) {
+            guestRecovery.validateAfterResume()
+          }
+          syncBrowserAnnotationViewportBridge()
+        })
+      } else {
+        const completedRecovery = guestRecovery.finish()
+        if (completedRecovery || validateRecoveryAfterNavigation) {
+          guestRecovery.validateAfterResume()
+        }
       }
       syncNavigationState(webview)
       if (keepAddressBarFocusRef.current) {
@@ -3837,7 +3664,18 @@ function BrowserPagePane({
         })
         return
       }
-      if (activeLoadFailure) {
+      if (activeLoadFailure?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
+        trackNextLoadingEventRef.current = false
+        onUpdatePageStateRef.current(browserTab.id, {
+          loading: false,
+          title: getBrowserDisplayTitle(webview.getTitle(), browserModelUrl),
+          faviconUrl: faviconUrlRef.current,
+          canGoBack: webview.canGoBack(),
+          canGoForward: webview.canGoForward(),
+          loadError: activeLoadFailure
+        })
+        return
+      } else if (activeLoadFailure) {
         const normalizedAttemptedUrl =
           normalizeBrowserNavigationUrl(activeLoadFailure.validatedUrl) ??
           activeLoadFailure.validatedUrl
@@ -3882,7 +3720,23 @@ function BrowserPagePane({
       })
     }
 
-    const handleDidNavigate = (event: { url?: string; isMainFrame?: boolean }): void => {
+    const handleDidStartNavigation = (event: Electron.DidStartNavigationEvent): void => {
+      if (!event.isMainFrame || event.isInPlace || !event.url) {
+        return
+      }
+      const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
+      const browserStartedUrl = redactKagiSessionToken(event.url)
+      const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
+      if (pendingRecoveryNavigation?.targetUrl === startedUrl) {
+        pendingRecoveryNavigation.started = true
+      }
+    }
+
+    const handleDidNavigate = (
+      event: { url?: string; isMainFrame?: boolean },
+      persistUrl = true,
+      preserveLoadError = false
+    ): void => {
       if (event.isMainFrame === false) {
         return
       }
@@ -3891,19 +3745,38 @@ function BrowserPagePane({
         return
       }
       const browserModelUrl = redactKagiSessionToken(currentUrl)
-      lastKnownWebviewUrlRef.current =
+      const normalizedBrowserModelUrl =
         normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+      lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
       rememberLiveBrowserUrl(browserTab.id, browserModelUrl)
       // Why: don't overwrite in-progress typing (see above).
       if (document.activeElement !== addressBarInputRef.current) {
         setAddressBarValue(toDisplayUrl(browserModelUrl))
       }
-      onSetUrlRef.current(browserTab.id, browserModelUrl)
+      if (persistUrl) {
+        onSetUrlRef.current(browserTab.id, browserModelUrl, { preserveLoadError })
+      }
       onUpdatePageStateRef.current(browserTab.id, {
         title: webview.getTitle() || browserModelUrl,
         canGoBack: webview.canGoBack(),
         canGoForward: webview.canGoForward()
       })
+    }
+
+    const handleFullDidNavigate = (event: { url?: string; isMainFrame?: boolean }): void => {
+      const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
+      if (event.isMainFrame !== false && pendingRecoveryNavigation?.started) {
+        pendingRecoveryNavigation.committed = true
+      }
+      const preserveRecoveryError =
+        activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
+      handleDidNavigate(event, true, preserveRecoveryError)
+    }
+
+    const handleDidNavigateInPage = (event: { url?: string; isMainFrame?: boolean }): void => {
+      const preserveRecoveryError =
+        activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
+      handleDidNavigate(event, !preserveRecoveryError)
     }
 
     const handleTitleUpdate = (event: { title?: string }): void => {
@@ -3944,6 +3817,10 @@ function BrowserPagePane({
         return
       }
       trackNextLoadingEventRef.current = false
+      const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
+      if (pendingRecoveryNavigation?.started) {
+        recoveryNavigationValidationRef.current = null
+      }
       const loadError = buildLoadError(event)
       activeLoadFailureRef.current = loadError
       onUpdatePageStateRef.current(browserTab.id, {
@@ -3978,19 +3855,33 @@ function BrowserPagePane({
       }
     }
 
+    const unsubscribeSystemResumed = subscribeBrowserSystemResume(guestRecovery.validateAfterResume)
+    validateVisibleGuestRegistrationRef.current = guestRecovery.validateAfterResume
+    retryGuestRecoveryRef.current = guestRecovery.retryRecovery
+
+    const handleGuestDestroyed = (): void => {
+      // Why: a guest can be destroyed without render-process-gone (detach/reattach race,
+      // guest-side close). Skip intentional teardown, where the element already left the DOM.
+      if (webview.isConnected) {
+        guestRecovery.recoverRenderer()
+      }
+    }
     webview.addEventListener('did-attach', handleDidAttach)
     webview.addEventListener('dom-ready', handleDomReady)
+    webview.addEventListener('render-process-gone', guestRecovery.recoverRenderer)
+    webview.addEventListener('destroyed', handleGuestDestroyed)
     webview.addEventListener('focus', dismissAddressBarSuggestions)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
+    webview.addEventListener('did-start-navigation', handleDidStartNavigation)
     webview.addEventListener('did-stop-loading', handleDidStopLoading)
     // Why: close find only on full 'did-navigate', not the shared handler, which also fires on SPA in-page hash/pushState changes.
     const handleFindCloseOnNavigate = (): void => {
       setFindOpen(false)
     }
 
-    webview.addEventListener('did-navigate', handleDidNavigate)
+    webview.addEventListener('did-navigate', handleFullDidNavigate)
     webview.addEventListener('did-navigate', handleFindCloseOnNavigate)
-    webview.addEventListener('did-navigate-in-page', handleDidNavigate)
+    webview.addEventListener('did-navigate-in-page', handleDidNavigateInPage)
     webview.addEventListener('page-title-updated', handleTitleUpdate)
     webview.addEventListener('page-favicon-updated', handleFaviconUpdate)
     webview.addEventListener('did-fail-load', handleFailLoad)
@@ -4003,23 +3894,40 @@ function BrowserPagePane({
       trackNextLoadingEventRef.current = initialUrl !== ORCA_BROWSER_BLANK_URL
       lastKnownWebviewUrlRef.current = initialUrl
       webview.src = initialUrl
+    } else if (isPaintableRef.current) {
+      if (isBrowserPageRendererRecoveryPending(browserTab.id)) {
+        guestRecovery.recoverRenderer()
+      } else {
+        guestRecovery.validateAfterResume()
+      }
     }
 
     return () => {
       webview.removeEventListener('did-attach', handleDidAttach)
       webview.removeEventListener('dom-ready', handleDomReady)
+      webview.removeEventListener('render-process-gone', guestRecovery.recoverRenderer)
+      webview.removeEventListener('destroyed', handleGuestDestroyed)
       webview.removeEventListener('focus', dismissAddressBarSuggestions)
       webview.removeEventListener('did-start-loading', handleDidStartLoading)
+      webview.removeEventListener('did-start-navigation', handleDidStartNavigation)
       webview.removeEventListener('did-stop-loading', handleDidStopLoading)
-      webview.removeEventListener('did-navigate', handleDidNavigate)
+      webview.removeEventListener('did-navigate', handleFullDidNavigate)
       webview.removeEventListener('did-navigate', handleFindCloseOnNavigate)
-      webview.removeEventListener('did-navigate-in-page', handleDidNavigate)
+      webview.removeEventListener('did-navigate-in-page', handleDidNavigateInPage)
       webview.removeEventListener('page-title-updated', handleTitleUpdate)
       webview.removeEventListener('page-favicon-updated', handleFaviconUpdate)
       webview.removeEventListener('did-fail-load', handleFailLoad)
       webview.removeEventListener('console-message', handleAnnotationViewportMessage)
       container.removeEventListener('dragover', onContainerDragOver)
       container.removeEventListener('drop', onContainerDrop)
+      unsubscribeSystemResumed()
+      guestRecovery.dispose()
+      if (validateVisibleGuestRegistrationRef.current === guestRecovery.validateAfterResume) {
+        validateVisibleGuestRegistrationRef.current = () => {}
+      }
+      if (retryGuestRecoveryRef.current === guestRecovery.retryRecovery) {
+        retryGuestRecoveryRef.current = () => {}
+      }
 
       if (webviewRef.current === webview) {
         webviewRef.current = null
@@ -4034,6 +3942,7 @@ function BrowserPagePane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     browserTab.id,
+    guestRecoveryGeneration,
     workspaceId,
     slotViewportReady,
     webviewPartition,
@@ -4044,6 +3953,14 @@ function BrowserPagePane({
     syncNavigationState,
     syncBrowserAnnotationViewportBridge
   ])
+
+  useEffect(() => {
+    const becamePaintable = isPaintable && !wasPaintableForGuestValidationRef.current
+    wasPaintableForGuestValidationRef.current = isPaintable
+    if (becamePaintable) {
+      validateVisibleGuestRegistrationRef.current()
+    }
+  }, [isPaintable])
 
   useLayoutEffect(() => {
     applyBrowserPageViewportLayout(browserTab.id, { paintable: isPaintable, active: isActive })
@@ -4526,11 +4443,17 @@ function BrowserPagePane({
     (url: string): void => {
       const navigateBrowserUrl = (targetUrl: string): void => {
         const browserModelUrl = redactKagiSessionToken(targetUrl)
+        const normalizedBrowserModelUrl =
+          normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+        const recoveryLoadError =
+          activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
+            ? activeLoadFailureRef.current
+            : null
         setAddressBarValue(toDisplayUrl(browserModelUrl))
         onSetUrlRef.current(browserTab.id, browserModelUrl)
         onUpdatePageStateRef.current(browserTab.id, {
           loading: true,
-          loadError: null,
+          loadError: recoveryLoadError,
           title: getBrowserDisplayTitle(browserModelUrl, browserModelUrl)
         })
         setResourceNotice(null)
@@ -4540,8 +4463,10 @@ function BrowserPagePane({
           return
         }
         trackNextLoadingEventRef.current = targetUrl !== ORCA_BROWSER_BLANK_URL
-        lastKnownWebviewUrlRef.current =
-          normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+        lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
+        recoveryNavigationValidationRef.current = recoveryLoadError
+          ? { committed: false, started: false, targetUrl: normalizedBrowserModelUrl }
+          : null
         webview.src = targetUrl
         if (targetUrl !== ORCA_BROWSER_BLANK_URL) {
           focusWebviewNow()
@@ -4633,6 +4558,8 @@ function BrowserPagePane({
   const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
   const externalUrl = getOpenableExternalUrl(webviewRef.current, browserTab.url)
   const currentBrowserUrl = getCurrentBrowserUrl(webviewRef.current, browserTab.url)
+  const shareableArtifactFile =
+    workspaceConnectionId === null ? getShareableBrowserArtifactFile(currentBrowserUrl) : null
   const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
   const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
@@ -4769,6 +4696,7 @@ function BrowserPagePane({
 
   return (
     <div
+      data-browser-page-pane-id={browserTab.id}
       className={cn(
         'absolute inset-0 flex min-h-0 flex-1 flex-col',
         isActive
@@ -4883,7 +4811,7 @@ function BrowserPagePane({
                   role="menuitem"
                   className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
                   onClick={() => {
-                    webviewRef.current?.reload()
+                    reloadWebviewOrRecoverGuest(false)
                     setContextMenu(null)
                   }}
                 >
@@ -4959,30 +4887,62 @@ function BrowserPagePane({
           >
             <ArrowRight className="size-4" />
           </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={() => {
-              const webview = webviewRef.current
-              if (!webview) {
-                return
-              }
-              if (browserTab.loading) {
-                webview.stop()
-              } else if (browserTab.loadError) {
-                retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
-              } else {
-                webview.reload()
-              }
-            }}
-          >
-            {browserTab.loading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="size-4" />
-            )}
-          </Button>
+          <DropdownMenu modal={false} open={reloadMenuOpen} onOpenChange={setReloadMenuOpen}>
+            {/* Why: suppress the tooltip while the menu is open — both anchor below the button and would overlap. */}
+            <Tooltip open={reloadMenuOpen ? false : undefined}>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    aria-label={reloadButtonLabel}
+                    // Why: preventDefault suppresses Radix's open-on-left-click (composeEventHandlers skips its
+                    // handler once defaultPrevented), keeping left-click on the primary action and the menu on right-click.
+                    onPointerDown={(e) => {
+                      if (e.button === 0) {
+                        e.preventDefault()
+                      }
+                    }}
+                    // Why: same trick for Radix's open-on-Enter/Space, which would otherwise preventDefault the
+                    // synthesized click and strand keyboard users. ArrowDown still falls through to open the menu.
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        runReloadTrigger('button')
+                      }
+                    }}
+                    onClick={() => runReloadTrigger('button')}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      setReloadMenuOpen(true)
+                    }}
+                  >
+                    {browserTab.loading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-4" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                {reloadButtonLabel}
+                {/* Why: the chord maps to plain reload(), which is not what Stop or Retry do — only hint when they match. */}
+                {reloadShortcut && reloadButtonLabelKind === 'reload' ? ` · ${reloadShortcut}` : ''}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="start" alignOffset={-4}>
+              <DropdownMenuItem onClick={() => runReloadTrigger('reload')}>
+                {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+                <DropdownMenuShortcut>{reloadShortcut}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => runReloadTrigger('hard-reload')}>
+                {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
+                <DropdownMenuShortcut>{hardReloadShortcut}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <BrowserAddressBar
             value={addressBarValue}
@@ -5072,6 +5032,14 @@ function BrowserPagePane({
             active={markup.isActive}
             surfaceActive={isActive}
           />
+
+          {shareableArtifactFile ? (
+            <ArtifactPublishButton
+              sourceKey={shareableArtifactFile.filePath}
+              className="h-7 w-7"
+              createRequest={() => readBrowserHtmlArtifactRequest(currentBrowserUrl)}
+            />
+          ) : null}
 
           <Button
             size="icon"
@@ -5438,6 +5406,10 @@ function BrowserPagePane({
                       return
                     }
                     onUpdatePageStateRef.current(browserTab.id, { loading: true })
+                    if (browserTab.loadError?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
+                      retryGuestRecoveryRef.current()
+                      return
+                    }
                     retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
                   }}
                   onTryHttps={navigateToUrl}

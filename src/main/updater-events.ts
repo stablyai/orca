@@ -12,6 +12,11 @@ import { compareVersions } from './updater-fallback'
 import { fetchChangelog } from './updater-changelog'
 import type { ElectronAutoUpdater } from './electron-updater-loader'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
+import {
+  captureLinuxPackageArtifact,
+  clearTrackedLinuxPackageArtifact,
+  clearTrackedLinuxPackageArtifactForOtherVersion
+} from './linux-package-update-recovery'
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
@@ -28,7 +33,7 @@ type UpdaterHandlerContext = {
   getKnownReleaseUrl: () => string | undefined
   getPendingInstallVersion: () => string
   getUserInitiatedCheck: () => boolean
-  handleQuitAndInstallFailure: () => boolean
+  handleQuitAndInstallFailure: (error?: unknown) => boolean
   isQuitAndInstallHandoffActive: () => boolean
   hasInstallableDownloadedVersion: () => boolean
   isLocalBuildCheck: () => boolean
@@ -184,6 +189,10 @@ export function registerAutoUpdaterHandlers({
       return
     }
 
+    // Why: only a genuinely newer offer supersedes the retained package; a publishing-window blip that
+    // momentarily resolves an older tag must not destroy a still-valid recovery path.
+    clearTrackedLinuxPackageArtifactForOtherVersion(info.version)
+
     // Why: fetch the changelog in main to avoid renderer-side CORS on onorca.dev.
     markUpdateAvailableEventPending(attemptId)
     void (async () => {
@@ -232,6 +241,7 @@ export function registerAutoUpdaterHandlers({
     }
     clearBackgroundCheckLaunchPending()
     resetMacInstallState()
+    clearTrackedLinuxPackageArtifact()
     const missingManifestFallback = consumeMissingManifestPrereleaseFallbackResult()
     const publishingWindowLastGoodCheck = getPublishingWindowLastGoodCheck()
     const wasUserInitiated = missingManifestFallback?.userInitiated ?? getUserInitiatedCheck()
@@ -260,10 +270,12 @@ export function registerAutoUpdaterHandlers({
 
   autoUpdater.on('download-progress', (progress) => {
     clearBackgroundCheckLaunchPending()
+    const version = getPendingInstallVersion()
+    clearTrackedLinuxPackageArtifactForOtherVersion(version)
     sendStatus({
       state: 'downloading',
       percent: Math.round(progress.percent),
-      version: getPendingInstallVersion()
+      version
     })
   })
 
@@ -276,9 +288,12 @@ export function registerAutoUpdaterHandlers({
       compareVersions(info.version, app.getVersion()) <= 0
     ) {
       clearAvailableUpdateContext()
+      clearTrackedLinuxPackageArtifact()
       sendStatus({ state: 'not-available' })
       return
     }
+    // Why: retain the verified artifact now — the 'error' event after a failed install no longer carries it.
+    captureLinuxPackageArtifact(info)
     const macInstallerReady = process.platform === 'darwin' ? isMacInstallerReady() : true
     recordUpdaterLifecycle('update_downloaded', { version: info.version, macInstallerReady })
     // On macOS, defer 'downloaded' until Squirrel.Mac finishes processing; other platforms are ready immediately.
@@ -294,7 +309,7 @@ export function registerAutoUpdaterHandlers({
   autoUpdater.on('error', (err) => {
     const message = err?.message ?? 'Unknown error'
     // Why: quitAndInstall reports "no staged update" via this error event (async on macOS); recover quit flags before suppression guards run.
-    if (handleQuitAndInstallFailure()) {
+    if (handleQuitAndInstallFailure(err)) {
       return
     }
     // Why: handoff still owns the process; don't treat as a check/download error.

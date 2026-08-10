@@ -1,7 +1,11 @@
 /* eslint-disable max-lines */
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultUIState, getWorktreeCardModeProperties } from '../../../../shared/constants'
+import {
+  getDefaultSettings,
+  getDefaultUIState,
+  getWorktreeCardModeProperties
+} from '../../../../shared/constants'
 import type {
   GitHubWorkItem,
   JiraIssue,
@@ -719,6 +723,33 @@ describe('createUISlice hydratePersistedUI', () => {
     const store = createUIStore()
 
     expect(store.getState().showSleepingWorkspaces).toBe(true)
+  })
+
+  it('defaults the default-branch sleeping exemption to on', () => {
+    expect(getDefaultUIState().alwaysShowDefaultBranchWorkspace).toBe(true)
+    expect(createUIStore().getState().alwaysShowDefaultBranchWorkspace).toBe(true)
+  })
+
+  it('treats a legacy profile with no default-branch exemption key as opted in', () => {
+    // Why: profiles written before #8873 are exactly the ones showing the bug,
+    // so an absent key must hydrate to on rather than silently re-hiding main.
+    const store = createUIStore()
+    const legacy = makePersistedUI()
+    delete (legacy as Partial<PersistedUIState>).alwaysShowDefaultBranchWorkspace
+
+    store.getState().hydratePersistedUI(legacy, 'startup')
+
+    expect(store.getState().alwaysShowDefaultBranchWorkspace).toBe(true)
+  })
+
+  it('preserves an explicit default-branch exemption opt-out on hydration', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ alwaysShowDefaultBranchWorkspace: false }), 'startup')
+
+    expect(store.getState().alwaysShowDefaultBranchWorkspace).toBe(false)
   })
 
   it('defaults workspace host scope to all hosts', () => {
@@ -1646,6 +1677,23 @@ describe('createUISlice hydratePersistedUI', () => {
       linearQuery: 'label:bug',
       jiraPreset: 'reported'
     })
+  })
+
+  // Why: the Linear issue view is device-local now. A host that still holds one from
+  // an older build must not reintroduce the key the strict ui.set schema rejects.
+  it('ignores a stale host-persisted Linear issue view during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        taskResumeState: {
+          linearQuery: 'label:bug',
+          linearIssueView: { viewMode: 'board', groupBy: 'assignee' }
+        } as unknown as PersistedUIState['taskResumeState']
+      })
+    )
+
+    expect(store.getState().taskResumeState).toEqual({ linearQuery: 'label:bug' })
   })
 
   it('restores acknowledgedAgentsByPaneKey from persisted UI state', () => {
@@ -3418,6 +3466,31 @@ describe('createUISlice space navigation', () => {
     store.getState().closeSpacePage()
 
     expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('returns to the originating view after closing Artifacts', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openArtifactsPage()
+
+    expect(store.getState().activeView).toBe('artifacts')
+    expect(store.getState().previousViewBeforeArtifacts).toBe('tasks')
+
+    store.getState().closeArtifactsPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('opens and restores Artifacts when its sidebar shortcut is hidden', () => {
+    const store = createUIStore()
+    store.setState({ settings: { ...getDefaultSettings('/tmp'), showArtifactsButton: false } })
+
+    store.getState().openArtifactsPage()
+    expect(store.getState().activeView).toBe('artifacts')
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'artifacts' }), 'startup')
+    expect(store.getState().activeView).toBe('artifacts')
   })
 })
 

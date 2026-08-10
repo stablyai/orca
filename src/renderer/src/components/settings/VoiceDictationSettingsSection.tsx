@@ -3,6 +3,7 @@ import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { VoiceMicrophoneSetting } from './VoiceMicrophoneSetting'
 
 type VoiceDictationSettingsSectionProps = {
   voiceSettings: VoiceSettings
@@ -50,7 +51,7 @@ export function VoiceDictationSettingsSection({
         >
           <span
             className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              voiceSettings.enabled ? 'translate-x-4' : 'translate-x-0.5'
+              voiceSettings.enabled ? 'translate-x-4.5' : 'translate-x-0.5'
             }`}
           />
         </button>
@@ -92,6 +93,13 @@ export function VoiceDictationSettingsSection({
           ))}
         </div>
       </div>
+
+      <Separator />
+
+      <VoiceMicrophoneSetting
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={onUpdateVoiceSettings}
+      />
 
       <Separator />
     </>

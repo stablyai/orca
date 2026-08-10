@@ -235,6 +235,11 @@ describe('parseWorkspaceSession', () => {
             title: 'Claude working',
             defaultTitle: 'Terminal 1',
             generatedTitle: 'Refactor auth',
+            aiVaultTitle: {
+              agent: 'codex',
+              sessionId: 'session-1',
+              title: 'Provider thread name'
+            },
             customTitle: null,
             color: null,
             sortOrder: 0,
@@ -253,6 +258,11 @@ describe('parseWorkspaceSession', () => {
             contentType: 'terminal',
             label: 'Claude working',
             generatedLabel: 'Refactor auth',
+            aiVaultTitle: {
+              agent: 'codex',
+              sessionId: 'session-1',
+              title: 'Provider thread name'
+            },
             customLabel: null,
             color: null,
             sortOrder: 0,
@@ -265,7 +275,56 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].generatedTitle).toBe('Refactor auth')
+      expect(result.value.tabsByWorktree.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
       expect(result.value.unifiedTabs?.wt[0].generatedLabel).toBe('Refactor auth')
+      expect(result.value.unifiedTabs?.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
+    }
+  })
+
+  it('drops malformed AI Vault titles without rejecting the workspace session', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'Codex',
+            aiVaultTitle: { agent: 'future-agent', sessionId: 'session-1', title: 'Name' },
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'terminal',
+            label: 'Codex',
+            aiVaultTitle: 'malformed',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0].aiVaultTitle).toBeUndefined()
+      expect(result.value.unifiedTabs?.wt[0].aiVaultTitle).toBeUndefined()
     }
   })
 

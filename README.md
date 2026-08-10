@@ -36,7 +36,7 @@
 
 Monitor and steer your agents from your phone — get notified when an agent finishes and send follow-ups from anywhere.
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [Android APK 0.0.36](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.36/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [Android APK 0.0.37](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.37/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -230,7 +230,7 @@ yay -S stably-orca-bin
 Pair with your desktop app to monitor and steer your agents from your phone.
 
 - **iOS:** [Download on the App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) or [join TestFlight](https://testflight.apple.com/join/YjeGMQBA)
-- **Android:** [Download APK 0.0.36](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.36/app-release.apk)
+- **Android:** [Download APK 0.0.37](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.37/app-release.apk)
 
 ---
 
@@ -238,10 +238,9 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 - **Discord:** Join the community on **[Discord](https://discord.gg/fzjDKHxv8Q)**.
 - **Twitter / X:** Follow **[@orca_build](https://x.com/orca_build)** for updates and announcements.
-- **WeChat:** If group 5 is full, you can join group 6.
+- **WeChat:** Scan to join the Orca community WeChat group 7.
 
-  <img src="docs/assets/wechat-qr.jpg" alt="WeChat group 5 QR code for the Orca community" width="160" style="margin-right: 16px;" />
-  <img src="docs/assets/wechat-qr-group6.jpg" alt="WeChat group 6 QR code for the Orca community" width="160" />
+  <img src="docs/assets/wechat-qr-group7.jpg" alt="WeChat group 7 QR code for the Orca community" width="160" />
 
 - **Feedback &amp; Ideas:** We ship fast. Missing something? [Request a new feature](https://github.com/stablyai/orca/issues).
 - **Privacy:** See the [privacy &amp; telemetry docs](https://www.onorca.dev/docs/telemetry) for what anonymous usage data Orca collects and how to opt out.

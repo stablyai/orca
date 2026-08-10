@@ -4,6 +4,7 @@ import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { createPaneDOM } from './pane-dom-creation'
 
 const webLinksAddonMock = vi.hoisted(() => ({
+  handler: null as ((event: MouseEvent, uri: string) => void) | null,
   options: null as { hover?: (event: MouseEvent, uri: string) => void; leave?: () => void } | null
 }))
 
@@ -32,7 +33,8 @@ vi.mock('@xterm/addon-unicode11', () => ({
 }))
 
 vi.mock('@xterm/addon-web-links', () => ({
-  WebLinksAddon: vi.fn().mockImplementation(function WebLinksAddon(_handler, options) {
+  WebLinksAddon: vi.fn().mockImplementation(function WebLinksAddon(handler, options) {
+    webLinksAddonMock.handler = handler
     webLinksAddonMock.options = options
     return {}
   })
@@ -115,5 +117,48 @@ describe('createPaneDOM link tooltips', () => {
     await Promise.resolve()
 
     expect(pane.linkTooltip.textContent).toBe(labeledText)
+  })
+
+  // Why: the hovered pane's host decides where its links can go, so both hooks must
+  // receive that pane's id rather than resolving against global state.
+  it('identifies the hovered pane to both tooltip hooks', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+    const linkOpenHint = vi.fn(() => 'open hint')
+    const formatLinkTooltip = vi.fn(() => null)
+    createPaneDOM(
+      7,
+      leafId,
+      { linkOpenHint, formatLinkTooltip },
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn(),
+      () => false
+    )
+
+    webLinksAddonMock.options?.hover?.({} as MouseEvent, 'http://localhost:5180/')
+
+    expect(linkOpenHint).toHaveBeenCalledWith(7)
+    expect(formatLinkTooltip).toHaveBeenCalledWith(7, 'http://localhost:5180/', 'open hint')
+  })
+
+  it('identifies the clicked pane to link routing', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+    const onLinkClick = vi.fn()
+    createPaneDOM(
+      7,
+      leafId,
+      { linkOpenHint: () => 'open hint', onLinkClick },
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn(),
+      () => false
+    )
+    const event = {} as MouseEvent
+
+    webLinksAddonMock.handler?.(event, 'https://example.com')
+
+    expect(onLinkClick).toHaveBeenCalledWith(7, event, 'https://example.com')
   })
 })

@@ -113,7 +113,8 @@ describe('remote filesystem watcher cancellation', () => {
     await Promise.all([first, second])
     expect(watchMock).toHaveBeenCalledTimes(2)
     secondCallback?.([{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
-    expect(secondSender.send).toHaveBeenCalledTimes(1)
+    // Why: remote fs:changed rides the shared debounce window, so the send lands a flush later.
+    await vi.waitFor(() => expect(secondSender.send).toHaveBeenCalledTimes(1))
 
     handlers['fs:unwatchWorktree']({ sender: { id: 2 } }, args)
     expect(secondUnwatch).toHaveBeenCalledTimes(1)

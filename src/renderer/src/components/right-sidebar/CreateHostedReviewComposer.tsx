@@ -33,13 +33,6 @@ import {
 
 const EMPTY_DROPDOWN_ITEMS: DropdownEntry[] = []
 
-export type CreateHostedReviewFields = {
-  base: string
-  title: string
-  body: string
-  draft: boolean
-}
-
 export type CreateHostedReviewComposerPrimaryAction = {
   disabled: boolean
   title: string

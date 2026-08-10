@@ -649,18 +649,9 @@ describe('pr-refresh-coordinator', () => {
       'graphql',
       executionOptions
     )
-    expect(noteRepositoryRateLimitSpendMock).toHaveBeenCalledWith(
-      testCase.repository,
-      'core',
-      1,
-      executionOptions
-    )
-    expect(noteRepositoryRateLimitSpendMock).toHaveBeenCalledWith(
-      testCase.repository,
-      'graphql',
-      1,
-      executionOptions
-    )
+    // Why (#11532): the lookup itself debits the snapshot now, so every caller
+    // is accounted for; the coordinator must not double-charge on top.
+    expect(noteRepositoryRateLimitSpendMock).not.toHaveBeenCalled()
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
   })
 

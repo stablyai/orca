@@ -15,7 +15,6 @@ const { muxRequestMock, openConsumerSessionMock } = vi.hoisted(() => ({
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn().mockResolvedValue('') }))
 vi.mock('./ssh-pty-consumer-session', () => ({
-  SSH_PTY_SOURCE_WINDOW_SU: 256 * 1024,
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
 vi.mock('./ssh-channel-multiplexer', () => ({
@@ -118,7 +117,8 @@ describe('SshRelaySession managed hooks', () => {
     )
     expect(muxRequestMock.mock.calls[pluginsIndex]?.[1]).toMatchObject({
       piExtensionSource: expect.stringContaining('/hook/pi'),
-      ompExtensionSource: expect.stringContaining('/hook/omp')
+      ompExtensionSource: expect.stringContaining('/hook/omp'),
+      primeAgentExtensionSource: expect.stringContaining('/hook/prime-agent')
     })
     expect(sftp).not.toHaveBeenCalled()
     expect(muxRequestMock.mock.invocationCallOrder[pluginsIndex]).toBeLessThan(

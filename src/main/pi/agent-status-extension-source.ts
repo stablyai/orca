@@ -19,7 +19,7 @@ export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
 export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): string {
   // Why: OMP needs the file only to reject ephemeral sessions; disclose just its resume id.
   const sessionMetadataSourceLines =
-    kind === 'pi'
+    kind !== 'omp'
       ? [
           'let sessionMetadata: Record<string, unknown> = {}',
           'let runtimeOmpSessionMetadata: Record<string, unknown> = {}',
@@ -81,7 +81,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
         ]
   // Why: Pi resumes from an existing transcript; OMP resumes directly by session id (#8962).
   const payloadLine =
-    kind === 'pi'
+    kind !== 'omp'
       ? '    payload: { hook_event_name: hookEventName, ...(ompRuntime ? metadata : getPersistedSessionMetadata()), ...extra },'
       : '    payload: { hook_event_name: hookEventName, ...metadata, ...extra },'
 

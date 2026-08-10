@@ -42,12 +42,18 @@ export function pairingAuthorizationForContext(
     : null
 }
 
+// Why: a broker that died without arming a retry (sleep past token expiry,
+// transient auth read) must not stay dead until the user clicks Retry. The
+// cadence is slow because it is a safety net, not the primary retry path.
+const RELAY_LIVENESS_INTERVAL_MS = 5 * 60_000
+
 export class DesktopRelayService {
   private readonly coordinator: RelayAuthCoordinator
   private readonly revokeOutbox: RelayRevokeOutbox
   private readonly runtimeRpc: OrcaRuntimeRpcServer
   private readonly demandLedger: RelayDemandLedger
   private demandExpiryTimer: ReturnType<typeof setTimeout> | null = null
+  private livenessTimer: ReturnType<typeof setInterval> | null = null
   private stopped = false
 
   constructor(options: DesktopRelayServiceOptions) {
@@ -92,11 +98,25 @@ export class DesktopRelayService {
     this.refreshDemand()
   }
 
+  // Safe to call from any wake signal (power resume, network change).
+  ensureLive(): void {
+    if (!this.stopped) {
+      this.coordinator.ensureLive()
+    }
+  }
+
   authMutated(): void {
     this.refreshDemand()
   }
 
   fenceAndCloseNow(): void {
+    // Why: a fence must be hard — a surviving liveness tick could catch the
+    // window between the pre-sign-out fence and the profile wipe and briefly
+    // resurrect a broker. The next auth mutation re-arms via refreshDemand.
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer)
+      this.livenessTimer = null
+    }
     this.coordinator.fenceAndCloseNow()
   }
 
@@ -217,6 +237,10 @@ export class DesktopRelayService {
       clearTimeout(this.demandExpiryTimer)
       this.demandExpiryTimer = null
     }
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer)
+      this.livenessTimer = null
+    }
     this.coordinator.stop()
   }
 
@@ -286,6 +310,9 @@ export class DesktopRelayService {
   private refreshDemand(): void {
     if (this.stopped) {
       return
+    }
+    if (!this.livenessTimer) {
+      this.livenessTimer = setInterval(() => this.ensureLive(), RELAY_LIVENESS_INTERVAL_MS)
     }
     if (this.demandExpiryTimer) {
       clearTimeout(this.demandExpiryTimer)

@@ -15,15 +15,21 @@ import { SshHostAdvancedFields } from '../settings/SshHostAdvancedFields'
 export function SshHostFields({
   form,
   disabled,
+  preferAdvancedOpen = false,
+  configIdentityAlias = null,
   onFormChange,
   onSubmit
 }: {
   form: EditingTarget
   disabled: boolean
+  /** When true after a config pick, expand Advanced so proxy/jump stay visible. */
+  preferAdvancedOpen?: boolean
+  /** Alias this form was filled from, so an empty Identity file can be explained. */
+  configIdentityAlias?: string | null
   onFormChange: (updater: (prev: EditingTarget) => EditingTarget) => void
   onSubmit: () => void
 }) {
-  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(preferAdvancedOpen)
   return (
     <form
       className="grid gap-3 sm:grid-cols-2"
@@ -112,6 +118,15 @@ export function SshHostFields({
             '~/.ssh/id_ed25519 (optional)'
           )}
         />
+        {configIdentityAlias && form.identityFile.trim() === '' ? (
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.sidebar.AddRemoteHostDialog.identityFileFromConfigHint',
+              'Left empty on purpose: Orca uses every key ~/.ssh/config resolves for {{value0}}. Type a path to use just that key.',
+              { value0: configIdentityAlias }
+            )}
+          </p>
+        ) : null}
       </div>
       <SshHostAdvancedFields
         open={advancedOpen}

@@ -15,17 +15,6 @@ function rpcSuccess(files: string[]): Awaited<ReturnType<RpcClient['sendRequest'
   }
 }
 
-function suppressRendererWarning(): () => void {
-  const original = console.error
-  const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-      return
-    }
-    original(...args)
-  })
-  return () => spy.mockRestore()
-}
-
 describe('useMobileNativeChatFileSearch', () => {
   let renderer: ReactTestRenderer | null = null
   let state: SearchState | null = null
@@ -35,19 +24,13 @@ describe('useMobileNativeChatFileSearch', () => {
       state = useMobileNativeChatFileSearch({ client, worktreeId: 'wt-1' })
       return null
     }
-    const restore = suppressRendererWarning()
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness))
-      })
-    } finally {
-      restore()
-    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
   }
 
   beforeEach(() => {
     vi.useFakeTimers()
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     state = null
   })
 

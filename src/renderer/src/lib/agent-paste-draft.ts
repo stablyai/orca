@@ -167,24 +167,6 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   })
 }
 
-export async function submitPromptToAgentTab(args: {
-  tabId: string
-  content: string
-  timeoutMs?: number
-}): Promise<boolean> {
-  const { tabId, content, timeoutMs } = args
-  const ptyId = await waitForPtyId(tabId, timeoutMs ?? READINESS_TIMEOUT_MS)
-  if (!ptyId) {
-    return false
-  }
-  return await sendBracketedPasteToAgent({
-    settings: getSettingsForAgentTabRuntimeOwner(tabId),
-    ptyId,
-    content,
-    submit: true
-  })
-}
-
 export async function submitPromptToAgentPty(args: {
   tabId: string
   ptyId: string

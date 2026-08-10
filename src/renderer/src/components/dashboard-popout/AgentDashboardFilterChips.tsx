@@ -34,18 +34,22 @@ export function AgentDashboardFilterChips({
   projects,
   statuses,
   reviewLabel,
+  showAgentlessWorkspaces,
   onProjectToggle,
   onStatusToggle,
   onReviewToggle,
+  onAgentlessWorkspacesToggle,
   onClear
 }: {
   filters: DashboardFilters
   projects: FilterLabel[]
   statuses: FilterLabel[]
   reviewLabel: (id: DashboardReviewFilter) => string
+  showAgentlessWorkspaces: boolean
   onProjectToggle: (id: string) => void
   onStatusToggle: (id: string) => void
   onReviewToggle: (id: DashboardReviewFilter) => void
+  onAgentlessWorkspacesToggle: () => void
   onClear: () => void
 }): React.JSX.Element {
   return (
@@ -74,6 +78,15 @@ export function AgentDashboardFilterChips({
           onRemove={() => onReviewToggle(id)}
         />
       ))}
+      {showAgentlessWorkspaces ? (
+        <ActiveChip
+          label={translate(
+            'dashboardPopout.map.filters.agentlessWorkspaces',
+            'Workspaces without agents'
+          )}
+          onRemove={onAgentlessWorkspacesToggle}
+        />
+      ) : null}
       <Button
         variant="link"
         size="xs"

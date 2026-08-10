@@ -13,8 +13,8 @@ import type {
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
 } from '../../shared/workspace-cleanup'
+import { getPersistedWorkspaceCleanupActivityAt } from '../../shared/workspace-cleanup'
 import {
-  getPersistedWorkspaceCleanupActivityAt,
   resolvePersistedWorkspaceCleanupActivityWorktree,
   resolveWorkspaceCleanupActivityWorktree
 } from './workspace-cleanup-activity'

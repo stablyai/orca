@@ -911,14 +911,6 @@ async function listRemoteNames(path: string, options: LocalGitExecOptions = {}):
   }
 }
 
-/**
- * Parse `git for-each-ref --format=%(refname)%00%(refname:short)` stdout into a deduped list of short
- * refs, dropping `<remote>/HEAD` pseudo-refs. Shared with the SSH branch in ipc/repos.ts so filtering can't drift.
- */
-export function parseAndFilterSearchRefs(stdout: string, limit: number): string[] {
-  return parseAndFilterSearchRefDetails(stdout, limit).map((entry) => entry.refName)
-}
-
 export function parseAndFilterSearchRefDetails(
   stdout: string,
   limit: number,

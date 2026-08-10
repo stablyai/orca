@@ -1896,6 +1896,61 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.sortEpoch).toBe(1)
   })
 
+  it('applies a marker-only host restart degradation to mirrored agent status', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const snapshot = makeSnapshot([
+      {
+        type: 'terminal',
+        id: HOST_SURFACE_ID,
+        title: 'codex [working]',
+        parentTabId: 'host-tab-1',
+        leafId: LEAF_ID,
+        isActive: true,
+        status: 'ready',
+        terminal: 'terminal-1',
+        agentStatus: {
+          state: 'working',
+          prompt: 'fix web parity',
+          updatedAt: NOW - 100,
+          stateStartedAt: NOW - 1_000,
+          agentType: 'codex',
+          paneKey: hostPaneKey,
+          tabId: 'host-tab-1',
+          worktreeId: WT,
+          stateHistory: []
+        }
+      }
+    ])
+    const initial = applyWebSessionTabsSnapshot(
+      makeState(),
+      snapshot,
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const mirroredPaneKey = Object.keys(initial.agentStatusByPaneKey ?? {})[0]!
+    const degraded = applyWebSessionTabsSnapshot(
+      makeState({ ...initial }),
+      {
+        ...snapshot,
+        snapshotVersion: 2,
+        tabs: snapshot.tabs.map((tab) =>
+          tab.type === 'terminal' && tab.agentStatus
+            ? {
+                ...tab,
+                agentStatus: { ...tab.agentStatus, restoredUnconfirmed: true }
+              }
+            : tab
+        )
+      },
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(degraded.agentStatusByPaneKey?.[mirroredPaneKey]?.restoredUnconfirmed).toBe(true)
+    expect(degraded.agentStatusEpoch).toBe(2)
+    expect(degraded.sortEpoch).toBe(2)
+  })
+
   it('repairs mirrored same-state attribution and retains identity from an older snapshot', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
     const snapshot = makeSnapshot([

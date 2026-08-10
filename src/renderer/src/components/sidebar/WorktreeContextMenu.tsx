@@ -76,6 +76,7 @@ type Props = {
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onOpenChange?: (open: boolean) => void
+  onLifecycleComplete?: () => void
 }
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
@@ -84,6 +85,9 @@ const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
 const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
 const DELETE_POSITION_RESTORE_MAX_FRAMES = 180
 const DELETE_POSITION_RESTORE_STABLE_FRAMES = 6
+// Why: the picker is unmounted on close, which would cut PopoverContent's
+// data-[state=closed] exit animation short; hold the subtree for its duration.
+const PARENT_PICKER_EXIT_ANIMATION_MS = 200
 
 // Why: stable empty sentinels let closed menu wrappers subscribe to a referentially
 // stable value instead of the high-churn maps that delete teardown replaces. The
@@ -316,7 +320,8 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   selectedWorktrees,
   onContextMenuSelect,
   onAssignWorkspaceStatus,
-  onOpenChange
+  onOpenChange,
+  onLifecycleComplete
 }: Props) {
   const defaultSelectedWorktrees = useMemo(() => [worktree], [worktree])
   const effectiveSelectedWorktrees = selectedWorktrees ?? defaultSelectedWorktrees
@@ -342,15 +347,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     effectiveSelectedWorktrees
   )
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
+  const createGroupDialogActiveRef = useRef(false)
   const [parentPicker, setParentPicker] = useState<{
     childWorktreeId: string
     anchorElement: HTMLElement
   } | null>(null)
+  const [parentPickerOpen, setParentPickerOpen] = useState(false)
   const pendingParentPickerRef = useRef<{
     childWorktreeId: string
     anchorElement: HTMLElement
   } | null>(null)
   const parentPickerFallbackTimerRef = useRef<number | null>(null)
+  const parentPickerUnmountTimerRef = useRef<number | null>(null)
+  const lifecycleStartedRef = useRef(false)
   const isDeleting = deleteState?.isDeleting ?? false
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
@@ -496,6 +505,33 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   )
 
   useEffect(() => {
+    if (!onLifecycleComplete) {
+      return
+    }
+    if (menuOpen) {
+      lifecycleStartedRef.current = true
+    }
+    if (
+      !lifecycleStartedRef.current ||
+      menuOpen ||
+      createGroupDialogOpen ||
+      createGroupDialogActiveRef.current ||
+      parentPicker !== null ||
+      pendingParentPickerRef.current !== null
+    ) {
+      return
+    }
+    const timer = window.setTimeout(() => {
+      if (createGroupDialogActiveRef.current || pendingParentPickerRef.current !== null) {
+        return
+      }
+      lifecycleStartedRef.current = false
+      onLifecycleComplete?.()
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [createGroupDialogOpen, menuOpen, onLifecycleComplete, parentPicker])
+
+  useEffect(() => {
     const closeMenu = (): void => setMenuOpenState(false)
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
@@ -505,6 +541,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     () => () => {
       if (parentPickerFallbackTimerRef.current != null) {
         window.clearTimeout(parentPickerFallbackTimerRef.current)
+      }
+      if (parentPickerUnmountTimerRef.current != null) {
+        window.clearTimeout(parentPickerUnmountTimerRef.current)
       }
     },
     []
@@ -526,8 +565,14 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     if (!repo) {
       return
     }
+    createGroupDialogActiveRef.current = true
     setCreateGroupDialogOpen(true)
   }, [repo])
+
+  const handleCreateGroupDialogOpenChange = useCallback((open: boolean) => {
+    createGroupDialogActiveRef.current = open
+    setCreateGroupDialogOpen(open)
+  }, [])
 
   const handleSubmitNewProjectGroup = useCallback(
     async (name: string) => {
@@ -590,6 +635,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const handleRename = useCallback(() => {
     openModal('edit-meta', {
       worktreeId: worktree.id,
+      // Why: the same workspace ID can exist under two hosts. Naming the owner
+      // keeps the dialog on this row instead of the ambiguous lookup.
+      repoId: worktree.repoId,
       currentDisplayName: worktree.displayName,
       currentIssue: worktree.linkedIssue,
       currentPR: worktree.linkedPR,
@@ -598,6 +646,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     })
   }, [
     worktree.id,
+    worktree.repoId,
     worktree.displayName,
     worktree.linkedIssue,
     worktree.linkedPR,
@@ -684,7 +733,23 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       window.clearTimeout(parentPickerFallbackTimerRef.current)
       parentPickerFallbackTimerRef.current = null
     }
+    if (parentPickerUnmountTimerRef.current != null) {
+      window.clearTimeout(parentPickerUnmountTimerRef.current)
+      parentPickerUnmountTimerRef.current = null
+    }
     setParentPicker(pendingParentPicker)
+    setParentPickerOpen(true)
+  }, [])
+
+  const handleParentPickerOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      return
+    }
+    setParentPickerOpen(false)
+    parentPickerUnmountTimerRef.current = window.setTimeout(() => {
+      parentPickerUnmountTimerRef.current = null
+      setParentPicker(null)
+    }, PARENT_PICKER_EXIT_ANIMATION_MS)
   }, [])
 
   const handleOpenParentPicker = useCallback(
@@ -1060,19 +1125,21 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         )}
         initialName={repo ? `${repo.displayName} group` : ''}
         confirmLabel="Create"
-        onOpenChange={setCreateGroupDialogOpen}
+        onOpenChange={handleCreateGroupDialogOpenChange}
         onSubmit={handleSubmitNewProjectGroup}
       />
-      <WorktreeParentPickerPopover
-        open={parentPicker !== null}
-        childWorktreeId={parentPicker?.childWorktreeId ?? null}
-        anchorElement={parentPicker?.anchorElement ?? null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setParentPicker(null)
-          }
-        }}
-      />
+      {/* Why: mounted only while open — one instance of this lives behind every
+          worktree card, and each one subscribes to the worktree and lineage
+          maps just to compute parent candidates it will never show. Closing
+          flips `open` first so the exit animation runs, then unmounts. */}
+      {parentPicker ? (
+        <WorktreeParentPickerPopover
+          open={parentPickerOpen}
+          childWorktreeId={parentPicker.childWorktreeId}
+          anchorElement={parentPicker.anchorElement}
+          onOpenChange={handleParentPickerOpenChange}
+        />
+      ) : null}
     </div>
   )
 })

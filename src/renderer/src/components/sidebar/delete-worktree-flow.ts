@@ -138,7 +138,11 @@ export function runWorktreeDeleteWithToast(
         onForceDelete: () => {
           // Why: recapture at click time — the user may have navigated away while the toast was open, so focus only hands off if still viewed.
           const commitForceFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-          const forceRemoval = useAppStore.getState().removeWorktree(worktreeId, true)
+          // Why (#11960): the user clicked Force Delete on a failure toast, so this
+          // retry may waive the PTY-stop proof the first attempt could not satisfy.
+          const forceRemoval = useAppStore
+            .getState()
+            .removeWorktree(worktreeId, true, { allowUnverifiedPtyStop: true })
           forceRemoval
             .then((forceResult) => {
               if (!forceResult.ok) {

@@ -133,13 +133,15 @@ export function mapIssueInfo(data: {
   url?: string
   html_url?: string
   labels?: { name: string }[]
+  body?: string | null
 }): IssueInfo {
   return {
     number: data.number,
     title: data.title,
     state: data.state?.toLowerCase() === 'open' ? 'open' : 'closed',
     url: data.html_url ?? data.url ?? '',
-    labels: (data.labels || []).map((l) => l.name)
+    labels: (data.labels || []).map((l) => l.name),
+    ...(typeof data.body === 'string' ? { description: data.body } : {})
   }
 }
 

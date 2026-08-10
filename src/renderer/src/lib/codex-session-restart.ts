@@ -22,9 +22,14 @@ import type { TuiAgent } from '../../../shared/types'
 
 // Why: prompt integrations such as Starship can outlast the daemon's 300ms
 // Codex fast-path timeout; account restarts must wait until the shell accepts input.
+// Why launchAgent: pty:spawn runs the managed-auth readiness gate and Codex
+// launch prep (project trust pre-mark) only for launchAgent 'codex', so without
+// it a restart respawn could race the account handoff and record a launch
+// account the pane does not actually read.
 export const CODEX_ACCOUNT_RESTART_STARTUP = {
   command: 'codex',
-  startupCommandDelivery: 'shell-ready'
+  startupCommandDelivery: 'shell-ready',
+  launchAgent: 'codex'
 } as const
 
 export type CodexPaneScanResult = {

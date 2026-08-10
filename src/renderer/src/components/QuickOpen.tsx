@@ -11,6 +11,7 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
+import { FilePathCursorTooltip, splitTrailingSegment } from '@/components/file-path-cursor-tooltip'
 import { prepareQuickOpenFiles, rankQuickOpenFiles } from '@/components/quick-open-search'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
@@ -146,9 +147,7 @@ export default function QuickOpen(): React.JSX.Element | null {
           </CommandEmpty>
         ) : (
           filtered.map((item) => {
-            const lastSlash = item.path.lastIndexOf('/')
-            const dir = lastSlash >= 0 ? item.path.slice(0, lastSlash) : ''
-            const filename = item.path.slice(lastSlash + 1)
+            const { directory, filename } = splitTrailingSegment(item.path)
             const FileIcon = getFileTypeIcon(item.path)
 
             return (
@@ -156,11 +155,24 @@ export default function QuickOpen(): React.JSX.Element | null {
                 key={item.path}
                 value={item.path}
                 onSelect={() => handleSelect(item.path)}
-                className="flex items-center gap-2 px-3 py-1.5"
+                className="min-w-0 p-0"
               >
-                <FileIcon className="size-3.5 text-muted-foreground flex-shrink-0" />
-                <span className="truncate text-foreground">{filename}</span>
-                {dir && <span className="truncate text-muted-foreground ml-1">{dir}</span>}
+                {/* Why: the trigger is this inner element, not the CommandItem.
+                    cmdk sets its own onPointerMove after spreading props, which
+                    drops the one Radix needs to open the tooltip. */}
+                <FilePathCursorTooltip path={item.path}>
+                  <div className="flex w-full min-w-0 items-center gap-2 px-3 py-1.5">
+                    <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                    {/* shrink-0 + max-w-full: the directory gives up all of its
+                        width before the filename loses a character. */}
+                    <span className="min-w-0 max-w-full shrink-0 truncate text-foreground">
+                      {filename}
+                    </span>
+                    {directory ? (
+                      <span className="min-w-0 truncate text-muted-foreground">{directory}</span>
+                    ) : null}
+                  </div>
+                </FilePathCursorTooltip>
               </CommandItem>
             )
           })

@@ -28,6 +28,9 @@ export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
 }
 
 export const CLAUDE_EVENTS = [
+  // Why: SessionStart is the only event a resumed/idle session emits before the
+  // first prompt; without it the sidebar row can't exist until the user types (STA-3386).
+  { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
   // Why: OpenClaude skips normal Stop hooks after API/model errors and emits

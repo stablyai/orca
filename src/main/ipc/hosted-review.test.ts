@@ -285,6 +285,26 @@ describe('registerHostedReviewHandlers', () => {
         localGitExecOptions: { wslDistro: 'Ubuntu' }
       })
     )
+    // Card-list polling is the O(N) tier and must not claim the fast one.
+    expect(getHostedReviewForBranchMock.mock.calls[0][0]).not.toHaveProperty('active')
+  })
+
+  it('carries a selected-worktree claim through to the branch lookup', async () => {
+    getHostedReviewForBranchMock.mockResolvedValueOnce(null)
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await handlers['hostedReview:forBranch'](null, {
+      repoPath,
+      repoId: repo.id,
+      branch: 'feature/selected',
+      active: true
+    })
+
+    // Why: the right sidebar renders only the selected worktree, so its lookup
+    // earns the per-minute tier instead of the card-list interval (#11532).
+    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: 'feature/selected', active: true })
+    )
   })
 
   it('passes SSH connectionId through create eligibility instead of blocking the worktree', async () => {

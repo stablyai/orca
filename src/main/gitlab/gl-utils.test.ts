@@ -16,8 +16,10 @@ import {
   _resetKnownHostsCache,
   _resetProjectRefCache,
   classifyGlabError,
+  classifyJobLogError,
   classifyListIssuesError,
   getIssueProjectRef,
+  isMissingJobLogError,
   getGlabKnownHosts,
   getProjectRef,
   getProjectRefForRemote,
@@ -27,16 +29,20 @@ import {
 } from './gl-utils'
 import { rememberGlabKnownHost, rememberGlabKnownHosts } from './gitlab-known-host-probe'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
+import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 
 describe('gitlab project ref resolution', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
+    glabExecFileAsyncMock.mockReset()
     sshExecMock.mockReset()
     unregisterSshGitProvider('conn-1')
     _resetProjectRefCache()
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     unregisterSshGitProvider('conn-1')
   })
 
@@ -50,7 +56,8 @@ describe('gitlab project ref resolution', () => {
       path: 'fork/orca'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -64,7 +71,8 @@ describe('gitlab project ref resolution', () => {
       path: 'stablyai/orca'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -118,11 +126,13 @@ describe('gitlab project ref resolution', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
       cwd: '/repo',
-      wslDistro: 'Ubuntu'
+      wslDistro: 'Ubuntu',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -143,7 +153,8 @@ describe('gitlab project ref resolution', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
 
     await expect(getProjectRefForRemote('/repo', 'upstream')).resolves.toBeNull()
@@ -159,7 +170,9 @@ describe('gitlab project ref resolution', () => {
       path: 'remote/orca'
     })
 
-    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
+    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo', {
+      signal: expect.any(AbortSignal)
+    })
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
@@ -202,6 +215,110 @@ describe('gitlab project ref resolution', () => {
       host: 'gitlab.com',
       path: 'remote/orca'
     })
+  })
+
+  it('does not cache a local probe killed on its deadline as a definitive miss', async () => {
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('git timed out.'))
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:fork/orca.git\n' })
+
+    await expect(getProjectRef('/repo')).resolves.toBeNull()
+    await expect(getProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'fork/orca'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-probes a repo whose GitLab remote could have been added since the miss', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error("error: No such remote 'origin'"))
+
+    await expect(getProjectRef('/repo')).resolves.toBeNull()
+    await expect(getProjectRef('/repo')).resolves.toBeNull()
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+
+    // Nothing watches `.git/config`, and SSH/WSL repos have no file to watch, so
+    // a remote configured after the miss is only visible once the negative ages out.
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@gitlab.com:fork/orca.git\n' })
+    vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
+
+    await expect(getProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'fork/orca'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a resolved project ref past the negative interval', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@gitlab.com:fork/orca.git\n' })
+
+    await expect(getProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'fork/orca'
+    })
+    vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS * 10)
+    await expect(getProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'fork/orca'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-resolves a self-hosted remote once glab auth knows its host', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@gitlab.internal:team/orca.git\n' })
+    glabExecFileAsyncMock.mockRejectedValue(new Error('not authenticated'))
+
+    await expect(getProjectRefForRemote('/repo', 'origin', ['gitlab.com'])).resolves.toBeNull()
+    await expect(
+      getProjectRefForRemote('/repo', 'origin', ['gitlab.com', 'gitlab.internal'])
+    ).resolves.toEqual({ host: 'gitlab.internal', path: 'team/orca' })
+  })
+
+  it('asks glab about an unauthenticated host once per interval, not once per repo', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@github.com:team/orca.git\n' })
+    glabExecFileAsyncMock.mockRejectedValue(new Error('not authenticated'))
+
+    // Expiring project-ref negatives must not turn the hosted-review poll into a
+    // `glab auth status` spawn per repo per interval — the answer is per host.
+    for (const repoPath of ['/repo-a', '/repo-b', '/repo-c']) {
+      await expect(getProjectRef(repoPath)).resolves.toBeNull()
+    }
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
+    for (const repoPath of ['/repo-a', '/repo-b', '/repo-c']) {
+      await expect(getProjectRef(repoPath)).resolves.toBeNull()
+    }
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not serve a project ref resolved on a retired SSH connection', async () => {
+    sshExecMock
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:before/orca.git\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:after/orca.git\n', stderr: '' })
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+
+    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'before/orca'
+    })
+
+    // A reconnect can swap the execution host under the same connection id.
+    unregisterSshGitProvider('conn-1')
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+
+    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'after/orca'
+    })
+    expect(sshExecMock).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -255,7 +372,8 @@ describe('resolveIssueSource', () => {
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo'
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 
@@ -304,6 +422,18 @@ describe('glab error classification', () => {
   it('rewrites copy for read contexts via classifyListIssuesError', () => {
     expect(classifyListIssuesError('HTTP 403').message).toMatch(/permission to read issues/i)
     expect(classifyListIssuesError('HTTP 404').message).toBe('Project not found.')
+  })
+
+  it('rewrites issue-edit copy for job logs via classifyJobLogError', () => {
+    expect(classifyJobLogError('HTTP 403').message).toMatch(/permission to read this job's log/i)
+    expect(classifyJobLogError('HTTP 403').message).not.toMatch(/issue/i)
+    expect(classifyJobLogError('boom').message).toBe('Failed to load the job log: boom')
+  })
+
+  it('treats a 404 job log as missing, but keeps a missing project an error', () => {
+    expect(isMissingJobLogError('HTTP 404 Not Found')).toBe(true)
+    expect(isMissingJobLogError('HTTP 404: Project Not Found')).toBe(false)
+    expect(isMissingJobLogError('HTTP 403 Forbidden')).toBe(false)
   })
 })
 

@@ -222,4 +222,63 @@ describe('codex restart notices with colliding account labels', () => {
       nextAccountId: 'account-c'
     })
   })
+
+  it('puts a failed accepted restart back to the unanswered prompt', () => {
+    switchAccount('pty-1', A, B)
+    useAppStore.getState().queueCodexPaneRestarts(['pty-1'])
+
+    useAppStore.getState().reopenCodexRestartPrompt('pty-1')
+
+    // Why: the executor could not run the restart, so the pane must show the
+    // question again rather than stay muted behind an answered prompt.
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
+      previousAccountLabel: A,
+      nextAccountLabel: B
+    })
+    expect(useAppStore.getState().pendingCodexPaneRestartIds).toEqual({})
+  })
+
+  it('leaves unanswered and dismissed notices alone on a reopen request', () => {
+    switchAccount('pty-1', A, B)
+    const unanswered = useAppStore.getState().codexRestartNoticeByPtyId
+
+    useAppStore.getState().reopenCodexRestartPrompt('pty-1')
+    expect(useAppStore.getState().codexRestartNoticeByPtyId).toBe(unanswered)
+
+    useAppStore.getState().dismissCodexRestartNotices(['pty-1'])
+    const dismissed = useAppStore.getState().codexRestartNoticeByPtyId
+    useAppStore.getState().reopenCodexRestartPrompt('pty-1')
+    expect(useAppStore.getState().codexRestartNoticeByPtyId).toBe(dismissed)
+  })
+})
+
+describe('replaceTerminalLayoutPanePtyId', () => {
+  const LEAF = '11111111-1111-4111-8111-111111111111'
+
+  it('rebinds one leaf and leaves split siblings alone', () => {
+    const OTHER_LEAF = '22222222-2222-4222-8222-222222222222'
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: null,
+          activeLeafId: LEAF,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF]: 'pty-old', [OTHER_LEAF]: 'pty-sibling' }
+        }
+      }
+    })
+
+    useAppStore.getState().replaceTerminalLayoutPanePtyId('tab-1', LEAF, 'pty-new')
+
+    expect(useAppStore.getState().terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({
+      [LEAF]: 'pty-new',
+      [OTHER_LEAF]: 'pty-sibling'
+    })
+  })
+
+  it('does nothing for a tab with no layout', () => {
+    const before = useAppStore.getState().terminalLayoutsByTabId
+    useAppStore.getState().replaceTerminalLayoutPanePtyId('tab-none', LEAF, 'pty-new')
+    expect(useAppStore.getState().terminalLayoutsByTabId).toBe(before)
+  })
 })

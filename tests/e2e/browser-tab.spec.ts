@@ -29,11 +29,10 @@ async function createBrowserTab(
   page: Parameters<typeof getActiveWorktreeId>[0],
   worktreeId: string,
   url?: string,
-  title = 'New Browser Tab',
-  allowWindowClose?: boolean
+  title = 'New Browser Tab'
 ): Promise<CreatedBrowserTab | null> {
   return page.evaluate(
-    ({ targetWorktreeId, targetUrl, targetTitle, allowClose }) => {
+    ({ targetWorktreeId, targetUrl, targetTitle }) => {
       const store = window.__store
       if (!store) {
         return null
@@ -45,18 +44,12 @@ async function createBrowserTab(
         targetUrl ?? state.browserDefaultUrl ?? 'about:blank',
         {
           title: targetTitle,
-          activate: true,
-          allowWindowClose: allowClose
+          activate: true
         }
       )
       return { id: tab.id, pageId: tab.activePageId ?? null }
     },
-    {
-      targetWorktreeId: worktreeId,
-      targetUrl: url,
-      targetTitle: title,
-      allowClose: allowWindowClose
-    }
+    { targetWorktreeId: worktreeId, targetUrl: url, targetTitle: title }
   )
 }
 
@@ -802,18 +795,23 @@ test.describe('Browser Tab', () => {
     }
   })
 
-  test('explicitly allowed browser tabs retain replaceable window.close', async ({ orcaPage }) => {
+  test('directly created browser tabs block window.close and remain usable', async ({
+    orcaPage
+  }) => {
     const closeServer = await startBrowserWindowCloseServer()
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
-      const allowedTab = await createBrowserTab(
+      const directTab = await createBrowserTab(
         orcaPage,
         worktreeId,
-        closeServer.sourceUrl,
-        'Allowed close tab',
-        true
+        closeServer.url,
+        'Direct close tab'
       )
-      expect(allowedTab?.id).toBeTruthy()
+      expect(directTab?.id).toBeTruthy()
+
+      await expect
+        .poll(() => readBrowserWindowCloseStatus(orcaPage, directTab!.id), { timeout: 5_000 })
+        .toContain('window.close() was blocked')
 
       await expect
         .poll(
@@ -834,10 +832,10 @@ test.describe('Browser Tab', () => {
               } catch {
                 return 'guest unavailable'
               }
-            }, allowedTab!.id),
+            }, directTab!.id),
           { timeout: 5_000 }
         )
-        .toBe('replacement-called')
+        .toBe('blocked')
     } finally {
       await closeServer.close()
     }

@@ -1,11 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isCaseInsensitiveRuntimeRoot,
   isPathInsideOrEqual,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot,
   resolveRuntimePath
 } from './cross-platform-path'
+
+describe('isCaseInsensitiveRuntimeRoot', () => {
+  it('folds Windows drive and plain UNC roots', () => {
+    expect(isCaseInsensitiveRuntimeRoot('C:\\repos\\app')).toBe(true)
+    expect(isCaseInsensitiveRuntimeRoot('c:/repos/app')).toBe(true)
+    expect(isCaseInsensitiveRuntimeRoot('\\\\server\\share\\app')).toBe(true)
+  })
+
+  it('keeps WSL UNC and POSIX roots case-sensitive', () => {
+    expect(isCaseInsensitiveRuntimeRoot('\\\\wsl.localhost\\Ubuntu\\home\\ada\\app')).toBe(false)
+    expect(isCaseInsensitiveRuntimeRoot('//wsl$/Ubuntu/home/ada/app')).toBe(false)
+    expect(isCaseInsensitiveRuntimeRoot('/home/ada/app')).toBe(false)
+    expect(isCaseInsensitiveRuntimeRoot('/Users/ada/app')).toBe(false)
+  })
+})
 
 describe('cross-platform path containment', () => {
   it('keeps POSIX sibling prefixes outside the root', () => {

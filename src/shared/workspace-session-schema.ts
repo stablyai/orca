@@ -72,6 +72,15 @@ const terminalTabSchema = z.object({
   title: z.string(),
   defaultTitle: z.string().optional(),
   generatedTitle: z.string().nullable().optional(),
+  aiVaultTitle: z
+    .object({
+      agent: z.enum(['claude', 'codex']),
+      sessionId: z.string(),
+      title: z.string()
+    })
+    .nullable()
+    .optional()
+    .catch(undefined),
   quickCommandLabel: z.string().nullable().optional(),
   customTitle: z.string().nullable(),
   color: z.string().nullable(),
@@ -112,6 +121,15 @@ const tabSchema = z.object({
   contentType: tabContentTypeSchema,
   label: z.string(),
   generatedLabel: z.string().nullable().optional(),
+  aiVaultTitle: z
+    .object({
+      agent: z.enum(['claude', 'codex']),
+      sessionId: z.string(),
+      title: z.string()
+    })
+    .nullable()
+    .optional()
+    .catch(undefined),
   quickCommandLabel: z.string().nullable().optional(),
   customLabel: z.string().nullable(),
   color: z.string().nullable(),
@@ -225,7 +243,6 @@ const browserPageSchema = z.object({
   canGoForward: z.boolean(),
   loadError: browserLoadErrorSchema.nullable(),
   createdAt: z.number(),
-  allowWindowClose: z.boolean().optional(),
   // Why: explicit null marks a browser page as client-local even when its
   // worktree is remote-owned; older sessions omit it and keep inferred runtime.
   browserRuntimeEnvironmentId: z.string().nullable().optional(),

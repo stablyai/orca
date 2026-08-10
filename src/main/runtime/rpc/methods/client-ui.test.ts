@@ -555,7 +555,8 @@ describe('client UI RPC methods', () => {
     ],
     ['browserImportHintHidden', { browserImportHintHidden: true }],
     ['mobileEmulatorTabIntroDismissed', { mobileEmulatorTabIntroDismissed: true }],
-    ['mobileEmulatorAgentSetupDismissed', { mobileEmulatorAgentSetupDismissed: true }]
+    ['mobileEmulatorAgentSetupDismissed', { mobileEmulatorAgentSetupDismissed: true }],
+    ['alwaysShowDefaultBranchWorkspace', { alwaysShowDefaultBranchWorkspace: false }]
   ])('accepts %s, which the renderer persists through ui.set', async (_label, payload) => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -592,6 +593,7 @@ describe('client UI RPC methods', () => {
       showSleepingWorkspaces: true,
       hideDefaultBranchWorkspace: false,
       hideAutomationGeneratedWorkspaces: false,
+      alwaysShowDefaultBranchWorkspace: true,
       showDotfilesByWorktree: { 'repo::/worktree': true },
       filterRepoIds: ['repo-1'],
       acknowledgedAgentsByPaneKey: { 'pane-1': 123 }

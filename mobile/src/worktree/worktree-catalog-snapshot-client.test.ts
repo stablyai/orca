@@ -3,8 +3,16 @@ import type { RpcClient } from '../transport/rpc-client'
 import {
   admitWorktreeCatalogResponse,
   WORKTREE_PS_FULL_LIMIT,
-  WorktreeCatalogSnapshotClient
+  WorktreeCatalogSnapshotClient,
+  type WorktreeCatalogFetchResult
 } from './worktree-catalog-snapshot-client'
+
+function admitFetched(
+  snapshots: WorktreeCatalogSnapshotClient,
+  fetched: WorktreeCatalogFetchResult
+) {
+  return snapshots.admit(fetched.kind === 'response' ? fetched.pending : null)
+}
 
 describe('admitWorktreeCatalogResponse', () => {
   it('accepts new-host full and unchanged responses', () => {
@@ -94,8 +102,8 @@ describe('WorktreeCatalogSnapshotClient', () => {
     )
     const snapshots = new WorktreeCatalogSnapshotClient()
 
-    const first = snapshots.admit(await snapshots.fetch(client, 'host-1'))
-    const second = snapshots.admit(await snapshots.fetch(client, 'host-1'))
+    const first = admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
+    const second = admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
 
     expect(first).toEqual(rows)
     expect(second).toEqual(rows)
@@ -109,7 +117,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
     const snapshots = new WorktreeCatalogSnapshotClient()
 
     await snapshots.fetch(client, 'host-1')
-    snapshots.admit(await snapshots.fetch(client, 'host-1'))
+    admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
       limit: WORKTREE_PS_FULL_LIMIT,
@@ -121,7 +129,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
     const client = clientWithResults({ worktrees: [], snapshotId: 'snapshot-1' })
     const snapshots = new WorktreeCatalogSnapshotClient()
 
-    snapshots.admit(await snapshots.fetch(client, 'host-1'))
+    admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
     snapshots.admit(null)
     await snapshots.fetch(client, 'host-1')
 
@@ -139,8 +147,8 @@ describe('WorktreeCatalogSnapshotClient', () => {
     )
     const snapshots = new WorktreeCatalogSnapshotClient()
 
-    snapshots.admit(await snapshots.fetch(client, 'host-1'))
-    snapshots.admit(await snapshots.fetch(client, 'host-1'))
+    admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
+    admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
     await snapshots.fetch(client, 'host-1')
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
@@ -154,7 +162,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
     const secondClient = clientWithResults({ worktrees: [], snapshotId: 'snapshot-2' })
     const snapshots = new WorktreeCatalogSnapshotClient()
 
-    snapshots.admit(await snapshots.fetch(firstClient, 'host-1'))
+    admitFetched(snapshots, await snapshots.fetch(firstClient, 'host-1'))
     await snapshots.fetch(secondClient, 'host-2')
 
     expect(secondClient.sendRequest).toHaveBeenCalledWith('worktree.ps', {
@@ -170,13 +178,49 @@ describe('WorktreeCatalogSnapshotClient', () => {
 
     // Host A's response is still in flight when the screen switches to host B.
     const stale = await snapshots.fetch(firstClient, 'host-1')
-    snapshots.admit(await snapshots.fetch(secondClient, 'host-2'))
-    expect(snapshots.admit(stale)).toBeNull()
+    admitFetched(snapshots, await snapshots.fetch(secondClient, 'host-2'))
+    expect(admitFetched(snapshots, stale)).toBeNull()
 
     await snapshots.fetch(secondClient, 'host-2')
     expect(secondClient.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
       limit: WORKTREE_PS_FULL_LIMIT,
       afterSnapshotId: 'snapshot-2'
+    })
+  })
+
+  // Why (STA-3123): a failed worktree.ps rendered as "0 worktrees"; callers need the
+  // failure code to show an error state instead of an empty host.
+  it('surfaces the RPC error code on failure and keeps the admitted token', async () => {
+    const responses: unknown[] = [
+      { id: 'request', ok: true, result: { worktrees: [], snapshotId: 'snapshot-1' } },
+      { id: 'request', ok: false, error: { code: 'forbidden', message: 'nope' } },
+      { id: 'request', ok: true, result: { unchanged: true, snapshotId: 'snapshot-1' } }
+    ]
+    const client = {
+      sendRequest: vi.fn(async () => responses.shift())
+    } as unknown as RpcClient
+    const snapshots = new WorktreeCatalogSnapshotClient()
+
+    admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
+    const failed = await snapshots.fetch(client, 'host-1')
+    expect(failed).toEqual({ kind: 'request_failed', code: 'forbidden' })
+
+    await snapshots.fetch(client, 'host-1')
+    expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
+      limit: WORKTREE_PS_FULL_LIMIT,
+      afterSnapshotId: 'snapshot-1'
+    })
+  })
+
+  it('falls back to a generic failure code when the error carries none', async () => {
+    const client = {
+      sendRequest: vi.fn(async () => ({ id: 'request', ok: false, error: { message: 'x' } }))
+    } as unknown as RpcClient
+    const snapshots = new WorktreeCatalogSnapshotClient()
+
+    expect(await snapshots.fetch(client, 'host-1')).toEqual({
+      kind: 'request_failed',
+      code: 'request_failed'
     })
   })
 })

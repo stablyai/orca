@@ -44,6 +44,10 @@ function status(version: string, runtimeId = 'runtime-old', automatic = true): R
   }
 }
 
+// The main process's own copy once quitAndInstall fails; it must survive to the client verbatim.
+const INSTALL_FAILURE =
+  "Could not start the update installer. Orca remains open. (Command failed: pkexec dpkg -i '/home/u/.cache/orca-updater/pending/orca-ide_1.5.0_amd64.deb' pkexec must be setuid root)"
+
 const availableSnapshot: RemoteServerUpdaterSnapshot = {
   appVersion: '1.4.0',
   runtimeId: 'runtime-old',
@@ -270,6 +274,91 @@ describe('remote server update execution', () => {
       { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 2, pollIntervalMs: 1 } }
     )
     expect(sameRuntime).toMatchObject({
+      phase: 'failed',
+      error: 'The server did not reconnect on the updated version.'
+    })
+  })
+
+  it('repeats the install failure a still-running server is publishing', async () => {
+    const snapshots = [
+      availableSnapshot,
+      { ...availableSnapshot, status: { state: 'downloaded', version: '1.5.0' } }
+    ] satisfies RemoteServerUpdaterSnapshot[]
+    let installed = false
+    const result = await runRemoteServerUpdate(
+      availableEntry(),
+      transport({
+        getUpdaterStatus: async () =>
+          installed
+            ? { ...availableSnapshot, status: { state: 'error', message: INSTALL_FAILURE } }
+            : (snapshots.shift() ?? availableSnapshot),
+        install: async (): Promise<RemoteServerUpdateInstallResult> => {
+          installed = true
+          return {
+            accepted: true,
+            fromVersion: '1.4.0',
+            targetVersion: '1.5.0',
+            runtimeId: 'runtime-old'
+          }
+        },
+        // The server never restarts: same runtimeId, same version, still perfectly reachable.
+        getRuntimeStatus: async () => status('1.4.0', 'runtime-old')
+      }),
+      () => undefined,
+      { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 60, pollIntervalMs: 1 } }
+    )
+    expect(result).toMatchObject({ phase: 'failed', error: INSTALL_FAILURE })
+  })
+
+  it('ignores an updater error that predates the install request', async () => {
+    const snapshots = [
+      availableSnapshot,
+      { ...availableSnapshot, status: { state: 'downloaded', version: '1.5.0' } }
+    ] satisfies RemoteServerUpdaterSnapshot[]
+    let reconnectTicks = 0
+    const result = await runRemoteServerUpdate(
+      availableEntry(),
+      transport({
+        // A background check that errored inside the 100ms before the installer fires.
+        getUpdaterStatus: async () =>
+          snapshots.shift() ?? {
+            ...availableSnapshot,
+            status: { state: 'error', message: 'a background check failed' }
+          },
+        getRuntimeStatus: async () => {
+          reconnectTicks += 1
+          return reconnectTicks > 1
+            ? status('1.5.0', 'runtime-new')
+            : status('1.4.0', 'runtime-old')
+        }
+      }),
+      () => undefined,
+      { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 60, pollIntervalMs: 1 } }
+    )
+    expect(result).toMatchObject({ phase: 'updated', currentVersion: '1.5.0' })
+  })
+
+  it('keeps waiting when the failure probe itself cannot be reached', async () => {
+    const snapshots = [
+      availableSnapshot,
+      { ...availableSnapshot, status: { state: 'downloaded', version: '1.5.0' } }
+    ] satisfies RemoteServerUpdaterSnapshot[]
+    const result = await runRemoteServerUpdate(
+      availableEntry(),
+      transport({
+        getUpdaterStatus: async () => {
+          const next = snapshots.shift()
+          if (!next) {
+            throw new Error('connection refused')
+          }
+          return next
+        },
+        getRuntimeStatus: async () => status('1.4.0', 'runtime-old')
+      }),
+      () => undefined,
+      { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 6, pollIntervalMs: 1 } }
+    )
+    expect(result).toMatchObject({
       phase: 'failed',
       error: 'The server did not reconnect on the updated version.'
     })

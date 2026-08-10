@@ -10,8 +10,6 @@ export const RuntimeAccessEndpointSchema = z.object({
   publicKeyB64: z.string().min(1)
 })
 
-export type RuntimeAccessEndpoint = z.infer<typeof RuntimeAccessEndpointSchema>
-
 export const PublicRuntimeAccessEndpointSchema = RuntimeAccessEndpointSchema.omit({
   deviceToken: true,
   publicKeyB64: true

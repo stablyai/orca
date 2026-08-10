@@ -2,7 +2,6 @@
 # This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green —
 # split the oversized file instead (AGENTS.md → "Do Not Disable Max Lines").
 # Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries only)
-inline mobile/src/constants/marine-creatures.ts
 inline src/cli/handlers/automations.ts
 inline src/cli/handlers/orchestration.ts
 inline src/cli/help.ts

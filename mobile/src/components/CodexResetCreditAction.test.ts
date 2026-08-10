@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CodexResetCreditAction } from './CodexResetCreditAction'
 
 vi.mock('react-native', () => ({
@@ -19,35 +19,19 @@ const summary = {
   expiryLabel: 'Expires in 5d'
 }
 
-function suppressRendererWarning(): () => void {
-  const original = console.error
-  const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-      return
-    }
-    original(...args)
-  })
-  return () => spy.mockRestore()
-}
-
 function renderAction(busy: boolean, disabled: boolean): ReactTestRenderer {
   let renderer: ReactTestRenderer | null = null
-  const restore = suppressRendererWarning()
-  try {
-    act(() => {
-      renderer = create(
-        createElement(CodexResetCreditAction, {
-          summary,
-          scopeLabel: 'dev@example.com on the host',
-          busy,
-          disabled,
-          onPress: vi.fn()
-        })
-      )
-    })
-  } finally {
-    restore()
-  }
+  act(() => {
+    renderer = create(
+      createElement(CodexResetCreditAction, {
+        summary,
+        scopeLabel: 'dev@example.com on the host',
+        busy,
+        disabled,
+        onPress: vi.fn()
+      })
+    )
+  })
   if (!renderer) {
     throw new Error('Reset action did not render')
   }
@@ -55,10 +39,6 @@ function renderAction(busy: boolean, disabled: boolean): ReactTestRenderer {
 }
 
 describe('CodexResetCreditAction', () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
   it('exposes a 44pt touch target and enabled accessibility state', () => {
     const renderer = renderAction(false, false)
     const button = renderer.root.findByType('Pressable')

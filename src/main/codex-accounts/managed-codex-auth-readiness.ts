@@ -85,19 +85,48 @@ function isManagedHostCodexHome(
   )
 }
 
-export function hasStoredCodexCredential(authPath: string): boolean {
+export type StoredCodexCredentialState =
+  | 'present'
+  | 'incomplete'
+  | 'missing'
+  | 'unreadable'
+  | 'no-credential'
+
+// Why: callers deciding whether to deselect an account must tell a settled
+// logout ('no-credential') apart from a rotation in progress ('unreadable') or
+// an absent file ('missing') — collapsing them to false logs users out on races.
+export function readStoredCodexCredentialState(authPath: string): StoredCodexCredentialState {
+  let raw: string
   try {
-    const parsed: unknown = JSON.parse(readFileSync(authPath, 'utf8'))
-    if (!isRecord(parsed) || Object.keys(parsed).length === 0) {
-      return false
-    }
-    const auth = parsed as StoredCodexAuth
-    return auth.auth_mode == null
+    raw = readFileSync(authPath, 'utf8')
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    // Why: Windows auth.json rotation can surface transient EPERM/EBUSY reads.
+    return code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'unreadable'
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    // Torn JSON means a write is in flight, not that the credential is gone.
+    return 'unreadable'
+  }
+  if (!isRecord(parsed) || Object.keys(parsed).length === 0) {
+    return 'no-credential'
+  }
+  const auth = parsed as StoredCodexAuth
+  const hasCredential =
+    auth.auth_mode == null
       ? hasCredentialWithoutDeclaredMode(auth)
       : hasCredentialForDeclaredMode(auth)
-  } catch {
-    return false
+  if (hasCredential) {
+    return 'present'
   }
+  return hasIncompleteCredentialMaterial(auth) ? 'incomplete' : 'no-credential'
+}
+
+export function hasStoredCodexCredential(authPath: string): boolean {
+  return readStoredCodexCredentialState(authPath) === 'present'
 }
 
 function hasCredentialForDeclaredMode(auth: StoredCodexAuth): boolean {
@@ -135,6 +164,10 @@ function hasCredentialWithoutDeclaredMode(auth: StoredCodexAuth): boolean {
   return Object.keys(auth).some((key) => key !== 'auth_mode' && key !== 'last_refresh')
 }
 
+function hasIncompleteCredentialMaterial(auth: StoredCodexAuth): boolean {
+  return hasChatGptTokenMaterial(auth.tokens) || hasAgentIdentityMaterial(auth.agent_identity)
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
@@ -164,6 +197,17 @@ function hasAgentIdentityCredential(value: unknown): boolean {
 
 function hasBedrockApiKey(value: unknown): boolean {
   return isRecord(value) && isNonEmptyString(value.api_key)
+}
+
+function hasChatGptTokenMaterial(tokens: unknown): boolean {
+  return (
+    isRecord(tokens) &&
+    [tokens.access_token, tokens.id_token, tokens.refresh_token].some(isNonEmptyString)
+  )
+}
+
+function hasAgentIdentityMaterial(value: unknown): boolean {
+  return isNonEmptyString(value) || (isRecord(value) && Object.values(value).some(isNonEmptyString))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

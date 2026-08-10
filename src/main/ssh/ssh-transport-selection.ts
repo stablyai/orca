@@ -21,8 +21,6 @@ const READ_CHUNK_BYTES = 64 * 1024
 const READ_OPEN_FLAGS =
   constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NONBLOCK)
 
-type IdentityInspection = { privateIdentityExists: boolean; requiresSystemSsh: boolean }
-
 async function readBoundedKeyFile(path: string): Promise<Buffer | null> {
   let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
@@ -59,21 +57,15 @@ async function readBoundedKeyFile(path: string): Promise<Buffer | null> {
   }
 }
 
-async function inspectIdentityPath(keyPath: string): Promise<IdentityInspection> {
+async function identityRequiresSystemSsh(keyPath: string): Promise<boolean> {
   const resolvedPath = resolveSshConfigHomePath(keyPath)
   const identity = await readBoundedKeyFile(resolvedPath)
+  // Why: a present private key wins; a `.pub` beside it may describe a key already replaced.
   if (identity !== null) {
-    return {
-      privateIdentityExists: true,
-      requiresSystemSsh:
-        isOpenSshSecurityKeyPublicKey(identity) || isOpenSshSecurityKeyPrivateKey(identity)
-    }
+    return isOpenSshSecurityKeyPublicKey(identity) || isOpenSshSecurityKeyPrivateKey(identity)
   }
   const publicIdentity = await readBoundedKeyFile(`${resolvedPath}.pub`)
-  return {
-    privateIdentityExists: false,
-    requiresSystemSsh: publicIdentity !== null && isOpenSshSecurityKeyPublicKey(publicIdentity)
-  }
+  return publicIdentity !== null && isOpenSshSecurityKeyPublicKey(publicIdentity)
 }
 
 export function shouldUseSystemSshTransport(
@@ -102,16 +94,19 @@ export async function requiresSystemSshForSecurityKey(
   target: SshTarget,
   resolved: Pick<SshResolvedConfig, 'identityFile'> | null
 ): Promise<boolean> {
-  const configuredPaths = resolveIdentityFilePaths(target, resolved)
-  const usesDefaultPaths = configuredPaths.length === 0 && !resolved && !target.identityFile
-  const identityPaths = usesDefaultPaths ? listDefaultIdentityFilePaths() : configuredPaths
+  const resolvedPaths = resolveIdentityFilePaths(target, resolved)
+  // Why: `ssh -G` already echoes OpenSSH's built-in defaults, so its list is the real candidate
+  // set; guess at the defaults only when config resolution failed outright.
+  const identityPaths =
+    resolvedPaths.length === 0 && !resolved && !target.identityFile
+      ? listDefaultIdentityFilePaths()
+      : resolvedPaths
   for (const keyPath of identityPaths) {
-    const inspection = await inspectIdentityPath(keyPath)
-    if (inspection.requiresSystemSsh) {
-      return !usesDefaultPaths || findSystemSsh() !== null
-    }
-    if (usesDefaultPaths && inspection.privateIdentityExists) {
-      return false
+    if (await identityRequiresSystemSsh(keyPath)) {
+      // Why: scan every candidate — an earlier normal key never rules out a security key the host
+      // requires — but forcing system transport with no binary hard-fails a connection ssh2 could
+      // still have served over agent or password auth.
+      return findSystemSsh() !== null
     }
   }
   return false

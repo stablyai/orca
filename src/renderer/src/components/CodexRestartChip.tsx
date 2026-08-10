@@ -1,70 +1,11 @@
-import { useEffect, useId, useMemo, useRef } from 'react'
-import { useShallow } from 'zustand/react/shallow'
+import { useEffect, useId, useRef } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '../store'
-import { selectCodexRestartInputs } from './codex-restart-chip-inputs'
 import { translate } from '@/i18n/i18n'
 import { shouldFocusMobileDriverAction } from './terminal-pane/mobile-driver-overlay-focus'
 import { buildCodexRestartNoticeKey } from './codex-restart-notice-key'
 import { awaitsCodexRestartAnswer } from './codex-restart-notice-state'
-import type { CodexRestartNotice } from '../store/slices/terminals'
-
-const EMPTY_TABS: { id: string }[] = []
-
-export function collectStalePtyIdsForTabs({
-  tabs,
-  ptyIdsByTabId,
-  codexRestartNoticeByPtyId
-}: {
-  tabs: { id: string }[]
-  ptyIdsByTabId: Record<string, string[]>
-  codexRestartNoticeByPtyId: Record<string, CodexRestartNotice | undefined>
-}): string[] {
-  // Why: an already-requested restart runs when its pane next mounts. Keeping it
-  // out of the prompt is what stops the panel from sticking on a worktree whose
-  // stale pane is parked or deferred and cannot answer the request yet. A
-  // dismissed notice is likewise answered — it only survives as launch-account
-  // memory.
-  return tabs.flatMap((tab) =>
-    (ptyIdsByTabId[tab.id] ?? []).filter((ptyId) =>
-      awaitsCodexRestartAnswer(codexRestartNoticeByPtyId[ptyId])
-    )
-  )
-}
-
-export function collectStaleWorktreePtyIds({
-  tabsByWorktree,
-  ptyIdsByTabId,
-  codexRestartNoticeByPtyId,
-  worktreeId
-}: {
-  tabsByWorktree: Record<string, { id: string }[]>
-  ptyIdsByTabId: Record<string, string[]>
-  codexRestartNoticeByPtyId: Record<string, CodexRestartNotice | undefined>
-  worktreeId: string
-}): string[] {
-  return collectStalePtyIdsForTabs({
-    tabs: tabsByWorktree[worktreeId] ?? EMPTY_TABS,
-    ptyIdsByTabId,
-    codexRestartNoticeByPtyId
-  })
-}
-
-export function dismissStaleWorktreePtyIds(
-  staleWorktreePtyIds: string[],
-  dismissCodexRestartNotices: (ptyIds: string[]) => void,
-  forgetLaunchAccounts: (ptyIds: string[]) => void
-): void {
-  // Why: restart notices are stored per PTY, but the workspace host presents
-  // one shared prompt. Dismissing all matching PTY notices keeps every pane in
-  // that worktree consistent with the dismissal.
-  dismissCodexRestartNotices(staleWorktreePtyIds)
-  // Why: notices are renderer-only, so without dropping the on-disk launch
-  // record the startup sweep re-raises this exact prompt — and re-blocks the
-  // pane's input — after every app restart the user already answered.
-  forgetLaunchAccounts(staleWorktreePtyIds)
-}
 
 function isInsideHiddenTree(element: HTMLElement): boolean {
   return element.closest('[aria-hidden="true"], [hidden], [inert]') !== null
@@ -78,58 +19,39 @@ type RestartNotice = {
 
 export default function CodexRestartChip({
   isVisible = true,
-  worktreeId
+  ptyId,
+  shouldFocus = false
 }: {
   isVisible?: boolean
-  worktreeId: string
+  ptyId: string
+  shouldFocus?: boolean
 }): React.JSX.Element | null {
-  const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
-  // Why: both of these maps churn on unrelated pty lifecycle events (ptyIdsByTabId
-  // on attach/detach; codexRestartNoticeByPtyId is re-spread even when empty on
-  // pty teardown), so subscribe to them only while a restart notice actually
-  // exists. Otherwise this per-worktree chip re-rendered on every pty event to
-  // compute "no notice → render nothing". See codex-restart-chip-inputs.
-  const { ptyIdsByTabId, codexRestartNoticeByPtyId } = useAppStore(
-    useShallow(selectCodexRestartInputs)
-  )
-  const staleWorktreePtyIds = useMemo(
-    () =>
-      collectStalePtyIdsForTabs({
-        tabs,
-        ptyIdsByTabId,
-        codexRestartNoticeByPtyId
-      }),
-    [codexRestartNoticeByPtyId, ptyIdsByTabId, tabs]
-  )
-  const restartNotice = staleWorktreePtyIds[0]
-    ? codexRestartNoticeByPtyId[staleWorktreePtyIds[0]]
-    : undefined
-  const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
-  const dismissCodexRestartNotices = useAppStore((s) => s.dismissCodexRestartNotices)
-
-  const noticeKey = restartNotice ? buildCodexRestartNoticeKey(restartNotice) : null
-
-  if (staleWorktreePtyIds.length === 0 || !restartNotice) {
+  // Why: one O(1) selector per mounted pane stays idle when unrelated PTY maps
+  // churn and prevents a worktree-wide scan for every split pane.
+  const restartNotice = useAppStore((state) => state.codexRestartNoticeByPtyId[ptyId])
+  if (!restartNotice || !awaitsCodexRestartAnswer(restartNotice)) {
     return null
   }
 
   const handleRestart = (): void => {
-    queueCodexPaneRestarts(staleWorktreePtyIds)
+    useAppStore.getState().queueCodexPaneRestarts([ptyId])
   }
 
   const handleDismiss = (): void => {
-    dismissStaleWorktreePtyIds(staleWorktreePtyIds, dismissCodexRestartNotices, (ptyIds) => {
-      void window.api.codexAccounts.forgetStalePanes({ ptyIds }).catch((err: unknown) => {
-        console.warn('Failed to forget dismissed Codex pane accounts:', err)
-      })
+    useAppStore.getState().dismissCodexRestartNotices([ptyId])
+    // Why: notices are renderer-only, so the persisted launch record must be
+    // cleared for this pane or the startup sweep re-raises its answered prompt.
+    void window.api.codexAccounts.forgetStalePanes({ ptyIds: [ptyId] }).catch((err: unknown) => {
+      console.warn('Failed to forget dismissed Codex pane account:', err)
     })
   }
 
   return (
     <LoudRestartOverlay
       isVisible={isVisible}
-      noticeKey={noticeKey}
+      noticeKey={`${ptyId}:${buildCodexRestartNoticeKey(restartNotice)}`}
       restartNotice={restartNotice}
+      shouldFocus={shouldFocus}
       onDismiss={handleDismiss}
       onRestart={handleRestart}
     />
@@ -140,12 +62,14 @@ function LoudRestartOverlay({
   isVisible,
   noticeKey,
   restartNotice,
+  shouldFocus,
   onDismiss,
   onRestart
 }: {
   isVisible: boolean
   noticeKey: string | null
   restartNotice: RestartNotice
+  shouldFocus: boolean
   onDismiss: () => void
   onRestart: () => void
 }): React.JSX.Element {
@@ -156,15 +80,10 @@ function LoudRestartOverlay({
   // Why: move focus to the card only when the user isn't typing elsewhere;
   // unconditional autoFocus would steal keys from an active composer.
   //
-  // The target is the dialog itself, never Restart. This card is mounted per
-  // WORKTREE (a sibling of the split layout), so its focus scope is every
-  // terminal in the worktree — a notice for one pane lands while the user may
-  // be typing in a different, perfectly healthy pane. With Restart focused, the
-  // next Space/Enter of their prose queued a restart of every stale pane here
-  // and destroyed those sessions. Focus must not land on a destructive action
-  // the user never aimed at. See #10863.
+  // The target is the dialog itself, never Restart, so the next Space/Enter
+  // cannot destroy a session the user did not explicitly choose. See #10863.
   useEffect(() => {
-    if (!isVisible) {
+    if (!isVisible || !shouldFocus) {
       return
     }
     const root = rootRef.current
@@ -175,7 +94,7 @@ function LoudRestartOverlay({
     if (shouldFocusMobileDriverAction(document.activeElement, document.body, paneScope)) {
       root.focus()
     }
-  }, [isVisible, noticeKey])
+  }, [isVisible, noticeKey, shouldFocus])
 
   return (
     <div

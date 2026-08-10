@@ -38,7 +38,6 @@ import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
-import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type {
   OrcaRuntimeService,
   RemoteFetchResult,
@@ -55,6 +54,7 @@ import {
   getSetupRunnerEnvVars,
   loadHooks,
   parseOrcaYaml,
+  resolveSetupRunnerShell,
   shouldRunSetupForCreate
 } from '../hooks'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -93,10 +93,13 @@ import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
   sameGitHubRemoteUrl,
+  type GitRemoteExec,
   type WorktreePushTargetStore
 } from './worktree-push-target-cleanup'
 import {
   configureCreatedWorktreePushTargetWithExec,
+  ensureUniqueRemoteName,
+  findRemoteForUrl,
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
 import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
@@ -174,6 +177,13 @@ type RemoteLocalBaseRefRefreshability =
 
 function appendWorktreeCreateWarning(current: string | undefined, next: string): string {
   return current ? `${current} Also ${next[0]?.toLowerCase() ?? ''}${next.slice(1)}` : next
+}
+
+function getSetupRunnerCommandPlatformForLaunch(
+  setup: CreateWorktreeResult['setup'],
+  fallbackPlatform: 'windows' | 'posix'
+): 'windows' | 'posix' {
+  return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallbackPlatform)
 }
 
 function validateWorkspaceLineageParentBeforeCreate(
@@ -264,14 +274,15 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   let sequencedStartup = startup
   let wrappedSetupCommandStr: string | undefined
   if (startup && setup?.waitForAgentStartup === true) {
-    const platform = getSetupRunnerCommandPlatformForPath(
-      setup.runnerScriptPath,
+    const platform = getSetupRunnerCommandPlatformForLaunch(
+      setup,
       process.platform === 'win32' ? 'windows' : 'posix'
     )
     const sequenced = createSequencedSetupAgentCommands({
       runnerScriptPath: setup.runnerScriptPath,
       startupCommand: startup.command,
-      platform
+      platform,
+      shell: setup.shell
     })
     sequencedStartup = {
       ...startup,
@@ -327,10 +338,11 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         wrappedSetupCommandStr ??
         buildSetupRunnerCommand(
           setup.runnerScriptPath,
-          getSetupRunnerCommandPlatformForPath(
-            setup.runnerScriptPath,
+          getSetupRunnerCommandPlatformForLaunch(
+            setup,
             process.platform === 'win32' ? 'windows' : 'posix'
-          )
+          ),
+          setup.shell
         )
       const setupLaunchMode =
         (settings as Partial<Pick<GlobalSettings, 'setupScriptLaunchMode'>>)
@@ -1048,67 +1060,6 @@ export async function configureCreatedWorktreePushTarget(
   )
 }
 
-async function findRemoteForUrlSsh(
-  provider: SshGitProvider,
-  repoPath: string,
-  remoteUrl: string
-): Promise<string | null> {
-  const target = parseGitHubOwnerRepo(remoteUrl)
-  try {
-    const { stdout } = await provider.exec(['remote'], repoPath)
-    for (const remote of stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)) {
-      try {
-        const { stdout: urlStdout } = await provider.exec(['remote', 'get-url', remote], repoPath)
-        const candidateUrl = urlStdout.trim()
-        const candidate = parseGitHubOwnerRepo(candidateUrl)
-        if (
-          target &&
-          candidate &&
-          target.owner.toLowerCase() === candidate.owner.toLowerCase() &&
-          target.repo.toLowerCase() === candidate.repo.toLowerCase()
-        ) {
-          return remote
-        }
-        if (candidateUrl === remoteUrl) {
-          return remote
-        }
-      } catch {
-        // Ignore a remote that disappeared or has no fetch URL.
-      }
-    }
-  } catch {
-    return null
-  }
-  return null
-}
-
-async function ensureUniqueRemoteNameSsh(
-  provider: SshGitProvider,
-  repoPath: string,
-  preferred: string
-): Promise<string> {
-  const { stdout } = await provider.exec(['remote'], repoPath)
-  const existing = new Set(
-    stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-  )
-  if (!existing.has(preferred)) {
-    return preferred
-  }
-  for (let suffix = 2; suffix < 100; suffix += 1) {
-    const candidate = `${preferred}-${suffix}`
-    if (!existing.has(candidate)) {
-      return candidate
-    }
-  }
-  throw new Error(`Could not find an available remote name for ${preferred}.`)
-}
-
 async function prepareWorktreePushTargetSsh(
   provider: SshGitProvider,
   repoPath: string,
@@ -1117,12 +1068,13 @@ async function prepareWorktreePushTargetSsh(
   repoId?: string
 ): Promise<GitPushTarget> {
   assertGitPushTargetShape(target)
+  const execGit: GitRemoteExec = (args, cwd) => provider.exec(args, cwd)
   const { remoteCreated: _ignoredRemoteCreated, ...sanitizedTarget } = target
   await provider.exec(['check-ref-format', '--branch', target.branchName], repoPath)
   let remoteName = target.remoteName
   let remoteCreated = false
   if (target.remoteUrl) {
-    const existingRemote = await findRemoteForUrlSsh(provider, repoPath, target.remoteUrl)
+    const existingRemote = await findRemoteForUrl(execGit, repoPath, target.remoteUrl)
     if (existingRemote) {
       remoteName = existingRemote
       // Why: a reused Orca-created fork remote must inherit ownership so deleting the final user can remove it.
@@ -1137,7 +1089,7 @@ async function prepareWorktreePushTargetSsh(
           )
         : false
     } else {
-      remoteName = await ensureUniqueRemoteNameSsh(provider, repoPath, target.remoteName)
+      remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
       await provider.exec(['remote', 'add', remoteName, target.remoteUrl], repoPath)
       remoteCreated = true
     }
@@ -1174,19 +1126,6 @@ export async function cleanupUnusedWorktreePushTargetRemoteSsh(
   }
 }
 
-async function configureCreatedWorktreePushTargetSsh(
-  provider: SshGitProvider,
-  worktreePath: string,
-  branchName: string,
-  target: GitPushTarget
-): Promise<GitPushTarget> {
-  await provider.exec(
-    ['branch', '--set-upstream-to', `${target.remoteName}/${target.branchName}`, branchName],
-    worktreePath
-  )
-  return target
-}
-
 async function readRemoteEffectiveHooks(
   repo: Repo,
   fsProvider: IFilesystemProvider,
@@ -1215,6 +1154,8 @@ async function createRemoteSetupRunnerScript(
   fsProvider: IFilesystemProvider
 ): Promise<CreateWorktreeResult['setup']> {
   const useWindowsFormat = isWindowsAbsolutePathLike(worktreePath)
+  // Why: SSH terminals choose their shell on the remote host; local Windows
+  // preferences cannot safely select a remote runner format or launch command.
   const runnerRelativePath = useWindowsFormat ? 'orca/setup-runner.cmd' : 'orca/setup-runner.sh'
   const { stdout } = await gitProvider.exec(
     ['rev-parse', '--git-path', runnerRelativePath],
@@ -1825,8 +1766,8 @@ export async function createRemoteWorktree(
   const metadataBaseRef = args.compareBaseRef ?? remoteTrackingBase?.ref ?? baseBranch
   let configuredPushTarget: GitPushTarget | undefined
   if (preparedPushTarget) {
-    configuredPushTarget = await configureCreatedWorktreePushTargetSsh(
-      provider,
+    configuredPushTarget = await configureCreatedWorktreePushTargetWithExec(
+      (args, cwd) => provider.exec(args, cwd),
       created.path,
       branchName,
       preparedPushTarget
@@ -2575,11 +2516,13 @@ export async function createLocalWorktree(
       try {
         // Why: main only writes the runner script and must not execute setup itself, or we reintroduce the old hidden background-hook behavior.
         // Why: worktree already exists, so a runner-gen failure degrades to "created without setup launch" rather than failing creation.
+        // Why: both trailing args are optional — the shell is undefined off Windows.
         setup = createSetupRunnerScript(
           repo,
           worktreePath,
           setupScript,
-          ...localWorktreeGitOptionArgs
+          localWorktreeGitOptionArgs[0],
+          resolveSetupRunnerShell(settings)
         )
       } catch (error) {
         console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)

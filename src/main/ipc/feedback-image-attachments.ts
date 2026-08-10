@@ -25,10 +25,6 @@ export function isSupportedFeedbackImageContentType(contentType: string): boolea
   return Object.hasOwn(FEEDBACK_IMAGE_EXTENSIONS, contentType)
 }
 
-export function getSupportedFeedbackImageContentTypes(): string[] {
-  return Object.keys(FEEDBACK_IMAGE_EXTENSIONS)
-}
-
 export function feedbackImageFilename(index: number, contentType: string): string {
   return `feedback-image-${index + 1}.${FEEDBACK_IMAGE_EXTENSIONS[contentType]}`
 }

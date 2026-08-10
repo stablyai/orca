@@ -209,7 +209,11 @@ describe('runWorktreeBatchDelete', () => {
     toastOptions?.onForceDelete()
 
     await vi.waitFor(() => {
-      expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'wt-1', true)
+      // Why (#11960): clicking Force Delete on the failure toast is an explicit
+      // force, so it also waives the PTY-stop proof the first attempt failed.
+      expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'wt-1', true, {
+        allowUnverifiedPtyStop: true
+      })
       expect(onDeleted).toHaveBeenCalledWith(['wt-1'])
     })
   })

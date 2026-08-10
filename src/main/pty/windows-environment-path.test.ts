@@ -15,7 +15,8 @@ import {
   mergePersistedWindowsPath,
   mergePersistedWindowsPathAsync,
   readPersistedWindowsPathSegments,
-  readPersistedWindowsPathSegmentsAsync
+  readPersistedWindowsPathSegmentsAsync,
+  resolvePathEnvKey
 } from './windows-environment-path'
 
 type ExecCallback = (error: Error | null, stdout: string, stderr: string) => void
@@ -242,6 +243,18 @@ describe('readPersistedWindowsPathSegments', () => {
 })
 
 describe('mergePersistedWindowsPath', () => {
+  it('expands variables already present in the inherited PATH', () => {
+    const execFileSync = vi.fn().mockReturnValue('    Path    REG_SZ    \r\n')
+    const env = {
+      ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
+      Path: '%orca_path_root%\\agy\\bin;C:\\Windows'
+    }
+
+    mergePersistedWindowsPath(env, { platform: 'win32', execFileSync, env })
+
+    expect(env.Path).toBe('C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows')
+  })
+
   it('appends missing persisted segments without reordering the inherited PATH', () => {
     const execFileSync = vi
       .fn()
@@ -296,5 +309,54 @@ describe('mergePersistedWindowsPath', () => {
     })
 
     expect(env).toEqual({ Path: 'C:\\Inherited;C:\\Machine;C:\\User' })
+  })
+
+  it('reads the live host spelling when a path-less env inherits duplicate keys', () => {
+    const execFileSync = vi
+      .fn()
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
+    const env: Record<string, string> = {}
+
+    mergePersistedWindowsPath(env, {
+      platform: 'win32',
+      execFileSync,
+      env: { ROOT: 'C:\\Root', Path: '%ROOT%\\Live', PATH: 'C:\\Shadowed' }
+    })
+
+    expect(env).toEqual({ Path: 'C:\\Root\\Live;C:\\Machine;C:\\User' })
+  })
+})
+
+describe('resolvePathEnvKey', () => {
+  it('uses whichever Windows spelling is present on the env', () => {
+    expect(resolvePathEnvKey({ Path: 'C:\\Windows' }, 'win32')).toBe('Path')
+    expect(resolvePathEnvKey({ PATH: 'C:\\Windows' }, 'win32')).toBe('PATH')
+    expect(resolvePathEnvKey({ path: 'C:\\Windows' }, 'win32')).toBe('path')
+    expect(resolvePathEnvKey({ PaTh: 'C:\\Windows' }, 'win32')).toBe('PaTh')
+  })
+
+  // Why: Win32 returns the first case-insensitive match in the block, so a dual-cased env is
+  // resolved by position; picking by casing would target the spelling the child never sees.
+  it('resolves a dual-cased Windows env by block order, not casing', () => {
+    expect(resolvePathEnvKey({ PATH: 'C:\\Live', Path: 'C:\\Shadowed' }, 'win32')).toBe('PATH')
+    expect(resolvePathEnvKey({ Path: 'C:\\Live', PATH: 'C:\\Shadowed' }, 'win32')).toBe('Path')
+  })
+
+  it('skips a path key explicitly set to undefined', () => {
+    expect(resolvePathEnvKey({ PATH: undefined, Path: 'C:\\Windows' }, 'win32')).toBe('Path')
+  })
+
+  it('falls back to the host block spelling for a Windows env with no path key', () => {
+    // Why: a sparse patch that guesses wrong leaves the daemon's own merge holding both keys.
+    expect(resolvePathEnvKey({}, 'win32', { PATH: 'C:\\Windows' })).toBe('PATH')
+    expect(resolvePathEnvKey({}, 'win32', { Path: 'C:\\Windows' })).toBe('Path')
+    expect(resolvePathEnvKey({}, 'win32', { Path: 'C:\\Live', PATH: 'C:\\Shadowed' })).toBe('Path')
+    expect(resolvePathEnvKey({}, 'win32', {})).toBe('Path')
+  })
+
+  it('always resolves `PATH` off Windows so a POSIX `Path` variable is untouched', () => {
+    expect(resolvePathEnvKey({ Path: '/decoy' }, 'linux')).toBe('PATH')
+    expect(resolvePathEnvKey({ Path: '/decoy', PATH: '/usr/bin' }, 'darwin')).toBe('PATH')
   })
 })

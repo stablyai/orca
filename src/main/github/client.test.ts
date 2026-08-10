@@ -170,6 +170,7 @@ import {
   getPRComments,
   getPRForBranch,
   getPRForBranchOutcome,
+  getGitHubPRLookupRateLimitBlock,
   getRepoSlug,
   getRepoUpstream,
   getWorkItem,
@@ -4607,5 +4608,72 @@ describe('GitHub GraphQL rate-limit guard', () => {
 
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
     expect(noteRateLimitSpendMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('getGitHubPRLookupRateLimitBlock', () => {
+  beforeEach(() => {
+    execFileAsyncMock.mockReset()
+    ghExecFileAsyncMock.mockReset()
+    getOwnerRepoMock.mockReset()
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    getRemoteUrlForRepoMock.mockReset()
+    gitExecFileAsyncMock.mockReset()
+    getRateLimitMock.mockReset()
+    getRateLimitMock.mockResolvedValue(undefined)
+    rateLimitGuardMock.mockReset()
+    rateLimitGuardMock.mockReturnValue({ blocked: false })
+    noteRateLimitSpendMock.mockReset()
+    _resetOwnerRepoCache()
+  })
+
+  it('reports no block while every lookup bucket has budget', async () => {
+    await expect(getGitHubPRLookupRateLimitBlock('/repo-root')).resolves.toBeNull()
+    expect(getRateLimitMock).toHaveBeenCalled()
+  })
+
+  it('reports a block when either lookup bucket is exhausted', async () => {
+    rateLimitGuardMock.mockImplementation(((bucket: string) =>
+      bucket === 'graphql'
+        ? { blocked: true, remaining: 4, limit: 5000, resetAt: 1_800_000_000 }
+        : { blocked: false }) as () => RateLimitGuardResult)
+
+    await expect(getGitHubPRLookupRateLimitBlock('/repo-root')).resolves.toEqual({
+      resetAt: 1_800_000_000
+    })
+  })
+
+  it('reports the latest reset when both lookup buckets are exhausted', async () => {
+    rateLimitGuardMock.mockImplementation(((bucket: string) => ({
+      blocked: true,
+      remaining: 4,
+      limit: 5000,
+      // Why: core resets first, so returning it would retry into graphql's block.
+      resetAt: bucket === 'core' ? 1_800_000_000 : 1_800_003_600
+    })) as () => RateLimitGuardResult)
+
+    await expect(getGitHubPRLookupRateLimitBlock('/repo-root')).resolves.toEqual({
+      resetAt: 1_800_003_600
+    })
+  })
+
+  it('reports the later reset when graphql outlasts core', async () => {
+    // Retrying at the earlier reset would fail again on the bucket still blocked.
+    rateLimitGuardMock.mockImplementation(((bucket: string) => ({
+      blocked: true,
+      remaining: 0,
+      limit: 5000,
+      resetAt: bucket === 'graphql' ? 1_800_000_600 : 1_800_000_000
+    })) as () => RateLimitGuardResult)
+
+    await expect(getGitHubPRLookupRateLimitBlock('/repo-root')).resolves.toEqual({
+      resetAt: 1_800_000_600
+    })
+  })
+
+  it('fails open when the exempt rate-limit probe itself fails', async () => {
+    getRateLimitMock.mockRejectedValue(new Error('probe offline'))
+
+    await expect(getGitHubPRLookupRateLimitBlock('/repo-root')).resolves.toBeNull()
   })
 })
