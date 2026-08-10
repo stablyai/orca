@@ -56,6 +56,7 @@ function createMockProcess(): ChildProcess {
   ;(p as unknown as Record<string, unknown>).kill = vi.fn()
   ;(p as unknown as Record<string, unknown>).exitCode = null
   ;(p as unknown as Record<string, unknown>).signalCode = null
+  Object.defineProperty(p, 'pid', { configurable: true, value: 1 })
 
   return p
 }
@@ -124,6 +125,8 @@ describe('filesystem-list-files', () => {
 
     const storeMock = {} as unknown as Store
     const promise = listQuickOpenFiles('/mock/root', storeMock)
+    await flushMicrotasks()
+    expect(spawnMock).toHaveBeenCalledTimes(2)
 
     // Simulate stdout output for normal files
     setTimeout(() => {
@@ -366,11 +369,8 @@ describe('filesystem-list-files', () => {
 
   it('lets cancellation win a native-unavailable race before Git starts', async () => {
     const first = createMockProcess()
-    const second = createMockProcess()
     Object.defineProperty(first, 'pid', { value: undefined })
-    Object.defineProperty(second, 'pid', { value: undefined })
-    let callIndex = 0
-    spawnMock.mockImplementation(() => (++callIndex === 1 ? first : second))
+    spawnMock.mockReturnValue(first)
     const controller = new AbortController()
     const cancellation = new FileListingCancelledError('superseded')
 
@@ -385,16 +385,62 @@ describe('filesystem-list-files', () => {
     first.emit('close', -2, null)
 
     await expect(promise).rejects.toBe(cancellation)
-    expect(second.kill).not.toHaveBeenCalled()
+    expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(spawnMock.mock.calls.some((call) => call[0] === 'git')).toBe(false)
     const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
     expect(() => first.emit('error', error)).not.toThrow()
-    expect(() => second.emit('error', error)).not.toThrow()
     expect(first.listenerCount('error')).toBe(0)
-    expect(second.listenerCount('error')).toBe(0)
   })
 
   describe('git ls-files fallback', () => {
+    it('kills only the admitted pass when ignored rg fails before spawn', async () => {
+      const primary = createMockProcess()
+      const missingIgnored = createMockProcess()
+      const revParse = createMockProcess()
+      const gitPrimary = createMockProcess()
+      const gitIgnored = createMockProcess()
+      Object.defineProperty(missingIgnored, 'pid', { value: undefined })
+      let gitPassIndex = 0
+      spawnMock.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'rg') {
+          return isIgnoredRgPass(args) ? missingIgnored : primary
+        }
+        if (args.includes('rev-parse')) {
+          return revParse
+        }
+        if (args.includes('ls-files')) {
+          return gitPassIndex++ === 0 ? gitPrimary : gitIgnored
+        }
+        return createMockProcess()
+      })
+
+      const promise = listQuickOpenFiles('/mock/root', {} as unknown as Store)
+      await flushMicrotasks()
+      expect(spawnMock.mock.calls.filter((call) => call[0] === 'rg')).toHaveLength(2)
+      missingIgnored.emit('close', -2, null)
+
+      await vi.waitFor(() => expect(primary.kill).toHaveBeenCalled())
+      expect(missingIgnored.kill).not.toHaveBeenCalled()
+      const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
+      expect(() => missingIgnored.emit('error', error)).not.toThrow()
+      await vi.waitFor(() =>
+        expect(
+          spawnMock.mock.calls.some((call) => (call[1] as string[]).includes('rev-parse'))
+        ).toBe(true)
+      )
+      revParse.emit('close', 0, null)
+      await vi.waitFor(() =>
+        expect(
+          spawnMock.mock.calls.filter((call) => (call[1] as string[]).includes('ls-files'))
+        ).toHaveLength(2)
+      )
+      gitPrimary.emit('close', 0, null)
+      gitIgnored.emit('close', 0, null)
+
+      await expect(promise).resolves.toEqual([])
+      expect(missingIgnored.listenerCount('error')).toBe(0)
+    })
+
     it('falls back to git ls-files when rg is not available', async () => {
       let callIndex = 0
       const revParseProc = createMockProcess()
@@ -443,9 +489,9 @@ describe('filesystem-list-files', () => {
 
       const result = await promise
 
-      // The real command doubles as the availability check.
+      // The primary real command doubles as the availability check.
       const rgCalls = spawnMock.mock.calls.filter((call) => call[0] === 'rg')
-      expect(rgCalls.length).toBe(2)
+      expect(rgCalls.length).toBe(1)
       expect(rgCalls.every((call) => !(call[1] as string[]).includes('--version'))).toBe(true)
 
       // Verify git ls-files was called

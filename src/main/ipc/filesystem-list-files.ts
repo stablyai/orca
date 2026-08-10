@@ -256,14 +256,17 @@ export async function listQuickOpenFiles(
       }
     }
   }
-
   try {
+    const primaryRun = runRg(primary)
     if (maxResults === undefined) {
-      await Promise.all([runRg(primary), runRg(ignoredPass)])
+      // Why: a pid-less primary proves launch failure; avoid doubling the failed spawn.
+      await (children[0]?.child.pid === undefined
+        ? primaryRun
+        : Promise.all([primaryRun, runRg(ignoredPass)]))
     } else {
       // Why: ignored-file output can be much larger and faster than the primary
       // pass; let source files claim the bounded autocomplete budget first.
-      await runRg(primary)
+      await primaryRun
       if (files.size < maxResults) {
         await runRg(ignoredPass)
       }

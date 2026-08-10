@@ -1,7 +1,5 @@
 /**
  * Ripgrep-based file listing for Quick Open.
- * Extracted from fs-handler-utils.ts to keep it under 300 lines (oxlint max-lines).
- *
  * Why a full rewrite vs. the older execFile+maxBuffer version: on a home-dir
  * worktree over SSH, rg descended into every dotfile cache, hit the timeout,
  * and silently resolved with a partial list — Quick Open then showed "No
@@ -268,12 +266,15 @@ export function listFilesWithRg(
     }
     signal?.addEventListener('abort', onAbort, { once: true })
 
+    const primaryPass = runPass(primary)
     const passes =
       maxResults === undefined
-        ? Promise.all([runPass(primary), runPass(ignoredPass)])
+        ? children[0]?.child.pid === undefined
+          ? primaryPass
+          : Promise.all([primaryPass, runPass(ignoredPass)])
         : // Why: deterministic primary-first budgeting prevents a large ignored
           // tree from starving ordinary source paths on a remote host.
-          runPass(primary).then(() =>
+          primaryPass.then(() =>
             files.size < maxResults ? runPass(ignoredPass) : Promise.resolve()
           )
 
