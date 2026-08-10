@@ -102,10 +102,10 @@ export async function retrySshOwnerRecoveryWhileBlocked<T>(
       }
       let deadline = deadlineByReason.get(reason)
       if (deadline === undefined) {
-        deadline = Date.now() + budgetByReason[reason]
+        deadline = performance.now() + budgetByReason[reason]
         deadlineByReason.set(reason, deadline)
       }
-      const remainingMs = deadline - Date.now()
+      const remainingMs = deadline - performance.now()
       if (remainingMs <= 0) {
         gate.onRetryExhausted?.(reason)
         throw error
