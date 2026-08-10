@@ -20,7 +20,6 @@ import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 import { RemoteWorkspaceTabIntentStore } from './remote-workspace-tab-intent-store'
-import type { RemoteWorkspacePatchIntentCapture } from './remote-workspace-tab-intent-types'
 import { RemoteWorkspaceTabObservationOwnerRegistry } from './remote-workspace-tab-observation-owner'
 import { getPtyProcessIncarnation } from './pty-process-incarnation-registry'
 
@@ -341,8 +340,7 @@ async function queueRemoteWorkspacePatch<T>(
 
 async function patchRemoteWorkspaceSession(
   target: SshTarget,
-  session: RemoteWorkspaceSession,
-  intentCapture: RemoteWorkspacePatchIntentCapture
+  session: RemoteWorkspaceSession
 ): Promise<RemoteWorkspacePatchResult | null> {
   const mux = getActiveMultiplexer(target.id)
   if (!mux) {
@@ -387,6 +385,7 @@ async function patchRemoteWorkspaceSession(
     }
   }
 
+  const intentCapture = remoteWorkspaceTabIntents.capturePatch(target.id, session)
   const result = await requestPatch(current?.revision)
   if (result.ok) {
     rememberRemoteWorkspaceSnapshot(target.id, result.snapshot)
@@ -469,7 +468,6 @@ export function registerRemoteWorkspaceHandlers(
   ipcMain.removeHandler('remoteWorkspace:clientId')
   ipcMain.removeHandler('remoteWorkspace:startTabStateObservation')
   ipcMain.removeHandler('remoteWorkspace:observeTabState')
-  ipcMain.removeHandler('remoteWorkspace:forgetAllTabState')
   ipcMain.removeHandler('remoteWorkspace:forgetTabState')
   ipcMain.removeHandler('remoteWorkspace:flushTabState')
   ipcMain.removeHandler('remoteWorkspace:reconcileSnapshot')
@@ -505,9 +503,8 @@ export function registerRemoteWorkspaceHandlers(
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
           const session = exportSessionForTarget(store, target.id, workspaceSession)
-          const intentCapture = remoteWorkspaceTabIntents.capturePatch(target.id, session)
           const result = await queueRemoteWorkspacePatch(target.id, () =>
-            patchRemoteWorkspaceSession(target, session, intentCapture)
+            patchRemoteWorkspaceSession(target, session)
           )
           return result ? { targetId: target.id, result } : null
         })
@@ -602,18 +599,6 @@ export function registerRemoteWorkspaceHandlers(
     )
     if (isMainRenderer(event) && authority && input.targetId) {
       remoteWorkspaceTabIntents.forgetTarget(input.targetId, authority)
-    }
-  })
-
-  ipcMain.handle('remoteWorkspace:forgetAllTabState', (event, args) => {
-    const input = args as { rendererGeneration?: number }
-    const authority = remoteWorkspaceTabObservationOwners.resolve(
-      event.sender,
-      event.processId,
-      input.rendererGeneration
-    )
-    if (isMainRenderer(event) && authority) {
-      remoteWorkspaceTabIntents.forgetAll(authority)
     }
   })
 

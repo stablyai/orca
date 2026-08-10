@@ -8,20 +8,25 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
 import type { AppState } from '../store/types'
-import {
-  configuredDirectSshTargetIds,
-  directSshConnectednessTransitionTargetIds,
-  directSshObservationScopeInputRefs,
-  directSshObservationScopeInputsEqual,
-  type DirectSshObservationScopeInputRefs
-} from './direct-ssh-tab-observation-scope'
 
 type ObservationApi = {
-  forgetAllTabState: (args: { rendererGeneration: number }) => Promise<void>
   forgetTabState: (args: { rendererGeneration: number; targetId: string }) => Promise<void>
   observeTabState: (observation: RemoteWorkspaceTabObservation) => Promise<void>
   startTabStateObservation: () => Promise<number>
 }
+
+type ScopeInputRefs = Pick<
+  AppState,
+  | 'sshTargetLabels'
+  | 'sshConnectionStates'
+  | 'remoteWorkspaceHydratedTargetIds'
+  | 'repos'
+  | 'worktreesByRepo'
+  | 'detectedWorktreesByRepo'
+  | 'folderWorkspaces'
+  | 'projectGroups'
+  | 'restoredRuntimeHostIdByWorkspaceSessionKey'
+>
 
 export type DirectSshTabIntentObserver = {
   beginSnapshotApply: (targetId: string) => () => void
@@ -32,6 +37,37 @@ export type DirectSshTabIntentObserver = {
 type ObserverOptions = {
   onTargetScanned?: (targetId: string) => void
   rendererGeneration?: number
+}
+
+function configuredTargetIds(state: AppState): Set<string> {
+  return new Set([
+    ...state.sshTargetLabels.keys(),
+    ...state.sshConnectionStates.keys(),
+    ...state.remoteWorkspaceHydratedTargetIds
+  ])
+}
+
+function scopeInputRefs(state: AppState): ScopeInputRefs {
+  return {
+    sshTargetLabels: state.sshTargetLabels,
+    sshConnectionStates: state.sshConnectionStates,
+    remoteWorkspaceHydratedTargetIds: state.remoteWorkspaceHydratedTargetIds,
+    repos: state.repos,
+    worktreesByRepo: state.worktreesByRepo,
+    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    folderWorkspaces: state.folderWorkspaces,
+    projectGroups: state.projectGroups,
+    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
+  }
+}
+
+function scopeInputsEqual(previous: ScopeInputRefs | null, next: ScopeInputRefs): boolean {
+  return (
+    previous !== null &&
+    Object.keys(next).every(
+      (key) => previous[key as keyof ScopeInputRefs] === next[key as keyof ScopeInputRefs]
+    )
+  )
 }
 
 function targetWorktreeIds(state: AppState, targetId: string): Set<string> {
@@ -146,8 +182,7 @@ export function createDirectSshTabIntentObserver(
   const pausedTargets = new Set<string>()
   let scopeByTarget = new Map<string, Set<string>>()
   let targetByWorktree = new Map<string, string>()
-  let previousScopeInputs: DirectSshObservationScopeInputRefs | null = null
-  let previousSshConnectionStates: AppState['sshConnectionStates'] | null = null
+  let previousScopeInputs: ScopeInputRefs | null = null
   let previousTabsByWorktree: AppState['tabsByWorktree'] | null = null
   let signatureByTarget = new Map<string, string>()
   let latestState: AppState | null = null
@@ -171,9 +206,8 @@ export function createDirectSshTabIntentObserver(
     }
     options.onTargetScanned?.(targetId)
     const worktrees = observedWorktrees(state, scopeByTarget.get(targetId) ?? new Set())
-    const connected = state.sshConnectionStates.get(targetId)?.status === 'connected'
     const hydrated = state.remoteWorkspaceHydratedTargetIds.has(targetId)
-    const signature = JSON.stringify([connected, hydrated, observationSignature(worktrees)])
+    const signature = JSON.stringify([hydrated, observationSignature(worktrees)])
     if (!authoritative && signatureByTarget.get(targetId) === signature) {
       return
     }
@@ -181,7 +215,7 @@ export function createDirectSshTabIntentObserver(
     withGeneration((generation) =>
       api.observeTabState({
         ...(authoritative ? { authoritative: true } : {}),
-        connected,
+        connected: state.sshConnectionStates.get(targetId)?.status === 'connected',
         hydrated,
         rendererGeneration: generation,
         targetId,
@@ -192,25 +226,17 @@ export function createDirectSshTabIntentObserver(
 
   const observeState = (state: AppState): void => {
     latestState = state
-    const nextScopeInputs = directSshObservationScopeInputRefs(state)
-    const scopeChanged = !directSshObservationScopeInputsEqual(previousScopeInputs, nextScopeInputs)
-    const connectionStatesChanged = previousSshConnectionStates !== state.sshConnectionStates
-    if (
-      !scopeChanged &&
-      !connectionStatesChanged &&
-      previousTabsByWorktree === state.tabsByWorktree
-    ) {
+    const nextScopeInputs = scopeInputRefs(state)
+    const scopeChanged = !scopeInputsEqual(previousScopeInputs, nextScopeInputs)
+    if (!scopeChanged && previousTabsByWorktree === state.tabsByWorktree) {
       return
     }
     const previousTabs = previousTabsByWorktree
-    const previousConnections = previousSshConnectionStates
     previousScopeInputs = nextScopeInputs
-    previousSshConnectionStates = state.sshConnectionStates
     previousTabsByWorktree = state.tabsByWorktree
     const targetsToSend = new Set<string>()
     if (scopeChanged) {
-      const targetIds = configuredDirectSshTargetIds(state)
-      const previousTargetCount = scopeByTarget.size
+      const targetIds = configuredTargetIds(state)
       for (const targetId of scopeByTarget.keys()) {
         if (!targetIds.has(targetId)) {
           scopeByTarget.delete(targetId)
@@ -219,9 +245,6 @@ export function createDirectSshTabIntentObserver(
             api.forgetTabState({ rendererGeneration: generation, targetId })
           )
         }
-      }
-      if (previousTargetCount > 0 && targetIds.size === 0) {
-        withGeneration((generation) => api.forgetAllTabState({ rendererGeneration: generation }))
       }
       const ownersByWorktree = new Map<string, string[]>()
       const rawScopeByTarget = new Map<string, Set<string>>()
@@ -246,15 +269,7 @@ export function createDirectSshTabIntentObserver(
         )
       )
       targetIds.forEach((targetId) => targetsToSend.add(targetId))
-    }
-    if (connectionStatesChanged && previousConnections) {
-      directSshConnectednessTransitionTargetIds(
-        previousConnections,
-        state.sshConnectionStates,
-        scopeByTarget
-      ).forEach((targetId) => targetsToSend.add(targetId))
-    }
-    if (!scopeChanged && previousTabs) {
+    } else if (previousTabs) {
       for (const worktreeId of new Set([
         ...Object.keys(previousTabs),
         ...Object.keys(state.tabsByWorktree)
@@ -293,7 +308,6 @@ export function createDirectSshTabIntentObserver(
       targetByWorktree.clear()
       signatureByTarget.clear()
       previousScopeInputs = null
-      previousSshConnectionStates = null
       previousTabsByWorktree = null
       latestState = null
     }
