@@ -278,21 +278,19 @@ describe('SSH worktree creation with git-crypt', () => {
     expect(commands).not.toContainEqual(['branch', '-D', '--', BRANCH])
   })
 
-  it('does not remove a worktree whose post-add attempt identity changed', async () => {
+  it('preserves a same-path same-branch replacement worktree incarnation', async () => {
     mockUnlockedRepo()
     symlinkMock.mockRejectedValue(Object.assign(new Error('cannot link state'), { code: 'EIO' }))
     const git = createGitMock()
-    let identityReads = 0
     git.mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: `${join(REPO, '.git')}\n`, stderr: '' }
       }
       if (args[0] === 'rev-parse' && args[1] === '--absolute-git-dir') {
-        identityReads += 1
-        return {
-          stdout: `${WORKTREE_GIT_DIR}${identityReads === 1 ? '' : '-replacement'}\n`,
-          stderr: ''
-        }
+        return { stdout: `${WORKTREE_GIT_DIR}\n`, stderr: '' }
+      }
+      if (args[0] === 'symbolic-ref' && args[1] === '--quiet') {
+        throw Object.assign(new Error('replacement has no attempt marker'), { code: 1 })
       }
       return { stdout: '', stderr: '' }
     })

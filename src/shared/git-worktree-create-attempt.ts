@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto'
 import * as path from 'node:path'
 import type { ResolveGitOutputPath } from './git-crypt-worktree-state'
 
 export type GitWorktreeCreateAttempt = Readonly<{
   gitDir: string
   branchRef: string
+  incarnationMarker: string
 }>
 
 type GitWorktreeCreateAttemptExec = (
@@ -21,6 +23,13 @@ function normalizePath(value: string): string {
   return api === path.win32 ? normalized.toLowerCase() : normalized
 }
 
+function createIncarnationMarker(): string {
+  const encodedToken = randomUUID()
+    .replaceAll('-', '')
+    .replace(/[0-9a-f]/g, (digit) => String.fromCharCode(65 + Number.parseInt(digit, 16)))
+  return `ORCA_WORKTREE_INCARNATION_${encodedToken}`
+}
+
 export async function captureGitWorktreeCreateAttempt(
   git: GitWorktreeCreateAttemptExec,
   targetDir: string,
@@ -32,26 +41,24 @@ export async function captureGitWorktreeCreateAttempt(
   if (!gitDirOutput) {
     throw new Error(`Git did not return attempt identity for worktree "${targetDir}".`)
   }
+  const branchRef = `refs/heads/${branchName.replace(/^refs\/heads\//, '')}`
+  const incarnationMarker = createIncarnationMarker()
+  await git(['symbolic-ref', incarnationMarker, branchRef], targetDir)
   return {
     gitDir: normalizePath(resolveGitPath(targetDir, gitDirOutput)),
-    branchRef: `refs/heads/${branchName.replace(/^refs\/heads\//, '')}`
+    branchRef,
+    incarnationMarker
   }
 }
 
 export async function gitWorktreeCreateAttemptMatches(
   git: GitWorktreeCreateAttemptExec,
   targetDir: string,
-  attempt: GitWorktreeCreateAttempt,
-  resolveGitPath?: ResolveGitOutputPath
+  attempt: GitWorktreeCreateAttempt
 ): Promise<boolean> {
   try {
-    const current = await captureGitWorktreeCreateAttempt(
-      git,
-      targetDir,
-      attempt.branchRef,
-      resolveGitPath
-    )
-    return current.gitDir === attempt.gitDir && current.branchRef === attempt.branchRef
+    await git(['symbolic-ref', '--quiet', attempt.incarnationMarker], targetDir)
+    return true
   } catch {
     return false
   }

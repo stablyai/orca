@@ -962,14 +962,7 @@ async function rollbackDeferredWorktreeCreate(
     }
     const cleanupGit = (args: string[], cwd: string) =>
       gitExecFileAsync(args, gitExecOptions(cwd, cleanupOptions))
-    if (
-      !(await gitWorktreeCreateAttemptMatches(
-        cleanupGit,
-        worktreePath,
-        attempt,
-        (cwd, outputPath) => resolveGitOutputPath(cwd, outputPath, options)
-      ))
-    ) {
+    if (!(await gitWorktreeCreateAttemptMatches(cleanupGit, worktreePath, attempt))) {
       wrapped.cleanupFailed = true
       wrapped.message = `${wrapped.message} (cleanup skipped — the created worktree no longer matches this attempt)`
       throw wrapped

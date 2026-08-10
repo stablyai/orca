@@ -151,6 +151,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   })
 
   it('creates a deferred-checkout worktree on the Git 2.25 baseline', async () => {
+    const incarnationMarker = 'ORCA_WORKTREE_INCARNATION_ABCDEFGHIJKLMNOPABCDEFGHIJKLMNOP'
     await runGit([
       'worktree',
       'add',
@@ -160,6 +161,18 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       'compat-deferred-add',
       'deferred-add-wt'
     ])
+    await expect(
+      runGit([
+        '-C',
+        'deferred-add-wt',
+        'symbolic-ref',
+        incarnationMarker,
+        'refs/heads/compat-deferred-add'
+      ])
+    ).resolves.toBeDefined()
+    await expect(
+      runGit(['-C', 'deferred-add-wt', 'symbolic-ref', '--quiet', incarnationMarker])
+    ).resolves.toMatchObject({ stdout: 'refs/heads/compat-deferred-add\n' })
     await expect(runGit(['-C', 'deferred-add-wt', 'checkout'])).resolves.toBeDefined()
 
     const remaining = await runGit(['worktree', 'list', '--porcelain'])

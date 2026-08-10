@@ -64,7 +64,7 @@ function spawnCreateAttempt(
   attempt: string,
   target: string,
   branch: string
-): Promise<number | null> {
+): Promise<{ code: number | null; stderr: string }> {
   const child = spawn(process.execPath, [forkedEntry], {
     env: {
       ...process.env,
@@ -74,11 +74,16 @@ function spawnCreateAttempt(
       ORCA_FORKED_CREATE_COORDINATION: coordinationDir,
       ORCA_FORKED_CREATE_ATTEMPT: attempt
     },
-    stdio: 'ignore'
+    stdio: ['ignore', 'ignore', 'pipe']
+  })
+  let stderr = ''
+  child.stderr.setEncoding('utf8')
+  child.stderr.on('data', (chunk: string) => {
+    stderr += chunk
   })
   return new Promise((resolve, reject) => {
     child.once('error', reject)
-    child.once('exit', resolve)
+    child.once('exit', (code) => resolve({ code, stderr }))
   })
 }
 
@@ -126,7 +131,10 @@ describe('same-target worktree create race against real Git', () => {
     await releaseCapturedAttempts(coordinationDir)
     const exitCodes = await Promise.all(attempts)
 
-    expect(exitCodes.filter((code) => code === 0)).toHaveLength(1)
+    if (!exitCodes.some((result) => result.code === 0)) {
+      throw new Error(exitCodes.map((result) => result.stderr || `exit ${result.code}`).join('\n'))
+    }
+    expect(exitCodes.filter((result) => result.code === 0)).toHaveLength(1)
     expect(await pathExists(join(coordinationDir, 'overlap-observed'))).toBe(false)
     await expectWinnerPreserved(target, branch)
   })
