@@ -10,8 +10,10 @@ import {
 import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
+  buildDroidAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
+  type AskAnswerKeyGroup,
   type AskAnswerSelection,
   type AskPrompt
 } from './native-chat-interactive-prompt'
@@ -25,6 +27,22 @@ import { inferQuestionAnsweredFromCurrentStatus } from '../terminal-pane/agent-q
 // ESC is the agent-TUI interrupt/cancel key over the PTY (matches how the
 // composer forwards Escape). Used to cancel a question or deny an approval.
 const ESC = '\x1b'
+
+/** Each stepped selector has its own state machine; only the transcript agent
+ *  identifies which. Claude's builder is the default for its own format. */
+function buildSteppedAskAnswerKeys(
+  transcriptAgent: ReturnType<typeof resolveNativeChatTranscriptAgent>,
+  prompt: AskPrompt,
+  selections: AskAnswerSelection[]
+): AskAnswerKeyGroup[] {
+  if (transcriptAgent === 'codex') {
+    return buildCodexAskAnswerKeys(prompt, selections)
+  }
+  if (transcriptAgent === 'droid') {
+    return buildDroidAskAnswerKeys(prompt, selections)
+  }
+  return buildAskAnswerKeys(prompt, selections)
+}
 
 export type NativeChatInteractiveSend = {
   /** Deliver the answer to an AskUserQuestion prompt. Claude-format selectors
@@ -93,10 +111,11 @@ export function useNativeChatInteractiveSend(
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
       const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
-      // Claude and Codex ignore pasted labels but have different selector state
-      // machines; Grok commits pasted text. OpenClaude follows Claude's path.
+      // Claude, Codex, and Droid all ignore pasted labels but have different
+      // selector state machines; Grok commits pasted text. OpenClaude follows
+      // Claude's path.
       const stepsAnswer = shouldStepNativeChatAskAnswer(agent)
-      const buildsCodexAnswer = resolveNativeChatTranscriptAgent(agent) === 'codex'
+      const steppedAnswerAgent = resolveNativeChatTranscriptAgent(agent)
       // Why: pin the answered question's baseline BEFORE delivery. A late settle
       // callback (paced writes + remote acceptance can span seconds on SSH) must
       // not read the live status and mint a fresh baseline for a replacement
@@ -132,9 +151,7 @@ export function useNativeChatInteractiveSend(
         ? sendNativeChatAskAnswer(
             settings,
             targetPtyId,
-            buildsCodexAnswer
-              ? buildCodexAskAnswerKeys(prompt, selections)
-              : buildAskAnswerKeys(prompt, selections),
+            buildSteppedAskAnswerKeys(steppedAnswerAgent, prompt, selections),
             onSettled
           )
         : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))

@@ -1,4 +1,5 @@
 import { getCommitMessageAgentSpec, type CommitMessageAgentSpec } from './commit-message-agent-spec'
+import { DROID_MODEL_LIST_ARGS, parseDroidModelList } from './droid-model-list-probe'
 import { GROK_MODEL_LIST_ARGS, parseGrokModelList } from './grok-model-list-probe'
 import type { TuiAgent } from './types'
 
@@ -22,6 +23,21 @@ const MODEL_DISCOVERY_ONLY_SPECS: Partial<Record<TuiAgent, AgentModelProbeSpec>>
     // second model list here that can drift from it.
     models: [],
     defaultModelId: 'grok-4.5'
+  },
+  droid: {
+    id: 'droid',
+    label: 'Droid',
+    binary: 'droid',
+    modelSource: 'dynamic',
+    modelDiscovery: {
+      binary: 'droid',
+      args: DROID_MODEL_LIST_ARGS,
+      parse: parseDroidModelList
+    },
+    models: [],
+    // Why: the interactive CLI's model comes from account/session settings, not a
+    // flag, so no id here can be stated as the one it runs with.
+    defaultModelId: ''
   }
 }
 

@@ -15,7 +15,16 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { orderNativeChatMessages } from './native-chat-message-grouping'
 import { stripNoiseMessages } from './native-chat-noise'
 import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold'
-import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
+import type { ScrollGeometry } from './native-chat-autoscroll'
+import {
+  isAtOldestEdge,
+  isPinnedToLatest,
+  latestScrollTop,
+  orientNativeChatMessages,
+  shouldShowJumpAffordance,
+  tracksPrependAnchor,
+  type NativeChatListOrientation
+} from './native-chat-list-orientation'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
@@ -95,6 +104,57 @@ function AgentControls({
         <ArrowUp className="size-3.5" />
       </button>
     </div>
+  )
+}
+
+/** Paging control at the transcript's oldest edge (top by default, bottom when
+ *  the newest turn is rendered first). */
+function LoadEarlierRow({
+  loadingEarlier,
+  onLoadEarlier
+}: {
+  loadingEarlier: boolean
+  onLoadEarlier: () => void
+}): React.JSX.Element {
+  return (
+    <div className="flex justify-center py-1">
+      <button
+        type="button"
+        onClick={onLoadEarlier}
+        disabled={loadingEarlier}
+        className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+      >
+        {loadingEarlier
+          ? translate('components.native-chat.loadingEarlier', 'Loading…')
+          : translate('components.native-chat.loadEarlier', 'Load earlier messages')}
+      </button>
+    </div>
+  )
+}
+
+/** Re-pins the viewport to the newest turn; sits on whichever edge holds it. */
+function JumpToLatestButton({
+  newestFirst,
+  onClick
+}: {
+  newestFirst: boolean
+  onClick: () => void
+}): React.JSX.Element {
+  const label = translate('components.native-chat.jumpToLatest', 'Jump to latest')
+  const Icon = newestFirst ? ArrowUp : ArrowDown
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className={cn(
+        'absolute left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        newestFirst ? 'top-3' : 'bottom-3'
+      )}
+    >
+      <Icon className="size-3.5" />
+      <span>{label}</span>
+    </button>
   )
 }
 
@@ -240,7 +300,8 @@ export function NativeChatMessageList({
   fontScale,
   onLinkClick,
   allowFileUriLinks = false,
-  failedDeliveryMessageIds
+  failedDeliveryMessageIds,
+  orientation = 'newest-last'
 }: {
   session: NativeChatLiveSession
   isWorking: boolean
@@ -251,17 +312,20 @@ export function NativeChatMessageList({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   failedDeliveryMessageIds?: ReadonlySet<string>
+  /** Which end holds the newest turn; 'newest-first' pairs with a top composer. */
+  orientation?: NativeChatListOrientation
 }): React.JSX.Element {
+  const newestFirst = orientation === 'newest-first'
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const [stuckToBottom, setStuckToBottom] = useState(true)
+  const [pinnedToLatest, setPinnedToLatest] = useState(true)
   const [showJump, setShowJump] = useState(false)
 
-  // Why: mirror stuck state into a ref so the auto-scroll layout effect can read
-  // it without depending on it — depending on stuckToBottom (which scrollToBottom
+  // Why: mirror pinned state into a ref so the auto-scroll layout effect can read
+  // it without depending on it — depending on pinnedToLatest (which scrollToLatest
   // sets) would re-fire the effect in a self-loop.
-  const stuckToBottomRef = useRef(stuckToBottom)
-  stuckToBottomRef.current = stuckToBottom
+  const pinnedToLatestRef = useRef(pinnedToLatest)
+  pinnedToLatestRef.current = pinnedToLatest
 
   const { hasMore, loadingEarlier, loadEarlier } = session
 
@@ -273,6 +337,10 @@ export function NativeChatMessageList({
   const messages = useMemo(
     () => foldToolMessages(orderNativeChatMessages(stripNoiseMessages(session.messages))),
     [session.messages]
+  )
+  const orderedMessages = useMemo(
+    () => orientNativeChatMessages(orientation, messages),
+    [orientation, messages]
   )
   const showTypingIndicator =
     isWorking && !messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID)
@@ -288,26 +356,28 @@ export function NativeChatMessageList({
       return
     }
     const geometry = geometryOf(el)
-    const stick = isNearBottom(geometry)
-    setStuckToBottom(stick)
-    setShowJump(shouldShowJumpToLatest(stick, geometry))
-    // Near the top — page in older history, anchoring the current position so the
-    // prepend doesn't yank the view.
-    if (geometry.scrollTop < 80 && hasMore && !loadingEarlier) {
-      prependAnchorRef.current = { scrollHeight: el.scrollHeight, scrollTop: el.scrollTop }
+    const pinned = isPinnedToLatest(orientation, geometry)
+    setPinnedToLatest(pinned)
+    setShowJump(shouldShowJumpAffordance(orientation, pinned, geometry))
+    // At the oldest edge — page in older history, anchoring the current position
+    // so the prepend doesn't yank the view.
+    if (isAtOldestEdge(orientation, geometry) && hasMore && !loadingEarlier) {
+      prependAnchorRef.current = tracksPrependAnchor(orientation)
+        ? { scrollHeight: el.scrollHeight, scrollTop: el.scrollTop }
+        : null
       loadEarlier()
     }
-  }, [hasMore, loadingEarlier, loadEarlier])
+  }, [orientation, hasMore, loadingEarlier, loadEarlier])
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToLatest = useCallback(() => {
     const el = scrollRef.current
     if (!el) {
       return
     }
-    el.scrollTop = el.scrollHeight
-    setStuckToBottom(true)
+    el.scrollTop = latestScrollTop(orientation, geometryOf(el))
+    setPinnedToLatest(true)
     setShowJump(false)
-  }, [])
+  }, [orientation])
 
   // Align a single message's top to the top of the scroll viewport.
   const scrollMessageToTop = useCallback((el: HTMLElement) => {
@@ -316,16 +386,16 @@ export function NativeChatMessageList({
       return
     }
     // Detach synchronously (not just via the pending onScroll) so an in-place
-    // streaming growth can't re-pin to the bottom mid-flight and fight this
+    // streaming growth can't re-pin to the newest turn mid-flight and fight this
     // deliberate scroll. The ref is what the resize observer reads.
-    stuckToBottomRef.current = false
-    setStuckToBottom(false)
+    pinnedToLatestRef.current = false
+    setPinnedToLatest(false)
     const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top
     container.scrollTo({ top: container.scrollTop + delta, behavior: 'smooth' })
   }, [])
 
-  // Re-pin to the bottom when new content arrives, but only if the user hasn't
-  // scrolled up. Layout effect so the jump happens before paint (no flicker).
+  // Re-pin to the newest turn when content arrives, but only if the user hasn't
+  // scrolled away. Layout effect so the jump happens before paint (no flicker).
   // When an older page just prepended, restore the prior position instead.
   useLayoutEffect(() => {
     const el = scrollRef.current
@@ -337,24 +407,24 @@ export function NativeChatMessageList({
       prependAnchorRef.current = null
       return
     }
-    if (stuckToBottomRef.current) {
-      scrollToBottom()
+    if (pinnedToLatestRef.current) {
+      scrollToLatest()
     }
-  }, [messages.length, isWorking, showTypingIndicator, scrollToBottom])
+  }, [messages.length, isWorking, showTypingIndicator, scrollToLatest])
 
   // Content growing without a message-count change (a streaming assistant turn
   // extends its own message in place) never re-fires the layout effect above.
   // Observe the container so those in-place growths still re-pin: stay glued to
-  // the bottom while stuck, otherwise just refresh the jump affordance. This is
-  // what removes most "Jump to latest" clicks during a live response.
+  // the newest turn while pinned, otherwise just refresh the jump affordance.
+  // This is what removes most "Jump to latest" clicks during a live response.
   useEffect(() => {
     const el = scrollRef.current
     if (!el || typeof ResizeObserver === 'undefined') {
       return
     }
     const observer = new ResizeObserver(() => {
-      if (stuckToBottomRef.current) {
-        scrollToBottom()
+      if (pinnedToLatestRef.current) {
+        scrollToLatest()
       } else {
         handleScroll()
       }
@@ -366,14 +436,24 @@ export function NativeChatMessageList({
       observer.observe(contentRef.current)
     }
     return () => observer.disconnect()
-  }, [handleScroll, scrollToBottom])
+  }, [handleScroll, scrollToLatest])
+
+  const loadEarlierRow = hasMore ? (
+    <LoadEarlierRow loadingEarlier={loadingEarlier} onLoadEarlier={loadEarlier} />
+  ) : null
+  const typingRow = showTypingIndicator ? <TypingIndicatorRow /> : null
 
   return (
     <div className="relative min-h-0 flex-1">
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="scrollbar-sleek h-full overflow-y-auto px-3 pt-10 pb-4 sm:px-4"
+        className={cn(
+          'scrollbar-sleek h-full overflow-y-auto px-3 sm:px-4',
+          // The breathing room belongs on the oldest edge; the newest edge sits
+          // against the composer.
+          newestFirst ? 'pt-4 pb-10' : 'pt-10 pb-4'
+        )}
       >
         <div
           ref={contentRef}
@@ -385,21 +465,8 @@ export function NativeChatMessageList({
           // the desktop analog of the mobile pinch-zoom (Chromium/Electron only).
           style={{ zoom: fontScale }}
         >
-          {hasMore ? (
-            <div className="flex justify-center py-1">
-              <button
-                type="button"
-                onClick={loadEarlier}
-                disabled={loadingEarlier}
-                className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-              >
-                {loadingEarlier
-                  ? translate('components.native-chat.loadingEarlier', 'Loading…')
-                  : translate('components.native-chat.loadEarlier', 'Load earlier messages')}
-              </button>
-            </div>
-          ) : null}
-          {messages.map((message) => (
+          {newestFirst ? typingRow : loadEarlierRow}
+          {orderedMessages.map((message) => (
             <MessageRow
               key={message.id}
               message={message}
@@ -410,20 +477,10 @@ export function NativeChatMessageList({
               deliveryFailed={failedDeliveryMessageIds?.has(message.id) === true}
             />
           ))}
-          {showTypingIndicator ? <TypingIndicatorRow /> : null}
+          {newestFirst ? loadEarlierRow : typingRow}
         </div>
       </div>
-      {showJump ? (
-        <button
-          type="button"
-          onClick={scrollToBottom}
-          aria-label={translate('components.native-chat.jumpToLatest', 'Jump to latest')}
-          className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowDown className="size-3.5" />
-          <span>{translate('components.native-chat.jumpToLatest', 'Jump to latest')}</span>
-        </button>
-      ) : null}
+      {showJump ? <JumpToLatestButton newestFirst={newestFirst} onClick={scrollToLatest} /> : null}
     </div>
   )
 }

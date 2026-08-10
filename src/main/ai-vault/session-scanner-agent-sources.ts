@@ -38,8 +38,9 @@ const DEVIN_TRANSCRIPTS_DIR = join(
   process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
   'transcripts'
 )
-const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
-const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
+const FACTORY_HOME_DIR = process.env.FACTORY_HOME?.trim() || join(homedir(), '.factory')
+const DROID_SESSIONS_DIR = join(FACTORY_HOME_DIR, 'sessions')
+const DROID_PROJECTS_DIR = join(FACTORY_HOME_DIR, 'projects')
 
 /**
  * Where one agent's session files live and which of them count as sessions.

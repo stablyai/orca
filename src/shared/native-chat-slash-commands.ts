@@ -78,10 +78,55 @@ const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'subagents', description: 'Switch the active agent thread' }
 ]
 
+// Read off the command registry the shipped `droid` binary itself builds, so a
+// name here is one the TUI really dispatches. Aliases Droid registers (`/cd`,
+// `/clear`, `/favorite`) are omitted in favor of their primary name.
+const DROID_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'model', description: 'Open the model selector' },
+  { name: 'new', description: 'Start a fresh session, resetting model and autonomy' },
+  { name: 'compress', description: 'Compress the current session' },
+  { name: 'context', description: 'Show context window usage' },
+  { name: 'cost', description: 'Show token usage and cost' },
+  { name: 'copy', description: 'Copy the last response to the clipboard' },
+  { name: 'btw', description: 'Ask a side question without polluting the transcript' },
+  { name: 'review', description: 'Review the current changes' },
+  { name: 'missions', description: 'Enter, manage, and resume missions' },
+  { name: 'droids', description: 'Manage custom droids (subagents)' },
+  { name: 'skills', description: 'Manage prompt-based skills' },
+  { name: 'commands', description: 'Manage custom slash commands' },
+  { name: 'create-skill', description: 'Create a skill from this conversation' },
+  { name: 'loop', description: 'Configure or run the agent loop' },
+  { name: 'automations', description: 'Manage local scheduled automations' },
+  { name: 'sessions', description: 'List and resume previous sessions' },
+  { name: 'fork', description: 'Fork this session into a new one' },
+  { name: 'tree', description: 'Navigate the session fork tree' },
+  { name: 'rewind-conversation', description: 'Rewind to an earlier message' },
+  { name: 'rename', description: 'Rename the current session' },
+  { name: 'pin', description: 'Pin the current session' },
+  { name: 'share', description: 'Share this session with your organization' },
+  { name: 'cwd', description: 'Change the working directory' },
+  { name: 'status', description: 'Show CLI status and configuration' },
+  { name: 'stats', description: 'Show usage statistics' },
+  { name: 'limits', description: 'Show credit rate limits and usage' },
+  { name: 'settings', description: 'Configure application settings' },
+  { name: 'statusline', description: 'Configure the status line' },
+  { name: 'themes', description: 'Choose a color theme' },
+  { name: 'language', description: 'Switch the display language' },
+  { name: 'hooks', description: 'Manage tool execution hooks' },
+  { name: 'mcp', description: 'Manage MCP servers' },
+  { name: 'plugins', description: 'Manage plugins and marketplaces' },
+  { name: 'ide', description: 'Connect to an IDE extension' },
+  { name: 'diagnostics', description: 'Show settings configuration errors' },
+  { name: 'bug', description: 'Report a bug to Factory' },
+  { name: 'help', description: 'Show available slash commands' },
+  { name: 'quit', description: 'Exit the Droid CLI' }
+]
+
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: CLAUDE_COMMANDS,
-  codex: CODEX_COMMANDS
+  codex: CODEX_COMMANDS,
+  droid: DROID_COMMANDS
 }
 
 /** Known slash commands for an agent, falling back to a small common set so the
