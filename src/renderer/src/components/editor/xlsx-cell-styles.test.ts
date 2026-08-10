@@ -117,3 +117,29 @@ describe('parseXlsxCellStyles', () => {
     expect(styles.getStyle(0)).toBeUndefined()
   })
 })
+
+describe('parseXlsxCellStyles alignment', () => {
+  const ALIGNED_STYLES_XML =
+    '<styleSheet><fonts count="1"><font/></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><cellXfs count="5"><xf/><xf applyAlignment="1"><alignment horizontal="center"/></xf><xf applyAlignment="1"><alignment horizontal="right" wrapText="1"/></xf><xf applyAlignment="1"><alignment horizontal="justify"/></xf><xf applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs></styleSheet>'
+
+  it('reports the horizontal alignment the author set', () => {
+    const styles = parseXlsxCellStyles(ALIGNED_STYLES_XML, '')
+
+    expect(styles.getStyle(1)).toEqual({ horizontalAlignment: 'center' })
+    expect(styles.getStyle(2)).toEqual({ horizontalAlignment: 'right', wrapText: true })
+  })
+
+  it('ignores alignments a read-only cell cannot express', () => {
+    // Why: `justify` and `distributed` have no counterpart here, and `general`
+    // means "infer from the value", which the viewer already does.
+    expect(parseXlsxCellStyles(ALIGNED_STYLES_XML, '').getStyle(3)).toBeUndefined()
+  })
+
+  it('reports wrapText on its own', () => {
+    expect(parseXlsxCellStyles(ALIGNED_STYLES_XML, '').getStyle(4)).toEqual({ wrapText: true })
+  })
+
+  it('counts alignment as visual styling', () => {
+    expect(parseXlsxCellStyles(ALIGNED_STYLES_XML, '').hasVisualStyles).toBe(true)
+  })
+})

@@ -3,7 +3,10 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import { getSpreadsheetCellAlignmentClass } from './spreadsheet-cell-alignment'
+import {
+  SPREADSHEET_ALIGNMENT_CLASSES,
+  getSpreadsheetCellAlignmentClass
+} from './spreadsheet-cell-alignment'
 import {
   buildSpreadsheetMergeIndex,
   planSpreadsheetMergePlacement
@@ -33,6 +36,8 @@ type SpreadsheetGridProps = {
   cellStyles?: readonly (readonly (SpreadsheetCellStyle | undefined)[])[]
   /** Column widths the file declares, by index; content sizing fills the gaps. */
   declaredColumnWidths?: readonly (number | undefined)[]
+  /** Row heights the file declares, by index; the default height fills the gaps. */
+  declaredRowHeights?: readonly (number | undefined)[]
   /** Merged ranges the file declares. */
   mergedRanges?: readonly XlsxMergedRange[]
   /**
@@ -47,6 +52,8 @@ export type SpreadsheetCellStyle = {
   backgroundColor?: string
   textColor?: string
   bold?: boolean
+  horizontalAlignment?: 'left' | 'right' | 'center'
+  wrapText?: boolean
 }
 
 // Why: shared by CsvViewer and XlsxViewer — both render a read-only sheet of
@@ -69,6 +76,7 @@ export function SpreadsheetGrid({
   columnCount,
   cellStyles,
   declaredColumnWidths,
+  declaredRowHeights,
   mergedRanges,
   headerAlignment = 'left'
 }: SpreadsheetGridProps): React.JSX.Element {
@@ -105,7 +113,8 @@ export function SpreadsheetGrid({
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => rowHeightPx,
+    estimateSize: (index) =>
+      Math.round((declaredRowHeights?.[index] ?? SPREADSHEET_GRID_ROW_HEIGHT) * zoomScale),
     overscan: SPREADSHEET_GRID_OVERSCAN,
     getItemKey: (index) => index
   })
@@ -207,7 +216,7 @@ export function SpreadsheetGrid({
                   position: 'absolute',
                   top: 0,
                   left: 0,
-                  height: rowHeightPx,
+                  height: virtualRow.size,
                   width: '100%',
                   transform: `translateY(${virtualRow.start}px)`
                 }}
@@ -250,8 +259,15 @@ export function SpreadsheetGrid({
                       aria-colindex={columnIndex + 2}
                       key={virtualColumn.key}
                       className={cn(
-                        'flex items-center overflow-hidden border-b border-r border-spreadsheet-gridline px-2',
-                        getSpreadsheetCellAlignmentClass(cell),
+                        'flex overflow-hidden border-b border-r border-spreadsheet-gridline px-2',
+                        // Why: an author-set alignment is a decision; inferring
+                        // from the value is only the fallback when there is none.
+                        cellStyle?.horizontalAlignment === undefined
+                          ? getSpreadsheetCellAlignmentClass(cell)
+                          : SPREADSHEET_ALIGNMENT_CLASSES[cellStyle.horizontalAlignment],
+                        cellStyle?.wrapText === true
+                          ? 'items-start py-1 whitespace-pre-wrap break-words'
+                          : 'items-center',
                         cellStyle?.bold === true && 'font-semibold'
                       )}
                       // Why: these colours come from the opened file, not from the
@@ -270,7 +286,9 @@ export function SpreadsheetGrid({
                       }}
                       title={cell}
                     >
-                      <span className="truncate">{cell}</span>
+                      <span className={cellStyle?.wrapText === true ? 'min-w-0' : 'truncate'}>
+                        {cell}
+                      </span>
                     </div>
                   )
                 })}

@@ -28,12 +28,12 @@ export function getSpreadsheetCellAlignment(value: string): SpreadsheetCellAlign
   return 'left'
 }
 
-const ALIGNMENT_CLASSES: Record<SpreadsheetCellAlignment, string> = {
+export const SPREADSHEET_ALIGNMENT_CLASSES: Record<SpreadsheetCellAlignment, string> = {
   left: 'justify-start text-left',
   right: 'justify-end text-right',
   center: 'justify-center text-center'
 }
 
 export function getSpreadsheetCellAlignmentClass(value: string): string {
-  return ALIGNMENT_CLASSES[getSpreadsheetCellAlignment(value)]
+  return SPREADSHEET_ALIGNMENT_CLASSES[getSpreadsheetCellAlignment(value)]
 }

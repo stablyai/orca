@@ -20,6 +20,8 @@ export type XlsxSheet = {
   styles: (XlsxCellStyle | undefined)[][]
   /** Author-set column widths in pixels, by column index. */
   columnWidths: (number | undefined)[]
+  /** Author-set row heights in pixels, by row index. */
+  rowHeights: (number | undefined)[]
   mergedRanges: XlsxMergedRange[]
   maxColumns: number
   truncated: boolean

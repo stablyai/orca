@@ -211,6 +211,18 @@ describe('parseXlsxWorksheetGrid', () => {
     expect(grid.rows).toEqual([['not-a-serial']])
   })
 
+  it('reads an author-set row height and ignores a recorded default', () => {
+    // Why: Excel writes `ht` on every row of some files just to record the
+    // default; only customHeight marks the author's own choice.
+    const xml =
+      '<row r="1" ht="45" customHeight="1"><c r="A1"><v>1</v></c></row><row r="2" ht="15"><c r="A2"><v>2</v></c></row>'
+
+    const grid = parseXlsxWorksheetGrid(xml, context())
+
+    expect(grid.rowHeights[0]).toBe(60)
+    expect(grid.rowHeights[1]).toBeUndefined()
+  })
+
   it('applies a number format to a styled numeric cell', () => {
     // Why: a currency cell showing 1000 where the file says 1,000 € is the most
     // visible way a viewer can misrepresent a sheet.
@@ -311,18 +323,10 @@ describe('parseXlsxWorksheetGrid', () => {
   })
 
   it('returns an empty grid for a missing or empty sheet part', () => {
-    expect(parseXlsxWorksheetGrid('', context())).toEqual({
-      rows: [],
-      styles: [],
-      maxColumns: 0,
-      truncated: false
-    })
-    expect(parseXlsxWorksheetGrid('<worksheet><sheetData/></worksheet>', context())).toEqual({
-      rows: [],
-      styles: [],
-      maxColumns: 0,
-      truncated: false
-    })
+    const empty = { rows: [], styles: [], rowHeights: [], maxColumns: 0, truncated: false }
+
+    expect(parseXlsxWorksheetGrid('', context())).toEqual(empty)
+    expect(parseXlsxWorksheetGrid('<worksheet><sheetData/></worksheet>', context())).toEqual(empty)
   })
 
   it('does not mistake <cols> metadata for cell data', () => {

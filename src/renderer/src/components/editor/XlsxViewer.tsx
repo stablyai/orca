@@ -100,6 +100,7 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
           columnCount={activeSheet.maxColumns}
           cellStyles={activeSheet.styles}
           declaredColumnWidths={activeSheet.columnWidths}
+          declaredRowHeights={activeSheet.rowHeights}
           mergedRanges={activeSheet.mergedRanges}
           headerAlignment="center"
         />

@@ -9,6 +9,9 @@ export type XlsxCellStyle = {
   backgroundColor?: string
   textColor?: string
   bold?: boolean
+  /** Horizontal alignment the author set, which wins over inferring it. */
+  horizontalAlignment?: 'left' | 'right' | 'center'
+  wrapText?: boolean
 }
 
 export type XlsxCellStyles = {
@@ -58,6 +61,13 @@ export function parseXlsxCellStyles(stylesXml: string, themeXml: string): XlsxCe
     if (font?.bold === true) {
       style.bold = true
     }
+    const horizontalAlignment = normalizeHorizontalAlignment(cellFormat.horizontalAlignment)
+    if (horizontalAlignment !== undefined) {
+      style.horizontalAlignment = horizontalAlignment
+    }
+    if (cellFormat.wrapText === true) {
+      style.wrapText = true
+    }
     return Object.keys(style).length === 0 ? undefined : style
   }
 
@@ -75,6 +85,21 @@ export function parseXlsxCellStyles(stylesXml: string, themeXml: string): XlsxCe
       return styleCache.get(styleIndex)
     }
   }
+}
+
+// Why: `justify` and `distributed` have no counterpart in a read-only cell, and
+// `general` means "infer from the value", which is what the viewer already does.
+const HORIZONTAL_ALIGNMENTS: Record<string, 'left' | 'right' | 'center'> = {
+  left: 'left',
+  right: 'right',
+  center: 'center',
+  centerContinuous: 'center'
+}
+
+function normalizeHorizontalAlignment(
+  horizontal: string | undefined
+): 'left' | 'right' | 'center' | undefined {
+  return horizontal === undefined ? undefined : HORIZONTAL_ALIGNMENTS[horizontal]
 }
 
 /** Fill colour per `<fills>` index, or undefined for an unfilled entry. */

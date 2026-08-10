@@ -16,6 +16,8 @@ export type XlsxWorksheetGrid = {
    * declares no fills, font colours or bold, so an unstyled sheet costs nothing.
    */
   styles: (XlsxCellStyle | undefined)[][]
+  /** Author-set row heights in pixels, by row index. */
+  rowHeights: (number | undefined)[]
   maxColumns: number
   /** True when the sheet has more rows than `maxRows` allowed through. */
   truncated: boolean
@@ -48,6 +50,7 @@ export function parseXlsxWorksheetGrid(
 ): XlsxWorksheetGrid {
   const rows: string[][] = []
   const styles: (XlsxCellStyle | undefined)[][] = []
+  const rowHeights: (number | undefined)[] = []
   const collectStyles = context.cellStyles.hasVisualStyles
   let maxColumns = 0
   let truncated = false
@@ -77,6 +80,10 @@ export function parseXlsxWorksheetGrid(
     if (collectStyles) {
       styles[rowIndex] = row.styles
     }
+    const rowHeightPx = readRowHeight(rowElement.attributes)
+    if (rowHeightPx !== undefined) {
+      rowHeights[rowIndex] = rowHeightPx
+    }
     if (rows[rowIndex]!.length > maxColumns) {
       maxColumns = rows[rowIndex]!.length
     }
@@ -86,6 +93,7 @@ export function parseXlsxWorksheetGrid(
   return {
     rows: padRows(rows, maxColumns),
     styles: collectStyles ? padStyleRows(styles, rows.length) : [],
+    rowHeights,
     maxColumns,
     truncated
   }
@@ -117,6 +125,26 @@ function readRowCells(
   })
 
   return { cells, styles }
+}
+
+// Why: `ht` is in points, the unit Excel's row-height dialog shows, and CSS
+// wants pixels — 96dpi over 72pt. Only a customHeight is the author's choice;
+// Excel writes `ht` on every row of some files just to record the default.
+const POINTS_TO_PIXELS = 96 / 72
+const MIN_ROW_HEIGHT_PX = 12
+const MAX_ROW_HEIGHT_PX = 400
+
+function readRowHeight(attributes: Record<string, string>): number | undefined {
+  if (attributes.customHeight !== '1' && attributes.customHeight !== 'true') {
+    return undefined
+  }
+  const points = Number.parseFloat(attributes.ht ?? '')
+  if (!Number.isFinite(points)) {
+    return undefined
+  }
+  return Math.round(
+    Math.min(MAX_ROW_HEIGHT_PX, Math.max(MIN_ROW_HEIGHT_PX, points * POINTS_TO_PIXELS))
+  )
 }
 
 function readStyleIndex(styleIndexAttribute: string | undefined): number | undefined {

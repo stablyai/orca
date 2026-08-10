@@ -11,6 +11,9 @@ export type XlsxCellFormat = {
   numberFormatId: number
   fontId: number
   fillId: number
+  /** `horizontal` from `<alignment>`, when the author set one. */
+  horizontalAlignment?: string
+  wrapText?: boolean
 }
 
 const GENERAL_NUMBER_FORMAT_ID = 0
@@ -27,13 +30,30 @@ export function parseXlsxCellFormats(stylesXml: string): XlsxCellFormat[] {
       cellFormats.push({
         numberFormatId: readIdAttribute(cellFormat.attributes.numFmtId, GENERAL_NUMBER_FORMAT_ID),
         fontId: readIdAttribute(cellFormat.attributes.fontId, DEFAULT_FONT_ID),
-        fillId: readIdAttribute(cellFormat.attributes.fillId, DEFAULT_FILL_ID)
+        fillId: readIdAttribute(cellFormat.attributes.fillId, DEFAULT_FILL_ID),
+        ...readAlignment(cellFormat.inner)
       })
     })
     return false
   })
 
   return cellFormats
+}
+
+function readAlignment(
+  cellFormatXml: string
+): Pick<XlsxCellFormat, 'horizontalAlignment' | 'wrapText'> {
+  const alignment: Pick<XlsxCellFormat, 'horizontalAlignment' | 'wrapText'> = {}
+  forEachXlsxXmlElement(cellFormatXml, 'alignment', (element) => {
+    if (element.attributes.horizontal !== undefined) {
+      alignment.horizontalAlignment = element.attributes.horizontal
+    }
+    if (element.attributes.wrapText === '1' || element.attributes.wrapText === 'true') {
+      alignment.wrapText = true
+    }
+    return false
+  })
+  return alignment
 }
 
 function readIdAttribute(value: string | undefined, fallback: number): number {
