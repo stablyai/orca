@@ -712,6 +712,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
     const codexHomeWslInfo = env.CODEX_HOME ? parseWslPath(env.CODEX_HOME) : null
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
+      addWslEnvKeys(env, ['ORCA_IMAGE_PROTOCOL'])
       if (codexHomeWslInfo) {
         const launchWslDistro = resolvedWslContext?.distro
         if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {

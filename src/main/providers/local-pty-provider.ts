@@ -724,6 +724,7 @@ export class LocalPtyProvider implements IPtyProvider {
     if (process.platform === 'win32') {
       const codexHomeWslInfo = finalEnv.CODEX_HOME ? parseWslPath(finalEnv.CODEX_HOME) : null
       if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
+        addWslEnvKeys(finalEnv, ['ORCA_IMAGE_PROTOCOL'])
         if (codexHomeWslInfo) {
           if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
             delete finalEnv.CODEX_HOME

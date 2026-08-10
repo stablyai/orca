@@ -1079,9 +1079,11 @@ describe('LocalPtyProvider', () => {
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[0]).toBe('wsl.exe')
+      expect(spawnCall[2].env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
       expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
       expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
         expect.arrayContaining([
+          'ORCA_IMAGE_PROTOCOL',
           'ORCA_TERMINAL_HANDLE/u',
           'ORCA_HERMES_STARTUP_QUERY',
           POWERLEVEL10K_WIZARD_DISABLE_ENV
