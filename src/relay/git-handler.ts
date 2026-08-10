@@ -403,6 +403,7 @@ export class GitHandler {
     context: RelayRemoteGitContext
   ): Promise<{ stdout: string; stderr: string }> {
     return runRelayGitRemoteCommand(args, {
+      cleanupDeadlineMs: context.deadline.expiresAtMs,
       cwd: expandTilde(cwd),
       env: buildRelayUnattendedGitEnv(),
       maxBuffer: MAX_GIT_BUFFER,

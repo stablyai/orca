@@ -18,6 +18,7 @@ export function gitOptionsForWorktree(
   signal?: AbortSignal
   timeout?: number
   killProcessTree?: true
+  processTreeCleanupDeadlineMs?: number
 } {
   return {
     cwd,
@@ -26,7 +27,8 @@ export function gitOptionsForWorktree(
     ...(options.remoteOperationDeadline
       ? {
           timeout: gitRemoteOperationExecutionTimeoutMs(options.remoteOperationDeadline),
-          killProcessTree: true as const
+          killProcessTree: true as const,
+          processTreeCleanupDeadlineMs: options.remoteOperationDeadline.expiresAtMs
         }
       : {})
   }
