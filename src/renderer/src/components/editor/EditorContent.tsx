@@ -19,6 +19,7 @@ import { getMarkdownRenderMode } from './markdown-render-mode'
 import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
 import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
+import { MarkdownFrontMatterView } from './MarkdownFrontMatterView'
 import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
 import {
@@ -972,12 +973,6 @@ export function EditorContent({
 
 // Why: no collapsible state — layout shifts would interfere with ProseMirror's scroll management.
 function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
-  // Strip the opening/closing delimiters to show only the YAML/TOML content.
-  const inner = raw
-    .replace(/^(?:---|\+\+\+)\r?\n/, '')
-    .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
-    .trim()
-
   return (
     <div className="border-b border-border/60 bg-muted/40 px-3 py-2">
       <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -986,9 +981,7 @@ function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
           {translate('auto.components.editor.EditorContent.56dba34e1a', '(edit in source mode)')}
         </span>
       </div>
-      <pre className="max-h-32 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">
-        {inner}
-      </pre>
+      <MarkdownFrontMatterView raw={raw} />
     </div>
   )
 }

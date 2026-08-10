@@ -542,6 +542,13 @@
   letter-spacing: -0.02em;
 }
 
+/* Underline h1/h2 to break sections up, matching GitHub's rendered markdown. */
+.rich-markdown-editor h1,
+.rich-markdown-editor h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+
 .rich-markdown-editor h2 {
   font-size: 1.4em;
 }
@@ -758,6 +765,15 @@
   font-weight: 700;
   letter-spacing: 0;
   line-height: 1.3;
+}
+
+/* Match the plain h1/h2 section underline on collapsible heading toggles. */
+.rich-markdown-editor details.orca-details[data-orca-toggle='heading-1'] > summary,
+.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-1'] summary,
+.rich-markdown-editor details.orca-details[data-orca-toggle='heading-2'] > summary,
+.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-2'] summary {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
 }
 
 .rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-1'] > button {
