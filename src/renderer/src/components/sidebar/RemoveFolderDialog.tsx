@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
 // Why: interpolated into the sentence so locales control where the name sits;
@@ -25,7 +26,9 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const isOpen = activeModal === 'confirm-remove-folder'
   const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
   const displayName = typeof modalData.displayName === 'string' ? modalData.displayName : ''
-  const hostId = typeof modalData.hostId === 'string' ? modalData.hostId : undefined
+  const hostId = normalizeExecutionHostId(
+    typeof modalData.hostId === 'string' ? modalData.hostId : null
+  )
 
   // Why: for an SSH project the files live on the remote host's disk, not the
   // user's — "still on your disk" would be misleading. Name the host (using the
@@ -62,10 +65,11 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const [descriptionBeforeName, descriptionAfterName] = description.split(NAME_TOKEN)
 
   const handleConfirm = useCallback(() => {
-    if (repoId) {
+    // Why: refuse bare remove when host is unknown — multi-host twins must not guess (#13071).
+    if (repoId && hostId) {
       void removeProject(repoId, {
         errorFeedback: 'toast',
-        ...(hostId ? { hostId: hostId as never } : {})
+        hostId
       })
     }
     closeModal()

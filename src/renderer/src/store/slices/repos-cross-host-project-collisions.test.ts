@@ -197,13 +197,45 @@ describe('deleting one host copy of a same-named project', () => {
     expect(remainingRepoIds(store)).toEqual(['env-b-uuid'])
   })
 
-  it('refuses unique-id fallback when hostId is omitted and focus is on another host', async () => {
+  it('allows unique-id bare remove even when focus is on another host', async () => {
+    // Why: env-a-uuid is unique across hosts; focus on B must not block a unambiguous remove.
+    // Same-id multi-host still requires hostId (covered above).
     const store = seed([remoteATwin, remoteBTwin], 'env-b')
 
     await store.getState().removeProject('env-a-uuid')
 
-    expect(repoRmCalls()).toEqual([])
-    expect(remainingRepoIds(store)).toEqual(['env-a-uuid', 'env-b-uuid'])
+    expect(repoRmCalls()).toEqual([
+      expect.objectContaining({
+        selector: 'env-a',
+        params: { repo: 'env-a-uuid' }
+      })
+    ])
+    expect(remainingRepoIds(store)).toEqual(['env-b-uuid'])
+  })
+
+  it('picks the focused host when the same id exists on multiple hosts without hostId', async () => {
+    // Why: bare multi-host id must not guess a non-focused twin; focused unique match is allowed.
+    const store = seed(
+      [
+        remoteATwin,
+        {
+          ...remoteBTwin,
+          id: 'env-a-uuid'
+        }
+      ],
+      'env-b'
+    )
+
+    await store.getState().removeProject('env-a-uuid')
+
+    expect(repoRmCalls()).toEqual([
+      expect.objectContaining({
+        selector: 'env-b',
+        params: { repo: 'env-a-uuid' }
+      })
+    ])
+    // Only the non-focused env-a twin remains.
+    expect(store.getState().repos.map((entry) => entry.executionHostId)).toEqual(['runtime:env-a'])
   })
 
   it('keeps remote B when remote A reports the project already gone', async () => {

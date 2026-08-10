@@ -1,11 +1,11 @@
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getWorktreeMapFromState } from '@/store/selectors'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   showNoDeletableWorkspacesToast,
   showWorkspaceListChangedToast
 } from './stale-workspace-list-toast'
 import { resolveRepoForWorktreeTarget } from './worktree-delete-repo-resolve'
+import { openMainWorktreeProjectRemove } from './worktree-delete-main-project-remove'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
@@ -45,15 +45,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     return
   }
   if (target.isMainWorktree) {
-    const repo = resolveRepoForWorktreeTarget(state.repos, target)
-    const hostId = target.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
-    // Why: git refuses to delete the primary checkout; users can still remove the owning project from Orca (disk contents kept).
-    state.openModal('confirm-remove-folder', {
-      repoId: target.repoId,
-      displayName: repo?.displayName ?? target.displayName,
-      // Why: pin host so confirm-remove cannot fall through to a twin on another host (#13071).
-      ...(hostId ? { hostId } : {})
-    })
+    openMainWorktreeProjectRemove(target)
     return
   }
   state.clearWorktreeDeleteState(worktreeId)

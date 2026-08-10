@@ -79,7 +79,6 @@ import { notifyInstalledAgentSkillsChanged } from '@/hooks/installed-agent-skill
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
-  getSettingsFocusedExecutionHostId,
   isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -2887,10 +2886,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     const removedProjectIds: string[] = []
     const failedProjectRemovals: ProjectRemovalFailure[] = []
     for (const projectId of targets.projectIds) {
-      const existedBeforeRemoval = get().repos.some((repo) => repo.id === projectId)
+      const hostCopies = get().repos.filter((repo) => repo.id === projectId)
       try {
-        if (existedBeforeRemoval) {
-          await get().removeProject(projectId)
+        for (const repo of hostCopies) {
+          // Why: group delete must clear every host twin, not only the focused one (#13536).
+          await get().removeProject(projectId, { hostId: getRepoExecutionHostId(repo) })
         }
       } catch (err) {
         console.error('Failed to remove contained project:', err)
@@ -3380,21 +3380,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   removeProject: async (projectId, options) => {
     try {
-      // Why: removals must not use unique-id-any-host fallback — a vanished twin leaves
-      // one survivor that would be destroyed if the user meant the other host (#13071).
-      const ownerRepo = options?.hostId
-        ? findRepoForHost(get().repos, projectId, { hostId: options.hostId })
-        : (() => {
-            const matching = get().repos.filter((repo) => repo.id === projectId)
-            if (matching.length === 0) {
-              return null
-            }
-            const focusedHostId = getSettingsFocusedExecutionHostId(get().settings)
-            const focusedMatches = matching.filter(
-              (repo) => getRepoExecutionHostId(repo) === focusedHostId
-            )
-            return focusedMatches.length === 1 ? focusedMatches[0] : null
-          })()
+      // Why: hostId pins multi-host twins (#13071). Bare id still allows a unique
+      // any-host match (SSH under local focus); only ambiguous ids require hostId.
+      const ownerRepo = findRepoForHost(get().repos, projectId, {
+        hostId: options?.hostId,
+        settings: get().settings
+      })
       if (!ownerRepo) {
         return
       }
