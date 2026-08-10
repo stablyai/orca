@@ -17,8 +17,11 @@ function directSshTabProcessInputRefsEqual(
   previous: DirectSshTabProcessInputRefs | null,
   next: DirectSshTabProcessInputRefs
 ): boolean {
+  if (!previous) {
+    return false
+  }
   return (
-    previous?.lastKnownRelayPtyIdByTabId === next.lastKnownRelayPtyIdByTabId &&
+    previous.lastKnownRelayPtyIdByTabId === next.lastKnownRelayPtyIdByTabId &&
     previous.ptyIdsByTabId === next.ptyIdsByTabId &&
     previous.terminalLayoutsByTabId === next.terminalLayoutsByTabId
   )

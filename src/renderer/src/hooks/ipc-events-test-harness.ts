@@ -78,9 +78,15 @@ export function createHarnessStoreState(
     enqueueSshCredentialRequest: vi.fn(),
     removeSshCredentialRequest: vi.fn(),
     ptyIdsByTabId: {},
+    lastKnownRelayPtyIdByTabId: {},
     terminalLayoutsByTabId: {},
     folderWorkspaces: [],
     projectGroups: [],
+    detectedWorktreesByRepo: {},
+    restoredRuntimeHostIdByWorkspaceSessionKey: {},
+    remoteWorkspaceHydratedTargetIds: new Set(),
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
     repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }],
     worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
     openFiles: [],
@@ -258,7 +264,10 @@ export async function loadIpcEventsHarness(
         mobile: createApiNamespaceStub({
           consumePendingUnpairedDeviceAuthFailure: () => Promise.resolve(false)
         }),
-        remoteWorkspace: createApiNamespaceStub({ clientId: () => Promise.resolve(null) })
+        remoteWorkspace: createApiNamespaceStub({
+          clientId: () => Promise.resolve(null),
+          startTabStateObservation: () => Promise.resolve(1)
+        })
       } as Record<string, unknown>,
       { get: (target, prop: string) => target[prop] ?? createApiNamespaceStub() }
     )
