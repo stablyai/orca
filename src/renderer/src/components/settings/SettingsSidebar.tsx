@@ -116,7 +116,11 @@ function SettingsSetupGuideNavRow({
         done={progress.doneCount}
         total={progress.total}
         sizeClassName="size-4"
-        tooltipLabel={`${progress.doneCount}/${progress.total} complete`}
+        tooltipLabel={translate(
+          'auto.components.settings.SettingsSidebar.progressComplete',
+          '{{value0}}/{{value1}} complete',
+          { value0: progress.doneCount, value1: progress.total }
+        )}
       />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[13px] font-medium leading-4">

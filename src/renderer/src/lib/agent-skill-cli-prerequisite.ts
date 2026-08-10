@@ -1,14 +1,37 @@
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../shared/cli-install-types'
 import { translate } from '@/i18n/i18n'
+import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
 
 type EnsureOrcaCliAvailableOptions = {
   onStatusChange?: (status: CliInstallStatus) => void
   registrationPromptDelayMs?: number
 }
 
+export function getAgentSkillCliPrerequisiteNotice(): string {
+  return translate(
+    'auto.lib.agent.skill.cli.prerequisite.notice',
+    'Before opening setup, Orca may show a system prompt to register the Orca CLI command on PATH.'
+  )
+}
+
+/** @deprecated Prefer getAgentSkillCliPrerequisiteNotice() so locale switches apply. */
 export const AGENT_SKILL_CLI_PREREQUISITE_NOTICE =
   'Before opening setup, Orca may show a system prompt to register the Orca CLI command on PATH.'
+
+export function getCliPrerequisiteRegistrationToast(): string {
+  return translate(
+    'auto.lib.agent.skill.cli.prerequisite.registrationToast',
+    'Orca needs to register its CLI on PATH.'
+  )
+}
+
+export function getCliPrerequisiteRegistrationToastDescription(): string {
+  return translate(
+    'auto.lib.agent.skill.cli.prerequisite.registrationToastDescription',
+    'Approve the system prompt so skill setup can use the Orca CLI command.'
+  )
+}
 
 export const CLI_PREREQUISITE_REGISTRATION_TOAST = 'Orca needs to register its CLI on PATH.'
 export const CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION =
@@ -61,8 +84,8 @@ export async function ensureOrcaCliAvailableForAgentSkillTerminal({
 }
 
 export async function showOrcaCliRegistrationPromptToast(delayMs = 700): Promise<void> {
-  toast.message(CLI_PREREQUISITE_REGISTRATION_TOAST, {
-    description: CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION
+  toast.message(getCliPrerequisiteRegistrationToast(), {
+    description: getCliPrerequisiteRegistrationToastDescription()
   })
   await delay(delayMs)
 }
@@ -83,7 +106,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
       ),
       {
         description:
-          status.detail ??
+          formatCliUserFacingDetail(status.detail) ||
           translate(
             'auto.lib.agent.skill.cli.prerequisite.15cbedc3e3',
             'Install the Orca CLI before running agent skill setup.'
@@ -101,7 +124,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
       ),
       {
         description:
-          status.detail ??
+          formatCliUserFacingDetail(status.detail) ||
           translate(
             'auto.lib.agent.skill.cli.prerequisite.15cbedc3e3',
             'Install the Orca CLI before running agent skill setup.'
@@ -119,7 +142,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
       ),
       {
         description:
-          status.detail ??
+          formatCliUserFacingDetail(status.detail) ||
           translate(
             'auto.lib.agent.skill.cli.prerequisite.refreshCliRegistration',
             'Refresh CLI registration status and try again.'
@@ -139,7 +162,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
       ),
       {
         description:
-          status.detail ??
+          formatCliUserFacingDetail(status.detail) ||
           translate(
             'auto.lib.agent.skill.cli.prerequisite.0f116999f1',
             'Restart your shell or add the Orca CLI directory to PATH before setup.'

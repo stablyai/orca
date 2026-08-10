@@ -68,7 +68,12 @@ export function AgentCapabilitiesSetupAction(props: {
     if (setupBusyLabel !== null || featureSetupCommand !== null) {
       return
     }
-    setSetupBusyLabel('Setting up capabilities...')
+    setSetupBusyLabel(
+      translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.settingUp',
+        'Setting up capabilities...'
+      )
+    )
     try {
       const result = await runOnboardingFeatureSetup(featureSetup, undefined, activeSkillRuntime)
       if (featureSetup.browserUse) {
@@ -275,7 +280,19 @@ function AgentCapabilitySetupChecklist(props: {
               type="button"
               role="checkbox"
               aria-checked={selected}
-              aria-label={`${selected ? 'Disable' : 'Enable'} ${row.title}`}
+              aria-label={
+                selected
+                  ? translate(
+                      'auto.components.feature.wall.AgentCapabilitiesSetupAction.disableNamed',
+                      'Disable {{value0}}',
+                      { value0: row.title }
+                    )
+                  : translate(
+                      'auto.components.feature.wall.AgentCapabilitiesSetupAction.enableNamed',
+                      'Enable {{value0}}',
+                      { value0: row.title }
+                    )
+              }
               className={cn(
                 'flex min-h-24 flex-col rounded-lg border px-4 py-3 text-left transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',

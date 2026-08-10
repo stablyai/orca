@@ -9,7 +9,7 @@ import {
   ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  getAgentSkillCliPrerequisiteNotice,
   ensureOrcaCliAvailableForAgentSkillTerminal,
   isOrcaCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
@@ -35,6 +35,8 @@ import {
 import { WslCliRegistration } from './WslCliRegistration'
 import { useLocalCliSkillFreshnessName } from './use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
+import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
+import { getCliInstallDescription, getCliRevealLabel } from './cli-section-copy'
 
 type CliSectionProps = {
   currentPlatform: string
@@ -42,29 +44,6 @@ type CliSectionProps = {
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslCapabilitiesLoading?: boolean
-}
-
-function getRevealLabel(platform: string): string {
-  if (platform === 'darwin') {
-    return 'Show in Finder'
-  }
-  if (platform === 'win32') {
-    return 'Show in Explorer'
-  }
-  return 'Show in File Manager'
-}
-
-function getInstallDescription(platform: string): string {
-  if (platform === 'darwin') {
-    return 'Register `orca` in /usr/local/bin.'
-  }
-  if (platform === 'linux') {
-    return 'Register `orca-ide` in ~/.local/bin.'
-  }
-  if (platform === 'win32') {
-    return 'Register `orca` in your user PATH.'
-  }
-  return 'CLI registration is not yet available on this platform.'
 }
 
 function getFallbackCommandName(platform: string): string {
@@ -162,7 +141,7 @@ export function CliSection({
   const isEnabled = status?.state === 'installed' && !pathStatusUnknown
   const isSupported = status?.supported ?? false
   const isBrowserManaged = status?.unsupportedReason === 'launch_mode_unavailable'
-  const revealLabel = getRevealLabel(currentPlatform)
+  const revealLabel = getCliRevealLabel(currentPlatform)
   const commandName = status?.commandName ?? getFallbackCommandName(currentPlatform)
   const canRevealCommandPath =
     status?.commandPath != null && ['installed', 'stale', 'conflict'].includes(status.state)
@@ -263,7 +242,8 @@ export function CliSection({
                     'auto.components.settings.CliSection.d363e5929b',
                     'Checking CLI registration…'
                   )
-                : (status?.detail ?? getInstallDescription(currentPlatform))}
+                : formatCliUserFacingDetail(status?.detail) ||
+                  getCliInstallDescription(currentPlatform)}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -333,7 +313,9 @@ export function CliSection({
         ) : null}
 
         {!loading && !isSupported && !isBrowserManaged && status?.detail ? (
-          <p className="text-xs text-muted-foreground">{status.detail}</p>
+          <p className="text-xs text-muted-foreground">
+            {formatCliUserFacingDetail(status.detail)}
+          </p>
         ) : null}
 
         <div className="flex items-center gap-2">
@@ -382,7 +364,7 @@ export function CliSection({
               installed={cliSkillDetected}
               loading={cliSkillLoading}
               error={cliSkillError}
-              preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+              preInstallNotice={getAgentSkillCliPrerequisiteNotice()}
               getPrerequisiteStatus={getCliSkillPrerequisiteStatus}
               isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
               onBeforeOpenTerminal={async () => {

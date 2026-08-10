@@ -242,14 +242,26 @@ export default function Landing(): React.JSX.Element {
   const previousWorktreeShortcut = useShortcutKeyDetails('worktree.navigateUp')
   const nextWorktreeShortcut = useShortcutKeyDetails('worktree.navigateDown')
   const shortcuts = useMemo<ShortcutItem[]>(() => {
+    const createAction =
+      createTargetLabel === 'Worktree'
+        ? translate('auto.components.Landing.createWorktreeAction', 'Create worktree')
+        : translate('auto.components.Landing.createWorkspaceAction', 'Create workspace')
     return [
       {
         id: 'create',
         shortcut: createWorktreeShortcut,
-        action: `Create ${createTargetLabel.toLowerCase()}`
+        action: createAction
       },
-      { id: 'up', shortcut: previousWorktreeShortcut, action: 'Move up workspace' },
-      { id: 'down', shortcut: nextWorktreeShortcut, action: 'Move down workspace' }
+      {
+        id: 'up',
+        shortcut: previousWorktreeShortcut,
+        action: translate('auto.components.Landing.moveUpWorkspace', 'Move up workspace')
+      },
+      {
+        id: 'down',
+        shortcut: nextWorktreeShortcut,
+        action: translate('auto.components.Landing.moveDownWorkspace', 'Move down workspace')
+      }
     ]
   }, [createTargetLabel, createWorktreeShortcut, nextWorktreeShortcut, previousWorktreeShortcut])
 
@@ -302,8 +314,9 @@ export default function Landing(): React.JSX.Element {
               onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
             >
               <GitBranchPlus className="size-3.5" />
-              {translate('auto.components.Landing.76a95f7f47', 'Create')}{' '}
-              {createTargetLabel.toLowerCase()}
+              {createTargetLabel === 'Worktree'
+                ? translate('auto.components.Landing.createWorktreeAction', 'Create worktree')
+                : translate('auto.components.Landing.createWorkspaceAction', 'Create workspace')}
             </button>
           </div>
 

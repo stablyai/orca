@@ -13,7 +13,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  getAgentSkillCliPrerequisiteNotice,
   isOrcaCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
 import { translate } from '@/i18n/i18n'
@@ -147,7 +147,7 @@ export function LinearAgentSkillSetupDialog({
               // Why: Install is this modal's sole CTA, so make it the filled primary —
               // matching the other setup surfaces (filled primary + muted dismiss).
               installVariant="default"
-              preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+              preInstallNotice={getAgentSkillCliPrerequisiteNotice()}
               getPrerequisiteStatus={getPrerequisiteStatus}
               isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
               onBeforeOpenTerminal={onBeforeOpenTerminal}

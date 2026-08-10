@@ -7,6 +7,7 @@ import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types
 import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-repo-telemetry'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { formatSshUserFacingError } from '@/components/settings/ssh-user-facing-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -131,7 +132,7 @@ export function useRemoteRepo(
     } catch (err) {
       toast.error(
         err instanceof Error
-          ? err.message
+          ? formatSshUserFacingError(err.message)
           : translate('auto.components.sidebar.AddRepoSteps.3e64e8a70d', 'Connection failed')
       )
     }

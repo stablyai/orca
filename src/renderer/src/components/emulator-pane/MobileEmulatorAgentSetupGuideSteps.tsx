@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  getAgentSkillCliPrerequisiteNotice,
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import { AgentSkillSetupPanel } from '../settings/AgentSkillSetupPanel'
@@ -18,6 +18,7 @@ import {
 } from './mobile-emulator-agent-setup-cli-state'
 import type { useMobileEmulatorAgentSetupState } from './use-mobile-emulator-agent-setup-state'
 import { translate } from '@/i18n/i18n'
+import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
 
 type MobileEmulatorAgentSetupGuideStepsProps = {
   setup: ReturnType<typeof useMobileEmulatorAgentSetupState>
@@ -76,7 +77,7 @@ export function MobileEmulatorAgentSetupGuideSteps({
           ) : null}
           {setup.cliPathNeedsAttention && setup.cliInstallStatus?.detail ? (
             <p className="text-[11px] text-amber-600 dark:text-amber-400">
-              {setup.cliInstallStatus.detail}
+              {formatCliUserFacingDetail(setup.cliInstallStatus.detail)}
             </p>
           ) : null}
           {setup.cliBusy ? (
@@ -97,7 +98,9 @@ export function MobileEmulatorAgentSetupGuideSteps({
             </p>
           ) : null}
           {!setup.cliEnabled && !setup.cliPathNeedsAttention && setup.cliInstallStatus?.detail ? (
-            <p className="text-[11px] text-muted-foreground">{setup.cliInstallStatus.detail}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {formatCliUserFacingDetail(setup.cliInstallStatus.detail)}
+            </p>
           ) : null}
         </div>
         <TooltipProvider delayDuration={250}>
@@ -125,7 +128,7 @@ export function MobileEmulatorAgentSetupGuideSteps({
             </TooltipTrigger>
             {!setup.cliSupported && !setup.cliLoading && setup.cliInstallStatus?.detail ? (
               <TooltipContent side="left" sideOffset={6}>
-                {setup.cliInstallStatus.detail}
+                {formatCliUserFacingDetail(setup.cliInstallStatus.detail)}
               </TooltipContent>
             ) : null}
           </Tooltip>
@@ -173,7 +176,7 @@ export function MobileEmulatorAgentSetupGuideSteps({
             showInstallWhenInstalled={!setup.cliSkillInstalled}
             terminalHeightPx={112}
             preInstallNotice={
-              showSkillPreInstallNotice ? AGENT_SKILL_CLI_PREREQUISITE_NOTICE : undefined
+              showSkillPreInstallNotice ? getAgentSkillCliPrerequisiteNotice() : undefined
             }
             openingHint={translate(
               'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.3941719a56',

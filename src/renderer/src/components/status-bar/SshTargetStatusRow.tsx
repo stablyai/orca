@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
 import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
+import { formatSshUserFacingError } from '../settings/ssh-user-facing-error'
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import {
@@ -20,13 +21,22 @@ function syncStatusLabel(status: RemoteWorkspaceSyncStatus | undefined): string 
   switch (status?.phase) {
     case 'pulling':
     case 'pushing':
-      return 'Workspace syncing'
+      return translate('auto.components.status.bar.SshTargetStatusRow.syncing', 'Workspace syncing')
     case 'conflict':
-      return 'Workspace sync conflict'
+      return translate(
+        'auto.components.status.bar.SshTargetStatusRow.syncConflict',
+        'Workspace sync conflict'
+      )
     case 'error':
-      return 'Workspace sync error'
+      return translate(
+        'auto.components.status.bar.SshTargetStatusRow.syncError',
+        'Workspace sync error'
+      )
     case 'offline':
-      return 'Workspace sync unavailable'
+      return translate(
+        'auto.components.status.bar.SshTargetStatusRow.syncUnavailable',
+        'Workspace sync unavailable'
+      )
     case 'synced':
     case 'idle':
     case undefined:
@@ -83,7 +93,7 @@ export function SshTargetStatusRow({
     } catch (err) {
       toast.error(
         err instanceof Error
-          ? err.message
+          ? formatSshUserFacingError(err.message)
           : translate('auto.components.status.bar.SshStatusSegment.2c29e2de68', 'Connection failed')
       )
     } finally {
@@ -102,7 +112,7 @@ export function SshTargetStatusRow({
     } catch (err) {
       toast.error(
         err instanceof Error
-          ? err.message
+          ? formatSshUserFacingError(err.message)
           : translate('auto.components.status.bar.SshStatusSegment.bf07aee59e', 'Disconnect failed')
       )
     } finally {

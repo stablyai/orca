@@ -1,11 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  findKeybindingConflictsForDefinitions,
-  formatKeybindingList,
   getEffectiveKeybindingsForDefinition,
   getKeybindingDefinition,
   keybindingFromInputForAction,
-  normalizeKeybindingListForAction,
   type KeybindingActionId,
   type KeybindingDefinition,
   type KeybindingInput
@@ -18,7 +15,6 @@ import { getShortcutTerminalStatus } from './shortcut-terminal-status'
 import {
   hasCommonBindingOverride,
   hasOwnBindingOverride,
-  removeBindingOverride,
   sameBindings
 } from './keybinding-override-edits'
 import {
@@ -35,6 +31,8 @@ import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
 import { getTerminalShortcutPolicySearchEntry } from './shortcuts-search'
 import { matchesSettingsSearch } from './settings-search'
 import { clearRecordingActionForShortcutMutation } from './shortcut-recording-state'
+import { translateShortcutMutationFailure } from './shortcut-action-copy'
+import { validateShortcutBindingsToSave } from './shortcut-pane-save-validation'
 import {
   adjustRecordingIndexAfterRemove,
   appendBinding,
@@ -165,61 +163,39 @@ export function ShortcutsPane(): React.JSX.Element {
     actionId: KeybindingActionId,
     normalized: string[]
   ): Promise<boolean> => {
-    const normalizedResult = normalizeKeybindingListForAction(actionId, normalized.join(', '))
-    if (!Array.isArray(normalizedResult)) {
-      setErrors((prev) => ({
-        ...prev,
-        [actionId]: normalizedResult.ok ? 'Unable to parse shortcut.' : normalizedResult.error
-      }))
-      return false
-    }
-
-    const definition = definitionForAction(actionId)
-    if (!definition) {
-      setErrors((prev) => ({
-        ...prev,
-        [actionId]: translate(
-          'auto.components.settings.ShortcutsPane.shortcutUnavailable',
-          'Shortcut is no longer available.'
-        )
-      }))
-      return false
-    }
-    const defaults = getEffectiveKeybindingsForDefinition(definition, platform, {})
-    const next =
-      sameBindings(normalizedResult, defaults) ||
-      (normalizedResult.length === 0 && defaults.length === 0)
-        ? removeBindingOverride(keybindings, actionId)
-        : { ...keybindings, [actionId]: normalizedResult }
-    const blockingConflict = findKeybindingConflictsForDefinitions(definitions, platform, next, {
-      ignoredActionIds: ignoredConflictActionIds
-    }).find((conflict) => conflict.actionIds.includes(actionId))
-    if (blockingConflict) {
-      const labels = blockingConflict.actionIds
-        .filter((id) => id !== actionId)
-        .map((id) => definitionsByAction.get(id)?.title ?? id)
-        .join(', ')
-      setErrors((prev) => ({
-        ...prev,
-        [actionId]: `${formatKeybindingList([blockingConflict.binding], platform)} conflicts with ${labels}.`
-      }))
+    const validated = validateShortcutBindingsToSave({
+      actionId,
+      normalized,
+      definition: definitionForAction(actionId),
+      definitions,
+      definitionsByAction,
+      keybindings,
+      platform,
+      ignoredConflictActionIds
+    })
+    if (!validated.ok) {
+      setErrors((prev) => ({ ...prev, [actionId]: validated.error }))
       return false
     }
 
     setErrors((prev) => ({ ...prev, [actionId]: undefined }))
     try {
       const matchesDefault =
-        sameBindings(normalizedResult, defaults) ||
-        (normalizedResult.length === 0 && defaults.length === 0)
+        sameBindings(validated.bindings, validated.defaults) ||
+        (validated.bindings.length === 0 && validated.defaults.length === 0)
       await (matchesDefault && !hasCommonBindingOverride(keybindingSnapshot, actionId)
         ? resetKeybindingOverride(actionId)
-        : setKeybindingOverride(actionId, normalizedResult))
+        : setKeybindingOverride(actionId, validated.bindings))
       return true
     } catch (error) {
       if (mountedRef.current) {
         setErrors((prev) => ({
           ...prev,
-          [actionId]: error instanceof Error ? error.message : 'Failed to save shortcut.'
+          [actionId]: translateShortcutMutationFailure(
+            error,
+            'auto.components.settings.ShortcutsPane.saveFailed',
+            'Failed to save shortcut.'
+          )
         }))
       }
       return false
@@ -265,7 +241,11 @@ export function ShortcutsPane(): React.JSX.Element {
       if (mountedRef.current) {
         setErrors((prev) => ({
           ...prev,
-          [actionId]: error instanceof Error ? error.message : 'Failed to reset shortcut.'
+          [actionId]: translateShortcutMutationFailure(
+            error,
+            'auto.components.settings.ShortcutsPane.resetFailed',
+            'Failed to reset shortcut.'
+          )
         }))
       }
     }
@@ -279,7 +259,11 @@ export function ShortcutsPane(): React.JSX.Element {
       if (mountedRef.current) {
         setErrors((prev) => ({
           ...prev,
-          [actionId]: error instanceof Error ? error.message : 'Failed to disable shortcut.'
+          [actionId]: translateShortcutMutationFailure(
+            error,
+            'auto.components.settings.ShortcutsPane.disableFailed',
+            'Failed to disable shortcut.'
+          )
         }))
       }
     }

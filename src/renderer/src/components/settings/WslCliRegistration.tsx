@@ -17,6 +17,7 @@ import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
 
 type WslCliRegistrationProps = {
   currentPlatform: string
@@ -159,11 +160,11 @@ export function WslCliRegistration({
                     'auto.components.settings.WslCliRegistration.0307677bb9',
                     'Checking WSL CLI registration...'
                   )
-                : (status?.detail ??
+                : formatCliUserFacingDetail(status?.detail) ||
                   translate(
                     'auto.components.settings.WslCliRegistration.7aa456a460',
                     'Register `orca-ide` in ~/.local/bin inside WSL.'
-                  ))}
+                  )}
             </p>
           </div>
           <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
-import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { getTranslatedExecutionHostLabel } from '../sidebar/host-section-rows'
 
 export type AutomationSourceDisplay = {
   label: string
@@ -15,7 +15,8 @@ export function getAutomationSourceDisplay(
   }
   const providerLabel = getProviderLabel(sourceContext.provider)
   const hostLabel =
-    hostLabelById?.get(sourceContext.hostId) ?? getExecutionHostLabel(sourceContext.hostId)
+    hostLabelById?.get(sourceContext.hostId) ??
+    getTranslatedExecutionHostLabel(sourceContext.hostId)
   const identityLabel = getSourceIdentityLabel(sourceContext)
   const label = [providerLabel, hostLabel, identityLabel]
     .filter((part): part is string => Boolean(part))

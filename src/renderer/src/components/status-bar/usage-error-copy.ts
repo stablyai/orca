@@ -1,5 +1,6 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { translate } from '@/i18n/i18n'
+import { formatRateLimitUserFacingError } from '@/lib/rate-limit-user-facing-error'
 
 export function getProviderDisplayName(provider: ProviderRateLimits['provider']): string {
   if (provider === 'claude') {
@@ -153,7 +154,7 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
           'Claude sign-in is being refreshed. Agent sessions may still be signed in.'
         )
       case 'missing-scope':
-        return p.error
+        return formatRateLimitUserFacingError(p.error) || p.error
       case 'network':
         return translate(
           'auto.components.status.bar.tooltip.c06c1d215d',
@@ -180,7 +181,7 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
     }
   }
   if (isUsageRateLimitError(p.error)) {
-    return p.error
+    return formatRateLimitUserFacingError(p.error) || p.error
   }
   if (isUsageAuthError(p.error)) {
     const name = getProviderDisplayName(p.provider)
@@ -190,5 +191,5 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
       { value0: name }
     )
   }
-  return p.error
+  return formatRateLimitUserFacingError(p.error) || p.error
 }

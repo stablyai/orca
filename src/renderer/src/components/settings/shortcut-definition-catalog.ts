@@ -9,6 +9,10 @@ import type { TuiAgent } from '../../../../shared/types'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import { buildPluginCommandKeybindingDefinitions } from '@/lib/plugin-command-keybindings'
 import { disabledAgentTabActionIds, groupDefinitions, type ShortcutGroup } from './shortcut-groups'
+import {
+  translateShortcutActionTitle,
+  translateShortcutConflictWarning
+} from './shortcut-action-copy'
 
 export type ShortcutDefinitionCatalog = {
   groups: ShortcutGroup[]
@@ -43,12 +47,18 @@ export function buildShortcutDefinitionCatalog(options: {
   )
   for (const conflict of conflicts) {
     const labels = conflict.actionIds
-      .map((id) => definitionsByAction.get(id)?.title ?? id)
+      .map((id) => {
+        const definition = definitionsByAction.get(id)
+        return definition ? translateShortcutActionTitle(definition.id, definition.title) : id
+      })
       .join(', ')
     for (const actionId of conflict.actionIds) {
       conflictByAction.set(actionId, [
         ...(conflictByAction.get(actionId) ?? []),
-        `${formatKeybindingList([conflict.binding], options.platform)} conflicts with ${labels}.`
+        translateShortcutConflictWarning(
+          formatKeybindingList([conflict.binding], options.platform),
+          labels
+        )
       ])
     }
   }

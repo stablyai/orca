@@ -5,6 +5,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { StepBadge } from './SetupStepBadge'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
 import { translate } from '@/i18n/i18n'
+import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
 
 type BrowserUseCliStepProps = {
   cliStatus: CliInstallStatus | null
@@ -54,7 +55,9 @@ export function BrowserUseCliStep({
             </p>
           ) : null}
           {cliPathNeedsAttention && cliStatus?.detail ? (
-            <p className="text-[11px] text-amber-600 dark:text-amber-400">{cliStatus.detail}</p>
+            <p className="text-[11px] text-amber-600 dark:text-amber-400">
+              {formatCliUserFacingDetail(cliStatus.detail)}
+            </p>
           ) : null}
         </div>
         <TooltipProvider delayDuration={250}>
@@ -85,7 +88,7 @@ export function BrowserUseCliStep({
             </TooltipTrigger>
             {!cliSupported && !cliLoading && cliStatus?.detail ? (
               <TooltipContent side="left" sideOffset={6}>
-                {cliStatus.detail}
+                {formatCliUserFacingDetail(cliStatus.detail)}
               </TooltipContent>
             ) : null}
           </Tooltip>

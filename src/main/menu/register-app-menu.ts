@@ -8,6 +8,7 @@ import {
 import type { UpdateCheckOptions } from '../../shared/types'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
+import { labeledAppMenuRole } from './labeled-app-menu-role'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -141,17 +142,17 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const macAppMenu: Electron.MenuItemConstructorOptions = {
     label: options.appMenuLabel ?? app.name,
     submenu: [
-      { role: 'about' },
+      labeledAppMenuRole('about', 'menu.about', 'About Orca'),
       checkForUpdatesItem,
       settingsItem,
       { type: 'separator' },
-      { role: 'services' },
+      labeledAppMenuRole('services', 'menu.services', 'Services'),
       { type: 'separator' },
-      { role: 'hide' },
-      { role: 'hideOthers' },
-      { role: 'unhide' },
+      labeledAppMenuRole('hide', 'menu.hide', 'Hide Orca'),
+      labeledAppMenuRole('hideOthers', 'menu.hideOthers', 'Hide Others'),
+      labeledAppMenuRole('unhide', 'menu.unhide', 'Show All'),
       { type: 'separator' },
-      { role: 'quit' }
+      labeledAppMenuRole('quit', 'menu.quit', 'Quit Orca')
     ]
   }
 
@@ -160,11 +161,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     // Why: on Windows/Linux there is no app-named menu, so Settings and
     // Quit live under File — matching the common platform convention and
     // keeping all user-facing actions reachable from the in-window menu bar.
-    submenu: [
-      settingsItem,
-      { type: 'separator' },
-      { role: 'quit', label: translateMain('menu.exit', 'Exit') }
-    ]
+    submenu: [settingsItem, { type: 'separator' }, labeledAppMenuRole('quit', 'menu.exit', 'Exit')]
   }
 
   // Why: keep native menu hints while letting non-macOS Ctrl+Z/Ctrl+Y reach the focused terminal or DOM control.
@@ -174,10 +171,10 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const editMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.edit', 'Edit'),
     submenu: [
-      { role: 'undo', ...undoRedoOptions },
-      { role: 'redo', ...undoRedoOptions },
+      { role: 'undo', label: translateMain('menu.undo', 'Undo'), ...undoRedoOptions },
+      { role: 'redo', label: translateMain('menu.redo', 'Redo'), ...undoRedoOptions },
       { type: 'separator' },
-      { role: 'cut' },
+      labeledAppMenuRole('cut', 'menu.cut', 'Cut'),
       createAppMenuSelectionItem({
         action: 'copy',
         label: translateMain('menu.copy', 'Copy'),
@@ -280,7 +277,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         label: `${translateMain('menu.forceReload', 'Force Reload')}\t${shortcutLabel('app.forceReload')}`,
         click: () => reloadFocusedWindow(true)
       },
-      { role: 'toggleDevTools' },
+      labeledAppMenuRole('toggleDevTools', 'menu.toggleDevTools', 'Toggle Developer Tools'),
       { type: 'separator' },
       {
         label: `${translateMain('menu.resetSize', 'Reset Size')}\t${shortcutLabel('zoom.reset')}`,
@@ -304,7 +301,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         label: `${translateMain('menu.openWorktreePalette', 'Open Worktree Palette')}\t${shortcutLabel('worktree.palette')}`
       },
       { type: 'separator' },
-      { role: 'togglefullscreen' },
+      labeledAppMenuRole('togglefullscreen', 'menu.toggleFullScreen', 'Toggle Full Screen'),
       { type: 'separator' },
       appearanceSubmenu
     ]
@@ -312,7 +309,10 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const windowMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.window', 'Window'),
-    submenu: [{ role: 'minimize' }, { role: 'zoom' }]
+    submenu: [
+      labeledAppMenuRole('minimize', 'menu.minimize', 'Minimize'),
+      labeledAppMenuRole('zoom', 'menu.zoom', 'Zoom')
+    ]
   }
 
   const helpMenu: Electron.MenuItemConstructorOptions = {
@@ -326,7 +326,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         ? []
         : ([
             { type: 'separator' },
-            { role: 'about' },
+            labeledAppMenuRole('about', 'menu.about', 'About Orca'),
             checkForUpdatesItem
           ] satisfies Electron.MenuItemConstructorOptions[]))
     ]

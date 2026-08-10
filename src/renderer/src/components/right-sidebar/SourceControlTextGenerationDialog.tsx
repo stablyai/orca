@@ -116,10 +116,19 @@ export function SourceControlTextGenerationDialog({
   const baseParams = resolved.ok ? resolved.value.params : null
   const recipeLabel =
     actionId === 'commitMessage'
-      ? 'commit-message recipe'
+      ? translate(
+          'auto.components.right.sidebar.SourceControlTextGenerationDialog.1d156632e1',
+          'commit-message recipe'
+        )
       : actionId === 'pullRequest'
-        ? 'hosted-review recipe'
-        : 'branch-name recipe'
+        ? translate(
+            'auto.components.right.sidebar.SourceControlTextGenerationDialog.e935cb4eaa',
+            'hosted-review recipe'
+          )
+        : translate(
+            'auto.components.right.sidebar.SourceControlTextGenerationDialog.e3d0a41d63',
+            'branch-name recipe'
+          )
   const saveTargets: SourceControlTextGenerationSaveTarget[] = repo?.id
     ? [
         {
@@ -128,7 +137,11 @@ export function SourceControlTextGenerationDialog({
             'auto.components.right.sidebar.SourceControlTextGenerationDialog.5959da1e4d',
             'Save for this repository only'
           ),
-          successMessage: `Saved ${recipeLabel} for this repository.`
+          successMessage: translate(
+            'auto.components.right.sidebar.SourceControlTextGenerationDialog.649f3d1762',
+            'Saved {{value0}} for this repository.',
+            { value0: recipeLabel }
+          )
         },
         {
           target: { type: 'global' },
@@ -136,7 +149,11 @@ export function SourceControlTextGenerationDialog({
             'auto.components.right.sidebar.SourceControlTextGenerationDialog.7f1ec309a4',
             'Save as default for all repositories'
           ),
-          successMessage: `Saved ${recipeLabel} as a global default.`
+          successMessage: translate(
+            'auto.components.right.sidebar.SourceControlTextGenerationDialog.369167678c',
+            'Saved {{value0}} as a global default.',
+            { value0: recipeLabel }
+          )
         }
       ]
     : [
@@ -146,7 +163,11 @@ export function SourceControlTextGenerationDialog({
             'auto.components.right.sidebar.SourceControlTextGenerationDialog.c5b7fa7cb6',
             'Save as global default'
           ),
-          successMessage: `Saved ${recipeLabel} as a global default.`
+          successMessage: translate(
+            'auto.components.right.sidebar.SourceControlTextGenerationDialog.369167678c',
+            'Saved {{value0}} as a global default.',
+            { value0: recipeLabel }
+          )
         }
       ]
   const formKey = open

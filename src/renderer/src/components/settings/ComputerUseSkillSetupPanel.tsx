@@ -5,7 +5,7 @@ import {
   COMPUTER_USE_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  getAgentSkillCliPrerequisiteNotice,
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import {
@@ -64,7 +64,7 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
       error={activeSkillRuntime.installDisabledReason ?? computerUseSkillError}
       installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
       icon={<MonitorCog className="size-5" />}
-      preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+      preInstallNotice={getAgentSkillCliPrerequisiteNotice()}
       getPrerequisiteStatus={() =>
         activeSkillRuntime.agentRuntime?.runtime === 'wsl'
           ? window.api.cli.getWslInstallStatus(

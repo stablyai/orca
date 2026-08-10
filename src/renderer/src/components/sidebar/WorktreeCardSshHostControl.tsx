@@ -19,6 +19,7 @@ import {
   useSshConnectInFlight
 } from '@/ssh/ssh-connect-in-flight'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import { formatSshUserFacingError } from '@/components/settings/ssh-user-facing-error'
 
 type WorktreeCardSshHostControlProps = {
   targetId: string
@@ -111,7 +112,7 @@ export function WorktreeCardSshHostControl({
     } catch (err) {
       toast.error(
         err instanceof Error
-          ? err.message
+          ? formatSshUserFacingError(err.message)
           : translate(
               'auto.components.sidebar.WorktreeCardSshHostControl.connectFailed',
               'SSH connection failed'

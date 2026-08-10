@@ -12,6 +12,7 @@ import {
 import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
 import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
 import { translate } from '@/i18n/i18n'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser-session-profile-label'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
@@ -124,7 +125,7 @@ export function BrowserToolbarMenu({
       translate(
         'auto.components.browser.pane.BrowserToolbarMenu.3ccd29d771',
         'Switched to {{value0}} profile',
-        { value0: profile?.label ?? 'Default' }
+        { value0: translateBrowserSessionProfileLabel(profile?.label, profile?.id) }
       )
     )
     setPendingSwitchProfileId(undefined)
@@ -169,7 +170,7 @@ export function BrowserToolbarMenu({
         translate(
           'auto.components.browser.pane.BrowserToolbarMenu.a7a86702b3',
           'Created and switched to {{value0}} profile',
-          { value0: profile.label }
+          { value0: translateBrowserSessionProfileLabel(profile.label, profile.id) }
         )
       )
     } finally {

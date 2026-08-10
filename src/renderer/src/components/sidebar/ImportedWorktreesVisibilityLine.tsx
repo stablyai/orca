@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { getExternalWorktreeParentPath } from '../../../../shared/external-worktree-visibility'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { translate } from '@/i18n/i18n'
+import { formatUnknownLocationLabel } from '@/components/stats/usage-formatters'
 
 export type ImportedWorktreesVisibilityPlacement = 'repo-group' | 'pinned-fallback'
 
@@ -183,11 +184,11 @@ export default function ImportedWorktreesVisibilityLine({
                       tabIndex={0}
                       className="block min-w-0 flex-1 truncate font-mono text-[10px] leading-4 text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
                     >
-                      {group.path}
+                      {formatUnknownLocationLabel(group.path)}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="top" sideOffset={4}>
-                    {group.path}
+                    {formatUnknownLocationLabel(group.path)}
                   </TooltipContent>
                 </Tooltip>
                 <span className="shrink-0 rounded-full border border-worktree-sidebar-border px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
@@ -199,7 +200,7 @@ export default function ImportedWorktreesVisibilityLine({
                 aria-label={translate(
                   'auto.components.sidebar.ImportedWorktreesVisibilityLine.b47ba1a9d2',
                   '{{value0}} preview',
-                  { value0: group.path }
+                  { value0: formatUnknownLocationLabel(group.path) }
                 )}
               >
                 {group.worktrees

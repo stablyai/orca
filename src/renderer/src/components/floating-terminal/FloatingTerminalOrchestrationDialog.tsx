@@ -11,7 +11,7 @@ import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { SkillFreshnessStatusPill } from '@/components/skills/SkillFreshnessStatusPill'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  getAgentSkillCliPrerequisiteNotice,
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import {
@@ -153,7 +153,7 @@ export function FloatingTerminalOrchestrationDialog({
           variant="inline"
           hideHeader
           installLabel="Install CLI & skill"
-          preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+          preInstallNotice={getAgentSkillCliPrerequisiteNotice()}
           getPrerequisiteStatus={() =>
             activeSkillRuntime.agentRuntime?.runtime === 'wsl'
               ? window.api.cli.getWslInstallStatus(

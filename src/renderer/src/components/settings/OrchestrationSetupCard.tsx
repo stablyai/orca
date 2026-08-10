@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  getAgentSkillCliPrerequisiteNotice,
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import {
@@ -61,7 +61,7 @@ export function OrchestrationSetupCard(props: {
       error={activeSkillRuntime.installDisabledReason ?? skill.error}
       installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
       terminalHeightPx={terminalHeightPx}
-      preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+      preInstallNotice={getAgentSkillCliPrerequisiteNotice()}
       getPrerequisiteStatus={() =>
         activeSkillRuntime.agentRuntime?.runtime === 'wsl'
           ? window.api.cli.getWslInstallStatus(

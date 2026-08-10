@@ -9,7 +9,7 @@ import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { EphemeralVmRecipeRow } from './EphemeralVmRecipeRow'
 import { translate } from '@/i18n/i18n'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  getAgentSkillCliPrerequisiteNotice,
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import {
@@ -168,7 +168,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
         error={activeSkillRuntime.installDisabledReason ?? skillError}
         installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
         icon={<Server className="size-5" />}
-        preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+        preInstallNotice={getAgentSkillCliPrerequisiteNotice()}
         getPrerequisiteStatus={() =>
           activeSkillRuntime.agentRuntime?.runtime === 'wsl'
             ? window.api.cli.getWslInstallStatus(

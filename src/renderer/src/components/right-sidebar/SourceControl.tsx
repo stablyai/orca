@@ -5774,22 +5774,42 @@ function SourceControlInner(): React.JSX.Element {
 
           {showGenericEmptyState && !normalizedFilter ? (
             <EmptyState
-              heading="No changes on this branch"
-              supportingText={`This workspace is clean and this branch has no changes ahead of ${branchSummary?.baseRef ?? 'base'}`}
+              heading={translate(
+                'auto.components.right.sidebar.SourceControl.f2fd70c988',
+                'No changes on this branch'
+              )}
+              supportingText={translate(
+                'auto.components.right.sidebar.SourceControl.72e0c73b4e',
+                'This workspace is clean and this branch has no changes ahead of {{value0}}',
+                { value0: branchSummary?.baseRef ?? 'base' }
+              )}
             />
           ) : null}
 
           {fileFilterState.tooLarge && (
             <EmptyState
-              heading="Search text is too large"
-              supportingText="Use a shorter file filter."
+              heading={translate(
+                'auto.components.right.sidebar.SourceControl.86794572dc',
+                'Search text is too large'
+              )}
+              supportingText={translate(
+                'auto.components.right.sidebar.SourceControl.ad0504a58a',
+                'Use a shorter file filter.'
+              )}
             />
           )}
 
           {normalizedFilter && !hasFilteredUncommittedEntries && !hasFilteredBranchEntries && (
             <EmptyState
-              heading="No matching files"
-              supportingText={`No changed files match "${filterQuery}"`}
+              heading={translate(
+                'auto.components.right.sidebar.SourceControl.362b97ec5c',
+                'No matching files'
+              )}
+              supportingText={translate(
+                'auto.components.right.sidebar.SourceControl.d5103e47c1',
+                'No changed files match "{{value0}}"',
+                { value0: filterQuery }
+              )}
             />
           )}
 

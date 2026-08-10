@@ -5,7 +5,7 @@ import {
   ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  getAgentSkillCliPrerequisiteNotice,
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
@@ -64,7 +64,7 @@ export function BrowserUseSkillSetupCard(props: {
       error={activeSkillRuntime.installDisabledReason ?? skill.error}
       installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
       terminalHeightPx={terminalHeightPx}
-      preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+      preInstallNotice={getAgentSkillCliPrerequisiteNotice()}
       getPrerequisiteStatus={() =>
         activeSkillRuntime.agentRuntime?.runtime === 'wsl'
           ? window.api.cli.getWslInstallStatus(

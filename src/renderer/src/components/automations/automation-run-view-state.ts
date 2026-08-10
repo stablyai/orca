@@ -1,4 +1,5 @@
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import { translate } from '@/i18n/i18n'
 
 export type AutomationRunViewAvailability = 'terminal' | 'workspace' | 'snapshot' | 'metadata'
 
@@ -61,8 +62,14 @@ export function getAutomationRunViewState({
   if (run.workspaceId && workspaceExists && terminalTargetExists) {
     return {
       availability: 'terminal',
-      actionLabel: 'View run',
-      statusLabel: 'Run is open',
+      actionLabel: translate(
+        'auto.components.automations.automation.run.view.state.54f28daf9c',
+        'View run'
+      ),
+      statusLabel: translate(
+        'auto.components.automations.automation.run.view.state.22522086c4',
+        'Run is open'
+      ),
       canOpen: true
     }
   }
@@ -70,8 +77,14 @@ export function getAutomationRunViewState({
   if (run.workspaceId && workspaceExists && hasTerminalIdentity) {
     return {
       availability: 'terminal',
-      actionLabel: 'View run',
-      statusLabel: 'Run terminal is unavailable.',
+      actionLabel: translate(
+        'auto.components.automations.automation.run.view.state.54f28daf9c',
+        'View run'
+      ),
+      statusLabel: translate(
+        'auto.components.automations.automation.run.view.state.512cb6234a',
+        'Run terminal is unavailable.'
+      ),
       canOpen: true
     }
   }
@@ -79,8 +92,14 @@ export function getAutomationRunViewState({
   if (run.workspaceId && workspaceExists) {
     return {
       availability: 'workspace',
-      actionLabel: 'Resume workspace',
-      statusLabel: 'Workspace is available.',
+      actionLabel: translate(
+        'auto.components.automations.automation.run.view.state.6ea3f7882d',
+        'Resume workspace'
+      ),
+      statusLabel: translate(
+        'auto.components.automations.automation.run.view.state.160f368f8e',
+        'Workspace is available.'
+      ),
       canOpen: true
     }
   }
@@ -88,20 +107,39 @@ export function getAutomationRunViewState({
   if (run.outputSnapshot?.content.trim()) {
     return {
       availability: 'snapshot',
-      actionLabel: 'Snapshot saved',
-      statusLabel: 'Showing saved run snapshot.',
+      actionLabel: translate(
+        'auto.components.automations.automation.run.view.state.358ae795ea',
+        'Snapshot saved'
+      ),
+      statusLabel: translate(
+        'auto.components.automations.automation.run.view.state.63a8bd42bd',
+        'Showing saved run snapshot.'
+      ),
       canOpen: false
     }
   }
 
   return {
     availability: 'metadata',
-    actionLabel: 'View run',
+    actionLabel: translate(
+      'auto.components.automations.automation.run.view.state.54f28daf9c',
+      'View run'
+    ),
     statusLabel: run.workspaceId
       ? run.workspaceDisplayName?.trim()
-        ? `${run.workspaceDisplayName.trim()} no longer available`
-        : 'Workspace no longer available'
-      : 'No workspace launched',
+        ? translate(
+            'auto.components.automations.automation.run.view.state.a4f3aa5960',
+            '{{value0}} no longer available',
+            { value0: run.workspaceDisplayName.trim() }
+          )
+        : translate(
+            'auto.components.automations.automation.run.view.state.272939969f',
+            'Workspace no longer available'
+          )
+      : translate(
+          'auto.components.automations.automation.run.view.state.cbd6ff6dd8',
+          'No workspace launched'
+        ),
     canOpen: false
   }
 }

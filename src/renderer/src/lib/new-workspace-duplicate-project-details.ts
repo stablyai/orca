@@ -1,4 +1,5 @@
-import { getExecutionHostLabel, type ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { getTranslatedExecutionHostLabel } from '@/components/sidebar/host-section-rows'
 import type { NewWorkspaceProjectOption } from './new-workspace-project-options'
 
 export type ProjectSetupDirectory = {
@@ -37,7 +38,8 @@ function getProjectDirectoryDetail(
       continue
     }
     const hostLabel =
-      hostLabelById.get(directory.hostId)?.trim() || getExecutionHostLabel(directory.hostId)
+      hostLabelById.get(directory.hostId)?.trim() ||
+      getTranslatedExecutionHostLabel(directory.hostId)
     const detail =
       mode === 'path'
         ? path

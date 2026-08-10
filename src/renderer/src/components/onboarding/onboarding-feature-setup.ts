@@ -13,6 +13,7 @@ import {
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
 import { showOrcaCliRegistrationPromptToast } from '@/lib/agent-skill-cli-prerequisite'
+import { ensureOnboardingCliRegistration } from './onboarding-cli-ensure'
 import type { ProjectAgentSkillRuntime } from '@/lib/project-skill-runtime'
 import type { OnboardingFeatureSetupRuntimeContext } from './onboarding-feature-setup-runtime'
 import {
@@ -242,35 +243,9 @@ export async function runOnboardingFeatureSetup(
     }
   }
 
-  try {
-    const status = await deps.getCliStatus()
-    if (!status.supported) {
-      warnings.push({
-        featureId: 'cli',
-        message: status.detail ?? 'Orca CLI registration is not available on this platform.'
-      })
-    } else if (status.pathConfigured === null) {
-      // Why: an unknown registry read cannot safely drive a PATH read-modify-write.
-      warnings.push({
-        featureId: 'cli',
-        message: status.detail ?? 'Orca could not check your Windows user PATH.'
-      })
-    } else if (status.state !== 'installed' || status.pathConfigured === false) {
-      await deps.showCliRegistrationPrompt?.()
-      const next = await deps.installCli()
-      cliTouched = true
-      if (next.state !== 'installed') {
-        warnings.push({
-          featureId: 'cli',
-          message: next.detail ?? 'Orca CLI registration needs attention.'
-        })
-      } else if (next.pathConfigured !== true && next.detail) {
-        warnings.push({ featureId: 'cli', message: next.detail })
-      }
-    }
-  } catch (error) {
-    warnings.push({ featureId: 'cli', message: formatFeatureSetupError(error) })
-  }
+  const cliResult = await ensureOnboardingCliRegistration(deps)
+  cliTouched = cliResult.cliTouched
+  warnings.push(...cliResult.warnings)
 
   if (selection.computerUse) {
     try {

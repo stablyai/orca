@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils'
 import { ShortcutCommandBlock } from './ShortcutCommandBlock'
 import type { ShortcutRowsByGroup } from './ShortcutFilterRail'
 import { translate } from '@/i18n/i18n'
+import { translateShortcutGroupTitle } from './shortcut-action-copy'
 
 const EMPTY_BINDINGS: readonly string[] = []
 
@@ -63,7 +64,7 @@ export function ShortcutRowsList({
       {groups.map((group) => (
         <div key={group.title} className="space-y-3">
           <h3 className="border-b border-border/50 pb-2 text-sm font-medium text-muted-foreground">
-            {group.title}
+            {translateShortcutGroupTitle(group.title)}
           </h3>
           <div className="flex flex-col gap-3">
             {group.rows.map((row) => (

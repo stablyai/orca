@@ -30,6 +30,7 @@ import {
 } from './feature-tip-telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
 import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'
 
 function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
@@ -191,7 +192,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             ),
             {
               description:
-                result.status.detail ??
+                formatCliUserFacingDetail(result.status.detail) ||
                 translate(
                   'auto.components.feature.tips.FeatureTipsModal.d1a86c7eb5',
                   'Open Settings to finish CLI setup.'
@@ -223,7 +224,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
           trackOrcaCliFeatureTipSetupResult(telemetrySource, 'failed')
           if (canApplySetupResult()) {
-            toast.error(message)
+            toast.error(formatCliUserFacingDetail(message) || message)
           }
         } finally {
           if (canApplySetupResult()) {

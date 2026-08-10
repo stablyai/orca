@@ -15,6 +15,10 @@ import type {
   TerminalQuickCommandHostsSlice
 } from '@/store/slices/terminal-quick-command-hosts'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getTranslatedExecutionHostLabel,
+  translateExecutionHostLabel
+} from '@/components/sidebar/host-section-rows'
 
 export type TerminalQuickCommandHost = {
   commands: readonly TerminalQuickCommand[]
@@ -94,7 +98,10 @@ export function getTerminalQuickCommandHostOptions(
     hostSource: 'configured-only',
     runtimeEnvironments,
     hostLabelOverrides: getHostDisplayLabelOverrides(settings)
-  }).map((host) => ({ id: host.id, label: host.label }))
+  }).map((host) => ({
+    id: host.id,
+    label: translateExecutionHostLabel(host.label)
+  }))
 }
 
 export function useTerminalQuickCommandHosts(
@@ -178,7 +185,8 @@ export function useTerminalQuickCommandHosts(
         commands: settings?.terminalQuickCommands ?? [],
         hostId: LOCAL_EXECUTION_HOST_ID,
         label:
-          hostOptions.find((host) => host.id === LOCAL_EXECUTION_HOST_ID)?.label ?? 'This computer'
+          hostOptions.find((host) => host.id === LOCAL_EXECUTION_HOST_ID)?.label ??
+          getTranslatedExecutionHostLabel(LOCAL_EXECUTION_HOST_ID)
       }
     ]
     if (

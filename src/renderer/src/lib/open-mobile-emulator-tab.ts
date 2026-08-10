@@ -3,6 +3,7 @@ import type { EmulatorStreamInfo } from '@/components/emulator-pane/emulator-pan
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { formatEmulatorAvailabilityUserFacingMessage } from '@/lib/cli-emulator-user-facing-copy'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from './ensure-simulator-tab'
 import {
   beginManualSimulatorLaunch,
@@ -42,7 +43,7 @@ function dispatchPrelaunchedSession(worktreeId: string, info: EmulatorStreamInfo
 
 function getLaunchErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
-    return error.message
+    return formatEmulatorAvailabilityUserFacingMessage(error.message) || error.message
   }
   return translate(
     'auto.lib.open.mobile.emulator.tab.bf4f2a8a72',

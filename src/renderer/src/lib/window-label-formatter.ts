@@ -1,4 +1,5 @@
 import { formatResetDuration } from '../../../shared/rate-limit-reset-format'
+import { translate } from '@/i18n/i18n'
 
 /**
  * Returns a short human-readable label for a usage window duration.
@@ -8,7 +9,7 @@ import { formatResetDuration } from '../../../shared/rate-limit-reset-format'
  */
 export function formatWindowLabel(windowMinutes: number): string {
   if (windowMinutes === 10080) {
-    return 'wk'
+    return translate('auto.components.status.bar.StatusBar.5c938d39ac', 'wk')
   }
   if (windowMinutes === 300) {
     return '5h'
@@ -20,7 +21,9 @@ export function formatWindowLabel(windowMinutes: number): string {
     return `${windowMinutes}m`
   }
   if (windowMinutes % (60 * 24 * 7) === 0) {
-    return `${windowMinutes / (60 * 24 * 7)}wk`
+    return translate('auto.components.status.bar.StatusBar.windowWeeks', '{{value0}}wk', {
+      value0: windowMinutes / (60 * 24 * 7)
+    })
   }
   if (windowMinutes % (60 * 24) === 0) {
     return `${windowMinutes / (60 * 24)}d`

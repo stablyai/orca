@@ -84,7 +84,10 @@ export function LinearIssueMarkdownDescriptionEditor({
         attributes: {
           class: 'rich-markdown-editor',
           spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled),
-          'aria-label': 'Issue description'
+          'aria-label': translate(
+            'auto.components.LinearIssueMarkdownDescriptionEditor.c6e6954223',
+            'Issue description'
+          )
         },
         handleKeyDown: (_view, event) => {
           if (!isScreenSubmitShortcut(event)) {

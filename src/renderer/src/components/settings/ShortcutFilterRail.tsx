@@ -8,6 +8,11 @@ import { Input } from '../ui/input'
 import type { ShortcutTerminalStatus } from './shortcut-terminal-status'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
+import {
+  translateShortcutActionTitle,
+  translateShortcutFilterLabel,
+  translateShortcutGroupTitle
+} from './shortcut-action-copy'
 
 export type ShortcutFilter = 'all' | 'modified' | 'unassigned' | 'conflicts'
 
@@ -49,12 +54,13 @@ export function normalizeShortcutLocalSearchQuery(query: string): string | null 
 }
 
 export function getShortcutSearchEntry(row: ShortcutRowModel): SettingsSearchEntry {
+  const groupTitle = translateShortcutGroupTitle(row.groupTitle)
   return {
-    title: row.item.title,
+    title: translateShortcutActionTitle(row.item.id, row.item.title),
     description: translate(
       'auto.components.settings.ShortcutFilterRail.1d5634ba31',
       '{{value0}} shortcut',
-      { value0: row.groupTitle }
+      { value0: groupTitle }
     ),
     keywords: [...row.item.searchKeywords]
   }
@@ -97,8 +103,10 @@ export function matchesShortcutLocalSearch(
   }
   const searchableText = [
     row.item.title,
+    translateShortcutActionTitle(row.item.id, row.item.title),
     row.item.id,
     row.groupTitle,
+    translateShortcutGroupTitle(row.groupTitle),
     ...row.item.searchKeywords,
     formatKeybindingList(row.effective, platform)
   ]
@@ -124,7 +132,7 @@ export function ShortcutFilterRail({
 }): React.JSX.Element {
   const filters = (Object.keys(SHORTCUT_FILTER_LABELS) as ShortcutFilter[]).map((id) => ({
     id,
-    label: SHORTCUT_FILTER_LABELS[id],
+    label: translateShortcutFilterLabel(id),
     count: filterCounts[id]
   }))
 

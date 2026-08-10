@@ -19,7 +19,12 @@ export const SETUP_GUIDE_PROJECT_PROMPT = "First add a project you'd like to wor
 
 export function promptForSetupGuideProject(openModal: (modal: 'add-repo') => void): void {
   openModal('add-repo')
-  toast.message(SETUP_GUIDE_PROJECT_PROMPT)
+  toast.message(
+    translate(
+      'auto.components.feature.wall.FeatureWallSetupWorkflowActions.projectPrompt',
+      SETUP_GUIDE_PROJECT_PROMPT
+    )
+  )
 }
 
 export function getSetupGuideGitRepo(

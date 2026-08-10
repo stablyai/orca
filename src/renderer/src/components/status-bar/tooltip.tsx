@@ -1,11 +1,9 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
-import {
-  formatResetCountdown,
-  formatResetDuration
-} from '../../../../shared/rate-limit-reset-format'
+import { formatResetDuration } from '../../../../shared/rate-limit-reset-format'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
+import { formatRateLimitUserFacingError } from '@/lib/rate-limit-user-facing-error'
 import {
   getProviderDisplayName,
   getProviderUsageErrorMessage,
@@ -34,19 +32,29 @@ export {
 export function formatTimeAgo(ts: number): string {
   const diff = Date.now() - ts
   if (diff < 60_000) {
-    return 'just now'
+    return translate('auto.components.status.bar.usage.justNow', 'just now')
   }
   const mins = Math.floor(diff / 60_000)
   if (mins < 60) {
-    return `${mins}m ago`
+    return translate('auto.components.status.bar.usage.minutesAgo', '{{value0}}m ago', {
+      value0: mins
+    })
   }
   const hours = Math.floor(mins / 60)
-  return `${hours}h ago`
+  return translate('auto.components.status.bar.usage.hoursAgo', '{{value0}}h ago', {
+    value0: hours
+  })
 }
 
-// Re-export so existing tooltip consumers/tests keep their import path; the
-// implementation is shared with mobile in src/shared/rate-limit-reset-format.
-export { formatResetCountdown }
+export function formatResetCountdown(ms: number): string {
+  const duration = formatResetDuration(ms)
+  if (duration === 'now') {
+    return translate('auto.components.status.bar.usage.resetsNow', 'Resets now')
+  }
+  return translate('auto.components.status.bar.usage.resetsIn', 'Resets in {{duration}}', {
+    duration
+  })
+}
 
 export function formatResetCreditExpiry(
   expiresAt: number | null | undefined,
@@ -274,7 +282,9 @@ export function ProviderPanel({
           {name}
         </div>
         <div className={mutedClass}>
-          {p.error ?? translate('auto.components.status.bar.tooltip.1292d4f2ee', 'Unavailable')}
+          {p.error
+            ? formatRateLimitUserFacingError(p.error) || p.error
+            : translate('auto.components.status.bar.tooltip.1292d4f2ee', 'Unavailable')}
         </div>
       </div>
     )
@@ -298,7 +308,11 @@ export function ProviderPanel({
     )
   }
 
-  const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
+  const updatedAgo = p.updatedAt
+    ? translate('auto.components.status.bar.usage.updatedAgo', 'Updated {{ago}}', {
+        ago: formatTimeAgo(p.updatedAt)
+      })
+    : translate('auto.components.status.bar.usage.notYetUpdated', 'Not yet updated')
   const resetCreditCount =
     showResetCredits && p.provider === 'codex'
       ? (p.rateLimitResetCredits?.availableCount ?? null)
@@ -349,7 +363,7 @@ export function ProviderPanel({
 
       {p.error ? (
         <ErrorMessage
-          message={p.error}
+          message={formatRateLimitUserFacingError(p.error) || p.error}
           stale={!!(p.session || p.weekly || p.fableWeekly || p.monthly)}
           inverted={inverted}
         />

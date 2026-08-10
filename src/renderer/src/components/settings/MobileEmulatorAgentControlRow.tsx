@@ -5,7 +5,7 @@ import {
   ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  getAgentSkillCliPrerequisiteNotice,
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
@@ -18,6 +18,7 @@ import { MobileEmulatorExamples } from './MobileEmulatorExamples'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
 
 const EMULATOR_CLI_COMMANDS = [
   'orca emulator list --json',
@@ -97,7 +98,9 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
               </p>
             ) : null}
             {!setup.cliEnabled && setup.cliInstallStatus?.detail ? (
-              <p className="text-[11px] text-muted-foreground">{setup.cliInstallStatus.detail}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {formatCliUserFacingDetail(setup.cliInstallStatus.detail)}
+              </p>
             ) : null}
             {setup.cliBusy ? (
               <p className="text-[11px] leading-snug text-muted-foreground">
@@ -139,7 +142,7 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
               </TooltipTrigger>
               {!setup.cliSupported && !setup.cliLoading && setup.cliInstallStatus?.detail ? (
                 <TooltipContent side="left" sideOffset={6}>
-                  {setup.cliInstallStatus.detail}
+                  {formatCliUserFacingDetail(setup.cliInstallStatus.detail)}
                 </TooltipContent>
               ) : null}
             </Tooltip>
@@ -168,7 +171,7 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
             error={setup.cliSkillError}
             installDisabled={setup.step2Blocked}
             leading={<StepBadge index={2} state={setup.cliSkillInstalled ? 'done' : 'pending'} />}
-            preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+            preInstallNotice={getAgentSkillCliPrerequisiteNotice()}
             openingHint={translate(
               'auto.components.settings.MobileEmulatorAgentControlRow.3941719a56',
               'Checking Orca CLI before opening skill setup.'

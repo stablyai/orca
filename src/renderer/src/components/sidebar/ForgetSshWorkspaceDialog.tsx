@@ -15,6 +15,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { runWorktreeDeleteWithToast } from './delete-worktree-flow'
 import type { SshWorkspaceForgetResolution } from './ssh-workspace-forget-resolution'
+import { formatSshUserFacingError } from '@/components/settings/ssh-user-facing-error'
 
 type ForgetSshWorkspaceModalData = {
   worktreeId: string
@@ -73,7 +74,7 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
       }
       toast.error(
         err instanceof Error
-          ? err.message
+          ? formatSshUserFacingError(err.message)
           : translate(
               'auto.components.sidebar.ForgetSshWorkspaceDialog.reconnectFailed',
               'Reconnection failed'

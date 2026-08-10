@@ -14,6 +14,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
 import { translate } from '@/i18n/i18n'
+import { formatEmulatorAvailabilityUserFacingMessage } from '@/lib/cli-emulator-user-facing-copy'
 
 type SimulatorDeviceRow = {
   name: string
@@ -39,9 +40,15 @@ type MobileEmulatorSettingsPaneProps = {
 }
 
 const AUTOMATIC_DEVICE_VALUE = '__orca_automatic_emulator_device__'
-const AUTOMATIC_DEVICE_LABEL = 'Auto-select device'
 const SIMULATOR_STATE_SUFFIX_RE =
   /\s+\((Booted|Booting|Creating|Shutdown|Shutting Down|Unavailable|Unknown)\)\s*$/i
+
+function getAutomaticDeviceLabel(): string {
+  return translate(
+    'auto.components.settings.MobileEmulatorSettingsPane.autoSelectDevice',
+    'Auto-select device'
+  )
+}
 
 function statusText(availability: EmulatorAvailability | null, enabled: boolean): string {
   if (!enabled) {
@@ -115,7 +122,9 @@ function availabilityDetail(availability: EmulatorAvailability | null): string {
           { value0: availability.devices.length }
         )
   }
-  return availability.simctl.message || availability.serveSim.message || availability.message
+  return formatEmulatorAvailabilityUserFacingMessage(
+    availability.simctl.message || availability.serveSim.message || availability.message
+  )
 }
 
 export function MobileEmulatorSettingsPane({
@@ -272,10 +281,10 @@ export function MobileEmulatorSettingsPane({
               }
             >
               <SelectTrigger size="sm" className="w-56 max-w-full">
-                <SelectValue placeholder={AUTOMATIC_DEVICE_LABEL} />
+                <SelectValue placeholder={getAutomaticDeviceLabel()} />
               </SelectTrigger>
               <SelectContent position="popper" align="end">
-                <SelectItem value={AUTOMATIC_DEVICE_VALUE}>{AUTOMATIC_DEVICE_LABEL}</SelectItem>
+                <SelectItem value={AUTOMATIC_DEVICE_VALUE}>{getAutomaticDeviceLabel()}</SelectItem>
                 {devices.map((device) => (
                   <SelectItem
                     key={device.udid}

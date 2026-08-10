@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
-  getExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -10,6 +9,7 @@ import {
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import { getTranslatedExecutionHostLabel } from '../sidebar/host-section-rows'
 import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
 
 export type AiVaultHostScopeOption = {
@@ -86,7 +86,7 @@ export function buildRuntimeAiVaultHostScopeOptions(
 ): AiVaultHostScopeOption[] {
   return runtimeEnvironments.map((environment) => {
     const id = toRuntimeExecutionHostId(environment.id)
-    const label = environment.name.trim() || getExecutionHostLabel(id)
+    const label = environment.name.trim() || getTranslatedExecutionHostLabel(id)
     return { id, label }
   })
 }
@@ -108,17 +108,23 @@ export function buildAiVaultHostScopeOptions(args: {
     ? parseExecutionHostId(args.activeExecutionHostScope)
     : null
 
-  add({ id: LOCAL_EXECUTION_HOST_ID, label: getExecutionHostLabel(LOCAL_EXECUTION_HOST_ID) })
+  add({
+    id: LOCAL_EXECUTION_HOST_ID,
+    label: getTranslatedExecutionHostLabel(LOCAL_EXECUTION_HOST_ID)
+  })
   if (activeHost?.kind === 'ssh') {
-    add({ id: activeHost.id, label: getExecutionHostLabel(activeHost.id) })
+    add({ id: activeHost.id, label: getTranslatedExecutionHostLabel(activeHost.id) })
   }
   for (const option of args.runtimeHostOptions) {
     add(option)
   }
   if (activeHost?.kind === 'runtime') {
-    add({ id: activeHost.id, label: getExecutionHostLabel(activeHost.id) })
+    add({ id: activeHost.id, label: getTranslatedExecutionHostLabel(activeHost.id) })
   }
-  add({ id: ALL_EXECUTION_HOSTS_SCOPE, label: getExecutionHostLabel(ALL_EXECUTION_HOSTS_SCOPE) })
+  add({
+    id: ALL_EXECUTION_HOSTS_SCOPE,
+    label: getTranslatedExecutionHostLabel(ALL_EXECUTION_HOSTS_SCOPE)
+  })
 
   return options
 }

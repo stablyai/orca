@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import { getExecutionHostLabel } from '../../../shared/execution-host'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
+import { getTranslatedExecutionHostLabel } from './sidebar/host-section-rows'
 import type { ExecutionHostHealth } from '../../../shared/execution-host-registry'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskProvider } from '../../../shared/types'
@@ -32,7 +32,7 @@ export type TaskSourceHostAvailability = {
 type HostLabelLookup = ReadonlyMap<string, string> | undefined
 
 function getHostLabel(hostId: ExecutionHostScope, hostLabelById: HostLabelLookup): string {
-  return hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)
+  return hostLabelById?.get(hostId) ?? getTranslatedExecutionHostLabel(hostId)
 }
 
 export function getTaskSourceContextSummary(args: {

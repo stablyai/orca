@@ -23,7 +23,10 @@ function getProjectFilterVisibilityLabel({
     )
   }
   if (selectedCount === 1) {
-    return selectedRepos[0]?.displayName ?? 'Projects'
+    return (
+      selectedRepos[0]?.displayName ??
+      translate('auto.components.sidebar.SidebarRepositoryFilterSection.7679f0c268', 'Projects')
+    )
   }
   return translate(
     'auto.components.sidebar.SidebarRepositoryFilterSection.selectedProjectsCount',

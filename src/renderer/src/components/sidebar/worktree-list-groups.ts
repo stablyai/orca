@@ -35,13 +35,13 @@ import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../store/slic
 import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 import { translate } from '@/i18n/i18n'
 import {
-  getExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { getTranslatedExecutionHostLabel } from './host-section-rows'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import {
   isWindowsAbsolutePathLike,
@@ -714,14 +714,14 @@ function getRepoHostLabel(
 ): string | null {
   const setup = projectIndex?.setupByRepoId.get(repoId)
   if (setup) {
-    return hostLabelById?.get(setup.hostId) ?? getExecutionHostLabel(setup.hostId)
+    return hostLabelById?.get(setup.hostId) ?? getTranslatedExecutionHostLabel(setup.hostId)
   }
   const repo = repoMap.get(repoId)
   if (!repo) {
     return null
   }
   const hostId = getRepoExecutionHostId(repo)
-  return hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)
+  return hostLabelById?.get(hostId) ?? getTranslatedExecutionHostLabel(hostId)
 }
 
 function getMixedHostContextLabels(
@@ -754,7 +754,10 @@ function getMixedWorktreeHostContextLabels(
   for (const worktree of worktrees) {
     const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
     uniqueHostIds.add(hostId)
-    labelsByWorktreeId.set(worktree.id, hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId))
+    labelsByWorktreeId.set(
+      worktree.id,
+      hostLabelById?.get(hostId) ?? getTranslatedExecutionHostLabel(hostId)
+    )
   }
   return uniqueHostIds.size > 1 ? labelsByWorktreeId : undefined
 }

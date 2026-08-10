@@ -302,7 +302,7 @@ function getSelectedAccountRuntime(
       wslDistro: selectedDistro,
       label: selectedDistro
         ? `WSL ${selectedDistro}`
-        : translate('auto.components.settings.AccountsPane.2358ac71d2', 'WSL default')
+        : translate('auto.components.settings.AccountsPane.2358ac71d2', 'WSL')
     }
   }
   return { runtime: 'host', label: getHostRuntimeLabel() }
@@ -684,16 +684,13 @@ export function AccountsPane({
                             'auto.components.settings.AccountsPane.ad47a33f72',
                             'Loading WSL'
                           )
-                        : translate(
-                            'auto.components.settings.AccountsPane.2358ac71d2',
-                            'WSL default'
-                          )
+                        : translate('auto.components.settings.AccountsPane.2358ac71d2', 'WSL')
                     }
                   />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={WSL_DEFAULT_DISTRO_KEY}>
-                    {translate('auto.components.settings.AccountsPane.2358ac71d2', 'WSL default')}
+                    {translate('auto.components.settings.AccountsPane.2358ac71d2', 'WSL')}
                   </SelectItem>
                   {wslDistros.map((distro) => (
                     <SelectItem key={distro} value={distro}>
@@ -850,7 +847,7 @@ export function AccountsPane({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.AccountsPane.72b36ea174',
-              'Optional. Orca can use your normal Claude login; add accounts only if you want quick switching without moving chat sessions.'
+              'Orca can use your normal Claude login; add accounts only if you want quick switching without moving chat sessions'
             )}
           </p>
         </div>
@@ -1114,7 +1111,7 @@ export function AccountsPane({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.AccountsPane.cedfab35ab',
-              'Optional. Orca can use your normal Codex login; add accounts only if you want quick switching in Orca.'
+              'Orca can use your normal Codex login; add accounts only if you want quick switching in Orca'
             )}
           </p>
           <p className="text-xs text-muted-foreground">

@@ -27,7 +27,10 @@ export function getDiscardEntryConfirmationCopy(
         'auto.components.right.sidebar.source.control.discard.confirmation.d97bf697c9',
         'This will permanently delete this file. This cannot be undone.'
       ),
-      confirmLabel: 'Delete'
+      confirmLabel: translate(
+        'auto.components.right.sidebar.source.control.discard.confirmation.38091f741b',
+        'Delete'
+      )
     }
   }
 
@@ -42,7 +45,10 @@ export function getDiscardEntryConfirmationCopy(
         'auto.components.right.sidebar.source.control.discard.confirmation.40e9357b2a',
         'This will restore the file from HEAD and discard the deletion. This cannot be undone.'
       ),
-      confirmLabel: 'Restore'
+      confirmLabel: translate(
+        'auto.components.right.sidebar.source.control.discard.confirmation.f04248c925',
+        'Restore'
+      )
     }
   }
 
@@ -56,7 +62,10 @@ export function getDiscardEntryConfirmationCopy(
       'auto.components.right.sidebar.source.control.discard.confirmation.1426c2efff',
       'This will revert all changes to this file. This cannot be undone.'
     ),
-    confirmLabel: 'Discard'
+    confirmLabel: translate(
+      'auto.components.right.sidebar.source.control.discard.confirmation.09ffa3d823',
+      'Discard'
+    )
   }
 }
 
@@ -67,12 +76,39 @@ export function getDiscardAreaConfirmationCopy(
   switch (area) {
     case 'untracked':
       return {
-        title: count === 1 ? 'Delete 1 untracked file?' : `Delete ${count} untracked files?`,
+        title:
+          count === 1
+            ? translate(
+                'auto.components.right.sidebar.source.control.discard.confirmation.8faac2cdbd',
+                'Delete 1 untracked file?'
+              )
+            : translate(
+                'auto.components.right.sidebar.source.control.discard.confirmation.4e31c88481',
+                'Delete {{value0}} untracked files?',
+                { value0: count }
+              ),
         description:
           count === 1
-            ? 'This will permanently delete this untracked file. This cannot be undone.'
-            : `This will permanently delete these ${count} untracked files. This cannot be undone.`,
-        confirmLabel: count === 1 ? 'Delete' : `Delete ${count}`
+            ? translate(
+                'auto.components.right.sidebar.source.control.discard.confirmation.fb23afa766',
+                'This will permanently delete this untracked file. This cannot be undone.'
+              )
+            : translate(
+                'auto.components.right.sidebar.source.control.discard.confirmation.d8321699df',
+                'This will permanently delete these {{value0}} untracked files. This cannot be undone.',
+                { value0: count }
+              ),
+        confirmLabel:
+          count === 1
+            ? translate(
+                'auto.components.right.sidebar.source.control.discard.confirmation.38091f741b',
+                'Delete'
+              )
+            : translate(
+                'auto.components.right.sidebar.source.control.discard.confirmation.7a33bf6ae0',
+                'Delete {{value0}}',
+                { value0: count }
+              )
       }
     case 'staged':
       return {
@@ -84,7 +120,10 @@ export function getDiscardAreaConfirmationCopy(
           'auto.components.right.sidebar.source.control.discard.confirmation.ddf36f291c',
           'This will unstage and revert all staged changes. Staged new files will be deleted. This cannot be undone.'
         ),
-        confirmLabel: 'Discard all'
+        confirmLabel: translate(
+          'auto.components.right.sidebar.source.control.discard.confirmation.947f57b4c8',
+          'Discard all'
+        )
       }
     case 'unstaged':
       return {
@@ -94,9 +133,19 @@ export function getDiscardAreaConfirmationCopy(
         ),
         description:
           count === 1
-            ? 'This will revert the unstaged changes in 1 file. This cannot be undone.'
-            : `This will revert unstaged changes in ${count} files. This cannot be undone.`,
-        confirmLabel: 'Discard all'
+            ? translate(
+                'auto.components.right.sidebar.source.control.discard.confirmation.5029ad1e9d',
+                'This will revert the unstaged changes in 1 file. This cannot be undone.'
+              )
+            : translate(
+                'auto.components.right.sidebar.source.control.discard.confirmation.f488e8a898',
+                'This will revert unstaged changes in {{value0}} files. This cannot be undone.',
+                { value0: count }
+              ),
+        confirmLabel: translate(
+          'auto.components.right.sidebar.source.control.discard.confirmation.947f57b4c8',
+          'Discard all'
+        )
       }
   }
 }

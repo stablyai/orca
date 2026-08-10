@@ -25,6 +25,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
+import { formatSshUserFacingError } from '@/components/settings/ssh-user-facing-error'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { describeRuntimeCompatBlock } from '../../../../shared/protocol-compat'
 import {
@@ -107,7 +108,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
       } catch (err) {
         toast.error(
           err instanceof Error
-            ? err.message
+            ? formatSshUserFacingError(err.message)
             : action === 'connect'
               ? translate(
                   'auto.components.sidebar.HostSectionHeaderMenu.2c29e2de68',

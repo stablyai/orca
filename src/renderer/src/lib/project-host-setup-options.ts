@@ -1,10 +1,13 @@
 import {
-  getExecutionHostLabel,
   isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
+import {
+  getTranslatedExecutionHostLabel,
+  translateExecutionHostLabel
+} from '@/components/sidebar/host-section-rows'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
 import { isEphemeralVmRuntimeEnvironment } from '../../../shared/runtime-environments'
 import {
@@ -12,6 +15,7 @@ import {
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
 import type { ProjectHostSetup, Repo } from '../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 export type ProjectHostSetupOption =
   | {
@@ -133,7 +137,9 @@ function buildReadySetupOptions({
       projectId: setup.projectId,
       hostId: setup.hostId,
       repoId: setup.repoId,
-      label: hostById.get(setup.hostId)?.label || getExecutionHostLabel(setup.hostId),
+      label: translateExecutionHostLabel(
+        hostById.get(setup.hostId)?.label || getTranslatedExecutionHostLabel(setup.hostId)
+      ),
       detail: setup.displayName,
       path: setup.path
     }))
@@ -178,7 +184,7 @@ function buildNeedsSetupOptions({
         kind: 'needs-setup' as const,
         projectId,
         hostId: host.id,
-        label: host.label || getExecutionHostLabel(host.id),
+        label: translateExecutionHostLabel(host.label || getTranslatedExecutionHostLabel(host.id)),
         detail: availability.isAvailable
           ? pendingSetup
             ? getPendingSetupDetail(pendingSetup)
@@ -210,7 +216,10 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
   if (host.health === 'blocked') {
     return {
       isAvailable: false,
-      detail: 'Orca server version is incompatible'
+      detail: translate(
+        'auto.lib.project.host.setup.options.deb150c3a7',
+        'Orca server version is incompatible'
+      )
     }
   }
   // Why: disconnected hosts cannot confirm project setup or runtime capabilities,
@@ -226,7 +235,10 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
     if (!host.capabilities) {
       return {
         isAvailable: false,
-        detail: 'Checking host capabilities'
+        detail: translate(
+          'auto.lib.project.host.setup.options.e084b8f916',
+          'Checking host capabilities'
+        )
       }
     }
     if (
@@ -235,7 +247,10 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
     ) {
       return {
         isAvailable: false,
-        detail: 'Update Orca on this host to set up projects'
+        detail: translate(
+          'auto.lib.project.host.setup.options.dab97ff977',
+          'Update Orca on this host to set up projects'
+        )
       }
     }
   }

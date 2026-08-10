@@ -13,6 +13,7 @@ import {
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { getMobileEmulatorCliPathNeedsAttention } from './mobile-emulator-agent-setup-cli-state'
 import { translate } from '@/i18n/i18n'
+import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
 
 function getCliActionLabel(status: CliInstallStatus | null, busy: boolean): string {
   if (busy) {
@@ -85,7 +86,7 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
       if (mountedRef.current) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? formatCliUserFacingDetail(error.message) || error.message
             : translate(
                 'auto.components.emulator.pane.use.mobile.emulator.agent.setup.state.51074ccb05',
                 'Failed to load CLI status.'
@@ -183,7 +184,7 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
       if (mountedRef.current) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? formatCliUserFacingDetail(error.message) || error.message
             : translate(
                 'auto.components.emulator.pane.use.mobile.emulator.agent.setup.state.c94ff11e91',
                 'Could not re-check setup status.'

@@ -168,8 +168,14 @@ export function SshTargetDestructiveActions({
           'This will remove the target and end any active remote terminals.'
         )}
         targetLabel={pendingRemove?.label}
-        actionLabel="Remove"
-        busyLabel="Removing"
+        actionLabel={translate(
+          'auto.components.settings.SshTargetDestructiveActions.remove',
+          'Remove'
+        )}
+        busyLabel={translate(
+          'auto.components.settings.SshTargetDestructiveActions.removing',
+          'Removing'
+        )}
         isBusy={pendingRemoveIsBusy}
         onOpenChange={(open) => {
           if (pendingRemoveIsBusy) {
@@ -195,8 +201,14 @@ export function SshTargetDestructiveActions({
           'This force-stops the remote relay for this SSH target. Active remote terminals and port forwards for this target will end.'
         )}
         targetLabel={dialogPendingReset?.label}
-        actionLabel="Reset Relay"
-        busyLabel="Resetting"
+        actionLabel={translate(
+          'auto.components.settings.SshTargetDestructiveActions.811f69bd7f',
+          'Reset Relay'
+        )}
+        busyLabel={translate(
+          'auto.components.settings.SshTargetDestructiveActions.15b1c376d0',
+          'Resetting'
+        )}
         isBusy={pendingResetIsBusy}
         onOpenChange={(open) => {
           if (pendingResetIsBusy) {
@@ -220,8 +232,14 @@ export function SshTargetDestructiveActions({
           'This will stop active terminal sessions on this SSH target. Reconnecting will not restore them.'
         )}
         targetLabel={pendingTerminate?.label}
-        actionLabel="End Terminals"
-        busyLabel="Ending"
+        actionLabel={translate(
+          'auto.components.settings.SshTargetDestructiveActions.083c8167c9',
+          'End Terminals'
+        )}
+        busyLabel={translate(
+          'auto.components.settings.SshTargetDestructiveActions.a6dbec27d7',
+          'Ending'
+        )}
         isBusy={pendingTerminateIsBusy}
         onOpenChange={(open) => {
           if (pendingTerminateIsBusy) {

@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { formatCost, formatTokens } from './usage-formatters'
+import { formatCost, formatTokens, formatUsageProjectLabel } from './usage-formatters'
 
 export type UsageBreakdownRow = {
   key: string
@@ -37,14 +37,16 @@ export function UsageBreakdownSection({
         <h4 className="text-sm font-semibold text-foreground">{title}</h4>
         <p className="text-xs text-muted-foreground">
           {topLabel}{' '}
-          {topValue ?? translate('auto.components.stats.UsageBreakdownSection.7765a4c3e1', 'n/a')}
+          {topValue
+            ? formatUsageProjectLabel(topValue)
+            : translate('auto.components.stats.UsageBreakdownSection.7765a4c3e1', 'n/a')}
         </p>
       </div>
       <div className="space-y-3">
         {rows.slice(0, 5).map((row) => (
           <div key={row.key} className="space-y-1">
             <div className="flex items-center justify-between gap-3 text-sm">
-              <span className="truncate text-foreground">{row.label}</span>
+              <span className="truncate text-foreground">{formatUsageProjectLabel(row.label)}</span>
               <span className="shrink-0 text-muted-foreground">{formatTokens(row.tokens)}</span>
             </div>
             <div className="text-xs text-muted-foreground">

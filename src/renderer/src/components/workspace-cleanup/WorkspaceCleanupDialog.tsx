@@ -930,7 +930,10 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                           'auto.components.workspace.cleanup.WorkspaceCleanupDialog.a19040cd67',
                           'No inactive workspaces match the selected repos.'
                         )}
-                        actionLabel="Show all repos"
+                        actionLabel={translate(
+                          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7869281a04',
+                          'Show all repos'
+                        )}
                         onAction={() => setRepoSelection(new Set(eligibleRepoIds))}
                       />
                     ) : null}
@@ -943,7 +946,10 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                           'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4719327c9c',
                           'All cleanup suggestions are ignored.'
                         )}
-                        actionLabel="Review ignored workspaces"
+                        actionLabel={translate(
+                          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.8c9ea6e305',
+                          'Review ignored workspaces'
+                        )}
                         onAction={() => setActiveView('hidden')}
                       />
                     ) : null}

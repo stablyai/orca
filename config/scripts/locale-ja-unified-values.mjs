@@ -154,7 +154,7 @@ export const JA_UNIFIED_VALUES = {
   'The GitLab CLI is installed but not authenticated. Run this command in a terminal:':
     'GitLab CLI はインストールされていますが、認証されていません。ターミナルで次のコマンドを実行してください:',
   'Install GitLab CLI': 'GitLab CLI をインストール',
-  'CLI.': 'CLI。',
+  'CLI.': 'CLI',
   'The GitHub CLI is installed but not authenticated. Run this command in a terminal:':
     'GitHub CLI はインストールされていますが、認証されていません。ターミナルで次のコマンドを実行してください:',
   'Install GitHub CLI': 'GitHub CLI をインストール',

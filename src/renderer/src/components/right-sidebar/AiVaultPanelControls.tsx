@@ -31,9 +31,11 @@ import {
   type AiVaultScope,
   type AiVaultSort
 } from '../../../../shared/ai-vault-types'
-import { getExecutionHostLabel, type ExecutionHostScope } from '../../../../shared/execution-host'
+import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { agentLabel, type AiVaultSessionGroup } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
+import { formatUnknownLocationLabel } from '@/components/stats/usage-formatters'
+import { getTranslatedExecutionHostLabel } from '../sidebar/host-section-rows'
 import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
 import { AiVaultSessionLimitMenu } from './AiVaultSessionLimitMenu'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
@@ -71,7 +73,7 @@ export function VaultGroupHeader({
           !collapsed && 'rotate-90'
         )}
       />
-      <span className="min-w-0 flex-1 truncate">{group.label}</span>
+      <span className="min-w-0 flex-1 truncate">{formatUnknownLocationLabel(group.label)}</span>
       <span className="rounded-md border border-sidebar-border bg-background px-2 py-0.5 text-[11px] font-semibold tabular-nums leading-none text-foreground shadow-xs">
         {group.sessions.length}
       </span>
@@ -164,7 +166,7 @@ export function VaultHostScopeMenu({
   onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
 }): React.JSX.Element {
   const selectedOption = hostOptions.find((option) => option.id === executionHostScope)
-  const label = selectedOption?.label ?? getExecutionHostLabel(executionHostScope)
+  const label = selectedOption?.label ?? getTranslatedExecutionHostLabel(executionHostScope)
 
   return (
     <DropdownMenu>

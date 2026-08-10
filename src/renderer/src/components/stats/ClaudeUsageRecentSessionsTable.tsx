@@ -3,7 +3,7 @@ import type {
   ClaudeUsageSummary
 } from '../../../../shared/claude-usage-types'
 import { translate } from '@/i18n/i18n'
-import { formatSessionTime, formatTokens } from './usage-formatters'
+import { formatSessionTime, formatTokens, formatUsageProjectLabel } from './usage-formatters'
 
 export function ClaudeUsageRecentSessionsTable({
   recentSessions,
@@ -58,7 +58,9 @@ export function ClaudeUsageRecentSessionsTable({
                 <td className="px-2 py-2 text-muted-foreground">
                   {formatSessionTime(row.lastActiveAt)}
                 </td>
-                <td className="px-2 py-2 text-foreground">{row.projectLabel}</td>
+                <td className="px-2 py-2 text-foreground">
+                  {formatUsageProjectLabel(row.projectLabel)}
+                </td>
                 <td className="px-2 py-2 text-muted-foreground">
                   {row.model ??
                     translate('auto.components.stats.ClaudeUsagePane.cfe2282ffa', 'Unknown')}

@@ -86,8 +86,6 @@ function getWslAgentSkillRuntime(distro: string | null): ProjectAgentSkillRuntim
   return {
     runtime: 'wsl',
     wslDistro: distro,
-    label: distro
-      ? `WSL ${distro}`
-      : translate('auto.lib.projectSkillRuntime.wslDefault', 'WSL default')
+    label: distro ? `WSL ${distro}` : translate('auto.lib.projectSkillRuntime.wslDefault', 'WSL')
   }
 }

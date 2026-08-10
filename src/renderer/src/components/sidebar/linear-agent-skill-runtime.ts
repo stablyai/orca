@@ -48,7 +48,7 @@ export function getLinearPromptAgentRuntime(
       wslDistro: selectedDistro,
       label: selectedDistro
         ? `WSL ${selectedDistro}`
-        : translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.wslLabel', 'WSL default')
+        : translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.wslLabel', 'WSL')
     }
   }
   return {
@@ -84,7 +84,7 @@ function getWslAgentRuntime(distro: string | null): LocalAgentRuntime {
     wslDistro: distro,
     label: distro
       ? `WSL ${distro}`
-      : translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.wslLabel', 'WSL default')
+      : translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.wslLabel', 'WSL')
   }
 }
 

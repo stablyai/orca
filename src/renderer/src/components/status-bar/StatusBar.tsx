@@ -189,7 +189,9 @@ function getCodexStatusRuntimeLabel(
   if (target.runtime === 'host') {
     return hostLabel
   }
-  return target.wslDistro ? `WSL ${target.wslDistro}` : 'WSL default'
+  return target.wslDistro
+    ? `WSL ${target.wslDistro}`
+    : translate('auto.components.status.bar.StatusBar.wslRuntime', 'WSL')
 }
 
 function getCodexStatusRuntimeKey(target: CodexStatusRuntimeTarget): string {

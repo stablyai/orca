@@ -3,6 +3,7 @@ import type React from 'react'
 import { toast } from 'sonner'
 import { Button } from '../ui/button'
 import { translate } from '@/i18n/i18n'
+import { formatAndroidSdkUserFacingMessage } from '@/lib/cli-emulator-user-facing-copy'
 
 type EmulatorAvailability = {
   platform: string
@@ -127,7 +128,7 @@ export function MobileEmulatorAvailabilityDetails({
                 <code className="rounded bg-muted px-1 py-0.5">{android.sdkPath}</code>
               </>
             ) : (
-              android.message ||
+              formatAndroidSdkUserFacingMessage(android.message) ||
               translate(
                 'auto.components.settings.MobileEmulatorSdkStatus.2784f0b22d',
                 'Not found. Install Android Studio, then create a Virtual Device.'

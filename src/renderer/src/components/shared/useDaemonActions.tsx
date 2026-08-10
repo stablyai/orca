@@ -245,8 +245,11 @@ function getCopy(kind: DaemonActionKind): CopyShape {
           )}
         </>
       ),
-      confirmLabel: 'Restart daemon',
-      busyLabel: 'Restarting…'
+      confirmLabel: translate(
+        'auto.components.shared.useDaemonActions.f659dcf9fd',
+        'Restart daemon'
+      ),
+      busyLabel: translate('auto.components.shared.useDaemonActions.14078af032', 'Restarting…')
     }
   }
   return {
@@ -262,8 +265,11 @@ function getCopy(kind: DaemonActionKind): CopyShape {
         )}
       </>
     ),
-    confirmLabel: 'Kill all sessions',
-    busyLabel: 'Killing…'
+    confirmLabel: translate(
+      'auto.components.shared.useDaemonActions.e81a7a23bc',
+      'Kill all sessions'
+    ),
+    busyLabel: translate('auto.components.shared.useDaemonActions.ee6f8918b4', 'Killing…')
   }
 }
 

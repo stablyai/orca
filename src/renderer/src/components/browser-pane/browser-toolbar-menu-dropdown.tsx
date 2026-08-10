@@ -25,6 +25,7 @@ type DetectedBrowserEntry = {
 }
 import { BROWSER_VIEWPORT_PRESETS } from '../../../../shared/browser-viewport-presets'
 import { translate } from '@/i18n/i18n'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser-session-profile-label'
 
 type BrowserToolbarMenuDropdownProps = {
   menuOpen: boolean
@@ -83,7 +84,9 @@ export function BrowserToolbarMenuDropdown({
               <Check
                 className={`mr-2 size-3.5 shrink-0 ${isSelectedProfile ? 'opacity-100' : 'opacity-0'}`}
               />
-              <span className="truncate">{profile.label}</span>
+              <span className="truncate">
+                {translateBrowserSessionProfileLabel(profile.label, profile.id)}
+              </span>
               {profile.source?.browserFamily && (
                 <span className="ml-auto pl-2 text-[11px] text-muted-foreground">
                   {BROWSER_FAMILY_LABELS[profile.source.browserFamily] ??
