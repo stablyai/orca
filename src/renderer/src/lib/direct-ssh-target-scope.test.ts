@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
+  resolveDirectSshGitWorktreeTargetIds,
   resolveDirectSshTargetScope,
   type DirectSshTargetScopeInput
 } from './direct-ssh-target-scope'
@@ -12,6 +13,34 @@ const baseInput: DirectSshTargetScopeInput = {
 }
 
 describe('resolveDirectSshTargetScope', () => {
+  it('indexes exact SSH worktree owners once while excluding ambiguous ownership', () => {
+    const exact = {
+      id: 'exact',
+      path: '/remote/exact',
+      projectGroupId: null,
+      connectionId: 'target-a',
+      executionHostId: 'ssh:target-a' as const
+    }
+    const duplicate = {
+      id: 'duplicate',
+      path: '/remote/duplicate',
+      projectGroupId: null,
+      connectionId: 'target-b',
+      executionHostId: 'ssh:target-b' as const
+    }
+
+    expect(
+      resolveDirectSshGitWorktreeTargetIds({
+        catalogRevision: 1,
+        repos: [exact, duplicate, { ...duplicate }],
+        worktreesByRepo: {
+          exact: [{ id: 'exact::worktree', repoId: 'exact', hostId: 'ssh:target-a' }],
+          duplicate: [{ id: 'duplicate::worktree', repoId: 'duplicate', hostId: 'ssh:target-b' }]
+        }
+      })
+    ).toEqual(new Map([['exact::worktree', 'target-a']]))
+  })
+
   it('resolves duplicate repo IDs by exact SSH host instead of first wins', () => {
     const scope = resolveDirectSshTargetScope({
       ...baseInput,

@@ -2705,22 +2705,24 @@
       "providers": ["ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "Deterministic main/renderer tests cover enqueue-time causal patch acknowledgement, Electron sender/process ownership, monotonic renderer takeover, initial hydration, workspace/tab/process identity reuse, target-scoped connectedness transitions, connected-target admission preference, target-local overflow and cleanup, secondary-overflow all-target cleanup, aggregate retained-payload admission, pre-delivery creation/deletion, request fencing, authoritative deletion, bounded writes, duplicate repair, and hot-title target-scan isolation. A target-65 oracle preloads 64 authoritative baselines, proves deletion acknowledgement, then preserves an unsolicited local creation; a saturated-pending variant fails closed and recovers after its target-local patch acknowledgement. The saturated variant also proves that an older acknowledgement cannot clear a newer same-target observation across either the same renderer generation or a renderer takeover, while an inverse three-operation queue proves a waiting stale session cannot capture a mutation observed after it was enqueued. Target IDs reject 1 MiB and multibyte overflow before retention while accepting the 512-byte boundary; full tab/layout observations retain at most 2 MiB per target. A real renderer/preload/main IPC run sends 1,000 target observations and proves target 65 plus an unrelated target reconcile without cross-target poisoning. A visible and headless macOS Electron client reached a throwaway Linux Docker OpenSSH target and real Git repository without ssh localhost; both preserved the exact new tab and PTY through a held stale snapshot, proved terminal input on the target, and exited with scoped cleanup. Physical Linux/Windows clients and paired-Orca-server topology remain unrun.",
+      "coverageNotes": "Deterministic main/renderer tests cover enqueue-time causal patch acknowledgement, target lifecycle and exact Electron sender/process authority, monotonic renderer takeover, initial hydration, workspace/tab/process identity reuse, target-scoped connectedness transitions, connected-target admission preference, target-local overflow and cleanup, secondary-overflow all-target cleanup, aggregate historical-layout retention, pre-delivery creation/deletion, request fencing, authoritative deletion, bounded writes, duplicate repair, and hot-title target-scan isolation. Sequential layouts grow proportionally below the 2 MiB retained-intent budget, then fail closed and release their payload; a pre-forget queued acknowledgement cannot clear a post-readmission intent whose sequence was reused. The production observer indexes SSH worktree ownership once per configuration state and publishes 1,000 initial targets within a 750 ms unit budget. A real renderer/preload/main IPC run sends 1,000 target observations and proves target 65 plus an unrelated target reconcile without cross-target poisoning. Prior visible and headless macOS Electron runs reached a throwaway Linux Docker OpenSSH target and real Git repository without ssh localhost; both preserved the exact new tab and PTY through a held stale snapshot, proved terminal input on the target, and exited with scoped cleanup. Docker was reserved and not rerun for the lifecycle/retention/index-only correction; physical Linux/Windows clients and paired-Orca-server topology remain unrun.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/13013"],
-      "invariant": "A direct SSH snapshot may change acknowledged terminal-tab presence, but it cannot erase an unacknowledged target-local creation or resurrect an unacknowledged target-local deletion. An acknowledgement may clear only the exact target observation sequence and renderer owner captured when that exact session was enqueued, and invalid or oversized observations may not consume unbounded retained state. SSH connectedness must reach main without rescanning unrelated target scopes so admission and eviction use current evidence. A relevant session write suppressed by snapshot application must persist after the trailing idle window or at one fixed 60-second ceiling that later mutations cannot postpone.",
+      "invariant": "A direct SSH snapshot may change acknowledged terminal-tab presence, but it cannot erase an unacknowledged target-local creation or resurrect an unacknowledged target-local deletion. An acknowledgement may clear only the exact target lifecycle, observation sequence, and Electron sender/process authority captured when that exact session was enqueued, and historical intent payloads must remain byte-bounded. SSH connectedness and configuration observation must not rebuild global worktree ownership per target. A relevant session write suppressed by snapshot application must persist after the trailing idle window or at one fixed 60-second ceiling that later mutations cannot postpone.",
       "oracle": "After 64 authoritative target baselines, admit target 65, close one of its tabs, and require a stale snapshot not to resurrect it; acknowledge the deletion through the captured patch, create a local tab, then require an unsolicited snapshot that omits it to preserve it. Saturate all 64 retained targets with pending mutations and require an untracked target-local mutation to block snapshot application until its own successful patch acknowledgement. Queue an older session behind a held write, observe a newer target-65 mutation, queue its exact session, and require the older acknowledgement to leave reconciliation blocked until the newer write returns. Connect and disconnect one target among 1,000 configured targets, require only that target to publish, then prove disconnected-first eviction, connected admission, and explicit cleanup. Submit 1 MiB and multibyte-overflow target IDs and require no retained state, accept the documented 512-byte boundary, fail closed above the 2 MiB per-target tab/layout budget, recover through a bounded authoritative observation, and clear secondary overflow only on authoritative all-target cleanup. Also hold a real remoteWorkspace:get, create a terminal through the visible UI, require its exact tab and PTY identity in the next remote snapshot, and write a proof file through that PTY on a real SSH target.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
-        "for run in {1..100}; do pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts --reporter=dot; done",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-retention.test.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts src/renderer/src/lib/direct-ssh-target-scope.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
+        "for run in {1..100}; do pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-retention.test.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts --reporter=dot; done",
         "VITE_EXPOSE_STORE=true pnpm exec electron-vite build --mode e2e",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/remote-workspace-tab-observation-scale.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-remote-workspace-snapshot-race.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-remote-workspace-snapshot-race.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
+        "src/main/ipc/remote-workspace-tab-intent-retention.test.ts",
         "src/main/ipc/remote-workspace-tab-intent-store.test.ts",
         "src/main/ipc/remote-workspace-tab-observation-owner.test.ts",
         "src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts",
+        "src/renderer/src/lib/direct-ssh-target-scope.test.ts",
         "src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts",
         "src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts",
         "src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts",
@@ -2734,12 +2736,19 @@
       ],
       "assertionRefs": [
         {
+          "file": "src/main/ipc/remote-workspace-tab-intent-retention.test.ts",
+          "assertions": [
+            "sequential historical layouts grow proportionally below the 2 MiB target budget, overflow fails closed, and cleanup releases retained payload accounting"
+          ]
+        },
+        {
           "file": "src/main/ipc/remote-workspace-tab-intent-store.test.ts",
           "assertions": [
             "unacknowledged intent survives renderer restart and only a causally captured successful patch acknowledges it",
             "worktree, tab, PTY, and process-incarnation reuse cannot acknowledge an older intent",
             "target 65 preserves deletion and creation intent after 64 baselines, prefers an idle disconnected eviction, and fails closed with target-local recovery when all retained targets are pending",
             "an older untracked patch acknowledgement cannot clear a newer same-target sequence or renderer-generation fence",
+            "a queued pre-forget acknowledgement cannot clear a post-readmission intent after tracked sequence reuse",
             "connection-only observations update disconnected-first eviction and explicit cleanup state",
             "secondary overflow recovers on authoritative all-target cleanup",
             "1 MiB and multibyte-overflow target IDs are rejected before retention while the 512-byte boundary remains valid",
@@ -2757,6 +2766,7 @@
           "file": "src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts",
           "assertions": [
             "only the target owning a changed worktree is scanned and live title churn emits no observation",
+            "1,000 initial target observations use one global worktree-owner index and complete within 750 ms",
             "connect and disconnect transitions publish only the changed target and participate in observation deduplication",
             "removing the final configured target emits authoritative all-target cleanup",
             "snapshot hydration establishes an authoritative baseline without creating local intent",
@@ -2812,19 +2822,19 @@
           "date": "2026-08-10",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-retention.test.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts src/renderer/src/lib/direct-ssh-target-scope.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 3,
-          "summary": "Eleven focused files passed 102 hydration, Electron-owner, persistent-intent, enqueue-time inverse-queue, connectedness, overflow-recovery, aggregate-payload, target-ID bound, target-65 admission, identity-reuse, race-oracle, snapshot, target-sync, persistence, patch-queue, and relay-handler tests."
+          "summary": "Thirteen focused files passed 114 hydration, lifecycle-fenced acknowledgement, Electron-owner, retained-byte, once-indexed 1,000-target observer, admission, race-oracle, snapshot, persistence, patch-queue, and relay-handler tests."
         },
         {
           "date": "2026-08-10",
           "runner": "local",
           "platform": "macos",
-          "command": "for run in {1..100}; do pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts --reporter=dot; done",
+          "command": "for run in {1..100}; do pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-retention.test.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts --reporter=dot; done",
           "result": "passed",
           "durationSeconds": 101,
-          "summary": "All 100 consecutive production-owner and byte-identical race-oracle iterations passed, with 23 tests per iteration including target-65 admission, saturated pending targets, causal untracked acknowledgement, aggregate payload bounds, secondary-overflow recovery, and target-ID bounds."
+          "summary": "All 100 consecutive production-owner and byte-identical race-oracle iterations passed, including lifecycle-fenced acknowledgement, proportional payload bounds, target-65 admission, renderer ownership, and 1,000-target observer latency."
         },
         {
           "date": "2026-08-10",

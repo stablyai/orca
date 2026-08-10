@@ -1,5 +1,26 @@
 import type { RemoteWorkspaceTabObservationAuthority } from './remote-workspace-tab-intent-types'
 
+export function sameRemoteWorkspaceTabObservationAuthority(
+  left: RemoteWorkspaceTabObservationAuthority,
+  right: RemoteWorkspaceTabObservationAuthority
+): boolean {
+  return (
+    left.rendererGeneration === right.rendererGeneration &&
+    left.processId === right.processId &&
+    left.senderId === right.senderId
+  )
+}
+
+export function canReplaceRemoteWorkspaceTabObservationAuthority(
+  current: RemoteWorkspaceTabObservationAuthority,
+  candidate: RemoteWorkspaceTabObservationAuthority
+): boolean {
+  return (
+    candidate.rendererGeneration > current.rendererGeneration ||
+    sameRemoteWorkspaceTabObservationAuthority(current, candidate)
+  )
+}
+
 type ObservationSender = {
   id: number
   once(event: 'destroyed', listener: () => void): unknown

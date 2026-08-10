@@ -35,8 +35,7 @@ export type DirectSshGroupOwner = Pick<
   'id' | 'parentGroupId' | 'connectionId' | 'executionHostId'
 >
 
-export type DirectSshTargetScopeInput = {
-  targetId: string
+export type DirectSshOwnerCatalog = {
   catalogRevision: number
   repos: readonly DirectSshRepoOwner[]
   worktreesByRepo?: Readonly<Record<string, readonly DirectSshWorktreeOwner[]>>
@@ -46,4 +45,8 @@ export type DirectSshTargetScopeInput = {
   folderWorkspaces?: readonly DirectSshFolderOwner[]
   projectGroups?: readonly DirectSshGroupOwner[]
   restoredRuntimeHostIdByWorkspaceSessionKey?: Readonly<Record<string, string | null | undefined>>
+}
+
+export type DirectSshTargetScopeInput = DirectSshOwnerCatalog & {
+  targetId: string
 }

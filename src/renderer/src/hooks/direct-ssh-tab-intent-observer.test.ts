@@ -205,6 +205,46 @@ describe('createDirectSshTabIntentObserver', () => {
     )
   })
 
+  it('publishes 1,000 initial target observations within the observer latency budget', () => {
+    const targetCount = 1_000
+    const repos = Array.from({ length: targetCount }, (_, index) => ({
+      id: `repo-${index}`,
+      path: `/remote/${index}`,
+      projectGroupId: null,
+      connectionId: `target-${index}`,
+      executionHostId: `ssh:target-${index}`
+    }))
+    const worktreesByRepo = Object.fromEntries(
+      repos.map((repo, index) => [
+        repo.id,
+        [
+          {
+            id: `${repo.id}::/remote/${index}`,
+            repoId: repo.id,
+            hostId: repo.executionHostId,
+            instanceId: `instance-${index}`
+          }
+        ]
+      ])
+    )
+    const scaled = {
+      ...state(),
+      repos,
+      worktreesByRepo,
+      sshTargetLabels: new Map(repos.map((_, index) => [`target-${index}`, `${index}`])),
+      remoteWorkspaceHydratedTargetIds: new Set(repos.map((_, index) => `target-${index}`)),
+      tabsByWorktree: {}
+    } as unknown as AppState
+    const { observer, observeTabState } = harness()
+
+    const startedAt = performance.now()
+    observer.observeState(scaled)
+    const elapsedMs = performance.now() - startedAt
+
+    expect(observeTabState).toHaveBeenCalledTimes(targetCount)
+    expect(elapsedMs).toBeLessThan(750)
+  })
+
   it('publishes only the transitioned target when SSH connectedness changes', () => {
     const base = state()
     const { observer, observeTabState, scanned } = harness()

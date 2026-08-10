@@ -6,7 +6,7 @@ import type {
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { splitWorktreeId } from '../../../shared/worktree/id'
-import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
+import { resolveDirectSshGitWorktreeTargetIds } from '../lib/direct-ssh-target-scope'
 import type { AppState } from '../store/types'
 import {
   configuredDirectSshTargetIds,
@@ -32,19 +32,6 @@ export type DirectSshTabIntentObserver = {
 type ObserverOptions = {
   onTargetScanned?: (targetId: string) => void
   rendererGeneration?: number
-}
-
-function targetWorktreeIds(state: AppState, targetId: string): Set<string> {
-  return resolveDirectSshTargetScope({
-    targetId,
-    catalogRevision: 0,
-    repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-    folderWorkspaces: state.folderWorkspaces,
-    projectGroups: state.projectGroups,
-    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
-  }).gitWorktreeIds
 }
 
 function worktreeRows(state: AppState): Map<string, Worktree[]> {
@@ -95,9 +82,9 @@ function observedTab(
 
 function observedWorktrees(
   state: AppState,
-  worktreeIds: ReadonlySet<string>
+  worktreeIds: ReadonlySet<string>,
+  rows: ReadonlyMap<string, Worktree[]>
 ): RemoteWorkspaceObservedWorktree[] {
-  const rows = worktreeRows(state)
   const observed: RemoteWorkspaceObservedWorktree[] = []
   for (const worktreeId of worktreeIds) {
     const parsed = splitWorktreeId(worktreeId)
@@ -151,6 +138,7 @@ export function createDirectSshTabIntentObserver(
   let previousTabsByWorktree: AppState['tabsByWorktree'] | null = null
   let signatureByTarget = new Map<string, string>()
   let latestState: AppState | null = null
+  let latestWorktreeRows = new Map<string, Worktree[]>()
 
   const withGeneration = (run: (generation: number) => Promise<void>): void => {
     if (stopped) {
@@ -170,7 +158,11 @@ export function createDirectSshTabIntentObserver(
       return
     }
     options.onTargetScanned?.(targetId)
-    const worktrees = observedWorktrees(state, scopeByTarget.get(targetId) ?? new Set())
+    const worktrees = observedWorktrees(
+      state,
+      scopeByTarget.get(targetId) ?? new Set(),
+      latestWorktreeRows
+    )
     const connected = state.sshConnectionStates.get(targetId)?.status === 'connected'
     const hydrated = state.remoteWorkspaceHydratedTargetIds.has(targetId)
     const signature = JSON.stringify([connected, hydrated, observationSignature(worktrees)])
@@ -209,6 +201,7 @@ export function createDirectSshTabIntentObserver(
     previousTabsByWorktree = state.tabsByWorktree
     const targetsToSend = new Set<string>()
     if (scopeChanged) {
+      latestWorktreeRows = worktreeRows(state)
       const targetIds = configuredDirectSshTargetIds(state)
       const previousTargetCount = scopeByTarget.size
       for (const targetId of scopeByTarget.keys()) {
@@ -223,23 +216,23 @@ export function createDirectSshTabIntentObserver(
       if (previousTargetCount > 0 && targetIds.size === 0) {
         withGeneration((generation) => api.forgetAllTabState({ rendererGeneration: generation }))
       }
-      const ownersByWorktree = new Map<string, string[]>()
       const rawScopeByTarget = new Map<string, Set<string>>()
       for (const targetId of targetIds) {
-        const worktreeIds = targetWorktreeIds(state, targetId)
-        rawScopeByTarget.set(targetId, worktreeIds)
-        for (const worktreeId of worktreeIds) {
-          ownersByWorktree.set(worktreeId, [...(ownersByWorktree.get(worktreeId) ?? []), targetId])
-        }
+        rawScopeByTarget.set(targetId, new Set())
       }
-      scopeByTarget = new Map(
-        [...rawScopeByTarget].map(([targetId, worktreeIds]) => [
-          targetId,
-          new Set(
-            [...worktreeIds].filter((worktreeId) => ownersByWorktree.get(worktreeId)?.length === 1)
-          )
-        ])
-      )
+      const targetIdByWorktree = resolveDirectSshGitWorktreeTargetIds({
+        catalogRevision: 0,
+        repos: state.repos,
+        worktreesByRepo: state.worktreesByRepo,
+        detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+        folderWorkspaces: state.folderWorkspaces,
+        projectGroups: state.projectGroups,
+        restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
+      })
+      for (const [worktreeId, targetId] of targetIdByWorktree) {
+        rawScopeByTarget.get(targetId)?.add(worktreeId)
+      }
+      scopeByTarget = rawScopeByTarget
       targetByWorktree = new Map(
         [...scopeByTarget].flatMap(([targetId, worktreeIds]) =>
           [...worktreeIds].map((worktreeId) => [worktreeId, targetId] as const)
@@ -296,6 +289,7 @@ export function createDirectSshTabIntentObserver(
       previousSshConnectionStates = null
       previousTabsByWorktree = null
       latestState = null
+      latestWorktreeRows.clear()
     }
   }
 }

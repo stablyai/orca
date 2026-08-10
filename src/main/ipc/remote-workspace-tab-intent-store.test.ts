@@ -280,6 +280,37 @@ describe('RemoteWorkspaceTabIntentStore', () => {
     expect(store.stateForTests(TARGET)).toBeNull()
   })
 
+  it('rejects a queued acknowledgement captured before target forget and readmission', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    const created = tab('created', 1)
+    store.observe(
+      authority(1),
+      observation({ authoritative: true, generation: 1, instance: 'worktree-1', tabs: [] })
+    )
+    store.observe(
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [created] })
+    )
+    const pushed = snapshot(2, [created])
+    const staleCapture = store.capturePatch(TARGET, pushed.session)
+
+    store.forgetTarget(TARGET, authority(1))
+    store.observe(
+      authority(1),
+      observation({ authoritative: true, generation: 1, instance: 'worktree-1', tabs: [] })
+    )
+    store.observe(
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [created] })
+    )
+    store.acknowledgePatch(TARGET, staleCapture, { ok: true, snapshot: pushed })
+
+    expect(store.stateForTests(TARGET)).toEqual({ intents: 1, overflowed: false })
+    expect(
+      store.reconcile(TARGET, snapshot(3, []))?.session.tabsByWorktreePath[WORKTREE_PATH]
+    ).toEqual([created.tab])
+  })
+
   it('ignores pre-hydration emptiness before accepting the post-snapshot baseline', () => {
     const store = new RemoteWorkspaceTabIntentStore()
     const staleLocal = tab('deleted-remotely', 1)
