@@ -32,7 +32,14 @@ process.stdin.on('data', (chunk) => {
   pending = Buffer.concat([pending, Buffer.from(chunk)])
   let newlineIndex = pending.indexOf(0x0a)
   while (newlineIndex >= 0) {
-    const line = pending.subarray(0, newlineIndex + 1)
+    // Why: a Unix pty's line discipline turns the terminal's CR into a bare LF, but Windows
+    // ConPTY hands the reader CRLF. Drop the CR so a recorded line-feed expectation holds on
+    // every substrate; the IME payload bytes ahead of it are compared unchanged.
+    const rawLine = pending.subarray(0, newlineIndex + 1)
+    const hasCarriageReturn = rawLine.length > 1 && rawLine[rawLine.length - 2] === 0x0d
+    const line = hasCarriageReturn
+      ? Buffer.concat([rawLine.subarray(0, rawLine.length - 2), Buffer.from([0x0a])])
+      : rawLine
     pending = pending.subarray(newlineIndex + 1)
     receivedLineCount += 1
     process.stdout.write(resultPrefix + ':' + receivedLineCount + ':' + line.toString('hex') + '\\n')

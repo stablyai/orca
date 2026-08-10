@@ -56,6 +56,7 @@ import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { parseAgentDefaultEnvDraft, stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 
 export { getAgentsPaneSearchEntries } from './agents-search'
 
@@ -867,7 +868,9 @@ export function AgentsPane({
 
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
 
-      <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
+      {!isPairedWebClientWindow() ? (
+        <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
 
       <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
 

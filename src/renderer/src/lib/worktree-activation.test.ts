@@ -370,6 +370,38 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
+  it('does not create a fallback while a backend startup terminal awaits mirroring', () => {
+    useAppStore.setState({
+      getKnownWorktreeById: ((id: string) =>
+        id === 'wt-1'
+          ? { id: 'wt-1' }
+          : undefined) as unknown as AppStoreState['getKnownWorktreeById']
+    } as Partial<AppStoreState>)
+    const store = createMockStore()
+
+    const result = ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      { command: 'gh issue view 42' },
+      undefined,
+      { backendStartupTerminalSpawned: true }
+    )
+
+    expect(result).toBeNull()
+    expect(store.createTab).not.toHaveBeenCalled()
+    expect(store.setActiveTab).not.toHaveBeenCalled()
+
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [{ id: 'mirror-tab-1' }] }
+    } as unknown as Partial<AppStoreState>)
+
+    expect(useAppStore.getState().pendingIssueCommandSplitByTabId['mirror-tab-1']).toEqual({
+      command: 'gh issue view 42'
+    })
+  })
+
   it('creates a local initial terminal for explicitly local worktrees while a runtime is focused', () => {
     useAppStore.setState((state) => ({
       settings: state.settings

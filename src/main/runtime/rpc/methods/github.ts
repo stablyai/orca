@@ -73,6 +73,13 @@ const PullRequest = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional()
 })
 
+const PRCommentReaction = RepoSelector.extend({
+  reactionSubjectId: requiredString('Missing reaction subject ID'),
+  content: z.enum(['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes']),
+  reacted: z.boolean(),
+  prRepo: SlugRepo.nullable().optional()
+})
+
 const PullRequestChecks = PullRequest.extend({
   headSha: OptionalString
 })
@@ -458,6 +465,18 @@ export const GITHUB_METHODS: RpcMethod[] = [
       runtime.getRepoPRComments(params.repo, params.prNumber, params.prRepo ?? null, {
         noCache: params.noCache
       })
+  }),
+  defineMethod({
+    name: 'github.setPRCommentReaction',
+    params: PRCommentReaction,
+    handler: async (params, { runtime }) =>
+      runtime.setRepoPRCommentReaction(
+        params.repo,
+        params.reactionSubjectId,
+        params.content,
+        params.reacted,
+        params.prRepo ?? null
+      )
   }),
   defineMethod({
     name: 'github.prFileContents',

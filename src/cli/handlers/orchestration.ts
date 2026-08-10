@@ -956,6 +956,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       state: string
       processAction: string
       lastError?: string
+      warning?: string
     }>(client, flags, 'orchestration.workerStop', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
@@ -966,7 +967,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       result,
       json,
       (value) =>
-        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}`
+        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}`
     )
   },
 

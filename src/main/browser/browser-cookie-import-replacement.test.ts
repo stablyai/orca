@@ -17,8 +17,7 @@ const {
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
-    clearPendingCookieImport: clearPendingCookieImportMock,
-    persistUserAgent: vi.fn()
+    clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
 vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))

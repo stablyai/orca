@@ -1,16 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AiVaultAgent,
-  AiVaultListResult,
-  AiVaultSession
-} from '../../../shared/ai-vault-types'
+import type { AiVaultSessionTitlesResult } from '../../../shared/ai-vault-session-title'
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import type { TerminalTab } from '../../../shared/types'
 import {
   collectAiVaultTitleRequests,
   type AiVaultTitleRequest
 } from './ai-vault-tab-title-requests'
-import { groupAiVaultTitleRequests } from './ai-vault-tab-title-scan-groups'
+import {
+  batchAiVaultTitleRequests,
+  settleAiVaultTitleRequestBatches
+} from './ai-vault-tab-title-batches'
 import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'
 import type { AppState } from '@/store/types'
 
@@ -28,33 +27,8 @@ function terminalTab(worktreeId: string, aiVaultTitle?: TerminalTab['aiVaultTitl
   }
 }
 
-function session(
-  agent: Extract<AiVaultAgent, 'claude' | 'codex'>,
-  executionHostId: AiVaultSession['executionHostId'],
-  title: string
-): AiVaultSession {
-  return {
-    id: `${executionHostId}:${agent}:${agent}-session:/sessions/${agent}.jsonl`,
-    executionHostId,
-    agent,
-    sessionId: `${agent}-session`,
-    title,
-    cwd: '/workspace/albacore',
-    branch: null,
-    model: null,
-    filePath: `/sessions/${agent}.jsonl`,
-    codexHome: agent === 'codex' ? '/home/dev/.codex' : null,
-    createdAt: null,
-    updatedAt: null,
-    modifiedAt: '2026-08-05T00:00:00.000Z',
-    messageCount: 1,
-    totalTokens: 0,
-    previewMessages: [],
-    queuedMessageCount: 0,
-    subagentTranscriptCount: 0,
-    resumeCommand: `${agent} --resume ${agent}-session`,
-    subagent: null
-  }
+function titleResult(agent: 'claude' | 'codex', title: string): AiVaultSessionTitlesResult {
+  return { titles: [{ agent, sessionId: `${agent}-session`, title }] }
 }
 
 function makeState(args: {
@@ -68,7 +42,11 @@ function makeState(args: {
   const agent = args.agent ?? 'codex'
   const tab = terminalTab(args.worktreeId, args.aiVaultTitle)
   const listeners = new Set<(state: AppState, previous: AppState) => void>()
-  const providerSession = { key: 'session_id' as const, id: `${agent}-session` }
+  const providerSession = {
+    key: 'session_id' as const,
+    id: `${agent}-session`,
+    transcriptPath: `/sessions/${agent}.jsonl`
+  }
   const statusEntry = {
     state: 'done' as const,
     prompt: '',
@@ -166,6 +144,14 @@ function makeState(args: {
         listener(state, previous)
       }
     },
+    setWorkspacePath: (path: string) => {
+      args.path = path
+      const previous = state
+      state = { ...state, worktreesByRepo: { changed: [] } }
+      for (const listener of listeners) {
+        listener(state, previous)
+      }
+    },
     removeSleepingRecord: () => {
       const previous = state
       state = { ...state, sleepingAgentSessionsByPaneKey: {} }
@@ -190,14 +176,8 @@ describe('AI Vault tab title sync', () => {
         worktreeId: 'worktree-1',
         path: '/workspace/albacore'
       })
-      const listSessions = vi.fn(
-        async (): Promise<AiVaultListResult> => ({
-          sessions: [session(agent, 'ssh:dev-box', `${agent} conversation`)],
-          issues: [],
-          scannedAt: '2026-08-05T00:00:00.000Z'
-        })
-      )
-      const stop = startAiVaultTabTitleSync({ ...store, listSessions })
+      const resolveSessionTitles = vi.fn(async () => titleResult(agent, `${agent} conversation`))
+      const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
 
       await vi.waitFor(() =>
         expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle).toEqual({
@@ -206,16 +186,21 @@ describe('AI Vault tab title sync', () => {
           title: `${agent} conversation`
         })
       )
-      expect(listSessions).toHaveBeenCalledWith({
+      expect(resolveSessionTitles).toHaveBeenCalledWith({
         executionHostScope: 'ssh:dev-box',
-        scopePaths: ['/workspace/albacore'],
-        limit: 500
+        requests: [
+          {
+            agent,
+            sessionId: `${agent}-session`,
+            transcriptPath: `/sessions/${agent}.jsonl`
+          }
+        ]
       })
       stop()
     }
   )
 
-  it('uses runtime host authority and folder workspace paths', () => {
+  it('uses runtime host authority for folder workspaces', () => {
     const store = makeState({
       executionHostId: 'runtime:server-1',
       worktreeId: 'folder:folder-1',
@@ -225,7 +210,6 @@ describe('AI Vault tab title sync', () => {
     expect(collectAiVaultTitleRequests(store.getState())).toEqual([
       expect.objectContaining({
         executionHostId: 'runtime:server-1',
-        scopePath: '/srv/folders/albacore',
         tabId: 'tab-1',
         worktreeId: 'folder:folder-1'
       })
@@ -241,11 +225,7 @@ describe('AI Vault tab title sync', () => {
     })
     const stop = startAiVaultTabTitleSync({
       ...store,
-      listSessions: async () => ({
-        sessions: [session('codex', 'ssh:dev-box', 'Stable conversation')],
-        issues: [],
-        scannedAt: '2026-08-05T00:00:00.000Z'
-      })
+      resolveSessionTitles: async () => titleResult('codex', 'Stable conversation')
     })
 
     await vi.waitFor(() =>
@@ -268,12 +248,9 @@ describe('AI Vault tab title sync', () => {
     let refresh: (() => void) | undefined
     const stop = startAiVaultTabTitleSync({
       ...store,
-      listSessions: async () => ({
-        sessions: [session('codex', 'ssh:dev-box', title)],
-        issues: [],
-        scannedAt: '2026-08-05T00:00:00.000Z'
-      }),
-      setTimer: (callback) => {
+      resolveSessionTitles: async () => titleResult('codex', title),
+      setTimer: (callback, delay) => {
+        expect(delay).toBe(5 * 60_000)
         refresh = callback
         return 1
       },
@@ -291,25 +268,84 @@ describe('AI Vault tab title sync', () => {
     stop()
   })
 
-  it('does not rescan when a live status ping preserves title inputs', async () => {
+  it('retries a missing live title without waiting for the long refresh', async () => {
     const store = makeState({
       executionHostId: 'ssh:dev-box',
       worktreeId: 'worktree-1',
       path: '/workspace/albacore'
     })
-    const listSessions = vi.fn(async () => ({
-      sessions: [session('codex', 'ssh:dev-box', 'Stable conversation')],
-      issues: [],
-      scannedAt: '2026-08-05T00:00:00.000Z'
-    }))
-    const stop = startAiVaultTabTitleSync({ ...store, listSessions })
+    let refreshDelay: number | undefined
+    const stop = startAiVaultTabTitleSync({
+      ...store,
+      resolveSessionTitles: async () => ({ titles: [] }),
+      setTimer: (_callback, delay) => {
+        refreshDelay = delay
+        return 1
+      },
+      clearTimer: () => {}
+    })
 
-    await vi.waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(refreshDelay).toBe(20_000))
+    stop()
+  })
+
+  it('defers title reads through the configured background scheduler', async () => {
+    const store = makeState({
+      executionHostId: 'ssh:dev-box',
+      worktreeId: 'worktree-1',
+      path: '/workspace/albacore'
+    })
+    const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'Deferred conversation'))
+    let runScheduled: (() => void) | undefined
+    const cancelScheduled = vi.fn()
+    const stop = startAiVaultTabTitleSync({
+      ...store,
+      resolveSessionTitles,
+      scheduleReconcile: (callback) => {
+        runScheduled = callback
+        return cancelScheduled
+      }
+    })
+
+    expect(resolveSessionTitles).not.toHaveBeenCalled()
+    runScheduled?.()
+    await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(1))
+    stop()
+  })
+
+  it('does not reread when a live status ping preserves title inputs', async () => {
+    const store = makeState({
+      executionHostId: 'ssh:dev-box',
+      worktreeId: 'worktree-1',
+      path: '/workspace/albacore'
+    })
+    const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'Stable conversation'))
+    const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
+
+    await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(1))
     store.pingAgentStatus()
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(listSessions).toHaveBeenCalledTimes(1)
+    expect(resolveSessionTitles).toHaveBeenCalledTimes(1)
+    stop()
+  })
+
+  it('does not reread titles when only the worktree path changes', async () => {
+    const store = makeState({
+      executionHostId: 'ssh:dev-box',
+      worktreeId: 'worktree-1',
+      path: '/workspace/albacore'
+    })
+    const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'Stable conversation'))
+    const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
+
+    await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(1))
+    store.setWorkspacePath('/workspace/renamed-albacore')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(resolveSessionTitles).toHaveBeenCalledTimes(1)
     stop()
   })
 
@@ -319,37 +355,69 @@ describe('AI Vault tab title sync', () => {
       worktreeId: 'worktree-1',
       path: '/workspace/albacore'
     })
-    const listSessions = vi.fn(async () => ({
-      sessions: [session('codex', 'ssh:dev-box', 'Original conversation')],
-      issues: [],
-      scannedAt: '2026-08-05T00:00:00.000Z'
-    }))
-    const stop = startAiVaultTabTitleSync({ ...store, listSessions })
+    const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'Original conversation'))
+    const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
 
-    await vi.waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(1))
     store.setProviderSessionId('codex-session-2')
 
-    await vi.waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(2))
     expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle).toBeNull()
     stop()
   })
 
-  it('batches workspace scopes per host within the wire bound', () => {
+  it('batches title identities per host within the wire bound', () => {
     const request = (index: number): AiVaultTitleRequest => ({
       agent: 'codex',
       executionHostId: 'ssh:dev-box',
       providerSession: { key: 'session_id', id: `session-${index}` },
       refresh: true,
-      scopePath: `/workspace/project-${index}`,
       tabId: `tab-${index}`,
       worktreeId: `worktree-${index}`
     })
-    const groups = groupAiVaultTitleRequests(
+    const groups = batchAiVaultTitleRequests(
       Array.from({ length: 65 }, (_, index) => request(index))
     )
 
     expect(groups).toHaveLength(2)
     expect(groups[0]).toHaveLength(64)
     expect(groups[1]).toHaveLength(1)
+  })
+
+  it('runs hosts concurrently while serializing each host wire', async () => {
+    const request = (executionHostId: AiVaultTitleRequest['executionHostId'], index: number) => ({
+      agent: 'codex' as const,
+      executionHostId,
+      providerSession: { key: 'session_id' as const, id: `session-${index}` },
+      refresh: true,
+      tabId: `tab-${index}`,
+      worktreeId: `worktree-${index}`
+    })
+    const requests = [
+      ...Array.from({ length: 65 }, (_, index) => request('ssh:dev-box', index)),
+      request('runtime:server-1', 100)
+    ]
+    const calls: AiVaultTitleRequest[][] = []
+    const completions: (() => void)[] = []
+    const pending = settleAiVaultTitleRequestBatches(
+      requests,
+      (batch) =>
+        new Promise<void>((resolve) => {
+          calls.push(batch)
+          completions.push(resolve)
+        })
+    )
+
+    await vi.waitFor(() => expect(calls).toHaveLength(2))
+    expect(calls.map((batch) => batch[0]!.executionHostId)).toEqual([
+      'ssh:dev-box',
+      'runtime:server-1'
+    ])
+    completions[0]!()
+    await vi.waitFor(() => expect(calls).toHaveLength(3))
+    expect(calls[2]).toHaveLength(1)
+    completions[1]!()
+    completions[2]!()
+    await pending
   })
 })

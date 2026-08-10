@@ -21,6 +21,33 @@ export type WslPathInfo = {
   linuxPath: string
 }
 
+const WSL_DIRECTORY_EXISTS_MARKER = '__ORCA_DIRECTORY_EXISTS__'
+const WSL_DIRECTORY_MISSING_MARKER = '__ORCA_DIRECTORY_MISSING__'
+
+function getWslDirectoryProbeArgs(info: WslPathInfo): string[] {
+  return [
+    '-d',
+    info.distro,
+    '--',
+    'sh',
+    '-c',
+    `if [ -d "$1" ]; then printf ${WSL_DIRECTORY_EXISTS_MARKER}; else printf ${WSL_DIRECTORY_MISSING_MARKER}; fi`,
+    'sh',
+    info.linuxPath
+  ]
+}
+
+function parseWslDirectoryProbeOutput(stdout: unknown): boolean | null {
+  const output = String(stdout)
+  if (output.includes(WSL_DIRECTORY_EXISTS_MARKER)) {
+    return true
+  }
+  if (output.includes(WSL_DIRECTORY_MISSING_MARKER)) {
+    return false
+  }
+  return null
+}
+
 /**
  * Detect if a Windows path is a WSL UNC path and extract the distro name
  * and equivalent Linux path.
@@ -49,8 +76,8 @@ export function isWslPath(path: string): boolean {
  * Why: Win32 fs.statSync against the WSL 9P filesystem (\\wsl.localhost\...)
  * is unreliable for repos that live on the WSL side — it can report ENOENT for
  * directories that exist, which made opening a WSL worktree fail with
- * "Working directory ... does not exist". `wsl.exe -d <distro> test -d` asks
- * the distro directly, which is the authoritative answer. Returns null (rather
+ * "Working directory ... does not exist". The guest marker probe asks the
+ * distro directly, which is the authoritative answer. Returns null (rather
  * than false) when wsl.exe is unavailable or errors so callers can fall back to
  * the fs check instead of falsely rejecting a valid directory.
  */
@@ -63,20 +90,31 @@ export function wslUncDirectoryExists(uncPath: string): boolean | null {
     return null
   }
   try {
-    execFileSync('wsl.exe', ['-d', info.distro, '--', 'test', '-d', info.linuxPath], {
+    const stdout = execFileSync('wsl.exe', getWslDirectoryProbeArgs(info), {
       stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 5000
+      timeout: 5000,
+      encoding: 'utf8'
     })
-    return true
-  } catch (error) {
-    // A non-zero exit (directory missing) surfaces as an error with a numeric
-    // `status`; treat that as a definitive "does not exist". Any other failure
-    // (wsl.exe missing, distro not running, timeout) is inconclusive -> null.
-    if (typeof (error as { status?: unknown })?.status === 'number') {
-      return false
-    }
+    return parseWslDirectoryProbeOutput(stdout)
+  } catch {
     return null
   }
+}
+
+export function wslUncDirectoryExistsAsync(uncPath: string): Promise<boolean | null> {
+  if (process.platform !== 'win32') {
+    return Promise.resolve(null)
+  }
+  const info = parseWslUncPath(uncPath)
+  if (!info) {
+    return Promise.resolve(null)
+  }
+  return new Promise((resolve) => {
+    execFile('wsl.exe', getWslDirectoryProbeArgs(info), { timeout: 5000 }, (_error, stdout) => {
+      // Why: wsl.exe uses numeric exits for both guest results and host failures; only the guest marker is authoritative.
+      resolve(parseWslDirectoryProbeOutput(stdout))
+    })
+  })
 }
 
 /**

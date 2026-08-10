@@ -103,10 +103,20 @@ export function installPreviewTerminalKeyHandler(args: {
     nativeOnlyShortcutTracker.prepareKeyDown(event)
     const keybindings = useAppStore.getState().keybindings
     if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
+      const selection = terminal.getSelection()
+      if (
+        !selection &&
+        platform !== 'darwin' &&
+        event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.shiftKey
+      ) {
+        return true
+      }
       const keyIdentity = event.code || event.key
       const firstKeydown = !consumedClipboardKeys.has(keyIdentity)
       consumedClipboardKeys.add(keyIdentity)
-      const selection = terminal.getSelection()
       if (firstKeydown && selection) {
         void window.api.ui.writeTerminalClipboardText(selection).catch(() => undefined)
       }
@@ -145,6 +155,12 @@ export function installPreviewTerminalKeyHandler(args: {
           terminal.scrollToTop()
         } else {
           terminal.scrollToBottom()
+        }
+        return consumeEvent(event)
+      case 'selectAll':
+        if (!event.repeat) {
+          nativeOnlyShortcutTracker.armKeyDown(event)
+          terminal.selectAll()
         }
         return consumeEvent(event)
       case 'switchInputSource':

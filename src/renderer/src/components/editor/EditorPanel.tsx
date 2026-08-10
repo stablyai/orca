@@ -24,6 +24,7 @@ import {
 } from './editor-panel-git-entry-selector'
 import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
 import { attemptEditorFileSave } from './editor-file-save-attempt'
+import { createCurrentMarkdownArtifactRequest } from './markdown-artifact-upload'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -348,6 +349,14 @@ function EditorPanelInner({
     markdownFrontmatterVisible[markdownDocumentStateFileId] ?? true
   const isMarkdownTableOfContentsVisible =
     markdownTableOfContentsVisible[markdownDocumentStateFileId] ?? false
+  const createActiveMarkdownArtifactRequest = () =>
+    Promise.resolve(
+      createCurrentMarkdownArtifactRequest(
+        activeFile,
+        markdownDocumentStateFileId,
+        activeMarkdownContent ?? ''
+      )
+    )
 
   return (
     // Why: each split pane needs an isolated bridge between its diff editor and header controls.
@@ -388,6 +397,9 @@ function EditorPanelInner({
         }
         onExportMarkdownToPdf={() =>
           void exportActiveMarkdownToPdf({ fileId: activeFile.id, root: panelRef.current })
+        }
+        createMarkdownArtifactRequest={
+          activeMarkdownContent === null ? undefined : createActiveMarkdownArtifactRequest
         }
         onContentChange={handleContentChange}
         onContentChangeForFile={handleContentChangeForFile}
