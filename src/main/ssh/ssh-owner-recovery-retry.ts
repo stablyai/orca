@@ -9,14 +9,7 @@ import {
 
 // Why: bound polling when publication is settling or a superseded attempt is closing its transport.
 export const SSH_OWNER_RECOVERY_WAIT_MS = 3_000
-// Why the budget outlasts the relay's full owner grace, not just its floor: only a 'peer-closed'
-// disconnect clamps the incumbent to the floor. A 'local'-cause holder — a socket the relay itself
-// tore down — keeps the whole grace, and a client that lost its resume proof has no way to shorten
-// it. Waiting the grace out on this connection always converges; tearing down and re-dialing resets
-// nothing on the relay, so each attempt hits the same refusal until the relay-lost backoff burns its
-// budget and parks the target in a terminal error state that only a manual reconnect clears.
-// Deriving from PTY_CONSUMER_OWNER_GRACE_MS keeps the invariant structural: the budget cannot fall
-// behind a grace retune.
+// Keep a live reconnect pending until a locally closed incumbent's full grace expires.
 export const SSH_OWNER_HELD_DISCONNECTED_WAIT_MS = PTY_CONSUMER_OWNER_GRACE_MS + 2_000
 // Why short: the incumbent is this client's own half-open connection, and the relay frees it when its
 // keepalive notices — well outside any budget worth blocking a connect on. Poll briefly in case the
@@ -58,9 +51,6 @@ const SSH_OWNER_RECOVERY_MAX_DELAY_MS = 250
 type SshOwnerRecoveryRetryGate = {
   isCurrent: () => boolean
   onClosed: (listener: () => void) => () => void
-  // Why callers observe this: the first attempt runs before any wait, so elapsed time alone cannot
-  // tell a refusal that was waited out from a single slow round trip. Only this signals contention.
-  onRetry?: (reason: SshOwnerRecoveryRetryReason) => void
   onRetryExhausted?: (reason: SshOwnerRecoveryRetryReason) => void
 }
 
@@ -120,7 +110,6 @@ export async function retrySshOwnerRecoveryWhileBlocked<T>(
         gate.onRetryExhausted?.(reason)
         throw error
       }
-      gate.onRetry?.(reason)
       await waitForRetry(Math.min(delayMs, remainingMs), gate)
       if (!gate.isCurrent()) {
         throw error

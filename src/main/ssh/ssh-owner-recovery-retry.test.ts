@@ -3,8 +3,10 @@ import {
   PTY_CONSUMER_OWNER_HELD_ATTACHED_ERROR,
   PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR,
   PTY_CONSUMER_OWNER_HELD_SELF_ERROR,
+  PTY_CONSUMER_OWNER_GRACE_MS,
   PTY_CONSUMER_OWNER_RECOVERY_PENDING_ERROR,
-  PTY_CONSUMER_OWNER_RECOVERY_SUPERSEDED_ERROR
+  PTY_CONSUMER_OWNER_RECOVERY_SUPERSEDED_ERROR,
+  PtyConsumerSession
 } from '../../shared/pty-consumer-session'
 import {
   isSshOwnerAdmissionBlocked,
@@ -12,7 +14,6 @@ import {
   SSH_OWNER_HELD_DISCONNECTED_WAIT_MS,
   SSH_OWNER_HELD_SELF_WAIT_MS
 } from './ssh-owner-recovery-retry'
-import { PTY_CONSUMER_OWNER_GRACE_MS } from '../../shared/pty-consumer-session'
 
 function publicationPendingError(): Error & { code: number } {
   return Object.assign(new Error('Owner grant publication is still pending'), {
@@ -138,49 +139,78 @@ describe('SSH owner recovery retry', () => {
     expect(attempt).toHaveBeenCalledTimes(7)
   })
 
-  it("waits out a 'local'-cause holder's full owner grace instead of failing the connect", async () => {
+  it('reconnects on one relay channel after a local holder loses its resume proof', async () => {
     vi.useFakeTimers()
-    const start = Date.now()
-    const attempt = vi.fn<() => Promise<string>>().mockImplementation(async () => {
-      // A holder the relay closed itself keeps the entire PTY_CONSUMER_OWNER_GRACE_MS — nothing the
-      // requester sends can clamp it, so admission opens only once the grace has fully elapsed.
-      if (Date.now() - start < PTY_CONSUMER_OWNER_GRACE_MS) {
-        throw heldError(PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR)
-      }
-      return 'recovered'
+    const ownerSession = new PtyConsumerSession({
+      serverBuildId: 'build-a',
+      createLease: () => 'lease-a'
+    })
+    const hello = { clientInstanceId: 'client-a', requestedRole: 'session-owner' as const }
+    const incumbent = ownerSession.admit(hello, {
+      connectionId: 'relay-channel-1',
+      principal: 'desktop',
+      authenticated: true,
+      allowSessionOwner: true
+    })
+    incumbent.commitPublication()
+    ownerSession.close('relay-channel-1', 'local')
+
+    const connectionIds = new Set<string>()
+    const attempt = vi.fn(async () => {
+      const connectionId = 'relay-channel-2'
+      connectionIds.add(connectionId)
+      const admission = ownerSession.admit(hello, {
+        connectionId,
+        principal: 'desktop',
+        authenticated: true,
+        allowSessionOwner: true
+      })
+      admission.commitPublication()
+      return admission.grant
     })
 
     const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, openGate())
+    const result = recovery.then(
+      (value) => ({ status: 'fulfilled' as const, value }),
+      (error: unknown) => ({ status: 'rejected' as const, error })
+    )
     await vi.advanceTimersByTimeAsync(SSH_OWNER_HELD_DISCONNECTED_WAIT_MS)
 
-    // Why this must resolve: throwing here tears the whole relay session down, and the re-dial meets
-    // the same untouched grace — a loop that ends in the relay-lost ladder's terminal error state.
-    await expect(recovery).resolves.toBe('recovered')
-    expect(SSH_OWNER_HELD_DISCONNECTED_WAIT_MS).toBeGreaterThan(PTY_CONSUMER_OWNER_GRACE_MS)
+    await expect(result).resolves.toMatchObject({
+      status: 'fulfilled',
+      value: { resumed: false, ownerGeneration: 2 }
+    })
+    expect(connectionIds).toEqual(new Set(['relay-channel-2']))
+    expect(attempt.mock.calls.length).toBeLessThanOrEqual(130)
+    expect(SSH_OWNER_HELD_DISCONNECTED_WAIT_MS).toBe(PTY_CONSUMER_OWNER_GRACE_MS + 2_000)
   })
 
-  it('signals a retry only once an attempt has actually been refused', async () => {
+  it('cancels a full-grace owner wait when the relay channel closes', async () => {
     vi.useFakeTimers()
-    const onRetry = vi.fn()
+    const error = heldError(PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR)
+    const attempt = vi.fn<() => Promise<never>>().mockRejectedValue(error)
+    let current = true
+    let close: (() => void) | undefined
+    const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, {
+      isCurrent: () => current,
+      onClosed: (listener) => {
+        close = listener
+        return () => {
+          close = undefined
+        }
+      }
+    })
+    const rejection = expect(recovery).rejects.toBe(error)
+    await vi.advanceTimersByTimeAsync(1_000)
+    const attemptsBeforeClose = attempt.mock.calls.length
 
-    await expect(
-      retrySshOwnerRecoveryWhileBlocked(async () => 'recovered', { ...openGate(), onRetry })
-    ).resolves.toBe('recovered')
-    // Why an unrefused admission must stay silent: the caller reports owner contention off this
-    // signal, and the first attempt runs before any wait, so elapsed time alone would report a
-    // single slow round trip as a refusal that was waited out.
-    expect(onRetry).not.toHaveBeenCalled()
+    current = false
+    close?.()
+    await rejection
+    expect(close).toBeUndefined()
 
-    const attempt = vi
-      .fn<() => Promise<string>>()
-      .mockRejectedValueOnce(heldError(PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR))
-      .mockResolvedValue('recovered')
-    const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, { ...openGate(), onRetry })
-    await vi.advanceTimersByTimeAsync(25)
-
-    await expect(recovery).resolves.toBe('recovered')
-    expect(onRetry).toHaveBeenCalledTimes(1)
-    expect(onRetry).toHaveBeenCalledWith('disconnected-holder')
+    await vi.advanceTimersByTimeAsync(SSH_OWNER_HELD_DISCONNECTED_WAIT_MS)
+    expect(attempt).toHaveBeenCalledTimes(attemptsBeforeClose)
   })
 
   it('reports each exhausted retry budget under its own reason', async () => {
