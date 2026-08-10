@@ -10,7 +10,6 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { translate } from '@/i18n/i18n'
 import type { GitHistoryItem } from '../../../../shared/git-history'
 
-/** Props for the per-file git history dialog. */
 type GitFileHistoryDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -20,7 +19,6 @@ type GitFileHistoryDialogProps = {
   worktreeId?: string
 }
 
-/** Load state for the file history dialog. */
 type FileHistoryState =
   | { status: 'idle' | 'loading' }
   | { status: 'error'; error: string }

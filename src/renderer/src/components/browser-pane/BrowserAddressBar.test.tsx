@@ -41,39 +41,6 @@ vi.mock('@/components/ui/command', () => ({
   CommandList: ({ children }: { children: ReactNode }) => <div>{children}</div>
 }))
 
-function dispatchAddressBarKey(
-  input: HTMLInputElement,
-  type: 'keydown' | 'keyup',
-  init: KeyboardEventInit
-): boolean {
-  const event = new KeyboardEvent(type, { bubbles: true, cancelable: true, ...init })
-  Object.defineProperty(event, 'keyCode', { value: init.keyCode })
-  act(() => input.dispatchEvent(event))
-  return event.defaultPrevented
-}
-
-function dispatchRecordedAddressBarGesture(input: HTMLInputElement): boolean {
-  act(() => input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })))
-  dispatchAddressBarKey(input, 'keydown', {
-    key: 'Process',
-    code: 'Enter',
-    keyCode: 229,
-    isComposing: true
-  })
-  act(() =>
-    input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '가' }))
-  )
-  const prevented = dispatchAddressBarKey(input, 'keydown', {
-    key: 'Enter',
-    code: 'Enter',
-    keyCode: 13,
-    isComposing: false
-  })
-  dispatchAddressBarKey(input, 'keyup', { key: 'Process', code: 'Enter', keyCode: 229 })
-  dispatchAddressBarKey(input, 'keyup', { key: 'Enter', code: 'Enter', keyCode: 13 })
-  return prevented
-}
-
 function historyEntry(overrides: Partial<BrowserHistoryEntry>): BrowserHistoryEntry {
   return {
     url: 'http://localhost:3000/review-one',
@@ -280,40 +247,5 @@ describe('BrowserAddressBar autocomplete preview', () => {
     )
     expect(onNavigate).not.toHaveBeenCalled()
     expect(onSubmit).not.toHaveBeenCalled()
-  })
-
-  it('does not navigate on the recorded Korean Enter redispatch', async () => {
-    const onSubmit = vi.fn()
-    await act(async () => {
-      root.render(
-        <AddressBarHarness initialValue="한글" onNavigate={() => {}} onSubmit={onSubmit} />
-      )
-    })
-    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')!
-    act(() => input.focus())
-
-    expect(dispatchRecordedAddressBarGesture(input)).toBe(true)
-    expect(onSubmit).not.toHaveBeenCalled()
-  })
-
-  it('navigates exactly once on an ordinary Enter', async () => {
-    const onSubmit = vi.fn()
-    await act(async () => {
-      root.render(
-        <AddressBarHarness initialValue="example.com" onNavigate={() => {}} onSubmit={onSubmit} />
-      )
-    })
-    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')!
-    act(() => input.focus())
-
-    expect(
-      dispatchAddressBarKey(input, 'keydown', {
-        key: 'Enter',
-        code: 'Enter',
-        keyCode: 13,
-        isComposing: false
-      })
-    ).toBe(true)
-    expect(onSubmit).toHaveBeenCalledOnce()
   })
 })

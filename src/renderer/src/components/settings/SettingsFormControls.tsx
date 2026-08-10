@@ -9,7 +9,6 @@ import { Label } from '../ui/label'
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { normalizeColor, type TerminalThemeOption } from '@/lib/terminal-theme'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
 import {
@@ -109,6 +108,7 @@ type SettingsSwitchRowProps = {
   onChange: () => void
   className?: string
   ariaLabel?: string
+  disabled?: boolean
 }
 
 export function SettingsSwitchRow({
@@ -117,7 +117,8 @@ export function SettingsSwitchRow({
   checked,
   onChange,
   className,
-  ariaLabel
+  ariaLabel,
+  disabled
 }: SettingsSwitchRowProps): React.JSX.Element {
   return (
     <SettingsRow
@@ -128,6 +129,7 @@ export function SettingsSwitchRow({
         <SettingsSwitch
           checked={checked}
           onChange={onChange}
+          disabled={disabled}
           ariaLabel={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
         />
       }
@@ -594,8 +596,6 @@ export function NumberField({
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => {
-              // No IME guard: Chromium blanks number inputs at compositionstart, so a
-              // confirm-Enter only ever reaches the empty-draft reset above.
               if (e.key === 'Enter') {
                 commit()
               }
@@ -749,12 +749,6 @@ export function FontAutocomplete({
                 setOpen(true)
               }}
               onKeyDown={(e) => {
-                // Why: while composing, Enter/arrows/Escape drive the IME candidate window, not
-                // this combobox — acting on them would commit a font the user never picked.
-                if (isImeCompositionKeyDown(e)) {
-                  return
-                }
-
                 if (e.key === 'Escape') {
                   if (open) {
                     e.preventDefault()

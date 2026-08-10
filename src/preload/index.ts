@@ -252,6 +252,7 @@ import type {
   AiVaultListArgs,
   AiVaultSubagentListArgs
 } from '../shared/ai-vault-types'
+import type { AiVaultSessionTitlesArgs } from '../shared/ai-vault-session-title'
 import type { AiVaultPrepareSessionResumeArgs } from '../shared/ai-vault-resume-preparation'
 import type { AgentType } from '../shared/native-chat-types'
 import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
@@ -3758,6 +3759,12 @@ const api = {
       ipcRenderer.on('ui:appMenuPaste', listener)
       return () => ipcRenderer.removeListener('ui:appMenuPaste', listener)
     },
+    onAppMenuSelectionAction: (callback: (action: 'copy' | 'select-all') => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, action: 'copy' | 'select-all'): void =>
+        callback(action)
+      ipcRenderer.on('ui:appMenuSelectionAction', listener)
+      return () => ipcRenderer.removeListener('ui:appMenuSelectionAction', listener)
+    },
     onEditableContextPaste: (
       callback: (data: { plainTextOnly: boolean }) => void
     ): (() => void) => {
@@ -4071,6 +4078,9 @@ const api = {
         mode: options?.mode === 'paste-and-match-style' ? 'paste-and-match-style' : 'paste'
       })
     },
+    performNativeSelectionAction: (action: 'copy' | 'select-all'): void => {
+      ipcRenderer.send('ui:performNativeSelectionAction', action)
+    },
     writeClipboardFile: (
       args:
         | {
@@ -4244,6 +4254,8 @@ const api = {
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
       ipcRenderer.invoke('aiVault:listSessions', args),
+    resolveSessionTitles: (args: AiVaultSessionTitlesArgs): Promise<unknown> =>
+      ipcRenderer.invoke('aiVault:resolveSessionTitles', args),
     cancelListSessions: (args: { requestToken: string }): Promise<void> =>
       ipcRenderer.invoke('aiVault:cancelListSessions', args),
     prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs): Promise<unknown> =>

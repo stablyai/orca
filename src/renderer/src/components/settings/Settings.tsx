@@ -1204,6 +1204,8 @@ function Settings(): React.JSX.Element {
         hasRepos={repos.length > 0}
         searchQuery={settingsSearchInputQuery}
         searchInputRef={searchInputRef}
+        // Why: deep-links open panes/modals that own focus; plain entry lands in search.
+        searchAutoFocus={settingsNavigationTarget == null}
         onBack={closeSettingsPageWithPromptGuard}
         onSearchChange={setSettingsSearchQuery}
         onSelectSection={scrollToSection}
@@ -1546,7 +1548,6 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('quick-commands') ? (
                     <QuickCommandsPane
                       settings={settings}
-                      updateSettings={updateSettings}
                       addCommandIntentSignal={quickCommandAddIntentSignal}
                     />
                   ) : null}

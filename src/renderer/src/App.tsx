@@ -26,11 +26,6 @@ import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import {
-  isImeOwnedKeyboardEvent,
-  markImeOwnedShortcutEvent,
-  resolveImeModifierGesture
-} from '@/lib/ime-composition-keyboard-event'
-import {
   isPairedWebClientWindow,
   shouldRenderDesktopWindowChrome
 } from '@/lib/desktop-window-chrome'
@@ -75,6 +70,10 @@ import { shouldShowOnboarding } from './components/onboarding/should-show-onboar
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
 import {
+  persistFloatingTerminalPanelOpen,
+  readPersistedFloatingTerminalPanelViewState
+} from './components/floating-terminal/floating-terminal-panel-view-state'
+import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
 } from '@/lib/floating-terminal'
@@ -103,6 +102,7 @@ import {
   usePrimarySelectionPaste
 } from './hooks/usePrimarySelectionPaste'
 import { useAppMenuPaste } from './hooks/useAppMenuPaste'
+import { useAppMenuSelectionActions } from './hooks/useAppMenuSelectionActions'
 import { useLargeTextControlPaste } from './hooks/useLargeTextControlPaste'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
@@ -445,7 +445,11 @@ function App(): React.JSX.Element {
   const clearUnreadDockBadge = useUnreadDockBadge()
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
-  const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
+  // Why restored: leaving the panel closed forces the user to reopen and re-maximize it,
+  // and that size jump reflows a live TUI's buffer (see floating-terminal-panel-view-state).
+  const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(
+    () => readPersistedFloatingTerminalPanelViewState()?.open === true
+  )
   const floatingWorkspaceTourInteractionSnapshotRef = useRef<{
     wasPreviouslyInteracted?: boolean
     persisted?: Promise<void>
@@ -540,6 +544,10 @@ function App(): React.JSX.Element {
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
   const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')
   const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
+  // Why tracked separately: the flag reads false while settings are still loading, and a
+  // false read at boot must not be treated as the user disabling the feature. The store
+  // initializes `settings` to null (not undefined) - fetchSettings replaces it atomically.
+  const floatingTerminalSettingsHydrated = useAppStore((s) => s.settings != null)
   const floatingTerminalTriggerLocation = useAppStore(
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   )
@@ -637,8 +645,19 @@ function App(): React.JSX.Element {
         restoreFloatingTerminalReturnFocus()
       }
       setFloatingTerminalOpen(resolvedOpen)
+      // Why gated on the flag: `settings` is undefined until it hydrates, so the
+      // feature-off effect force-closes the panel on every boot. Persisting there would
+      // overwrite the user's restored `open` with a value they never chose.
+      if (floatingTerminalEnabled) {
+        persistFloatingTerminalPanelOpen(resolvedOpen)
+      }
     },
-    [floatingTerminalOpen, rememberFloatingTerminalReturnFocus, restoreFloatingTerminalReturnFocus]
+    [
+      floatingTerminalEnabled,
+      floatingTerminalOpen,
+      rememberFloatingTerminalReturnFocus,
+      restoreFloatingTerminalReturnFocus
+    ]
   )
 
   useEffect(() => {
@@ -652,10 +671,13 @@ function App(): React.JSX.Element {
   }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
 
   useEffect(() => {
-    if (!floatingTerminalEnabled) {
+    // Why the hydration gate: this effect fires on every boot while settings are still
+    // undefined, and closing there discards the restored open state before the real flag
+    // value arrives. Only a hydrated flag-off is an actual disable.
+    if (floatingTerminalSettingsHydrated && !floatingTerminalEnabled) {
       setFloatingTerminalOpenWithFocus(false)
     }
-  }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
+  }, [floatingTerminalSettingsHydrated, floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
 
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
@@ -699,6 +721,7 @@ function App(): React.JSX.Element {
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
 
   useAppMenuPaste()
+  useAppMenuSelectionActions()
   useLargeTextControlPaste()
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const petVisible = useAppStore((s) => s.petVisible)
@@ -1573,7 +1596,6 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     const doubleTapDetector = new ModifierDoubleTapDetector()
-    let imeOwnedModifierGesture = false
 
     const createRegisteredCommandHandlers = (
       input?: ShortcutDispatchInput,
@@ -1868,18 +1890,6 @@ function App(): React.JSX.Element {
         return
       }
 
-      if (matchShortcut('worktree.palette')) {
-        input.preventDefault()
-        notifyTerminalCapture('worktree.palette')
-        const store = useAppStore.getState()
-        if (store.activeModal === 'worktree-palette') {
-          store.closeModal()
-        } else {
-          store.openModal('worktree-palette')
-        }
-        return
-      }
-
       // Skip editable surfaces so TipTap's Cmd+B bold works; this renderer-side fallback covers the blur→press IPC race (docs/markdown-cmd-b-bold-design.md).
       if (isEditableTarget(input.target)) {
         return
@@ -1946,15 +1956,6 @@ function App(): React.JSX.Element {
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
-      const gesture = resolveImeModifierGesture(imeOwnedModifierGesture, e)
-      imeOwnedModifierGesture = gesture.active
-      if (gesture.owned || isImeOwnedKeyboardEvent(e)) {
-        if (gesture.carried) {
-          markImeOwnedShortcutEvent(e)
-        }
-        doubleTapDetector.reset()
-        return
-      }
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: 'keyDown',
@@ -1995,12 +1996,6 @@ function App(): React.JSX.Element {
     }
 
     const onKeyUp = (e: KeyboardEvent): void => {
-      const gesture = resolveImeModifierGesture(imeOwnedModifierGesture, e)
-      imeOwnedModifierGesture = gesture.active
-      if (gesture.owned || isImeOwnedKeyboardEvent(e)) {
-        doubleTapDetector.reset()
-        return
-      }
       doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: 'keyUp',
@@ -2016,10 +2011,7 @@ function App(): React.JSX.Element {
     }
 
     // Why: a window blur mid-gesture must not leave the detector armed.
-    const onBlur = (): void => {
-      imeOwnedModifierGesture = false
-      doubleTapDetector.reset()
-    }
+    const onBlur = (): void => doubleTapDetector.reset()
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keyup', onKeyUp, { capture: true })

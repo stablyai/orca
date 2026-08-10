@@ -105,7 +105,6 @@ describe('useGitBlame', () => {
     mocks.getRuntimeGitBlame.mockResolvedValue(blameResult())
   })
 
-  /** Ensures rejected blame requests do not poison later remounts. */
   it('evicts a rejected cache entry after unmount so remount refetches', async () => {
     let reject!: (error: Error) => void
     const pending = new Promise<GitBlameResult>((_resolve, rejectPromise) => {
@@ -141,7 +140,6 @@ describe('useGitBlame', () => {
     expect(mocks.getRuntimeGitBlame).toHaveBeenCalledTimes(2)
   })
 
-  /** Ensures model edits clear stale blame and force a fresh request. */
   it('clears decorations and evicts cache when the model changes', async () => {
     mocks.getRuntimeGitBlame.mockResolvedValue(blameResult())
     const first = createEditor()

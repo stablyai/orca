@@ -1,5 +1,7 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Tab, TabGroup, Worktree } from '../../../shared/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
+import { selectPaletteTypeAliasMatch } from './palette-type-alias-match'
 import { resolveWorktreeDisplayName } from './worktree-default-display-name'
 import type { MatchRange } from './worktree-palette-search'
 
@@ -13,6 +15,8 @@ export type SearchableSimulatorTab = {
 }
 
 export type SimulatorPaletteSearchResult = {
+  /** Worktree ids collide across hosts; activation must not resolve by id alone. */
+  executionHostId?: ExecutionHostId
   tabId: string
   worktreeId: string
   groupId: string
@@ -197,6 +201,7 @@ export function searchSimulatorTabs(
     // Why: a cleared display name leaves this undefined at runtime; findRange would throw.
     const worktreeName = resolveWorktreeDisplayName(entry.worktree)
     const baseResult = {
+      executionHostId: entry.worktree.hostId,
       tabId: entry.tab.id,
       worktreeId: entry.worktree.id,
       groupId: entry.tab.groupId,
@@ -239,14 +244,7 @@ export function searchSimulatorTabs(
       continue
     }
 
-    let typeAliasHit: { text: string; range: MatchRange } | null = null
-    for (const alias of SIMULATOR_TYPE_SEARCH_ALIASES) {
-      const range = findRange(alias, trimmedQuery)
-      if (range) {
-        typeAliasHit = { text: alias, range }
-        break
-      }
-    }
+    const typeAliasHit = selectPaletteTypeAliasMatch(SIMULATOR_TYPE_SEARCH_ALIASES, trimmedQuery)
     if (typeAliasHit) {
       results.push({
         ...baseResult,

@@ -80,7 +80,7 @@ describe('locale-translation-policy', () => {
         localeValue: '壊れた小切手に対して AI エージェントを開始しました。',
         locale: 'ja'
       })
-    ).toBe('失敗したチェックに対して AI エージェントを開始しました。')
+    ).toBe('失敗したチェックに対して AI Agent を開始しました。')
     expect(
       repairTranslatedValue({
         key: 'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
@@ -88,7 +88,7 @@ describe('locale-translation-policy', () => {
         localeValue: '電話機からターミナルとエージェントを制御します。',
         locale: 'ja'
       })
-    ).toBe('スマートフォンからターミナルとエージェントを操作')
+    ).toBe('スマートフォンからターミナルと Agent を操作します。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.934add88b6',
@@ -398,7 +398,7 @@ describe('locale-translation-policy', () => {
         localeValue: 'コンピューターと携帯電話で。',
         locale: 'ja'
       })
-    ).toBe('コンピューターとスマートフォンで。')
+    ).toBe('コンピュータとスマートフォンで。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.3ab6ac0fc8',

@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { NestedRepoScanResult } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
-import { ImeEnterGuardedForm } from '../ime-enter-guarded-form'
 import { RepoStepNestedImportPanel } from './RepoStepNestedImportPanel'
 
 type RepoStepProps = {
@@ -82,7 +81,7 @@ export function RepoStep({
   return (
     <div className="space-y-3">
       {runtimeActive ? (
-        <ImeEnterGuardedForm
+        <form
           className="rounded-lg border border-border bg-muted/30 p-5"
           onSubmit={(event) => {
             event.preventDefault()
@@ -136,7 +135,7 @@ export function RepoStep({
               {translate('auto.components.onboarding.RepoStep.e8214aa632', 'Open as Folder')}
             </button>
           </div>
-        </ImeEnterGuardedForm>
+        </form>
       ) : (
         <button
           type="button"
@@ -181,7 +180,7 @@ export function RepoStep({
         </button>
       )}
 
-      <ImeEnterGuardedForm
+      <form
         className="rounded-lg border border-border bg-muted/30 p-5"
         onSubmit={(e) => {
           e.preventDefault()
@@ -241,7 +240,7 @@ export function RepoStep({
             />
           </div>
         )}
-      </ImeEnterGuardedForm>
+      </form>
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-1 pt-1 text-xs text-muted-foreground">
         <div className="flex min-w-0 items-center gap-2">

@@ -115,10 +115,6 @@ import {
   loadTerminalAccessoryLayout
 } from '../../../../src/terminal/terminal-accessory-layout'
 import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/terminal-live-accessory-input'
-import {
-  TerminalLiveInputField,
-  type TerminalLiveInputFieldHandle
-} from '../../../../src/terminal/terminal-live-input-field'
 import { sendTerminalLiveAccessoryRawBytes } from '../../../../src/terminal/terminal-live-accessory-raw-send'
 import {
   clearTerminalLiveInputFocusTimer,
@@ -131,9 +127,7 @@ import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
 import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-terminal-query-reply'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
-import { imeGuardedSubmitProps } from '../../../../src/ime/ime-submit-carry'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
-import { useTerminalLiveInputPreedit } from '../../../../src/terminal/use-terminal-live-input-preedit'
 import { resolveMobileTerminalInputGate } from '../../../../src/terminal/terminal-input-connection-gate'
 import {
   buildTerminalSendParams,
@@ -1036,7 +1030,7 @@ export default function SessionScreen() {
   const viewportRef = useRef<{ cols: number; rows: number } | null>(null)
   const viewportMeasuredRef = useRef(false)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
-  const liveInputRef = useRef<TerminalLiveInputFieldHandle>(null)
+  const liveInputRef = useRef<TextInput>(null)
   const commandInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
@@ -1097,12 +1091,9 @@ export default function SessionScreen() {
     liveInputRef,
     liveInputTerminalHandles,
     liveInputTerminalHandlesRef,
-    platform: Platform.OS,
     sendLiveTerminalInputRef,
     setLiveInputCapture
   })
-  const { isComposing: liveInputComposing, handleLiveInputChangeWithPreedit } =
-    useTerminalLiveInputPreedit(handleLiveInputChange)
   const { canCompose, canSend } = resolveMobileTerminalInputGate({
     connState,
     activeHandle,
@@ -4996,7 +4987,6 @@ export default function SessionScreen() {
                         dictation={dictation}
                         isAttaching={isAttaching}
                         liveInputText={liveInputCapture}
-                        composingText={liveInputComposing ? liveInputCapture : ''}
                       />
                     </Pressable>
                     <MobileTerminalInputActions
@@ -5014,11 +5004,11 @@ export default function SessionScreen() {
                       onDictationPressOut={handleDictationPressOut}
                       onDictationCancel={cancelDictation}
                     />
-                    <TerminalLiveInputField
+                    <TextInput
                       ref={liveInputRef}
                       style={styles.liveInputCapture}
                       value={liveInputCapture}
-                      onChange={handleLiveInputChangeWithPreedit}
+                      onChangeText={handleLiveInputChange}
                       onKeyPress={handleLiveInputKeyPress}
                       onSubmitEditing={handleLiveInputSubmit}
                       placeholder=""
@@ -5067,7 +5057,7 @@ export default function SessionScreen() {
                       returnKeyType="send"
                       // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
                       editable={canCompose}
-                      {...imeGuardedSubmitProps(Platform.OS, () => void handleSend())}
+                      onSubmitEditing={() => void handleSend()}
                     />
                     <MobileTerminalInputActions
                       canSend={canSend}

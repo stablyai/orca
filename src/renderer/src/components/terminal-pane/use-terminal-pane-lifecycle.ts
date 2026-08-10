@@ -82,9 +82,20 @@ import { copyTerminalSelection } from './terminal-selection-copy'
 import { parseOsc7 } from './parse-osc7'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
+import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
+import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
+import {
+  armTerminalImePendingCandidateKeyRelease,
+  clearTerminalImePendingCandidateKeyRelease,
+  createTerminalImePendingCandidateKeyReleases,
+  shouldApplyTerminalImePendingCandidateKeyRelease
+} from './terminal-ime-candidate-key-release-guard'
+import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
 import {
   shouldBypassXtermKeyboardEvent,
   shouldHandleTerminalInterruptKeyboardEvent,
+  shouldPreventDefaultTerminalImeCandidateKey,
+  shouldSuppressTerminalImeKeyboardEvent,
   shouldSuppressTerminalInterruptKeyup,
   shouldSuppressTerminalModifierKeyboardEvent,
   TERMINAL_INTERRUPT_INPUT
@@ -100,6 +111,7 @@ import {
   type ReconcilableBinding
 } from './terminal-dead-session-reconcile'
 import { getConnectionId } from '@/lib/connection-context'
+import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { canReleaseReplayedScrollbackFromStore } from './replayed-scrollback-store-release'
@@ -652,6 +664,8 @@ export function useTerminalPaneLifecycle({
   const osc52DisposablesRef = useRef(new Map<number, IDisposable>())
   const osc7DisposablesRef = useRef(new Map<number, IDisposable>())
   const mouseHideDisposablesRef = useRef(new Map<number, IDisposable>())
+  const imeCompositionDisposablesRef = useRef(new Map<number, IDisposable>())
+  const imeNativeTextForwarderDisposablesRef = useRef(new Map<number, IDisposable>())
   const queuedInitialCwdRef = useRef<string | null | undefined>(undefined)
   const restoredViewportBlankingPanesRef = useRef(new Set<number>())
 
@@ -689,6 +703,8 @@ export function useTerminalPaneLifecycle({
     const selectionDisposables = selectionDisposablesRef.current
     const selectionCaptureTimers = selectionCaptureTimersRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
+    const imeCompositionDisposables = imeCompositionDisposablesRef.current
+    const imeNativeTextForwarderDisposables = imeNativeTextForwarderDisposablesRef.current
     const worktreePath =
       useAppStore
         .getState()
@@ -705,6 +721,9 @@ export function useTerminalPaneLifecycle({
     queuedInitialCwdRef.current = initialCwdResolution.queuedInitialCwd
     const startupCwd = initialCwdResolution.startupCwd
     const terminalHomePath = resolveTerminalHomePathFromEnv(startup?.env)
+    const wslDistro = getConnectionId(worktreeId)
+      ? null
+      : resolvePaneWslDistro(useAppStore.getState(), worktreeId, worktreePath)
     const getPaneLinkCwd = (paneId: number): string =>
       resolvePaneLinkCwd(paneCwdRef.current, paneId, startupCwd)
     const getHttpLinkSourceOwnerForPane = (paneId: number) =>
@@ -717,6 +736,7 @@ export function useTerminalPaneLifecycle({
       startupCwd,
       getPaneLinkCwd,
       terminalHomePath,
+      wslDistro,
       managerRef,
       linkProviderDisposablesRef,
       pathExistsCache,
@@ -877,10 +897,83 @@ export function useTerminalPaneLifecycle({
 
         // Why: let host-handled keys bypass xterm's kitty CSI-u encoder — with kittyKeyboard on it preventDefaults Cmd+C and blocks Chromium's native copy. See xterm-bypass-policy.ts.
         let pendingTerminalInterruptKeyup = false
+        const pendingTerminalImeCandidateKeyReleases =
+          createTerminalImePendingCandidateKeyReleases()
         const isMac = navigator.userAgent.includes('Mac')
+        // Why: Android/ChromeOS UAs also contain "Linux"; scope the fcitx candidate-key policy to desktop Linux.
+        const isLinux =
+          !isMac &&
+          navigator.userAgent.includes('Linux') &&
+          !/Android|CrOS/.test(navigator.userAgent)
+        const linuxImeCandidateState = isLinux
+          ? installTerminalImeLinuxCandidateState(pane.terminal.element)
+          : null
+        const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
+        imeCompositionDisposablesRef.current.set(pane.id, {
+          dispose: () => {
+            imeCompositionTracker.dispose()
+            linuxImeCandidateState?.dispose()
+          }
+        })
+        // Why: macOS commits an input source's substituted text through the input event alone, so printable keydowns must not reach xterm's encoder.
+        const imeNativeTextForwarder = isMac
+          ? installTerminalImeNativeTextForwarder({
+              terminalElement: pane.terminal.element,
+              isComposing: () => imeCompositionTracker.isActive(),
+              sendInput: (data) => pane.terminal.input(data),
+              getKittyKeyboardFlags: () =>
+                paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
+            })
+          : {
+              claimKeyEvent: () => false,
+              dispose: () => undefined
+            }
+        imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
         pane.terminal.attachCustomKeyEventHandler((e) => {
+          const linuxCandidateClassification = linuxImeCandidateState?.classifyKeyboardEvent(e) ?? {
+            candidateDigitGuardActive: false
+          }
+          /** Advances the fallback state after every terminal key event path. */
+          const observeLinuxCandidateEvent = (): void => {
+            linuxImeCandidateState?.observeKeyboardEvent(e, linuxCandidateClassification)
+          }
+          const now = Date.now()
+          const pendingCandidateReleaseGuardActive =
+            shouldApplyTerminalImePendingCandidateKeyRelease(
+              e,
+              pendingTerminalImeCandidateKeyReleases,
+              now
+            )
+          const imeKeyboardOptions = {
+            compositionActive: imeCompositionTracker.isActive(),
+            candidateKeyGuardActive:
+              imeCompositionTracker.isCandidateKeyGuardActive() ||
+              pendingCandidateReleaseGuardActive,
+            pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,
+            linuxOrphanCandidateDigitGuardActive:
+              linuxCandidateClassification.candidateDigitGuardActive,
+            isMac,
+            isLinux
+          }
+          if (shouldSuppressTerminalImeKeyboardEvent(e, imeKeyboardOptions)) {
+            // Why: clear before arm so a fresh keydown drops any stale pending release before arming its own.
+            clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, e)
+            if (shouldPreventDefaultTerminalImeCandidateKey(e, imeKeyboardOptions)) {
+              // Why: without preventDefault the suppressed candidate keydown still fires a keypress and mutates the helper textarea.
+              e.preventDefault()
+              armTerminalImePendingCandidateKeyRelease(
+                pendingTerminalImeCandidateKeyReleases,
+                e,
+                now
+              )
+            }
+            observeLinuxCandidateEvent()
+            return false
+          }
+          clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, e)
           if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(e)) {
             pendingTerminalInterruptKeyup = false
+            observeLinuxCandidateEvent()
             return false
           }
           if (
@@ -898,10 +991,12 @@ export function useTerminalPaneLifecycle({
             } else {
               pendingTerminalInterruptKeyup = false
             }
+            observeLinuxCandidateEvent()
             return false
           }
           if (shouldSuppressTerminalModifierKeyboardEvent(e)) {
             // Why: stale Kitty keyboard reporting can encode standalone modifier presses before Ctrl+C reaches the interrupt handler.
+            observeLinuxCandidateEvent()
             return false
           }
 
@@ -914,6 +1009,7 @@ export function useTerminalPaneLifecycle({
               // Why: translated character, not a shortcut — keep it on xterm's onData path so PTY input guards still run.
               pane.terminal.input(jisYenInput.data)
             }
+            observeLinuxCandidateEvent()
             return false
           }
 
@@ -935,11 +1031,18 @@ export function useTerminalPaneLifecycle({
             }
           }
 
+          if (imeNativeTextForwarder.claimKeyEvent(e)) {
+            // Why: bypass xterm's kitty encoder for native text keydowns so the committed glyph survives via the input event.
+            observeLinuxCandidateEvent()
+            return false
+          }
+
           const shouldBypass = shouldBypassXtermKeyboardEvent(e, {
             isMac,
             hasSelection: pane.terminal.hasSelection(),
             kittyKeyboardFlags: paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
           })
+          observeLinuxCandidateEvent()
           return !shouldBypass
         })
 
@@ -1128,6 +1231,17 @@ export function useTerminalPaneLifecycle({
         if (selectionDisposable) {
           selectionDisposable.dispose()
           selectionDisposablesRef.current.delete(paneId)
+        }
+        const imeCompositionDisposable = imeCompositionDisposablesRef.current.get(paneId)
+        if (imeCompositionDisposable) {
+          imeCompositionDisposable.dispose()
+          imeCompositionDisposablesRef.current.delete(paneId)
+        }
+        const imeNativeTextForwarderDisposable =
+          imeNativeTextForwarderDisposablesRef.current.get(paneId)
+        if (imeNativeTextForwarderDisposable) {
+          imeNativeTextForwarderDisposable.dispose()
+          imeNativeTextForwarderDisposablesRef.current.delete(paneId)
         }
         const selectionCaptureTimer = selectionCaptureTimersRef.current.get(paneId)
         if (selectionCaptureTimer !== undefined) {
@@ -1619,6 +1733,14 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       mouseHideDisposables.clear()
+      for (const disposable of imeCompositionDisposables.values()) {
+        disposable.dispose()
+      }
+      imeCompositionDisposables.clear()
+      for (const disposable of imeNativeTextForwarderDisposables.values()) {
+        disposable.dispose()
+      }
+      imeNativeTextForwarderDisposables.clear()
       // Why: hidden-view parking starts pane-less byte watchers right after unmount; record pane identities first so watchers write the same runtime-title slots.
       captureParkedTerminalPaneCandidates(
         tabId,

@@ -9,7 +9,11 @@ function providerSessionEqual(
   left: AgentProviderSessionMetadata | undefined,
   right: AgentProviderSessionMetadata | undefined
 ): boolean {
-  return left?.key === right?.key && left?.id === right?.id
+  return (
+    left?.key === right?.key &&
+    left?.id === right?.id &&
+    left?.transcriptPath === right?.transcriptPath
+  )
 }
 
 function relevantRecordEqual<T>(
@@ -148,12 +152,6 @@ function requestOwnersEqual(current: AppState, previous: AppState): boolean {
     const currentHost = getExecutionHostIdForWorktree(current, worktreeId)
     const previousHost = getExecutionHostIdForWorktree(previous, worktreeId)
     if (currentHost !== previousHost) {
-      return false
-    }
-    const currentPath = current.getKnownWorktreeById(worktreeId, currentHost)?.path?.trim() || null
-    const previousPath =
-      previous.getKnownWorktreeById(worktreeId, previousHost)?.path?.trim() || null
-    if (currentPath !== previousPath) {
       return false
     }
   }

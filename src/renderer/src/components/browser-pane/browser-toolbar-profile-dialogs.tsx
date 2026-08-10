@@ -1,4 +1,3 @@
-import { ImeEnterGuardedForm } from '@/components/ime-enter-guarded-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -87,7 +86,7 @@ export function BrowserToolbarProfileDialogs({
               )}
             </DialogTitle>
           </DialogHeader>
-          <ImeEnterGuardedForm
+          <form
             onSubmit={(e) => {
               e.preventDefault()
               onCreateProfile()
@@ -130,7 +129,7 @@ export function BrowserToolbarProfileDialogs({
                     )}
               </Button>
             </DialogFooter>
-          </ImeEnterGuardedForm>
+          </form>
         </DialogContent>
       </Dialog>
     </>

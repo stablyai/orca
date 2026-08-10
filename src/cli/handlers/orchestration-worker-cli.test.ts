@@ -205,6 +205,43 @@ describe('orchestration worker-start CLI contract', () => {
     ).toContain('Warning: Terminal term_worker is running but could not be revealed.')
   })
 
+  it('prints the retained-process warning for a manual worker-stop', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        dispatchId: 'ctx_manual',
+        state: 'stopped',
+        processAction: 'none',
+        warning: 'The assignment was stopped without closing its unsupervised terminal process.'
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-stop']({
+      flags: new Map<string, string | boolean>([['dispatch', 'ctx_manual']]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: false
+    } as never)
+
+    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
+      | ((result: {
+          dispatchId: string
+          state: string
+          processAction: string
+          warning?: string
+        }) => string)
+      | undefined
+    expect(
+      formatter?.({
+        dispatchId: 'ctx_manual',
+        state: 'stopped',
+        processAction: 'none',
+        warning: 'The assignment was stopped without closing its unsupervised terminal process.'
+      })
+    ).toContain(
+      'Warning: The assignment was stopped without closing its unsupervised terminal process.'
+    )
+  })
+
   it('allows the initial zero cursor when paging worker output', async () => {
     callMock.mockResolvedValue({
       result: {

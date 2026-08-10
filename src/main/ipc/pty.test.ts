@@ -331,6 +331,8 @@ describe('registerPtyHandlers', () => {
   const savedOrcaOmpAgentDir = process.env.ORCA_OMP_CODING_AGENT_DIR
   const savedOrcaOmpSourceAgentDir = process.env.ORCA_OMP_SOURCE_AGENT_DIR
   const savedOrcaOmpStatusExtension = process.env.ORCA_OMP_STATUS_EXTENSION
+  const savedPrimeAgentDir = process.env.PRIME_AGENT_CODING_AGENT_DIR
+  const savedOrcaPrimeAgentSourceDir = process.env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
   const savedOrcaClaudeAgentStatusSettings = process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
   const savedProcessPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   const savedDisableMacosLoginShell = process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
@@ -356,6 +358,8 @@ describe('registerPtyHandlers', () => {
     delete process.env.ORCA_OMP_SOURCE_AGENT_DIR
     delete process.env.ORCA_OMP_CODING_AGENT_DIR
     delete process.env.ORCA_OMP_STATUS_EXTENSION
+    delete process.env.PRIME_AGENT_CODING_AGENT_DIR
+    delete process.env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     handlers.clear()
     handleMock.mockReset()
     onMock.mockReset()
@@ -461,6 +465,14 @@ describe('registerPtyHandlers', () => {
             ORCA_OMP_STATUS_EXTENSION: `${existingAgentDir ?? '/tmp/default-omp-agent'}/extensions/orca-agent-status.ts`
           }
         }
+        if (kind === 'prime-agent') {
+          if (!existingAgentDir && !materializeDefaultHome) {
+            return {}
+          }
+          return {
+            ORCA_PRIME_AGENT_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-prime-agent'
+          }
+        }
         if (!existingAgentDir && !materializeDefaultHome) {
           return {}
         }
@@ -563,6 +575,16 @@ describe('registerPtyHandlers', () => {
       process.env.ORCA_OMP_STATUS_EXTENSION = savedOrcaOmpStatusExtension
     } else {
       delete process.env.ORCA_OMP_STATUS_EXTENSION
+    }
+    if (savedPrimeAgentDir !== undefined) {
+      process.env.PRIME_AGENT_CODING_AGENT_DIR = savedPrimeAgentDir
+    } else {
+      delete process.env.PRIME_AGENT_CODING_AGENT_DIR
+    }
+    if (savedOrcaPrimeAgentSourceDir !== undefined) {
+      process.env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = savedOrcaPrimeAgentSourceDir
+    } else {
+      delete process.env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     }
     if (savedOrcaClaudeAgentStatusSettings === undefined) {
       delete process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
@@ -2813,6 +2835,32 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
     })
 
+    it('installs Prime status into its independent agent dir on explicit launch', async () => {
+      const env = await spawnAndGetEnv(
+        undefined,
+        {
+          PI_CODING_AGENT_DIR: '/tmp/user-pi-agent',
+          PRIME_AGENT_CODING_AGENT_DIR: '/tmp/user-prime-agent'
+        },
+        undefined,
+        undefined,
+        'prime-agent'
+      )
+
+      expect(piBuildPtyEnvMock).toHaveBeenCalledTimes(1)
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/tmp/user-prime-agent',
+        'prime-agent',
+        { materializeDefaultHome: true }
+      )
+      expect(env.PRIME_AGENT_CODING_AGENT_DIR).toBe('/tmp/user-prime-agent')
+      expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/user-pi-agent')
+      expect(env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR).toBe('/tmp/user-prime-agent')
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBeUndefined()
+    })
+
     it('uses sequenced startup env as the OMP launch hint when command is a wrapper', async () => {
       const env = await spawnAndGetEnv(
         {
@@ -2916,6 +2964,21 @@ describe('registerPtyHandlers', () => {
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/user-pi-agent')
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+    })
+
+    it('strips only the Prime source shadow when hooks are disabled', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          PRIME_AGENT_CODING_AGENT_DIR: '/tmp/user-prime-agent',
+          ORCA_PRIME_AGENT_SOURCE_AGENT_DIR: '/tmp/user-prime-agent'
+        },
+        undefined,
+        undefined,
+        () => ({ agentStatusHooksEnabled: false })
+      )
+
+      expect(env.PRIME_AGENT_CODING_AGENT_DIR).toBe('/tmp/user-prime-agent')
+      expect(env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR).toBeUndefined()
     })
 
     posixOnlyIt(
@@ -4130,6 +4193,22 @@ describe('registerPtyHandlers', () => {
           expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
           expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
           expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+        })
+      })
+
+      it('does not materialize Windows-host Prime extensions for a WSL launch', async () => {
+        await withWin32Platform(async () => {
+          const env = await daemonSpawnAndGetEnv(
+            { PRIME_AGENT_CODING_AGENT_DIR: 'C:\\Users\\test\\.prime\\agent' },
+            undefined,
+            undefined,
+            undefined,
+            { shellOverride: 'wsl.exe', command: 'prime-agent', launchAgent: 'prime-agent' }
+          )
+
+          expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+          expect(env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR).toBeUndefined()
+          expect(env.PRIME_AGENT_CODING_AGENT_DIR).toBe('C:\\Users\\test\\.prime\\agent')
         })
       })
 
@@ -17122,6 +17201,33 @@ describe('registerPtyHandlers', () => {
     expect(recordCodexPaneAccountMock.mock.calls).toEqual([
       ['pty-fresh', { selectionKey: 'host', accountId: 'account-a', homeRoute: 'real-home' }]
     ])
+  })
+
+  it('refreshes the WSL hook relay for the distro a reattached pane already owns', async () => {
+    // Why here and not only in the helper's unit test: nothing else catches pty.ts dropping the
+    // reattach call — the manager owns the hooks/platform gating this spy stands in for.
+    const ensureForDistro = vi
+      .spyOn(wslHookRelayManager, 'ensureForDistro')
+      .mockImplementation(() => {})
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({ id: 'pty-wsl', isReattach: true, wslDistro: 'Ubuntu-24.04' })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    registerPtyHandlers(mainWindow as never)
+
+    try {
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, sessionId: 'pty-wsl' })
+      expect(ensureForDistro).toHaveBeenCalledWith('Ubuntu-24.04')
+    } finally {
+      ensureForDistro.mockRestore()
+    }
   })
 
   posixOnlyIt(

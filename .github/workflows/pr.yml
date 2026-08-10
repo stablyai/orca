@@ -108,7 +108,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: bash .github/scripts/check-root-directory-entries.sh "$BASE_SHA" "$HEAD_SHA"
+        run: node .github/scripts/check-root-directory-entries.mjs "$BASE_SHA" "$HEAD_SHA"
 
   typecheck:
     runs-on: ubuntu-latest
@@ -173,34 +173,6 @@ jobs:
           done
           exit "$status"
 
-  xterm_patch_sync:
-    name: xterm patch sync
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/install-node-dependencies
-
-      # Why: the check rebuilds xterm.js from a pinned upstream commit. Caching the
-      # npm metadata and the shallow clone turns a ~4 min cold run into well under a
-      # minute; the key is the manifest, so a commit or toolchain bump invalidates it.
-      - name: Restore upstream xterm build inputs
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            ${{ runner.temp }}/xterm-patch-build/upstream/.git
-          key: xterm-upstream-${{ hashFiles('config/patches/xterm-upstream.json') }}
-
-      - name: Verify xterm patches match the pinned upstream build
-        env:
-          WORK_DIR: ${{ runner.temp }}/xterm-patch-build
-        run: node config/scripts/regenerate-xterm-patches.mjs --check --work-dir="$WORK_DIR"
-
   shell_contracts:
     name: shell contracts
     runs-on: ubuntu-latest
@@ -211,8 +183,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install zsh
-        run: sudo apt-get update && sudo apt-get install -y zsh
+      # Why fish: shell-ready.test.ts gates its live fish test on the binary being
+      # present, so without this the fish barrier is only covered by config-shape
+      # assertions and never actually exercised.
+      - name: Install zsh and fish
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -443,8 +418,7 @@ jobs:
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
           CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
-          # Native specs require their dedicated platform harnesses.
-          TEST_FILES="$(printf '%s\n' "$CHANGED" | grep -E '^tests/e2e/.*\.spec\.ts$' | grep -Ev -- '-native\.spec\.ts$' || true)"
+          TEST_FILES="$(printf '%s\n' "$CHANGED" | grep -E '^tests/e2e/.*\.spec\.ts$' || true)"
           TEST_FILES_JSON="$(printf '%s\n' "$TEST_FILES" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
           echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
           if [ "$TEST_FILES_JSON" != '[]' ]; then
@@ -473,7 +447,6 @@ jobs:
       - root_directory_guard
       - typecheck
       - git_compatibility
-      - xterm_patch_sync
       - shell_contracts
       - test
       - managed_hook_node18
@@ -496,7 +469,6 @@ jobs:
           ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
-          XTERM_PATCH_SYNC: ${{ needs.xterm_patch_sync.result }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
           TEST: ${{ needs.test.result }}
           MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
@@ -508,7 +480,6 @@ jobs:
             "$ROOT_DIRECTORY_GUARD" \
             "$TYPECHECK" \
             "$GIT_COMPATIBILITY" \
-            "$XTERM_PATCH_SYNC" \
             "$SHELL_CONTRACTS" \
             "$TEST" \
             "$MANAGED_HOOK_NODE18" \

@@ -6,8 +6,6 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
-import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 
 export type LinkBubbleState = {
   kind: 'markdown' | 'html-superscript'
@@ -102,7 +100,7 @@ export function isLinkEditCancelShortcut(
   event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey'>,
   isMac: boolean
 ): boolean {
-  if (!isLatinShortcutKey(event, 'k')) {
+  if (event.key.toLowerCase() !== 'k') {
     return false
   }
   return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
@@ -136,11 +134,6 @@ function LinkEditInput({
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={(e) => {
-        // Oracle tier only: link targets are URLs rather than CJK prose, and a redispatch-saved
-        // link is undoable in the editor.
-        if (isImeOwnedKeyboardEvent(e)) {
-          return
-        }
         if (e.key === 'Enter') {
           e.preventDefault()
           onSave(value.trim())

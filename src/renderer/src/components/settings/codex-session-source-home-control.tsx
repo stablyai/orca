@@ -6,7 +6,6 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 
 export type AgentSessionSourceHomeControl = {
   runtimeLabel: string
@@ -137,10 +136,6 @@ export function AgentSessionSourceHomeInput({
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => {
-            // Why: an Enter confirming a CJK IME candidate must not commit a half-composed path.
-            if (isImeCompositionKeyDown(e)) {
-              return
-            }
             if (e.key === 'Enter') {
               commit()
               e.currentTarget.blur()

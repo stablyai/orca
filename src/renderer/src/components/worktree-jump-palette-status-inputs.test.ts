@@ -12,7 +12,9 @@ const BASE: PaletteStatusInputsState = {
   runtimePaneTitlesByTabId: {},
   ptyIdsByTabId: {},
   terminalLayoutsByTabId: {},
-  tabsByWorktree: {}
+  tabsByWorktree: {},
+  unreadTerminalTabs: {},
+  unreadAgentCompletionPanes: {}
 }
 
 describe('selectPaletteStatusInputs', () => {
@@ -76,6 +78,29 @@ describe('selectPaletteIndexStatusSnapshot', () => {
     )
     expect(snapshot.runtimePaneTitlesByTabId).toBe(titles)
     expect(snapshot.agentStatusByPaneKey).toBe(statuses)
+  })
+
+  // Why here and not subscribed: recent-section membership reads these, and the row order is frozen
+  // on open — a live unread write would change membership the frozen order can no longer honour.
+  it('snapshots the unread maps alongside the status maps', () => {
+    const unreadTabs = { 'term-1': true } as const
+    const unreadPanes = { 'term-1:leaf-1': true } as const
+    const snapshot = selectPaletteIndexStatusSnapshot(
+      { ...BASE, unreadTerminalTabs: unreadTabs, unreadAgentCompletionPanes: unreadPanes },
+      true
+    )
+    expect(snapshot.unreadTerminalTabs).toBe(unreadTabs)
+    expect(snapshot.unreadAgentCompletionPanes).toBe(unreadPanes)
+  })
+
+  it('keeps unread churn out of the subscribed bundle', () => {
+    const r1 = selectPaletteStatusInputs(BASE, true)
+    const churned: PaletteStatusInputsState = {
+      ...BASE,
+      unreadTerminalTabs: { 'term-1': true },
+      unreadAgentCompletionPanes: { 'term-1:leaf-1': true }
+    }
+    expect(shallow(r1, selectPaletteStatusInputs(churned, true))).toBe(true)
   })
 
   it('drops its hold on the live maps once inactive', () => {

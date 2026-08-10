@@ -132,6 +132,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     skipDeleteWorktreeConfirm: false,
     skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
+    skipDeleteArtifactConfirm: false,
     skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
