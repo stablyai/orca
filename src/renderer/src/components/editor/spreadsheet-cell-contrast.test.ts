@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getContrastRatio,
   getRelativeLuminance,
+  isLargeCellText,
   pickReadableCellTextColor
 } from './spreadsheet-cell-contrast'
 
@@ -74,5 +75,37 @@ describe('pickReadableCellTextColor', () => {
       const ink = pickReadableCellTextColor(fill)
       expect(getContrastRatio(ink, fill)).toBeGreaterThanOrEqual(4.5)
     }
+  })
+})
+
+describe('large text contrast', () => {
+  it('recognizes WCAG large text by size and by bold', () => {
+    expect(isLargeCellText({ sizePt: 18 })).toBe(true)
+    expect(isLargeCellText({ sizePt: 14, bold: true })).toBe(true)
+    expect(isLargeCellText({ sizePt: 14 })).toBe(false)
+    expect(isLargeCellText({ sizePt: 11, bold: true })).toBe(false)
+    expect(isLargeCellText({})).toBe(false)
+  })
+
+  it('keeps an accent colour on a heading that only clears the large-text ratio', () => {
+    // Why: a brand orange title on white is 3.1:1 — below the body threshold but
+    // above the large-text one, and it is what Excel and Sheets both show.
+    // Replacing it with black would discard a deliberate design decision.
+    expect(getContrastRatio('#f46524', '#ffffff')).toBeLessThan(4.5)
+    expect(getContrastRatio('#f46524', '#ffffff')).toBeGreaterThan(3)
+
+    expect(pickReadableCellTextColor('#ffffff', '#f46524', { sizePt: 18, bold: true })).toBe(
+      '#f46524'
+    )
+  })
+
+  it('still replaces that colour for body text', () => {
+    expect(pickReadableCellTextColor('#ffffff', '#f46524', { sizePt: 11 })).toBe('#000000')
+  })
+
+  it('replaces a colour that fails even the large-text ratio', () => {
+    expect(pickReadableCellTextColor('#ffff00', '#ffffff', { sizePt: 24, bold: true })).toBe(
+      '#000000'
+    )
   })
 })

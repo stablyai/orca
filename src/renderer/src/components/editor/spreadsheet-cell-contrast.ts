@@ -7,8 +7,24 @@ import { readRgbChannels } from './xlsx-color'
 // it; the ink has to follow the fill, not the theme.
 const INK_ON_LIGHT_FILL = '#000000'
 const INK_ON_DARK_FILL = '#ffffff'
-// The WCAG AA threshold for body text.
+// The WCAG AA thresholds: 4.5:1 for body text, 3:1 for large text. Applying the
+// body threshold to a heading discards the author's accent colour for no reason —
+// an 18pt bold title in a brand orange is legible on white and is exactly what
+// both Excel and Sheets show.
 const MIN_READABLE_CONTRAST_RATIO = 4.5
+const MIN_READABLE_LARGE_TEXT_CONTRAST_RATIO = 3
+// WCAG's definition of large: 18pt, or 14pt when bold.
+const LARGE_TEXT_POINTS = 18
+const LARGE_BOLD_TEXT_POINTS = 14
+
+export type CellTextWeight = { sizePt?: number; bold?: boolean }
+
+export function isLargeCellText({ sizePt, bold }: CellTextWeight): boolean {
+  if (sizePt === undefined) {
+    return false
+  }
+  return sizePt >= LARGE_TEXT_POINTS || (bold === true && sizePt >= LARGE_BOLD_TEXT_POINTS)
+}
 
 /**
  * Picks a readable text colour for a cell that carries a background fill.
@@ -20,12 +36,16 @@ const MIN_READABLE_CONTRAST_RATIO = 4.5
  */
 export function pickReadableCellTextColor(
   backgroundColor: string,
-  declaredTextColor?: string | null
+  declaredTextColor?: string | null,
+  textWeight: CellTextWeight = {}
 ): string {
+  const minimumRatio = isLargeCellText(textWeight)
+    ? MIN_READABLE_LARGE_TEXT_CONTRAST_RATIO
+    : MIN_READABLE_CONTRAST_RATIO
   if (
     declaredTextColor !== undefined &&
     declaredTextColor !== null &&
-    getContrastRatio(declaredTextColor, backgroundColor) >= MIN_READABLE_CONTRAST_RATIO
+    getContrastRatio(declaredTextColor, backgroundColor) >= minimumRatio
   ) {
     return declaredTextColor
   }

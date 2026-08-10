@@ -65,7 +65,10 @@ export function parseXlsxCellStyles(stylesXml: string, themeXml: string): XlsxCe
     const style: XlsxCellStyle = {}
     if (backgroundColor !== undefined) {
       style.backgroundColor = backgroundColor
-      style.textColor = pickReadableCellTextColor(backgroundColor, font?.color)
+      style.textColor = pickReadableCellTextColor(backgroundColor, font?.color, {
+        sizePt: font?.sizePt,
+        bold: font?.bold
+      })
     }
     if (font?.bold === true) {
       style.bold = true
