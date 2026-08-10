@@ -103,6 +103,11 @@ import { useActiveWorktree } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { sortChecksBySeverity } from '../../../../shared/pr-check-severity-order'
 import { summarizeProviderChecks } from '../../../../shared/provider-check-summary'
+import {
+  cancelAnnotationRevealFrame,
+  getOpenableAnnotationLine,
+  openAnnotationLocation
+} from '@/components/editor/check-annotation-open'
 
 export const PullRequestIcon = GitPullRequest
 
@@ -1657,6 +1662,64 @@ function buildCopyText(comment: PRComment): string {
   return `File: ${location}\n\n${comment.body}`
 }
 
+function getOpenablePRCommentLocation(comment: PRComment): { path: string; line: number } | null {
+  return getOpenableAnnotationLine({
+    path: comment.path ?? null,
+    startLine: comment.line ?? null,
+    endLine: comment.line ?? null,
+    annotationLevel: null,
+    title: null,
+    message: comment.body,
+    rawDetails: null
+  })
+}
+
+function CommentLocationBadge({
+  comment,
+  className,
+  onOpenLocation
+}: {
+  comment: PRComment
+  className: string
+  onOpenLocation?: (path: string, line: number) => void
+}): React.JSX.Element | null {
+  if (!comment.path) {
+    return null
+  }
+  const fileName = comment.path.split('/').pop()
+  const lineRange = formatLineRange(comment)
+  const label = `${fileName}${lineRange ? `:${lineRange}` : ''}`
+  const openableLocation = getOpenablePRCommentLocation(comment)
+  if (!openableLocation || !onOpenLocation) {
+    return (
+      <span className={className} title={comment.path}>
+        {label}
+      </span>
+    )
+  }
+  const openLocation = onOpenLocation
+
+  return (
+    <button
+      type="button"
+      className={cn(
+        className,
+        'rounded text-left transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
+      )}
+      title={translate(
+        'auto.components.right.sidebar.checks.panel.content.6da4b0f9e2',
+        'Open file at this line'
+      )}
+      onClick={(event) => {
+        event.stopPropagation()
+        openLocation(openableLocation.path, openableLocation.line)
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
 function QueueForAgentButton({
   className,
   onQueueForAgent
@@ -1732,6 +1795,7 @@ function CommentRow({
   onReply,
   onEditComment,
   onDeleteComment,
+  onOpenLocation,
   onQueueForAgent
 }: {
   comment: PRComment
@@ -1749,6 +1813,7 @@ function CommentRow({
   onReply?: (comment: PRComment) => void
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
+  onOpenLocation?: (path: string, line: number) => void
   onQueueForAgent?: () => void
 }): React.JSX.Element {
   const automated = isBotPRComment(comment, botAuthorOverrides)
@@ -1886,12 +1951,11 @@ function CommentRow({
             {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
           </span>
         ) : null}
-        {comment.path ? (
-          <span className={presentation.pathBadge} title={comment.path}>
-            {comment.path.split('/').pop()}
-            {formatLineRange(comment) && `:${formatLineRange(comment)}`}
-          </span>
-        ) : null}
+        <CommentLocationBadge
+          comment={comment}
+          className={presentation.pathBadge}
+          onOpenLocation={onOpenLocation}
+        />
         <PRCommentActionBadge
           actionState={actionState}
           isQueued={isQueued}
@@ -1932,12 +1996,13 @@ function CommentRow({
             {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
           </span>
         )}
-        {!isReply && comment.path && (
-          <span className={presentation.pathBadge}>
-            {comment.path.split('/').pop()}
-            {formatLineRange(comment) && `:${formatLineRange(comment)}`}
-          </span>
-        )}
+        {!isReply ? (
+          <CommentLocationBadge
+            comment={comment}
+            className={presentation.pathBadge}
+            onOpenLocation={onOpenLocation}
+          />
+        ) : null}
         {!isReply ? (
           <PRCommentActionBadge
             actionState={actionState}
@@ -2036,6 +2101,7 @@ function PRCommentGroupView({
   onReply,
   onEditComment,
   onDeleteComment,
+  onOpenLocation,
   onQueueForAgent
 }: {
   group: PRCommentGroup
@@ -2053,6 +2119,7 @@ function PRCommentGroupView({
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
+  onOpenLocation?: (path: string, line: number) => void
   onQueueForAgent?: () => void
 }): React.JSX.Element {
   // Reply targets a specific comment id so any comment in a thread — root or
@@ -2099,6 +2166,7 @@ function PRCommentGroupView({
     onResolve,
     onEditComment,
     onDeleteComment,
+    onOpenLocation,
     onQueueForAgent
   }
 
@@ -2181,7 +2249,8 @@ function ResolvedCommentGroupsSection({
   onCancelReply,
   onReply,
   onEditComment,
-  onDeleteComment
+  onDeleteComment,
+  onOpenLocation
 }: {
   groups: PRCommentGroup[]
   botAuthorOverrides: ReadonlySet<string>
@@ -2195,6 +2264,7 @@ function ResolvedCommentGroupsSection({
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
+  onOpenLocation?: (path: string, line: number) => void
 }): React.JSX.Element | null {
   if (groups.length === 0) {
     return null
@@ -2230,6 +2300,7 @@ function ResolvedCommentGroupsSection({
                 onReply={onReply}
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}
+                onOpenLocation={onOpenLocation}
               />
             ))}
           </AccordionContent>
@@ -2289,6 +2360,7 @@ export function PRCommentsList({
   commentsDisabledReason,
   selectionContextKey,
   selectionClearRequest,
+  worktreeId,
   resolveCommentsWithAIDisabled,
   resolveCommentsWithAIDisabledReason,
   onAddComment,
@@ -2305,6 +2377,7 @@ export function PRCommentsList({
   commentsDisabledReason?: string
   selectionContextKey?: string
   selectionClearRequest?: PRCommentsListSelectionClearRequest | null
+  worktreeId?: string | null
   resolveCommentsWithAIDisabled?: boolean
   resolveCommentsWithAIDisabledReason?: string
   onAddComment?: (body: string) => Promise<RightPanelCommentSubmitResult>
@@ -2320,6 +2393,8 @@ export function PRCommentsList({
   const [replyingCommentId, setReplyingCommentId] = useState<number | null>(null)
   const [isAddingComment, setIsAddingComment] = useState(false)
   const addCommentSurfaceRef = useRef<HTMLDivElement>(null)
+  const revealRafRef = useRef<number | null>(null)
+  const revealInnerRafRef = useRef<number | null>(null)
   const shouldScrollAddCommentRef = useRef(false)
   const botAuthorOverrides = usePRBotAuthorOverrides()
   const commentCounts = React.useMemo(
@@ -2348,6 +2423,24 @@ export function PRCommentsList({
     onResolveSelectedCommentsWithAI && selectableGroups.length > 0
   )
   const selectedCommentQueueCount = selectedGroups.length
+
+  useEffect(
+    () => () => {
+      cancelAnnotationRevealFrame(revealRafRef)
+      cancelAnnotationRevealFrame(revealInnerRafRef)
+    },
+    []
+  )
+
+  const openCommentLocation = useCallback(
+    (path: string, line: number): void => {
+      if (!worktreeId) {
+        return
+      }
+      openAnnotationLocation({ worktreeId, path, line, revealRafRef, revealInnerRafRef })
+    },
+    [worktreeId]
+  )
 
   useEffect(() => {
     if (!isAddingComment || !shouldScrollAddCommentRef.current) {
@@ -2435,6 +2528,7 @@ export function PRCommentsList({
         onReply={onReply}
         onEditComment={onEditComment}
         onDeleteComment={onDeleteComment}
+        onOpenLocation={worktreeId ? openCommentLocation : undefined}
         onQueueForAgent={canQueue ? () => addGroupToSelection(groupId) : undefined}
       />
     )
@@ -2765,6 +2859,7 @@ export function PRCommentsList({
                 onReply={onReply}
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}
+                onOpenLocation={worktreeId ? openCommentLocation : undefined}
               />
             </>
           )}

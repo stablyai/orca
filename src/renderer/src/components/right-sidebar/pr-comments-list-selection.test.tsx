@@ -7,6 +7,38 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
+const mocks = vi.hoisted(() => ({
+  state: {
+    worktreesByRepo: {
+      'repo-1': [
+        {
+          id: 'wt-1',
+          repoId: 'repo-1',
+          path: '/repo/wt'
+        }
+      ]
+    },
+    openFile: vi.fn(),
+    setPendingEditorReveal: vi.fn()
+  },
+  activateAndRevealWorktree: vi.fn()
+}))
+
+vi.mock('@/store', () => {
+  const useAppStore = Object.assign(
+    (selector?: (state: typeof mocks.state) => unknown) =>
+      selector ? selector(mocks.state) : mocks.state,
+    {
+      getState: () => mocks.state
+    }
+  )
+  return { useAppStore }
+})
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.activateAndRevealWorktree
+}))
+
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
   DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -61,6 +93,12 @@ let root: Root
 
 beforeEach(() => {
   clearPRCommentsListSelectionsForTests()
+  vi.clearAllMocks()
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
+    callback(0)
+    return 1
+  })
+  vi.stubGlobal('cancelAnimationFrame', vi.fn())
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -72,6 +110,7 @@ afterEach(() => {
   })
   container.remove()
   clearPRCommentsListSelectionsForTests()
+  vi.unstubAllGlobals()
 })
 
 function comment(overrides: Partial<PRComment>): PRComment {
@@ -92,6 +131,7 @@ function renderList(props: {
   strictMode?: boolean
   onResolveSelectedCommentsWithAI?: (groups: PRCommentGroup[]) => void
   clearRequest?: PRCommentsListSelectionClearRequest | null
+  worktreeId?: string | null
 }): void {
   const list = (
     <TooltipProvider>
@@ -100,6 +140,7 @@ function renderList(props: {
         commentsLoading={false}
         selectionContextKey={props.contextKey ?? 'review:42'}
         selectionClearRequest={props.clearRequest}
+        worktreeId={props.worktreeId ?? 'wt-1'}
         onResolveSelectedCommentsWithAI={props.onResolveSelectedCommentsWithAI ?? vi.fn()}
       />
     </TooltipProvider>
@@ -187,6 +228,66 @@ function clickMenuItem(label: string): void {
 }
 
 describe('PRCommentsList comment resolution selection', () => {
+  it('opens a safe review comment file location in the active worktree', () => {
+    renderList({
+      comments: [
+        comment({
+          id: 1,
+          threadId: 'thread-1',
+          path: 'src/file.ts',
+          line: 12,
+          isResolved: false
+        })
+      ]
+    })
+
+    const locationButton = container.querySelector<HTMLButtonElement>(
+      'button[title="Open file at this line"]'
+    )
+    expect(locationButton?.textContent).toBe('file.ts:L12')
+
+    act(() => {
+      locationButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
+    expect(mocks.state.openFile).toHaveBeenCalledWith(
+      {
+        filePath: '/repo/wt/src/file.ts',
+        relativePath: 'src/file.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { forceContentReload: true }
+    )
+    expect(mocks.state.setPendingEditorReveal).toHaveBeenLastCalledWith({
+      filePath: '/repo/wt/src/file.ts',
+      line: 12,
+      column: 1,
+      matchLength: 0
+    })
+  })
+
+  it('keeps an escaping review comment path non-clickable', () => {
+    renderList({
+      comments: [
+        comment({
+          id: 1,
+          threadId: 'thread-1',
+          path: '../../secret.ts',
+          line: 7,
+          isResolved: false
+        })
+      ]
+    })
+
+    expect(container.textContent).toContain('secret.ts:L7')
+    expect(container.querySelector('button[title="Open file at this line"]')).toBeNull()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.openFile).not.toHaveBeenCalled()
+  })
+
   it('shows the bulk action when loaded unresolved comment groups are selectable', () => {
     renderList({
       comments: [
