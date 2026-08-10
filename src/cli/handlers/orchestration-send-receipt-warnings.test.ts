@@ -56,6 +56,24 @@ it('prints one warning line per unreachable fan-out recipient', async () => {
   )
 })
 
+it('shows a partial fan-out as a smaller recipient count plus the skipped recipient', async () => {
+  const line = await send({
+    messages: [{ id: 'msg_1' }],
+    recipients: 1,
+    warnings: [
+      {
+        code: 'recipient_unreachable',
+        recipient: 'term_orphan',
+        message: 'No live terminal holds term_orphan, so no message was created for it.'
+      }
+    ]
+  })
+
+  expect(line).toBe(
+    'Sent 1 messages to 1 recipients\nWarning: No live terminal holds term_orphan, so no message was created for it.'
+  )
+})
+
 it('leaves a clean receipt unchanged', async () => {
   expect(await send({ message: { id: 'msg_1' } })).toBe('Sent msg_1')
 })

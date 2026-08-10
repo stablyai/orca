@@ -6,6 +6,7 @@ export type SendRecipientWarningCode =
   | 'no_live_terminal'
   | 'recipient_reads_other_mailbox'
   | 'recipient_outside_run'
+  | 'recipient_unreachable'
 
 export type SendRecipientWarning = {
   code: SendRecipientWarningCode
@@ -95,4 +96,17 @@ export function resolveTerminalRecipientReach(params: {
   }
 
   return { deliverable: true }
+}
+
+/**
+ * Group membership is discovered, not chosen, so one unreachable member must not fail a
+ * broadcast to the live ones. The recipient is dropped before insertion and named here
+ * instead, which is what distinguishes it from `no_live_terminal` on a row that was stored.
+ */
+export function unreachableRecipientWarning(handle: string): SendRecipientWarning {
+  return {
+    code: 'recipient_unreachable',
+    recipient: handle,
+    message: `No live terminal holds ${handle} and no active Dispatch names it, so no message was created for that recipient.`
+  }
 }

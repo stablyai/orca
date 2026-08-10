@@ -21,7 +21,10 @@ import {
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import { resolveRunScope } from './orchestration-run-scope'
-import { resolveTerminalRecipientReach } from './orchestration-recipient-reachability'
+import {
+  resolveTerminalRecipientReach,
+  unreachableRecipientWarning
+} from './orchestration-recipient-reachability'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
 import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration-federation-methods'
@@ -657,9 +660,26 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         throw new Error(`No recipients resolved for group address: ${to}`)
       }
 
+      // Why: resolve reach before any row exists — a fan-out member with no live pane and no
+      // active Dispatch would otherwise be stored and notified before anyone noticed nothing
+      // could read it (#13363).
+      const recipientReach = handles.map((handle) => ({
+        handle,
+        reach: resolveTerminalRecipientReach({ runtime, db, handle, run: routing.run })
+      }))
+      const deliverable = recipientReach.filter(({ reach }) => reach.deliverable)
+      if (deliverable.length === 0) {
+        // Why: refusing the whole group for one dead member would let a single orphaned pane
+        // block a broadcast, so only a fan-out that would store nothing readable at all fails.
+        throw new OrchestrationError(
+          'terminal_not_found',
+          `No recipient of ${to} has a live terminal or an active Dispatch.`
+        )
+      }
+
       revalidateLegacyCoordinator?.()
       const threadId = params.threadId ?? `thread_${Date.now()}`
-      const messages = handles.map((handle) =>
+      const messages = deliverable.map(({ handle }) =>
         db.insertMessage({
           from,
           to: handle,
@@ -683,16 +703,18 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
 
       // Why: fan-out rows are legacy-handle rows too, so every recipient already reading a Run
-      // or Dispatch mailbox gets a message its check will never return (#13363). The group form
-      // stays accepted — its members are live terminals — so the receipt names them instead.
-      const groupWarnings = handles.flatMap((handle) => {
-        const reach = resolveTerminalRecipientReach({ runtime, db, handle, run: routing.run })
+      // or Dispatch mailbox gets a message its check will never return (#13363). Those are
+      // stored and warned about; a recipient nothing can reach is dropped and named instead.
+      const groupWarnings = recipientReach.flatMap(({ handle, reach }) => {
+        if (!reach.deliverable) {
+          return [unreachableRecipientWarning(handle)]
+        }
         return reach.warning ? [reach.warning] : []
       })
 
       return {
         messages,
-        recipients: handles.length,
+        recipients: messages.length,
         ...(groupWarnings.length > 0 ? { warnings: groupWarnings } : {})
       }
     }

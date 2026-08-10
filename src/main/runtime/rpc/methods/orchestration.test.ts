@@ -845,6 +845,14 @@ describe('orchestration RPC methods', () => {
         totalCount: terminals.length,
         truncated: false
       })
+      // Why: a listed terminal normally holds a pane, so default every group member to one;
+      // tests that need an unreachable member override this mock.
+      const panesByHandle = new Map(
+        terminals.map((terminal) => [terminal.handle, `${terminal.tabId}:${terminal.leafId}`])
+      )
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle: string) =>
+        handle === 'term_coord' ? coordinatorPaneKey : (panesByHandle.get(handle) ?? null)
+      )
       vi.spyOn(runtime, 'getAgentStatusForHandle').mockImplementation(
         (handle: string) => agentStatuses?.[handle] ?? null
       )
@@ -908,6 +916,79 @@ describe('orchestration RPC methods', () => {
       })) as { count: number; dispatchId: string }
       expect(coordCheck.count).toBe(0)
       expect(workerCheck).toMatchObject({ count: 0, dispatchId: dispatch.id })
+    })
+
+    it('skips a fan-out member nothing can reach and names it on the receipt', async () => {
+      setupWithTerminals([
+        makeSummary('term_sender', { tabId: 'tab_sender', leafId: 'leaf_sender' }),
+        makeSummary('term_live', { tabId: 'tab_live', leafId: 'leaf_live' }),
+        // An orphaned PTY is listed as a terminal but owns no pane, so nothing reads its mail.
+        makeSummary('term_orphan', { tabId: 'pty:orphan', leafId: 'pty:orphan' })
+      ])
+      const panes: Record<string, string> = {
+        term_sender: 'tab_sender:leaf_sender',
+        term_live: 'tab_live:leaf_live'
+      }
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => panes[handle] ?? null)
+
+      const result = (await call('orchestration.send', {
+        from: 'term_sender',
+        to: '@all',
+        subject: 'broadcast'
+      })) as {
+        messages: { to_handle: string }[]
+        recipients: number
+        warnings: { code: string; recipient: string }[]
+      }
+
+      expect(result.messages.map((message) => message.to_handle)).toEqual(['term_live'])
+      expect(result.recipients).toBe(1)
+      expect(result.warnings).toEqual([
+        expect.objectContaining({ code: 'recipient_unreachable', recipient: 'term_orphan' })
+      ])
+      // The skipped recipient must own no row at all, not an unread one.
+      expect(db.getUnreadMessages('term_orphan')).toHaveLength(0)
+      expect(db.getUnreadMessages('term_live')).toHaveLength(1)
+    })
+
+    it('refuses a fan-out when no resolved recipient can be reached', async () => {
+      setupWithTerminals([
+        makeSummary('term_sender', { tabId: 'tab_sender', leafId: 'leaf_sender' }),
+        makeSummary('term_orphan_a', { tabId: 'pty:a', leafId: 'pty:a' }),
+        makeSummary('term_orphan_b', { tabId: 'pty:b', leafId: 'pty:b' })
+      ])
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_sender' ? 'tab_sender:leaf_sender' : null
+      )
+
+      await expect(
+        call('orchestration.send', { from: 'term_sender', to: '@all', subject: 'broadcast' })
+      ).rejects.toMatchObject({ code: 'terminal_not_found' })
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('keeps delivering to a worktree group when one member has no pane', async () => {
+      setupWithTerminals([
+        makeSummary('term_sender', { worktreeId: 'wt_x', tabId: 'tab_s', leafId: 'leaf_s' }),
+        makeSummary('term_live', { worktreeId: 'wt_x', tabId: 'tab_l', leafId: 'leaf_l' }),
+        makeSummary('term_orphan', { worktreeId: 'wt_x', tabId: 'pty:o', leafId: 'pty:o' })
+      ])
+      const panes: Record<string, string> = {
+        term_sender: 'tab_s:leaf_s',
+        term_live: 'tab_l:leaf_l'
+      }
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => panes[handle] ?? null)
+
+      const result = (await call('orchestration.send', {
+        from: 'term_sender',
+        to: '@worktree:wt_x',
+        subject: 'worktree broadcast'
+      })) as { recipients: number; warnings: { code: string; recipient: string }[] }
+
+      expect(result.recipients).toBe(1)
+      expect(result.warnings).toEqual([
+        expect.objectContaining({ code: 'recipient_unreachable', recipient: 'term_orphan' })
+      ])
     })
 
     it('continues to fan out status messages to groups', async () => {
