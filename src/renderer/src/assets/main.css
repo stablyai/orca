@@ -212,6 +212,13 @@
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
   --git-decoration-ignored: #8c8c8c;
+  /* Why separate from --git-decoration-*: those tint file-tree labels, where a name reads
+     alongside its status. A 3px gutter bar carries the meaning on hue alone, so modified must
+     be blue rather than the label palette's amber, which is near-indistinguishable from the
+     added olive at that width. Values follow VS Code's editorGutter.* roles. */
+  --editor-gutter-added: #587c0c;
+  --editor-gutter-modified: #1b81a8;
+  --editor-gutter-deleted: #ad0707;
   --git-graph-ref: #007acc;
   --git-graph-remote-ref: #b66dff;
   --git-graph-base-ref: #ea5c00;
@@ -319,6 +326,9 @@
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
   --git-decoration-ignored: #6e6e6e;
+  --editor-gutter-added: #81b88b;
+  --editor-gutter-modified: #4aa8d8;
+  --editor-gutter-deleted: #c74e39;
   --git-graph-ref: #3794ff;
   --git-graph-remote-ref: #b66dff;
   --git-graph-base-ref: #ea5c00;
@@ -2179,11 +2189,11 @@ html.native-shell .app-layout {
 }
 
 .monaco-editor .orca-git-gutter-added {
-  background: var(--git-decoration-added);
+  background: var(--editor-gutter-added);
 }
 
 .monaco-editor .orca-git-gutter-modified {
-  background: var(--git-decoration-modified);
+  background: var(--editor-gutter-modified);
 }
 
 /* Why: a deletion has no line of its own — render a wedge on the boundary instead of a bar. */
@@ -2197,7 +2207,7 @@ html.native-shell .app-layout {
   position: absolute;
   left: 0;
   bottom: -3px;
-  border-left: 4px solid var(--git-decoration-deleted);
+  border-left: 4px solid var(--editor-gutter-deleted);
   border-top: 3px solid transparent;
   border-bottom: 3px solid transparent;
 }
