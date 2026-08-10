@@ -57,7 +57,7 @@ export function TerminalFontSizeSetting({
                   updateSettings({ terminalFontSize: value })
                 }
               }}
-              className="number-input-clean w-24 text-center tabular-nums"
+              className="number-input-clean w-14 text-center tabular-nums"
             />
             <Button
               variant="outline"
