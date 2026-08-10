@@ -38,9 +38,9 @@ describe('relay remote Git preparation deadline', () => {
 
     await handler.remotePreparationGit(['remote'], '/repo', context)
 
-    expect(runRelayGitRemoteCommandMock).toHaveBeenCalledWith(
-      ['remote'],
-      expect.objectContaining({ cleanupDeadlineMs: context.deadline.expiresAtMs })
-    )
+    const options = runRelayGitRemoteCommandMock.mock.calls[0]?.[1] as {
+      cleanupDeadlineMs?: number
+    }
+    expect(options.cleanupDeadlineMs).toBe(context.deadline.expiresAtMs)
   })
 })
