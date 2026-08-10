@@ -29,6 +29,7 @@ vi.mock('./status', () => ({
 }))
 
 import { addWorktree, WORKTREE_ADD_TIMEOUT_MS } from './worktree'
+import { shareGitCryptStateWithWorktree } from '../../shared/git-crypt-worktree-state'
 
 const REPO = '/repo'
 const WORKTREE = '/repo-feature'
@@ -90,7 +91,7 @@ describe('addWorktree on git-crypt repositories', () => {
     expect(cpMock).not.toHaveBeenCalled()
   })
 
-  it('shares git-crypt state before running the deferred checkout', async () => {
+  it('shares folder-source git-crypt state before running the deferred checkout', async () => {
     mockUnlockedRepo()
     resolveRemoteBase()
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
@@ -178,6 +179,24 @@ describe('addWorktree on git-crypt repositories', () => {
       join(WORKTREE_GIT_DIR, 'git-crypt'),
       expect.any(String)
     )
+  })
+
+  it('keeps concurrent creates on the same repository-wide authority', async () => {
+    const git = vi.fn(async (_args: string[], cwd: string) => ({
+      stdout: join(REPO_GIT_DIR, 'worktrees', cwd.endsWith('one') ? 'one' : 'two')
+    }))
+
+    await Promise.all([
+      shareGitCryptStateWithWorktree(git, REPO_GIT_CRYPT, '/target-one'),
+      shareGitCryptStateWithWorktree(git, REPO_GIT_CRYPT, '/target-two')
+    ])
+
+    expect(symlinkMock).toHaveBeenCalledTimes(2)
+    expect(symlinkMock.mock.calls.map(([source]) => source)).toEqual([
+      REPO_GIT_CRYPT,
+      REPO_GIT_CRYPT
+    ])
+    expect(cpMock).not.toHaveBeenCalled()
   })
 
   it('fails closed without copying key material when directory links are unavailable', async () => {
