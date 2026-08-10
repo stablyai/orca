@@ -2,16 +2,36 @@ import type { TerminalTab, WorkspaceSessionState } from '../../../shared/types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree-id'
 import type { AppState } from '../store/types'
+import { collectLeafIdsInOrder } from '../components/terminal-pane/terminal-layout-leaf-ids'
 
-function preserveNewerLocalTerminalFields(remote: TerminalTab, local: TerminalTab): TerminalTab {
+function preserveNewerLocalTerminalFields(
+  remote: TerminalTab,
+  local: TerminalTab,
+  retainedPtyId?: string
+): TerminalTab {
   const preserved = {
     ...remote,
     generation: local.generation,
-    ptyId: local.ptyId
+    ptyId: local.ptyId ?? retainedPtyId ?? null
   }
   return local.pendingActivationSpawn
     ? { ...preserved, pendingActivationSpawn: local.pendingActivationSpawn }
     : preserved
+}
+
+function retainedLocalPtyId(
+  current: WorkspaceSessionState,
+  reconnectPtyIdByTabId: Readonly<Record<string, string>>,
+  tabId: string
+): string | undefined {
+  const layout = current.terminalLayoutsByTabId[tabId]
+  const mountedLeafIds = collectLeafIdsInOrder(layout?.root)
+  const primaryLeafId =
+    layout?.activeLeafId && mountedLeafIds.includes(layout.activeLeafId)
+      ? layout.activeLeafId
+      : mountedLeafIds[0]
+  const layoutPtyId = primaryLeafId ? layout?.ptyIdsByLeafId?.[primaryLeafId] : undefined
+  return reconnectPtyIdByTabId[tabId] ?? layoutPtyId
 }
 
 export function mergeDirectSshRemoteWorkspaceSession(
@@ -19,7 +39,8 @@ export function mergeDirectSshRemoteWorkspaceSession(
   remote: WorkspaceSessionState,
   replaceWorktreeIds: ReadonlySet<string>,
   liveTabsByWorktree: AppState['tabsByWorktree'],
-  preserveLocalTerminalTabIds: ReadonlySet<string>
+  preserveLocalTerminalTabIds: ReadonlySet<string>,
+  reconnectPtyIdByTabId: Readonly<Record<string, string>>
 ): WorkspaceSessionState {
   const currentTabsById = new Map(
     [...replaceWorktreeIds]
@@ -27,21 +48,25 @@ export function mergeDirectSshRemoteWorkspaceSession(
       .map((tab) => [tab.id, tab])
   )
   const locallyPreservedTabIds = new Set<string>()
+  const locallyPreservedWorktreeIds = new Set<string>()
   const tabsByWorktree = Object.fromEntries(
     Object.entries(remote.tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
       tabs.map((tab) => {
         const local = currentTabsById.get(tab.id)
+        const retainedPtyId = retainedLocalPtyId(current, reconnectPtyIdByTabId, tab.id)
         if (
           !local ||
           ((local.generation ?? 0) <= (tab.generation ?? 0) &&
+            !((local.ptyId || retainedPtyId) && !tab.ptyId) &&
             !local.pendingActivationSpawn &&
             !preserveLocalTerminalTabIds.has(tab.id))
         ) {
           return tab
         }
         locallyPreservedTabIds.add(tab.id)
-        return preserveNewerLocalTerminalFields(tab, local)
+        locallyPreservedWorktreeIds.add(worktreeId)
+        return preserveNewerLocalTerminalFields(tab, local, retainedPtyId)
       })
     ])
   )
@@ -88,8 +113,13 @@ export function mergeDirectSshRemoteWorkspaceSession(
     },
     terminalLayoutsByTabId,
     activeWorktreeIdsOnShutdown: [
-      ...(current.activeWorktreeIdsOnShutdown ?? []).filter((id) => !replaceWorktreeIds.has(id)),
-      ...(remote.activeWorktreeIdsOnShutdown ?? [])
+      ...new Set([
+        ...(current.activeWorktreeIdsOnShutdown ?? []).filter(
+          (id) => !replaceWorktreeIds.has(id) || locallyPreservedWorktreeIds.has(id)
+        ),
+        ...locallyPreservedWorktreeIds,
+        ...(remote.activeWorktreeIdsOnShutdown ?? [])
+      ])
     ],
     activeTabIdByWorktree: {
       ...omitTargetWorktrees(current.activeTabIdByWorktree),
@@ -105,6 +135,13 @@ export function mergeDirectSshRemoteWorkspaceSession(
         Object.entries(remote.remoteSessionIdsByTabId ?? {}).filter(
           ([tabId]) => !locallyPreservedTabIds.has(tabId)
         )
+      ),
+      ...Object.fromEntries(
+        [...locallyPreservedTabIds]
+          .map(
+            (tabId) => [tabId, retainedLocalPtyId(current, reconnectPtyIdByTabId, tabId)] as const
+          )
+          .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
       )
     },
     lastVisitedAtByWorktreeId: {

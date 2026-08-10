@@ -5990,7 +5990,13 @@
           "file": "src/main/ipc/remote-workspace.test.ts",
           "assertions": [
             "duplicate repository ids resolve through the exact SSH target host and export only that target's adopted state",
-            "conflicting local and target partitions skip replacement exports, and explicit sessions require matching target provenance"
+            "conflicting local and target partitions skip replacement exports, and explicit sessions require matching target provenance and durable PTY identity"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/remote-workspace-target-sync.test.ts",
+          "assertions": [
+            "identity-free target snapshots preserve the exact local tab, active leaf binding, provider session, and shutdown reconnect owner before hydration"
           ]
         },
         {

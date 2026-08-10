@@ -437,20 +437,72 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     )
   })
 
-  it('does not consult ssh partitions when an explicit session argument is provided', async () => {
+  it('fences a transient explicit PTY loss while allowing matching durable target state', async () => {
     const worktreeId = 'repo-target-1::/repo'
-    await callSetForConnectedTargets({
-      session: {
+    getWorkspaceSessionMock.mockImplementation((hostId?: string | null) => {
+      if (hostId !== undefined) {
+        return baseSession
+      }
+      return {
         ...baseSession,
         tabsByWorktree: {
-          [worktreeId]: [{ id: 'tab-explicit', title: 'Shell', ptyId: null, worktreeId } as never]
+          [worktreeId]: [
+            { id: 'tab-explicit', title: 'Shell', ptyId: 'pty-durable', worktreeId } as never
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'tab-explicit': {
+            root: { type: 'leaf', id: 'leaf-1' },
+            ptyIdsByLeafId: { 'leaf-1': 'pty-durable' }
+          } as never
         }
-      },
+      }
+    })
+
+    await expect(
+      callSetForConnectedTargets({
+        session: {
+          ...baseSession,
+          tabsByWorktree: {
+            [worktreeId]: [{ id: 'tab-explicit', title: 'Shell', ptyId: null, worktreeId } as never]
+          },
+          terminalLayoutsByTabId: {
+            'tab-explicit': {
+              root: { type: 'leaf', id: 'leaf-1' },
+              ptyIdsByLeafId: {}
+            } as never
+          }
+        },
+        sessionTargetId: 'target-1',
+        hydratedTargetIds: ['target-1']
+      })
+    ).resolves.toEqual([])
+
+    expect(getWorkspaceSessionMock).toHaveBeenCalledWith()
+    expect(requestByTargetId.get('target-1')).not.toHaveBeenCalledWith(
+      'workspace.patch',
+      expect.anything()
+    )
+
+    const session = {
+      ...baseSession,
+      tabsByWorktree: {
+        [worktreeId]: [
+          { id: 'tab-explicit', title: 'Shell', ptyId: 'pty-durable', worktreeId } as never
+        ]
+      }
+    }
+    getWorkspaceSessionMock.mockImplementation((hostId?: string | null) =>
+      hostId === undefined ? session : baseSession
+    )
+
+    await callSetForConnectedTargets({
+      session,
       sessionTargetId: 'target-1',
       hydratedTargetIds: ['target-1']
     })
 
-    expect(getWorkspaceSessionMock).not.toHaveBeenCalled()
+    expect(getWorkspaceSessionMock).toHaveBeenCalledWith()
     expect(requestByTargetId.get('target-1')).toHaveBeenCalledWith(
       'workspace.patch',
       expect.objectContaining({

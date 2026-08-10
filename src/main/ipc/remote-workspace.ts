@@ -5,7 +5,6 @@ import { hostname } from 'node:os'
 import { isDeepStrictEqual } from 'node:util'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
-import { exportRemoteWorkspaceSession } from '../../shared/remote-workspace-session-projection'
 import type {
   RemoteWorkspaceChangedEvent,
   RemoteWorkspaceConnectedClient,
@@ -15,7 +14,6 @@ import type {
 } from '../../shared/remote-workspace-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import { adoptOrphanedWorkspaceSessionPartition } from '../../shared/workspace-session-partition-adoption'
 import {
@@ -24,6 +22,10 @@ import {
 } from '../../shared/workspace-session-partition-authority'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
+import {
+  exportExplicitSessionForTarget,
+  exportSessionForTarget
+} from './remote-workspace-explicit-session-authority'
 
 const CLIENT_ID = randomUUID()
 const CLIENT_NAME = hostname() || 'This device'
@@ -224,21 +226,6 @@ function getExplicitHydratedTargetIds(value: unknown): Set<string> | null {
     return null
   }
   return new Set(value)
-}
-
-function targetForWorktree(store: Store, worktreeId: string, targetId: string): string | null {
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  return store.getRepo(repoId, toSshExecutionHostId(targetId))?.connectionId ?? null
-}
-
-function exportSessionForTarget(
-  store: Store,
-  targetId: string,
-  session: WorkspaceSessionState
-): RemoteWorkspaceSession {
-  return exportRemoteWorkspaceSession(session, {
-    isTargetWorktree: (worktreeId) => targetForWorktree(store, worktreeId, targetId) === targetId
-  })
 }
 
 async function getRemoteSnapshot(target: SshTarget): Promise<RemoteWorkspaceSnapshot | null> {
@@ -446,8 +433,10 @@ export function registerRemoteWorkspaceHandlers(
       const results = await Promise.all(
         targets.map(async (target) => {
           // Boot owns persistence; export only overlays stranded SSH state.
-          let workspaceSession = args.session
-          if (!workspaceSession) {
+          let session: RemoteWorkspaceSession | null
+          if (args.session) {
+            session = exportExplicitSessionForTarget(store, target.id, args.session)
+          } else {
             const targetPartition = store.getWorkspaceSession(toSshExecutionHostId(target.id))
             const ambiguousKeys = findAmbiguousWorkspaceSessionKeys([
               fallbackSession,
@@ -461,14 +450,17 @@ export function registerRemoteWorkspaceHandlers(
             if (hasPopulatedLocalConflict) {
               return null
             }
-            workspaceSession = adoptOrphanedWorkspaceSessionPartition(
-              fallbackSession,
-              targetPartition
-            ).session
+            session = exportSessionForTarget(
+              store,
+              target.id,
+              adoptOrphanedWorkspaceSessionPartition(fallbackSession, targetPartition).session
+            )
+          }
+          if (!session) {
+            return null
           }
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
-          const session = exportSessionForTarget(store, target.id, workspaceSession)
           const result = await queueRemoteWorkspacePatch(target.id, () =>
             patchRemoteWorkspaceSession(target, session)
           )

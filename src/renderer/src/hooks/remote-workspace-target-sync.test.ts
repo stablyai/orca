@@ -329,7 +329,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
     expect(state.hydrateBrowserSession).not.toHaveBeenCalled()
   })
 
-  it('preserves a higher local generation from an older remote snapshot', async () => {
+  it('preserves a durable local PTY bundle from older or identity-free snapshots', async () => {
     const hydrateTabsSession = vi.fn()
     const state = appState({
       tabsByWorktree: {
@@ -342,6 +342,14 @@ describe('createRemoteWorkspaceTargetSync', () => {
           }
         ]
       },
+      terminalLayoutsByTabId: {
+        'stable-tab': {
+          root: { type: 'leaf', leafId: 'leaf-local' },
+          activeLeafId: 'leaf-local',
+          ptyIdsByLeafId: { 'leaf-local': 'local-pty' }
+        }
+      },
+      ptyIdsByTabId: { 'stable-tab': ['local-pty'] },
       hydrateTabsSession
     })
     const harness = createHarness(state, async () => null)
@@ -361,6 +369,37 @@ describe('createRemoteWorkspaceTargetSync', () => {
     expect(
       hydrateTabsSession.mock.calls[0][0].tabsByWorktree['repo-a::/remote/work'][0]
     ).toMatchObject({ generation: 7, ptyId: 'local-pty' })
+
+    state.tabsByWorktree['repo-a::/remote/work'][0].ptyId = null
+    state.pendingReconnectPtyIdByTabId = {}
+    await harness.sync.applyUnsolicitedSnapshot(
+      'target-a',
+      snapshot(6, {
+        '/remote/work': [
+          {
+            id: 'stable-tab',
+            worktreePath: '/remote/work',
+            ptyId: null,
+            generation: 7
+          } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
+        ]
+      })
+    )
+
+    const merged = hydrateTabsSession.mock.calls[1][0]
+    expect(merged.tabsByWorktree['repo-a::/remote/work'][0]).toMatchObject({
+      generation: 7,
+      ptyId: 'local-pty'
+    })
+    expect(merged.terminalLayoutsByTabId['stable-tab']).toEqual({
+      root: { type: 'leaf', leafId: 'leaf-local' },
+      activeLeafId: 'leaf-local',
+      ptyIdsByLeafId: { 'leaf-local': 'local-pty' }
+    })
+    expect(merged.remoteSessionIdsByTabId).toEqual({
+      'stable-tab': 'local-pty'
+    })
+    expect(merged.activeWorktreeIdsOnShutdown).toEqual(['repo-a::/remote/work'])
   })
 
   it('admits a genuinely newer remote generation without local recovery state', async () => {

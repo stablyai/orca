@@ -1,4 +1,4 @@
-import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -103,8 +103,7 @@ test.describe('SSH session partition adoption', () => {
   test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker-backed SSH tests.')
   test.skip(process.platform === 'win32', 'Docker SSH adoption uses POSIX SSH tooling.')
 
-  test('round-trips stranded tabs without remote deletion @headful', async (// oxlint-disable-next-line no-empty-pattern -- The test owns each Electron launch.
-  {}, testInfo) => {
+  async function runSshSessionPartitionAdoption(testInfo: TestInfo): Promise<void> {
     test.setTimeout(360_000)
     const restart = createRestartSession(testInfo)
     let target: DockerSshRelayTarget | null = null
@@ -185,5 +184,10 @@ test.describe('SSH session partition adoption', () => {
       await restart.dispose()
       cleanupDockerSshRelayTarget(target)
     }
-  })
+  }
+
+  test('round-trips stranded tabs without remote deletion', async (// oxlint-disable-next-line no-empty-pattern -- The test owns each Electron launch.
+  {}, testInfo) => runSshSessionPartitionAdoption(testInfo))
+  test('round-trips stranded tabs without remote deletion @headful', async (// oxlint-disable-next-line no-empty-pattern -- The test owns each Electron launch.
+  {}, testInfo) => runSshSessionPartitionAdoption(testInfo))
 })
