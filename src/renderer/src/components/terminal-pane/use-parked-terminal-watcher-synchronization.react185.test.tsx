@@ -213,6 +213,7 @@ describe('parked terminal watcher synchronization', () => {
   })
 
   it('does not scan unparked worktrees on an unrelated store write', () => {
+    const capturedPaneGet = vi.spyOn(capturedPanesByTabId, 'get')
     const ptyIdsByTabId = new Proxy({} as Record<string, string[]>, {
       get(target, property, receiver) {
         if (typeof property === 'string') {
@@ -245,6 +246,7 @@ describe('parked terminal watcher synchronization', () => {
     })
 
     expect(harness.reconciliationPtyReads).toBe(0)
+    expect(capturedPaneGet).not.toHaveBeenCalled()
     expect(harness.syncCalls).toBe(syncCallsAfterMount)
   })
 })

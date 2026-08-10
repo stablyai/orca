@@ -74,6 +74,9 @@ function getWatcherReconciliationKey(
   terminalTabs: readonly TerminalTab[],
   inputs: WatcherReconciliationStoreInputs
 ): string {
+  if (inputs.length === 0) {
+    return ''
+  }
   const tabs = terminalTabs.map((tab, index) => {
     const offset = index * 3
     const ptyIds = inputs[offset] as readonly string[]

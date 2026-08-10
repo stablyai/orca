@@ -24538,7 +24538,7 @@ describe('OrcaRuntimeService', () => {
     unsubscribe()
   })
 
-  it('keeps same-status Pi-compatible title changes queued behind the foreground owner probe', async () => {
+  it('keeps decorative Pi frames queued behind the foreground owner probe', async () => {
     const foregroundProcess = deferred<string | null>()
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-omp' })
     const getForegroundProcess = vi.fn(() => foregroundProcess.promise)
@@ -24557,9 +24557,9 @@ describe('OrcaRuntimeService', () => {
     const events: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
 
-    runtime.onPtyData('pty-typed-omp', '\x1b]0;Pi ready\x07', 123)
+    runtime.onPtyData('pty-typed-omp', '\x1b]0;⠋ Pi\x07', 123)
     await new Promise<void>((resolve) => setImmediate(resolve))
-    runtime.onPtyData('pty-typed-omp', '\x1b]0;Pi idle\x07', 124)
+    runtime.onPtyData('pty-typed-omp', '\x1b]0;⠙ Pi\x07', 124)
     await new Promise<void>((resolve) => setImmediate(resolve))
 
     expect(getForegroundProcess).toHaveBeenCalledTimes(1)
@@ -24574,17 +24574,21 @@ describe('OrcaRuntimeService', () => {
         tabs: [
           expect.objectContaining({
             type: 'terminal',
-            title: 'OMP ready',
+            title: '⠋ OMP',
             agentStatus: expect.objectContaining({
-              state: 'done',
+              state: 'working',
               agentType: 'omp',
               terminalHandle: terminal.handle,
-              terminalTitle: 'OMP ready'
+              terminalTitle: '⠋ OMP'
             })
           })
         ]
       })
     ])
+
+    runtime.onPtyData('pty-typed-omp', '\x1b]0;⠹ Pi\x07', 125)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(events).toHaveLength(1)
 
     unsubscribe()
   })
