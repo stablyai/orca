@@ -374,12 +374,12 @@ describe('NativeChatMessageList assistant messages', () => {
 
     const status = screen.getByRole('button', { name: 'Toggle turn details' })
     expect(status).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByRole('button', { name: /1× shell/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /1× Run command/ })).toBeNull()
     fireEvent.click(status)
     expect(status).toHaveAttribute('aria-expanded', 'true')
-    const tool = screen.getByRole('button', { name: /1× shell/ })
+    const tool = screen.getByRole('button', { name: /1× Run command/ })
     expect(tool).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getAllByRole('button', { name: /shell pwd/ })[1]).toHaveAttribute(
+    expect(screen.getAllByRole('button', { name: /Run command pwd/ })[1]).toHaveAttribute(
       'aria-expanded',
       'false'
     )

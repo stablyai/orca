@@ -54,7 +54,7 @@ describe('summarizeToolRun', () => {
       { type: 'tool-result', output: 'x' },
       { type: 'tool-call', name: 'Edit', input: { file_path: '/x/app.tsx' } }
     ]
-    expect(summarizeToolRun(blocks)).toBe('Bash ls  ·  Edit app.tsx')
+    expect(summarizeToolRun(blocks)).toBe('Run command ls  ·  Edit file app.tsx')
   })
 
   it('skips nameless tool calls so the join has no orphan separators', () => {
@@ -63,7 +63,7 @@ describe('summarizeToolRun', () => {
       { type: 'tool-call', name: '   ', input: { command: 'x' } },
       { type: 'tool-call', name: 'Edit', input: { file_path: '/x/app.tsx' } }
     ]
-    expect(summarizeToolRun(blocks)).toBe('Bash ls  ·  Edit app.tsx')
+    expect(summarizeToolRun(blocks)).toBe('Run command ls  ·  Edit file app.tsx')
   })
 })
 

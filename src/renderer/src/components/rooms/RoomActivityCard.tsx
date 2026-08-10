@@ -69,6 +69,7 @@ export function RoomActivityCard({
           sourceKey={participant.id}
           startedAt={activity.startedAt}
           completedAt={null}
+          messages={activity.messages}
         />
       ) : null}
     </div>

@@ -596,12 +596,14 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(
       makePersistedUI({
         sidebarWidth: 100,
-        rightSidebarWidth: 100
+        rightSidebarWidth: 100,
+        subagentSheetWidth: 100
       })
     )
 
     expect(store.getState().sidebarWidth).toBe(220)
     expect(store.getState().rightSidebarWidth).toBe(220)
+    expect(store.getState().subagentSheetWidth).toBe(220)
   })
 
   it('clamps persisted markdown toc panel widths into the supported range', () => {
@@ -664,15 +666,18 @@ describe('createUISlice hydratePersistedUI', () => {
 
     store.getState().setSidebarWidth(320)
     store.setState({ rightSidebarWidth: 360 })
+    store.setState({ subagentSheetWidth: 760 })
 
     store.getState().hydratePersistedUI(
       makePersistedUI({
         sidebarWidth: Number.NaN,
-        rightSidebarWidth: Number.POSITIVE_INFINITY
+        rightSidebarWidth: Number.POSITIVE_INFINITY,
+        subagentSheetWidth: Number.POSITIVE_INFINITY
       })
     )
 
     expect(store.getState().sidebarWidth).toBe(320)
     expect(store.getState().rightSidebarWidth).toBe(360)
+    expect(store.getState().subagentSheetWidth).toBe(760)
   })
 })

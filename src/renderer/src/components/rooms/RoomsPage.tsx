@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { AlertCircle, MessagesSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useShallow } from 'zustand/react/shallow'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { getActiveRuntimeTarget, settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -19,6 +20,12 @@ import { RoomSettingsDialog } from './RoomSettingsDialog'
 import { exportRoomArchive, importRoomArchive } from './room-archive-transfer'
 import { roomRpc } from '@/runtime/runtime-rooms-client'
 import { showRoomActionError } from './room-action-error'
+import {
+  AgentSubagentProvider,
+  type AgentSubagentSource
+} from '../agent-subagents/AgentSubagentProvider'
+
+const EMPTY_SUBAGENTS = [] as const
 
 export default function RoomsPage(): React.JSX.Element {
   useTranslation()
@@ -60,6 +67,51 @@ export default function RoomsPage(): React.JSX.Element {
     [settings, worktreeOwner?.runtimeOwnerEnvironmentId]
   )
   const data = useRoomData(target, projectId)
+  const participants = useMemo(
+    () => data.snapshot?.participants ?? [],
+    [data.snapshot?.participants]
+  )
+  const liveSubagentsByPaneKey = useAppStore(
+    useShallow((state) =>
+      Object.fromEntries(
+        participants.flatMap((participant) =>
+          participant.paneKey
+            ? [
+                [
+                  participant.paneKey,
+                  state.agentStatusByPaneKey[participant.paneKey]?.subagents ?? EMPTY_SUBAGENTS
+                ]
+              ]
+            : []
+        )
+      )
+    )
+  )
+  const subagentSources = useMemo<AgentSubagentSource[]>(
+    () =>
+      participants.flatMap((participant) =>
+        participant.actorKind === 'agent' && participant.agent
+          ? [
+              {
+                key: participant.id,
+                identity: participant.identity,
+                agent: participant.agent,
+                paneKey: participant.paneKey ?? `room:${participant.id}`,
+                sessionId: participant.providerSession?.id ?? null,
+                transcriptPath: participant.providerSession?.transcriptPath ?? null,
+                runtimeEnvironmentId:
+                  data.target.kind === 'environment' ? data.target.environmentId : null,
+                target: data.target,
+                liveSubagents: participant.paneKey
+                  ? (liveSubagentsByPaneKey[participant.paneKey] ?? [])
+                  : [],
+                working: Boolean(data.activities[participant.id])
+              }
+            ]
+          : []
+      ),
+    [data.activities, data.target, liveSubagentsByPaneKey, participants]
+  )
   const [addAgentOpen, setAddAgentOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [transferring, setTransferring] = useState(false)
@@ -143,77 +195,79 @@ export default function RoomsPage(): React.JSX.Element {
     )
   }
   return (
-    <main className="flex min-h-0 flex-1 bg-background" data-testid="rooms-page">
-      <section className="flex min-w-0 flex-1 flex-col">
-        <RoomParticipantBar
-          data={data}
-          onAdd={() => setAddAgentOpen(true)}
-          onSettings={() => setSettingsOpen(true)}
-          onExport={() => void exportArchive()}
-          onImport={() => archiveInputRef.current?.click()}
-          onArchiveToggle={() => {
-            const room = data.snapshot?.room
-            if (room) {
-              void roomRpc(data.target, 'rooms.update', {
-                roomId: room.id,
-                archived: !room.archivedAt
-              }).catch(showRoomActionError)
+    <AgentSubagentProvider sources={subagentSources}>
+      <main className="flex min-h-0 flex-1 bg-background" data-testid="rooms-page">
+        <section className="flex min-w-0 flex-1 flex-col">
+          <RoomParticipantBar
+            data={data}
+            onAdd={() => setAddAgentOpen(true)}
+            onSettings={() => setSettingsOpen(true)}
+            onExport={() => void exportArchive()}
+            onImport={() => archiveInputRef.current?.click()}
+            onArchiveToggle={() => {
+              const room = data.snapshot?.room
+              if (room) {
+                void roomRpc(data.target, 'rooms.update', {
+                  roomId: room.id,
+                  archived: !room.archivedAt
+                }).catch(showRoomActionError)
+              }
+            }}
+            transferring={transferring}
+          />
+          {data.error ? (
+            <div className="flex items-center gap-2 border-b border-destructive/20 bg-destructive/5 px-3 py-1.5 text-xs text-destructive">
+              <AlertCircle className="size-3.5" />
+              {data.error}
+            </div>
+          ) : null}
+          <RoomMessageFeed key={data.roomId ?? 'none'} data={data} onReply={setReply} />
+          {data.snapshot?.room.archivedAt ? (
+            <div className="border-t border-border p-3 text-center text-xs text-muted-foreground">
+              {translate(
+                'rooms.page.archived',
+                'This room is archived. Restore it from the room menu to continue.'
+              )}
+            </div>
+          ) : (
+            <RoomComposer data={data} reply={reply} onReplyChange={setReply} />
+          )}
+        </section>
+        <RoomInspector data={data} onAddAgent={() => setAddAgentOpen(true)} />
+        <RoomAddAgentDialog
+          open={addAgentOpen}
+          onOpenChange={setAddAgentOpen}
+          roomId={data.roomId}
+          worktreeId={
+            data.snapshot?.room.worktreeId ??
+            data.rooms.find((room) => room.id === data.roomId)?.worktreeId ??
+            null
+          }
+          worktrees={worktrees}
+          target={target}
+        />
+        {settingsOpen ? (
+          <RoomSettingsDialog
+            key={data.roomId ?? 'none'}
+            data={data}
+            open
+            onOpenChange={setSettingsOpen}
+          />
+        ) : null}
+        <input
+          ref={archiveInputRef}
+          type="file"
+          accept=".zip,application/zip"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) {
+              void importArchive(file)
             }
           }}
-          transferring={transferring}
         />
-        {data.error ? (
-          <div className="flex items-center gap-2 border-b border-destructive/20 bg-destructive/5 px-3 py-1.5 text-xs text-destructive">
-            <AlertCircle className="size-3.5" />
-            {data.error}
-          </div>
-        ) : null}
-        <RoomMessageFeed key={data.roomId ?? 'none'} data={data} onReply={setReply} />
-        {data.snapshot?.room.archivedAt ? (
-          <div className="border-t border-border p-3 text-center text-xs text-muted-foreground">
-            {translate(
-              'rooms.page.archived',
-              'This room is archived. Restore it from the room menu to continue.'
-            )}
-          </div>
-        ) : (
-          <RoomComposer data={data} reply={reply} onReplyChange={setReply} />
-        )}
-      </section>
-      <RoomInspector data={data} onAddAgent={() => setAddAgentOpen(true)} />
-      <RoomAddAgentDialog
-        open={addAgentOpen}
-        onOpenChange={setAddAgentOpen}
-        roomId={data.roomId}
-        worktreeId={
-          data.snapshot?.room.worktreeId ??
-          data.rooms.find((room) => room.id === data.roomId)?.worktreeId ??
-          null
-        }
-        worktrees={worktrees}
-        target={target}
-      />
-      {settingsOpen ? (
-        <RoomSettingsDialog
-          key={data.roomId ?? 'none'}
-          data={data}
-          open
-          onOpenChange={setSettingsOpen}
-        />
-      ) : null}
-      <input
-        ref={archiveInputRef}
-        type="file"
-        accept=".zip,application/zip"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0]
-          if (file) {
-            void importArchive(file)
-          }
-        }}
-      />
-    </main>
+      </main>
+    </AgentSubagentProvider>
   )
 }
 

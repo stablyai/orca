@@ -11,58 +11,122 @@ import {
   SheetTitle
 } from '@/components/ui/sheet'
 import { translate } from '@/i18n/i18n'
+import { useSidebarResize } from '@/hooks/useSidebarResize'
+import { useAppStore } from '@/store'
 import type { AgentSubagentSnapshot } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { NativeChatMessageList } from '../native-chat/NativeChatMessageList'
 import { useNativeChatLiveSession } from '../native-chat/use-native-chat-live-session'
-import type { AgentSubagentSourceData } from './AgentSubagentContext'
+import { subagentDisplayName, type AgentSubagentSourceData } from './AgentSubagentContext'
+import { projectSubagentTranscript } from './subagent-transcript-projection'
 import { useAgentSubagentSessions } from './use-agent-subagent-sessions'
+import {
+  clampRightSidebarPanelWidth,
+  computeMaxRightSidebarPanelWidth,
+  RIGHT_SIDEBAR_MIN_WIDTH
+} from '../right-sidebar/right-sidebar-width'
 
 export function AgentSubagentSheet({
   open,
   data,
+  initialSelection,
   onOpenChange
 }: {
   open: boolean
-  data: AgentSubagentSourceData | null
+  data: AgentSubagentSourceData[]
+  initialSelection: SubagentSelection | null
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
-  const [stack, setStack] = useState<AiVaultSession[]>([])
-  const selected = stack.at(-1) ?? null
+  const [stack, setStack] = useState<SubagentSelection[]>(
+    initialSelection ? [initialSelection] : []
+  )
+  const storedSelection = stack.at(-1) ?? null
+  const selected = storedSelection ? reconcileSelection(storedSelection, data) : null
+  const width = useAppStore((state) => state.subagentSheetWidth)
+  const setWidth = useAppStore((state) => state.setSubagentSheetWidth)
+  const windowWidth = typeof window === 'undefined' ? null : window.innerWidth
+  const renderedWidth = clampRightSidebarPanelWidth(width, windowWidth, 0)
+  const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
+    isOpen: true,
+    width: renderedWidth,
+    minWidth: RIGHT_SIDEBAR_MIN_WIDTH,
+    maxWidth: computeMaxRightSidebarPanelWidth(windowWidth, 0),
+    deltaSign: -1,
+    setWidth
+  })
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[min(760px,92vw)] sm:max-w-[760px]">
-        {data ? (
-          selected ? (
-            <SubagentTranscript
-              sourceData={data}
-              session={selected}
-              onBack={() => setStack((current) => current.slice(0, -1))}
-              onOpenChild={(session) => setStack((current) => [...current, session])}
-            />
-          ) : (
-            <SubagentList sourceData={data} onOpen={(session) => setStack([session])} />
-          )
-        ) : null}
+      <SheetContent
+        ref={containerRef}
+        side="right"
+        className="w-auto max-w-[calc(100vw-320px)] sm:max-w-none"
+        style={{ width: renderedWidth }}
+      >
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          onMouseDown={onResizeStart}
+          className="absolute inset-y-0 left-0 z-10 w-1 cursor-col-resize hover:bg-primary/35"
+        />
+        {selected ? (
+          <SubagentTranscript
+            sourceData={selected.sourceData}
+            session={selected.session}
+            onBack={() => setStack((current) => current.slice(0, -1))}
+            onOpenChild={(session) =>
+              setStack((current) => [...current, { sourceData: selected.sourceData, session }])
+            }
+          />
+        ) : (
+          <SubagentList sourceDatas={data} onOpen={(selection) => setStack([selection])} />
+        )}
       </SheetContent>
     </Sheet>
   )
 }
 
+type SubagentSelection = {
+  sourceData: AgentSubagentSourceData
+  session: AiVaultSession
+}
+
+function reconcileSelection(
+  selection: SubagentSelection,
+  data: AgentSubagentSourceData[]
+): SubagentSelection {
+  const sourceData = data.find((row) => row.source.key === selection.sourceData.source.key)
+  const session = sourceData?.sessions.find((row) => row.sessionId === selection.session.sessionId)
+  return sourceData && session ? { sourceData, session } : selection
+}
+
 function SubagentList({
-  sourceData,
+  sourceDatas,
   onOpen
 }: {
-  sourceData: AgentSubagentSourceData
-  onOpen: (session: AiVaultSession) => void
+  sourceDatas: AgentSubagentSourceData[]
+  onOpen: (selection: SubagentSelection) => void
 }): React.JSX.Element {
-  const { active, done } = useMemo(() => splitRows(sourceData), [sourceData])
+  const { active, done } = useMemo(
+    () =>
+      sourceDatas.reduce(
+        (rows, sourceData) => {
+          const split = splitRows(sourceData, sourceDatas.length > 1)
+          rows.active.push(...split.active)
+          rows.done.push(...split.done)
+          return rows
+        },
+        { active: [] as SubagentRow[], done: [] as SubagentRow[] }
+      ),
+    [sourceDatas]
+  )
+  const identity = sourceDatas.length === 1 ? `@${sourceDatas[0]!.source.identity} ` : ''
   return (
     <>
       <SheetHeader className="border-b border-border pr-12">
         <SheetTitle className="flex items-center gap-2">
-          <Bot className="size-4" />@{sourceData.source.identity} subagents
+          <Bot className="size-4" />
+          {identity ? `${identity}subagents` : 'Subagents'}
         </SheetTitle>
         <SheetDescription>
           {translate(
@@ -75,7 +139,7 @@ function SubagentList({
         <SubagentSection
           title="Active"
           rows={active}
-          loading={sourceData.loading}
+          loading={sourceDatas.some((sourceData) => sourceData.loading)}
           onOpen={onOpen}
         />
         <SubagentSection title="Done" rows={done} loading={false} onOpen={onOpen} />
@@ -90,6 +154,7 @@ type SubagentRow = {
   subtitle: string | null
   state: AgentDotState
   session: AiVaultSession | null
+  sourceData: AgentSubagentSourceData
 }
 
 function SubagentSection({
@@ -101,7 +166,7 @@ function SubagentSection({
   title: string
   rows: SubagentRow[]
   loading: boolean
-  onOpen: (session: AiVaultSession) => void
+  onOpen: (selection: SubagentSelection) => void
 }): React.JSX.Element {
   return (
     <section className="mb-5 last:mb-0">
@@ -117,7 +182,9 @@ function SubagentSection({
               key={row.id}
               type="button"
               disabled={!row.session}
-              onClick={() => row.session && onOpen(row.session)}
+              onClick={() =>
+                row.session && onOpen({ sourceData: row.sourceData, session: row.session })
+              }
               className="flex w-full items-center gap-3 rounded-lg border border-border/70 bg-card px-3 py-2.5 text-left hover:bg-accent disabled:cursor-default disabled:opacity-80"
             >
               <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-background">
@@ -172,7 +239,18 @@ function SubagentTranscript({
     transcriptPath: session.filePath,
     runtimeEnvironmentId: sourceData.source.runtimeEnvironmentId
   })
-  const working = session.subagent?.status === 'running'
+  const visibleTranscript = useMemo(
+    () => ({
+      ...transcript,
+      messages: projectSubagentTranscript(transcript.messages, sourceData.source.identity)
+    }),
+    [transcript, sourceData.source.identity]
+  )
+  const liveSubagent = sourceData.source.liveSubagents.find(
+    (subagent) => subagent.id === session.sessionId
+  )
+  const working = Boolean(liveSubagent) || session.subagent?.status === 'running'
+  const displayName = subagentDisplayName(session.title, session.subagent?.agentType)
   return (
     <>
       <SheetHeader className="border-b border-border pr-12">
@@ -181,7 +259,7 @@ function SubagentTranscript({
             <ArrowLeft />
           </Button>
           <div className="min-w-0 flex-1">
-            <SheetTitle className="truncate">{session.title}</SheetTitle>
+            <SheetTitle className="truncate">{displayName}</SheetTitle>
             <SheetDescription className="truncate">
               @{sourceData.source.identity} · Read-only subagent transcript
             </SheetDescription>
@@ -205,7 +283,9 @@ function SubagentTranscript({
                 className="max-w-full"
               >
                 <Bot className="size-3.5" />
-                <span className="truncate">{child.title}</span>
+                <span className="truncate">
+                  {subagentDisplayName(child.title, child.subagent?.agentType)}
+                </span>
               </Button>
             ))}
           </div>
@@ -216,9 +296,11 @@ function SubagentTranscript({
           <div className="m-auto text-sm text-destructive">{transcript.error}</div>
         ) : (
           <NativeChatMessageList
-            session={transcript}
+            session={visibleTranscript}
             isWorking={working}
-            workingStartedAt={Date.parse(session.createdAt ?? session.modifiedAt)}
+            workingStartedAt={
+              liveSubagent?.startedAt ?? Date.parse(session.modifiedAt ?? session.createdAt)
+            }
             expandSignal={false}
             fontScale={0.92}
             allowFileUriLinks
@@ -229,25 +311,33 @@ function SubagentTranscript({
   )
 }
 
-function splitRows(data: AgentSubagentSourceData): { active: SubagentRow[]; done: SubagentRow[] } {
+function splitRows(
+  data: AgentSubagentSourceData,
+  showIdentity: boolean
+): { active: SubagentRow[]; done: SubagentRow[] } {
   const sessionsById = new Map(data.sessions.map((session) => [session.sessionId, session]))
   const active = data.source.liveSubagents.map((subagent) =>
-    liveRow(subagent, sessionsById.get(subagent.id) ?? null)
+    liveRow(data, subagent, sessionsById.get(subagent.id) ?? null, showIdentity)
   )
   const activeIds = new Set(active.map((row) => row.id))
   for (const session of data.sessions) {
     if (session.subagent?.status === 'running' && !activeIds.has(session.sessionId)) {
-      active.push(sessionRow(session, 'working'))
+      active.push(sessionRow(data, session, 'working', showIdentity))
       activeIds.add(session.sessionId)
     }
   }
   const done = data.sessions
     .filter((session) => !activeIds.has(session.sessionId))
-    .map((session) => sessionRow(session, statusDot(session)))
+    .map((session) => sessionRow(data, session, statusDot(session), showIdentity))
   return { active, done }
 }
 
-function liveRow(subagent: AgentSubagentSnapshot, session: AiVaultSession | null): SubagentRow {
+function liveRow(
+  sourceData: AgentSubagentSourceData,
+  subagent: AgentSubagentSnapshot,
+  session: AiVaultSession | null,
+  showIdentity: boolean
+): SubagentRow {
   const state: AgentDotState =
     subagent.state === 'blocked'
       ? 'blocked'
@@ -258,20 +348,29 @@ function liveRow(subagent: AgentSubagentSnapshot, session: AiVaultSession | null
           : 'working'
   return {
     id: subagent.id,
-    title: subagent.description ?? subagent.agentType ?? subagent.id,
-    subtitle: agentStateLabel(state),
+    title: session
+      ? subagentDisplayName(session.title, subagent.agentType)
+      : subagentDisplayName(subagent.description, subagent.agentType),
+    subtitle: `${showIdentity ? `@${sourceData.source.identity} · ` : ''}${agentStateLabel(state)}`,
     state,
-    session
+    session,
+    sourceData
   }
 }
 
-function sessionRow(session: AiVaultSession, state: AgentDotState): SubagentRow {
+function sessionRow(
+  sourceData: AgentSubagentSourceData,
+  session: AiVaultSession,
+  state: AgentDotState,
+  showIdentity: boolean
+): SubagentRow {
   return {
     id: session.sessionId,
-    title: session.title,
-    subtitle: `${session.messageCount} messages`,
+    title: subagentDisplayName(session.title, session.subagent?.agentType),
+    subtitle: `${showIdentity ? `@${sourceData.source.identity} · ` : ''}${session.messageCount} messages`,
     state,
-    session
+    session,
+    sourceData
   }
 }
 

@@ -73,7 +73,7 @@ export class NativeChatHookActivityStore {
     const completed = hookEvent.startsWith('posttooluse')
     const message: NativeChatMessage = {
       id: `hook:${toolUseId}`,
-      turnId: `hook:${toolUseId}`,
+      turnId: toolUseId,
       role: 'tool',
       blocks: [
         {
@@ -132,7 +132,7 @@ export class NativeChatHookActivityStore {
       try {
         const message = JSON.parse(line) as unknown
         if (isHookActivityMessage(message)) {
-          byId.set(message.id, message)
+          byId.set(message.id, normalizePersistedHookTurnId(message))
         }
       } catch {
         // Ignore one torn/corrupt append; later records remain readable.
@@ -173,6 +173,12 @@ export class NativeChatHookActivityStore {
     const hash = createHash('sha256').update(activityKey(agent, sessionId)).digest('hex')
     return join(this.root!, `${hash}.jsonl`)
   }
+}
+
+function normalizePersistedHookTurnId(message: NativeChatMessage): NativeChatMessage {
+  return message.turnId === message.id && message.id.startsWith('hook:')
+    ? { ...message, turnId: message.id.slice('hook:'.length) }
+    : message
 }
 
 export const nativeChatHookActivityStore = new NativeChatHookActivityStore()

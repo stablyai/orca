@@ -41,6 +41,15 @@ describe('isNoiseMessage', () => {
     expect(isNoiseMessage(msg('system', 'Conversation interrupted'))).toBe(false)
   })
 
+  it('hides Codex subagent transport records outside the subagent projection', () => {
+    expect(
+      isNoiseMessage({
+        ...msg('system', ''),
+        subagentEvent: { kind: 'turn-boundary', triggerTurn: true }
+      })
+    ).toBe(true)
+  })
+
   it('keeps a user turn that carries tool results', () => {
     expect(isNoiseMessage(msg('user', '', [{ type: 'tool-result', output: 'ok' }]))).toBe(false)
   })

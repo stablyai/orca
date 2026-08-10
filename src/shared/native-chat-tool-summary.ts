@@ -1,4 +1,5 @@
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
+import { isSubagentToolName, nativeChatToolLabel } from './native-chat-tool-name'
 
 const MAX_PREVIEW_LENGTH = 80
 const MAX_PREVIEW_STRING_INPUT = 160
@@ -270,8 +271,9 @@ export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
     if (!name) {
       continue
     }
-    const detail = briefToolArg(block.input)
-    parts.push(detail ? `${name} ${detail}` : name)
+    const detail = isSubagentToolName(name) ? '' : briefToolArg(block.input)
+    const label = nativeChatToolLabel(name)
+    parts.push(detail ? `${label} ${detail}` : label)
     if (parts.length >= MAX_TOOL_RUN_SUMMARY_PARTS) {
       break
     }

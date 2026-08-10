@@ -1,6 +1,7 @@
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener'
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../../shared/native-chat-types'
 import { isNoiseMessage } from '../../../shared/native-chat-noise'
+import { isSubagentToolName } from '../../../shared/native-chat-tool-name'
 import { briefToolArg } from '../../../shared/native-chat-tool-summary'
 import { roomActivityKindFromTool } from '../../../shared/room-activity'
 
@@ -137,7 +138,7 @@ function toolActivityMessage(
   }
   return {
     id: `hook:${toolUseId}`,
-    turnId: `hook:${toolUseId}`,
+    turnId: toolUseId,
     role: 'tool',
     blocks: [
       { type: 'tool-call', name: toolName, input: activity.input ?? null },
@@ -173,5 +174,10 @@ function activityFromTool(
   detail: string | undefined
 ): { kind: RoomHarnessActivityKind; detail?: string } {
   const kind = roomActivityKindFromTool(toolName, input)
-  return { kind, ...(detail?.trim() ? { detail: detail.trim() } : {}) }
+  return {
+    kind,
+    ...(toolName && !isSubagentToolName(toolName) && detail?.trim()
+      ? { detail: detail.trim() }
+      : {})
+  }
 }

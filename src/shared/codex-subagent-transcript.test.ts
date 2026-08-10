@@ -155,7 +155,7 @@ describe('Codex subagent transcript reconciliation', () => {
     }
   })
 
-  it('removes a child when Codex reports it interrupted', () => {
+  it.each(['interrupted', 'completed'])('removes a child when Codex reports it %s', (kind) => {
     const dir = mkdtempSync(join(tmpdir(), 'codex-subagent-transcript-'))
     dirs.push(dir)
     const parentPath = join(dir, 'rollout-parent.jsonl')
@@ -164,7 +164,7 @@ describe('Codex subagent transcript reconciliation', () => {
     const roster: CodexSubagentRoster = new Map()
     reconcileCodexSubagentTranscript(state, roster, parentPath)
 
-    writeFileSync(parentPath, jsonl([activity('started'), activity('interrupted')]))
+    writeFileSync(parentPath, jsonl([activity('started'), activity(kind)]))
     reconcileCodexSubagentTranscript(state, roster, parentPath)
 
     expect(hasTrackedCodexTranscriptSubagents(state)).toBe(false)

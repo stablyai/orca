@@ -52,4 +52,14 @@ describe('room reply recipients', () => {
       )
     ).toEqual({ body: 'Useful answer.', mentions: ['claude'], silent: false })
   })
+
+  it('does not publish or route a recipients-only footer', () => {
+    expect(
+      extractRoomReplyRecipients(
+        '<orca-room-recipients>["claude"]</orca-room-recipients>',
+        participants,
+        'codex'
+      )
+    ).toEqual({ body: '', mentions: [], silent: true })
+  })
 })

@@ -1,5 +1,6 @@
 import { closeSync, openSync, readSync, readdirSync, statSync, type Stats } from 'node:fs'
 import { basename, dirname, extname, isAbsolute, join } from 'node:path'
+import { acceptCodexRolloutRecord, type CodexRolloutScope } from './codex-rollout-scope'
 
 import {
   finishCodexSubagent,
@@ -16,6 +17,7 @@ const CHILD_UNREADABLE_GRACE_MS = 60_000
 const SAFE_THREAD_ID = /^[A-Za-z0-9-]{1,64}$/
 
 type JsonlCursor = {
+  scope?: CodexRolloutScope
   filePath?: string
   offset: number
   carry: string
@@ -59,6 +61,7 @@ function readJsonlCursor(cursor: JsonlCursor): JsonRecord[] | undefined {
   if (stats.size < cursor.offset) {
     cursor.offset = 0
     cursor.carry = ''
+    cursor.scope = undefined
   }
   if (stats.size === cursor.offset) {
     return []
@@ -93,7 +96,7 @@ function readJsonlCursor(cursor: JsonlCursor): JsonRecord[] | undefined {
     }
     try {
       const parsed = record(JSON.parse(line) as unknown)
-      if (parsed) {
+      if (parsed && acceptCodexRolloutRecord((cursor.scope ??= {}), parsed)) {
         records.push(parsed)
       }
     } catch {
@@ -110,14 +113,14 @@ function readTranscriptDirectory(directory: string): string[] {
   } catch {
     return []
   }
-  if (entries.length > TRANSCRIPT_DIRECTORY_MAX_ENTRIES) {
-    entries = entries.slice(-TRANSCRIPT_DIRECTORY_MAX_ENTRIES)
-  }
-  return entries
+  return entries.slice(-TRANSCRIPT_DIRECTORY_MAX_ENTRIES)
 }
 
 // Why: Codex files each rollout under its OWN local start date, so a session running past midnight spawns children into a sibling day directory.
-function childDayDirectory(parentPath: string, startedAt: number): string | undefined {
+export function codexSubagentDayDirectory(
+  parentPath: string,
+  startedAt: number
+): string | undefined {
   const dayDir = dirname(parentPath)
   const monthDir = dirname(dayDir)
   const yearDir = dirname(monthDir)
@@ -153,7 +156,7 @@ export function resolveCodexSubagentTranscript(
   }
   const suffix = `-${threadId}.jsonl`
   const parentDir = dirname(parentPath)
-  const childDir = childDayDirectory(parentPath, startedAt)
+  const childDir = codexSubagentDayDirectory(parentPath, startedAt)
   const directories = childDir && childDir !== parentDir ? [parentDir, childDir] : [parentDir]
   for (const directory of directories) {
     let entries = entriesByDirectory.get(directory)
@@ -173,7 +176,7 @@ export function readCodexSubagentActivity(recordValue: JsonRecord):
   | {
       id: string
       description?: string
-      kind: 'started' | 'interacted' | 'interrupted'
+      kind: 'started' | 'interacted' | 'interrupted' | 'completed'
       startedAt: number
     }
   | undefined {
@@ -188,7 +191,10 @@ export function readCodexSubagentActivity(recordValue: JsonRecord):
   const rawKind = typeof payload.kind === 'string' ? payload.kind.toLowerCase() : ''
   if (
     !SAFE_THREAD_ID.test(id) ||
-    (rawKind !== 'started' && rawKind !== 'interacted' && rawKind !== 'interrupted')
+    (rawKind !== 'started' &&
+      rawKind !== 'interacted' &&
+      rawKind !== 'interrupted' &&
+      rawKind !== 'completed')
   ) {
     return undefined
   }
@@ -204,9 +210,7 @@ export function readCodexSubagentActivity(recordValue: JsonRecord):
   }
 }
 
-/** Latest model from the child's own `turn_context` records. A child can be
- *  launched on a different model than its parent, so this is read from the
- *  child rollout rather than inherited. */
+/** Read the child's model; it may differ from its parent's. */
 function readChildModel(records: JsonRecord[]): string | undefined {
   let model: string | undefined
   for (const recordValue of records) {
@@ -239,10 +243,7 @@ function childIsComplete(records: JsonRecord[]): boolean {
 }
 
 export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptState {
-  return {
-    parent: { offset: 0, carry: '' },
-    subagents: new Map()
-  }
+  return { parent: { offset: 0, carry: '' }, subagents: new Map() }
 }
 
 export function hasTrackedCodexTranscriptSubagents(
@@ -272,7 +273,7 @@ export function reconcileCodexSubagentTranscript(
     if (!activity) {
       continue
     }
-    if (activity.kind === 'interrupted') {
+    if (activity.kind === 'interrupted' || activity.kind === 'completed') {
       finishCodexSubagent(roster, activity.id)
       state.subagents.delete(activity.id)
       continue
