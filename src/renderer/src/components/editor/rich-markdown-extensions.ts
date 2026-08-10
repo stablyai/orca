@@ -33,8 +33,16 @@ import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLink } from './rich-markdown-html-superscript-link'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
+import { renderTableToCompactMarkdown } from './rich-markdown-table-markdown'
 
 const lowlight = createLowlight(common)
+
+// Why: the default table serializer pads every column to its longest cell, so a
+// single long cell blows the whole column (and its separator dashes) out. Ours
+// aligns to the longest non-outlier cell instead.
+const RichMarkdownTable = Table.extend({
+  renderMarkdown: renderTableToCompactMarkdown
+})
 
 const RichMarkdownLink = Link.extend({
   // Why: link's priority must stay below code's default 100 so Markdown
@@ -195,7 +203,7 @@ export function createRichMarkdownExtensions({
       nested: true
     }),
     ...createOrcaDetailsExtensions(),
-    Table.configure({
+    RichMarkdownTable.configure({
       resizable: false
     }),
     TableRow,
