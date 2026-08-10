@@ -36409,12 +36409,18 @@ function readTerminalTail(args: {
     (charBoundedTail.slicedFirstLine && charBoundedStartIndex < args.completedLineCount)
   // Why: a long partial line trimmed by the char budget can't be recovered via nextCursor, since cursor reads only page completed lines.
   const truncatedByNonPageablePartial = charBoundedTail.limited && !hasPageableOmittedCompletedLines
+  // Why: the preview buffer is a live-screen model that redraws collapse, so it can hold far fewer
+  // rows than the retained transcript. Without this the response says "caught up" and callers stop.
+  const withholdsRetainedTranscriptLines = latestCursor - oldestCursor > charBoundedTail.tail.length
   return {
     handle: args.handle,
     status: args.status,
     tail: charBoundedTail.tail,
     truncated: args.bufferTruncated || truncatedByNonPageablePartial,
-    limited: lineBoundedTail.length < allLines.length || charBoundedTail.limited,
+    limited:
+      lineBoundedTail.length < allLines.length ||
+      charBoundedTail.limited ||
+      withholdsRetainedTranscriptLines,
     oldestCursor: String(oldestCursor),
     nextCursor: String(latestCursor),
     latestCursor: String(latestCursor),

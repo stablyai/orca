@@ -17949,6 +17949,41 @@ describe('OrcaRuntimeService', () => {
     liveScreen.dispose()
   })
 
+  it('reports limited on an un-cursored read that withholds redrawn transcript lines', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'A\r\nB\r\nC\r\n\x1b[2A\x1b[2K\x1b[1GB2\r\n', 100)
+
+    const preview = await runtime.readTerminal(terminal.handle)
+
+    // The redraw collapses the preview to 2 rows while 4 completed lines stay pageable.
+    expect(preview).toMatchObject({
+      tail: ['A', 'B2'],
+      returnedLineCount: 2,
+      oldestCursor: '0',
+      latestCursor: '4',
+      limited: true
+    })
+  })
+
+  it('keeps an un-cursored read unlimited when its preview covers every retained line', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'A\r\nB\r\nC\r\n', 100)
+
+    await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({
+      tail: ['A', 'B', 'C'],
+      returnedLineCount: 3,
+      oldestCursor: '0',
+      latestCursor: '3',
+      limited: false
+    })
+  })
+
   it('records completed transcript lines before later CUU redraws in the same PTY chunk', async () => {
     const runtime = new OrcaRuntimeService(store)
     syncSinglePty(runtime)
