@@ -2829,7 +2829,7 @@
         "No physical Linux or Windows client journey was run; cross-platform relay artifacts only received build coverage.",
         "Folder workspaces are outside the existing direct-SSH snapshot projection and remain unaffected rather than newly covered.",
         "Paired remote-runtime snapshots use a separate path and were not changed or exercised by this gate.",
-        "The acknowledgement ledger is renderer-lifetime state; crash/restart convergence continues to rely on the already-persisted host partition and the next full remote snapshot/write."
+        "Pending acknowledgement intent is retained only in the main-process session owner, not durably across a full app or host restart."
       ],
       "demotionRule": "Demote or quarantine if an unacknowledged creation disappears, an unacknowledged deletion is resurrected, mutations cross targets, the write deadline slides, polling returns, or the real-SSH gate flakes without a product or harness bug."
     },
