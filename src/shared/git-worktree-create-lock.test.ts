@@ -1,9 +1,13 @@
+import { randomUUID } from 'node:crypto'
+import { rm } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  GIT_WORKTREE_HOST_LOCK_RELEASE_MAX_ATTEMPTS,
   getGitWorktreeCreateCleanupError,
   resetGitWorktreeCreateLocksForTests,
   withGitWorktreeCreateLock
 } from './git-worktree-create-lock'
+import { gitWorktreeHostLockPathForTests } from './git-worktree-host-lock'
 import { createGitWorktreeDeadline } from './git-worktree-create-timeout'
 
 afterEach(() => resetGitWorktreeCreateLocksForTests())
@@ -118,24 +122,34 @@ describe('git worktree create lock', () => {
   })
 
   it('preserves the operation error and records a claim-retirement error', async () => {
+    const repository = `/repo/${randomUUID()}/.git`
     const operationError = new Error('operation failed') as Error & { cleanupError?: unknown }
     const cleanupError = Object.assign(new Error('claim retirement failed'), { code: 'EBUSY' })
+    let retirementAttempts = 0
 
-    const result = lock(
-      '/target',
-      async () => {
-        throw operationError
-      },
-      createGitWorktreeDeadline(1_000),
-      {
-        beforeClaimRetired: async () => {
-          throw cleanupError
+    try {
+      const startedAt = Date.now()
+      const result = withGitWorktreeCreateLock(
+        { repository, target: '/target' },
+        createGitWorktreeDeadline(1_000),
+        async () => {
+          throw operationError
+        },
+        {
+          beforeClaimRetired: async () => {
+            retirementAttempts += 1
+            throw cleanupError
+          }
         }
-      }
-    )
+      )
 
-    await expect(result).rejects.toBe(operationError)
-    expect(operationError.cleanupError).toBe(cleanupError)
-    expect(getGitWorktreeCreateCleanupError(operationError)).toBe(cleanupError)
+      await expect(result).rejects.toBe(operationError)
+      expect(Date.now() - startedAt).toBeLessThan(500)
+      expect(retirementAttempts).toBe(GIT_WORKTREE_HOST_LOCK_RELEASE_MAX_ATTEMPTS)
+      expect(operationError.cleanupError).toBe(cleanupError)
+      expect(getGitWorktreeCreateCleanupError(operationError)).toBe(cleanupError)
+    } finally {
+      await rm(gitWorktreeHostLockPathForTests(repository), { recursive: true, force: true })
+    }
   })
 })

@@ -31,6 +31,8 @@ type ResolveGitOutputPath = (cwd: string, outputPath: string) => string
 
 const createLocks = new Map<string, CreateLockState>()
 const cleanupErrors = new WeakMap<object, unknown>()
+export const GIT_WORKTREE_HOST_LOCK_RELEASE_MAX_ATTEMPTS = 4
+export const GIT_WORKTREE_HOST_LOCK_RELEASE_RETRY_MS = 10
 
 function recordCleanupError(error: unknown, cleanupError: unknown): void {
   if ((typeof error !== 'object' && typeof error !== 'function') || error === null) {
@@ -52,6 +54,30 @@ function getErrorCode(error: unknown): string | undefined {
   return typeof error === 'object' && error !== null && 'code' in error
     ? String((error as { code?: unknown }).code)
     : undefined
+}
+
+async function waitForHostLockReleaseRetry(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, GIT_WORKTREE_HOST_LOCK_RELEASE_RETRY_MS)
+    timer.unref?.()
+  })
+}
+
+async function releaseHostLockWithRetry(release: () => Promise<void>): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await release()
+      return
+    } catch (error) {
+      if (
+        getErrorCode(error) !== 'EBUSY' ||
+        attempt >= GIT_WORKTREE_HOST_LOCK_RELEASE_MAX_ATTEMPTS
+      ) {
+        throw error
+      }
+      await waitForHostLockReleaseRetry()
+    }
+  }
 }
 
 function looksLikeWindowsPath(value: string): boolean {
@@ -195,7 +221,9 @@ export async function withGitWorktreeCreateLock<T>(
     primaryError = error
   }
   try {
-    await releaseHostLock?.()
+    if (releaseHostLock) {
+      await releaseHostLockWithRetry(releaseHostLock)
+    }
   } catch (error) {
     cleanupFailed = true
     cleanupError = error
