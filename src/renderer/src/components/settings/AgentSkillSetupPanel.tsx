@@ -83,9 +83,7 @@ export function AgentSkillSetupPanel({
     if (terminalOpening || setupAttemptRunning) {
       return
     }
-    const nextSnapshot =
-      (setupCommandFailedCode !== null && terminalSnapshot) ||
-      createTerminalSnapshot(activeCommand, shellOverride, runtime)
+    const nextSnapshot = createTerminalSnapshot(activeCommand, shellOverride, runtime)
     setTerminalOpening(true)
     if (setupCommandFailedCode !== null) {
       setTerminalOpen(false)

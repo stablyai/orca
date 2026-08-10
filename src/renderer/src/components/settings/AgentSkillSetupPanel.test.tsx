@@ -464,6 +464,40 @@ describe('AgentSkillSetupPanel', () => {
     })
   })
 
+  it('captures the current runtime when retrying a failed command', async () => {
+    await renderInteractivePanel({
+      terminalShellOverride: 'powershell.exe',
+      terminalRuntime: { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' }
+    })
+    await clickButton('Install')
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
+    })
+
+    await rerenderInteractivePanel({
+      terminalShellOverride: 'powershell.exe',
+      terminalRuntime: { runtime: 'wsl', wslDistro: 'Fedora', label: 'WSL Fedora' }
+    })
+    expect(mocks.terminalProps.at(-1)?.command).toContain("wsl.exe -d 'Ubuntu'")
+
+    await clickButton('Retry')
+
+    expect(mocks.terminalProps.at(-1)?.command).toContain("wsl.exe -d 'Fedora'")
+
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
+    })
+    await rerenderInteractivePanel({
+      terminalShellOverride: 'powershell.exe',
+      terminalRuntime: { runtime: 'host', label: 'Windows' }
+    })
+
+    await clickButton('Retry')
+
+    expect(mocks.terminalProps.at(-1)?.command).toMatch(/^cmd\.exe \/d \/s \/c /)
+    expect(mocks.terminalProps.at(-1)?.command).not.toContain('wsl.exe')
+  })
+
   it('falls back to the install command for installed callers without installedCommand', async () => {
     await renderInteractivePanel({ installed: true })
 
