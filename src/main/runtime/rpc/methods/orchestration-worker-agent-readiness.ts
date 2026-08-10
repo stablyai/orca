@@ -33,7 +33,11 @@ export async function waitForWorkerAgentTuiReady(args: {
 
   // Why: re-confirm idle after settle so a boot-time idle blip that becomes
   // "working" (MCP load) is waited out before paste+Enter (#13488).
-  const remainingMs = Math.max(1_000, args.timeoutMs - (Date.now() - startedAt))
+  const remainingMs = args.timeoutMs - (Date.now() - startedAt)
+  // Why: settle is part of the caller budget — do not floor a second wait past the deadline.
+  if (remainingMs <= 0) {
+    throw new Error('timeout')
+  }
   return args.runtime.waitForTerminal(args.terminalHandle, {
     condition: 'tui-idle',
     timeoutMs: remainingMs

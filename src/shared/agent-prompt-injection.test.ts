@@ -31,11 +31,12 @@ describe('agent prompt injection bytes', () => {
   })
 
   it('scales submit delay for long orchestration pastes', () => {
-    // 10_000 bytes / 20 = 500ms base floor on darwin; 20_000 → 1_000ms
-    expect(getAgentPromptSubmitDelayMs('darwin', 10_000)).toBe(500)
-    expect(getAgentPromptSubmitDelayMs('darwin', 20_000)).toBe(1_000)
-    expect(getAgentPromptSubmitDelayMs('win32', 20_000)).toBe(1_500)
+    // #13488 mid-size preambles (~8–10KB) must exceed the 500ms floor on darwin.
+    expect(getAgentPromptSubmitDelayMs('darwin', 8_000)).toBe(1_600)
+    expect(getAgentPromptSubmitDelayMs('darwin', 10_000)).toBe(2_000)
+    expect(getAgentPromptSubmitDelayMs('win32', 8_000)).toBe(1_600)
     expect(getAgentPromptSubmitDelayMs('darwin', 200_000)).toBe(5_000)
+    expect(getAgentPromptSubmitDelayMs('darwin', 100)).toBe(500)
   })
 
   it('sanitizes embedded escape bytes before framing', () => {
