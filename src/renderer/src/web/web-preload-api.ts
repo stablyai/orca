@@ -1999,6 +1999,7 @@ async function callAbortableRuntimeStatus<TResult>(
   }
 }
 
+/** Builds the web preload git API backed by the active runtime. */
 function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
     status: async ({

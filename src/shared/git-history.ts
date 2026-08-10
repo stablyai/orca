@@ -164,6 +164,7 @@ async function resolveNamedRef(
   return revision ? gitHistoryRefFromFullName(fullName, normalized, revision) : undefined
 }
 
+/** Loads history by resolving refs and running git log through an executor. */
 export async function loadGitHistoryFromExecutor(
   git: GitHistoryExecutor,
   cwd: string,

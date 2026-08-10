@@ -171,6 +171,7 @@ function getDefaultWorkspaceDir(homeDir: string): string {
   return [trimmedHomeDir, 'orca', 'workspaces'].join(separator)
 }
 
+/** Builds default global settings for a user home directory. */
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
     workspaceDir: getDefaultWorkspaceDir(homedir),

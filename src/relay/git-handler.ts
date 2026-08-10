@@ -203,6 +203,7 @@ export class GitHandler {
     this.clearGitMutationReadCaches()
   }
 
+  /** Wires relay RPC requests for git commands to the runtime handlers. */
   private registerHandlers(): void {
     this.dispatcher.onRequest('git.status', (p, context) => this.getStatus(p, context))
     this.dispatcher.onRequest('git.submoduleStatus', (p, context) =>
@@ -421,6 +422,7 @@ export class GitHandler {
     return checkIgnoredPathsOp(this.git.bind(this), params)
   }
 
+  /** Loads git history, optionally scoped to one file inside the worktree. */
   private async history(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     const filePath = typeof params.filePath === 'string' ? params.filePath : undefined

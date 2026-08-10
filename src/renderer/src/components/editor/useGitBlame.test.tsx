@@ -42,6 +42,7 @@ vi.mock('monaco-editor', () => ({
   }
 }))
 
+/** Creates a Monaco editor mock with content-change and decoration hooks. */
 function createEditor(): {
   editor: editor.IStandaloneCodeEditor
   setDecoration: ReturnType<typeof vi.fn>
@@ -86,6 +87,7 @@ function createEditor(): {
   }
 }
 
+/** Returns a one-line blame fixture. */
 function blameResult(): GitBlameResult {
   return [
     {

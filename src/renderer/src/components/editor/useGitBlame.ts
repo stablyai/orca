@@ -11,6 +11,7 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 /** Coalesces in-flight blame reads across Monaco remounts for the same file. */
 const blameCache = new Map<string, Promise<GitBlameResult>>()
 
+/** Formats a blame entry as author, relative time, and summary. */
 function blameLabel(author: string, authorTime: number, summary: string): string {
   const relativeTime = formatPrCommentRelativeTime(
     new Date(authorTime * 1000).toISOString(),
@@ -47,6 +48,7 @@ export function useGitBlame({ editor, worktreeId, filePath, enabled }: UseGitBla
     let disposed = false
     let latestResult: GitBlameResult | null = null
     const decorations = ed.createDecorationsCollection([])
+    /** Refreshes the inline blame decoration for the current cursor line. */
     const update = (): void => {
       if (disposed) {
         return

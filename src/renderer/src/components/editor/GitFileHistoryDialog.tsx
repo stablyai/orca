@@ -24,6 +24,7 @@ type FileHistoryState =
   | { status: 'error'; error: string }
   | { status: 'ready'; items: GitHistoryItem[] }
 
+/** Formats an optional history timestamp as a compact relative label. */
 function formatRelativeTimestamp(timestamp: number | undefined): string {
   if (!timestamp || !Number.isFinite(timestamp)) {
     return ''

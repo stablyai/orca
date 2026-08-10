@@ -312,6 +312,7 @@ export async function getRuntimeGitHistory(
   )
 }
 
+/** Routes inline blame for one file to local IPC or the active runtime. */
 export async function getRuntimeGitBlame(
   context: RuntimeGitContext,
   filePath: string

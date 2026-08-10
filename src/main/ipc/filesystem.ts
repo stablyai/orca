@@ -502,6 +502,7 @@ async function isDirectoryEntry(
   return false
 }
 
+/** Registers filesystem IPC handlers shared by native and web renderers. */
 export function registerFilesystemHandlers(
   store: Store,
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers

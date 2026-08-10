@@ -8,6 +8,7 @@ type InlineGitBlameSettingProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
+/** Renders the inline Git blame editor setting switch. */
 export function InlineGitBlameSetting({
   settings,
   updateSettings

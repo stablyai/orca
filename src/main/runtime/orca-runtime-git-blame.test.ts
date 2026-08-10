@@ -16,6 +16,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'Remote connection dropped.'
 }))
 
+/** Creates a resolved runtime worktree fixture for the given path. */
 function makeWorktree(path: string): ResolvedRuntimeGitWorktree {
   return {
     id: 'wt-1',
@@ -31,6 +32,7 @@ function makeWorktree(path: string): ResolvedRuntimeGitWorktree {
   } as unknown as ResolvedRuntimeGitWorktree
 }
 
+/** Creates RuntimeGitCommands against a fixed worktree path. */
 function makeCommands(worktreePath: string): RuntimeGitCommands {
   return new RuntimeGitCommands({
     resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath) }),

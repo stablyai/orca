@@ -40,6 +40,7 @@ function clampGitHistoryPanelHeight(height: number): number {
   return Math.min(MAX_GIT_HISTORY_PANEL_HEIGHT, Math.max(MIN_GIT_HISTORY_PANEL_HEIGHT, height))
 }
 
+/** Renders the expandable git history panel for a worktree. */
 export function GitHistoryPanel({
   state,
   collapsed,

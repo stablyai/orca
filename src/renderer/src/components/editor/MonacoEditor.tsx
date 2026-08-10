@@ -96,6 +96,7 @@ type MarkdownCommentPopoverState = Omit<MonacoMarkdownSelectionAnnotationTarget,
   selectedText?: string
 }
 
+/** Monaco-based file editor with history and inline blame decoration wiring. */
 export default function MonacoEditor({
   fileId,
   filePath,

@@ -149,6 +149,7 @@ function CommitFilesBody({
   )
 }
 
+/** Renders an expanded commit's files with optional per-file history actions. */
 export function GitHistoryCommitFiles({
   state,
   author,

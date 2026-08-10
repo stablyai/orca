@@ -33,6 +33,7 @@ type GeneralEditorSettingsSectionProps = {
   onRequestFontSuggestions?: () => void
 }
 
+/** Renders general editor settings, including the inline blame toggle. */
 export function GeneralEditorSettingsSection({
   settings,
   updateSettings,

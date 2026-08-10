@@ -272,6 +272,7 @@ export class RuntimeGitCommands {
     return checkIgnoredPaths(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
   }
 
+  /** Loads history for a worktree file through local Git or the SSH provider. */
   async getRuntimeGitHistory(
     worktreeSelector: string,
     options: GitHistoryOptions = {}
