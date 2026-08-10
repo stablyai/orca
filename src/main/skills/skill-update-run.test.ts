@@ -311,7 +311,7 @@ describe('SkillUpdateRunner', () => {
       })
 
       expect(runner.start(['orca-cli']).started).toBe(true)
-      expect(spawnCalls[0]?.args.slice(0, 3)).toEqual(['/d', '/c', npx])
+      expect(spawnCalls[0]?.args.slice(0, 4)).toEqual(['/d', '/c', '@', npx])
     } finally {
       platform.mockRestore()
     }

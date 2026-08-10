@@ -167,7 +167,7 @@ describe('account CLI handlers', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       getCmdExePath(),
-      ['/d', '/c', 'C:\\tools\\codex.cmd', 'login', '--device-auth'],
+      ['/d', '/c', '@', 'C:\\tools\\codex.cmd', 'login', '--device-auth'],
       expect.objectContaining({ stdio: ['inherit', 'inherit', 'inherit'] })
     )
   })
@@ -181,7 +181,7 @@ describe('account CLI handlers', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       getCmdExePath(),
-      ['/d', '/c', shim, 'login', '--device-auth'],
+      ['/d', '/c', '@', shim, 'login', '--device-auth'],
       expect.anything()
     )
   })

@@ -64,7 +64,14 @@ export function getSpawnArgsForWindows(
       }
     }
 
-    // Why: separate argv entries let Node quote spaces without breaking cmd.
+    // Why: `cmd /c` strips the line's outer quote pair unless exactly one token
+    // is quoted, severing a launcher whose own path needs quoting
+    // (`...\Microsoft VS Code\bin\code.cmd`). A leading `@` keeps the first
+    // character unquoted so the strip never fires. Not `call`: being an internal
+    // command it swallows a `/?` operand into its own help, and it reports the
+    // live ERRORLEVEL rather than the last statement's exit code.
+    const batchInvocation = ['@', command, ...args]
+
     if (options.detachedGui) {
       // Why: `start` launches a batch target through a nested `cmd /K`, which
       // stays resident after the script ends — `/B` only suppresses a *new*
@@ -80,10 +87,10 @@ export function getSpawnArgsForWindows(
       const cmdExePath = getCmdExePath()
       return {
         spawnCmd: cmdExePath,
-        spawnArgs: ['/d', '/c', 'start', '', '/B', cmdExePath, '/d', '/c', command, ...args]
+        spawnArgs: ['/d', '/c', 'start', '', '/B', cmdExePath, '/d', '/c', ...batchInvocation]
       }
     }
-    return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/c', command, ...args] }
+    return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/c', ...batchInvocation] }
   }
   return { spawnCmd: command, spawnArgs: args }
 }

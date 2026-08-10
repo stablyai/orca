@@ -462,7 +462,7 @@ describe('discoverCommitMessageModelsLocal', () => {
     if (process.platform === 'win32') {
       expect(spawnMock).toHaveBeenCalledWith(
         expect.stringMatching(/cmd\.exe$/i),
-        ['/d', '/c', expect.stringMatching(/npx\.cmd$/i), 'cursor-agent', '--list-models'],
+        ['/d', '/c', '@', expect.stringMatching(/npx\.cmd$/i), 'cursor-agent', '--list-models'],
         expect.objectContaining({ windowsHide: true })
       )
     } else {
@@ -2028,7 +2028,7 @@ describe('generateCommitMessageFromContext', () => {
         })
         expect(spawnMock).toHaveBeenCalledWith(
           'C:\\Windows\\System32\\cmd.exe',
-          ['/d', '/c', 'C:/tools/agent.cmd'],
+          ['/d', '/c', '@', 'C:/tools/agent.cmd'],
           expect.objectContaining({
             cwd: 'C:\\repo',
             windowsHide: true
