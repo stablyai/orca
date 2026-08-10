@@ -177,22 +177,35 @@ describe('repo slice runtime routing', () => {
     expect(orcaProfileFindProjectProfiles).not.toHaveBeenCalled()
   })
 
-  it('defers duplicate feedback to the Add Project Space resolver', async () => {
-    const onProjectAlreadyPresent = vi.fn()
-    const ownedLocalRepo = { ...localRepo, executionHostId: 'local' as const }
+  it('moves an already-added project into the active Space', async () => {
+    const moveProjectToSpace = vi.fn().mockResolvedValue(true)
     reposAdd.mockResolvedValue({ repo: localRepo })
     const store = createTestStore()
-    store.setState({ repos: [ownedLocalRepo] })
-
-    await store.getState().addRepoPath('/local', 'git', {
-      runtimeEnvironmentId: null,
-      deferAlreadyAddedFeedback: true,
-      onProjectAlreadyPresent
+    store.setState({
+      repos: [{ ...localRepo, executionHostId: 'local' as const, spaceId: 'space:work' }],
+      activeSpaceId: 'space:personal',
+      moveProjectToSpace
     })
 
-    expect(onProjectAlreadyPresent).toHaveBeenCalledWith(ownedLocalRepo)
-    expect(toast.info).not.toHaveBeenCalled()
-    expect(toast.success).not.toHaveBeenCalled()
+    await store.getState().addRepoPath('/local', 'git', { runtimeEnvironmentId: null })
+
+    expect(moveProjectToSpace).toHaveBeenCalledWith(localRepo.id, 'space:personal', 'local')
+    expect(toast.info).toHaveBeenCalled()
+  })
+
+  it('leaves an already-added project alone when it is in the active Space', async () => {
+    const moveProjectToSpace = vi.fn().mockResolvedValue(true)
+    reposAdd.mockResolvedValue({ repo: localRepo })
+    const store = createTestStore()
+    store.setState({
+      repos: [{ ...localRepo, executionHostId: 'local' as const, spaceId: 'space:work' }],
+      activeSpaceId: 'space:work',
+      moveProjectToSpace
+    })
+
+    await store.getState().addRepoPath('/local', 'git', { runtimeEnvironmentId: null })
+
+    expect(moveProjectToSpace).not.toHaveBeenCalled()
   })
 
   it('warns when a local project is already present in another profile', async () => {

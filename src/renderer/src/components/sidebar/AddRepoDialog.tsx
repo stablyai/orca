@@ -18,7 +18,6 @@ import {
   useAddRepoHostedController,
   type AddRepoDialogHostedController
 } from './use-add-repo-hosted-controller'
-import { useAddRepoSpaceConflict } from './use-add-repo-space-conflict'
 
 export default React.memo(function AddRepoDialog({
   hosted
@@ -44,14 +43,11 @@ export default React.memo(function AddRepoDialog({
   const [step, setStep] = useState<AddRepoDialogStep>('add')
   const [isAdding, setIsAdding] = useState(false)
   const [addProjectBusyLabel, setAddProjectBusyLabel] = useState<string | null>(null)
-  const showSpaceConflict = useCallback(() => setStep('space-conflict'), [])
-  const finishGitRepoAdd = useCompleteGitRepoAdd({
+  const completeGitRepoAdd = useCompleteGitRepoAdd({
     closeModal,
     setHideDefaultBranchWorkspace,
     finishProjectAdd
   })
-  const spaceConflict = useAddRepoSpaceConflict({ finishGitRepoAdd, onConflict: showSpaceConflict })
-  const { completeGitRepoAdd, resetSpaceConflict } = spaceConflict
   const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
@@ -225,7 +221,6 @@ export default React.memo(function AddRepoDialog({
     resetCreateDefaultState()
     resetCreateState()
     resetRemoteState()
-    resetSpaceConflict()
   }, [
     resetCloneFlow,
     resetLocalFolderFlow,
@@ -234,8 +229,7 @@ export default React.memo(function AddRepoDialog({
     resetServerPathFlow,
     resetNestedImportFlow,
     resetRemoteState,
-    resetCreateState,
-    resetSpaceConflict
+    resetCreateState
   ])
 
   const resetHostScopedState = useCallback(() => {
@@ -328,9 +322,6 @@ export default React.memo(function AddRepoDialog({
         createParent={createParent}
         createError={createError}
         isCreating={isCreating}
-        spaceConflict={spaceConflict.conflictView}
-        spaceConflictError={spaceConflict.error}
-        isResolvingSpaceConflict={spaceConflict.isResolving}
         hostSelector={<AddRepoHostSelectorSlot hostSelection={hostSelection} />}
         showRemoteAction={false}
         browseHostKind={
@@ -403,9 +394,6 @@ export default React.memo(function AddRepoDialog({
           })
         }}
         onCreate={handleCreate}
-        onCancelSpaceConflict={() => handleOpenChange(false)}
-        onMoveSpaceConflict={() => void spaceConflict.moveToActiveSpace()}
-        onOpenSpaceConflict={() => void spaceConflict.openSourceSpace()}
       />
     </AddRepoDialogChrome>
   )

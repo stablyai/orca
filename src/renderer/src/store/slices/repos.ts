@@ -85,6 +85,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { isRepoInSpace } from '../../../../shared/spaces'
 import { isRemovedRuntimeHostId } from './stale-runtime-host-rows'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -432,6 +433,24 @@ function repoWithFetchedOwner(repo: Repo, target: ReturnType<typeof getActiveRun
     return { ...repo, executionHostId: getRepoExecutionHostId(repo) }
   }
   return repo.executionHostId ? repo : { ...repo, executionHostId: LOCAL_EXECUTION_HOST_ID }
+}
+
+// Why: re-adding an existing project is an explicit "put it here", so follow the active Space.
+async function moveAlreadyAddedRepoToActiveSpace(
+  get: () => AppState,
+  repoIdentity: string
+): Promise<void> {
+  const state = get()
+  const present = state.repos.find((r) => getRepoHostIdentity(r) === repoIdentity)
+  if (!present || isRepoInSpace(present, state.activeSpaceId)) {
+    return
+  }
+  const hostId = getRepoExecutionHostId(present)
+  // Runtime-owned rows never carry Space membership (see repoWithFetchedOwner).
+  if (parseExecutionHostId(hostId)?.kind === 'runtime') {
+    return
+  }
+  await state.moveProjectToSpace(present.id, state.activeSpaceId, hostId)
 }
 
 function projectGroupWithFetchedOwner(
@@ -1410,11 +1429,7 @@ function getRuntimeTargetCachePrefix(
 }
 
 type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId?: string | null }
-type AddRepoPathRouteOptions = {
-  runtimeEnvironmentId?: string | null
-  deferAlreadyAddedFeedback?: boolean
-  onProjectAlreadyPresent?: (repo: Repo) => void
-}
+type AddRepoPathRouteOptions = { runtimeEnvironmentId?: string | null }
 type RuntimeCatalogFetchOptions = { runtimeEnvironmentId?: string | null }
 
 function getFolderWorkspacePathStatusRouteSettings(
@@ -2940,7 +2955,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const alreadyAdded = get().repos.some((r) => getRepoHostIdentity(r) === repoIdentity)
       if (alreadyAdded) {
         get().clearOrcaHookTrustForRepo(repo.id)
-        options?.onProjectAlreadyPresent?.(repo)
       }
       set((s) => {
         if (s.repos.some((r) => getRepoHostIdentity(r) === repoIdentity)) {
@@ -2959,11 +2973,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         }
       })
       if (alreadyAdded) {
-        if (!options?.deferAlreadyAddedFeedback) {
-          toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
-            description: repo.displayName
-          })
-        }
+        await moveAlreadyAddedRepoToActiveSpace(get, repoIdentity)
+        toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
+          description: repo.displayName
+        })
       } else {
         toast.success(
           isGitRepoKind(repo)

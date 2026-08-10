@@ -9,7 +9,6 @@ import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import type { NestedRepoScanResult } from '../../../../shared/types'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
 import type { GitAvailability } from './create-project-defaults'
-import { AddRepoSpaceConflictStep, type AddRepoSpaceConflictView } from './AddRepoSpaceConflictStep'
 
 type AddRepoDialogStepContentProps = {
   step: AddRepoDialogStep
@@ -44,9 +43,6 @@ type AddRepoDialogStepContentProps = {
   createParent: string
   createError: string | null
   isCreating: boolean
-  spaceConflict: AddRepoSpaceConflictView | null
-  spaceConflictError: string | null
-  isResolvingSpaceConflict: boolean
   hostSelector?: ReactNode
   showRemoteAction?: boolean
   canCreateProject?: boolean
@@ -81,9 +77,6 @@ type AddRepoDialogStepContentProps = {
   onCreateParentChange: (parent: string) => void
   onPickCreateParent: () => void
   onCreate: () => void
-  onCancelSpaceConflict: () => void
-  onMoveSpaceConflict: () => void
-  onOpenSpaceConflict: () => void
 }
 
 export function AddRepoDialogStepContent({
@@ -119,9 +112,6 @@ export function AddRepoDialogStepContent({
   createParent,
   createError,
   isCreating,
-  spaceConflict,
-  spaceConflictError,
-  isResolvingSpaceConflict,
   hostSelector,
   showRemoteAction = true,
   canCreateProject = true,
@@ -155,24 +145,8 @@ export function AddRepoDialogStepContent({
   onCreateNameChange,
   onCreateParentChange,
   onPickCreateParent,
-  onCreate,
-  onCancelSpaceConflict,
-  onMoveSpaceConflict,
-  onOpenSpaceConflict
+  onCreate
 }: AddRepoDialogStepContentProps): React.JSX.Element | null {
-  if (step === 'space-conflict' && spaceConflict) {
-    return (
-      <AddRepoSpaceConflictStep
-        conflict={spaceConflict}
-        error={spaceConflictError}
-        isResolving={isResolvingSpaceConflict}
-        onCancel={onCancelSpaceConflict}
-        onMove={onMoveSpaceConflict}
-        onOpen={onOpenSpaceConflict}
-      />
-    )
-  }
-
   if (step === 'add') {
     return (
       <AddRepoLocalStartStep

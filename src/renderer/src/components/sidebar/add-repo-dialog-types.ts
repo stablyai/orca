@@ -1,21 +1,4 @@
-import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-
-export type AddRepoDialogStep =
-  | 'add'
-  | 'clone'
-  | 'remote'
-  | 'server-path'
-  | 'create'
-  | 'nested'
-  | 'space-conflict'
-
-export type CompleteAddedGitRepo = (
-  repoId: string,
-  source: AddRepoExistingWorkspaceSource,
-  executionHostId?: ExecutionHostId,
-  alreadyPresent?: boolean
-) => Promise<void>
+export type AddRepoDialogStep = 'add' | 'clone' | 'remote' | 'server-path' | 'create' | 'nested'
 
 export function defaultProjectGroupNameForPath(path: string): string {
   return (

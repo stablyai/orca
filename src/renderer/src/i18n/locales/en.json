@@ -5333,19 +5333,6 @@
           "chooseEmoji": "Choose Space emoji",
           "searchPlaceholder": "Search emoji",
           "removeEmoji": "Remove emoji"
-        },
-        "AddRepoSpaceConflictStep": {
-          "c69b0787ba": "Project is in “{{spaceName}}”",
-          "9c68432d3d": "Move “{{projectName}}” to “{{targetSpaceName}}” to show it here. It will no longer appear in “{{sourceSpaceName}}”; its files and workspaces won’t change.",
-          "92d91b0399": "Cancel",
-          "fda24641cc": "Open in {{spaceName}}",
-          "a6a5fca1aa": "Move to {{spaceName}}"
-        },
-        "useAddRepoSpaceConflict": {
-          "58f69327ca": "Project already in {{spaceName}}",
-          "75699542b5": "Project already added",
-          "63ac3b7d21": "Couldn’t move this project to {{spaceName}}. Try again.",
-          "7642a01650": "Project moved to {{spaceName}}"
         }
       },
       "shared": {
