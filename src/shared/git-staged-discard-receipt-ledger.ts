@@ -4,12 +4,12 @@ import {
   gitStagedDiscardOperationTimestamp,
   type GitStagedDiscardReceipt
 } from './git-staged-discard-receipt'
+import { GitStagedDiscardReceiptEntryMap } from './git-staged-discard-receipt-entry-map'
 import {
   assertGitStagedDiscardReceiptLedgerAvailable,
   createGitStagedDiscardReceiptEntry,
   createGitStagedDiscardReceiptLedgerSnapshot,
   durableGitStagedDiscardReceiptEntry,
-  gitStagedDiscardReceiptEntriesBytes,
   gitStagedDiscardReceiptKey,
   interruptedGitStagedDiscardReceipt,
   isInterruptedGitStagedDiscardReceipt,
@@ -37,7 +37,7 @@ const DEFAULT_MAX_BYTES = 4 * 1024 * 1024
 const MAX_TRUSTED_CLIENT_CLOCK_SKEW_MS = 5 * 60 * 1_000
 
 export class GitStagedDiscardReceiptLedger {
-  private readonly entries = new Map<string, GitStagedDiscardReceiptEntry>()
+  private readonly entries = new GitStagedDiscardReceiptEntryMap()
   private readonly maxReceipts: number
   private readonly retentionMs: number
   private readonly maxBytes: number
@@ -146,6 +146,7 @@ export class GitStagedDiscardReceiptLedger {
     }
     entry.receipt = receipt
     entry.promise = Promise.resolve(receipt)
+    this.entries.set(gitStagedDiscardReceiptKey(entry.scope, entry.operationId), entry)
     const removedKeys = this.evictForByteBound(entry)
     this.persist({ upsert: durableGitStagedDiscardReceiptEntry(entry), removedKeys })
     return receipt
@@ -201,11 +202,7 @@ export class GitStagedDiscardReceiptLedger {
 
   private evictForByteBound(newEntry?: GitStagedDiscardReceiptEntry): string[] {
     const removedKeys: string[] = []
-    while (
-      gitStagedDiscardReceiptEntriesBytes(this.entries.values()) +
-        this.retiredSkewedOperationIds.size * 130 >
-      this.maxBytes
-    ) {
+    while (this.entries.bytes + this.retiredSkewedOperationIds.size * 130 > this.maxBytes) {
       const candidate = [...this.entries.entries()].find(
         ([, entry]) =>
           entry !== newEntry &&

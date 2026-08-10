@@ -107,9 +107,13 @@ export function gitStagedDiscardReceiptEntriesBytes(
 ): number {
   let total = 0
   for (const entry of entries) {
-    total += Buffer.byteLength(JSON.stringify(durableGitStagedDiscardReceiptEntry(entry)), 'utf8')
+    total += gitStagedDiscardReceiptEntryBytes(entry)
   }
   return total
+}
+
+export function gitStagedDiscardReceiptEntryBytes(entry: GitStagedDiscardReceiptEntry): number {
+  return Buffer.byteLength(JSON.stringify(durableGitStagedDiscardReceiptEntry(entry)), 'utf8')
 }
 
 export function sameGitStagedDiscardReceipt(
