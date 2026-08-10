@@ -624,6 +624,23 @@ describe('Session', () => {
         expect(warn).toHaveBeenCalledWith(expect.stringContaining('never delivered'))
       })
 
+      it('names the deadline this session waited, not the default one', () => {
+        createSession({
+          shellReadySupported: true,
+          shellReadyTimeoutMs: 2_000,
+          shellReadyLateMarkerGraceMs: 5_000
+        })
+        session.writeStartupCommand('claude\n')
+
+        vi.advanceTimersByTime(2_000 + 5_000)
+
+        expect(subprocess.written).toEqual(['claude\n'])
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('after 7000ms'))
+        expect(warn).not.toHaveBeenCalledWith(
+          expect.stringContaining(`after ${SHELL_READY_TIMEOUT_MS + 5_000}ms`)
+        )
+      })
+
       // Why: shortening the barrier is how Codex opts out of marker-gated delivery.
       it('gives no grace window to a session that shortened the barrier', () => {
         createSession({ shellReadySupported: true, shellReadyTimeoutMs: 300 })

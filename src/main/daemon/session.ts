@@ -132,6 +132,7 @@ export class Session {
   private attachedClients: AttachedClient[] = []
   private preReadyStdinQueue: string[] = []
   private heldStartupCommand: string | null = null
+  private readonly shellReadyTimeoutMs: number
   private readonly shellReadyLateMarkerGraceMs: number
   private shellReadyLateMarkerTimer: ReturnType<typeof setTimeout> | null = null
   private releaseStartupDeviceAttributesResponder: (() => void) | null = null
@@ -179,6 +180,9 @@ export class Session {
         ? undefined
         : opts.historySeedChunks.every((chunk) => this.emulator.writeSync(chunk))
 
+    // Why: the late-marker warning has to name the deadline this session actually waited, so the
+    // effective timeout is resolved once here instead of re-derived from the default at print time.
+    this.shellReadyTimeoutMs = opts.shellReadyTimeoutMs ?? SHELL_READY_TIMEOUT_MS
     this.shellReadyLateMarkerGraceMs =
       opts.shellReadyLateMarkerGraceMs ??
       (opts.shellReadyTimeoutMs === undefined ? SHELL_READY_LATE_MARKER_GRACE_MS : 0)
@@ -197,7 +201,7 @@ export class Session {
       this.startupDeviceAttributesQueryFilter = new StartupDeviceAttributesQueryFilter()
       this.shellReadyTimer = setTimeout(() => {
         this.onShellReadyTimeout()
-      }, opts.shellReadyTimeoutMs ?? SHELL_READY_TIMEOUT_MS)
+      }, this.shellReadyTimeoutMs)
     } else {
       this._shellState = 'unsupported'
     }
@@ -826,7 +830,7 @@ export class Session {
     }
     console.warn(
       `[daemon/session] ${this.sessionId}: no shell-ready marker after ${
-        SHELL_READY_TIMEOUT_MS + this.shellReadyLateMarkerGraceMs
+        this.shellReadyTimeoutMs + this.shellReadyLateMarkerGraceMs
       }ms; writing the startup command without proof the shell is reading it`
     )
     this.releaseHeldShellReadyBytes()
