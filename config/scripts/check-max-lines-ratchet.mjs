@@ -67,11 +67,20 @@ export function collectMobileBumps(configText) {
     }
     for (const glob of override.files ?? []) {
       if (rule[1].max > defaultLimitForPath(glob)) {
-        bumps.push(`mobile-config ${glob}`)
+        bumps.push(`mobile-config ${glob} max=${rule[1].max}`)
       }
     }
   }
   return bumps
+}
+
+// Include mobile ceilings so a per-file override cannot rise under the same glob.
+export function parseMobileCeiling(entry) {
+  const match = /^mobile-config (.+) max=(\d+)$/.exec(entry)
+  if (!match) {
+    return null
+  }
+  return { entry, glob: match[1], max: Number(match[2]) }
 }
 
 export function parseBaseline(text) {
@@ -86,9 +95,81 @@ export function parseBaseline(text) {
 export function diffBaseline(current, baseline) {
   const cur = new Set(current)
   const base = baseline instanceof Set ? baseline : new Set(baseline)
-  const added = [...cur].filter((e) => !base.has(e)).sort()
-  const stale = [...base].filter((e) => !cur.has(e)).sort()
-  return { added, stale }
+  const currentMobile = new Map(
+    [...cur]
+      .map(parseMobileCeiling)
+      .filter(Boolean)
+      .map((entry) => [entry.glob, entry])
+  )
+  const baselineMobile = new Map(
+    [...base]
+      .map(parseMobileCeiling)
+      .filter(Boolean)
+      .map((entry) => [entry.glob, entry])
+  )
+  const added = [...cur]
+    .filter((entry) => !base.has(entry) && !baselineMobile.has(parseMobileCeiling(entry)?.glob))
+    .sort()
+  const stale = [...base]
+    .filter((entry) => !cur.has(entry) && !currentMobile.has(parseMobileCeiling(entry)?.glob))
+    .sort()
+  const increased = []
+  const lowered = []
+
+  for (const [glob, currentEntry] of currentMobile) {
+    const baselineEntry = baselineMobile.get(glob)
+    if (!baselineEntry) {
+      continue
+    }
+    if (currentEntry.max > baselineEntry.max) {
+      increased.push({ glob, from: baselineEntry.max, to: currentEntry.max })
+    } else if (currentEntry.max < baselineEntry.max) {
+      lowered.push({ glob, from: baselineEntry.max, to: currentEntry.max })
+    }
+  }
+
+  return { added, stale, increased, lowered }
+}
+
+export function pruneBaseline(current, baseline) {
+  const cur = new Set(current)
+  const currentMobile = new Map(
+    [...cur]
+      .map(parseMobileCeiling)
+      .filter(Boolean)
+      .map((entry) => [entry.glob, entry])
+  )
+
+  return [...baseline]
+    .flatMap((entry) => {
+      const mobileEntry = parseMobileCeiling(entry)
+      if (!mobileEntry) {
+        return cur.has(entry) ? [entry] : []
+      }
+      const currentEntry = currentMobile.get(mobileEntry.glob)
+      if (!currentEntry) {
+        return []
+      }
+      return currentEntry.max <= mobileEntry.max ? [currentEntry.entry] : [entry]
+    })
+    .sort()
+}
+
+export function planBaselinePrune(current, baseline) {
+  const { added, stale, increased, lowered } = diffBaseline(current, baseline)
+  return {
+    added,
+    increased,
+    kept: pruneBaseline(current, baseline),
+    lowered,
+    stale
+  }
+}
+
+export function formatPruneSummary({ kept, stale, lowered }) {
+  const staleLabel = stale.length === 1 ? 'entry' : 'entries'
+  const ceilingLabel = lowered.length === 1 ? 'ceiling' : 'ceilings'
+  return `Pruned baseline to ${kept.length} entries (removed ${stale.length} stale ${staleLabel}; updated ${lowered.length} lowered mobile ${ceilingLabel}).`
 }
 
 // Collect every current suppression entry from the tracked tree.
@@ -123,16 +204,20 @@ export function collectCurrentSuppressions(root = process.cwd()) {
   return entries.sort()
 }
 
-function printAddedFailure(added) {
+function printAddedFailure(added, increased) {
   for (const entry of added) {
     console.error(`::error::New max-lines bypass not allowed: ${entry}`)
   }
+  for (const { glob, from, to } of increased) {
+    console.error(`::error::Mobile max-lines ceiling increased: ${glob} (${from} -> ${to})`)
+  }
   console.error('')
   console.error('╭────────────────────────────────────────────────────────────────────────────╮')
-  console.error('│  ❌  max-lines ratchet failed — a NEW file is trying to exceed the line cap.  │')
+  console.error('│  ❌  max-lines ratchet failed — a bypass or mobile ceiling grew.              │')
   console.error('╰────────────────────────────────────────────────────────────────────────────╯')
   console.error('')
-  console.error(`  ${added.length} file(s)/glob(s) newly bypass the oxlint \`max-lines\` rule:`)
+  const violations = added.length + increased.length
+  console.error(`  ${violations} max-lines policy violation(s):`)
   console.error('')
   for (const entry of added) {
     const [kind, ...rest] = entry.split(' ')
@@ -143,6 +228,9 @@ function printAddedFailure(added) {
         : 'added a per-file max-lines bump in mobile/.oxlintrc.json'
     console.error(`    • ${target}\n        ↳ ${how}`)
   }
+  for (const { glob, from, to } of increased) {
+    console.error(`    • ${glob}\n        ↳ mobile ceiling grew from ${from} to ${to}`)
+  }
   console.error('')
   console.error('  Orca caps file size (300 .ts / 400 .tsx / 600 .mjs / 800 test — non-blank,')
   console.error(
@@ -151,30 +239,43 @@ function printAddedFailure(added) {
   console.error('')
   console.error('  ✅  Fix it: SPLIT the file into focused modules — do NOT suppress the rule.')
   console.error('      See AGENTS.md → "Lint Rules: Do Not Disable Max Lines".')
+  console.error('      Mobile ceilings may only stay the same or decrease.')
   console.error('')
   console.error('  (If you are intentionally, with reviewer sign-off, adding an unavoidable')
   console.error(`   exception, add the exact line(s) above to ${BASELINE_PATH}.)`)
   console.error('')
 }
 
-function printStaleFailure(stale) {
+export function printStaleFailure(stale, lowered) {
   for (const entry of stale) {
     console.error(`::error::Stale max-lines baseline entry (prune it): ${entry}`)
   }
-  console.error('')
-  console.error('╭────────────────────────────────────────────────────────────────────────────╮')
-  console.error('│  ⚠️  max-lines baseline is out of date — nice work removing a bypass!         │')
-  console.error('╰────────────────────────────────────────────────────────────────────────────╯')
-  console.error('')
-  console.error(`  ${stale.length} baseline entr(y/ies) no longer have a max-lines suppression.`)
-  console.error(
-    '  The baseline may only shrink, so these must be removed to keep re-adding blocked:'
-  )
-  console.error('')
-  for (const entry of stale) {
-    console.error(`    • ${entry}`)
+  for (const { glob, from, to } of lowered) {
+    console.error(`::notice::Mobile max-lines ceiling lowered: ${glob} (${from} -> ${to})`)
   }
   console.error('')
+  console.error('╭────────────────────────────────────────────────────────────────────────────╮')
+  console.error('│  ⚠️  max-lines baseline needs to shrink.                                      │')
+  console.error('╰────────────────────────────────────────────────────────────────────────────╯')
+  console.error('')
+  if (stale.length > 0) {
+    console.error(`  ${stale.length} stale baseline entr(y/ies) no longer have a suppression.`)
+    console.error('  These stale entries must be removed to keep re-adding blocked:')
+    console.error('')
+    for (const entry of stale) {
+      console.error(`    • ${entry}`)
+    }
+    console.error('')
+  }
+  if (lowered.length > 0) {
+    console.error(`  ${lowered.length} mobile max-lines ceiling(s) decreased.`)
+    console.error('  These lowered ceilings must update their baseline values:')
+    console.error('')
+    for (const { glob, from, to } of lowered) {
+      console.error(`    • ${glob}\n        ↳ mobile ceiling dropped from ${from} to ${to}`)
+    }
+    console.error('')
+  }
   console.error(`  ✅  Fix it (one command):  pnpm check:max-lines-ratchet --prune`)
   console.error('')
 }
@@ -189,20 +290,20 @@ export function main(root = process.cwd()) {
   }
   const baseline = parseBaseline(fs.readFileSync(baselineFile, 'utf8'))
   const current = collectCurrentSuppressions(root)
-  const { added, stale } = diffBaseline(current, baseline)
+  const { added, stale, increased, lowered } = diffBaseline(current, baseline)
 
-  if (added.length > 0) {
-    printAddedFailure(added)
-    if (stale.length > 0) {
+  if (added.length > 0 || increased.length > 0) {
+    printAddedFailure(added, increased)
+    if (stale.length > 0 || lowered.length > 0) {
       console.error(
-        `  (Also: ${stale.length} stale baseline entr(y/ies) can be pruned — see below.)`
+        `  (Also: ${stale.length + lowered.length} baseline entr(y/ies) can be pruned — see below.)`
       )
-      printStaleFailure(stale)
+      printStaleFailure(stale, lowered)
     }
     return 1
   }
-  if (stale.length > 0) {
-    printStaleFailure(stale)
+  if (stale.length > 0 || lowered.length > 0) {
+    printStaleFailure(stale, lowered)
     return 1
   }
   console.log(
@@ -216,7 +317,8 @@ function writeBaseline(root, entries) {
     '# Files/globs currently allowed to exceed the oxlint `max-lines` budget.',
     '# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green —',
     '# split the oversized file instead (AGENTS.md → "Do Not Disable Max Lines").',
-    '# Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries only)',
+    '# Mobile entries record max=<ceiling>; their ceiling may only decrease.',
+    '# Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries and lowers ceilings)',
     ''
   ].join('\n')
   fs.writeFileSync(path.join(root, BASELINE_PATH), `${header}${entries.join('\n')}\n`)
@@ -233,18 +335,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(0)
   }
   if (arg === '--prune') {
-    // Remove baseline entries whose suppression is gone (shrink only; never adds).
-    const current = new Set(collectCurrentSuppressions(root))
+    // Remove stale entries and record mobile ceiling decreases; never add or raise a bypass.
+    const current = collectCurrentSuppressions(root)
     const baseline = parseBaseline(fs.readFileSync(path.join(root, BASELINE_PATH), 'utf8'))
-    const kept = [...baseline].filter((e) => current.has(e)).sort()
-    const newlyAdded = [...current].filter((e) => !baseline.has(e))
-    writeBaseline(root, kept)
-    console.log(
-      `Pruned baseline to ${kept.length} entries (removed ${baseline.size - kept.length}).`
-    )
-    if (newlyAdded.length > 0) {
+    const plan = planBaselinePrune(current, baseline)
+    writeBaseline(root, plan.kept)
+    console.log(formatPruneSummary(plan))
+    if (plan.added.length > 0 || plan.increased.length > 0) {
       console.error(
-        `::error::--prune does not add entries; ${newlyAdded.length} new bypass(es) remain — split those files.`
+        `::error::--prune does not add entries or raise mobile ceilings; ${plan.added.length + plan.increased.length} policy violation(s) remain — split those files.`
       )
       process.exit(1)
     }

@@ -1,7 +1,8 @@
 # Files/globs currently allowed to exceed the oxlint `max-lines` budget.
 # This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green —
 # split the oversized file instead (AGENTS.md → "Do Not Disable Max Lines").
-# Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries only)
+# Mobile entries record max=<ceiling>; their ceiling may only decrease.
+# Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries and lowers ceilings)
 inline src/cli/handlers/automations.ts
 inline src/cli/handlers/orchestration.ts
 inline src/cli/help.ts
@@ -335,22 +336,22 @@ inline src/shared/text-search.ts
 inline src/shared/types.ts
 inline tests/e2e/helpers/terminal.ts
 inline tests/e2e/terminal-panes.spec.ts
-mobile-config app/h/*/files/*.tsx
-mobile-config app/h/*/index.tsx
-mobile-config app/h/*/session/*.tsx
-mobile-config app/h/*/source-control/*.tsx
-mobile-config app/h/*/tasks.tsx
-mobile-config app/index.tsx
-mobile-config app/pair-scan.tsx
-mobile-config app/terminal-settings.tsx
-mobile-config app/troubleshoot.tsx
-mobile-config scripts/mock-server.ts
-mobile-config scripts/repro-terminal-colors.ts
-mobile-config scripts/repro-worktree-startup-stream.ts
-mobile-config src/browser/MobileBrowserPane.tsx
-mobile-config src/components/CustomKeyModal.tsx
-mobile-config src/components/NewWorktreeModal.tsx
-mobile-config src/components/mobile-rich-markdown-editor-html.ts
-mobile-config src/terminal/terminal-accessory-keys.ts
-mobile-config src/terminal/terminal-webview-html.ts
-mobile-config src/transport/rpc-client.ts
+mobile-config app/h/*/files/*.tsx max=402
+mobile-config app/h/*/index.tsx max=1603
+mobile-config app/h/*/session/*.tsx max=5015
+mobile-config app/h/*/source-control/*.tsx max=2152
+mobile-config app/h/*/tasks.tsx max=14682
+mobile-config app/index.tsx max=1422
+mobile-config app/pair-scan.tsx max=531
+mobile-config app/terminal-settings.tsx max=514
+mobile-config app/troubleshoot.tsx max=436
+mobile-config scripts/mock-server.ts max=407
+mobile-config scripts/repro-terminal-colors.ts max=319
+mobile-config scripts/repro-worktree-startup-stream.ts max=326
+mobile-config src/browser/MobileBrowserPane.tsx max=1594
+mobile-config src/components/CustomKeyModal.tsx max=645
+mobile-config src/components/NewWorktreeModal.tsx max=1263
+mobile-config src/components/mobile-rich-markdown-editor-html.ts max=648
+mobile-config src/terminal/terminal-accessory-keys.ts max=388
+mobile-config src/terminal/terminal-webview-html.ts max=1784
+mobile-config src/transport/rpc-client.ts max=1074

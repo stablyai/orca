@@ -1,11 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   collectMobileBumps,
   defaultLimitForPath,
   diffBaseline,
+  formatPruneSummary,
   hasMaxLinesDisable,
-  parseBaseline
+  parseBaseline,
+  planBaselinePrune,
+  printStaleFailure,
+  pruneBaseline
 } from './check-max-lines-ratchet.mjs'
 
 describe('hasMaxLinesDisable', () => {
@@ -77,8 +81,8 @@ describe('collectMobileBumps', () => {
       ]
     })
     expect(collectMobileBumps(cfg)).toEqual([
-      'mobile-config app/h/*/tasks.tsx',
-      'mobile-config scripts/mock-server.ts'
+      'mobile-config app/h/*/tasks.tsx max=14682',
+      'mobile-config scripts/mock-server.ts max=407'
     ])
   })
 
@@ -99,17 +103,84 @@ describe('parseBaseline', () => {
 
 describe('diffBaseline', () => {
   it('reports added and stale entries', () => {
-    const { added, stale } = diffBaseline(
+    const { added, stale, increased, lowered } = diffBaseline(
       ['inline b.ts', 'inline c.ts'],
       new Set(['inline a.ts', 'inline b.ts'])
     )
     expect(added).toEqual(['inline c.ts']) // new bypass
     expect(stale).toEqual(['inline a.ts']) // suppression removed
+    expect(increased).toEqual([])
+    expect(lowered).toEqual([])
   })
 
   it('is clean when current matches baseline', () => {
-    const { added, stale } = diffBaseline(['inline a.ts'], new Set(['inline a.ts']))
+    const { added, stale, increased, lowered } = diffBaseline(
+      ['inline a.ts'],
+      new Set(['inline a.ts'])
+    )
     expect(added).toEqual([])
     expect(stale).toEqual([])
+    expect(increased).toEqual([])
+    expect(lowered).toEqual([])
+  })
+
+  it('rejects a mobile ceiling increase even when its glob is already baseline', () => {
+    const { added, stale, increased, lowered } = diffBaseline(
+      ['mobile-config app/h/*/session/*.tsx max=5016'],
+      new Set(['mobile-config app/h/*/session/*.tsx max=5015'])
+    )
+    expect(added).toEqual([])
+    expect(stale).toEqual([])
+    expect(increased).toEqual([{ glob: 'app/h/*/session/*.tsx', from: 5015, to: 5016 }])
+    expect(lowered).toEqual([])
+  })
+
+  it('requires the baseline to record a mobile ceiling decrease', () => {
+    const baseline = new Set(['mobile-config app/h/*/session/*.tsx max=5015'])
+    const current = ['mobile-config app/h/*/session/*.tsx max=5000']
+    const { added, stale, increased, lowered } = diffBaseline(current, baseline)
+    expect(added).toEqual([])
+    expect(stale).toEqual([])
+    expect(increased).toEqual([])
+    expect(lowered).toEqual([{ glob: 'app/h/*/session/*.tsx', from: 5015, to: 5000 }])
+    expect(pruneBaseline(current, baseline)).toEqual([
+      'mobile-config app/h/*/session/*.tsx max=5000'
+    ])
+  })
+
+  it('never lets --prune record a mobile ceiling increase', () => {
+    const baseline = new Set(['mobile-config app/h/*/session/*.tsx max=5015'])
+    const current = ['mobile-config app/h/*/session/*.tsx max=5016']
+    expect(pruneBaseline(current, baseline)).toEqual([
+      'mobile-config app/h/*/session/*.tsx max=5015'
+    ])
+  })
+
+  it('reports stale removals and lowered mobile updates separately', () => {
+    const plan = planBaselinePrune(
+      ['inline current.ts', 'mobile-config app/h/*/session/*.tsx max=5000'],
+      new Set([
+        'inline current.ts',
+        'inline stale.ts',
+        'mobile-config app/h/*/session/*.tsx max=5015'
+      ])
+    )
+    expect(formatPruneSummary(plan)).toBe(
+      'Pruned baseline to 2 entries (removed 1 stale entry; updated 1 lowered mobile ceiling).'
+    )
+  })
+
+  it('explains stale removals separately from lowered mobile baseline updates', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    printStaleFailure(
+      ['inline stale.ts'],
+      [{ glob: 'app/h/*/session/*.tsx', from: 5015, to: 5000 }]
+    )
+    const output = error.mock.calls.map(([message]) => message).join('\n')
+    error.mockRestore()
+
+    expect(output).toContain('These stale entries must be removed to keep re-adding blocked:')
+    expect(output).toContain('These lowered ceilings must update their baseline values:')
+    expect(output).toContain('mobile ceiling dropped from 5015 to 5000')
   })
 })
