@@ -35,7 +35,7 @@ type MockChildProcess = EventEmitter & {
 function createMockChildProcess(pid: number): MockChildProcess {
   const child = new EventEmitter() as MockChildProcess
   child.pid = pid
-  child.kill = vi.fn()
+  child.kill = vi.fn(() => true)
   child.unref = vi.fn()
   return child
 }
@@ -540,7 +540,7 @@ describe('ghExecFileAsync WSL fallback', () => {
 
     taskkill.emit('close', 0)
     await rejection
-    expect(wslChild.kill).not.toHaveBeenCalled()
+    expect(wslChild.kill).not.toHaveBeenCalledWith()
   })
 
   it('aborts the default-WSL glab fallback with full process-tree cleanup', async () => {
@@ -577,7 +577,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     taskkill.emit('close', 0)
 
     await rejection
-    expect(wslChild.kill).not.toHaveBeenCalled()
+    expect(wslChild.kill).not.toHaveBeenCalledWith()
   })
 
   it('does not wake the default WSL distro for host-only GitLab diagnostics', async () => {
