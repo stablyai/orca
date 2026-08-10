@@ -1,8 +1,16 @@
 import React, { useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { getSpreadsheetCellAlignmentClass } from './spreadsheet-cell-alignment'
 import {
+  buildSpreadsheetMergeIndex,
+  planSpreadsheetMergePlacement
+} from './spreadsheet-merged-cells'
+import type { XlsxMergedRange } from './xlsx-worksheet-layout'
+import {
+  SPREADSHEET_GRID_BASE_FONT_PX,
   SPREADSHEET_GRID_COLUMN_OVERSCAN,
   SPREADSHEET_GRID_OVERSCAN,
   SPREADSHEET_GRID_ROW_HEIGHT,
@@ -23,6 +31,10 @@ type SpreadsheetGridProps = {
    * cells may be absent; a workbook with no styling at all passes nothing.
    */
   cellStyles?: readonly (readonly (SpreadsheetCellStyle | undefined)[])[]
+  /** Column widths the file declares, by index; content sizing fills the gaps. */
+  declaredColumnWidths?: readonly (number | undefined)[]
+  /** Merged ranges the file declares. */
+  mergedRanges?: readonly XlsxMergedRange[]
   /**
    * `center` for the generated column letters of a workbook; `left` for a CSV,
    * whose heading row holds the file's own first row of text.
@@ -56,22 +68,44 @@ export function SpreadsheetGrid({
   rows,
   columnCount,
   cellStyles,
+  declaredColumnWidths,
+  mergedRanges,
   headerAlignment = 'left'
 }: SpreadsheetGridProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
+  // Why: reuse the editor's own zoom level rather than a control of our own, so
+  // the sheet zooms with the same shortcuts as every other editor surface and
+  // remembers the level across tabs.
+  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const fontSizePx = computeEditorFontSize(SPREADSHEET_GRID_BASE_FONT_PX, editorFontZoomLevel)
+  const zoomScale = fontSizePx / SPREADSHEET_GRID_BASE_FONT_PX
+  const rowHeightPx = Math.round(SPREADSHEET_GRID_ROW_HEIGHT * zoomScale)
+  const rowNumberColumnPx = Math.round(SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX * zoomScale)
+  // Why: the header bands sit a step below the cell text, as both Excel and
+  // Sheets do. Inline rather than a utility because a Tailwind `text-[…]`
+  // arbitrary value cannot be disambiguated between a size and a colour.
+  const headerFontSizePx = Math.round(fontSizePx * 0.85)
   const paddedHeader = useMemo(
     () => padSpreadsheetHeader(header, columnCount),
     [header, columnCount]
   )
   const columnWidths = useMemo(
-    () => computeSpreadsheetColumnWidths({ header: paddedHeader, rows, columnCount }),
-    [paddedHeader, rows, columnCount]
+    () =>
+      computeSpreadsheetColumnWidths({
+        header: paddedHeader,
+        rows,
+        columnCount,
+        declaredColumnWidths,
+        zoomScale
+      }),
+    [paddedHeader, rows, columnCount, declaredColumnWidths, zoomScale]
   )
+  const mergeIndex = useMemo(() => buildSpreadsheetMergeIndex(mergedRanges ?? []), [mergedRanges])
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => SPREADSHEET_GRID_ROW_HEIGHT,
+    estimateSize: () => rowHeightPx,
     overscan: SPREADSHEET_GRID_OVERSCAN,
     getItemKey: (index) => index
   })
@@ -92,37 +126,42 @@ export function SpreadsheetGrid({
     lastVirtualColumn === undefined
       ? 0
       : Math.max(0, columnsTotalWidth - lastVirtualColumn.start - lastVirtualColumn.size)
+  const firstRenderedColumn = virtualColumns[0]?.index ?? 0
+  const lastRenderedColumn = lastVirtualColumn?.index ?? 0
   const gridTemplate = useMemo(
     () =>
       buildSpreadsheetGridTemplate({
         columnWidths: virtualColumns.map((virtualColumn) => virtualColumn.size),
+        rowNumberColumnPx,
         leadingSpacerPx,
         trailingSpacerPx
       }),
-    [virtualColumns, leadingSpacerPx, trailingSpacerPx]
+    [virtualColumns, rowNumberColumnPx, leadingSpacerPx, trailingSpacerPx]
   )
 
   return (
     <div
       ref={scrollRef}
-      className="relative min-h-0 flex-1 overflow-auto scrollbar-editor bg-spreadsheet-surface text-[13px] text-spreadsheet-foreground tabular-nums"
+      className="relative min-h-0 flex-1 overflow-auto scrollbar-editor bg-spreadsheet-surface text-spreadsheet-foreground tabular-nums"
+      style={{ fontSize: fontSizePx }}
     >
       <div
         role="table"
         aria-rowcount={rows.length + 1}
         aria-colcount={columnCount + 1}
         className="inline-block min-w-full"
-        style={{ width: SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX + columnsTotalWidth }}
+        style={{ width: rowNumberColumnPx + columnsTotalWidth }}
       >
         <div
           role="row"
           aria-rowindex={1}
           className="sticky top-0 z-10 grid bg-spreadsheet-header"
-          style={{ gridTemplateColumns: gridTemplate, height: SPREADSHEET_GRID_ROW_HEIGHT }}
+          style={{ gridTemplateColumns: gridTemplate, height: rowHeightPx }}
         >
           <div
             role="columnheader"
-            className="sticky left-0 z-20 flex items-center justify-center border-b border-r border-spreadsheet-gridline-strong bg-spreadsheet-header text-[11px] font-normal text-spreadsheet-header-foreground"
+            className="sticky left-0 z-20 flex items-center justify-center border-b border-r border-spreadsheet-gridline-strong bg-spreadsheet-header font-normal text-spreadsheet-header-foreground"
+            style={{ fontSize: headerFontSizePx }}
           >
             #
           </div>
@@ -135,9 +174,10 @@ export function SpreadsheetGrid({
                 aria-colindex={virtualColumn.index + 2}
                 key={virtualColumn.key}
                 className={cn(
-                  'flex items-center overflow-hidden border-b border-r border-spreadsheet-gridline-strong px-2 text-[11px] font-medium text-spreadsheet-header-foreground',
+                  'flex items-center overflow-hidden border-b border-r border-spreadsheet-gridline-strong px-2 font-medium text-spreadsheet-header-foreground',
                   headerAlignment === 'center' ? 'justify-center' : 'justify-start'
                 )}
+                style={{ fontSize: headerFontSizePx }}
               >
                 <span className="truncate" title={cell}>
                   {cell}
@@ -155,7 +195,6 @@ export function SpreadsheetGrid({
           style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}
         >
           {virtualRows.map((virtualRow) => {
-            const row = rows[virtualRow.index] ?? []
             return (
               <div
                 role="row"
@@ -168,22 +207,43 @@ export function SpreadsheetGrid({
                   position: 'absolute',
                   top: 0,
                   left: 0,
-                  height: SPREADSHEET_GRID_ROW_HEIGHT,
+                  height: rowHeightPx,
                   width: '100%',
                   transform: `translateY(${virtualRow.start}px)`
                 }}
               >
                 <div
                   role="rowheader"
-                  className="sticky left-0 z-[5] flex items-center justify-center border-b border-r border-spreadsheet-gridline bg-spreadsheet-header px-2 text-[11px] text-spreadsheet-header-foreground group-hover:bg-spreadsheet-gridline"
+                  className="sticky left-0 z-[5] flex items-center justify-center border-b border-r border-spreadsheet-gridline bg-spreadsheet-header px-2 text-spreadsheet-header-foreground group-hover:bg-spreadsheet-gridline"
+                  style={{ fontSize: headerFontSizePx }}
                 >
                   {virtualRow.index + 1}
                 </div>
                 <div aria-hidden className="border-b border-spreadsheet-gridline" />
                 {virtualColumns.map((virtualColumn) => {
                   const columnIndex = virtualColumn.index
-                  const cell = row[columnIndex] ?? ''
-                  const cellStyle = cellStyles?.[virtualRow.index]?.[columnIndex]
+                  const merge = mergeIndex.find(virtualRow.index, columnIndex)
+                  const mergePlacement =
+                    merge === undefined
+                      ? null
+                      : planSpreadsheetMergePlacement({
+                          merge,
+                          rowIndex: virtualRow.index,
+                          columnIndex,
+                          firstRenderedColumn,
+                          lastRenderedColumn
+                        })
+                  // Why: another cell of the same merge already covers this one.
+                  if (merge !== undefined && mergePlacement === null) {
+                    return null
+                  }
+                  const valueRowIndex = merge?.rowIndex ?? virtualRow.index
+                  const valueColumnIndex = merge?.columnIndex ?? columnIndex
+                  const cell =
+                    mergePlacement !== null && !mergePlacement.showsValue
+                      ? ''
+                      : (rows[valueRowIndex]?.[valueColumnIndex] ?? '')
+                  const cellStyle = cellStyles?.[valueRowIndex]?.[valueColumnIndex]
                   return (
                     <div
                       role="cell"
@@ -197,14 +257,17 @@ export function SpreadsheetGrid({
                       // Why: these colours come from the opened file, not from the
                       // design system, so no token can express them. A cell that
                       // declares none keeps the theme's own foreground above.
-                      style={
-                        cellStyle?.backgroundColor === undefined
-                          ? undefined
+                      style={{
+                        ...(cellStyle?.backgroundColor === undefined
+                          ? {}
                           : {
                               backgroundColor: cellStyle.backgroundColor,
                               color: cellStyle.textColor
-                            }
-                      }
+                            }),
+                        ...(mergePlacement === null
+                          ? {}
+                          : { gridColumn: `span ${mergePlacement.columnSpan}` })
+                      }}
                       title={cell}
                     >
                       <span className="truncate">{cell}</span>

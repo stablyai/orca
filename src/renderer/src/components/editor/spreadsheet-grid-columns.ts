@@ -15,10 +15,19 @@ const CELL_PADDING_PX = 24
 // every column wide.
 const SAMPLED_ROW_COUNT = 200
 
+export const SPREADSHEET_GRID_BASE_FONT_PX = 13
+
 export type SpreadsheetColumnWidthsInput = {
   header: readonly string[]
   rows: readonly (readonly string[])[]
   columnCount: number
+  /**
+   * Widths the file itself declares, by column index. A declared width is the
+   * author's layout decision and wins over sizing from content.
+   */
+  declaredColumnWidths?: readonly (number | undefined)[]
+  /** Multiplier from the editor zoom level; 1 at the default font size. */
+  zoomScale?: number
 }
 
 /**
@@ -28,7 +37,9 @@ export type SpreadsheetColumnWidthsInput = {
 export function computeSpreadsheetColumnWidths({
   header,
   rows,
-  columnCount
+  columnCount,
+  declaredColumnWidths,
+  zoomScale = 1
 }: SpreadsheetColumnWidthsInput): number[] {
   const widths = Array.from<number>({ length: columnCount }).fill(MIN_COLUMN_PX)
   const consider = (cell: string | undefined, columnIndex: number): void => {
@@ -53,12 +64,16 @@ export function computeSpreadsheetColumnWidths({
     }
   }
 
-  return widths
+  return widths.map((width, columnIndex) =>
+    Math.round((declaredColumnWidths?.[columnIndex] ?? width) * zoomScale)
+  )
 }
 
 export type SpreadsheetGridTemplateInput = {
   /** Widths of the columns actually rendered, in order. */
   columnWidths: readonly number[]
+  /** Width of the sticky row-number column, which scales with the zoom level. */
+  rowNumberColumnPx?: number
   /** Width of the columns scrolled off to the left, collapsed into one spacer. */
   leadingSpacerPx?: number
   /** Width of the columns still off to the right. */
@@ -76,11 +91,12 @@ export type SpreadsheetGridTemplateInput = {
  */
 export function buildSpreadsheetGridTemplate({
   columnWidths,
+  rowNumberColumnPx = SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX,
   leadingSpacerPx = 0,
   trailingSpacerPx = 0
 }: SpreadsheetGridTemplateInput): string {
   return [
-    `${SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX}px`,
+    `${rowNumberColumnPx}px`,
     `${leadingSpacerPx}px`,
     ...columnWidths.map((width) => `${width}px`),
     `${trailingSpacerPx}px`

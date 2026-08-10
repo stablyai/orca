@@ -86,6 +86,8 @@ export type WorkbookSheetInput = {
   /** Raw `<row>` elements, so a test can write sparse or malformed sheets. */
   sheetXml: string
   hidden?: boolean
+  /** Raw XML placed before `<sheetData>`, for `<cols>` and `<mergeCells>`. */
+  layoutXml?: string
 }
 
 export type WorkbookInput = {
@@ -116,7 +118,7 @@ export function buildXlsxWorkbook({
     },
     ...sheets.map((sheet, index) => ({
       name: `xl/worksheets/sheet${index + 1}.xml`,
-      content: buildWorksheetXml(sheet.sheetXml)
+      content: buildWorksheetXml(sheet.sheetXml, sheet.layoutXml ?? '')
     }))
   ]
 
@@ -172,9 +174,9 @@ function buildWorkbookXml(sheets: WorkbookSheetInput[], use1904DateSystem: boole
   }<sheets>${sheetElements}</sheets></workbook>`
 }
 
-function buildWorksheetXml(rowsXml: string): string {
+function buildWorksheetXml(rowsXml: string, layoutXml: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<worksheet><sheetData>${rowsXml}</sheetData></worksheet>`
+<worksheet>${layoutXml}<sheetData>${rowsXml}</sheetData></worksheet>`
 }
 
 function buildSharedStringsXml(sharedStrings: string[]): string {

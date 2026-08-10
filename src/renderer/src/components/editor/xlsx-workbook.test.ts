@@ -192,6 +192,26 @@ describe('parseXlsxWorkbook', () => {
     ])
   })
 
+  it('reads column widths and merged ranges off the worksheet', async () => {
+    const bytes = buildXlsxWorkbook({
+      sheets: [
+        {
+          name: 'Layout',
+          layoutXml:
+            '<cols><col min="2" max="2" width="40" customWidth="1"/></cols><mergeCells count="1"><mergeCell ref="B2:G5"/></mergeCells>',
+          sheetXml: '<row r="2"><c r="B2" t="str"><v>banner</v></c></row>'
+        }
+      ]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.columnWidths[1]).toBe(285)
+    expect(workbook.sheets[0]?.mergedRanges).toEqual([
+      { rowIndex: 1, columnIndex: 1, rowSpan: 4, columnSpan: 6 }
+    ])
+  })
+
   it('leaves styles empty for a workbook with no visual styling', async () => {
     const bytes = buildXlsxWorkbook({
       sheets: [{ name: 'Plain', sheetXml: '<row r="1"><c r="A1"><v>1</v></c></row>' }]

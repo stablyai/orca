@@ -7,6 +7,7 @@ import { parseXlsxCellStyles, type XlsxCellStyle, type XlsxCellStyles } from './
 import { parseXlsxNumberFormats } from './xlsx-number-formats'
 import { parseXlsxSharedStrings } from './xlsx-shared-strings'
 import { parseXlsxWorksheetGrid } from './xlsx-worksheet-grid'
+import { parseXlsxWorksheetLayout, type XlsxMergedRange } from './xlsx-worksheet-layout'
 import { forEachXlsxXmlElement } from './xlsx-xml-elements'
 import { openXlsxZipArchive, type XlsxZipArchive } from './xlsx-zip-archive'
 
@@ -17,6 +18,9 @@ export type XlsxSheet = {
   rows: string[][]
   /** Per-cell fill, text colour and bold; empty when the workbook has none. */
   styles: (XlsxCellStyle | undefined)[][]
+  /** Author-set column widths in pixels, by column index. */
+  columnWidths: (number | undefined)[]
+  mergedRanges: XlsxMergedRange[]
   maxColumns: number
   truncated: boolean
 }
@@ -81,7 +85,8 @@ export async function parseXlsxWorkbook(bytes: Uint8Array): Promise<XlsxWorkbook
       use1904DateSystem,
       maxRows: MAX_XLSX_SHEET_ROWS
     })
-    sheets.push({ name: descriptor.name, hidden: descriptor.hidden, ...grid })
+    const layout = parseXlsxWorksheetLayout(worksheetXml ?? '')
+    sheets.push({ name: descriptor.name, hidden: descriptor.hidden, ...grid, ...layout })
   }
 
   if (sheets.length === 0) {
