@@ -21,7 +21,10 @@ import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { normalizeGlobalWindowsRuntimeDefault } from '../../../shared/project-execution-runtime'
+import {
+  normalizeGlobalWindowsRuntimeDefault,
+  type GlobalWindowsRuntimeDefault
+} from '../../../shared/project-execution-runtime'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   filterEnabledTuiAgents
@@ -169,6 +172,45 @@ type NewWorkspaceComposerCardProps = {
   onAddProjectOverride?: () => void
   /** Fires as the nested Set-project-location dialog opens and closes, so the host can stand down its Escape/submit handling. */
   onNestedDialogOpenChange?: (open: boolean) => void
+}
+
+/**
+ * Decides whether the workspace composer should nudge a Windows user toward
+ * WSL-installed agents.
+ *
+ * Returns `{ kind: 'enable', distro }` when the host picker found nothing but
+ * WSL is available and the agent runtime is still the Windows host — one click
+ * switches the runtime and re-detects. Returns `{ kind: 'retry', distro }` when
+ * the runtime is already WSL but detection still came back empty (typically a
+ * cold-start probe timeout) — the probe needs a retry, not a setting change.
+ * Returns null on non-Windows platforms, while detection is in flight, when
+ * agents were found, or when WSL is unavailable.
+ */
+function resolveWslAgentPickerHint(args: {
+  appPlatform: NodeJS.Platform
+  windowsRuntimeDefault: GlobalWindowsRuntimeDefault
+  wslAvailable: boolean
+  wslDistros: readonly string[]
+  detectedAgentIds: Set<TuiAgent> | null
+}): { kind: 'enable' | 'retry'; distro: string } | null {
+  const { appPlatform, windowsRuntimeDefault, wslAvailable, wslDistros, detectedAgentIds } = args
+  if (appPlatform !== 'win32') {
+    return null
+  }
+  if (detectedAgentIds === null || detectedAgentIds.size > 0) {
+    return null
+  }
+  if (!wslAvailable) {
+    return null
+  }
+  const distro =
+    windowsRuntimeDefault.kind === 'wsl' && windowsRuntimeDefault.distro
+      ? windowsRuntimeDefault.distro
+      : (wslDistros.find((candidate) => candidate.trim().length > 0) ?? null)
+  if (!distro) {
+    return null
+  }
+  return { kind: windowsRuntimeDefault.kind === 'wsl' ? 'retry' : 'enable', distro }
 }
 
 const SSH_STATUS_LABELS: Partial<Record<SshConnectionStatus, string>> = {
@@ -448,34 +490,43 @@ export default function NewWorkspaceComposerCard({
   )
 
   // Why: a Windows host with no detected agents usually has its CLIs installed
-  // in WSL. Offer the existing WSL agent runtime instead of an empty picker.
+  // in WSL. Offer the existing WSL agent runtime instead of an empty picker;
+  // when the runtime is already WSL, offer a retry (the probe may have timed
+  // out on a cold start).
   const appPlatform = getRendererAppPlatform()
   const wslCapabilities = useWindowsTerminalCapabilities(appPlatform === 'win32')
   const windowsRuntimeDefault = normalizeGlobalWindowsRuntimeDefault(localWindowsRuntimeDefault)
-  const wslDetectionHint = React.useMemo(() => {
-    if (appPlatform !== 'win32') {
-      return null
-    }
-    if (windowsRuntimeDefault.kind === 'wsl') {
-      return null
-    }
-    if (detectedAgentIds === null || detectedAgentIds.size > 0) {
-      return null
-    }
-    if (!wslCapabilities.wslAvailable) {
-      return null
-    }
-    return wslCapabilities.wslDistros.find((distro) => distro.trim().length > 0) ?? null
-  }, [appPlatform, windowsRuntimeDefault, detectedAgentIds, wslCapabilities])
+  const wslPickerHint = React.useMemo(
+    () =>
+      resolveWslAgentPickerHint({
+        appPlatform,
+        windowsRuntimeDefault,
+        wslAvailable: wslCapabilities.wslAvailable,
+        wslDistros: wslCapabilities.wslDistros,
+        detectedAgentIds
+      }),
+    [appPlatform, windowsRuntimeDefault, wslCapabilities, detectedAgentIds]
+  )
 
-  const handleDetectWslAgents = React.useCallback((): void => {
-    if (!wslDetectionHint) {
+  /**
+   * Applies the picked WSL action: switch the agent runtime to WSL for
+   * `enable`, or simply re-run detection for `retry` (the runtime is already
+   * WSL; the previous probe likely timed out on a cold start).
+   */
+  const handleWslPickerHint = React.useCallback((): void => {
+    if (!wslPickerHint) {
       return
     }
-    void Promise.resolve(
-      updateSettings({ localWindowsRuntimeDefault: { kind: 'wsl', distro: wslDetectionHint } })
-    ).then(() => refreshDetectedAgents())
-  }, [updateSettings, refreshDetectedAgents, wslDetectionHint])
+    if (wslPickerHint.kind === 'enable') {
+      void Promise.resolve(
+        updateSettings({
+          localWindowsRuntimeDefault: { kind: 'wsl', distro: wslPickerHint.distro }
+        })
+      ).then(() => refreshDetectedAgents())
+      return
+    }
+    void refreshDetectedAgents()
+  }, [updateSettings, refreshDetectedAgents, wslPickerHint])
 
   const cancelNameInputFocusFrame = React.useCallback((): void => {
     if (nameInputFocusFrameRef.current === null) {
@@ -971,26 +1022,37 @@ export default function NewWorkspaceComposerCard({
             triggerClassName="h-9 w-full min-w-0 border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
             onTriggerEnter={createDisabled ? undefined : onCreate}
           />
-          {wslDetectionHint ? (
+          {wslPickerHint ? (
             <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-border px-2 py-1.5">
               <span className="text-[11px] leading-tight text-muted-foreground">
-                {translate(
-                  'auto.components.NewWorkspaceComposerCard.detectWslAgentsHint',
-                  'No agents found on Windows. Your coding agents may be installed in WSL.'
-                )}
+                {wslPickerHint.kind === 'enable'
+                  ? translate(
+                      'auto.components.NewWorkspaceComposerCard.detectWslAgentsHint',
+                      'No agents found on Windows. Your coding agents may be installed in WSL.'
+                    )
+                  : translate(
+                      'auto.components.NewWorkspaceComposerCard.detectWslAgentsRetryHint',
+                      'No agents found in WSL ({{value0}}) yet. Detection may have timed out.',
+                      { value0: wslPickerHint.distro }
+                    )}
               </span>
               <Button
                 type="button"
                 variant="outline"
                 size="xs"
-                onClick={handleDetectWslAgents}
+                onClick={handleWslPickerHint}
                 className="h-6 shrink-0 whitespace-nowrap text-[11px]"
               >
-                {translate(
-                  'auto.components.NewWorkspaceComposerCard.detectWslAgentsAction',
-                  'Detect in WSL ({{value0}})',
-                  { value0: wslDetectionHint }
-                )}
+                {wslPickerHint.kind === 'enable'
+                  ? translate(
+                      'auto.components.NewWorkspaceComposerCard.detectWslAgentsAction',
+                      'Detect in WSL ({{value0}})',
+                      { value0: wslPickerHint.distro }
+                    )
+                  : translate(
+                      'auto.components.NewWorkspaceComposerCard.detectWslAgentsRetryAction',
+                      'Retry detection'
+                    )}
               </Button>
             </div>
           ) : null}

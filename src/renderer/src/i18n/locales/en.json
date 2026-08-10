@@ -1458,6 +1458,8 @@
         "01d1e8f601": "Agent",
         "detectWslAgentsHint": "No agents found on Windows. Your coding agents may be installed in WSL.",
         "detectWslAgentsAction": "Detect in WSL ({{value0}})",
+        "detectWslAgentsRetryHint": "No agents found in WSL ({{value0}}) yet. Detection may have timed out.",
+        "detectWslAgentsRetryAction": "Retry detection",
         "0c5d6a479c": "[Optional]",
         "b5a0796911": "Connect",
         "dccd26d4e4": "Choose project",

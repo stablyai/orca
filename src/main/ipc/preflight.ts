@@ -91,7 +91,7 @@ async function detectCommandRuntime(
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
-    const foundCommands = await detectWslCommandsOnPath(
+    const { found: foundCommands } = await detectWslCommandsOnPath(
       wslTarget,
       getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
     )

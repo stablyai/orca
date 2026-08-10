@@ -974,10 +974,14 @@ describe('NewWorkspaceComposerCard WSL agent detection hint', () => {
     current = null
   })
 
+  /**
+   * Finds the WSL agent hint row by its shared "No agents found" prefix — both
+   * the enable and retry variants start with it.
+   */
   function findWslHint(container: HTMLElement): HTMLElement | null {
     return (
       [...container.querySelectorAll<HTMLElement>('div')].find((node) =>
-        node.textContent?.includes('No agents found on Windows')
+        node.textContent?.includes('No agents found')
       ) ?? null
     )
   }
@@ -1022,10 +1026,28 @@ describe('NewWorkspaceComposerCard WSL agent detection hint', () => {
     expect(findWslHint(current.container)).toBeNull()
   })
 
-  it('hides the hint when the agent runtime is already WSL', () => {
+  it('shows a retry hint when the runtime is already WSL and detection is empty', () => {
     storeSettings.localWindowsRuntimeDefault = { kind: 'wsl', distro: 'Ubuntu' }
     current = renderCard({ detectedAgentIds: new Set() })
-    expect(findWslHint(current.container)).toBeNull()
+    const hint = findWslHint(current.container)
+    expect(hint).toBeTruthy()
+    const action = [...(hint?.querySelectorAll('button') ?? [])].find((button) =>
+      button.textContent?.includes('Retry detection')
+    )
+    expect(action).toBeTruthy()
+  })
+
+  it('clicking the retry hint only refreshes detection', async () => {
+    storeSettings.localWindowsRuntimeDefault = { kind: 'wsl', distro: 'Ubuntu' }
+    current = renderCard({ detectedAgentIds: new Set() })
+    const action = [...current.container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Retry detection')
+    )
+    expect(action).toBeTruthy()
+    act(() => action?.click())
+    expect(storeMocks.updateSettings).not.toHaveBeenCalled()
+    await act(async () => {})
+    expect(storeMocks.refreshDetectedAgents).toHaveBeenCalledTimes(1)
   })
 
   it('hides the hint on non-Windows platforms', () => {

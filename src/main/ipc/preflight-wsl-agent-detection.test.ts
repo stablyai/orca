@@ -70,7 +70,7 @@ describe('detectWslCommandsOnPath', () => {
       stderr: ''
     })
 
-    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
+    const { found } = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
 
     expect(found).toEqual(new Set(['claude', 'codex']))
   })
@@ -81,23 +81,33 @@ describe('detectWslCommandsOnPath', () => {
       stderr: ''
     })
 
-    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
+    const { found } = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
 
     expect(found).toEqual(new Set())
   })
 
-  it('returns an empty set when the probe fails (e.g. shell parse error)', async () => {
+  it('marks a failed probe as failed instead of returning a plain empty set', async () => {
     execFileAsyncMock.mockRejectedValue(new Error("zsh:1: parse error near `done'"))
 
-    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
+    const result = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
 
-    expect(found).toEqual(new Set())
+    // Why: a timed-out or errored probe must not be indistinguishable from
+    // "no agents installed" — callers surface a retry affordance on failure.
+    expect(result).toEqual({ found: new Set(), failed: true })
+  })
+
+  it('returns a clean empty result (not failed) when nothing is found', async () => {
+    execFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    const result = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
+
+    expect(result).toEqual({ found: new Set(), failed: false })
   })
 
   it('skips the probe entirely when no commands are requested', async () => {
-    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, [])
+    const result = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, [])
 
-    expect(found).toEqual(new Set())
+    expect(result).toEqual({ found: new Set(), failed: false })
     expect(execFileAsyncMock).not.toHaveBeenCalled()
   })
 })
