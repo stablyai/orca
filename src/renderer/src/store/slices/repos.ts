@@ -79,6 +79,7 @@ import { notifyInstalledAgentSkillsChanged } from '@/hooks/installed-agent-skill
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
+  getSettingsFocusedExecutionHostId,
   isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -3379,11 +3380,21 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   removeProject: async (projectId, options) => {
     try {
-      // Why: pass an explicit hostId so a duplicate id across hosts resolves to the intended row, not the focused-host fallback.
-      const ownerRepo = findRepoForHost(get().repos, projectId, {
-        settings: get().settings,
-        hostId: options?.hostId
-      })
+      // Why: removals must not use unique-id-any-host fallback — a vanished twin leaves
+      // one survivor that would be destroyed if the user meant the other host (#13071).
+      const ownerRepo = options?.hostId
+        ? findRepoForHost(get().repos, projectId, { hostId: options.hostId })
+        : (() => {
+            const matching = get().repos.filter((repo) => repo.id === projectId)
+            if (matching.length === 0) {
+              return null
+            }
+            const focusedHostId = getSettingsFocusedExecutionHostId(get().settings)
+            const focusedMatches = matching.filter(
+              (repo) => getRepoExecutionHostId(repo) === focusedHostId
+            )
+            return focusedMatches.length === 1 ? focusedMatches[0] : null
+          })()
       if (!ownerRepo) {
         return
       }

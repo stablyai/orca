@@ -6189,7 +6189,9 @@ const WorktreeList = React.memo(function WorktreeList({
     (repo: Repo) => {
       openModal('confirm-remove-folder', {
         repoId: repo.id,
-        displayName: repo.displayName
+        displayName: repo.displayName,
+        // Why: same repo id can exist on two hosts; bare id would remove the wrong row (#13071).
+        hostId: getRepoExecutionHostId(repo)
       })
     },
     [openModal]

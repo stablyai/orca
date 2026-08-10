@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { translate } from '@/i18n/i18n'
 
 // Why: interpolated into the sentence so locales control where the name sits;
@@ -24,13 +25,16 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const isOpen = activeModal === 'confirm-remove-folder'
   const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
   const displayName = typeof modalData.displayName === 'string' ? modalData.displayName : ''
+  const hostId = typeof modalData.hostId === 'string' ? modalData.hostId : undefined
 
   // Why: for an SSH project the files live on the remote host's disk, not the
   // user's — "still on your disk" would be misleading. Name the host (using the
   // removed-target label when it's a ghost) so the user knows where it remains
   // and that re-adding that host recovers it.
   const sshHostLabel = useAppStore((s) => {
-    const connectionId = s.repos.find((r) => r.id === repoId)?.connectionId?.trim()
+    // Why: prefer host-scoped lookup so a twin id on another host does not label this dialog (#13071).
+    const repo = findRepoForHost(s.repos, repoId, hostId ? { hostId } : {})
+    const connectionId = repo?.connectionId?.trim()
     if (!connectionId) {
       return null
     }
@@ -59,10 +63,13 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
 
   const handleConfirm = useCallback(() => {
     if (repoId) {
-      void removeProject(repoId, { errorFeedback: 'toast' })
+      void removeProject(repoId, {
+        errorFeedback: 'toast',
+        ...(hostId ? { hostId: hostId as never } : {})
+      })
     }
     closeModal()
-  }, [closeModal, removeProject, repoId])
+  }, [closeModal, hostId, removeProject, repoId])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {

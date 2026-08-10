@@ -185,7 +185,8 @@ describe('deleting one host copy of a same-named project', () => {
   it('removes only remote A when the same name exists on remote B', async () => {
     const store = seed([remoteATwin, remoteBTwin], 'env-b')
 
-    await store.getState().removeProject('env-a-uuid')
+    // Why: bare id while focused on B would historically unique-match A and risk the wrong host (#13071).
+    await store.getState().removeProject('env-a-uuid', { hostId: 'runtime:env-a' })
 
     expect(repoRmCalls()).toEqual([
       expect.objectContaining({
@@ -194,6 +195,15 @@ describe('deleting one host copy of a same-named project', () => {
       })
     ])
     expect(remainingRepoIds(store)).toEqual(['env-b-uuid'])
+  })
+
+  it('refuses unique-id fallback when hostId is omitted and focus is on another host', async () => {
+    const store = seed([remoteATwin, remoteBTwin], 'env-b')
+
+    await store.getState().removeProject('env-a-uuid')
+
+    expect(repoRmCalls()).toEqual([])
+    expect(remainingRepoIds(store)).toEqual(['env-a-uuid', 'env-b-uuid'])
   })
 
   it('keeps remote B when remote A reports the project already gone', async () => {

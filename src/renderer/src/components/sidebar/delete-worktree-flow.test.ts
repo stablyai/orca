@@ -493,7 +493,8 @@ describe('delete worktree flow', () => {
     expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
     expect(mocks.state.openModal).toHaveBeenCalledWith('confirm-remove-folder', {
       repoId: 'repo-1',
-      displayName: 'orca'
+      displayName: 'orca',
+      hostId: 'local'
     })
   })
 

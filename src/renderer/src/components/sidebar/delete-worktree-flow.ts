@@ -1,10 +1,11 @@
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getWorktreeMapFromState } from '@/store/selectors'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   showNoDeletableWorkspacesToast,
   showWorkspaceListChangedToast
 } from './stale-workspace-list-toast'
+import { resolveRepoForWorktreeTarget } from './worktree-delete-repo-resolve'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
@@ -44,11 +45,14 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     return
   }
   if (target.isMainWorktree) {
-    const repo = state.repos.find((entry) => entry.id === target.repoId)
+    const repo = resolveRepoForWorktreeTarget(state.repos, target)
+    const hostId = target.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
     // Why: git refuses to delete the primary checkout; users can still remove the owning project from Orca (disk contents kept).
     state.openModal('confirm-remove-folder', {
       repoId: target.repoId,
-      displayName: repo?.displayName ?? target.displayName
+      displayName: repo?.displayName ?? target.displayName,
+      // Why: pin host so confirm-remove cannot fall through to a twin on another host (#13071).
+      ...(hostId ? { hostId } : {})
     })
     return
   }
@@ -56,12 +60,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
 
   // Why: a disconnected SSH host has no provider, so worktrees:remove throws; route to reconnect-and-delete or local-only forget.
   // Skip on paired web/mobile clients: SSH state is desktop-only, so empty sshTargetLabels misclassifies SSH repos as ghosts; their worktree.rm RPC still handles the delete.
-  const matchingRepos = state.repos.filter((entry) => entry.id === target.repoId)
-  const repo = target.hostId
-    ? findRepoForHost(matchingRepos, target.repoId, { hostId: target.hostId })
-    : matchingRepos.length === 1
-      ? matchingRepos[0]
-      : null
+  const repo = resolveRepoForWorktreeTarget(state.repos, target)
   const sshResolution = isPairedWebClientWindow()
     ? { kind: 'not-ssh' as const }
     : resolveSshWorkspaceForget({
