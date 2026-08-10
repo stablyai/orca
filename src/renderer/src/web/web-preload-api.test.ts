@@ -3632,7 +3632,11 @@ describe('web git preload API', () => {
       { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: TEST_COMMIT_OID } },
       {
         method: 'git.fetch',
-        params: { worktree: 'id:wt-1', pushTarget: undefined },
+        params: {
+          worktree: 'id:wt-1',
+          pushTarget: undefined,
+          operationTimeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
+        },
         timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
       }
     ])

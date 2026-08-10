@@ -47,6 +47,17 @@ function killIfAlive(pid: number): void {
   }
 }
 
+function windowsProcessIsRunning(pid: number): boolean {
+  try {
+    const output = execFileSync('tasklist', ['/fi', `PID eq ${pid}`, '/fo', 'csv', '/nh'], {
+      encoding: 'utf8'
+    })
+    return output.includes(`"${pid}"`)
+  } catch {
+    return false
+  }
+}
+
 describe.skipIf(process.platform === 'win32')('real remote Git timeout oracle', () => {
   let root = ''
   let hookPid = 0
@@ -128,5 +139,63 @@ describe.skipIf(process.platform === 'win32')('real remote Git timeout oracle', 
 
     await operation
     console.info(`real-git-timeout-oracle=${EXPECTED_OUTCOME}:${observed}`)
+  })
+})
+
+describe.skipIf(process.platform !== 'win32')('real Windows remote Git cleanup', () => {
+  let root = ''
+  let helperPid = 0
+
+  afterEach(() => {
+    if (helperPid > 0 && windowsProcessIsRunning(helperPid)) {
+      try {
+        execFileSync('taskkill', ['/pid', String(helperPid), '/t', '/f'], { stdio: 'ignore' })
+      } catch {
+        // The candidate should already have reaped the process tree.
+      }
+    }
+    if (root) {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reaps the hook tree before returning a maxBuffer error', { timeout: 30_000 }, async () => {
+    root = mkdtempSync(join(tmpdir(), 'orca-real-git-max-buffer-'))
+    const remote = join(root, 'remote.git')
+    const worktree = join(root, 'worktree')
+    const marker = join(remote, 'hook-helper-pid')
+
+    git(root, ['init', '--bare', remote])
+    git(root, ['init', worktree])
+    git(worktree, ['config', 'user.name', 'Orca Test'])
+    git(worktree, ['config', 'user.email', 'orca-test@example.com'])
+    writeFileSync(join(worktree, 'file.txt'), 'initial\n')
+    git(worktree, ['add', 'file.txt'])
+    git(worktree, ['commit', '-m', 'initial'])
+    git(worktree, ['remote', 'add', 'origin', remote])
+    git(worktree, ['push', '--set-upstream', 'origin', 'HEAD:main'])
+
+    const hook = join(remote, 'hooks', 'pre-receive')
+    writeFileSync(
+      hook,
+      `#!/bin/sh\npowershell.exe -NoProfile -NonInteractive -Command '$PID | Set-Content -Encoding ascii -LiteralPath "hook-helper-pid"; while ($true) { [Console]::Error.Write(("x" * 65536)); [Console]::Error.Flush() }'\n`
+    )
+    chmodSync(hook, 0o755)
+    writeFileSync(join(worktree, 'file.txt'), 'next\n')
+    git(worktree, ['add', 'file.txt'])
+    git(worktree, ['commit', '-m', 'next'])
+
+    const operation = gitPush(worktree)
+    await waitFor(() => {
+      try {
+        helperPid = Number(readFileSync(marker, 'utf8').trim())
+        return Number.isSafeInteger(helperPid) && helperPid > 0
+      } catch {
+        return false
+      }
+    })
+
+    await expect(operation).rejects.toThrow(/maxBuffer/i)
+    await waitFor(() => !windowsProcessIsRunning(helperPid))
   })
 })

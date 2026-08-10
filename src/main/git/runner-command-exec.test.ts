@@ -87,6 +87,7 @@ describe('commandExecFileAsync Windows command shims', () => {
       })
       const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
       controller.abort()
+      taskkill.emit('close', 0)
 
       await rejection
       expect(spawnMock).toHaveBeenCalledWith(
@@ -94,7 +95,6 @@ describe('commandExecFileAsync Windows command shims', () => {
         ['/pid', '1234', '/t', '/f'],
         expect.objectContaining({ stdio: 'ignore', windowsHide: true })
       )
-      expect(command.kill).not.toHaveBeenCalled()
     })
   })
 
@@ -111,6 +111,8 @@ describe('commandExecFileAsync Windows command shims', () => {
       })
       const rejection = expect(promise).rejects.toThrow('C:\\tools\\pnpm.cmd timed out.')
       await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(0)
+      taskkill.emit('close', 0)
 
       await rejection
       expect(spawnMock).toHaveBeenCalledWith(
@@ -118,7 +120,6 @@ describe('commandExecFileAsync Windows command shims', () => {
         ['/pid', '1234', '/t', '/f'],
         expect.objectContaining({ stdio: 'ignore', windowsHide: true })
       )
-      expect(command.kill).not.toHaveBeenCalled()
       expect(command.stdout.listenerCount('data')).toBe(0)
       expect(command.stderr.listenerCount('data')).toBe(0)
       expect(command.listenerCount('error')).toBe(0)
@@ -140,6 +141,7 @@ describe('commandExecFileAsync Windows command shims', () => {
         'C:\\tools\\pnpm.cmd stdout exceeded maxBuffer.'
       )
       command.stdout.emit('data', Buffer.from('too much output'))
+      taskkill.emit('close', 0)
 
       await rejection
       expect(spawnMock).toHaveBeenCalledWith(
@@ -147,7 +149,6 @@ describe('commandExecFileAsync Windows command shims', () => {
         ['/pid', '1234', '/t', '/f'],
         expect.objectContaining({ stdio: 'ignore', windowsHide: true })
       )
-      expect(command.kill).not.toHaveBeenCalled()
       expect(command.stdout.listenerCount('data')).toBe(0)
       expect(command.stderr.listenerCount('data')).toBe(0)
       expect(command.listenerCount('error')).toBe(0)
@@ -216,6 +217,57 @@ describe('runner execFile timeout handling', () => {
 
     await rejection
     expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('kills the Windows Git tree before settling a maxBuffer overflow', async () => {
+    await withPlatform('win32', async () => {
+      const command = createMockChildProcess(1234)
+      const taskkill = createMockTaskkillProcess()
+      spawnMock.mockImplementation((cmd: string) => (cmd === 'taskkill' ? taskkill : command))
+
+      const promise = gitExecFileAsync(['push'], {
+        cwd: 'C:\\repo',
+        maxBuffer: 2,
+        killProcessTree: true
+      })
+      let settled = false
+      void promise
+        .catch(() => {})
+        .finally(() => {
+          settled = true
+        })
+      command.stderr.emit('data', Buffer.from('too much output'))
+
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(false)
+      expect(spawnMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '1234', '/t', '/f'],
+        expect.objectContaining({ stdio: 'ignore', windowsHide: true })
+      )
+
+      taskkill.emit('close', 0)
+      await expect(promise).rejects.toThrow('git stderr exceeded maxBuffer.')
+      expect(settled).toBe(true)
+    })
+  })
+
+  it('preserves Windows tree-owned Git stderr after cleanup', async () => {
+    await withPlatform('win32', async () => {
+      const command = createMockChildProcess(1234)
+      const taskkill = createMockTaskkillProcess()
+      spawnMock.mockImplementation((cmd: string) => (cmd === 'taskkill' ? taskkill : command))
+
+      const promise = gitExecFileAsync(['push'], {
+        cwd: 'C:\\repo',
+        killProcessTree: true
+      })
+      command.stderr.emit('data', Buffer.from('remote: fixture-refused\n'))
+      command.emit('close', 1)
+      taskkill.emit('close', 0)
+
+      await expect(promise).rejects.toThrow('fixture-refused')
+    })
   })
 
   it('rejects gh executions that never call back using the default timeout', async () => {
@@ -369,6 +421,30 @@ describe('runner execFile timeout handling', () => {
     expect(calls[1]?.env.GIT_SSH_COMMAND).toBe(
       'ssh -F ~/.ssh/github-work -i ~/.ssh/work_key -o BatchMode=yes'
     )
+  })
+
+  it('expires the user action while a WSL SSH-policy probe is hung', async () => {
+    vi.useFakeTimers()
+    await withPlatform('win32', async () => {
+      const child = createMockChildProcess(1234)
+      execFileMock.mockReturnValue(child)
+      let settled = false
+
+      void gitExecFileAsync(['fetch', 'origin'], {
+        cwd: String.raw`C:\repo`,
+        wslDistro: 'Ubuntu',
+        timeout: 100,
+        useConfiguredSshCommandForNetwork: true
+      })
+        .catch(() => {})
+        .finally(() => {
+          settled = true
+        })
+
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(settled).toBe(true)
+    })
   })
 
   it('replaces configured BatchMode for opted-in mergeable OpenSSH commands', async () => {

@@ -55,7 +55,8 @@ function readWorktreeSummary(value: unknown): RuntimeWorktreeSummary | null {
 
 export async function resolveMobileBranchCompareBaseRef(
   client: RpcClient,
-  worktreeId: string
+  worktreeId: string,
+  requestOptions?: () => { timeoutMs: number }
 ): Promise<string | null> {
   const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
   if (!repoId) {
@@ -63,8 +64,10 @@ export async function resolveMobileBranchCompareBaseRef(
   }
 
   const [worktreeResponse, repoResponse] = await Promise.all([
-    client.sendRequest('worktree.show', { worktree: `id:${worktreeId}` }).catch(() => null),
-    client.sendRequest('repo.list').catch(() => null)
+    client
+      .sendRequest('worktree.show', { worktree: `id:${worktreeId}` }, requestOptions?.())
+      .catch(() => null),
+    client.sendRequest('repo.list', undefined, requestOptions?.()).catch(() => null)
   ])
   if (worktreeResponse?.ok) {
     const worktreeBaseRef = readWorktreeSummary(worktreeResponse.result)?.baseRef?.trim() || null
@@ -81,7 +84,11 @@ export async function resolveMobileBranchCompareBaseRef(
     }
   }
 
-  const defaultResponse = await client.sendRequest('repo.baseRefDefault', { repo: `id:${repoId}` })
+  const defaultResponse = await client.sendRequest(
+    'repo.baseRefDefault',
+    { repo: `id:${repoId}` },
+    requestOptions?.()
+  )
   if (!defaultResponse.ok) {
     if (isMobileGitUnavailable(defaultResponse.error?.code, defaultResponse.error?.message)) {
       return null

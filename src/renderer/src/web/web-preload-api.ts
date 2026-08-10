@@ -140,7 +140,11 @@ import {
   assertClipboardImageDimensionsWithinLimit
 } from '../../../shared/clipboard-image'
 import { sanitizeWebRuntimeWorkspaceSession } from './web-workspace-session'
-import { GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS } from '../../../shared/git-remote-operation-timeout'
+import {
+  GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS,
+  gitRemoteOperationRemainingMs,
+  runWithGitRemoteOperationDeadline
+} from '../../../shared/git-remote-operation-timeout'
 import {
   normalizeFeatureInteractions,
   type FeatureInteractionId,
@@ -182,6 +186,7 @@ const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
 let activeClient: WebRuntimeClient | null = null
 let activeClientEnvironmentId: string | null = null
+let activeGitRemoteOperationTimeoutMs = GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
 const manuallyDisconnectedEnvironmentIds = new Set<string>()
 let cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 let cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
@@ -509,6 +514,7 @@ const webKeybindingListeners = new Set<(snapshot: KeybindingFileSnapshot) => voi
 
 export function installWebPreloadApi(): void {
   activeEnvironment = readStoredWebRuntimeEnvironment()
+  activeGitRemoteOperationTimeoutMs = GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
   const webWindow = window as unknown as { __ORCA_WEB_CLIENT__?: boolean }
   webWindow.__ORCA_WEB_CLIENT__ = true
   window.electron = createFallbackProxy(['electron']) as Window['electron']
@@ -1506,6 +1512,8 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
       manuallyDisconnectedEnvironmentIds.clear()
       closeActiveRuntimeClients()
       activeEnvironment = nextEnvironment
+      activeGitRemoteOperationTimeoutMs =
+        runtimeStatus.gitRemoteOperationTimeoutMs ?? GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
       return {
         ok: true,
         environment: redactStoredWebRuntimeEnvironment(nextEnvironment),
@@ -2141,47 +2149,22 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       })
     },
     fetch: async ({ worktreePath, pushTarget }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRemoteGitRuntimeResult('git.fetch', {
-        worktree: toRuntimeWorktreeSelector(worktree.id),
-        pushTarget
-      })
+      await callRemoteGitRuntimeResult('git.fetch', worktreePath, { pushTarget })
     },
     syncFork: async ({ worktreePath, expectedUpstream }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRemoteGitRuntimeResult('git.forkSync', {
-        worktree: toRuntimeWorktreeSelector(worktree.id),
-        expectedUpstream
-      })
+      return callRemoteGitRuntimeResult('git.forkSync', worktreePath, { expectedUpstream })
     },
     push: async ({ worktreePath, publish, pushTarget }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRemoteGitRuntimeResult('git.push', {
-        worktree: toRuntimeWorktreeSelector(worktree.id),
-        publish,
-        pushTarget
-      })
+      await callRemoteGitRuntimeResult('git.push', worktreePath, { publish, pushTarget })
     },
     pull: async ({ worktreePath, pushTarget }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRemoteGitRuntimeResult('git.pull', {
-        worktree: toRuntimeWorktreeSelector(worktree.id),
-        pushTarget
-      })
+      await callRemoteGitRuntimeResult('git.pull', worktreePath, { pushTarget })
     },
     fastForward: async ({ worktreePath, pushTarget }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRemoteGitRuntimeResult('git.fastForward', {
-        worktree: toRuntimeWorktreeSelector(worktree.id),
-        pushTarget
-      })
+      await callRemoteGitRuntimeResult('git.fastForward', worktreePath, { pushTarget })
     },
     rebaseFromBase: async ({ worktreePath, baseRef }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRemoteGitRuntimeResult('git.rebaseFromBase', {
-        worktree: toRuntimeWorktreeSelector(worktree.id),
-        baseRef
-      })
+      await callRemoteGitRuntimeResult('git.rebaseFromBase', worktreePath, { baseRef })
     },
     branchDiff: async ({ worktreePath, filePath, compare, oldPath }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
@@ -3408,6 +3391,13 @@ async function callRuntimeEnvelope<TResult = unknown>(
     return manuallyDisconnectedResponse(environment)
   }
   updateEnvironmentFromResponse(environment, response)
+  if (method === 'status.get' && response.ok) {
+    const configured = (response.result as RuntimeStatus).gitRemoteOperationTimeoutMs
+    activeGitRemoteOperationTimeoutMs =
+      typeof configured === 'number' && Number.isSafeInteger(configured) && configured > 0
+        ? Math.min(configured, GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS)
+        : GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
+  }
   return response as RuntimeRpcResponse<TResult>
 }
 
@@ -3538,8 +3528,29 @@ function captureWebFileMutationSession(): {
   }
 }
 
-function callRemoteGitRuntimeResult<TResult>(method: string, params?: unknown): Promise<TResult> {
-  return callRuntimeResult(method, params, GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS)
+function callRemoteGitRuntimeResult<TResult>(
+  method: string,
+  worktreePath: string,
+  params: Record<string, unknown>
+): Promise<TResult> {
+  return runWithGitRemoteOperationDeadline(activeGitRemoteOperationTimeoutMs, async (context) => {
+    const remainingMs = (): number => gitRemoteOperationRemainingMs(context.deadline)
+    const callResult: WebRuntimeResultCaller = (nextMethod, nextParams) =>
+      callRuntimeResult(nextMethod, nextParams, remainingMs())
+    const callEnvelope: WebRuntimeEnvelopeCaller = (nextMethod, nextParams) =>
+      callRuntimeEnvelope(nextMethod, nextParams, remainingMs())
+    const worktree = await resolveRuntimeWorktreeByPath(worktreePath, callResult, callEnvelope)
+    const operationTimeoutMs = remainingMs()
+    return callRuntimeResult<TResult>(
+      method,
+      {
+        ...params,
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        operationTimeoutMs
+      },
+      operationTimeoutMs
+    )
+  })
 }
 
 async function saveClipboardImageAsTempFileInRuntime(

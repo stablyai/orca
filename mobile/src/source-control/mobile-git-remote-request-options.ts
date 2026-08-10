@@ -9,8 +9,13 @@ const REMOTE_GIT_METHODS = new Set([
   'git.rebaseFromBase'
 ])
 
-export function mobileGitRequestOptions(method: string): { timeoutMs: number } | undefined {
+export function isMobileRemoteGitMethod(method: string): boolean {
   return REMOTE_GIT_METHODS.has(method)
-    ? { timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS }
-    : undefined
+}
+
+export function mobileGitRequestOptions(
+  method: string,
+  timeoutMs = GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
+): { timeoutMs: number } | undefined {
+  return isMobileRemoteGitMethod(method) ? { timeoutMs } : undefined
 }

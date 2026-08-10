@@ -17,18 +17,25 @@ function abortError(): Error {
   return error
 }
 
-function terminateGitProcessTree(child: ChildProcess): void {
+function terminateGitProcessTree(child: ChildProcess): Promise<void> {
   const pid = child.pid
   if (!pid) {
     child.kill()
-    return
+    return Promise.resolve()
   }
   if (process.platform === 'win32') {
-    try {
-      const killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
+    return new Promise((resolve) => {
+      let killer: ChildProcess
+      try {
+        killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
+          stdio: 'ignore',
+          windowsHide: true
+        })
+      } catch {
+        child.kill()
+        resolve()
+        return
+      }
       let settled = false
       let fallbackTimer: NodeJS.Timeout | null = null
       const fallback = (): void => {
@@ -40,6 +47,7 @@ function terminateGitProcessTree(child: ChildProcess): void {
           clearTimeout(fallbackTimer)
         }
         child.kill()
+        resolve()
       }
       fallbackTimer = setTimeout(() => {
         killer.kill()
@@ -55,13 +63,11 @@ function terminateGitProcessTree(child: ChildProcess): void {
         if (fallbackTimer) {
           clearTimeout(fallbackTimer)
         }
+        resolve()
       })
       fallbackTimer.unref?.()
       killer.unref()
-    } catch {
-      child.kill()
-    }
-    return
+    })
   }
   try {
     // Why: a remote Git command can leave ssh, credential helpers, or hooks
@@ -69,7 +75,7 @@ function terminateGitProcessTree(child: ChildProcess): void {
     process.kill(-pid, 'SIGTERM')
   } catch {
     child.kill()
-    return
+    return Promise.resolve()
   }
   const forceKillTimer = setTimeout(() => {
     try {
@@ -79,6 +85,7 @@ function terminateGitProcessTree(child: ChildProcess): void {
     }
   }, FORCE_KILL_DELAY_MS)
   forceKillTimer.unref?.()
+  return Promise.resolve()
 }
 
 function commandFailure(args: string[], stderr: string, code: number | null): Error {
@@ -114,10 +121,10 @@ export function runRelayGitRemoteCommand(
     let stdoutBytes = 0
     let stderrBytes = 0
     let settled = false
+    let terminating = false
 
     const timeout = setTimeout(() => {
-      terminateGitProcessTree(child)
-      finish(new Error('git timed out.'))
+      terminate(new Error('git timed out.'))
     }, options.timeout)
     timeout.unref?.()
 
@@ -144,17 +151,22 @@ export function runRelayGitRemoteCommand(
       resolve({ stdout, stderr })
     }
     function onAbort(): void {
-      if (settled) {
+      terminate(abortError())
+    }
+    function terminate(error: Error): void {
+      if (settled || terminating) {
         return
       }
-      terminateGitProcessTree(child)
-      finish(abortError())
+      terminating = true
+      void terminateGitProcessTree(child).then(() => {
+        terminating = false
+        finish(error)
+      })
     }
     function onStdout(chunk: Buffer): void {
       stdoutBytes += chunk.byteLength
       if (stdoutBytes > options.maxBuffer) {
-        terminateGitProcessTree(child)
-        finish(new Error('git stdout exceeded maxBuffer.'))
+        terminate(new Error('git stdout exceeded maxBuffer.'))
         return
       }
       stdout += stdoutDecoder.write(chunk)
@@ -162,17 +174,23 @@ export function runRelayGitRemoteCommand(
     function onStderr(chunk: Buffer): void {
       stderrBytes += chunk.byteLength
       if (stderrBytes > options.maxBuffer) {
-        terminateGitProcessTree(child)
-        finish(new Error('git stderr exceeded maxBuffer.'))
+        terminate(new Error('git stderr exceeded maxBuffer.'))
         return
       }
       stderr += stderrDecoder.write(chunk)
     }
     function onError(error: Error): void {
-      finish(error)
+      terminate(error)
     }
     function onClose(code: number | null): void {
-      finish(code === 0 ? null : commandFailure(args, stderr, code))
+      if (terminating) {
+        return
+      }
+      if (code === 0) {
+        finish(null)
+        return
+      }
+      terminate(commandFailure(args, stderr, code))
     }
 
     child.stdout?.on('data', onStdout)

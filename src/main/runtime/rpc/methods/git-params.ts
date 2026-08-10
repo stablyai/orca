@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { GIT_REMOTE_OPERATION_TIMEOUT_MS } from '../../../../shared/git-remote-operation-timeout'
 
 export const WorktreeSelector = z.object({
   worktree: z
@@ -210,17 +211,24 @@ const GitPushTargetParam = z.object({
   remoteCreated: z.boolean().optional()
 })
 
+const GitRemoteOperationTimeout = {
+  operationTimeoutMs: z.number().int().positive().max(GIT_REMOTE_OPERATION_TIMEOUT_MS).optional()
+}
+
 export const GitPush = WorktreeSelector.extend({
+  ...GitRemoteOperationTimeout,
   publish: z.boolean().optional(),
   forceWithLease: z.boolean().optional(),
   pushTarget: GitPushTargetParam.optional()
 })
 
 export const GitTargetedRemote = WorktreeSelector.extend({
+  ...GitRemoteOperationTimeout,
   pushTarget: GitPushTargetParam.optional()
 })
 
 export const GitForkSync = WorktreeSelector.extend({
+  ...GitRemoteOperationTimeout,
   expectedUpstream: z.object({
     owner: z.string().trim().min(1),
     repo: z.string().trim().min(1)
@@ -228,6 +236,7 @@ export const GitForkSync = WorktreeSelector.extend({
 })
 
 export const GitRebaseFromBase = WorktreeSelector.extend({
+  ...GitRemoteOperationTimeout,
   baseRef: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))

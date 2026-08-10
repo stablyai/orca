@@ -8,7 +8,10 @@ import { resolveGitRemoteRebaseSource } from '../../shared/git-rebase-source'
 import type { GitPushTarget } from '../../shared/types'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
-import { gitRemoteOperationOptionsForWorktree } from './git-remote-operation-options'
+import {
+  gitRemoteOperationOptionsForWorktree,
+  runLocalGitRemoteOperation
+} from './git-remote-operation-options'
 import { validateGitPushTarget } from './push-target-validation'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
@@ -183,33 +186,38 @@ export async function gitPush(
   pushTarget?: GitPushTarget,
   options: { forceWithLease?: boolean } & GitRuntimeOptions = {}
 ): Promise<void> {
-  try {
-    if (pushTarget) {
-      await validateGitPushTarget(worktreePath, pushTarget, options)
+  return runLocalGitRemoteOperation(options, async (remoteOptions) => {
+    try {
+      if (pushTarget) {
+        await validateGitPushTarget(worktreePath, pushTarget, remoteOptions)
+      }
+      // Why: push to the branch's configured upstream when one exists. PR-created
+      // worktrees can track a contributor fork remote; hardcoding origin here
+      // would send review commits to the upstream repository instead.
+      //
+      // When no upstream exists, keep the existing first-publish behavior:
+      // create/update origin/<current branch> and set it as upstream.
+      //
+      // Branch-vs-base reporting (the "Committed on Branch" section) is
+      // unaffected because it uses branchCompare against an explicit baseRef
+      // from worktree config, not the upstream relationship.
+      const target = pushTarget
+        ? explicitPushTarget(pushTarget)
+        : await getConfiguredPushTarget(worktreePath, remoteOptions)
+      const args = [
+        'push',
+        ...(options.forceWithLease ? ['--force-with-lease'] : []),
+        '--set-upstream',
+        ...(target ? [target.remote, target.refspec] : ['origin', 'HEAD'])
+      ]
+      await gitExecFileAsync(
+        args,
+        gitRemoteOperationOptionsForWorktree(worktreePath, remoteOptions)
+      )
+    } catch (error) {
+      throw new Error(normalizeGitErrorMessage(error, 'push'))
     }
-    // Why: push to the branch's configured upstream when one exists. PR-created
-    // worktrees can track a contributor fork remote; hardcoding origin here
-    // would send review commits to the upstream repository instead.
-    //
-    // When no upstream exists, keep the existing first-publish behavior:
-    // create/update origin/<current branch> and set it as upstream.
-    //
-    // Branch-vs-base reporting (the "Committed on Branch" section) is
-    // unaffected because it uses branchCompare against an explicit baseRef
-    // from worktree config, not the upstream relationship.
-    const target = pushTarget
-      ? explicitPushTarget(pushTarget)
-      : await getConfiguredPushTarget(worktreePath, options)
-    const args = [
-      'push',
-      ...(options.forceWithLease ? ['--force-with-lease'] : []),
-      '--set-upstream',
-      ...(target ? [target.remote, target.refspec] : ['origin', 'HEAD'])
-    ]
-    await gitExecFileAsync(args, gitRemoteOperationOptionsForWorktree(worktreePath, options))
-  } catch (error) {
-    throw new Error(normalizeGitErrorMessage(error, 'push'))
-  }
+  })
 }
 
 async function gitPullWithArgs(
@@ -261,8 +269,10 @@ export async function gitPull(
   // Why: plain `git pull` uses the user's configured pull strategy (merge by
   // default) so diverged branches reconcile instead of erroring out. Conflicts
   // surface through the existing conflict-resolution flow.
-  await runWithGitReadCacheInvalidation(() =>
-    gitPullWithArgs(worktreePath, [], pushTarget, options)
+  return runLocalGitRemoteOperation(options, (remoteOptions) =>
+    runWithGitReadCacheInvalidation(() =>
+      gitPullWithArgs(worktreePath, [], pushTarget, remoteOptions)
+    )
   )
 }
 
@@ -271,8 +281,10 @@ export async function gitFastForward(
   pushTarget?: GitPushTarget,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  await runWithGitReadCacheInvalidation(() =>
-    gitPullWithArgs(worktreePath, ['--ff-only'], pushTarget, options)
+  return runLocalGitRemoteOperation(options, (remoteOptions) =>
+    runWithGitReadCacheInvalidation(() =>
+      gitPullWithArgs(worktreePath, ['--ff-only'], pushTarget, remoteOptions)
+    )
   )
 }
 
@@ -281,20 +293,22 @@ export async function gitPullRebaseFromBase(
   baseRef: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  await runWithGitReadCacheInvalidation(async () => {
-    try {
-      const source = await resolveGitRemoteRebaseSource(
-        (args) => gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options)),
-        baseRef
-      )
-      await gitExecFileAsync(
-        ['pull', '--rebase', source.remoteName, source.branchName],
-        gitRemoteOperationOptionsForWorktree(worktreePath, options)
-      )
-    } catch (error) {
-      throw new Error(normalizeGitErrorMessage(error, 'pull'))
-    }
-  })
+  return runLocalGitRemoteOperation(options, (remoteOptions) =>
+    runWithGitReadCacheInvalidation(async () => {
+      try {
+        const source = await resolveGitRemoteRebaseSource(
+          (args) => gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, remoteOptions)),
+          baseRef
+        )
+        await gitExecFileAsync(
+          ['pull', '--rebase', source.remoteName, source.branchName],
+          gitRemoteOperationOptionsForWorktree(worktreePath, remoteOptions)
+        )
+      } catch (error) {
+        throw new Error(normalizeGitErrorMessage(error, 'pull'))
+      }
+    })
+  )
 }
 
 export async function gitFetch(
@@ -302,20 +316,22 @@ export async function gitFetch(
   pushTarget?: GitPushTarget,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  try {
-    if (pushTarget) {
-      const target = await validateGitPushTarget(worktreePath, pushTarget, options)
+  return runLocalGitRemoteOperation(options, async (remoteOptions) => {
+    try {
+      if (pushTarget) {
+        const target = await validateGitPushTarget(worktreePath, pushTarget, remoteOptions)
+        await gitExecFileAsync(
+          ['fetch', '--prune', target.remoteName],
+          gitRemoteOperationOptionsForWorktree(worktreePath, remoteOptions)
+        )
+        return
+      }
       await gitExecFileAsync(
-        ['fetch', '--prune', target.remoteName],
-        gitRemoteOperationOptionsForWorktree(worktreePath, options)
+        ['fetch', '--prune'],
+        gitRemoteOperationOptionsForWorktree(worktreePath, remoteOptions)
       )
-      return
+    } catch (error) {
+      throw new Error(normalizeGitErrorMessage(error, 'fetch'))
     }
-    await gitExecFileAsync(
-      ['fetch', '--prune'],
-      gitRemoteOperationOptionsForWorktree(worktreePath, options)
-    )
-  } catch (error) {
-    throw new Error(normalizeGitErrorMessage(error, 'fetch'))
-  }
+  })
 }

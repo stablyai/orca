@@ -1,13 +1,10 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
-import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
-import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
-import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
-import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
 import type { RuntimeClientTarget } from './runtime-client-target'
+import { callRuntimeRpcWithDeadline, type RuntimeRpcCallOptions } from './runtime-rpc-action-call'
 
 export {
   getActiveRuntimeTarget,
@@ -47,52 +44,13 @@ export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown,
-  options: {
-    timeoutMs?: number
-    compatibilityTimeoutMs?: number
-    suppressFeatureInteraction?: boolean
-    reuseRecentCompatibilityFailure?: boolean
-    skipCompatibilityCheck?: boolean
-    signal?: AbortSignal
-    expectedEnvironmentPairingRevision?: number
-  } = {}
+  options: RuntimeRpcCallOptions = {}
 ): Promise<TResult> {
-  const expectedEnvironmentPairingRevision =
-    target.kind === 'environment'
-      ? captureRuntimeEnvironmentRequestRevision(
-          target.environmentId,
-          options.expectedEnvironmentPairingRevision
-        )
-      : undefined
-  if (
-    target.kind === 'environment' &&
-    method !== 'status.get' &&
-    options.skipCompatibilityCheck !== true
-  ) {
-    await ensureRuntimeEnvironmentCompatible(target.environmentId, {
-      ...options,
-      timeoutMs: options.compatibilityTimeoutMs ?? options.timeoutMs,
-      expectedEnvironmentPairingRevision
-    })
-  }
-  if (options.signal?.aborted) {
-    throw createRuntimeRpcAbortError()
-  }
-  const nextParams = options.suppressFeatureInteraction
-    ? withBrowserPaneUiRuntimeRpcSource(params)
-    : params
-  const response =
-    target.kind === 'local'
-      ? await window.api.runtime.call({ method, params: nextParams })
-      : await callRuntimeEnvironmentWithRevision({
-          environmentId: target.environmentId,
-          method,
-          params: nextParams,
-          timeoutMs: options.timeoutMs,
-          signal: options.signal,
-          expectedEnvironmentPairingRevision
-        })
-  return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
+  return callRuntimeRpcWithDeadline(target, method, params, options, {
+    ensureCompatible: ensureRuntimeEnvironmentCompatible,
+    configuredGitTimeoutMs: (environmentId) =>
+      runtimeCompatibilityChecks.get(environmentId)?.status?.gitRemoteOperationTimeoutMs
+  })
 }
 
 async function ensureRuntimeEnvironmentCompatible(

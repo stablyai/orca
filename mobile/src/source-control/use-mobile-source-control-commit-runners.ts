@@ -8,6 +8,7 @@ import type {
 
 type GitStep = { method: string; params?: Record<string, unknown> }
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
+type RunRemoteGitAction = <T>(run: (remainingMs: () => number) => Promise<T>) => Promise<T>
 type RunGitWorkflow = (
   actionId: string,
   runner: () => Promise<void>,
@@ -21,6 +22,7 @@ type Params = {
   sendCommitRequest: (message: string) => Promise<unknown>
   runGitSyncSteps: () => Promise<void>
   runGitWorkflow: RunGitWorkflow
+  runRemoteGitAction: RunRemoteGitAction
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
   mountedRef: MutableRefObject<boolean>
   busyActionRef: MutableRefObject<string | null>
@@ -40,6 +42,7 @@ export function useMobileSourceControlCommitRunners(params: Params) {
     sendCommitRequest,
     runGitSyncSteps,
     runGitWorkflow,
+    runRemoteGitAction,
     loadStatus,
     mountedRef,
     busyActionRef,
@@ -142,17 +145,19 @@ export function useMobileSourceControlCommitRunners(params: Params) {
   const runCommitSequence = useCallback(
     async (actionId: string, afterCommit: GitStep[]) => {
       return await runCommitFollowUps(actionId, async () => {
-        for (const step of afterCommit) {
-          await sendGitRequest<unknown>(step.method, step.params)
-        }
+        await runRemoteGitAction(async () => {
+          for (const step of afterCommit) {
+            await sendGitRequest<unknown>(step.method, step.params)
+          }
+        })
       })
     },
-    [runCommitFollowUps, sendGitRequest]
+    [runCommitFollowUps, runRemoteGitAction, sendGitRequest]
   )
 
   const runCommitSyncSequence = useCallback(async () => {
-    return await runCommitFollowUps('commit-sync', runGitSyncSteps)
-  }, [runCommitFollowUps, runGitSyncSteps])
+    return await runCommitFollowUps('commit-sync', () => runRemoteGitAction(runGitSyncSteps))
+  }, [runCommitFollowUps, runGitSyncSteps, runRemoteGitAction])
 
   return { commit, runCommitSequence, runCommitSyncSequence }
 }

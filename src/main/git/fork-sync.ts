@@ -5,7 +5,10 @@ import {
   type GitForkSyncResult
 } from '../../shared/git-fork-sync'
 import type { GitRuntimeOptions } from './git-runtime-options'
-import { gitRemoteOperationOptionsForWorktree } from './git-remote-operation-options'
+import {
+  gitRemoteOperationOptionsForWorktree,
+  runLocalGitRemoteOperation
+} from './git-remote-operation-options'
 import { gitExecFileAsync } from './runner'
 
 export async function gitSyncForkDefaultBranch(
@@ -13,19 +16,14 @@ export async function gitSyncForkDefaultBranch(
   expectedUpstream: GitForkSyncExpectedUpstream,
   options: GitRuntimeOptions = {}
 ): Promise<GitForkSyncResult> {
-  // Compose the caller's cancel signal with the 60s timeout so neither is lost —
-  // the caller's signal was previously clobbered by the timeout controller.
-  const signal = options.signal
-    ? AbortSignal.any([options.signal, AbortSignal.timeout(60_000)])
-    : AbortSignal.timeout(60_000)
+  if (!options.remoteOperationDeadline) {
+    return runLocalGitRemoteOperation(options, (remoteOptions) =>
+      gitSyncForkDefaultBranch(worktreePath, expectedUpstream, remoteOptions)
+    )
+  }
   try {
     return await syncForkDefaultBranch(
-      (args) =>
-        gitExecFileAsync(args, {
-          ...gitRemoteOperationOptionsForWorktree(worktreePath, options),
-          timeout: 60_000,
-          signal
-        }),
+      (args) => gitExecFileAsync(args, gitRemoteOperationOptionsForWorktree(worktreePath, options)),
       { expectedUpstream }
     )
   } catch (error) {

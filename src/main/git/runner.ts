@@ -605,6 +605,14 @@ function execFileCapture(
             finish(null, stdout.stdout, stdout.stderr)
             return
           }
+          if (error && child && options.killProcessTree) {
+            terminating = true
+            void killSpawnedCommandTree(child, true).then(() => {
+              terminating = false
+              finish(error, stdout, stderr)
+            })
+            return
+          }
           finish(error, stdout, stderr)
         }
       )
@@ -675,9 +683,19 @@ async function spawnCommandCapture(
     })
     recordSubprocessSpawn(spawnCmd, spawnArgs, performance.now() - spawnStartedAt)
     let timer: NodeJS.Timeout | null = null
+    let terminating = false
+    const terminate = (error: Error): void => {
+      if (settled || terminating) {
+        return
+      }
+      terminating = true
+      void killSpawnedCommandTree(child, options.killProcessTree).then(() => {
+        terminating = false
+        finish(error)
+      })
+    }
     const onAbort = (): void => {
-      void killSpawnedCommandTree(child, options.killProcessTree)
-      finish(createAbortError())
+      terminate(createAbortError())
     }
     const cleanupListeners = (): void => {
       if (timer) {
@@ -705,17 +723,13 @@ async function spawnCommandCapture(
       resolve({ stdout, stderr })
     }
     timer = options.timeout
-      ? setTimeout(() => {
-          void killSpawnedCommandTree(child, options.killProcessTree)
-          finish(new Error(`${command} timed out.`))
-        }, options.timeout)
+      ? setTimeout(() => terminate(new Error(`${command} timed out.`)), options.timeout)
       : null
     options.signal?.addEventListener('abort', onAbort, { once: true })
     function onStdoutData(chunk: Buffer): void {
       stdoutBytes += chunk.byteLength
       if (options.maxBuffer && stdoutBytes > options.maxBuffer) {
-        void killSpawnedCommandTree(child, options.killProcessTree)
-        finish(new Error(`${command} stdout exceeded maxBuffer.`))
+        terminate(new Error(`${command} stdout exceeded maxBuffer.`))
         return
       }
       stdout += stdoutDecoder.write(chunk)
@@ -723,21 +737,24 @@ async function spawnCommandCapture(
     function onStderrData(chunk: Buffer): void {
       stderrBytes += chunk.byteLength
       if (options.maxBuffer && stderrBytes > options.maxBuffer) {
-        void killSpawnedCommandTree(child, options.killProcessTree)
-        finish(new Error(`${command} stderr exceeded maxBuffer.`))
+        terminate(new Error(`${command} stderr exceeded maxBuffer.`))
         return
       }
       stderr += stderrDecoder.write(chunk)
     }
     function onError(error: Error): void {
-      finish(error)
+      terminate(error)
     }
     function onClose(code: number | null): void {
+      if (terminating) {
+        return
+      }
       if (code === 0) {
         finish(null)
         return
       }
-      finish(new Error(`${command} exited with ${code}.`))
+      const detail = stderr.trim()
+      terminate(new Error(`${command} exited with ${code}.${detail ? `\n${detail}` : ''}`))
     }
     child.stdout?.on('data', onStdoutData)
     child.stderr?.on('data', onStderrData)
@@ -928,7 +945,10 @@ function buildOpenSshBatchModeCommand(configuredCommand: string): string | null 
   return [...withoutBatchModeOptions(tokens), '-o', 'BatchMode=yes'].map(shellQuoteToken).join(' ')
 }
 
-async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
+async function buildNetworkSshPolicyEnv(
+  options: GitExecOptions,
+  expiresAtMs?: number
+): Promise<{
   env: NodeJS.ProcessEnv
   mode: GitSshPolicyMode
 }> {
@@ -946,17 +966,27 @@ async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
   )
   let configuredCommand = ''
   try {
+    const remainingMs =
+      expiresAtMs === undefined
+        ? CORE_SSH_COMMAND_PROBE_TIMEOUT_MS
+        : expiresAtMs - performance.now()
+    if (remainingMs <= 0) {
+      throw new Error('git timed out.')
+    }
     const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
       cwd: resolved.cwd,
       encoding: 'utf-8',
       maxBuffer: DEFAULT_GIT_MAX_BUFFER,
-      timeout: CORE_SSH_COMMAND_PROBE_TIMEOUT_MS,
+      timeout: Math.min(CORE_SSH_COMMAND_PROBE_TIMEOUT_MS, Math.max(1, Math.ceil(remainingMs))),
       env: promptEnv,
       signal: options.signal
     })
     configuredCommand = String(stdout).trim()
   } catch {
     configuredCommand = ''
+  }
+  if (expiresAtMs !== undefined && expiresAtMs - performance.now() <= 0) {
+    throw new Error('git timed out.')
   }
 
   if (!configuredCommand) {
@@ -981,6 +1011,17 @@ async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
   return { env, mode: 'configured-openssh' }
 }
 
+function remainingGitCommandTimeoutMs(expiresAtMs: number | undefined): number | undefined {
+  if (expiresAtMs === undefined) {
+    return undefined
+  }
+  const remainingMs = Math.ceil(expiresAtMs - performance.now())
+  if (remainingMs <= 0) {
+    throw new Error('git timed out.')
+  }
+  return remainingMs
+}
+
 /**
  * Async git command execution. Drop-in replacement for
  * `execFileAsync('git', args, { cwd, encoding, ... })`.
@@ -993,19 +1034,20 @@ export async function gitExecFileAsync(
   return withGitSpan(
     { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
     async () => {
+      const expiresAtMs = options.timeout ? performance.now() + options.timeout : undefined
       const resolved = resolveGitCommand(args, options)
       const policy = options.useConfiguredSshCommandForNetwork
-        ? await buildNetworkSshPolicyEnv(options)
+        ? await buildNetworkSshPolicyEnv(options, expiresAtMs)
         : { env: nonInteractiveGitEnv(options.env), mode: 'default' as const }
       const capture = (
         command: ResolvedCommand
       ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> =>
-        options.killProcessTree === true && process.platform !== 'win32'
+        options.killProcessTree === true
           ? spawnCommandCapture(command.binary, command.args, {
               cwd: command.cwd,
               encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
               maxBuffer: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
-              timeout: options.timeout,
+              timeout: remainingGitCommandTimeoutMs(expiresAtMs),
               env: policy.env,
               signal: options.signal,
               killProcessTree: true
@@ -1014,7 +1056,7 @@ export async function gitExecFileAsync(
               cwd: command.cwd,
               encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
               maxBuffer: options.maxBuffer,
-              timeout: options.timeout,
+              timeout: remainingGitCommandTimeoutMs(expiresAtMs),
               stdin: options.stdin,
               env: policy.env,
               signal: options.signal,

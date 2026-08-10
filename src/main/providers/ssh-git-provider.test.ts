@@ -3,7 +3,35 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshGitProvider } from './ssh-git-provider'
 import { GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS } from '../../shared/git-remote-operation-timeout'
 
-const REMOTE_RPC_OPTIONS = { timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS }
+const REMOTE_RPC_OPTIONS = expect.objectContaining({
+  timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS,
+  signal: expect.any(AbortSignal)
+})
+const REMOTE_GIT_METHODS = new Set([
+  'git.fetch',
+  'git.forkSync',
+  'git.push',
+  'git.pull',
+  'git.fastForward',
+  'git.rebaseFromBase',
+  'git.fetchRemoteTrackingRef',
+  'git.fetchGitLabMergeRequestHeadRef',
+  'git.fetchGitHubPullRequestHead'
+])
+
+function expectMuxRequest(
+  request: ReturnType<typeof vi.fn>,
+  method: string,
+  params: Record<string, unknown>,
+  options?: unknown
+): void {
+  const expectedParams = REMOTE_GIT_METHODS.has(method)
+    ? expect.objectContaining({ ...params, operationTimeoutMs: expect.any(Number) })
+    : params
+  const expected =
+    options === undefined ? [method, expectedParams] : [method, expectedParams, options]
+  expect(request).toHaveBeenCalledWith(...expected)
+}
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
@@ -69,7 +97,7 @@ describe('SshGitProvider', () => {
     mux.request.mockResolvedValue(statusResult)
 
     const result = await provider.getStatus('/home/user/repo')
-    expect(mux.request).toHaveBeenCalledWith('git.status', { worktreePath: '/home/user/repo' })
+    expectMuxRequest(mux.request, 'git.status', { worktreePath: '/home/user/repo' })
     expect(result).toEqual(statusResult)
   })
 
@@ -114,7 +142,8 @@ describe('SshGitProvider', () => {
       signal: controller.signal
     })
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.status',
       { worktreePath: '/home/user/repo', reuseLineStats: true },
       { signal: controller.signal }
@@ -127,7 +156,7 @@ describe('SshGitProvider', () => {
 
     const result = await provider.getSubmoduleStatus('/home/user/repo', 'vendor/lib')
 
-    expect(mux.request).toHaveBeenCalledWith('git.submoduleStatus', {
+    expectMuxRequest(mux.request, 'git.submoduleStatus', {
       worktreePath: '/home/user/repo',
       submodulePath: 'vendor/lib',
       area: 'unstaged'
@@ -141,7 +170,7 @@ describe('SshGitProvider', () => {
 
     await provider.getSubmoduleStatus('/home/user/repo', 'vendor/lib', 'staged')
 
-    expect(mux.request).toHaveBeenCalledWith('git.submoduleStatus', {
+    expectMuxRequest(mux.request, 'git.submoduleStatus', {
       worktreePath: '/home/user/repo',
       submodulePath: 'vendor/lib',
       area: 'staged'
@@ -173,7 +202,7 @@ describe('SshGitProvider', () => {
 
     const result = await provider.checkIgnoredPaths('/home/user/repo', ['dist/bundle.js'])
 
-    expect(mux.request).toHaveBeenCalledWith('git.checkIgnored', {
+    expectMuxRequest(mux.request, 'git.checkIgnored', {
       worktreePath: '/home/user/repo',
       paths: ['dist/bundle.js']
     })
@@ -204,7 +233,8 @@ describe('SshGitProvider', () => {
       onProgress
     })
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.clone',
       expect.objectContaining({
         args: ['clone', '--progress', '--', 'url', 'repo'],
@@ -249,7 +279,7 @@ describe('SshGitProvider', () => {
       baseRef: 'origin/main'
     })
 
-    expect(mux.request).toHaveBeenCalledWith('git.history', {
+    expectMuxRequest(mux.request, 'git.history', {
       worktreePath: '/home/user/repo',
       limit: 25,
       baseRef: 'origin/main'
@@ -263,7 +293,7 @@ describe('SshGitProvider', () => {
 
     const result = await provider.commit('/home/user/repo', 'feat: add source control commit')
 
-    expect(mux.request).toHaveBeenCalledWith('git.commit', {
+    expectMuxRequest(mux.request, 'git.commit', {
       worktreePath: '/home/user/repo',
       message: 'feat: add source control commit'
     })
@@ -281,7 +311,8 @@ describe('SshGitProvider', () => {
 
     const result = await provider.execNonInteractive('pnpm', ['--version'], '/home/user/repo', 8000)
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'agent.execNonInteractive',
       {
         binary: 'pnpm',
@@ -316,7 +347,8 @@ describe('SshGitProvider', () => {
       }
     )
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'agent.execNonInteractive',
       {
         binary: '/bin/bash',
@@ -336,7 +368,7 @@ describe('SshGitProvider', () => {
   it('cancelNonInteractiveExec sends best-effort relay cancellation', async () => {
     await provider.cancelNonInteractiveExec('/home/user/repo')
 
-    expect(mux.request).toHaveBeenCalledWith('agent.cancelExec', { cwd: '/home/user/repo' })
+    expectMuxRequest(mux.request, 'agent.cancelExec', { cwd: '/home/user/repo' })
   })
 
   it('exec forwards abort and timeout options to the relay request', async () => {
@@ -352,7 +384,8 @@ describe('SshGitProvider', () => {
       }
     )
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.exec',
       {
         args: ['clone', '--progress', '--', 'git@example.com:repo.git', 'repo'],
@@ -390,7 +423,7 @@ describe('SshGitProvider', () => {
       stagedSummary: 'M\tREADME.md',
       stagedPatch: 'diff --git a/README.md b/README.md\n+hello'
     })
-    expect(mux.request).toHaveBeenCalledWith('git.exec', {
+    expectMuxRequest(mux.request, 'git.exec', {
       args: ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
       cwd: '/home/user/repo',
       __streamResponse: true
@@ -494,7 +527,7 @@ describe('SshGitProvider', () => {
       await vi.advanceTimersByTimeAsync(15_000)
 
       await expect(pending).resolves.toEqual(execResult)
-      expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', expect.any(Object), {
+      expectMuxRequest(mux.request, 'agent.execNonInteractive', expect.any(Object), {
         timeoutMs: 65_000
       })
     } finally {
@@ -522,7 +555,8 @@ describe('SshGitProvider', () => {
       60_000
     )
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'agent.execNonInteractive',
       {
         binary: 'codex',
@@ -745,7 +779,7 @@ describe('SshGitProvider', () => {
   it('cancelGenerateCommitMessage sends best-effort relay cancellation', async () => {
     await provider.cancelGenerateCommitMessage('/home/user/repo')
 
-    expect(mux.request).toHaveBeenCalledWith('agent.cancelExec', {
+    expectMuxRequest(mux.request, 'agent.cancelExec', {
       cwd: '/home/user/repo',
       operation: 'commit-message'
     })
@@ -756,7 +790,7 @@ describe('SshGitProvider', () => {
     mux.request.mockResolvedValue(diffResult)
 
     const result = await provider.getDiff('/home/user/repo', 'src/index.ts', true)
-    expect(mux.request).toHaveBeenCalledWith('git.diff', {
+    expectMuxRequest(mux.request, 'git.diff', {
       worktreePath: '/home/user/repo',
       filePath: 'src/index.ts',
       staged: true,
@@ -769,7 +803,7 @@ describe('SshGitProvider', () => {
 
   it('stageFile sends git.stage request', async () => {
     await provider.stageFile('/home/user/repo', 'src/file.ts')
-    expect(mux.request).toHaveBeenCalledWith('git.stage', {
+    expectMuxRequest(mux.request, 'git.stage', {
       worktreePath: '/home/user/repo',
       filePath: 'src/file.ts'
     })
@@ -777,7 +811,7 @@ describe('SshGitProvider', () => {
 
   it('unstageFile sends git.unstage request', async () => {
     await provider.unstageFile('/home/user/repo', 'src/file.ts')
-    expect(mux.request).toHaveBeenCalledWith('git.unstage', {
+    expectMuxRequest(mux.request, 'git.unstage', {
       worktreePath: '/home/user/repo',
       filePath: 'src/file.ts'
     })
@@ -785,7 +819,7 @@ describe('SshGitProvider', () => {
 
   it('bulkStageFiles sends git.bulkStage request', async () => {
     await provider.bulkStageFiles('/home/user/repo', ['a.ts', 'b.ts'])
-    expect(mux.request).toHaveBeenCalledWith('git.bulkStage', {
+    expectMuxRequest(mux.request, 'git.bulkStage', {
       worktreePath: '/home/user/repo',
       filePaths: ['a.ts', 'b.ts']
     })
@@ -793,7 +827,7 @@ describe('SshGitProvider', () => {
 
   it('bulkUnstageFiles sends git.bulkUnstage request', async () => {
     await provider.bulkUnstageFiles('/home/user/repo', ['a.ts', 'b.ts'])
-    expect(mux.request).toHaveBeenCalledWith('git.bulkUnstage', {
+    expectMuxRequest(mux.request, 'git.bulkUnstage', {
       worktreePath: '/home/user/repo',
       filePaths: ['a.ts', 'b.ts']
     })
@@ -801,7 +835,7 @@ describe('SshGitProvider', () => {
 
   it('discardChanges sends git.discard request', async () => {
     await provider.discardChanges('/home/user/repo', 'src/file.ts')
-    expect(mux.request).toHaveBeenCalledWith('git.discard', {
+    expectMuxRequest(mux.request, 'git.discard', {
       worktreePath: '/home/user/repo',
       filePath: 'src/file.ts'
     })
@@ -809,7 +843,7 @@ describe('SshGitProvider', () => {
 
   it('bulkDiscardChanges sends git.bulkDiscard request', async () => {
     await provider.bulkDiscardChanges('/home/user/repo', ['a.ts', 'b.ts'])
-    expect(mux.request).toHaveBeenCalledWith('git.bulkDiscard', {
+    expectMuxRequest(mux.request, 'git.bulkDiscard', {
       worktreePath: '/home/user/repo',
       filePaths: ['a.ts', 'b.ts']
     })
@@ -818,7 +852,7 @@ describe('SshGitProvider', () => {
   it('detectConflictOperation sends git.conflictOperation request', async () => {
     mux.request.mockResolvedValue('rebase')
     const result = await provider.detectConflictOperation('/home/user/repo')
-    expect(mux.request).toHaveBeenCalledWith('git.conflictOperation', {
+    expectMuxRequest(mux.request, 'git.conflictOperation', {
       worktreePath: '/home/user/repo'
     })
     expect(result).toBe('rebase')
@@ -829,7 +863,7 @@ describe('SshGitProvider', () => {
     mux.request.mockResolvedValue(compareResult)
 
     const result = await provider.getBranchCompare('/home/user/repo', 'main')
-    expect(mux.request).toHaveBeenCalledWith('git.branchCompare', {
+    expectMuxRequest(mux.request, 'git.branchCompare', {
       worktreePath: '/home/user/repo',
       baseRef: 'main'
     })
@@ -841,7 +875,7 @@ describe('SshGitProvider', () => {
     mux.request.mockResolvedValue(upstreamResult)
 
     const result = await provider.getUpstreamStatus('/home/user/repo')
-    expect(mux.request).toHaveBeenCalledWith('git.upstreamStatus', {
+    expectMuxRequest(mux.request, 'git.upstreamStatus', {
       worktreePath: '/home/user/repo'
     })
     expect(result).toEqual(upstreamResult)
@@ -854,7 +888,7 @@ describe('SshGitProvider', () => {
     const pushTarget = { remoteName: 'fork', branchName: 'feature' }
     const result = await provider.getUpstreamStatus('/home/user/repo', pushTarget)
 
-    expect(mux.request).toHaveBeenCalledWith('git.upstreamStatus', {
+    expectMuxRequest(mux.request, 'git.upstreamStatus', {
       worktreePath: '/home/user/repo',
       pushTarget
     })
@@ -866,7 +900,8 @@ describe('SshGitProvider', () => {
       remoteName: 'pr-fork-orca',
       branchName: 'contributor/fix'
     })
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.push',
       {
         worktreePath: '/home/user/repo',
@@ -883,7 +918,8 @@ describe('SshGitProvider', () => {
   it('pushBranch forwards force-with-lease mode', async () => {
     await provider.pushBranch('/home/user/repo', false, undefined, { forceWithLease: true })
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.push',
       {
         worktreePath: '/home/user/repo',
@@ -897,7 +933,8 @@ describe('SshGitProvider', () => {
 
   it('pullBranch sends git.pull request', async () => {
     await provider.pullBranch('/home/user/repo')
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.pull',
       { worktreePath: '/home/user/repo' },
       REMOTE_RPC_OPTIONS
@@ -909,7 +946,8 @@ describe('SshGitProvider', () => {
 
     await provider.pullBranch('/home/user/repo', pushTarget)
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.pull',
       { worktreePath: '/home/user/repo', pushTarget },
       REMOTE_RPC_OPTIONS
@@ -918,7 +956,8 @@ describe('SshGitProvider', () => {
 
   it('fastForwardBranch sends git.fastForward request', async () => {
     await provider.fastForwardBranch('/home/user/repo')
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.fastForward',
       { worktreePath: '/home/user/repo' },
       REMOTE_RPC_OPTIONS
@@ -930,7 +969,8 @@ describe('SshGitProvider', () => {
 
     await provider.fastForwardBranch('/home/user/repo', pushTarget)
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.fastForward',
       { worktreePath: '/home/user/repo', pushTarget },
       REMOTE_RPC_OPTIONS
@@ -940,7 +980,8 @@ describe('SshGitProvider', () => {
   it('rebaseFromBase sends git.rebaseFromBase request', async () => {
     await provider.rebaseFromBase('/home/user/repo', 'upstream/main')
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.rebaseFromBase',
       { worktreePath: '/home/user/repo', baseRef: 'upstream/main' },
       REMOTE_RPC_OPTIONS
@@ -949,7 +990,8 @@ describe('SshGitProvider', () => {
 
   it('fetchRemote sends git.fetch request', async () => {
     await provider.fetchRemote('/home/user/repo')
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.fetch',
       { worktreePath: '/home/user/repo' },
       REMOTE_RPC_OPTIONS
@@ -961,7 +1003,8 @@ describe('SshGitProvider', () => {
 
     await provider.fetchRemote('/home/user/repo', pushTarget)
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.fetch',
       { worktreePath: '/home/user/repo', pushTarget },
       REMOTE_RPC_OPTIONS
@@ -982,7 +1025,8 @@ describe('SshGitProvider', () => {
     const expectedUpstream = { owner: 'stablyai', repo: 'orca' }
     const result = await provider.syncForkDefaultBranch('/home/user/repo', expectedUpstream)
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.forkSync',
       { worktreePath: '/home/user/repo', expectedUpstream },
       REMOTE_RPC_OPTIONS
@@ -999,7 +1043,8 @@ describe('SshGitProvider', () => {
       { skipAutoMaintenance: true }
     )
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.fetchRemoteTrackingRef',
       {
         worktreePath: '/home/user/repo',
@@ -1019,7 +1064,8 @@ describe('SshGitProvider', () => {
 
     const localRef = await provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.fetchGitLabMergeRequestHeadRef',
       { worktreePath: '/home/user/repo', remote: 'origin', mrIid: 42 },
       REMOTE_RPC_OPTIONS
@@ -1055,7 +1101,8 @@ describe('SshGitProvider', () => {
 
     const localRef = await provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)
 
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.fetchGitHubPullRequestHead',
       { worktreePath: '/home/user/repo', remote: 'origin', prNumber: 42 },
       REMOTE_RPC_OPTIONS
@@ -1089,9 +1136,9 @@ describe('SshGitProvider', () => {
     const error = new Error('fatal: could not read from remote repository')
     mux.request.mockRejectedValueOnce(error)
 
-    await expect(
-      provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)
-    ).rejects.toBe(error)
+    await expect(provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)).rejects.toBe(
+      error
+    )
   })
 
   it('getBranchDiff sends git.branchDiff request', async () => {
@@ -1099,7 +1146,7 @@ describe('SshGitProvider', () => {
     mux.request.mockResolvedValue(diffs)
 
     const result = await provider.getBranchDiff('/home/user/repo', 'main')
-    expect(mux.request).toHaveBeenCalledWith('git.branchDiff', {
+    expectMuxRequest(mux.request, 'git.branchDiff', {
       worktreePath: '/home/user/repo',
       baseRef: 'main',
       __streamResponse: true
@@ -1450,7 +1497,8 @@ describe('SshGitProvider', () => {
 
     const controller = new AbortController()
     const result = await provider.listWorktrees('/home/user/repo', { signal: controller.signal })
-    expect(mux.request).toHaveBeenCalledWith(
+    expectMuxRequest(
+      mux.request,
       'git.listWorktrees',
       { repoPath: '/home/user/repo' },
       { signal: controller.signal }
@@ -1463,7 +1511,7 @@ describe('SshGitProvider', () => {
       base: 'main',
       noCheckout: true
     })
-    expect(mux.request).toHaveBeenCalledWith('git.addWorktree', {
+    expectMuxRequest(mux.request, 'git.addWorktree', {
       repoPath: '/home/user/repo',
       branchName: 'feature',
       targetDir: '/home/user/feat',
@@ -1474,7 +1522,7 @@ describe('SshGitProvider', () => {
 
   it('removeWorktree sends git.removeWorktree request', async () => {
     await provider.removeWorktree('/home/user/feat', true)
-    expect(mux.request).toHaveBeenCalledWith('git.removeWorktree', {
+    expectMuxRequest(mux.request, 'git.removeWorktree', {
       worktreePath: '/home/user/feat',
       force: true
     })
@@ -1486,7 +1534,7 @@ describe('SshGitProvider', () => {
 
     const result = await provider.worktreeIsClean('/home/user/feat')
 
-    expect(mux.request).toHaveBeenCalledWith('git.worktreeIsClean', {
+    expectMuxRequest(mux.request, 'git.worktreeIsClean', {
       worktreePath: '/home/user/feat'
     })
     expect(result).toEqual(cleanResult)
@@ -1498,7 +1546,7 @@ describe('SshGitProvider', () => {
 
     const result = await provider.worktreeIsClean('/home/user/feat', { includeUntracked: false })
 
-    expect(mux.request).toHaveBeenCalledWith('git.worktreeIsClean', {
+    expectMuxRequest(mux.request, 'git.worktreeIsClean', {
       worktreePath: '/home/user/feat',
       includeUntracked: false
     })
@@ -1529,7 +1577,7 @@ describe('SshGitProvider', () => {
       ownerWorktreePath: '/home/user/repo'
     })
 
-    expect(mux.request).toHaveBeenCalledWith('git.refreshLocalBaseRefForWorktreeCreate', {
+    expectMuxRequest(mux.request, 'git.refreshLocalBaseRefForWorktreeCreate', {
       repoPath: '/home/user/repo',
       fullRef: 'refs/heads/main',
       remoteTrackingRef: 'refs/remotes/origin/main',
@@ -1586,7 +1634,7 @@ describe('SshGitProvider', () => {
 
   it('renameCurrentBranch sends the narrow branch-rename request', async () => {
     await provider.renameCurrentBranch('/home/user/feat', 'you/fix-auth')
-    expect(mux.request).toHaveBeenCalledWith('git.renameCurrentBranch', {
+    expectMuxRequest(mux.request, 'git.renameCurrentBranch', {
       worktreePath: '/home/user/feat',
       newBranch: 'you/fix-auth'
     })
@@ -1594,7 +1642,7 @@ describe('SshGitProvider', () => {
 
   it('forceDeletePreservedBranch sends the preserved-branch delete request', async () => {
     await provider.forceDeletePreservedBranch('/home/user/repo', 'you/fix-auth', 'abc123')
-    expect(mux.request).toHaveBeenCalledWith('git.forceDeletePreservedBranch', {
+    expectMuxRequest(mux.request, 'git.forceDeletePreservedBranch', {
       repoPath: '/home/user/repo',
       branchName: 'you/fix-auth',
       expectedHead: 'abc123'

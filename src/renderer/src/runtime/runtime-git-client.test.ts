@@ -591,33 +591,44 @@ describe('runtime git client', () => {
       params: {
         worktree: 'id:wt-1',
         publish: true,
-        pushTarget: { remoteName: 'origin', branchName: 'feature' }
+        pushTarget: { remoteName: 'origin', branchName: 'feature' },
+        operationTimeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
       },
-      timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
+      timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS,
+      expectedEnvironmentPairingRevision: undefined
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(7, {
       selector: 'env-1',
       method: 'git.fetch',
       params: {
         worktree: 'id:wt-1',
-        pushTarget: { remoteName: 'fork', branchName: 'feature' }
+        pushTarget: { remoteName: 'fork', branchName: 'feature' },
+        operationTimeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
       },
-      timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
+      timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS,
+      expectedEnvironmentPairingRevision: undefined
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(8, {
       selector: 'env-1',
       method: 'git.fastForward',
       params: {
         worktree: 'id:wt-1',
-        pushTarget: { remoteName: 'fork', branchName: 'feature' }
+        pushTarget: { remoteName: 'fork', branchName: 'feature' },
+        operationTimeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
       },
-      timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
+      timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS,
+      expectedEnvironmentPairingRevision: undefined
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(9, {
       selector: 'env-1',
       method: 'git.rebaseFromBase',
-      params: { worktree: 'id:wt-1', baseRef: 'origin/main' },
-      timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
+      params: {
+        worktree: 'id:wt-1',
+        baseRef: 'origin/main',
+        operationTimeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
+      },
+      timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS,
+      expectedEnvironmentPairingRevision: undefined
     })
   })
 

@@ -87,6 +87,12 @@ import {
   type PullRequestLinkedIssueMeta
 } from '../source-control/pull-request-linked-issue'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
+import { normalizeGitErrorMessage } from '../../shared/git-remote-error'
+import {
+  resolveGitRemoteOperationTimeoutMs,
+  runWithGitRemoteOperationDeadline,
+  type GitRemoteOperationContext
+} from '../../shared/git-remote-operation-timeout'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 type RuntimeCommitMessageSettingsOverride = Partial<
@@ -180,6 +186,24 @@ export type RuntimeGitCommandHost = {
 
 export class RuntimeGitCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
+
+  private async runRemoteGitOperation<T>(
+    requestedTimeoutMs: number | undefined,
+    operation: 'push' | 'pull' | 'fetch',
+    run: (context: GitRemoteOperationContext) => Promise<T>
+  ): Promise<T> {
+    const configuredTimeoutMs = resolveGitRemoteOperationTimeoutMs(
+      process.env.ORCA_GIT_REMOTE_OPERATION_TIMEOUT_MS
+    )
+    const timeoutMs = requestedTimeoutMs
+      ? Math.min(requestedTimeoutMs, configuredTimeoutMs)
+      : configuredTimeoutMs
+    try {
+      return await runWithGitRemoteOperationDeadline(timeoutMs, run)
+    } catch (error) {
+      throw new Error(normalizeGitErrorMessage(error, operation))
+    }
+  }
 
   private linkedIssueForTarget(target: RuntimeGitTarget): number | null | undefined {
     const live = this.host.getWorktreeLinkedIssue?.(target.worktree.id)
@@ -416,110 +440,150 @@ export class RuntimeGitCommands {
 
   async fetchRuntimeGit(
     worktreeSelector: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    operationTimeoutMs?: number
   ): Promise<{ ok: true }> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    return this.runRemoteGitOperation(operationTimeoutMs, 'fetch', async (context) => {
+      const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+      const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+      if (target.connectionId) {
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        await provider.fetchRemote(target.worktree.path, pushTarget, context)
+        return { ok: true }
       }
-      await provider.fetchRemote(target.worktree.path, pushTarget)
+      await gitFetch(target.worktree.path, pushTarget, {
+        ...localGitOptionsForTarget(target),
+        signal: context.signal,
+        remoteOperationDeadline: context.deadline
+      })
       return { ok: true }
-    }
-    await gitFetch(target.worktree.path, pushTarget, localGitOptionsForTarget(target))
-    return { ok: true }
+    })
   }
 
   async syncRuntimeGitForkDefaultBranch(
     worktreeSelector: string,
-    expectedUpstream: GitForkSyncExpectedUpstream
+    expectedUpstream: GitForkSyncExpectedUpstream,
+    operationTimeoutMs?: number
   ): Promise<GitForkSyncResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    return this.runRemoteGitOperation(operationTimeoutMs, 'push', async (context) => {
+      const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+      const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+      if (target.connectionId) {
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.syncForkDefaultBranch(target.worktree.path, expectedUpstream, context)
       }
-      return provider.syncForkDefaultBranch(target.worktree.path, expectedUpstream)
-    }
-    return gitSyncForkDefaultBranch(
-      target.worktree.path,
-      expectedUpstream,
-      localGitOptionsForTarget(target)
-    )
+      return gitSyncForkDefaultBranch(target.worktree.path, expectedUpstream, {
+        ...localGitOptionsForTarget(target),
+        signal: context.signal,
+        remoteOperationDeadline: context.deadline
+      })
+    })
   }
 
   async pullRuntimeGit(
     worktreeSelector: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    operationTimeoutMs?: number
   ): Promise<{ ok: true }> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    return this.runRemoteGitOperation(operationTimeoutMs, 'pull', async (context) => {
+      const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+      const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+      if (target.connectionId) {
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        await provider.pullBranch(target.worktree.path, pushTarget, context)
+        return { ok: true }
       }
-      await provider.pullBranch(target.worktree.path, pushTarget)
+      await gitPull(target.worktree.path, pushTarget, {
+        ...localGitOptionsForTarget(target),
+        signal: context.signal,
+        remoteOperationDeadline: context.deadline
+      })
       return { ok: true }
-    }
-    await gitPull(target.worktree.path, pushTarget, localGitOptionsForTarget(target))
-    return { ok: true }
+    })
   }
 
   async fastForwardRuntimeGit(
     worktreeSelector: string,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    operationTimeoutMs?: number
   ): Promise<{ ok: true }> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    return this.runRemoteGitOperation(operationTimeoutMs, 'pull', async (context) => {
+      const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+      const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+      if (target.connectionId) {
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        await provider.fastForwardBranch(target.worktree.path, pushTarget, context)
+        return { ok: true }
       }
-      await provider.fastForwardBranch(target.worktree.path, pushTarget)
+      await gitFastForward(target.worktree.path, pushTarget, {
+        ...localGitOptionsForTarget(target),
+        signal: context.signal,
+        remoteOperationDeadline: context.deadline
+      })
       return { ok: true }
-    }
-    await gitFastForward(target.worktree.path, pushTarget, localGitOptionsForTarget(target))
-    return { ok: true }
+    })
   }
 
-  async rebaseRuntimeGitFromBase(worktreeSelector: string, baseRef: string): Promise<{ ok: true }> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+  async rebaseRuntimeGitFromBase(
+    worktreeSelector: string,
+    baseRef: string,
+    operationTimeoutMs?: number
+  ): Promise<{ ok: true }> {
+    return this.runRemoteGitOperation(operationTimeoutMs, 'pull', async (context) => {
+      const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+      const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+      if (target.connectionId) {
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        await provider.rebaseFromBase(target.worktree.path, baseRef, context)
+        return { ok: true }
       }
-      await provider.rebaseFromBase(target.worktree.path, baseRef)
+      await gitPullRebaseFromBase(target.worktree.path, baseRef, {
+        ...localGitOptionsForTarget(target),
+        signal: context.signal,
+        remoteOperationDeadline: context.deadline
+      })
       return { ok: true }
-    }
-    await gitPullRebaseFromBase(target.worktree.path, baseRef, localGitOptionsForTarget(target))
-    return { ok: true }
+    })
   }
 
   async pushRuntimeGit(
     worktreeSelector: string,
     publish?: boolean,
     pushTarget?: GitPushTarget,
-    forceWithLease?: boolean
+    forceWithLease?: boolean,
+    operationTimeoutMs?: number
   ): Promise<{ ok: true }> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    return this.runRemoteGitOperation(operationTimeoutMs, 'push', async (context) => {
+      const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+      const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+      if (target.connectionId) {
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        await provider.pushBranch(target.worktree.path, publish === true, pushTarget, {
+          forceWithLease: forceWithLease === true,
+          remoteOperationContext: context
+        })
+        return { ok: true }
       }
-      await provider.pushBranch(target.worktree.path, publish === true, pushTarget, {
-        forceWithLease: forceWithLease === true
+      await gitPush(target.worktree.path, publish === true, pushTarget, {
+        ...localGitOptionsForTarget(target),
+        forceWithLease: forceWithLease === true,
+        signal: context.signal,
+        remoteOperationDeadline: context.deadline
       })
       return { ok: true }
-    }
-    await gitPush(target.worktree.path, publish === true, pushTarget, {
-      forceWithLease: forceWithLease === true,
-      ...localGitOptionsForTarget(target)
     })
-    return { ok: true }
   }
 
   async getRuntimeGitBranchDiff(

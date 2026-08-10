@@ -174,8 +174,9 @@ describe('relay remote git command', () => {
       const rejection = expect(result).rejects.toThrow('git timed out.')
 
       await vi.advanceTimersByTimeAsync(1000)
-      await rejection
+      await vi.advanceTimersByTimeAsync(0)
       taskkill.emit('close', 0)
+      await rejection
 
       expect(spawnMock).toHaveBeenCalledWith(
         'taskkill',
@@ -204,8 +205,9 @@ describe('relay remote git command', () => {
       const rejection = expect(result).rejects.toThrow('git timed out.')
 
       await vi.advanceTimersByTimeAsync(1000)
-      await rejection
+      await vi.advanceTimersByTimeAsync(0)
       taskkill.emit('close', 1)
+      await rejection
 
       expect(command.kill).toHaveBeenCalled()
     })

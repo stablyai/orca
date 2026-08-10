@@ -5,12 +5,14 @@ import { resolveMobileBranchCompareBaseRef } from './mobile-branch-base-ref'
 type GitStep = { method: string; params?: Record<string, unknown> }
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
 type RunGitWorkflow = (actionId: string, runner: () => Promise<void>) => Promise<boolean>
+type RunRemoteGitAction = <T>(run: (remainingMs: () => number) => Promise<T>) => Promise<T>
 
 type Params = {
   client: RpcClient | null
   worktreeId: string
   sendGitRequest: SendGitRequest
   runGitWorkflow: RunGitWorkflow
+  runRemoteGitAction: RunRemoteGitAction
   runGitSequence: (actionId: string, steps: GitStep[]) => Promise<boolean>
   runGitSync: (actionId: string) => Promise<boolean>
   commit: () => Promise<boolean>
@@ -27,6 +29,7 @@ export function useMobileSourceControlActionSheetRunners(params: Params) {
     worktreeId,
     sendGitRequest,
     runGitWorkflow,
+    runRemoteGitAction,
     runGitSequence,
     runGitSync,
     commit,
@@ -67,18 +70,22 @@ export function useMobileSourceControlActionSheetRunners(params: Params) {
   }, [runGitSync, setShowActionSheet])
 
   const runActionSheetRebase = useCallback(async () => {
-    await runGitWorkflow('rebase', async () => {
-      if (!client) {
-        throw new Error('Waiting for desktop...')
-      }
-      const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
-      if (!baseRef) {
-        throw new Error('No base branch to rebase onto')
-      }
-      await sendGitRequest<unknown>('git.rebaseFromBase', { baseRef })
-    })
+    await runGitWorkflow('rebase', () =>
+      runRemoteGitAction(async (remainingMs) => {
+        if (!client) {
+          throw new Error('Waiting for desktop...')
+        }
+        const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId, () => ({
+          timeoutMs: remainingMs()
+        }))
+        if (!baseRef) {
+          throw new Error('No base branch to rebase onto')
+        }
+        await sendGitRequest<unknown>('git.rebaseFromBase', { baseRef })
+      })
+    )
     setShowActionSheet(false)
-  }, [client, runGitWorkflow, sendGitRequest, setShowActionSheet, worktreeId])
+  }, [client, runGitWorkflow, runRemoteGitAction, sendGitRequest, setShowActionSheet, worktreeId])
 
   return {
     runActionSheetCommit,

@@ -84,6 +84,8 @@ export type RuntimeStatus = {
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
   terminalWindowsShell?: string | null
+  // Optional so older clients and servers keep their established 120s fallback.
+  gitRemoteOperationTimeoutMs?: number
   // Why: legacy or saved WebSocket pairings may not carry scope metadata, so
   // the server stamps the authenticated token scope here for status.get only.
   deviceScope?: DeviceScope

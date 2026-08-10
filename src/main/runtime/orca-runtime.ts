@@ -103,6 +103,7 @@ import {
 } from '../git/repo-clone-path'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
+import { resolveGitRemoteOperationTimeoutMs } from '../../shared/git-remote-operation-timeout'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
@@ -4828,6 +4829,9 @@ export class OrcaRuntimeService {
       capabilities,
       hostPlatform: process.platform,
       terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
+      gitRemoteOperationTimeoutMs: resolveGitRemoteOperationTimeoutMs(
+        process.env.ORCA_GIT_REMOTE_OPERATION_TIMEOUT_MS
+      ),
       floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled !== false,
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleMobileVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
