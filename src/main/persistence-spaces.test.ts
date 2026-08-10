@@ -43,8 +43,8 @@ function repo(id: string, spaceId?: string | null): Repo {
   } as Repo
 }
 
-function customSpace(id: string, createdAt = 1): Space {
-  return { id, name: id, emoji: '🚀', createdAt, updatedAt: createdAt }
+function customSpace(id: string): Space {
+  return { id, name: id, emoji: '🚀', createdAt: 1, updatedAt: 1 }
 }
 
 function folderWorkspace(id: string): FolderWorkspace {
@@ -79,41 +79,6 @@ describe('Space persistence', () => {
     expect(store.getRepos()[0]?.spaceId).toBeUndefined()
   })
 
-  it('repairs malformed catalogs, stale memberships, and stale UI state', async () => {
-    const store = await createStoreFromState({
-      spaces: [customSpace('space-b', 2), null, { name: 'no id' }, customSpace('space-a', 1)],
-      repos: [repo('stale', 'space-gone'), repo('valid', 'space-a')],
-      ui: {
-        activeSpaceId: 'space-gone',
-        lastWorkspaceKeyBySpaceId: {
-          'space-gone': 'worktree:gone',
-          'space-a': 'folder:folder-1'
-        }
-      }
-    })
-
-    expect(store.getSpaces().map((space) => space.id)).toEqual([
-      DEFAULT_SPACE_ID,
-      'space-a',
-      'space-b'
-    ])
-    expect(store.getRepos().map((entry) => entry.spaceId)).toEqual([undefined, 'space-a'])
-    expect(store.getUI()).toMatchObject({
-      activeSpaceId: DEFAULT_SPACE_ID,
-      lastWorkspaceKeyBySpaceId: { 'space-a': 'folder:folder-1' }
-    })
-  })
-
-  it('creates and updates normalized Spaces while protecting Default from deletion', async () => {
-    const store = await createStoreFromState({})
-    const created = store.createSpace({ name: '  Work  ', emoji: '🧪🧨' })
-
-    expect(created).toMatchObject({ name: 'Work', emoji: '🧪' })
-    expect(store.updateSpace(DEFAULT_SPACE_ID, { name: 'Personal' })?.name).toBe('Personal')
-    expect(store.deleteSpace(DEFAULT_SPACE_ID)).toBe(false)
-    expect(store.deleteSpace('space-gone')).toBe(false)
-  })
-
   it('deleting a Space reassigns projects and UI state without deleting workspaces', async () => {
     const store = await createStoreFromState({
       spaces: [customSpace('space-a')],
@@ -134,17 +99,16 @@ describe('Space persistence', () => {
       ],
       folderWorkspaces: [folderWorkspace('folder-1')],
       worktreeMeta: { 'wt-1': { repoId: 'a', comment: 'keep me' } },
-      ui: { activeSpaceId: 'space-a', lastWorkspaceKeyBySpaceId: { 'space-a': 'worktree:wt-1' } }
+      ui: { activeSpaceId: 'space-a' }
     })
 
+    expect(store.deleteSpace(DEFAULT_SPACE_ID)).toBe(false)
+    expect(store.deleteSpace('space-gone')).toBe(false)
     expect(store.deleteSpace('space-a')).toBe(true)
     expect(store.getRepos().map((entry) => entry.spaceId ?? null)).toEqual([null, null])
     expect(store.getFolderWorkspaces()).toHaveLength(1)
     expect(store.getAllWorktreeMeta()['wt-1']?.comment).toBe('keep me')
-    expect(store.getUI()).toMatchObject({
-      activeSpaceId: DEFAULT_SPACE_ID,
-      lastWorkspaceKeyBySpaceId: {}
-    })
+    expect(store.getUI().activeSpaceId).toBe(DEFAULT_SPACE_ID)
   })
 
   it('moves only the selected host and normalizes invalid targets to Default', async () => {

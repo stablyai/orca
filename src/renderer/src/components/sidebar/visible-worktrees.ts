@@ -22,7 +22,7 @@ import {
 import { computeRenderedSidebarWorktreeOrder } from './rendered-sidebar-worktree-order'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
-import { getActiveSpaceFilterId, isWorktreeInActiveSpace } from './worktree-list-space-filtering'
+import { getActiveSpaceFilterId, isWorktreeInActiveSpace } from './space-scoping'
 
 /**
  * Whether a worktree represents the repo's default-branch row that the

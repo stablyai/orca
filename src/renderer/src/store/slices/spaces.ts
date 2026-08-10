@@ -1,24 +1,15 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type {
-  PersistedUIState,
-  Space,
-  SpaceWorkspaceSelectionKey,
-  WorkspaceKey
-} from '../../../../shared/types'
+import type { PersistedUIState, Space, WorkspaceKey } from '../../../../shared/types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   DEFAULT_SPACE_ID,
   clearRepoSpaceMembership,
-  createSpaceWorkspaceSelectionKey,
   createDefaultSpace,
-  getSpaceById,
   isDefaultSpaceId,
   isRepoInSpace,
   normalizeActiveSpaceId,
-  normalizeLastWorkspaceKeyBySpaceId,
   normalizeSpaces,
-  parseSpaceWorkspaceSelectionKey,
   resolveSpaceId,
   type SpaceCreateInput,
   type SpaceUpdates
@@ -31,20 +22,17 @@ import {
 import {
   getActiveSpaceFilterId,
   getActiveSpaceProjectGroupIdSet
-} from '../../components/sidebar/worktree-list-space-filtering'
+} from '../../components/sidebar/space-scoping'
 
 export type SpacesSlice = {
   spaces: Space[]
   activeSpaceId: string
-  lastWorkspaceKeyBySpaceId: Record<string, SpaceWorkspaceSelectionKey>
+  /** Session-only: switching back into a Space reopens the workspace last used there. */
+  lastWorkspaceKeyBySpaceId: Record<string, WorkspaceKey>
 
   loadSpaces: () => Promise<void>
   setActiveSpace: (spaceId: string) => void
-  rememberSpaceWorkspaceKey: (
-    spaceId: string,
-    workspaceKey: WorkspaceKey,
-    hostId?: ExecutionHostId | null
-  ) => void
+  rememberSpaceWorkspaceKey: (spaceId: string, workspaceKey: WorkspaceKey) => void
   createSpace: (input: SpaceCreateInput) => Promise<boolean>
   updateSpace: (spaceId: string, updates: SpaceUpdates) => Promise<boolean>
   deleteSpace: (spaceId: string) => Promise<boolean>
@@ -69,31 +57,14 @@ function persistSpaceUiState(patch: Partial<PersistedUIState>): void {
   }
 }
 
-function spacesSignature(spaces: readonly Space[]): string {
-  return spaces.map((space) => `${space.id}\0${space.name}\0${space.emoji ?? ''}`).join('\n')
-}
-
-export function resolvePersistedSpaceUiState(
-  ui: Pick<PersistedUIState, 'activeSpaceId' | 'lastWorkspaceKeyBySpaceId'>,
-  spaces: readonly Space[]
-): Pick<SpacesSlice, 'activeSpaceId' | 'lastWorkspaceKeyBySpaceId'> {
-  return {
-    activeSpaceId: normalizeActiveSpaceId(ui.activeSpaceId, spaces),
-    lastWorkspaceKeyBySpaceId: normalizeLastWorkspaceKeyBySpaceId(
-      ui.lastWorkspaceKeyBySpaceId,
-      spaces
-    )
-  }
-}
-
 function restoreRememberedWorkspace(state: AppState, spaceId: string): void {
-  const selection = parseSpaceWorkspaceSelectionKey(state.lastWorkspaceKeyBySpaceId[spaceId])
-  const scope = selection ? parseWorkspaceKey(selection.workspaceKey) : null
+  const remembered = state.lastWorkspaceKeyBySpaceId[spaceId]
+  const scope = remembered ? parseWorkspaceKey(remembered) : null
   if (!scope) {
     return
   }
   if (scope.type === 'folder') {
-    const workspace = findFolderWorkspaceOwner(state, scope.folderWorkspaceId, selection?.hostId)
+    const workspace = findFolderWorkspaceOwner(state, scope.folderWorkspaceId)
     const visibleGroupIds = getActiveSpaceProjectGroupIdSet(
       state.projectGroups,
       state.repos,
@@ -102,19 +73,20 @@ function restoreRememberedWorkspace(state: AppState, spaceId: string): void {
     if (workspace && (!visibleGroupIds || visibleGroupIds.has(workspace.projectGroupId))) {
       state.setActiveFolderWorkspace(
         workspace.id,
-        getExecutionHostIdForFolderWorkspace(state, workspace.id, selection?.hostId)
+        getExecutionHostIdForFolderWorkspace(state, workspace.id)
       )
     }
     return
   }
+  // Why: the same repo can exist on several hosts; only the copy inside the Space may claim the selection.
   const repo = state.repos.find(
     (candidate) =>
-      (!selection?.hostId || getRepoExecutionHostId(candidate) === selection.hostId) &&
+      isRepoInSpace(candidate, spaceId) &&
       (state.worktreesByRepo[candidate.id] ?? []).some(
         (worktree) => worktree.id === scope.worktreeId
       )
   )
-  if (repo && isRepoInSpace(repo, spaceId)) {
+  if (repo) {
     state.setActiveWorktree(scope.worktreeId, getRepoExecutionHostId(repo))
   }
 }
@@ -131,10 +103,7 @@ export const createSpacesSlice: StateCreator<AppState, [], [], SpacesSlice> = (s
       if (activeSpaceId !== state.activeSpaceId) {
         persistSpaceUiState({ activeSpaceId })
       }
-      return spacesSignature(spaces) === spacesSignature(state.spaces) &&
-        activeSpaceId === state.activeSpaceId
-        ? state
-        : { spaces, activeSpaceId }
+      return { spaces, activeSpaceId }
     })
   }
 
@@ -146,25 +115,16 @@ export const createSpacesSlice: StateCreator<AppState, [], [], SpacesSlice> = (s
     }
   }
 
+  // Why: every spaces:* IPC handler emits repos:changed, which refreshes the list; only ordering-sensitive callers reload inline.
   async function mutate<T>(
     action: () => Promise<T | null | undefined> | undefined
   ): Promise<T | null> {
-    let result: T | null | undefined
     try {
-      result = await action()
+      return (await action()) || null
     } catch (error) {
       console.error(error)
       return null
     }
-    if (!result) {
-      return null
-    }
-    try {
-      await reload()
-    } catch (error) {
-      console.error(error)
-    }
-    return result
   }
 
   return {
@@ -175,8 +135,8 @@ export const createSpacesSlice: StateCreator<AppState, [], [], SpacesSlice> = (s
     loadSpaces: load,
 
     setActiveSpace: (spaceId) => {
-      const target = getSpaceById(get().spaces, spaceId)
-      if (!target || target.id !== spaceId || target.id === get().activeSpaceId) {
+      const target = get().spaces.find((space) => space.id === spaceId)
+      if (!target || target.id === get().activeSpaceId) {
         return
       }
       set({ activeSpaceId: target.id })
@@ -184,28 +144,28 @@ export const createSpacesSlice: StateCreator<AppState, [], [], SpacesSlice> = (s
       restoreRememberedWorkspace(get(), target.id)
     },
 
-    rememberSpaceWorkspaceKey: (spaceId, workspaceKey, hostId) =>
+    rememberSpaceWorkspaceKey: (spaceId, workspaceKey) =>
       set((state) => {
         const resolved = resolveSpaceId(spaceId)
-        const selection = createSpaceWorkspaceSelectionKey(workspaceKey, hostId)
-        if (state.lastWorkspaceKeyBySpaceId[resolved] === selection) {
-          return state
-        }
-        const lastWorkspaceKeyBySpaceId = {
-          ...state.lastWorkspaceKeyBySpaceId,
-          [resolved]: selection
-        }
-        persistSpaceUiState({ lastWorkspaceKeyBySpaceId })
-        return { lastWorkspaceKeyBySpaceId }
+        return state.lastWorkspaceKeyBySpaceId[resolved] === workspaceKey
+          ? state
+          : {
+              lastWorkspaceKeyBySpaceId: {
+                ...state.lastWorkspaceKeyBySpaceId,
+                [resolved]: workspaceKey
+              }
+            }
       }),
 
     createSpace: async (input) => {
       const created = await mutate(() => spacesApi()?.create?.(input))
-      if (created) {
-        get().setActiveSpace(created.id)
-        return true
+      if (!created) {
+        return false
       }
-      return false
+      // Why: setActiveSpace only accepts a Space already in state, so don't wait for the repos:changed refresh.
+      await load()
+      get().setActiveSpace(created.id)
+      return true
     },
 
     updateSpace: async (spaceId, updates) =>
@@ -215,7 +175,15 @@ export const createSpacesSlice: StateCreator<AppState, [], [], SpacesSlice> = (s
       if (spaceId === DEFAULT_SPACE_ID) {
         return false
       }
-      return (await mutate(() => spacesApi()?.delete?.({ spaceId }))) !== null
+      if ((await mutate(() => spacesApi()?.delete?.({ spaceId }))) === null) {
+        return false
+      }
+      // Why: a recreated Space could otherwise inherit the dead one's remembered workspace.
+      set((state) => {
+        const { [spaceId]: _removed, ...rest } = state.lastWorkspaceKeyBySpaceId
+        return { lastWorkspaceKeyBySpaceId: rest }
+      })
+      return true
     },
 
     moveProjectToSpace: async (projectId, spaceId, hostId) => {

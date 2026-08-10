@@ -24,7 +24,7 @@ import {
   filterProjectGroupsForActiveSpace,
   getActiveSpaceFilterId,
   getActiveSpaceProjectGroupIdSet
-} from './worktree-list-space-filtering'
+} from './space-scoping'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
 const EMPTY_IMPORTED_BY_REPO = Object.freeze(new Map()) as never

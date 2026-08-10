@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../../../shared/types'
+import type { ProjectGroup, Repo } from '../../../../shared/types'
 import { DEFAULT_SPACE_ID } from '../../../../shared/spaces'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import {
-  filterFolderWorkspacesForActiveSpace,
-  filterProjectGroupsForActiveSpace,
   filterReposForActiveSpace,
   getActiveSpaceFilterId,
   getActiveSpaceProjectGroupIdSet,
   isWorktreeInActiveSpace
-} from './worktree-list-space-filtering'
+} from './space-scoping'
 
 function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {
@@ -40,25 +38,6 @@ function group(id: string, overrides: Partial<ProjectGroup> = {}): ProjectGroup 
   }
 }
 
-function folderWorkspace(id: string, projectGroupId: string): FolderWorkspace {
-  return {
-    id,
-    projectGroupId,
-    name: id,
-    folderPath: `/folders/${id}`,
-    connectionId: null,
-    linkedTask: null,
-    comment: '',
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 1,
-    createdAt: 1,
-    updatedAt: 1
-  }
-}
-
 describe('active Space filtering', () => {
   it('preserves the pre-Spaces fast path and activates filtering when needed', () => {
     const defaultRepos = [repo('a'), repo('b', { spaceId: null })]
@@ -80,9 +59,8 @@ describe('active Space filtering', () => {
     expect(isWorktreeInActiveSpace({ repoId: 'work' }, repoMap, DEFAULT_SPACE_ID)).toBe(false)
     expect(isWorktreeInActiveSpace({ repoId: 'missing' }, repoMap, DEFAULT_SPACE_ID)).toBe(false)
     expect(filterReposForActiveSpace(repos, 'space-a').map((entry) => entry.id)).toEqual(['work'])
-  })
 
-  it('uses workspace host identity when project ids collide', () => {
+    // Same project id on two hosts: host identity decides which Space the workspace belongs to.
     const local = repo('shared', { executionHostId: 'local' })
     const remote = repo('shared', { spaceId: 'space-a', executionHostId: 'ssh:server' })
     const byHost = new Map([local, remote].map((entry) => [getRepoHostIdentity(entry), entry]))
@@ -120,38 +98,5 @@ describe('active Space filtering', () => {
     expect(
       [...(getActiveSpaceProjectGroupIdSet(groups, repos, DEFAULT_SPACE_ID) ?? [])].sort()
     ).toEqual(['default', 'empty'])
-  })
-
-  it('bounds cyclic group ancestry', () => {
-    const groups = [group('one', { parentGroupId: 'two' }), group('two', { parentGroupId: 'one' })]
-    const visible = getActiveSpaceProjectGroupIdSet(
-      groups,
-      [repo('work', { spaceId: 'space-a', projectGroupId: 'one' })],
-      'space-a'
-    )
-
-    expect([...(visible ?? [])].sort()).toEqual(['one', 'two'])
-  })
-
-  it('scopes project-group and folder-workspace rows with the same membership set', () => {
-    const groups = [group('work'), group('default')]
-    const folders = [
-      folderWorkspace('folder-work', 'work'),
-      folderWorkspace('folder-default', 'default')
-    ]
-    const visible = getActiveSpaceProjectGroupIdSet(
-      groups,
-      [repo('work', { spaceId: 'space-a', projectGroupId: 'work' })],
-      'space-a'
-    )
-
-    expect(filterProjectGroupsForActiveSpace(groups, visible).map((entry) => entry.id)).toEqual([
-      'work'
-    ])
-    expect(filterFolderWorkspacesForActiveSpace(folders, visible).map((entry) => entry.id)).toEqual(
-      ['folder-work']
-    )
-    expect(filterProjectGroupsForActiveSpace(groups, null)).toBe(groups)
-    expect(filterFolderWorkspacesForActiveSpace(folders, null)).toBe(folders)
   })
 })

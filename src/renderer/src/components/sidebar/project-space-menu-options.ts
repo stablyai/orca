@@ -1,5 +1,5 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { DEFAULT_SPACE_ID, hasCustomSpaces, resolveSpaceId } from '../../../../shared/spaces'
+import { DEFAULT_SPACE_ID, resolveSpaceId } from '../../../../shared/spaces'
 import type { Space } from '../../../../shared/types'
 
 export type ProjectSpaceMenuOption = {
@@ -18,7 +18,8 @@ export function getProjectSpaceMenuOptions(
   hostId?: ExecutionHostId
 ): readonly ProjectSpaceMenuOption[] {
   // Why: runtime-owned catalogs are host-managed and do not persist desktop Space membership.
-  if (!hasCustomSpaces(spaces) || parseExecutionHostId(hostId)?.kind === 'runtime') {
+  const hasCustomSpaces = spaces.some((space) => space.id !== DEFAULT_SPACE_ID)
+  if (!hasCustomSpaces || parseExecutionHostId(hostId)?.kind === 'runtime') {
     return NO_SPACE_OPTIONS
   }
   const currentSpaceId = resolveSpaceId(repoSpaceId)

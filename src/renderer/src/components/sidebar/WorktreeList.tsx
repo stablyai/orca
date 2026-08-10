@@ -317,7 +317,7 @@ import {
   filterReposForActiveSpace,
   getActiveSpaceFilterId,
   getActiveSpaceProjectGroupIdSet
-} from './worktree-list-space-filtering'
+} from './space-scoping'
 import { isRepoInSpace } from '../../../../shared/spaces'
 import {
   getProjectSpaceMenuOptions,
@@ -5264,6 +5264,7 @@ const WorktreeList = React.memo(function WorktreeList({
 }: WorktreeListProps) {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const allWorktrees = useAllWorktrees()
+  // Why: manual header order is bound to state.repos; Recent/Smart derive order from the sorted worktree stream.
   const repos = useAppStore((s) => s.repos)
   const repoMap = useRepoMap()
   const repoByHostIdentity = useMemo(

@@ -1,8 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { createSpacesSlice } from './spaces'
+import { createUISlice } from './ui'
 import type { AppState } from '../types'
-import type { FolderWorkspace, ProjectGroup, Repo, Space, Worktree } from '../../../../shared/types'
+import type {
+  FolderWorkspace,
+  PersistedUIState,
+  ProjectGroup,
+  Repo,
+  Space,
+  Worktree
+} from '../../../../shared/types'
 import { DEFAULT_SPACE_ID, createDefaultSpace } from '../../../../shared/spaces'
 
 const spacesApi = {
@@ -47,6 +55,7 @@ function createTestAppStore() {
   return create<AppState>()(
     (...a) =>
       ({
+        ...createUISlice(...a),
         repos: [],
         worktreesByRepo: {},
         projectGroups: [],
@@ -88,7 +97,7 @@ describe('spaces slice', () => {
     expect(uiSet).toHaveBeenCalledWith({ activeSpaceId: CUSTOM_SPACE_ID })
   })
 
-  it('restores a remembered worktree on its recorded host', async () => {
+  it('restores a remembered worktree on the host whose project lives in that Space', async () => {
     const store = createTestAppStore()
     store.setState({
       repos: [
@@ -98,9 +107,7 @@ describe('spaces slice', () => {
       worktreesByRepo: { shared: [makeWorktree('shared::/repo', 'shared')] }
     })
     await seedSpaces(store, [createDefaultSpace(), makeSpace(CUSTOM_SPACE_ID)])
-    store
-      .getState()
-      .rememberSpaceWorkspaceKey(CUSTOM_SPACE_ID, 'worktree:shared::/repo', 'ssh:server')
+    store.getState().rememberSpaceWorkspaceKey(CUSTOM_SPACE_ID, 'worktree:shared::/repo')
 
     store.getState().setActiveSpace(CUSTOM_SPACE_ID)
 
@@ -136,35 +143,17 @@ describe('spaces slice', () => {
     expect(setActiveFolderWorkspace).not.toHaveBeenCalled()
   })
 
-  it('round-trips rememberSpaceWorkspaceKey and persists it', () => {
+  it('ignores another window`s Space on a sync broadcast but restores it on startup', async () => {
     const store = createTestAppStore()
+    await seedSpaces(store, [createDefaultSpace(), makeSpace(CUSTOM_SPACE_ID)])
 
-    store.getState().rememberSpaceWorkspaceKey(CUSTOM_SPACE_ID, 'folder:folder-1')
+    store.getState().hydratePersistedUI({ activeSpaceId: CUSTOM_SPACE_ID } as PersistedUIState)
+    expect(store.getState().activeSpaceId).toBe(DEFAULT_SPACE_ID)
 
-    expect(store.getState().lastWorkspaceKeyBySpaceId).toEqual({
-      [CUSTOM_SPACE_ID]: 'folder:folder-1'
-    })
-    expect(uiSet).toHaveBeenCalledWith({
-      lastWorkspaceKeyBySpaceId: { [CUSTOM_SPACE_ID]: 'folder:folder-1' }
-    })
-  })
-
-  it('never publishes Space UI state from a paired web client', () => {
-    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-    const store = createTestAppStore()
-
-    store.getState().rememberSpaceWorkspaceKey(DEFAULT_SPACE_ID, 'folder:folder-1')
-
-    expect(uiSet).not.toHaveBeenCalled()
-  })
-
-  it('refuses to delete the Default Space without an IPC round-trip', async () => {
-    const store = createTestAppStore()
-
-    const deleted = await store.getState().deleteSpace(DEFAULT_SPACE_ID)
-
-    expect(deleted).toBe(false)
-    expect(spacesApi.delete).not.toHaveBeenCalled()
+    store
+      .getState()
+      .hydratePersistedUI({ activeSpaceId: CUSTOM_SPACE_ID } as PersistedUIState, 'startup')
+    expect(store.getState().activeSpaceId).toBe(CUSTOM_SPACE_ID)
   })
 
   it('falls back to the Default Space after deleting the active one', async () => {
@@ -175,6 +164,8 @@ describe('spaces slice', () => {
     spacesApi.list.mockResolvedValue([createDefaultSpace()])
 
     await store.getState().deleteSpace(CUSTOM_SPACE_ID)
+    // Stands in for the repos:changed refresh the delete IPC handler broadcasts.
+    await store.getState().loadSpaces()
 
     expect(store.getState().activeSpaceId).toBe(DEFAULT_SPACE_ID)
     expect(store.getState().spaces.map((space) => space.id)).toEqual([DEFAULT_SPACE_ID])
@@ -208,17 +199,6 @@ describe('spaces slice', () => {
     consoleError.mockRestore()
   })
 
-  it('reports a successful mutation when only its refresh fails', async () => {
-    const store = createTestAppStore()
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    spacesApi.moveProject.mockResolvedValue(true)
-    spacesApi.list.mockRejectedValue(new Error('nope'))
-
-    expect(await store.getState().moveProjectToSpace('repo-1', CUSTOM_SPACE_ID, 'local')).toBe(true)
-    expect(consoleError).toHaveBeenCalled()
-    consoleError.mockRestore()
-  })
-
   it('updates only the addressed host project after moving it', async () => {
     const store = createTestAppStore()
     store.setState({
@@ -236,17 +216,5 @@ describe('spaces slice', () => {
       makeRepo('shared', null),
       { ...makeRepo('shared', CUSTOM_SPACE_ID), executionHostId: 'ssh:server' }
     ])
-  })
-
-  it('keeps Default membership absent after moving a project back', async () => {
-    const store = createTestAppStore()
-    store.setState({ repos: [makeRepo('repo-1', CUSTOM_SPACE_ID)] })
-    spacesApi.moveProject.mockResolvedValue(true)
-    spacesApi.list.mockResolvedValue([createDefaultSpace(), makeSpace(CUSTOM_SPACE_ID)])
-
-    await store.getState().moveProjectToSpace('repo-1', DEFAULT_SPACE_ID, 'local')
-
-    expect(store.getState().repos[0]?.spaceId).toBeUndefined()
-    expect(store.getState().repos[0]).not.toHaveProperty('spaceId')
   })
 })

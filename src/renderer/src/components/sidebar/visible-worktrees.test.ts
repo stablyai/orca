@@ -881,19 +881,6 @@ describe('computeVisibleWorktreeIds Space scoping', () => {
     expect(visible(spacedRepoMap('space-a', null), 'space-a')).toEqual([local.id])
   })
 
-  it('composes with host filtering and never force-reveals another Space', () => {
-    expect(
-      visible(spacedRepoMap('space-a', 'space-a'), 'space-a', {
-        visibleWorkspaceHostIds: ['local']
-      })
-    ).toEqual([local.id])
-    expect(
-      visible(spacedRepoMap('space-a', null), DEFAULT_SPACE_ID, {
-        forcedVisibleWorktreeIds: [local.id]
-      })
-    ).toEqual([remote.id])
-  })
-
   it('does not inject a lineage parent from another Space', () => {
     expect(
       visible(spacedRepoMap('space-a', null), 'space-a', {

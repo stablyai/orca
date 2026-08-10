@@ -230,10 +230,8 @@ import {
 import {
   DEFAULT_SPACE_ID,
   clearMissingSpaceMemberships,
-  clearRepoSpaceMembership,
   createSpace,
   normalizeActiveSpaceId,
-  normalizeLastWorkspaceKeyBySpaceId,
   normalizeSpaceEmoji,
   normalizeSpaceName,
   normalizeSpaces,
@@ -4441,19 +4439,17 @@ export class Store {
   }
 
   getSpaces(): Space[] {
-    return normalizeSpaces(this.state.spaces)
+    return this.state.spaces
   }
 
   createSpace(input: SpaceCreateInput): Space {
     const space = createSpace(input)
-    this.state.spaces = [...this.getSpaces(), space]
+    this.state.spaces = [...this.state.spaces, space]
     this.scheduleSave()
     return space
   }
 
   updateSpace(spaceId: string, updates: SpaceUpdates): Space | null {
-    // Why: normalizeSpaces materializes the Default Space, so renaming it works before it is ever persisted.
-    this.state.spaces = this.getSpaces()
     const space = this.state.spaces.find((entry) => entry.id === spaceId)
     if (!space) {
       return null
@@ -4473,20 +4469,18 @@ export class Store {
     if (spaceId === DEFAULT_SPACE_ID) {
       return false
     }
-    const spaces = this.getSpaces()
-    const remaining = spaces.filter((space) => space.id !== spaceId)
-    if (remaining.length === spaces.length) {
+    const remaining = this.state.spaces.filter((space) => space.id !== spaceId)
+    if (remaining.length === this.state.spaces.length) {
       return false
     }
     this.state.spaces = remaining
-    this.state.repos = this.state.repos.map((repo) =>
-      repo.spaceId === spaceId ? clearRepoSpaceMembership(repo) : repo
-    )
+    // Why: Spaces are organization only, so deleting one sends its projects back to Default rather than deleting them.
+    for (const repo of this.state.repos) {
+      if (repo.spaceId === spaceId) {
+        delete repo.spaceId
+      }
+    }
     if (this.state.ui) {
-      this.state.ui.lastWorkspaceKeyBySpaceId = normalizeLastWorkspaceKeyBySpaceId(
-        this.state.ui.lastWorkspaceKeyBySpaceId,
-        remaining
-      )
       this.state.ui.activeSpaceId = normalizeActiveSpaceId(this.state.ui.activeSpaceId, remaining)
     }
     this.scheduleSave()
@@ -4518,7 +4512,7 @@ export class Store {
     return normalizeActiveSpaceId(this.state.ui?.activeSpaceId, this.getSpaces())
   }
 
-  /** Default membership stays sparse so downgrades keep reading these repos unchanged. */
+  /** Default membership stays sparse: an absent spaceId already resolves to Default. */
   private normalizeStoredSpaceId(spaceId: string | null | undefined): string | null {
     if (!spaceId || spaceId === DEFAULT_SPACE_ID) {
       return null
@@ -6094,11 +6088,7 @@ export class Store {
       ),
       workspaceHostOrder: normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
       manualRepoOrder: normalizeManualRepoOrder(this.state.ui?.manualRepoOrder),
-      activeSpaceId: normalizeActiveSpaceId(this.state.ui?.activeSpaceId, this.state.spaces ?? []),
-      lastWorkspaceKeyBySpaceId: normalizeLastWorkspaceKeyBySpaceId(
-        this.state.ui?.lastWorkspaceKeyBySpaceId,
-        this.state.spaces ?? []
-      ),
+      activeSpaceId: normalizeActiveSpaceId(this.state.ui?.activeSpaceId, this.state.spaces),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         this.state.ui?.browserDefaultZoomLevel
       ),
@@ -6214,12 +6204,8 @@ export class Store {
           : normalizeManualRepoOrder(this.state.ui?.manualRepoOrder),
       activeSpaceId:
         updates.activeSpaceId !== undefined
-          ? normalizeActiveSpaceId(updates.activeSpaceId, this.state.spaces ?? [])
-          : normalizeActiveSpaceId(this.state.ui?.activeSpaceId, this.state.spaces ?? []),
-      lastWorkspaceKeyBySpaceId: normalizeLastWorkspaceKeyBySpaceId(
-        updates.lastWorkspaceKeyBySpaceId ?? this.state.ui?.lastWorkspaceKeyBySpaceId,
-        this.state.spaces ?? []
-      ),
+          ? normalizeActiveSpaceId(updates.activeSpaceId, this.state.spaces)
+          : normalizeActiveSpaceId(this.state.ui?.activeSpaceId, this.state.spaces),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
       ),

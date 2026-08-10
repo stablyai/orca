@@ -339,7 +339,6 @@ export type WorkspaceScope =
   | { type: 'folder'; folderWorkspaceId: string }
 
 export type WorkspaceKey = `worktree:${string}` | `folder:${string}`
-export type SpaceWorkspaceSelectionKey = WorkspaceKey | `${ExecutionHostId}\0${WorkspaceKey}`
 
 export type FolderWorkspace = {
   id: string
@@ -3412,8 +3411,6 @@ export type PersistedUIState = {
   hideSleepingWorkspaces?: boolean
   /** Missing/unknown resolves to Default. */
   activeSpaceId?: string
-  /** Per-Space last active workspace, restored on switch. */
-  lastWorkspaceKeyBySpaceId?: Record<string, SpaceWorkspaceSelectionKey>
   /** Which execution hosts the sidebar shows; `all` = mixed view, specific IDs focus without tearing down other hosts' sessions. */
   workspaceHostScope?: WorkspaceHostScope
   /** Which execution hosts the sidebar shows; `null` = sticky all-hosts so new hosts appear automatically. */

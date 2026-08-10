@@ -126,7 +126,7 @@ import {
   filterReposForActiveSpace,
   getActiveSpaceFilterId,
   getActiveSpaceProjectGroupIdSet
-} from '@/components/sidebar/worktree-list-space-filtering'
+} from '@/components/sidebar/space-scoping'
 import {
   resolveWorkspaceCreationRepoId,
   resolveWorkspaceCreationTarget
@@ -720,9 +720,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [hostOptions]
   )
   // Why: a runtime-owned SSH repo (active right after creating a per-workspace-env) is ineligible; seed from its local same-project sibling, not another project.
+  // Why: that hidden repo can sit outside the active Space, so look it up unscoped; only the sibling it maps to must be eligible.
   const seedActiveRepoId = useMemo(
-    () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId),
-    [repos, eligibleRepos, activeRepoId]
+    () => resolveComposerActiveRepoId(reposAcrossSpaces, eligibleRepos, activeRepoId),
+    [reposAcrossSpaces, eligibleRepos, activeRepoId]
   )
   const draftRepoId = persistDraft ? (newWorkspaceDraft?.repoId ?? null) : null
   const draftProjectId = persistDraft ? (newWorkspaceDraft?.projectId ?? null) : null

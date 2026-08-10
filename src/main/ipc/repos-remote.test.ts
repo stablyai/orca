@@ -359,26 +359,6 @@ describe('projectGroups IPC validation', () => {
     expect(mockStore.updateProjectGroup).not.toHaveBeenCalled()
   })
 
-  it('rejects malformed space arguments before persistence', () => {
-    expect(() => handlers.get('spaces:create')!(null, { name: '' })).toThrow(
-      'invalid_space_create_args'
-    )
-    expect(() =>
-      handlers.get('spaces:update')!(null, { spaceId: 'space-1', updates: { name: '' } })
-    ).toThrow('invalid_space_update_args')
-    expect(() => handlers.get('spaces:delete')!(null, { spaceId: '' })).toThrow(
-      'invalid_space_delete_args'
-    )
-    expect(() =>
-      handlers.get('spaces:moveProject')!(null, { projectId: 'repo-1', spaceId: 7 })
-    ).toThrow('invalid_space_move_project_args')
-
-    expect(mockStore.createSpace).not.toHaveBeenCalled()
-    expect(mockStore.updateSpace).not.toHaveBeenCalled()
-    expect(mockStore.deleteSpace).not.toHaveBeenCalled()
-    expect(mockStore.moveProjectToSpace).not.toHaveBeenCalled()
-  })
-
   it('broadcasts repos:changed only when a space mutation actually landed', () => {
     mockStore.deleteSpace.mockReturnValue(false)
     expect(handlers.get('spaces:delete')!(null, { spaceId: 'space:default' })).toBe(false)

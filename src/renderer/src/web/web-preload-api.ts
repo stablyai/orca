@@ -3398,7 +3398,7 @@ async function callRuntimeResultWithOwner<TResult>(
 }
 
 function withRuntimeRepoOwner(repo: Repo, hostId: ExecutionHostId): Repo {
-  // Spaces are desktop-local; paired clients retain the all-project view.
+  // Why: the host's Space ids are host-local and absent from this client's catalog, so drop them — remote projects pin to Default.
   return { ...repo, spaceId: null, executionHostId: hostId }
 }
 

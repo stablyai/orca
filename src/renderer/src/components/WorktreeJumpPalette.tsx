@@ -56,7 +56,7 @@ import {
   getActiveSpaceFilterId,
   getActiveSpaceProjectGroupIdSet,
   isWorktreeInActiveSpace
-} from '@/components/sidebar/worktree-list-space-filtering'
+} from '@/components/sidebar/space-scoping'
 import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import {
@@ -1238,15 +1238,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       .slice(0, EMPTY_QUERY_RECENT_TAB_CAP)
   }, [openTabItems, recentTabOrder])
 
-  const settingsResults = useMemo(() => {
-    const repoIds = new Set(repos.map((repo) => repo.id))
-    return buildCmdJSettingsResults(
-      settingsSections.filter(
-        (section) =>
-          !section.id.startsWith('repo-') || repoIds.has(section.id.slice('repo-'.length))
-      )
-    )
-  }, [repos, settingsSections])
+  const settingsResults = useMemo(
+    () => buildCmdJSettingsResults(settingsSections),
+    [settingsSections]
+  )
   const actionResults = useMemo(
     () =>
       buildCmdJActionResults([

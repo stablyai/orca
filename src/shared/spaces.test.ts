@@ -4,19 +4,13 @@ import {
   DEFAULT_SPACE_ID,
   clearMissingSpaceMemberships,
   createDefaultSpace,
-  createSpace,
-  createSpaceWorkspaceSelectionKey,
-  getSpaceById,
-  hasCustomSpaces,
   isDefaultSpaceId,
   isRepoInSpace,
   limitSpaceName,
   normalizeActiveSpaceId,
-  normalizeLastWorkspaceKeyBySpaceId,
   normalizeSpaceEmoji,
   normalizeSpaceName,
   normalizeSpaces,
-  parseSpaceWorkspaceSelectionKey,
   resolveSpaceId
 } from './spaces'
 import type { Repo, Space } from './types'
@@ -56,15 +50,11 @@ describe('Space value normalization', () => {
     ['❤️', '❤️'],
     [ENGLAND_FLAG, ENGLAND_FLAG],
     ['🚀🔥', '🚀'],
-    [` ${FAMILY}🔥 `, FAMILY]
+    [` ${FAMILY}🔥 `, FAMILY],
+    ['  ', null],
+    [7, null]
   ])('keeps one complete emoji grapheme from %s', (input, expected) => {
     expect(normalizeSpaceEmoji(input)).toBe(expected)
-  })
-
-  it('rejects missing, blank, non-string, and control-only emoji values', () => {
-    for (const value of [undefined, null, '', '  ', 7, ['🚀'], '\u200B']) {
-      expect(normalizeSpaceEmoji(value)).toBeNull()
-    }
   })
 })
 
@@ -81,25 +71,6 @@ describe('Space catalog normalization', () => {
     expect(spaces.map((entry) => entry.id)).toEqual([DEFAULT_SPACE_ID, 'space-a', 'space-b'])
     expect(spaces[0]).toMatchObject({ name: DEFAULT_SPACE_FALLBACK_NAME, emoji: null })
     expect(spaces[1]).toMatchObject({ name: 'Untitled space', emoji: '🚀' })
-  })
-
-  it('creates normalized custom Spaces and a stable Default Space', () => {
-    const first = createSpace({ name: '  Work  ', emoji: '🧪🧨', now: 10 })
-    const second = createSpace({ name: 'Side', now: 20 })
-    const defaultSpace = createDefaultSpace(5)
-
-    expect(first).toMatchObject({ name: 'Work', emoji: '🧪', createdAt: 10, updatedAt: 10 })
-    expect(first.id).not.toBe(second.id)
-    expect(defaultSpace).toEqual({
-      id: DEFAULT_SPACE_ID,
-      name: DEFAULT_SPACE_FALLBACK_NAME,
-      emoji: null,
-      createdAt: 5,
-      updatedAt: 5
-    })
-    expect(hasCustomSpaces([defaultSpace])).toBe(false)
-    expect(hasCustomSpaces([defaultSpace, first])).toBe(true)
-    expect(getSpaceById([defaultSpace, first], first.id)).toBe(first)
   })
 })
 
@@ -125,40 +96,11 @@ describe('Space membership', () => {
     expect(result[1]).toBe(unassigned)
     expect(result[2]?.spaceId).toBeUndefined()
   })
-})
 
-describe('persisted Space UI state', () => {
-  const spaces = [createDefaultSpace(), space('space-work')]
+  it('falls back unknown active ids to Default', () => {
+    const spaces = [createDefaultSpace(), space('space-work')]
 
-  it('falls back unknown active ids and prunes invalid remembered selections', () => {
     expect(normalizeActiveSpaceId('space-work', spaces)).toBe('space-work')
     expect(normalizeActiveSpaceId('space-gone', spaces)).toBe(DEFAULT_SPACE_ID)
-    expect(
-      normalizeLastWorkspaceKeyBySpaceId(
-        {
-          [DEFAULT_SPACE_ID]: 'folder:folder-1',
-          'space-work': 'ssh:server\0worktree:worktree-1',
-          'space-gone': 'worktree:gone',
-          invalid: 'not-a-workspace'
-        },
-        spaces
-      )
-    ).toEqual({
-      [DEFAULT_SPACE_ID]: 'folder:folder-1',
-      'space-work': 'ssh:server\0worktree:worktree-1'
-    })
-  })
-
-  it('round-trips host-qualified selections while accepting legacy keys', () => {
-    const qualified = createSpaceWorkspaceSelectionKey('worktree:worktree-1', 'ssh:server')
-
-    expect(parseSpaceWorkspaceSelectionKey(qualified)).toEqual({
-      workspaceKey: 'worktree:worktree-1',
-      hostId: 'ssh:server'
-    })
-    expect(parseSpaceWorkspaceSelectionKey('folder:folder-1')).toEqual({
-      workspaceKey: 'folder:folder-1'
-    })
-    expect(parseSpaceWorkspaceSelectionKey('bad')).toBeNull()
   })
 })

@@ -3,7 +3,10 @@ import type { PersistedUIState } from '../../../../shared/types'
 import type { UiUpdateFieldsSchema } from './client-ui-schemas'
 import type { AssertNoMissingKeys, AssertNoMissingValues } from './ui-state-schema-parity'
 
-// Exclude main-owned and desktop-only state while guarding every runtime-writable field.
+// Why: state only the main process or the desktop app ever writes (store.updateUI,
+// star-nag's own IPC, window lifecycle, desktop-local Spaces). Clients never send
+// these, so keeping them out of the strict schema is deliberate — but it must stay
+// deliberate rather than forgotten, which is what the parity assertion below enforces.
 type NonRuntimeClientUIState =
   | 'trayMinimizeNoticeShown'
   | 'dashboardPopoutBounds'
@@ -16,7 +19,6 @@ type NonRuntimeClientUIState =
   | 'starNagDeferredUntil'
   | 'starNagAgentValueMomentAppVersion'
   | 'activeSpaceId'
-  | 'lastWorkspaceKeyBySpaceId'
 const _uiUpdateParity: AssertNoMissingKeys<
   Omit<PersistedUIState, NonRuntimeClientUIState>,
   z.infer<UiUpdateFieldsSchema>
