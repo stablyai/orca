@@ -34,6 +34,8 @@ type FileExplorerVirtualRowsProps = {
   onViewFile: (node: TreeNode) => void
   onContextMenuSelect: (node: TreeNode) => void
   onCopyPaths: (node: TreeNode, pathKind: 'absolute' | 'relative') => void
+  canCompareSelected: boolean
+  onCompareSelected: () => void
   onStartNew: (type: 'file' | 'folder', parentPath: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
@@ -80,6 +82,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     onViewFile,
     onContextMenuSelect,
     onCopyPaths,
+    canCompareSelected,
+    onCompareSelected,
     onStartNew,
     onStartRename,
     onDuplicate,
@@ -183,11 +187,13 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}
               selectionSize={selectedPaths.has(n.path) ? visibleSelectionCount : 1}
+              canCompareSelected={canCompareSelected}
               onClick={(event) => onClick(n, event)}
               onDoubleClick={() => onDoubleClick(n)}
               onViewFile={() => onViewFile(n)}
               onContextMenuSelect={() => onContextMenuSelect(n)}
               onCopyPaths={(pathKind) => onCopyPaths(n, pathKind)}
+              onCompareSelected={onCompareSelected}
               onStartNew={onStartNew}
               onStartRename={onStartRename}
               onDuplicate={onDuplicate}

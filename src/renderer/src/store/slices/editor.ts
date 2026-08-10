@@ -137,10 +137,17 @@ export type DiffSource =
   | 'staged'
   | 'branch'
   | 'commit'
+  | 'file-compare'
   | 'combined-all'
   | 'combined-uncommitted'
   | 'combined-branch'
   | 'combined-commit'
+
+/** Second side of a same-worktree file↔file compare tab (#10033). Left side uses OpenFile.filePath. */
+export type FileCompareTarget = {
+  filePath: string
+  relativePath: string
+}
 
 export type BranchCompareSnapshot = Pick<
   GitBranchCompareSummary,
@@ -249,6 +256,8 @@ export type OpenFile = {
   /** Hash fragment to reveal when a preview tab opens from a link (`./guide.md#setup`); kept on tab state so repeat opens can retarget it. */
   markdownPreviewAnchor?: string
   diffSource?: DiffSource
+  /** Right-hand file when `diffSource === 'file-compare'`. */
+  compareTarget?: FileCompareTarget
   branchCompare?: BranchCompareSnapshot
   commitCompare?: CommitCompareSnapshot
   branchOldPath?: string
@@ -548,6 +557,13 @@ export type EditorSlice = {
     relativePath: string,
     language: string,
     staged: boolean,
+    options?: EditorOpenTargetOptions
+  ) => void
+  openFileCompare: (
+    worktreeId: string,
+    left: { filePath: string; relativePath: string },
+    right: { filePath: string; relativePath: string },
+    language: string,
     options?: EditorOpenTargetOptions
   ) => void
   openBranchDiff: (
@@ -3163,6 +3179,115 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     set((s) => ({
       openFiles: s.openFiles.map((f) => (f.id === fileId ? { ...f, isUntitled: undefined } : f))
     })),
+
+  openFileCompare: (worktreeId, left, right, language, options) => {
+    const isPreview = options?.preview ?? false
+    let editorItemTargetGroupId = options?.targetGroupId
+    let editorItemFileId = ''
+    let tabRelativePath = left.relativePath
+    set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
+      // Why: lexicographic order keeps A↔B and B↔A on one tab id.
+      const [orderedLeft, orderedRight] =
+        left.relativePath < right.relativePath ||
+        (left.relativePath === right.relativePath && left.filePath <= right.filePath)
+          ? [left, right]
+          : [right, left]
+      tabRelativePath = orderedLeft.relativePath
+      const pairKey = `${orderedLeft.relativePath}::${orderedRight.relativePath}`
+      const diffSource: DiffSource = 'file-compare'
+      const id = buildDiffEditorFileId(worktreeId, diffSource, pairKey, runtimeEnvironmentId)
+      editorItemFileId = id
+      const targetGroupId =
+        resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+      editorItemTargetGroupId = targetGroupId
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (existing) {
+        const reopenedDiff = withDiffContentReloadRequest({
+          ...existing,
+          mode: 'diff' as const,
+          diffSource,
+          filePath: orderedLeft.filePath,
+          relativePath: orderedLeft.relativePath,
+          compareTarget: {
+            filePath: orderedRight.filePath,
+            relativePath: orderedRight.relativePath
+          },
+          conflict: undefined,
+          skippedConflicts: undefined,
+          conflictReview: undefined,
+          isPreview: isPreview ? existing.isPreview : false,
+          runtimeEnvironmentId
+        })
+        return {
+          openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
+          activeFileId: id,
+          activeTabType: 'editor',
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        }
+      }
+      const newFile: OpenFile = {
+        id,
+        filePath: orderedLeft.filePath,
+        relativePath: orderedLeft.relativePath,
+        worktreeId,
+        language,
+        isDirty: false,
+        mode: 'diff',
+        diffSource,
+        compareTarget: {
+          filePath: orderedRight.filePath,
+          relativePath: orderedRight.relativePath
+        },
+        conflict: undefined,
+        skippedConflicts: undefined,
+        conflictReview: undefined,
+        isPreview: isPreview || undefined,
+        runtimeEnvironmentId
+      }
+      // Why: match openDiff/openBranchDiff — preview mode replaces a replaceable preview tab.
+      if (isPreview) {
+        const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
+        const replaceablePreviewIndex =
+          replaceablePreviewId !== null
+            ? s.openFiles.findIndex((f) => f.id === replaceablePreviewId)
+            : -1
+        if (replaceablePreviewIndex !== -1) {
+          return {
+            openFiles: s.openFiles.map((file, index) =>
+              index === replaceablePreviewIndex ? newFile : file
+            ),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
+            activeFileId: id,
+            activeTabType: 'editor',
+            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          }
+        }
+      }
+      return {
+        openFiles: [...s.openFiles, newFile],
+        activeFileId: id,
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+      }
+    })
+    void openWorkspaceEditorItem(
+      get(),
+      editorItemFileId,
+      worktreeId,
+      tabRelativePath,
+      'diff',
+      isPreview,
+      editorItemTargetGroupId
+    )
+  },
 
   openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
     const isPreview = options?.preview ?? false

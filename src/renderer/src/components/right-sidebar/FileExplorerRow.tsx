@@ -4,6 +4,7 @@ import { basename } from '@/lib/path'
 import {
   ChevronRight,
   CircleSlash,
+  Columns2,
   Copy,
   Download,
   ExternalLink,
@@ -271,11 +272,13 @@ type FileExplorerRowProps = {
   targetDir: string
   targetDepth: number
   selectionSize: number
+  canCompareSelected: boolean
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: () => void
   onViewFile: () => void
   onContextMenuSelect: () => void
   onCopyPaths: (pathKind: 'absolute' | 'relative') => void
+  onCompareSelected: () => void
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
@@ -455,11 +458,13 @@ export function FileExplorerRow({
   targetDir,
   targetDepth,
   selectionSize,
+  canCompareSelected,
   onClick,
   onDoubleClick,
   onViewFile,
   onContextMenuSelect,
   onCopyPaths,
+  onCompareSelected,
   onStartNew,
   onStartRename,
   onDuplicate,
@@ -730,6 +735,15 @@ export function FileExplorerRow({
             <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
           ) : null}
         </ContextMenuItem>
+        {canCompareSelected ? (
+          <ContextMenuItem onSelect={onCompareSelected}>
+            <Columns2 />
+            {translate(
+              'auto.components.right.sidebar.FileExplorerRow.compareSelectedFiles',
+              'Compare Selected Files'
+            )}
+          </ContextMenuItem>
+        ) : null}
         {!node.isDirectory && (
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
             <Files />

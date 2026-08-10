@@ -73,6 +73,8 @@ function virtualRowsElement(nodes: TreeNode[]): React.JSX.Element {
     onDoubleClick: vi.fn(),
     onContextMenuSelect: vi.fn(),
     onCopyPaths: vi.fn(),
+      canCompareSelected: false,
+      onCompareSelected: vi.fn(),
     onViewFile: vi.fn(),
     onStartNew: vi.fn(),
     onStartRename: vi.fn(),

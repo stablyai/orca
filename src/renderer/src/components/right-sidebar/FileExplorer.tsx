@@ -57,6 +57,11 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import type { RightSidebarExplorerView } from '../../../../shared/types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { createNewTerminalTab } from '@/components/terminal/terminal-tab-create'
+import { detectLanguage } from '@/lib/language-detect'
+import {
+  canCompareSelectedFiles,
+  orderFileComparePair
+} from '@/lib/file-explorer-file-compare'
 
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -482,6 +487,41 @@ function FileExplorerFiles(): React.JSX.Element {
     () => rowProjection.getRowsByPaths(selectedPaths),
     [rowProjection, selectedPaths]
   )
+  const canCompareSelected = useMemo(
+    () =>
+      canCompareSelectedFiles(
+        selectedNodes.map((node) => ({
+          path: node.path,
+          relativePath: node.relativePath,
+          isDirectory: node.isDirectory
+        }))
+      ),
+    [selectedNodes]
+  )
+  const handleCompareSelected = useCallback(() => {
+    if (!activeWorktreeId || !canCompareSelected || selectedNodes.length !== 2) {
+      return
+    }
+    const [left, right] = orderFileComparePair(
+      {
+        path: selectedNodes[0].path,
+        relativePath: selectedNodes[0].relativePath,
+        isDirectory: selectedNodes[0].isDirectory
+      },
+      {
+        path: selectedNodes[1].path,
+        relativePath: selectedNodes[1].relativePath,
+        isDirectory: selectedNodes[1].isDirectory
+      }
+    )
+    const language = detectLanguage(left.relativePath)
+    useAppStore.getState().openFileCompare(
+      activeWorktreeId,
+      { filePath: left.path, relativePath: left.relativePath },
+      { filePath: right.path, relativePath: right.relativePath },
+      language
+    )
+  }, [activeWorktreeId, canCompareSelected, selectedNodes])
   const handleToggleNameFilterDir = useCallback(
     (_worktreeId: string, dirPath: string) => {
       setNameFilterCollapsedPaths((current) =>
@@ -783,6 +823,8 @@ function FileExplorerFiles(): React.JSX.Element {
                 onViewFile={handleClick}
                 onContextMenuSelect={preserveSelectionForContextMenu}
                 onCopyPaths={copyPathsForNode}
+                canCompareSelected={canCompareSelected}
+                onCompareSelected={handleCompareSelected}
                 onStartNew={startNew}
                 onStartRename={handleStartRename}
                 onDuplicate={handleDuplicate}

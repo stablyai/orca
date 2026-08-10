@@ -515,6 +515,35 @@ describe('createEditorSlice file search seed state', () => {
   })
 })
 
+describe('createEditorSlice openFileCompare', () => {
+  it('opens a file-compare tab and reuses A↔B / B↔A as one id', () => {
+    const store = createEditorStore()
+
+    store.getState().openFileCompare(
+      'wt-1',
+      { filePath: '/repo/b.ts', relativePath: 'b.ts' },
+      { filePath: '/repo/a.ts', relativePath: 'a.ts' },
+      'typescript'
+    )
+    store.getState().openFileCompare(
+      'wt-1',
+      { filePath: '/repo/a.ts', relativePath: 'a.ts' },
+      { filePath: '/repo/b.ts', relativePath: 'b.ts' },
+      'typescript'
+    )
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        mode: 'diff',
+        diffSource: 'file-compare',
+        relativePath: 'a.ts',
+        compareTarget: expect.objectContaining({ relativePath: 'b.ts' })
+      })
+    )
+  })
+})
+
 describe('createEditorSlice openDiff', () => {
   it('keeps staged and unstaged diffs in separate tabs', () => {
     const store = createEditorStore()
