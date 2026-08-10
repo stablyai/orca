@@ -37,6 +37,7 @@ import type {
   FederationRelayDirection,
   FederationRelayItemRow
 } from './types'
+import { WORKER_REPORT_REJECTED_STAGE } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -4524,7 +4525,11 @@ export class OrchestrationDb {
       }
 
       const activeDispatch = dispatch.status === 'pending' || dispatch.status === 'dispatched'
-      const stopWasPending = worker.state === 'stopping' || worker.state === 'stop_unknown'
+      // Why: a lane parked by a refused report never had a stop requested, so its Task still needs
+      // requeuing here — treating it as a pending stop would leave the Task at 'dispatched'.
+      const stopWasPending =
+        worker.state === 'stopping' ||
+        (worker.state === 'stop_unknown' && worker.stage !== WORKER_REPORT_REJECTED_STAGE)
       if (activeDispatch) {
         const failureCount = dispatch.failure_count + 1
         const dispatchStatus: DispatchStatus = failureCount >= 3 ? 'circuit_broken' : 'failed'
@@ -6448,6 +6453,19 @@ export class OrchestrationDb {
     }
   }
 
+  // Why: a rejected worker_done still means its assignee stopped working, so the lane must not keep
+  // reading 'ready' — an ended Dispatch would be indistinguishable from a live one (#13364).
+  markWorkerReportRejected(dispatchId: string, reason: string): WorkerDispatchRow | undefined {
+    this.db
+      .prepare(
+        `UPDATE worker_dispatches
+         SET state = 'stop_unknown', stage = ?, last_error = ?, updated_at = datetime('now')
+         WHERE dispatch_id = ? AND state = 'ready'`
+      )
+      .run(WORKER_REPORT_REJECTED_STAGE, reason, dispatchId)
+    return this.getWorkerDispatch(dispatchId)
+  }
+
   settleWorkerReport(params: {
     taskId: string
     dispatchId: string
@@ -6497,19 +6515,15 @@ export class OrchestrationDb {
       return { action: 'settled', outcome: params.outcome, duplicate: true }
     }
     if (dispatch.status !== 'dispatched' || task.status !== 'dispatched') {
-      return {
-        action: 'rejected',
-        code: 'inactive_dispatch',
-        reason: `inactive dispatch ${params.dispatchId}: it or task ${params.taskId} is already settled.`
-      }
+      const reason = `inactive dispatch ${params.dispatchId}: it or task ${params.taskId} is already settled.`
+      this.markWorkerReportRejected(params.dispatchId, reason)
+      return { action: 'rejected', code: 'inactive_dispatch', reason }
     }
     const latest = this.getDispatchContext(params.taskId)
     if (latest?.id !== params.dispatchId) {
-      return {
-        action: 'rejected',
-        code: 'stale_dispatch',
-        reason: `Dispatch ${params.dispatchId} is not the current dispatch for task ${params.taskId}.`
-      }
+      const reason = `Dispatch ${params.dispatchId} is not the current dispatch for task ${params.taskId}.`
+      this.markWorkerReportRejected(params.dispatchId, reason)
+      return { action: 'rejected', code: 'stale_dispatch', reason }
     }
 
     this.db.exec('SAVEPOINT settle_worker_report')
@@ -6532,19 +6546,24 @@ export class OrchestrationDb {
     if (dispatchUpdate.changes !== 1 || taskUpdate.changes !== 1) {
       this.db.exec('ROLLBACK TO settle_worker_report')
       this.db.exec('RELEASE settle_worker_report')
-      return {
-        action: 'rejected',
-        code: 'inactive_dispatch',
-        reason: `Dispatch ${params.dispatchId} changed while its worker report was settling.`
-      }
+      const reason = `Dispatch ${params.dispatchId} changed while its worker report was settling.`
+      this.markWorkerReportRejected(params.dispatchId, reason)
+      return { action: 'rejected', code: 'inactive_dispatch', reason }
     }
+    // Why: a lane parked by an earlier refused report is still settleable — a corrected retry must
+    // not leave it at stop_unknown while its Task reads completed.
     this.db
       .prepare(
         `UPDATE worker_dispatches
-         SET state = ?, stage = 'settled', updated_at = datetime('now')
-         WHERE dispatch_id = ? AND state = 'ready'`
+         SET state = ?, stage = 'settled', last_error = NULL, updated_at = datetime('now')
+         WHERE dispatch_id = ?
+           AND (state = 'ready' OR (state = 'stop_unknown' AND stage = ?))`
       )
-      .run(params.outcome === 'succeeded' ? 'succeeded' : 'failed', params.dispatchId)
+      .run(
+        params.outcome === 'succeeded' ? 'succeeded' : 'failed',
+        params.dispatchId,
+        WORKER_REPORT_REJECTED_STAGE
+      )
     this.closeQuestionsForDispatch(params.dispatchId)
     if (params.outcome === 'succeeded') {
       this.promoteReadyTasks(params.taskId)

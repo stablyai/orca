@@ -143,6 +143,10 @@ export type WorkerDispatchState =
   | 'stopped'
   | 'abandoned'
 
+// Why: distinguishes a lane parked by a refused report from one parked by a stop that lost its
+// receipt, and marks the only stop_unknown lane a later accepted report may still settle.
+export const WORKER_REPORT_REJECTED_STAGE = 'worker_report_rejected'
+
 export type WorkerDispatchRow = {
   dispatch_id: string
   runtime_epoch: string | null

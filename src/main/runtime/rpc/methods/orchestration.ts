@@ -12,7 +12,10 @@ import { MESSAGE_TYPES } from '../../orchestration/types'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
-import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
+import {
+  hasLifecycleAuthority,
+  reconcileLifecycleMessage
+} from '../../orchestration/lifecycle-reconciliation'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
 import {
   ORCHESTRATION_LEGACY_RUN_ID,
@@ -605,6 +608,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
                 'dispatch_capability_invalid',
                 authority.reason
               ) ?? msg
+            // Why: this branch returns before reconciliation, so the lane has to be parked here or a
+            // worker that reported done keeps reading 'ready' forever (#13364). Pane authority gates
+            // it so an unassigned sender cannot park someone else's lane.
+            if (msg.type === 'worker_done' && hasLifecycleAuthority(dispatch, msg)) {
+              db.markWorkerReportRejected(dispatch.id, authority.reason)
+            }
             runtime.notifyMessageArrived(to, rejection.type)
             return {
               message: rejection,
