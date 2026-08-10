@@ -33,6 +33,8 @@ const createLocks = new Map<string, CreateLockState>()
 const cleanupErrors = new WeakMap<object, unknown>()
 export const GIT_WORKTREE_HOST_LOCK_RELEASE_MAX_ATTEMPTS = 4
 export const GIT_WORKTREE_HOST_LOCK_RELEASE_RETRY_MS = 10
+export const GIT_WORKTREE_HOST_LOCK_RECOVERY_RETRY_MS = 25
+export const GIT_WORKTREE_HOST_LOCK_RECOVERY_RETRY_MAX_MS = 1_000
 
 function recordCleanupError(error: unknown, cleanupError: unknown): void {
   if ((typeof error !== 'object' && typeof error !== 'function') || error === null) {
@@ -56,9 +58,11 @@ function getErrorCode(error: unknown): string | undefined {
     : undefined
 }
 
-async function waitForHostLockReleaseRetry(): Promise<void> {
+async function waitForHostLockReleaseRetry(
+  delayMs = GIT_WORKTREE_HOST_LOCK_RELEASE_RETRY_MS
+): Promise<void> {
   await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, GIT_WORKTREE_HOST_LOCK_RELEASE_RETRY_MS)
+    const timer = setTimeout(resolve, delayMs)
     timer.unref?.()
   })
 }
@@ -76,6 +80,23 @@ async function releaseHostLockWithRetry(release: () => Promise<void>): Promise<v
         throw error
       }
       await waitForHostLockReleaseRetry()
+    }
+  }
+}
+
+async function recoverHostLockRelease(
+  releaseHostLock: () => Promise<void>,
+  releaseProcessLock: () => void
+): Promise<void> {
+  let delayMs = GIT_WORKTREE_HOST_LOCK_RECOVERY_RETRY_MS
+  while (true) {
+    await waitForHostLockReleaseRetry(delayMs)
+    try {
+      await releaseHostLock()
+      releaseProcessLock()
+      return
+    } catch {
+      delayMs = Math.min(delayMs * 2, GIT_WORKTREE_HOST_LOCK_RECOVERY_RETRY_MAX_MS)
     }
   }
 }
@@ -209,6 +230,7 @@ export async function withGitWorktreeCreateLock<T>(
   let primaryFailed = false
   let cleanupError: unknown
   let cleanupFailed = false
+  let processLockReleaseDeferred = false
   try {
     releaseHostLock = await acquireGitWorktreeHostLock(identity.repository, deadline, hostLockHooks)
     const lockedIdentity = {
@@ -227,8 +249,14 @@ export async function withGitWorktreeCreateLock<T>(
   } catch (error) {
     cleanupFailed = true
     cleanupError = error
+    if (releaseHostLock && getErrorCode(error) === 'EBUSY') {
+      processLockReleaseDeferred = true
+      void recoverHostLockRelease(releaseHostLock, releaseProcessLock)
+    }
   } finally {
-    releaseProcessLock()
+    if (!processLockReleaseDeferred) {
+      releaseProcessLock()
+    }
   }
   if (primaryFailed) {
     if (cleanupFailed) {

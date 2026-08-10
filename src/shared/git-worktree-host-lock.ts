@@ -4,28 +4,25 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import {
   getGitWorktreeHostProcessIdentity,
-  probeGitWorktreeHostProcess,
-  type GitWorktreeHostProcessIdentity
+  probeGitWorktreeHostProcess
 } from './git-worktree-host-process-identity'
 import {
   remainingGitWorktreeCreateMs,
   runWithinGitWorktreeDeadline,
   type GitWorktreeCreateDeadline
 } from './git-worktree-create-timeout'
+import { runGitWorktreeHostClaimScan } from './git-worktree-host-claim-scan'
+import {
+  parseGitWorktreeHostClaimOwner,
+  type GitWorktreeHostClaimOwner as HostLockOwner
+} from './git-worktree-host-claim-owner'
 import type { GitWorktreeHostLockTestHooks } from './git-worktree-host-lock-types'
-
-type HostLockOwner = GitWorktreeHostProcessIdentity & {
-  token: string
-  choosing: boolean
-  ticket?: number
-}
 
 export type { GitWorktreeHostLockTestHooks } from './git-worktree-host-lock-types'
 
 const HOST_LOCK_INITIALIZATION_GRACE_MS = 5_000
 const HOST_LOCK_POLL_MS = 25
 const CLAIM_SUFFIX = '.claim'
-const TOKEN_PATTERN = /^[0-9a-f]{8}-[0-9a-f-]{27}$/
 const localClaimOwners = new Map<string, HostLockOwner>()
 
 function getErrorCode(error: unknown): string | undefined {
@@ -74,33 +71,15 @@ async function ensureHostLockDirectory(
   return lockPath
 }
 
-function parseOwner(value: string): HostLockOwner | null {
-  try {
-    const owner = JSON.parse(value) as Partial<HostLockOwner>
-    if (
-      !Number.isSafeInteger(owner.pid) ||
-      !Number.isSafeInteger(owner.port) ||
-      typeof owner.processToken !== 'string' ||
-      typeof owner.token !== 'string' ||
-      !TOKEN_PATTERN.test(owner.token) ||
-      typeof owner.choosing !== 'boolean' ||
-      (!owner.choosing && !Number.isSafeInteger(owner.ticket))
-    ) {
-      return null
-    }
-    return owner as HostLockOwner
-  } catch {
-    return null
-  }
-}
-
 async function readClaimOwner(claimPath: string): Promise<HostLockOwner | null> {
   const localOwner = localClaimOwners.get(claimPath)
   if (localOwner) {
     return localOwner
   }
   try {
-    return parseOwner(await readFile(path.join(claimPath, 'owner.json'), 'utf8'))
+    return parseGitWorktreeHostClaimOwner(
+      await readFile(path.join(claimPath, 'owner.json'), 'utf8')
+    )
   } catch {
     return null
   }
@@ -152,10 +131,12 @@ async function listLiveClaims(
 ): Promise<HostLockOwner[]> {
   const entries = await readdir(lockPath, { withFileTypes: true })
   const owners: HostLockOwner[] = []
-  await Promise.all(
-    entries.map(async (entry) => {
+  let nextEntry = 0
+  const scanNext = async (): Promise<void> => {
+    while (nextEntry < entries.length) {
+      const entry = entries[nextEntry++]
       if (!entry.name.endsWith(CLAIM_SUFFIX)) {
-        return
+        continue
       }
       const claimPath = path.join(lockPath, entry.name)
       if (!entry.isDirectory() || entry.isSymbolicLink()) {
@@ -168,14 +149,15 @@ async function listLiveClaims(
       if (await claimCanBeRemoved(claimPath, owner, deadline)) {
         await hooks.beforeStaleClaimRemoved?.(claimPath)
         await retireClaim(claimPath, hooks)
-        return
+        continue
       }
       if (!owner) {
         throw new Error(`Git worktree host lock claim is not initialized: "${claimPath}"`)
       }
       owners.push(owner)
-    })
-  )
+    }
+  }
+  await runGitWorktreeHostClaimScan(entries.length, scanNext)
   return owners
 }
 

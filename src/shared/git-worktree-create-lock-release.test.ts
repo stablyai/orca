@@ -3,6 +3,8 @@ import { rm } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   GIT_WORKTREE_HOST_LOCK_RELEASE_RETRY_MS,
+  GIT_WORKTREE_HOST_LOCK_RELEASE_MAX_ATTEMPTS,
+  GIT_WORKTREE_HOST_LOCK_RECOVERY_RETRY_MS,
   resetGitWorktreeCreateLocksForTests,
   withGitWorktreeCreateLock
 } from './git-worktree-create-lock'
@@ -101,6 +103,49 @@ describe('git worktree host-lock release', () => {
       ).resolves.toBeUndefined()
       expect(retirementAttempts).toBe(2)
     } finally {
+      await rm(gitWorktreeHostLockPathForTests(repository), { recursive: true, force: true })
+    }
+  })
+
+  it('keeps successors fenced until an exhausted transient retirement recovers', async () => {
+    const repository = `/repo/${randomUUID()}/.git`
+    const timerSpy = vi.spyOn(globalThis, 'setTimeout')
+    let retirementAttempts = 0
+    try {
+      await expect(
+        withGitWorktreeCreateLock(
+          { repository, target: '/target-one' },
+          createGitWorktreeDeadline(1_000),
+          async () => {},
+          {
+            beforeClaimRetired: async () => {
+              retirementAttempts += 1
+              if (retirementAttempts <= GIT_WORKTREE_HOST_LOCK_RELEASE_MAX_ATTEMPTS) {
+                throw Object.assign(new Error('injected busy claim'), { code: 'EBUSY' })
+              }
+            }
+          }
+        )
+      ).rejects.toMatchObject({ code: 'EBUSY' })
+
+      await expect(
+        withGitWorktreeCreateLock(
+          { repository, target: '/target-two' },
+          createGitWorktreeDeadline(1_000),
+          async () => {}
+        )
+      ).resolves.toBeUndefined()
+      expect(retirementAttempts).toBe(GIT_WORKTREE_HOST_LOCK_RELEASE_MAX_ATTEMPTS + 1)
+      const recoveryTimers = timerSpy.mock.calls.flatMap((call, index) =>
+        call[1] === GIT_WORKTREE_HOST_LOCK_RECOVERY_RETRY_MS
+          ? [timerSpy.mock.results[index]?.value as NodeJS.Timeout]
+          : []
+      )
+      expect(recoveryTimers).toHaveLength(1)
+      expect(recoveryTimers[0]?.hasRef()).toBe(false)
+      expect((recoveryTimers[0] as NodeJS.Timeout & { _destroyed?: boolean })._destroyed).toBe(true)
+    } finally {
+      timerSpy.mockRestore()
       await rm(gitWorktreeHostLockPathForTests(repository), { recursive: true, force: true })
     }
   })

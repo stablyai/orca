@@ -114,6 +114,7 @@ describe('addWorktree on git-crypt repositories', () => {
     mockUnlockedRepo()
     resolveLockIdentity()
     resolveRemoteBase()
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'def456\n' }) // rollback branch OID
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${WORKTREE_GIT_DIR}\n` })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // incarnation marker
@@ -169,6 +170,7 @@ describe('addWorktree on git-crypt repositories', () => {
       throw enoent()
     })
     resolveLockIdentity('/main/.git')
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'def456\n' }) // rollback branch OID
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${WORKTREE_GIT_DIR}\n` })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // incarnation marker
@@ -197,6 +199,7 @@ describe('addWorktree on git-crypt repositories', () => {
       throw enoent()
     })
     resolveLockIdentity(REPO)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'def456\n' }) // rollback branch OID
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${WORKTREE_GIT_DIR}\n` })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // incarnation marker
@@ -235,6 +238,7 @@ describe('addWorktree on git-crypt repositories', () => {
     mockUnlockedRepo()
     resolveLockIdentity()
     symlinkMock.mockRejectedValue(Object.assign(new Error('links unavailable'), { code: 'EPERM' }))
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'def456\n' }) // rollback branch OID
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${WORKTREE_GIT_DIR}\n` })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // incarnation marker
@@ -250,6 +254,7 @@ describe('addWorktree on git-crypt repositories', () => {
   it('shares state but leaves checkout to sparse-worktree setup when requested', async () => {
     mockUnlockedRepo()
     resolveLockIdentity()
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'def456\n' }) // rollback branch OID
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${WORKTREE_GIT_DIR}\n` })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // incarnation marker
@@ -270,6 +275,7 @@ describe('addWorktree on git-crypt repositories', () => {
     mockUnlockedRepo()
     resolveLockIdentity()
     symlinkMock.mockRejectedValue(Object.assign(new Error('cannot link state'), { code: 'EIO' }))
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'def456\n' }) // rollback branch OID
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${WORKTREE_GIT_DIR}\n` })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // incarnation marker
@@ -369,6 +375,29 @@ describe('addWorktree on git-crypt repositories', () => {
     expect(commands.find((args) => args[0] === 'update-ref')).toBeUndefined()
   })
 
+  it('preserves a branch advanced outside the matching worktree incarnation', async () => {
+    mockUnlockedRepo()
+    symlinkMock.mockRejectedValue(Object.assign(new Error('cannot link state'), { code: 'EIO' }))
+    const git = gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
+        return { stdout: `${REPO_GIT_DIR}\n` }
+      }
+      if (args[0] === 'rev-parse' && args[1] === '--absolute-git-dir') {
+        return { stdout: `${WORKTREE_GIT_DIR}\n` }
+      }
+      if (args[0] === 'rev-parse' && args[1] === '--verify') {
+        return { stdout: args[2] === 'HEAD^{commit}' ? 'def456\n' : 'advanced789\n' }
+      }
+      return { stdout: '' }
+    })
+
+    await expect(addWorktree(REPO, WORKTREE, BRANCH)).rejects.toThrow('cleanup skipped')
+
+    const commands = git.mock.calls.map((call) => call[0])
+    expect(commands).not.toContainEqual(['worktree', 'remove', '--force', WORKTREE])
+    expect(commands.find((args) => args[0] === 'update-ref')).toBeUndefined()
+  })
+
   it('bounds git-crypt filesystem discovery by the whole-operation deadline', async () => {
     vi.useFakeTimers()
     resolveLockIdentity()
@@ -420,6 +449,7 @@ describe('addWorktree on git-crypt repositories', () => {
     mockUnlockedRepo()
     resolveLockIdentity()
     symlinkMock.mockRejectedValue(Object.assign(new Error('cannot link state'), { code: 'EIO' }))
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'def456\n' }) // rollback branch OID
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${WORKTREE_GIT_DIR}\n` })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // incarnation marker

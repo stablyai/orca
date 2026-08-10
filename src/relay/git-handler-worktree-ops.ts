@@ -39,10 +39,6 @@ async function rollbackRelayWorktreeCreate(
       wrapped.message = `${wrapped.message} (cleanup skipped — the created worktree no longer matches this attempt)`
       throw wrapped
     }
-    let branchOid = ''
-    if (deleteBranch) {
-      branchOid = (await git(['rev-parse', '--verify', attempt.branchRef], repoPath)).stdout.trim()
-    }
     try {
       await git(['worktree', 'remove', '--force', targetDir], repoPath)
     } catch {
@@ -55,7 +51,7 @@ async function rollbackRelayWorktreeCreate(
       .map((entry) => entry.match(/^worktree (.+)$/m)?.[1])
       .some((candidate) => candidate && areRelayWorktreePathsEqual(candidate, targetDir))
     if (deleteBranch) {
-      await git(['update-ref', '-d', attempt.branchRef, branchOid], repoPath)
+      await git(['update-ref', '-d', attempt.branchRef, attempt.branchOid], repoPath)
     }
   } catch (cleanupError) {
     if (cleanupError !== wrapped || !worktreeRemoved) {
@@ -171,8 +167,24 @@ export async function addWorktreeOp(
     if (gitCryptDir) {
       let attempt: GitWorktreeCreateAttempt | undefined
       try {
+        const branchRef = `refs/heads/${branchName.replace(/^refs\/heads\//, '')}`
+        const rollbackBranchOid = (
+          await runWorktreeGit(
+            [
+              'rev-parse',
+              '--verify',
+              `${checkoutExistingBranch ? branchRef : (effectiveBase ?? 'HEAD')}^{commit}`
+            ],
+            repoPath
+          )
+        ).stdout.trim()
         await runWorktreeGit(args, repoPath)
-        attempt = await captureGitWorktreeCreateAttempt(runWorktreeGit, targetDir, branchName)
+        attempt = await captureGitWorktreeCreateAttempt(
+          runWorktreeGit,
+          targetDir,
+          branchName,
+          rollbackBranchOid
+        )
         await shareGitCryptStateWithWorktree(
           runWorktreeGit,
           gitCryptDir,

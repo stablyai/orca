@@ -5,6 +5,7 @@ import type { ResolveGitOutputPath } from './git-crypt-worktree-state'
 export type GitWorktreeCreateAttempt = Readonly<{
   gitDir: string
   branchRef: string
+  branchOid: string
   incarnationMarker: string
 }>
 
@@ -34,6 +35,7 @@ export async function captureGitWorktreeCreateAttempt(
   git: GitWorktreeCreateAttemptExec,
   targetDir: string,
   branchName: string,
+  branchOid: string,
   resolveGitPath: ResolveGitOutputPath = (cwd, output) => path.resolve(cwd, output.trim())
 ): Promise<GitWorktreeCreateAttempt> {
   const { stdout } = await git(['rev-parse', '--absolute-git-dir'], targetDir)
@@ -47,6 +49,7 @@ export async function captureGitWorktreeCreateAttempt(
   return {
     gitDir: normalizePath(resolveGitPath(targetDir, gitDirOutput)),
     branchRef,
+    branchOid,
     incarnationMarker
   }
 }
@@ -58,7 +61,8 @@ export async function gitWorktreeCreateAttemptMatches(
 ): Promise<boolean> {
   try {
     await git(['symbolic-ref', '--quiet', attempt.incarnationMarker], targetDir)
-    return true
+    const { stdout } = await git(['rev-parse', '--verify', attempt.branchRef], targetDir)
+    return stdout.trim() === attempt.branchOid
   } catch {
     return false
   }

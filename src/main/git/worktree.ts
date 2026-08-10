@@ -967,12 +967,6 @@ async function rollbackDeferredWorktreeCreate(
       wrapped.message = `${wrapped.message} (cleanup skipped — the created worktree no longer matches this attempt)`
       throw wrapped
     }
-    let branchOid = ''
-    if (deleteBranch) {
-      branchOid = (
-        await cleanupGit(['rev-parse', '--verify', attempt.branchRef], repoPath)
-      ).stdout.trim()
-    }
     const result = await removeWorktree(repoPath, worktreePath, true, {
       deleteBranch: false,
       ...cleanupOptions,
@@ -983,7 +977,7 @@ async function rollbackDeferredWorktreeCreate(
     }
     if (deleteBranch) {
       await gitExecFileAsync(
-        ['update-ref', '-d', attempt.branchRef, branchOid],
+        ['update-ref', '-d', attempt.branchRef, attempt.branchOid],
         gitExecOptions(repoPath, cleanupOptions)
       )
     }
@@ -1115,11 +1109,23 @@ async function performAddWorktree(
   if (gitCryptDir) {
     let attempt: GitWorktreeCreateAttempt | undefined
     try {
+      const branchRef = `refs/heads/${branch.replace(/^refs\/heads\//, '')}`
+      const rollbackBranchOid = (
+        await runGitCryptCommand(
+          [
+            'rev-parse',
+            '--verify',
+            `${options.checkoutExistingBranch ? branchRef : (effectiveBase ?? 'HEAD')}^{commit}`
+          ],
+          repoPath
+        )
+      ).stdout.trim()
       await gitExecFileAsync(args, gitExecOptions(repoPath, createOptions))
       attempt = await captureGitWorktreeCreateAttempt(
         runGitCryptCommand,
         worktreePath,
         branch,
+        rollbackBranchOid,
         resolveGitCryptPath
       )
       await shareGitCryptStateWithWorktree(

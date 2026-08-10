@@ -126,6 +126,7 @@ describe('git worktree create lock', () => {
     const operationError = new Error('operation failed') as Error & { cleanupError?: unknown }
     const cleanupError = Object.assign(new Error('claim retirement failed'), { code: 'EBUSY' })
     let retirementAttempts = 0
+    let retirementBlocked = true
 
     try {
       const startedAt = Date.now()
@@ -138,7 +139,9 @@ describe('git worktree create lock', () => {
         {
           beforeClaimRetired: async () => {
             retirementAttempts += 1
-            throw cleanupError
+            if (retirementBlocked) {
+              throw cleanupError
+            }
           }
         }
       )
@@ -148,7 +151,16 @@ describe('git worktree create lock', () => {
       expect(retirementAttempts).toBe(GIT_WORKTREE_HOST_LOCK_RELEASE_MAX_ATTEMPTS)
       expect(operationError.cleanupError).toBe(cleanupError)
       expect(getGitWorktreeCreateCleanupError(operationError)).toBe(cleanupError)
+      retirementBlocked = false
+      await expect(
+        withGitWorktreeCreateLock(
+          { repository, target: '/successor' },
+          createGitWorktreeDeadline(1_000),
+          async () => {}
+        )
+      ).resolves.toBeUndefined()
     } finally {
+      retirementBlocked = false
       await rm(gitWorktreeHostLockPathForTests(repository), { recursive: true, force: true })
     }
   })

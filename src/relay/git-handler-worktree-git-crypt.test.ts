@@ -304,6 +304,35 @@ describe('SSH worktree creation with git-crypt', () => {
     expect(commands.find((args) => args[0] === 'update-ref')).toBeUndefined()
   })
 
+  it('preserves an externally advanced branch within the matching relay incarnation', async () => {
+    mockUnlockedRepo()
+    symlinkMock.mockRejectedValue(Object.assign(new Error('cannot link state'), { code: 'EIO' }))
+    const git = createGitMock()
+    git.mockImplementation(async (args) => {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
+        return { stdout: `${join(REPO, '.git')}\n`, stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args[1] === '--absolute-git-dir') {
+        return { stdout: `${WORKTREE_GIT_DIR}\n`, stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args[1] === '--verify') {
+        return {
+          stdout: args[2] === 'HEAD^{commit}' ? 'def456\n' : 'advanced789\n',
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      addWorktreeOp(git, { repoPath: REPO, targetDir: WORKTREE, branchName: BRANCH })
+    ).rejects.toThrow('cleanup skipped')
+
+    const commands = git.mock.calls.map((call) => call[0])
+    expect(commands).not.toContainEqual(['worktree', 'remove', '--force', WORKTREE])
+    expect(commands.find((args) => args[0] === 'update-ref')).toBeUndefined()
+  })
+
   it('reports a cleanup failure when compare-and-delete preserves the branch', async () => {
     mockUnlockedRepo()
     symlinkMock.mockRejectedValue(Object.assign(new Error('cannot link state'), { code: 'EIO' }))

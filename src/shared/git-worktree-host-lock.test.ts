@@ -9,6 +9,7 @@ import {
   gitWorktreeHostLockPathForTests,
   type GitWorktreeHostLockTestHooks
 } from './git-worktree-host-lock'
+import { GIT_WORKTREE_HOST_LOCK_PROBE_CONCURRENCY } from './git-worktree-host-claim-scan'
 import { createGitWorktreeDeadline } from './git-worktree-create-timeout'
 
 const cleanupPaths: string[] = []
@@ -230,6 +231,48 @@ describe('Git worktree host lock', () => {
     } finally {
       await new Promise<void>((resolve, reject) =>
         silentServer.close((error) => (error ? reject(error) : resolve()))
+      )
+    }
+  })
+
+  it('caps concurrent liveness probes across many foreign claims', async () => {
+    const repository = repositoryIdentity()
+    const processToken = randomUUID()
+    let activeConnections = 0
+    let maxActiveConnections = 0
+    const server = createServer((socket) => {
+      activeConnections += 1
+      maxActiveConnections = Math.max(maxActiveConnections, activeConnections)
+      setTimeout(() => socket.end(processToken), 40)
+      socket.once('close', () => {
+        activeConnections -= 1
+      })
+    })
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', resolve)
+    })
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('Probe server did not receive a port')
+    }
+    for (let index = 0; index < GIT_WORKTREE_HOST_LOCK_PROBE_CONCURRENCY * 3; index += 1) {
+      await createCrashedClaim(repository, {
+        pid: process.pid,
+        port: address.port,
+        processToken
+      })
+    }
+
+    try {
+      await expect(
+        acquireGitWorktreeHostLock(repository, createGitWorktreeDeadline(75))
+      ).rejects.toThrow('timed out during')
+      expect(maxActiveConnections).toBeGreaterThan(0)
+      expect(maxActiveConnections).toBeLessThanOrEqual(GIT_WORKTREE_HOST_LOCK_PROBE_CONCURRENCY)
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
       )
     }
   })
