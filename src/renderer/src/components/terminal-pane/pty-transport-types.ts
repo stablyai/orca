@@ -59,6 +59,8 @@ export type PtyConnectResult = {
   snapshot?: string
   snapshotCols?: number
   snapshotRows?: number
+  /** Start of an alternate-screen frame within the merged snapshot. */
+  snapshotFrameStart?: number
   isAlternateScreen?: boolean
   sessionExpired?: boolean
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }

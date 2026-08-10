@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildMainModelSnapshotReplayWrites,
   hasPositiveTerminalDimensions,
-  resolvePositiveTerminalDimensions
+  readProposedTerminalCols,
+  resolvePositiveTerminalDimensions,
+  selectDaemonSnapshotReplayData
 } from './terminal-snapshot-replay-paint'
 
 describe('hasPositiveTerminalDimensions', () => {
@@ -30,6 +32,66 @@ describe('resolvePositiveTerminalDimensions', () => {
     expect(resolvePositiveTerminalDimensions(80, 24)).toEqual({ cols: 80, rows: 24 })
     expect(resolvePositiveTerminalDimensions(Infinity, 24)).toBeNull()
     expect(resolvePositiveTerminalDimensions(undefined, undefined)).toBeNull()
+  })
+})
+
+describe('readProposedTerminalCols', () => {
+  it('returns a measurable proposed width and degrades safely', () => {
+    expect(
+      readProposedTerminalCols({ fitAddon: { proposeDimensions: () => ({ cols: 90, rows: 30 }) } })
+    ).toBe(90)
+    expect(readProposedTerminalCols({ fitAddon: { proposeDimensions: () => undefined } })).toBe(
+      undefined
+    )
+    expect(
+      readProposedTerminalCols({
+        fitAddon: {
+          proposeDimensions: () => {
+            throw new Error('unmeasurable')
+          }
+        }
+      })
+    ).toBe(undefined)
+  })
+})
+
+describe('selectDaemonSnapshotReplayData', () => {
+  const snapshot = 'PREFIX-ALT-FRAME'
+  const base = {
+    snapshot,
+    snapshotFrameStart: 7,
+    snapshotCols: 140,
+    targetCols: 80,
+    isAlternateScreen: true
+  }
+
+  it('drops only a wider live alternate-screen frame', () => {
+    expect(selectDaemonSnapshotReplayData(base)).toBe('PREFIX-')
+  })
+
+  it('keeps equal, narrower, normal-screen, and cold-restore frames', () => {
+    expect(selectDaemonSnapshotReplayData({ ...base, targetCols: 140 })).toBe(snapshot)
+    expect(selectDaemonSnapshotReplayData({ ...base, targetCols: 160 })).toBe(snapshot)
+    expect(selectDaemonSnapshotReplayData({ ...base, isAlternateScreen: false })).toBe(snapshot)
+    expect(selectDaemonSnapshotReplayData({ ...base, coldRestore: true })).toBe(snapshot)
+  })
+
+  it.each([undefined, -1, 0, 7.5, snapshot.length, snapshot.length + 1])(
+    'keeps the merged snapshot for boundary %s',
+    (snapshotFrameStart) => {
+      expect(selectDaemonSnapshotReplayData({ ...base, snapshotFrameStart })).toBe(snapshot)
+    }
+  )
+
+  it.each([
+    { snapshotCols: undefined, targetCols: 80 },
+    { snapshotCols: 140, targetCols: undefined },
+    { snapshotCols: Number.NaN, targetCols: 80 },
+    { snapshotCols: 140, targetCols: Number.POSITIVE_INFINITY },
+    { snapshotCols: 0, targetCols: 80 },
+    { snapshotCols: 140, targetCols: 0 }
+  ])('keeps the merged snapshot for invalid widths %#', (widths) => {
+    expect(selectDaemonSnapshotReplayData({ ...base, ...widths })).toBe(snapshot)
   })
 })
 

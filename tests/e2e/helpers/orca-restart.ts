@@ -44,6 +44,8 @@ type LaunchOptions = {
   onStderr?: (chunk: string) => void
   /** Merged into this launch only (not baked into the session's shared env). */
   extraEnv?: Record<string, string>
+  /** Applied before renderer readiness so restore-time terminal fitting observes this grid. */
+  windowSize?: { width: number; height: number }
 }
 
 type RestartSession = {
@@ -195,6 +197,15 @@ export function createRestartSession(
       throw error
     }
     const page = await app.firstWindow({ timeout: 120_000 })
+    if (options?.windowSize) {
+      await app.evaluate(({ BrowserWindow }, size) => {
+        const window = BrowserWindow.getAllWindows()[0]
+        if (!window) {
+          throw new Error('Restart fixture could not find the first BrowserWindow')
+        }
+        window.setSize(size.width, size.height)
+      }, options.windowSize)
+    }
     await page.waitForLoadState('domcontentloaded')
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
     return { app, page }

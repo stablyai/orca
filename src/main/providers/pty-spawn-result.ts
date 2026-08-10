@@ -32,6 +32,9 @@ export type PtySpawnResult = {
    *  writing the snapshot so ANSI cursor positions land correctly. */
   snapshotCols?: number
   snapshotRows?: number
+  /** Start of the alternate-screen frame within `snapshot`. Optional so older
+   *  clients keep consuming the merged snapshot unchanged. */
+  snapshotFrameStart?: number
   /** Provider sequence at the attach boundary. `reset` starts a new provider
    *  generation; `continued` resumes the existing absolute domain. */
   providerSequence?: {

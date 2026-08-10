@@ -831,10 +831,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
 
     const isAltScreen = result.snapshot.modes.alternateScreen
-    const snapshotPayload =
-      result.snapshot.scrollbackAnsi +
-      result.snapshot.rehydrateSequences +
-      result.snapshot.snapshotAnsi
+    const snapshotPrefix = result.snapshot.scrollbackAnsi + result.snapshot.rehydrateSequences
+    const snapshotPayload = snapshotPrefix + result.snapshot.snapshotAnsi
     // Why kitty flags ride beside the payload, not inside it: the snapshot reaches renderer xterms where POST_REPLAY_REATTACH_RESET's kitty reset must win (terminal-query-authority.md §kitty).
     const kittyKeyboardFlags = result.snapshot.modes.kittyKeyboardFlags
     return {
@@ -847,6 +845,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
       snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
       snapshotRows: result.snapshot.rows,
+      ...(isAltScreen && result.snapshot.snapshotAnsi
+        ? { snapshotFrameStart: snapshotPrefix.length }
+        : {}),
       ...(providerSequence ? { providerSequence } : {}),
       ...(typeof kittyKeyboardFlags === 'number' && kittyKeyboardFlags > 0
         ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }

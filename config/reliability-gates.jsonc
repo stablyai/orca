@@ -3477,7 +3477,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence on main@1282f5c2d, including #7192's runtime-mirror geometry authority slice. Deterministic provider-contract coverage now includes settled window-wake reassertion and SSH relay applied-size readback. Live shell-visible SSH/remote geometry and Windows ConPTY readback remain non-blocking gaps.",
+      "coverageNotes": "Local macOS evidence on main@1282f5c2d, including #7192's runtime-mirror geometry authority slice. Deterministic provider-contract coverage includes settled window-wake reassertion and SSH relay applied-size readback. A live daemon-backed restart test now covers a wide alternate-screen capture reattaching to a narrow pane. Live shell-visible SSH/remote geometry and Windows ConPTY readback remain non-blocking gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6644",
         "https://github.com/stablyai/orca/pull/6649",
@@ -3488,9 +3488,10 @@
         "https://github.com/stablyai/orca/pull/7192"
       ],
       "invariant": "A visible desktop-owned terminal cannot trust 0x0, stale requested size, or renderer-only size; xterm, fit/proposed size, applied PTY size, shell-visible size, and the runtime mirror's parse dimensions must converge or enter explicit degraded state, and mirror resize reflow must stay ordered with queued output writes.",
-      "oracle": "The current executable slice uses deterministic frame schedulers and fake providers to force 0x0 first fit, delayed layout settle, dropped resize/readback drift, hidden-to-visible activation, and window wake. It asserts the renderer forwards a usable size, pty:getSize reports applied rather than merely requested size where available, visibility resume reasserts real drift without hot listSessions, one settled wake produces one geometry-only readback, and SSH relay readback is authoritative with bounded fallback. Shell-visible stty/echo-wrap convergence remains a live-gate follow-up.",
+      "oracle": "The provider-contract slice forces 0x0 first fit, delayed layout settle, dropped resize/readback drift, hidden-to-visible activation, and window wake. The Electron slice restarts Orca around a live daemon-backed alternate-screen fixture, proves daemon and PTY identity survive, narrows the pane, observes the live resize repaint, and rejects any retained wide-frame rows. Shell-visible SSH/remote convergence remains a live-gate follow-up.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/relay/pty-handler.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/relay/pty-handler.test.ts",
+        "pnpm exec playwright test tests/e2e/terminal-active-restart-alt-frame-width.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts",
@@ -3500,7 +3501,8 @@
         "src/main/ipc/pty.test.ts",
         "src/main/providers/ssh-pty-provider.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
-        "src/relay/pty-handler.test.ts"
+        "src/relay/pty-handler.test.ts",
+        "tests/e2e/terminal-active-restart-alt-frame-width.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -3561,6 +3563,14 @@
             "relay readback reports the grid actually applied by node-pty",
             "missing relay PTYs return an unverified null size"
           ]
+        },
+        {
+          "file": "tests/e2e/terminal-active-restart-alt-frame-width.spec.ts",
+          "assertions": [
+            "the daemon and exact PTY survive restart while the pane narrows",
+            "the live fixture receives the new grid and visibly repaints",
+            "no row from the wider captured alternate frame remains"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -3572,6 +3582,15 @@
           "result": "passed",
           "durationSeconds": 18.54,
           "summary": "8 test files passed, 1,272 tests passed on the PR branch."
+        },
+        {
+          "date": "2026-08-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/terminal-active-restart-alt-frame-width.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 16.0,
+          "summary": "5 live daemon restart repetitions passed; three forced-headful repetitions also passed."
         }
       ],
       "runtimeBudget": {
@@ -3584,7 +3603,7 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "#7192 proved the mirror slice red before its fix (snapshot stayed 80x24, queued write parsed at the wrong width). The renderer 0x0/settle slices do not have recorded red runs."
+        "evidence": "#7192 proved the mirror slice red before its fix. The restart slice retained 16 stale frame rows on current main and under an intentional bypass, then passed after restoring the frame-boundary selection. The renderer 0x0/settle slices do not have recorded red runs."
       },
       "performanceBudget": {
         "required": true,

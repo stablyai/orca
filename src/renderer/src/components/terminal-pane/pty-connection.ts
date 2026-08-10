@@ -260,7 +260,9 @@ import { resolveHiddenRestoreScrollbackRows } from './terminal-hidden-restore-sc
 import {
   buildMainModelSnapshotReplayWrites,
   hasPositiveTerminalDimensions,
-  resolvePositiveTerminalDimensions
+  readProposedTerminalCols,
+  resolvePositiveTerminalDimensions,
+  selectDaemonSnapshotReplayData
 } from './terminal-snapshot-replay-paint'
 import {
   decideSshReattachPaintSource,
@@ -8322,6 +8324,14 @@ export function connectPanePty(
         }
         if (connectResult?.snapshot) {
           rememberReattachPayloadAgentSignal(connectResult.snapshot, { fullScreenReplay: true })
+          const snapshotReplayData = selectDaemonSnapshotReplayData({
+            snapshot: connectResult.snapshot,
+            snapshotFrameStart: connectResult.snapshotFrameStart,
+            snapshotCols: connectResult.snapshotCols,
+            targetCols: readProposedTerminalCols(pane),
+            isAlternateScreen: connectResult.isAlternateScreen,
+            coldRestore: Boolean(connectResult.coldRestore)
+          })
           // Why: replay at the snapshot's own dimensions to avoid rewrapping soft-wrapped rows at a different column count (#7279); suppress the PTY forward so this layout-only resize doesn't SIGWINCH the remote TUI.
           const snapshotDimensions = resolvePositiveTerminalDimensions(
             connectResult.snapshotCols,
@@ -8342,7 +8352,7 @@ export function connectPanePty(
           writeReplayData('\x1b[2J\x1b[3J\x1b[H')
           // Why: re-arm the kitty keyboard mirror from the snapshot preamble so Option chords keep their encoding after a window reload.
           kittyKeyboardModes.scanReplay(connectResult.snapshot)
-          writeReplayData(connectResult.snapshot)
+          writeReplayData(snapshotReplayData)
           // Snapshot reattach keeps a live session, so drop only renderer-owned state instead of the broader mode reset — unless this is a cold restore, whose owner is gone.
           writeReplayData(
             reattachReplayResetSequence(

@@ -1485,6 +1485,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(second.launchAgent).toBe('droid')
       expect(second.snapshot).toBeDefined()
       expect(second.snapshot).toContain('hello from shell')
+      expect(second.snapshotFrameStart).toBeUndefined()
       expect(second.providerSequence).toEqual({
         value: 'hello from shell\r\n'.length,
         generation: 'continued'
@@ -1504,6 +1505,21 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.isReattach).toBe(true)
       expect(result.snapshot).toContain('\x1b[?2004h')
       expect(result.snapshot).toContain('prompt$')
+    })
+
+    it('marks the alternate-screen frame boundary in the merged snapshot', async () => {
+      const sessionId = 'alt-frame-boundary-test'
+      await adapter.spawn({ cols: 100, rows: 30, sessionId })
+      lastSubprocess._simulateData('\x1b[?1049h\x1b[2J\x1b[HALT-FRAME-BODY')
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      const result = await adapter.spawn({ cols: 100, rows: 30, sessionId })
+      const boundary = result.snapshotFrameStart
+
+      expect(result.isAlternateScreen).toBe(true)
+      expect(boundary).toEqual(expect.any(Number))
+      expect(result.snapshot?.slice(0, boundary)).toContain('\x1b[?1049h')
+      expect(result.snapshot?.slice(boundary)).toContain('ALT-FRAME-BODY')
     })
 
     it('returns the preserved sequence from attach-only adoption', async () => {

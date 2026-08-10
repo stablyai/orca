@@ -28,6 +28,47 @@ export function resolvePositiveTerminalDimensions(
     : null
 }
 
+export function readProposedTerminalCols(pane: {
+  fitAddon?: { proposeDimensions?: () => { cols: number; rows: number } | undefined }
+}): number | undefined {
+  try {
+    return pane.fitAddon?.proposeDimensions?.()?.cols
+  } catch {
+    return undefined
+  }
+}
+
+export function selectDaemonSnapshotReplayData(input: {
+  snapshot: string
+  snapshotFrameStart?: number
+  snapshotCols?: number
+  targetCols?: number
+  isAlternateScreen?: boolean
+  coldRestore?: boolean
+}): string {
+  const { snapshot, snapshotFrameStart, snapshotCols, targetCols } = input
+  const hasNarrowerTarget =
+    typeof snapshotCols === 'number' &&
+    typeof targetCols === 'number' &&
+    Number.isFinite(snapshotCols) &&
+    Number.isFinite(targetCols) &&
+    snapshotCols > 0 &&
+    targetCols > 0 &&
+    snapshotCols > targetCols
+  const hasFrameBoundary =
+    typeof snapshotFrameStart === 'number' &&
+    Number.isInteger(snapshotFrameStart) &&
+    snapshotFrameStart > 0 &&
+    snapshotFrameStart < snapshot.length
+
+  if (!input.isAlternateScreen || input.coldRestore || !hasNarrowerTarget || !hasFrameBoundary) {
+    return snapshot
+  }
+
+  // The live owner repaints its absolute frame after the post-replay SIGWINCH.
+  return snapshot.slice(0, snapshotFrameStart)
+}
+
 /**
  * Ordered replay writes for a main-model snapshot, including the alt-screen
  * choreography: main strips the `?1049h` marker when splitting scrollbackAnsi
