@@ -237,11 +237,22 @@ describe('git RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('git.bulkDiscard', { worktree: 'id:wt-1', filePaths: ['src/a.ts', 'b.ts'] })
     )
+    await dispatcher.dispatch(
+      makeRequest('git.discardFromIndex', { worktree: 'id:wt-1', filePath: 'src/c.ts' })
+    )
+    await dispatcher.dispatch(
+      makeRequest('git.bulkDiscardFromIndex', {
+        worktree: 'id:wt-1',
+        filePaths: ['src/c.ts', 'd.ts']
+      })
+    )
 
     expect(runtime.stageRuntimeGitPath).toHaveBeenCalledWith('id:wt-1', 'src/a.ts')
     expect(runtime.bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['src/a.ts', 'b.ts'])
     expect(runtime.discardRuntimeGitPath).toHaveBeenCalledWith('id:wt-1', 'src/a.ts')
     expect(runtime.bulkDiscardRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['src/a.ts', 'b.ts'])
+    expect(runtime.discardRuntimeGitPath).toHaveBeenCalledWith('id:wt-1', 'src/c.ts')
+    expect(runtime.bulkDiscardRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['src/c.ts', 'd.ts'])
   })
 
   it('rejects empty bulk mutation paths before calling the runtime', async () => {

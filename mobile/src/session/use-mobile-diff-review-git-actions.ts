@@ -5,6 +5,7 @@ import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { GitMutationMethod } from './mobile-diff-review-screen-model'
 import { mobileReviewCountLabel } from './mobile-diff-review-screen-model'
+import { sendMobileIndexPreservingDiscard } from '../source-control/mobile-git-index-preserving-discard'
 
 type GitActionsInput = {
   client: RpcClient | null
@@ -29,12 +30,19 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
       setBusyAction(`${method}:${item.filePath}`)
       setActionError(null)
       try {
-        const response = await client.sendRequest(method, {
-          worktree: `id:${worktreeId}`,
-          filePath: item.filePath
-        })
-        if (!response.ok) {
-          throw new Error(response.error?.message || 'Source control action failed')
+        if (method === 'git.discard') {
+          await sendMobileIndexPreservingDiscard(client, {
+            worktree: `id:${worktreeId}`,
+            filePath: item.filePath
+          })
+        } else {
+          const response = await client.sendRequest(method, {
+            worktree: `id:${worktreeId}`,
+            filePath: item.filePath
+          })
+          if (!response.ok) {
+            throw new Error(response.error?.message || 'Source control action failed')
+          }
         }
         triggerSuccess()
         await loadReviewData()

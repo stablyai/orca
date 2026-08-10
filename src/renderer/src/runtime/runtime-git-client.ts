@@ -23,7 +23,12 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/so
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree-id'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { assertGitIndexPreservingDiscardCapability } from '../../../shared/git-index-preserving-discard-capability'
+import {
+  callRuntimeRpc,
+  getActiveRuntimeTarget,
+  getRuntimeEnvironmentStatus
+} from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 export type RuntimeGenerateCommitMessageResult =
@@ -900,9 +905,11 @@ export async function bulkDiscardRuntimeGitPaths(
     })
     return
   }
+  const status = await getRuntimeEnvironmentStatus(target.environmentId, 15_000)
+  assertGitIndexPreservingDiscardCapability(status)
   await callRuntimeRpc(
     target,
-    'git.bulkDiscard',
+    'git.bulkDiscardFromIndex',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePaths },
     { timeoutMs: 15_000 }
   )
@@ -921,9 +928,11 @@ export async function discardRuntimeGitPath(
     })
     return
   }
+  const status = await getRuntimeEnvironmentStatus(target.environmentId, 15_000)
+  assertGitIndexPreservingDiscardCapability(status)
   await callRuntimeRpc(
     target,
-    'git.discard',
+    'git.discardFromIndex',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePath },
     { timeoutMs: 15_000 }
   )

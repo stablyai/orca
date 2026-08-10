@@ -7,6 +7,7 @@ import {
   type MobileGitUpstreamStatus
 } from './mobile-git-status'
 import type { GitCommitResult, GitRequestError } from './mobile-source-control-screen-state'
+import { sendMobileIndexPreservingDiscard } from './mobile-git-index-preserving-discard'
 
 type Params = {
   client: RpcClient | null
@@ -21,6 +22,12 @@ export function useMobileGitRequests({ client, connState, worktreeId }: Params) 
     async <T>(method: string, params?: Record<string, unknown>): Promise<T> => {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
+      }
+      if (method === 'git.discard' && typeof params?.filePath === 'string') {
+        return (await sendMobileIndexPreservingDiscard(client, {
+          worktree: `id:${worktreeId}`,
+          filePath: params.filePath
+        })) as T
       }
       const response = await client.sendRequest(method, {
         worktree: `id:${worktreeId}`,

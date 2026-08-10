@@ -84,6 +84,10 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
   'Remote file changes require a newer Orca server. Update the HUB and try again.'
+export const GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY =
+  'git.index-preserving-discard.v1' as const
+export const GIT_INDEX_PRESERVING_DISCARD_UPDATE_REQUIRED_MESSAGE =
+  'Discard requires a newer Orca server. Update the HUB and try again.'
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',

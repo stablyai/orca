@@ -32,15 +32,27 @@
       "invariant": "Discarding unstaged Source Control content must restore tracked paths from the current index without changing staged blobs, delete genuine untracked and intent-to-add paths as promised by the confirmation UI, refuse conflicted paths without mutation, and apply the same semantics on local, linked-worktree, folder-workspace, WSL, and direct-SSH execution owners.",
       "oracle": "Snapshot the index entry, cached diff, worktree bytes, and porcelain status before discard, then require the exact staged blob to survive for tracked staged-only, staged-plus-unstaged, added, renamed, deleted, partial-index, bulk, and linked-worktree cases. Require intent-to-add and untracked content to disappear, conflicts and non-Git folders to remain byte-identical after an error, the headed UI to retain the staged row, and a real Docker SSH relay to produce the same remote index/worktree state.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/git/discard-index-semantics.test.ts src/shared/git-discard-status.test.ts src/shared/git-binary-compatibility.test.ts src/relay/git-handler.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/git/discard-index-semantics.test.ts src/main/git/status-discard-symlink.test.ts src/main/git/status-wsl-pathspecs.test.ts src/main/git/status.test.ts src/shared/git-discard-status.test.ts src/shared/git-binary-compatibility.test.ts src/relay/git-handler.test.ts src/relay/integration.test.ts src/renderer/src/components/right-sidebar/discard-all-sequence.test.ts src/renderer/src/components/right-sidebar/source-control-discard-confirmation.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/git.test.ts src/main/runtime/rpc/methods/status-git-discard-capability.test.ts src/renderer/src/runtime/runtime-git-client.test.ts src/shared/git-index-preserving-discard-capability.test.ts --reporter=dot",
+        "pnpm --dir mobile exec vitest run src/source-control/mobile-git-index-preserving-discard.test.ts --reporter=dot",
         "pnpm exec playwright test tests/e2e/source-control-discard-confirmation.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-source-control-discard.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/main/git/discard-index-semantics.test.ts",
+        "src/main/git/status-discard-symlink.test.ts",
+        "src/main/git/status-wsl-pathspecs.test.ts",
+        "src/main/git/status.test.ts",
         "src/shared/git-discard-status.test.ts",
         "src/shared/git-binary-compatibility.test.ts",
         "src/relay/git-handler.test.ts",
+        "src/relay/integration.test.ts",
+        "src/renderer/src/components/right-sidebar/discard-all-sequence.test.ts",
+        "src/renderer/src/components/right-sidebar/source-control-discard-confirmation.test.ts",
+        "src/main/runtime/rpc/methods/git.test.ts",
+        "src/main/runtime/rpc/methods/status-git-discard-capability.test.ts",
+        "src/renderer/src/runtime/runtime-git-client.test.ts",
+        "src/shared/git-index-preserving-discard-capability.test.ts",
         "tests/e2e/source-control-discard-confirmation.spec.ts",
         "tests/e2e/ssh-source-control-discard.spec.ts"
       ],

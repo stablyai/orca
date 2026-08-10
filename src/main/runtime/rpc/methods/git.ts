@@ -360,6 +360,18 @@ export const GIT_METHODS: RpcMethod[] = [
       runtime.bulkDiscardRuntimeGitPaths(params.worktree, params.filePaths)
   }),
   defineMethod({
+    name: 'git.discardFromIndex',
+    params: GitFilePath,
+    handler: async (params, { runtime }) =>
+      runtime.discardRuntimeGitPath(params.worktree, params.filePath)
+  }),
+  defineMethod({
+    name: 'git.bulkDiscardFromIndex',
+    params: GitBulkPaths,
+    handler: async (params, { runtime }) =>
+      runtime.bulkDiscardRuntimeGitPaths(params.worktree, params.filePaths)
+  }),
+  defineMethod({
     name: 'git.remoteFileUrl',
     params: GitRemoteFileUrl,
     handler: async (params, { runtime }) =>

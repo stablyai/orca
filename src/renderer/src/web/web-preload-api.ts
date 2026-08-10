@@ -9,6 +9,7 @@ import type {
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { parseHostAccessLink } from '../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing-verification'
+import { assertGitIndexPreservingDiscardCapability } from '../../../shared/git-index-preserving-discard-capability'
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import type {
@@ -2242,12 +2243,13 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       mutateGitPath('git.unstage', worktreePath, filePath),
     bulkUnstage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkUnstage', worktreePath, filePaths),
-    discard: async ({ worktreePath, filePath }) =>
-      mutateGitPath('git.discard', worktreePath, filePath),
+    discard: async ({ worktreePath, filePath }) => {
+      assertGitIndexPreservingDiscardCapability(await callRuntimeResult('status.get'))
+      await mutateGitPath('git.discardFromIndex', worktreePath, filePath)
+    },
     bulkDiscard: async ({ worktreePath, filePaths }) => {
-      for (const filePath of filePaths) {
-        await mutateGitPath('git.discard', worktreePath, filePath)
-      }
+      assertGitIndexPreservingDiscardCapability(await callRuntimeResult('status.get'))
+      await mutateGitPaths('git.bulkDiscardFromIndex', worktreePath, filePaths)
     },
     remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
