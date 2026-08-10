@@ -1010,9 +1010,13 @@ def write_clipboard(value):
 
 
 def set_value(node, value):
-    if node is not None and bool(attempt(node.is_editable_text, False)):
+    # Why: Atspi.Accessible has no is_editable_text attribute (#10569); probe the
+    # editable-text iface directly (AttributeError would fire before attempt()).
+    if node is not None:
         editable = attempt(node.get_editable_text_iface)
-        if editable is not None and attempt(lambda: Atspi.EditableText.set_text_contents(editable, str(value)), False):
+        if editable is not None and attempt(
+            lambda: Atspi.EditableText.set_text_contents(editable, str(value)), False
+        ):
             return True
     value_iface = attempt(node.get_value_iface) if node is not None else None
     if value_iface is not None:
