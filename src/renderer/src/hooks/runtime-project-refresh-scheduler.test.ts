@@ -5,7 +5,7 @@ import {
 } from './runtime-project-refresh-scheduler'
 
 describe('refreshRuntimeProjectWorktrees', () => {
-  it('pins same-ID repo refreshes to the event runtime', async () => {
+  it('deduplicates same-host repo IDs and pins the refresh to the event runtime', async () => {
     const fetchWorktrees = vi.fn().mockResolvedValue(true)
 
     await refreshRuntimeProjectWorktrees(
@@ -14,11 +14,8 @@ describe('refreshRuntimeProjectWorktrees', () => {
       fetchWorktrees
     )
 
-    expect(fetchWorktrees).toHaveBeenCalledTimes(2)
-    expect(fetchWorktrees).toHaveBeenNthCalledWith(1, 'same-repo', {
-      executionHostId: 'runtime:env-1'
-    })
-    expect(fetchWorktrees).toHaveBeenNthCalledWith(2, 'same-repo', {
+    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
+    expect(fetchWorktrees).toHaveBeenCalledWith('same-repo', {
       executionHostId: 'runtime:env-1'
     })
   })

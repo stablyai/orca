@@ -276,7 +276,6 @@ function AgentControls({
 
 function MobileNativeChatMessageImpl({
   message,
-  queued,
   toolsExpanded = false,
   fontScale = 1,
   messageIndex,
@@ -284,7 +283,6 @@ function MobileNativeChatMessageImpl({
   onOpenFile
 }: {
   message: NativeChatMessage
-  queued?: boolean
   toolsExpanded?: boolean
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
@@ -328,27 +326,24 @@ function MobileNativeChatMessageImpl({
 
   // Copy + scroll-to-top, shown inline with the first tool call (or after the
   // prose when there are no tools).
-  const controls =
-    isAgent && !queued ? (
-      <AgentControls
-        onCopy={handleCopy}
-        onScrollToTop={
-          onScrollToMessage && messageIndex !== undefined
-            ? () => onScrollToMessage(messageIndex)
-            : undefined
-        }
-      />
-    ) : null
+  const controls = isAgent ? (
+    <AgentControls
+      onCopy={handleCopy}
+      onScrollToTop={
+        onScrollToMessage && messageIndex !== undefined
+          ? () => onScrollToMessage(messageIndex)
+          : undefined
+      }
+    />
+  ) : null
 
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
-      {isUser && queued ? <Text style={styles.queuedTag}>Queued</Text> : null}
       <View
         style={[
           styles.content,
           isUser && styles.userBubble,
           isReasoning && styles.reasoning,
-          queued && styles.queued,
           copied && styles.copied
         ]}
       >

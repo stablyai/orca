@@ -1669,7 +1669,8 @@ export async function getRepoSlug(
 
 /**
  * Resolve a fork's upstream/parent owner/repo, or null when not a fork.
- * Why: a fork's `origin` is the personal copy, so repo identity (avatar) should prefer upstream.
+ * Why: drives the fork indicator, and a same-name fork's avatar prefers the
+ * upstream owner (a renamed fork keeps its own owner).
  * Best-effort: any failure (offline, unauthed, non-GitHub) resolves to null.
  */
 export async function getRepoUpstream(

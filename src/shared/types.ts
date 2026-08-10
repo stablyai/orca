@@ -253,8 +253,9 @@ export type Repo = {
   badgeColor: string
   repoIcon?: RepoIcon | null
   /** Set when the repo is a fork: the upstream/parent owner/repo. Drives the
-   *  default avatar (upstream owner, not the personal fork) and the fork
-   *  indicator. Absent = not a fork, or fork status not yet resolved. */
+   *  fork indicator and the default avatar of same-name forks (renamed forks
+   *  keep their own owner). Absent = not a fork, or fork status not yet
+   *  resolved. */
   upstream?: GitHubRepositoryIdentity | null
   addedAt: number
   kind?: RepoKind

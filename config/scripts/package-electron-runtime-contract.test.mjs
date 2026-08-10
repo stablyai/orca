@@ -197,8 +197,13 @@ describe('Electron runtime package contract', () => {
     expect(relayBuild).toContain("'parcel-watcher-process-entry.ts'")
     expect(relayBuild).toContain("outfile: join(outDir, 'relay-watcher.js')")
     expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-watcher.js'))")
+    expect(relayBuild).toContain("outfile: join(outDir, 'relay-ai-vault-service.js')")
+    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-ai-vault-service.js'))")
     expect(builderConfig).toContain("from: 'out/relay'")
     expect(remoteCommands).toContain("joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')")
+    expect(remoteCommands).toContain(
+      "joinRemotePath(host, remoteRelayDir, 'relay-ai-vault-service.js')"
+    )
 
     const assertRelayGate = (steps, publishStepName) => {
       const names = steps.map((step) => step.name)

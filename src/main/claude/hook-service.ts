@@ -13,6 +13,7 @@ import {
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   buildPosixHookPayloadCapture,
   buildWindowsHookEnvironmentGuardLines,
@@ -169,6 +170,18 @@ export class ClaudeHookService {
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
     return { agent: this.options.agent, state, configPath, managedHooksPresent, detail }
+  }
+
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(
+      getManagedScriptPath(this.options.settings),
+      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+    )
+    // Why: no agent gate — the statusline script only ever exists for claude, so presence is the gate.
+    await refreshManagedScriptIfPresent(
+      getStatusLineScriptPath(this.options.settings),
+      getManagedStatusLineScript('local')
+    )
   }
 
   install(): AgentHookInstallStatus {

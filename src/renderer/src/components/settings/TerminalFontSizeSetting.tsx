@@ -45,6 +45,7 @@ export function TerminalFontSizeSetting({
             >
               <Minus className="size-3" />
             </Button>
+            {/* Why: native spin buttons overlap the value and duplicate the −/+ steppers. */}
             <Input
               type="number"
               min={10}
@@ -56,7 +57,7 @@ export function TerminalFontSizeSetting({
                   updateSettings({ terminalFontSize: value })
                 }
               }}
-              className="w-14 text-center tabular-nums"
+              className="number-input-clean w-14 text-center tabular-nums"
             />
             <Button
               variant="outline"
