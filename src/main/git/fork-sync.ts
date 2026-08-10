@@ -10,6 +10,7 @@ import {
   runLocalGitRemoteOperation
 } from './git-remote-operation-options'
 import { gitExecFileAsync } from './runner'
+import { createGitNetworkSshPolicyCache } from './git-network-ssh-policy-cache'
 
 export async function gitSyncForkDefaultBranch(
   worktreePath: string,
@@ -22,10 +23,14 @@ export async function gitSyncForkDefaultBranch(
     )
   }
   try {
-    return await syncForkDefaultBranch(
-      (args) => gitExecFileAsync(args, gitRemoteOperationOptionsForWorktree(worktreePath, options)),
-      { expectedUpstream }
-    )
+    const networkSshPolicyCache = createGitNetworkSshPolicyCache()
+    const operationOptions = {
+      ...gitRemoteOperationOptionsForWorktree(worktreePath, options),
+      networkSshPolicyCache
+    }
+    return await syncForkDefaultBranch((args) => gitExecFileAsync(args, operationOptions), {
+      expectedUpstream
+    })
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'push'))
   }

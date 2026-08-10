@@ -52,6 +52,7 @@ import {
   peekWslGitReadEnvironment,
   type WslGitReadEnvironment
 } from './wsl-git-read-environment'
+import type { GitNetworkSshPolicyCache } from './git-network-ssh-policy-cache'
 // Re-exported for existing importers; lightweight consumers should import from './exec-error' to avoid this heavy module.
 import { extractExecError, parseRetryAfterMs } from './exec-error'
 export { extractExecError, parseRetryAfterMs }
@@ -317,6 +318,7 @@ type GitExecOptions = {
   wslDistro?: string
   preferWslDirectGit?: boolean
   useConfiguredSshCommandForNetwork?: boolean
+  networkSshPolicyCache?: GitNetworkSshPolicyCache
 }
 
 type CommandExecOptions = {
@@ -932,27 +934,32 @@ async function buildNetworkSshPolicyEnv(
     options.wslDistro,
     { useWslLoginShell: Boolean(options.wslDistro) }
   )
-  let configuredCommand = ''
-  try {
-    const remainingMs =
-      expiresAtMs === undefined
-        ? CORE_SSH_COMMAND_PROBE_TIMEOUT_MS
-        : expiresAtMs - performance.now()
-    if (remainingMs <= 0) {
-      throw new Error('git timed out.')
+  const probe = async (): Promise<string> => {
+    try {
+      const remainingMs =
+        expiresAtMs === undefined
+          ? CORE_SSH_COMMAND_PROBE_TIMEOUT_MS
+          : expiresAtMs - performance.now()
+      if (remainingMs <= 0) {
+        throw new Error('git timed out.')
+      }
+      const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
+        cwd: resolved.cwd,
+        encoding: 'utf-8',
+        maxBuffer: DEFAULT_GIT_MAX_BUFFER,
+        timeout: Math.min(CORE_SSH_COMMAND_PROBE_TIMEOUT_MS, Math.max(1, Math.ceil(remainingMs))),
+        env: promptEnv,
+        signal: options.signal
+      })
+      return String(stdout).trim()
+    } catch {
+      return ''
     }
-    const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
-      cwd: resolved.cwd,
-      encoding: 'utf-8',
-      maxBuffer: DEFAULT_GIT_MAX_BUFFER,
-      timeout: Math.min(CORE_SSH_COMMAND_PROBE_TIMEOUT_MS, Math.max(1, Math.ceil(remainingMs))),
-      env: promptEnv,
-      signal: options.signal
-    })
-    configuredCommand = String(stdout).trim()
-  } catch {
-    configuredCommand = ''
   }
+  const probeScope = JSON.stringify([resolved.binary, resolved.args, resolved.cwd])
+  const configuredCommand = options.networkSshPolicyCache
+    ? await options.networkSshPolicyCache.resolve(probeScope, probe)
+    : await probe()
   if (expiresAtMs !== undefined && expiresAtMs - performance.now() <= 0) {
     throw new Error('git timed out.')
   }
