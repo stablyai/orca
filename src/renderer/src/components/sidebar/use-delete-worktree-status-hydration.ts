@@ -17,32 +17,35 @@ export function useDeleteWorktreeStatusHydration({
 }): void {
   const repos = useAppStore((state) => state.repos)
   const settings = useAppStore((state) => state.settings)
-  const gitStatusByWorktree = useAppStore((state) => state.gitStatusByWorktree)
   const setGitStatus = useAppStore((state) => state.setGitStatus)
 
   useEffect(() => {
     if (!isOpen) {
       return
     }
+    const gitStatusByWorktree = useAppStore.getState().gitStatusByWorktree
     const targets = deleteTargets.filter(
       (target) =>
         !target.isMainWorktree &&
         !isFolderWorkspaceDelete(repoMap, target) &&
         gitStatusByWorktree[target.id] === undefined
     )
-    let cancelled = false
+    const controller = new AbortController()
     for (const target of targets) {
-      void getRuntimeGitStatus({
-        settings: getSettingsForWorktreeRuntimeOwner(
-          { repos, settings, worktreesByRepo: useAppStore.getState().worktreesByRepo },
-          target.id
-        ),
-        worktreeId: target.id,
-        worktreePath: target.path,
-        connectionId: getConnectionId(target.id) ?? undefined
-      })
+      void getRuntimeGitStatus(
+        {
+          settings: getSettingsForWorktreeRuntimeOwner(
+            { repos, settings, worktreesByRepo: useAppStore.getState().worktreesByRepo },
+            target.id
+          ),
+          worktreeId: target.id,
+          worktreePath: target.path,
+          connectionId: getConnectionId(target.id) ?? undefined
+        },
+        { signal: controller.signal }
+      )
         .then((status) => {
-          if (!cancelled) {
+          if (!controller.signal.aborted) {
             setGitStatus(target.id, status)
           }
         })
@@ -51,7 +54,7 @@ export function useDeleteWorktreeStatusHydration({
         })
     }
     return () => {
-      cancelled = true
+      controller.abort()
     }
-  }, [deleteTargets, gitStatusByWorktree, isOpen, repoMap, repos, setGitStatus, settings])
+  }, [deleteTargets, isOpen, repoMap, repos, setGitStatus, settings])
 }

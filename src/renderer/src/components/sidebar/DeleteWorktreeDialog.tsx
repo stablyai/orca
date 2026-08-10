@@ -7,7 +7,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
-import { getWorktreeMapFromState, useAllWorktrees } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/selectors'
 import { toast } from 'sonner'
 import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
@@ -27,13 +27,8 @@ import {
   isFolderWorkspaceDelete as getIsFolderWorkspaceDelete
 } from './delete-worktree-dialog-copy'
 import { translate } from '@/i18n/i18n'
-import {
-  readWorktreeDeleteIdentities,
-  resolveWorktreeBatchDeleteTargets,
-  type WorktreeDeleteIdentity
-} from './worktree-delete-request'
-import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'
+import { useConfirmedWorktreeDeleteTargets } from './use-confirmed-worktree-delete-targets'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -60,8 +55,12 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           : [],
     [modalData.worktreeIds, worktreeId]
   )
-  const worktreeDeleteIdentities = readWorktreeDeleteIdentities(modalData.worktreeDeleteIdentities)
-  const lineageDeleteIdentities = readWorktreeDeleteIdentities(modalData.lineageDeleteIdentities)
+  const { worktreeDeleteIdentities, lineageDeleteIdentities, resolveConfirmedTargets } =
+    useConfirmedWorktreeDeleteTargets({
+      worktreeIdentityData: modalData.worktreeDeleteIdentities,
+      lineageIdentityData: modalData.lineageDeleteIdentities,
+      closeModal
+    })
   const onDeleted =
     typeof modalData.onDeleted === 'function'
       ? (modalData.onDeleted as (worktreeIds: string[]) => void)
@@ -211,22 +210,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       onDeleted?.([deletedId])
     },
     [onDeleted]
-  )
-
-  const resolveConfirmedTargets = useCallback(
-    (identities: readonly WorktreeDeleteIdentity[], expectedCount: number) => {
-      const targets = resolveWorktreeBatchDeleteTargets(
-        identities,
-        getWorktreeMapFromState(useAppStore.getState())
-      )
-      if (!targets || targets.length !== expectedCount) {
-        showWorkspaceListChangedToast()
-        closeModal()
-        return null
-      }
-      return targets
-    },
-    [closeModal]
   )
 
   const handleDelete = useCallback(

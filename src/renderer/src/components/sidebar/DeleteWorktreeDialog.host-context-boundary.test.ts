@@ -21,4 +21,14 @@ describe('DeleteWorktreeDialog host-context boundaries', () => {
     expect(effect).toContain('target.id')
     expect(effect).not.toContain('settings,\n        worktreeId: target.id')
   })
+
+  it('does not restart pending status requests when one target hydrates', () => {
+    const effect = sourceBetween(SOURCE, 'useEffect(() => {', '}, [')
+
+    expect(SOURCE).not.toContain('useAppStore((state) => state.gitStatusByWorktree)')
+    expect(effect).toContain('useAppStore.getState().gitStatusByWorktree')
+    expect(effect).toContain('const controller = new AbortController()')
+    expect(effect).toContain('{ signal: controller.signal }')
+    expect(effect).toContain('controller.abort()')
+  })
 })
