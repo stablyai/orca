@@ -73,7 +73,8 @@ function waitForOperationCleanup<T>(operation: Promise<T>, timeoutMs: number): P
       resolve()
     }
     const timer = setTimeout(finish, timeoutMs)
-    timer.unref?.()
+    const nodeTimer = timer as unknown as { unref?: () => void }
+    nodeTimer.unref?.()
     void operation.then(finish, finish)
   })
 }

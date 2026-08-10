@@ -58,7 +58,9 @@ describe('useMobileGitRequests', () => {
       )
       await operation
     } finally {
-      renderer?.unmount()
+      await act(async () => {
+        renderer?.unmount()
+      })
     }
   })
 })
