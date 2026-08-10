@@ -16,7 +16,8 @@ import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-tra
 import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subagent-transcripts'
 import type { FileWithMtime } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
-import { remoteCodexIndexTitles } from './remote-session-scanner-codex-index'
+import { remoteRolloutIndexTitles } from './remote-session-scanner-rollout-index'
+import { remoteTraeSource } from './remote-session-scanner-trae-source'
 import type {
   RemoteParserOptions,
   RemoteScannerContext,
@@ -38,6 +39,7 @@ export function remoteSessionSources(
 ): RemoteSessionSource[] {
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
+    remoteTraeSource(remoteHome, hostPlatform),
     {
       ...jsonlSource(
         'claude',
@@ -216,9 +218,9 @@ function remoteCodexSources(
         signal: context.signal,
         readIndexedTitle: async (sessionId) =>
           (
-            await remoteCodexIndexTitles({
+            await remoteRolloutIndexTitles({
               provider: context.provider,
-              codexHome,
+              sessionHome: codexHome,
               hostPlatform,
               titleCaches: context.titleCaches,
               signal: context.signal

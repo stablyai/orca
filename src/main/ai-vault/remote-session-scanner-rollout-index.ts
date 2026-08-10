@@ -1,36 +1,36 @@
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
-import { extractString, normalizeTitleText, parseJsonObject } from './session-scanner-values'
-import { remoteSessionContentLines } from './remote-session-content-lines'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+import { remoteSessionContentLines } from './remote-session-content-lines'
+import { extractString, normalizeTitleText, parseJsonObject } from './session-scanner-values'
 import type { RemoteSessionFilesystemProvider } from './remote-session-scanner-types'
 
-const CODEX_SESSION_INDEX_FILE = 'session_index.jsonl'
+const SESSION_INDEX_FILE = 'session_index.jsonl'
 
-export async function remoteCodexIndexTitles(args: {
+export async function remoteRolloutIndexTitles(args: {
   provider: RemoteSessionFilesystemProvider
-  codexHome: string
+  sessionHome: string
   hostPlatform: RemoteHostPlatform
   titleCaches: Map<string, Promise<Map<string, string>>>
   signal?: AbortSignal
 }): Promise<Map<string, string>> {
-  const cached = args.titleCaches.get(args.codexHome)
+  const cached = args.titleCaches.get(args.sessionHome)
   if (cached) {
     return cached
   }
-  const pending = readRemoteCodexIndexTitles(
+  const pending = readRemoteRolloutIndexTitles(
     args.provider,
-    args.codexHome,
+    args.sessionHome,
     args.hostPlatform,
     args.signal
   )
-  args.titleCaches.set(args.codexHome, pending)
+  args.titleCaches.set(args.sessionHome, pending)
   return pending
 }
 
-async function readRemoteCodexIndexTitles(
+async function readRemoteRolloutIndexTitles(
   provider: RemoteSessionFilesystemProvider,
-  codexHome: string,
+  sessionHome: string,
   hostPlatform: RemoteHostPlatform,
   signal?: AbortSignal
 ): Promise<Map<string, string>> {
@@ -38,7 +38,7 @@ async function readRemoteCodexIndexTitles(
   try {
     throwIfAiVaultScanCancelled(signal)
     const { content, isBinary } = await provider.readFile(
-      joinRemotePath(hostPlatform, codexHome, CODEX_SESSION_INDEX_FILE)
+      joinRemotePath(hostPlatform, sessionHome, SESSION_INDEX_FILE)
     )
     throwIfAiVaultScanCancelled(signal)
     if (isBinary) {
@@ -57,7 +57,7 @@ async function readRemoteCodexIndexTitles(
     }
   } catch {
     throwIfAiVaultScanCancelled(signal)
-    // Codex indexes are opportunistic; raw transcripts remain sufficient.
+    // Session indexes are opportunistic; raw transcripts remain sufficient.
   }
   return titleBySessionId
 }

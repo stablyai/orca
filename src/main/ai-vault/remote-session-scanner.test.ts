@@ -3,8 +3,47 @@ import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { scanRemoteAiVaultSessions } from './remote-session-scanner'
 import { MemoryRemoteProvider, jsonLines } from './remote-session-scanner-test-fixtures'
 import { primeAgentFixture } from './session-scanner-prime-agent-fixtures'
+import { TRAE_FIXTURE_SESSION_ID, traeFixture } from './session-scanner-trae-fixtures'
 
 describe('scanRemoteAiVaultSessions', () => {
+  it('discovers indexed Trae sessions over SSH and ignores artifact transcripts', async () => {
+    const provider = new MemoryRemoteProvider()
+    provider.addFile(
+      '/home/ada/.trae/cli/session_index.jsonl',
+      jsonLines([{ id: TRAE_FIXTURE_SESSION_ID, thread_name: 'Indexed remote Trae title' }]),
+      1
+    )
+    provider.addFile(
+      `/home/ada/.trae/cli/sessions/2026/08/10/rollout-${TRAE_FIXTURE_SESSION_ID}.jsonl`,
+      traeFixture().seedLines.join('\n'),
+      10
+    )
+    provider.addFile(
+      `/home/ada/.trae/cli/sessions/2026/08/10/rollout-${TRAE_FIXTURE_SESSION_ID}.artifacts/nested.jsonl`,
+      '{}',
+      11
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]).toMatchObject({
+      executionHostId: 'ssh:dev-box',
+      executionHostPlatform: 'linux',
+      agent: 'trae',
+      sessionId: TRAE_FIXTURE_SESSION_ID,
+      title: 'Indexed remote Trae title',
+      codexHome: null,
+      resumeCommand: "cd '/repo/trae' && traecli resume '019fe968-ff04-7e43-8316-983ae577b782'"
+    })
+  })
+
   it('parses remote default and Orca-managed Codex homes with SSH host ids', async () => {
     const provider = new MemoryRemoteProvider()
     provider.addFile(
