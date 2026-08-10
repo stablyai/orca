@@ -2823,8 +2823,8 @@
           "platform": "macos",
           "command": "for run in {1..100}; do pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts --reporter=dot; done",
           "result": "passed",
-          "durationSeconds": 170,
-          "summary": "All 100 consecutive production-owner and byte-identical race-oracle iterations passed, with 20 tests per iteration including target-65 admission, saturated pending targets, causal untracked acknowledgement, and target-ID bounds."
+          "durationSeconds": 101,
+          "summary": "All 100 consecutive production-owner and byte-identical race-oracle iterations passed, with 23 tests per iteration including target-65 admission, saturated pending targets, causal untracked acknowledgement, aggregate payload bounds, secondary-overflow recovery, and target-ID bounds."
         },
         {
           "date": "2026-08-10",
@@ -2864,7 +2864,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The original byte-identical oracle blob 2a9c2c077e9718cadec4058eedbb05fb93fd4e33 fails 0/2 on base bbcf89e221ad5e759b1933bbd4b04b07f770f379 and published 587ea496d48b60f9c9473f47092f1246e66687eb (rebased as 7daf37968d), then passes 2/2 with the main-process production owner and fails 0/2 when renderer reconciliation is disabled. The target-65 store oracle fails on candidate d5d8e63c295723d38eba4cb4a336888e6e1a96bd and passes with safe bounded admission. The causal untracked-ack and oversized-target regressions both fail on rejected correction 68a06df85c98638439ca1ed5139636ae289fcd76, pass on the bounded correction, and fail on its fresh unpublished revert control; exact corrected and disabled object IDs are recorded in the review handoff because they are created after this manifest content."
+        "evidence": "The original byte-identical oracle blob 2a9c2c077e9718cadec4058eedbb05fb93fd4e33 fails 0/2 on base bbcf89e221ad5e759b1933bbd4b04b07f770f379, published 587ea496d48b60f9c9473f47092f1246e66687eb, and disabled historical control a1e5811985d1cca20d096e1a59445a6dbba001ac, while historical admission control ee15d7c165b39c30f22e2174cd45cf75275e50a6 passes 2/2. The target-65 store oracle fails 3/12 on candidate d5d8e63c295723d38eba4cb4a336888e6e1a96bd and passes 12/12 on 68a06df85c98638439ca1ed5139636ae289fcd76. The byte-identical causal untracked-ack and oversized-target regressions fail 0/2 on 68a06df85c98638439ca1ed5139636ae289fcd76 and pass 2/2 on rejected final 873973722b188b148bc0c7bf6e7d99a2a7f2db63. The inverse queue and connectedness regressions fail 0/3 on 873973722b188b148bc0c7bf6e7d99a2a7f2db63; the complete new focused set fails 6/31 on unpublished disabled control 52900bdadaa379568735e00ec7ff910b17a3215c and passes 31/31 with production restored."
       },
       "performanceBudget": {
         "required": true,
