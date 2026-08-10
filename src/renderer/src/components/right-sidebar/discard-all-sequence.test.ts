@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   getDiscardAllPaths,
+  getStagedDiscardEditorPaths,
   getStageAllPaths,
   getUnstageAllPaths,
   isStageableStatusEntry,
@@ -40,9 +41,7 @@ describe('getDiscardAllPaths', () => {
         conflictStatus: 'unresolved'
       })
     ]
-    // Why: `git restore --worktree --source=HEAD` on an unresolved conflict
-    // clears the `u` record silently before the user has reviewed it, which
-    // is why the per-row Stage/Discard buttons also suppress this case.
+    // Why: discard is suppressed on unresolved conflicts (no stage-0 entry to restore).
     expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['clean.ts'])
   })
 
@@ -65,6 +64,20 @@ describe('getDiscardAllPaths', () => {
   it('returns an empty array when nothing matches', () => {
     expect(getDiscardAllPaths([], 'staged')).toEqual([])
     expect(getDiscardAllPaths([entry({ path: 'a.ts', area: 'staged' })], 'unstaged')).toEqual([])
+  })
+})
+
+describe('getStagedDiscardEditorPaths', () => {
+  it('includes selected rename sources without expanding unrelated rows', () => {
+    const entries = [
+      entry({ path: 'renamed.ts', oldPath: 'original.ts', area: 'staged', status: 'renamed' }),
+      entry({ path: 'other.ts', oldPath: 'old-other.ts', area: 'staged', status: 'renamed' })
+    ]
+
+    expect(getStagedDiscardEditorPaths(entries, ['renamed.ts'])).toEqual([
+      'renamed.ts',
+      'original.ts'
+    ])
   })
 })
 
@@ -210,20 +223,20 @@ describe('getUnstageAllPaths', () => {
 describe('runDiscardAllForArea', () => {
   function makeDeps(
     overrides: {
-      bulkUnstageError?: unknown
+      discardStagedError?: unknown
       discardManyError?: unknown
       discardOneError?: (path: string) => unknown
     } = {}
   ) {
-    const bulkUnstageCalls: string[][] = []
+    const discardStagedCalls: string[][] = []
     const discardManyCalls: string[][] = []
     const discardOneCalls: string[] = []
     const errors: unknown[] = []
 
-    const bulkUnstage = vi.fn(async (paths: string[]) => {
-      bulkUnstageCalls.push([...paths])
-      if (overrides.bulkUnstageError !== undefined) {
-        throw overrides.bulkUnstageError
+    const discardStaged = vi.fn(async (paths: string[]) => {
+      discardStagedCalls.push([...paths])
+      if (overrides.discardStagedError !== undefined) {
+        throw overrides.discardStagedError
       }
     })
     const discardMany = vi.fn(async (paths: string[]) => {
@@ -246,13 +259,13 @@ describe('runDiscardAllForArea', () => {
     })
 
     return {
-      deps: { bulkUnstage, discardOne, onError },
-      depsWithBulkDiscard: { bulkUnstage, discardMany, discardOne, onError },
-      bulkUnstageCalls,
+      deps: { discardStaged, discardOne, onError },
+      depsWithBulkDiscard: { discardStaged, discardMany, discardOne, onError },
+      discardStagedCalls,
       discardManyCalls,
       discardOneCalls,
       errors,
-      bulkUnstage,
+      discardStaged,
       discardMany,
       discardOne,
       onError
@@ -263,7 +276,7 @@ describe('runDiscardAllForArea', () => {
     const ctx = makeDeps()
     const result = await runDiscardAllForArea('staged', [], ctx.deps)
     expect(result).toEqual({ discarded: [], failed: [], aborted: false })
-    expect(ctx.bulkUnstage).not.toHaveBeenCalled()
+    expect(ctx.discardStaged).not.toHaveBeenCalled()
     expect(ctx.discardOne).not.toHaveBeenCalled()
   })
 
@@ -271,7 +284,7 @@ describe('runDiscardAllForArea', () => {
     const ctx = makeDeps()
     const result = await runDiscardAllForArea('unstaged', ['a.ts', 'b.ts'], ctx.deps)
     expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
-    expect(ctx.bulkUnstage).not.toHaveBeenCalled()
+    expect(ctx.discardStaged).not.toHaveBeenCalled()
     expect(ctx.discardOneCalls).toEqual(['a.ts', 'b.ts'])
   })
 
@@ -279,22 +292,16 @@ describe('runDiscardAllForArea', () => {
     const ctx = makeDeps()
     const result = await runDiscardAllForArea('untracked', ['new.ts'], ctx.deps)
     expect(result).toEqual({ discarded: ['new.ts'], failed: [], aborted: false })
-    expect(ctx.bulkUnstage).not.toHaveBeenCalled()
+    expect(ctx.discardStaged).not.toHaveBeenCalled()
     expect(ctx.discardOneCalls).toEqual(['new.ts'])
   })
 
-  it('bulk-unstages staged paths before the per-file discard loop', async () => {
+  it('uses one authoritative operation for staged paths', async () => {
     const ctx = makeDeps()
     const result = await runDiscardAllForArea('staged', ['a.ts', 'b.ts'], ctx.deps)
     expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
-    expect(ctx.bulkUnstageCalls).toEqual([['a.ts', 'b.ts']])
-    expect(ctx.discardOneCalls).toEqual(['a.ts', 'b.ts'])
-    // Why: bulk unstage MUST happen strictly before any discard, otherwise
-    // the index would still hold the staged delta when the worktree was
-    // reset and the files would reappear as inverse changes.
-    expect(ctx.bulkUnstage.mock.invocationCallOrder[0]).toBeLessThan(
-      ctx.discardOne.mock.invocationCallOrder[0]
-    )
+    expect(ctx.discardStagedCalls).toEqual([['a.ts', 'b.ts']])
+    expect(ctx.discardOne).not.toHaveBeenCalled()
   })
 
   it('uses bulk discard when the dependency is available', async () => {
@@ -305,18 +312,13 @@ describe('runDiscardAllForArea', () => {
     expect(ctx.discardOne).not.toHaveBeenCalled()
   })
 
-  it('bulk-unstages staged paths before bulk discard', async () => {
+  it('does not expose bulk discard as a staged fallback', async () => {
     const ctx = makeDeps()
     const result = await runDiscardAllForArea('staged', ['a.ts', 'b.ts'], ctx.depsWithBulkDiscard)
     expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
-    expect(ctx.bulkUnstageCalls).toEqual([['a.ts', 'b.ts']])
-    expect(ctx.discardManyCalls).toEqual([['a.ts', 'b.ts']])
+    expect(ctx.discardStagedCalls).toEqual([['a.ts', 'b.ts']])
+    expect(ctx.discardMany).not.toHaveBeenCalled()
     expect(ctx.discardOne).not.toHaveBeenCalled()
-    // Why: staged discard is a two-step mutation. The index must be reset
-    // before the worktree restore/delete batch runs or staged deltas survive.
-    expect(ctx.bulkUnstage.mock.invocationCallOrder[0]).toBeLessThan(
-      ctx.discardMany.mock.invocationCallOrder[0]
-    )
   })
 
   it('falls back to per-file discard when bulk discard rejects', async () => {
@@ -328,9 +330,9 @@ describe('runDiscardAllForArea', () => {
     expect(ctx.onError).not.toHaveBeenCalled()
   })
 
-  it('aborts and skips the discard loop if bulk-unstage rejects', async () => {
+  it('aborts and skips legacy fallbacks if the staged owner rejects', async () => {
     const error = new Error('index locked')
-    const ctx = makeDeps({ bulkUnstageError: error })
+    const ctx = makeDeps({ discardStagedError: error })
     const result = await runDiscardAllForArea('staged', ['a.ts', 'b.ts'], ctx.deps)
     expect(result).toEqual({ discarded: [], failed: [], aborted: true })
     // Why: a failed unstage + successful discard would leave the index with
@@ -366,7 +368,7 @@ describe('runDiscardAllForArea', () => {
     expect(ctx.onError).not.toHaveBeenCalled()
   })
 
-  it('does not bulk-unstage for non-staged areas even if the dep is provided', async () => {
+  it('does not call staged discard for non-staged areas', async () => {
     const ctx = makeDeps()
     const areas: DiscardAllArea[] = ['unstaged', 'untracked']
     for (const area of areas) {
@@ -376,6 +378,6 @@ describe('runDiscardAllForArea', () => {
     // reset. Accidentally invoking it for unstaged/untracked would be a
     // no-op for unstaged entries but could mask a regression where staged
     // entries leak into those paths.
-    expect(ctx.bulkUnstage).not.toHaveBeenCalled()
+    expect(ctx.discardStaged).not.toHaveBeenCalled()
   })
 })

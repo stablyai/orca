@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -14,6 +14,13 @@ import {
   isUnsupportedWorktreeListZError
 } from './git-worktree-command-capabilities'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
+import { endSubprocessStdin } from './subprocess-stdin-write'
+import { classifyGitDiscardPaths, gitDiscardStatusArgs } from './git-discard-status'
+import {
+  gitStagedDiscardArgs,
+  gitStagedDiscardStatusArgs,
+  resolveGitStagedDiscardPaths
+} from './git-staged-discard-operation'
 import {
   githubPullRequestHeadLocalRef,
   gitlabMergeRequestHeadLocalRef,
@@ -32,13 +39,36 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   let repoPath = ''
   let version = { major: 0, minor: 0 }
 
-  async function runGit(args: string[], env?: NodeJS.ProcessEnv): Promise<GitResult> {
+  async function runGit(
+    args: string[],
+    env?: NodeJS.ProcessEnv,
+    stdin?: string
+  ): Promise<GitResult> {
+    const execute = (
+      command: string,
+      commandArgs: string[],
+      options: Parameters<typeof execFile>[2]
+    ): Promise<GitResult> => {
+      if (stdin === undefined) {
+        return execFileAsync(command, commandArgs, options) as Promise<GitResult>
+      }
+      return new Promise((resolve, reject) => {
+        const child = execFile(command, commandArgs, options, (error, stdout, stderr) => {
+          if (error) {
+            reject(error)
+          } else {
+            resolve({ stdout: String(stdout), stderr: String(stderr) })
+          }
+        })
+        endSubprocessStdin(child.stdin, stdin)
+      })
+    }
     if (image) {
       const dockerUser =
         typeof process.getuid === 'function' && typeof process.getgid === 'function'
           ? ['--user', `${process.getuid()}:${process.getgid()}`]
           : []
-      return execFileAsync(
+      return execute(
         'docker',
         [
           'run',
@@ -60,7 +90,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
         { maxBuffer: 2 * 1024 * 1024 }
       )
     }
-    return execFileAsync(binary!, args, {
+    return execute(binary!, args, {
       cwd: repoPath,
       env: env ? { ...process.env, ...env } : undefined,
       maxBuffer: 2 * 1024 * 1024
@@ -197,6 +227,72 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     })
     await expect(runGit(['rev-parse', '--verify', mergeRequestRef])).resolves.toMatchObject({
       stdout: `${head}\n`
+    })
+  })
+
+  it('classifies discard state and restores staged content from the index', async () => {
+    await writeFile(join(repoPath, 'discard-staged.txt'), 'staged\n')
+    await runGit(['add', 'discard-staged.txt'])
+    await writeFile(join(repoPath, 'discard-staged.txt'), 'staged\nunstaged\n')
+    await writeFile(join(repoPath, 'discard-intent.txt'), 'intent\n')
+    await runGit(['add', '-N', 'discard-intent.txt'])
+    const selectedPaths = ['discard-staged.txt', 'discard-intent.txt']
+    const { stdout } = await runGit(gitDiscardStatusArgs(selectedPaths, (filePath) => filePath))
+
+    expect(Object.fromEntries(classifyGitDiscardPaths(stdout, selectedPaths))).toEqual({
+      'discard-intent.txt': 'intent-to-add',
+      'discard-staged.txt': 'tracked'
+    })
+
+    await runGit(['restore', '--worktree', '--', 'discard-staged.txt'])
+    await runGit(['reset', '--', 'discard-intent.txt'])
+    await runGit(['clean', '-ffdx', '--', 'discard-intent.txt'])
+
+    await expect(readFile(join(repoPath, 'discard-staged.txt'), 'utf8')).resolves.toBe('staged\n')
+    await expect(readFile(join(repoPath, 'discard-intent.txt'), 'utf8')).rejects.toThrow()
+    await expect(
+      runGit(['status', '--porcelain=v1', '--', ...selectedPaths])
+    ).resolves.toMatchObject({
+      stdout: 'A  discard-staged.txt\n'
+    })
+  })
+
+  it('atomically restores staged index and worktree content from HEAD', async () => {
+    await writeFile(join(repoPath, 'tracked.txt'), 'staged\n')
+    await runGit(['add', 'tracked.txt'])
+    await writeFile(join(repoPath, 'tracked.txt'), 'staged\nunstaged\n')
+
+    await runGit(gitStagedDiscardArgs(['tracked.txt']))
+
+    await expect(readFile(join(repoPath, 'tracked.txt'), 'utf8')).resolves.toBe('compatibility\n')
+    await expect(runGit(['status', '--porcelain=v1', '--', 'tracked.txt'])).resolves.toMatchObject({
+      stdout: ''
+    })
+
+    await runGit(['mv', 'tracked.txt', 'renamed.txt'])
+    const { stdout } = await runGit(gitStagedDiscardStatusArgs())
+    const selection = resolveGitStagedDiscardPaths(stdout, ['renamed.txt'])
+    expect(selection).toEqual({ paths: ['renamed.txt', 'tracked.txt'], hasConflict: false })
+    await runGit(gitStagedDiscardArgs(selection.paths))
+    await expect(readFile(join(repoPath, 'tracked.txt'), 'utf8')).resolves.toBe('compatibility\n')
+    await expect(readFile(join(repoPath, 'renamed.txt'), 'utf8')).rejects.toThrow()
+  })
+
+  it('restores staged additions from an empty tree on an unborn branch', async () => {
+    await runGit(['init', '-q', 'unborn'])
+    await writeFile(join(repoPath, 'unborn', 'selected.txt'), 'selected\n')
+    await writeFile(join(repoPath, 'unborn', 'unrelated.txt'), 'unrelated\n')
+    await runGit(['-C', 'unborn', 'add', 'selected.txt', 'unrelated.txt'])
+    const emptyTree = (await runGit(['-C', 'unborn', 'mktree'], undefined, '')).stdout.trim()
+
+    await runGit(['-C', 'unborn', ...gitStagedDiscardArgs(['selected.txt'], emptyTree)])
+
+    await expect(readFile(join(repoPath, 'unborn', 'selected.txt'), 'utf8')).rejects.toThrow()
+    await expect(readFile(join(repoPath, 'unborn', 'unrelated.txt'), 'utf8')).resolves.toBe(
+      'unrelated\n'
+    )
+    await expect(runGit(['-C', 'unborn', 'status', '--porcelain=v1'])).resolves.toMatchObject({
+      stdout: 'A  unrelated.txt\n'
     })
   })
 

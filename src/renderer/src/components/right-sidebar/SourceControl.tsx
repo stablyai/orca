@@ -74,6 +74,7 @@ import { BulkActionBar } from './BulkActionBar'
 import { useSourceControlSelection, type FlatEntry } from './useSourceControlSelection'
 import {
   getDiscardAllPaths,
+  getStagedDiscardEditorPaths,
   getStageAllPaths,
   getUnstageAllPaths,
   isStageableStatusEntry,
@@ -86,6 +87,7 @@ import {
   canStageStatusEntry,
   canUnstageStatusEntry
 } from './source-control-entry-actions'
+import { throwIfGitStagedDiscardFailed } from '../../../../shared/git-staged-discard-receipt'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import {
   buildGitStatusSourceControlTree,
@@ -165,6 +167,7 @@ import {
 } from '@/lib/source-control-launch-agent-selection'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
+  holdEditorSaveQuiescence,
   notifyEditorExternalFileChange,
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
@@ -174,6 +177,7 @@ import {
   abortRuntimeGitMerge,
   abortRuntimeGitRebase,
   bulkDiscardRuntimeGitPaths,
+  bulkDiscardStagedRuntimeGitPaths,
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
   cancelRuntimeGenerateCommitMessage,
@@ -1181,6 +1185,7 @@ function SourceControlInner(): React.JSX.Element {
   >({})
   const gitHistoryRequestSeqRef = useRef(0)
   const gitHistoryRequestByWorktreeRef = useRef<Record<string, number>>({})
+  const stagedDiscardAbortControllerRef = useRef<AbortController | null>(null)
   const gitHistoryState = activeWorktreeId
     ? (gitHistoryByWorktree[activeWorktreeId] ?? EMPTY_GIT_HISTORY_STATE)
     : EMPTY_GIT_HISTORY_STATE
@@ -1209,6 +1214,12 @@ function SourceControlInner(): React.JSX.Element {
 
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
+  useEffect(() => {
+    return () => {
+      stagedDiscardAbortControllerRef.current?.abort()
+      stagedDiscardAbortControllerRef.current = null
+    }
+  }, [activeWorktreeId])
   const { expandedSubmoduleKeys, submoduleStatusByKey, toggleSubmodule } =
     useSourceControlSubmoduleStatus({
       activeWorktreeId,
@@ -5381,6 +5392,65 @@ function SourceControlInner(): React.JSX.Element {
     [activeRepoSettings, activeWorktreeId, worktreePath]
   )
 
+  const discardStagedMany = useCallback(
+    async (filePaths: string[]) => {
+      if (!worktreePath || !activeWorktreeId) {
+        return
+      }
+      const runtimeEnvironmentId =
+        useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+      stagedDiscardAbortControllerRef.current?.abort()
+      const abortController = new AbortController()
+      stagedDiscardAbortControllerRef.current = abortController
+      const editorPaths = getStagedDiscardEditorPaths(grouped.staged, filePaths)
+      const releaseSaveHolds = await Promise.all(
+        editorPaths.map((relativePath) =>
+          holdEditorSaveQuiescence({
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            relativePath,
+            runtimeEnvironmentId
+          })
+        )
+      )
+      try {
+        const receipt = await bulkDiscardStagedRuntimeGitPaths(
+          {
+            // Why: capability proof and both Git mutations belong to the repo owner.
+            settings: activeRepoSettings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId: getConnectionId(activeWorktreeId) ?? undefined
+          },
+          filePaths,
+          abortController.signal
+        )
+        throwIfGitStagedDiscardFailed(receipt)
+      } finally {
+        try {
+          if (!abortController.signal.aborted) {
+            for (const relativePath of editorPaths) {
+              notifyEditorExternalFileChange({
+                worktreeId: activeWorktreeId,
+                worktreePath,
+                relativePath,
+                runtimeEnvironmentId
+              })
+            }
+          }
+        } finally {
+          for (const release of releaseSaveHolds) {
+            release()
+          }
+          if (stagedDiscardAbortControllerRef.current === abortController) {
+            stagedDiscardAbortControllerRef.current = null
+          }
+        }
+      }
+    },
+    [activeRepoSettings, activeWorktreeId, grouped.staged, worktreePath]
+  )
+
   const handleDiscard = useCallback(
     async (filePath: string) => {
       try {
@@ -5394,7 +5464,7 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   // Why: "Discard all" skips unresolved/resolved_locally rows (discarding can re-create the conflict or lose the resolution; no v1 UX for it).
-  // Why: sequencing/filter rules live in discard-all-sequence.ts for independent unit tests, with per-file fallback when an older SSH relay lacks bulk discard.
+  // Why: staged discard is one owner operation; unstaged areas retain the per-file fallback.
   const handleRevertAllInArea = useCallback(
     async (area: DiscardAllArea, confirmedPaths?: readonly string[]) => {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
@@ -5405,26 +5475,17 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
       setIsExecutingBulk(true)
+      let canceled = false
       try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
         // Why: onError fires per failure; aggregate into one toast so a partial failure across N files doesn't spam N toasts.
         const errors: unknown[] = []
         const result = await runDiscardAllForArea(area, paths, {
-          bulkUnstage: (filePaths) =>
-            bulkUnstageRuntimeGitPaths(
-              {
-                // Why: route unstaging by the repo OWNER host, not the focused runtime.
-                settings: activeRepoSettings,
-                worktreeId: activeWorktreeId,
-                worktreePath,
-                connectionId
-              },
-              filePaths
-            ),
+          discardStaged: discardStagedMany,
           discardMany,
           discardOne: discardSingle,
           onError: (error) => {
             errors.push(error)
+            canceled ||= error instanceof Error && error.name === 'AbortError'
             console.error('[SourceControl] discard-all failure', error)
           }
         })
@@ -5432,7 +5493,7 @@ function SourceControlInner(): React.JSX.Element {
           toast.error(
             translate(
               'auto.components.right.sidebar.SourceControl.a5e5a11090',
-              'Discard all failed — unable to unstage files before discard'
+              'Discard all may have partially completed'
             ),
             {
               description: errors[0] instanceof Error ? errors[0].message : undefined
@@ -5461,20 +5522,25 @@ function SourceControlInner(): React.JSX.Element {
           )
         }
         if (!result.aborted) {
-          await refreshActiveGitStatusAfterMutation()
           clearSelection()
         }
       } finally {
-        setIsExecutingBulk(false)
+        try {
+          if (!canceled) {
+            await refreshActiveGitStatusAfterMutation()
+          }
+        } finally {
+          setIsExecutingBulk(false)
+        }
       }
     },
     [
-      activeRepoSettings,
       worktreePath,
       activeWorktreeId,
       grouped,
       isExecutingBulk,
       clearSelection,
+      discardStagedMany,
       discardMany,
       discardSingle,
       refreshActiveGitStatusAfterMutation

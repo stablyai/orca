@@ -9,6 +9,7 @@ import type {
   HostedReviewProvider
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
+import type { GitStagedDiscardReceipt } from '../shared/git-staged-discard-receipt'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type { BrowserFindSource } from '../shared/browser-find-source'
 import type {
@@ -3158,6 +3159,17 @@ export type PreloadApi = {
       filePaths: string[]
       connectionId?: string
     }) => Promise<void>
+    bulkDiscardStaged: (args: {
+      worktreePath: string
+      filePaths: string[]
+      operationId: string
+      connectionId?: string
+    }) => Promise<GitStagedDiscardReceipt>
+    getStagedDiscardReceipt: (args: {
+      worktreePath: string
+      operationId: string
+      connectionId?: string
+    }) => Promise<GitStagedDiscardReceipt | null>
     remoteFileUrl: (args: {
       worktreePath: string
       relativePath: string

@@ -39,8 +39,8 @@ export function getDiscardEntryConfirmationCopy(
         { value0: name }
       ),
       description: translate(
-        'auto.components.right.sidebar.source.control.discard.confirmation.40e9357b2a',
-        'This will restore the file from HEAD and discard the deletion. This cannot be undone.'
+        'auto.components.right.sidebar.source.control.discard.confirmation.b11c879a18',
+        'This will restore the staged version and discard the deletion. This cannot be undone.'
       ),
       confirmLabel: 'Restore'
     }

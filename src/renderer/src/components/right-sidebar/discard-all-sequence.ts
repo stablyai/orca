@@ -21,6 +21,20 @@ export function getDiscardAllPaths(
     .map((entry) => entry.path)
 }
 
+export function getStagedDiscardEditorPaths(
+  entries: readonly GitStatusEntry[],
+  requestedPaths: readonly string[]
+): string[] {
+  const requested = new Set(requestedPaths)
+  const paths = new Set(requestedPaths)
+  for (const entry of entries) {
+    if (requested.has(entry.path) && entry.oldPath) {
+      paths.add(entry.oldPath)
+    }
+  }
+  return [...paths]
+}
+
 export type StageAllArea = 'unstaged' | 'untracked'
 
 /**
@@ -64,17 +78,17 @@ export function getUnstageAllPaths(entries: readonly GitStatusEntry[]): string[]
 }
 
 export type DiscardAllDeps = {
-  /** Unstage the given paths in one IPC round-trip. Only called for 'staged'. */
-  bulkUnstage: (paths: string[]) => Promise<void>
+  /** Discard staged index and worktree content through one authoritative operation. */
+  discardStaged: (paths: string[]) => Promise<void>
   /**
    * Discard the given paths in one IPC round-trip. Callers may omit this to
    * keep the legacy per-file sequence in tests or older surfaces.
    */
   discardMany?: (paths: string[]) => Promise<void>
-  /** Discard a single path (restore working-tree to HEAD, or rm if untracked). */
+  /** Discard a single path (restore working-tree from the index, or rm if untracked). */
   discardOne: (path: string) => Promise<void>
   /**
-   * Called when either the pre-step (bulkUnstage) rejects OR an individual
+   * Called when either the staged operation rejects OR an individual
    * `discardOne` rejects. Invoked once per failure so callers can surface
    * each error (e.g. a toast per stuck file) rather than swallowing them.
    */
@@ -87,8 +101,8 @@ export type DiscardAllResult = {
   /** Paths whose `discardOne` call rejected. Best-effort: the loop continues past these. */
   failed: string[]
   /**
-   * True only when the pre-step (bulk unstage for the 'staged' area) failed
-   * and we never entered the per-file discard loop. Per-file failures do
+   * True when the host-authoritative staged operation did not fully succeed.
+   * Its mutation receipt may still report partial or uncertain changes. Per-file failures do
    * NOT set this flag — they are reported via `failed`.
    */
   aborted: boolean
@@ -97,13 +111,9 @@ export type DiscardAllResult = {
 /**
  * Run the "Discard all" sequence for a given area.
  *
- * For 'staged', this first bulk-unstages the paths — without that step,
- * `discardOne` (which maps to `git restore --worktree --source=HEAD`) would
- * reset the working tree to HEAD but leave the index carrying the staged
- * delta, producing phantom inverse "Changes" rows the user thought they just
- * discarded. If the unstage fails we MUST skip the discard loop entirely for
- * the same reason: a stale index with a clean worktree is a worse state than
- * the one the user started in.
+ * For 'staged', one capability-negotiated owner operation updates the index
+ * and worktree together. The renderer must never expose the legacy unstage
+ * pre-step across a mixed-version boundary.
  *
  * Per-file `discardOne` failures are best-effort: we continue past a failed
  * file so a single stuck path does not block the rest of the bulk action.
@@ -121,7 +131,8 @@ export async function runDiscardAllForArea(
 
   if (area === 'staged') {
     try {
-      await deps.bulkUnstage([...paths])
+      await deps.discardStaged([...paths])
+      return { discarded: [...paths], failed: [], aborted: false }
     } catch (error) {
       deps.onError?.(error)
       return { discarded: [], failed: [], aborted: true }

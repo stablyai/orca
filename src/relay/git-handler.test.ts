@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { MAX_RENDERED_DIFF_COMBINED_CHARACTERS } from '../shared/large-diff-render-limit'
 import { reviewHeadRemoteRefComponent } from '../shared/review-head-tracking-ref'
+import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../shared/protocol-version'
 import {
   createMockDispatcher,
   gitInit,
@@ -98,6 +99,7 @@ describe('GitHandler', () => {
 
   it('registers all expected handlers', () => {
     const methods = Array.from(dispatcher._requestHandlers.keys())
+    expect(methods).toContain('git.getCapabilities')
     expect(methods).toContain('git.status')
     expect(methods).toContain('git.checkIgnored')
     expect(methods).toContain('git.history')
@@ -113,6 +115,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.localBranches')
     expect(methods).toContain('git.discard')
     expect(methods).toContain('git.bulkDiscard')
+    expect(methods).toContain('git.bulkDiscardStaged')
     expect(methods).toContain('git.conflictOperation')
     expect(methods).toContain('git.branchCompare')
     expect(methods).toContain('git.upstreamStatus')
@@ -137,6 +140,12 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.exec')
     expect(methods).toContain('git.clone')
     expect(methods).toContain('git.isGitRepo')
+  })
+
+  it('reports the staged discard owner capability', async () => {
+    await expect(dispatcher.callRequest('git.getCapabilities')).resolves.toEqual({
+      stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+    })
   })
 
   it('runs remote worktree deletion inside the relay watcher fence', async () => {
@@ -897,8 +906,135 @@ describe('GitHandler', () => {
       await expect(fs.access(path.join(tmpDir, 'new.txt'))).rejects.toThrow()
     })
 
+    it('discards staged and unstaged bytes through one versioned owner operation', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'base\n')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'staged\n')
+      execFileSync('git', ['add', 'file.txt'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'staged\nunstaged\n')
+      writeFileSync(path.join(tmpDir, 'new.txt'), 'new\n')
+      execFileSync('git', ['add', 'new.txt'], { cwd: tmpDir, stdio: 'pipe' })
+
+      await dispatcher.callRequest('git.bulkDiscardStaged', {
+        worktreePath: tmpDir,
+        filePaths: ['file.txt', 'new.txt'],
+        operationId: 'op-success',
+        stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+      })
+
+      await expect(fs.readFile(path.join(tmpDir, 'file.txt'), 'utf8')).resolves.toBe('base\n')
+      await expect(fs.access(path.join(tmpDir, 'new.txt'))).rejects.toThrow()
+      expect(
+        execFileSync('git', ['status', '--porcelain=v1', '-z'], {
+          cwd: tmpDir,
+          encoding: 'utf8'
+        })
+      ).toBe('')
+    })
+
+    it('discards only selected staged additions on an unborn branch', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'selected.txt'), 'selected\n')
+      writeFileSync(path.join(tmpDir, 'unrelated.txt'), 'unrelated\n')
+      execFileSync('git', ['add', 'selected.txt', 'unrelated.txt'], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+
+      await dispatcher.callRequest('git.bulkDiscardStaged', {
+        worktreePath: tmpDir,
+        filePaths: ['selected.txt'],
+        operationId: 'op-unborn',
+        stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+      })
+
+      await expect(fs.access(path.join(tmpDir, 'selected.txt'))).rejects.toThrow()
+      await expect(fs.readFile(path.join(tmpDir, 'unrelated.txt'), 'utf8')).resolves.toBe(
+        'unrelated\n'
+      )
+      expect(
+        execFileSync('git', ['status', '--porcelain=v1'], {
+          cwd: tmpDir,
+          encoding: 'utf8'
+        })
+      ).toBe('A  unrelated.txt\n')
+    })
+
+    it.each([undefined, '2', 1])(
+      'rejects staged discard version %s before changing any Git bytes',
+      async (stagedDiscardOperationVersion) => {
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'file.txt'), 'base\n')
+        gitCommit(tmpDir, 'initial')
+        writeFileSync(path.join(tmpDir, 'file.txt'), 'staged\n')
+        execFileSync('git', ['add', 'file.txt'], { cwd: tmpDir, stdio: 'pipe' })
+        writeFileSync(path.join(tmpDir, 'file.txt'), 'staged\nunstaged\n')
+        const before = {
+          index: await fs.readFile(path.join(tmpDir, '.git', 'index')),
+          cachedDiff: execFileSync('git', ['diff', '--cached', '--binary'], {
+            cwd: tmpDir,
+            encoding: 'utf8'
+          }),
+          status: execFileSync('git', ['status', '--porcelain=v1', '-z'], {
+            cwd: tmpDir,
+            encoding: 'utf8'
+          }),
+          worktree: await fs.readFile(path.join(tmpDir, 'file.txt'))
+        }
+
+        await expect(
+          dispatcher.callRequest('git.bulkDiscardStaged', {
+            worktreePath: tmpDir,
+            filePaths: ['file.txt'],
+            operationId: 'op-rejected',
+            stagedDiscardOperationVersion
+          })
+        ).rejects.toThrow('unsupported_staged_discard_operation')
+
+        await expect(fs.readFile(path.join(tmpDir, '.git', 'index'))).resolves.toEqual(before.index)
+        expect(
+          execFileSync('git', ['diff', '--cached', '--binary'], {
+            cwd: tmpDir,
+            encoding: 'utf8'
+          })
+        ).toBe(before.cachedDiff)
+        expect(
+          execFileSync('git', ['status', '--porcelain=v1', '-z'], {
+            cwd: tmpDir,
+            encoding: 'utf8'
+          })
+        ).toBe(before.status)
+        await expect(fs.readFile(path.join(tmpDir, 'file.txt'))).resolves.toEqual(before.worktree)
+      }
+    )
+
+    it('preserves staged additions and deletes intent-to-add paths in bulk', async () => {
+      gitInit(tmpDir)
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'staged.txt'), 'staged\n')
+      execFileSync('git', ['add', 'staged.txt'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'staged.txt'), 'staged\nunstaged\n')
+      writeFileSync(path.join(tmpDir, 'intent.txt'), 'intent\n')
+      execFileSync('git', ['add', '-N', 'intent.txt'], { cwd: tmpDir, stdio: 'pipe' })
+
+      await dispatcher.callRequest('git.bulkDiscard', {
+        worktreePath: tmpDir,
+        filePaths: ['staged.txt', 'intent.txt']
+      })
+
+      await expect(fs.readFile(path.join(tmpDir, 'staged.txt'), 'utf8')).resolves.toBe('staged\n')
+      await expect(fs.access(path.join(tmpDir, 'intent.txt'))).rejects.toThrow()
+      expect(
+        execFileSync('git', ['status', '--porcelain=v1'], { cwd: tmpDir, encoding: 'utf8' })
+      ).toBe('A  staged.txt\n')
+    })
+
     it('handles large tracked path lists during bulk discard classification', async () => {
-      const trackedStdout = Array.from({ length: 150_000 }, (_, index) => `docs/file-${index}.ts`)
+      const trackedStdout = Array.from(
+        { length: 150_000 },
+        (_, index) => ` M docs/file-${index}.ts`
+      )
         .join('\0')
         .concat('\0')
       const gitMock = vi
@@ -918,7 +1054,7 @@ describe('GitHandler', () => {
 
       expect(gitMock).toHaveBeenNthCalledWith(
         2,
-        ['restore', '--worktree', '--source=HEAD', '--', ':(literal)docs'],
+        ['restore', '--worktree', '--', ':(literal)docs'],
         tmpDir
       )
     })

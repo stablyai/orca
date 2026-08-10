@@ -545,6 +545,7 @@ import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { getRuntimeFileTargetExecutionHostId, RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
+import { getLocalGitStagedDiscardReceiptLedger } from '../git/staged-discard-receipt-ledger'
 import {
   activateClientSessionTabSelection,
   ClientSessionTabSelectionStore,
@@ -8891,36 +8892,39 @@ export class OrcaRuntimeService {
     this.fileCommands
   )
 
-  private readonly gitCommands = new RuntimeGitCommands({
-    resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
-    getRuntimeSettings: () => this.requireStore().getSettings() as GlobalSettings,
-    getCommitMessageAgentEnvironment: () => this.commitMessageAgentEnv ?? undefined,
-    // Why: resolved worktrees are cached for a second, so link/unlink would lag
-    // generation; meta is keyed by the same id the resolver returns.
-    getWorktreeLinkedIssue: (worktreeId) => {
-      const store = this.store
-      // Why: an unreadable store is "unknown", not "unlinked" — undefined keeps
-      // the resolver's cached linkedIssue instead of suppressing {linkedIssue}.
-      if (!store?.getWorktreeMeta) {
-        return undefined
+  private readonly gitCommands = new RuntimeGitCommands(
+    {
+      resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
+      getRuntimeSettings: () => this.requireStore().getSettings() as GlobalSettings,
+      getCommitMessageAgentEnvironment: () => this.commitMessageAgentEnv ?? undefined,
+      // Why: resolved worktrees are cached for a second, so link/unlink would lag
+      // generation; meta is keyed by the same id the resolver returns.
+      getWorktreeLinkedIssue: (worktreeId) => {
+        const store = this.store
+        // Why: an unreadable store is "unknown", not "unlinked" — undefined keeps
+        // the resolver's cached linkedIssue instead of suppressing {linkedIssue}.
+        if (!store?.getWorktreeMeta) {
+          return undefined
+        }
+        return store.getWorktreeMeta(worktreeId)?.linkedIssue ?? null
+      },
+      getWorktreeLinkedIssueMeta: (worktreeId) => {
+        const store = this.store
+        if (!store?.getWorktreeMeta) {
+          return undefined
+        }
+        const meta = store.getWorktreeMeta(worktreeId)
+        return meta
+          ? {
+              linkedIssue: meta.linkedIssue,
+              linkedGitLabIssue: meta.linkedGitLabIssue,
+              linkedWorkItem: meta.linkedWorkItem
+            }
+          : null
       }
-      return store.getWorktreeMeta(worktreeId)?.linkedIssue ?? null
     },
-    getWorktreeLinkedIssueMeta: (worktreeId) => {
-      const store = this.store
-      if (!store?.getWorktreeMeta) {
-        return undefined
-      }
-      const meta = store.getWorktreeMeta(worktreeId)
-      return meta
-        ? {
-            linkedIssue: meta.linkedIssue,
-            linkedGitLabIssue: meta.linkedGitLabIssue,
-            linkedWorkItem: meta.linkedWorkItem
-          }
-        : null
-    }
-  })
+    getLocalGitStagedDiscardReceiptLedger()
+  )
 
   getRuntimeGitStatus: RuntimeGitCommands['getRuntimeGitStatus'] =
     this.gitCommands.getRuntimeGitStatus.bind(this.gitCommands)
@@ -8990,6 +8994,10 @@ export class OrcaRuntimeService {
     this.gitCommands.bulkUnstageRuntimeGitPaths.bind(this.gitCommands)
   bulkDiscardRuntimeGitPaths: RuntimeGitCommands['bulkDiscardRuntimeGitPaths'] =
     this.gitCommands.bulkDiscardRuntimeGitPaths.bind(this.gitCommands)
+  bulkDiscardStagedRuntimeGitPaths: RuntimeGitCommands['bulkDiscardStagedRuntimeGitPaths'] =
+    this.gitCommands.bulkDiscardStagedRuntimeGitPaths.bind(this.gitCommands)
+  getStagedDiscardRuntimeGitReceipt: RuntimeGitCommands['getStagedDiscardRuntimeGitReceipt'] =
+    this.gitCommands.getStagedDiscardRuntimeGitReceipt.bind(this.gitCommands)
   discardRuntimeGitPath: RuntimeGitCommands['discardRuntimeGitPath'] =
     this.gitCommands.discardRuntimeGitPath.bind(this.gitCommands)
   getRuntimeGitRemoteFileUrl: RuntimeGitCommands['getRuntimeGitRemoteFileUrl'] =

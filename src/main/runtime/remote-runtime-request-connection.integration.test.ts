@@ -710,7 +710,9 @@ describe('remote runtime request connection integration', () => {
             shared.request('status.get', undefined, REMOTE_RUNTIME_REQUEST_TIMEOUT_MS)
           ).resolves.toMatchObject({
             ok: true,
-            result: { capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY] }
+            result: {
+              capabilities: expect.arrayContaining([REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY])
+            }
           })
           await expect(
             shared.request('repo.list', undefined, REMOTE_RUNTIME_REQUEST_TIMEOUT_MS)

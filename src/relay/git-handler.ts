@@ -67,6 +67,24 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../shared/git-discard-path-safety'
+import {
+  classifyGitDiscardPaths,
+  gitDiscardStatusArgs,
+  type GitDiscardPathKind
+} from '../shared/git-discard-status'
+import {
+  gitStagedDiscardArgs,
+  gitStagedDiscardStatusArgs,
+  resolveGitStagedDiscardPaths
+} from '../shared/git-staged-discard-operation'
+import {
+  failedGitStagedDiscardReceipt,
+  pendingGitStagedDiscardReceipt,
+  projectGitStagedDiscardReceiptPaths,
+  runGitStagedDiscardBatches
+} from '../shared/git-staged-discard-receipt'
+import { GitStagedDiscardReceiptLedger } from '../shared/git-staged-discard-receipt-ledger'
+import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../shared/protocol-version'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
 import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../shared/in-flight-promise-dedupe'
@@ -179,6 +197,7 @@ export class GitHandler {
   private readonly gitCapabilities = new GitCapabilityCache()
   // Why: use the bulk lane so large responses do not block interactive PTY echo.
   private readonly responseStreams = new GitResponseStreamRegistry()
+  private readonly stagedDiscardReceipts: GitStagedDiscardReceiptLedger
 
   // Why: cache .gitmodules per instance to avoid SSH reads and test leakage.
   private submodulePathsCache: SubmodulePathsCache = createSubmodulePathsCache()
@@ -187,9 +206,11 @@ export class GitHandler {
   constructor(
     dispatcher: RelayDispatcher,
     _context: RelayContext,
-    private readonly watcherRegistry?: Pick<RelayFilesystemWatchRegistry, 'runWithRemovalFence'>
+    private readonly watcherRegistry?: Pick<RelayFilesystemWatchRegistry, 'runWithRemovalFence'>,
+    stagedDiscardReceipts = new GitStagedDiscardReceiptLedger()
   ) {
     this.dispatcher = dispatcher
+    this.stagedDiscardReceipts = stagedDiscardReceipts
     this.registerHandlers()
     // Why: a detached client's git.responseAck frames never arrive; wake any pump parked on the ack window so it re-checks staleness and exits.
     this.dispatcher.onClientDetached?.(() => this.responseStreams.wakeAll())
@@ -201,6 +222,9 @@ export class GitHandler {
   }
 
   private registerHandlers(): void {
+    this.dispatcher.onRequest('git.getCapabilities', async () => ({
+      stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+    }))
     this.dispatcher.onRequest('git.status', (p, context) => this.getStatus(p, context))
     this.dispatcher.onRequest('git.submoduleStatus', (p, context) =>
       this.getSubmoduleStatus(p, context)
@@ -219,6 +243,8 @@ export class GitHandler {
     this.dispatcher.onRequest('git.localBranches', (p) => this.localBranches(p))
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
     this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
+    this.dispatcher.onRequest('git.bulkDiscardStaged', (p) => this.bulkDiscardStaged(p))
+    this.dispatcher.onRequest('git.getStagedDiscardReceipt', (p) => this.getStagedDiscardReceipt(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
     this.dispatcher.onRequest('git.branchCompare', (p) => this.branchCompare(p))
     this.dispatcher.onRequest('git.commitCompare', (p) => this.commitCompare(p))
@@ -570,6 +596,97 @@ export class GitHandler {
     }
   }
 
+  private async bulkDiscardStaged(params: Record<string, unknown>) {
+    if (params.stagedDiscardOperationVersion !== GIT_STAGED_DISCARD_OPERATION_VERSION) {
+      throw new Error('unsupported_staged_discard_operation')
+    }
+    const worktreePath = params.worktreePath as string
+    const filePaths = params.filePaths as string[]
+    const operationId = params.operationId as string
+    if (typeof operationId !== 'string' || operationId.length < 1 || operationId.length > 128) {
+      throw new Error('invalid_staged_discard_operation_id')
+    }
+    if (!Array.isArray(filePaths) || filePaths.length === 0) {
+      return runGitStagedDiscardBatches(operationId, [], BULK_CHUNK_SIZE, async () => {})
+    }
+    for (const filePath of filePaths) {
+      if (typeof filePath !== 'string') {
+        throw new Error('invalid_staged_discard_path')
+      }
+      this.assertInWorktree(worktreePath, filePath)
+    }
+    const fingerprint = filePaths.join('\0')
+    return this.stagedDiscardReceipts.run(
+      worktreePath,
+      operationId,
+      fingerprint,
+      pendingGitStagedDiscardReceipt(operationId, filePaths),
+      async () => {
+        try {
+          const { stdout: status } = await this.git(gitStagedDiscardStatusArgs(), worktreePath)
+          const selection = resolveGitStagedDiscardPaths(status, filePaths, (filePath) =>
+            path.sep === '\\' ? filePath.replaceAll('\\', '/') : filePath
+          )
+          if (selection.hasConflict) {
+            throw new Error('Cannot discard staged changes for conflicted paths')
+          }
+          const source = await this.resolveStagedDiscardSource(worktreePath)
+          this.clearGitMutationReadCaches()
+          try {
+            return projectGitStagedDiscardReceiptPaths(
+              await runGitStagedDiscardBatches(
+                operationId,
+                selection.paths,
+                BULK_CHUNK_SIZE,
+                async (chunk) => {
+                  await this.git(
+                    gitStagedDiscardArgs(
+                      chunk.map((filePath) => this.literalPathspec(filePath)),
+                      source
+                    ),
+                    worktreePath
+                  )
+                }
+              ),
+              filePaths
+            )
+          } finally {
+            this.clearGitMutationReadCaches()
+          }
+        } catch (error) {
+          return failedGitStagedDiscardReceipt(operationId, filePaths, error)
+        }
+      }
+    )
+  }
+
+  private async getStagedDiscardReceipt(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const operationId = params.operationId as string
+    if (typeof operationId !== 'string' || operationId.length < 1 || operationId.length > 128) {
+      throw new Error('invalid_staged_discard_operation_id')
+    }
+    return this.stagedDiscardReceipts.get(worktreePath, operationId)
+  }
+
+  private async resolveStagedDiscardSource(worktreePath: string): Promise<string> {
+    try {
+      const { stdout } = await this.git(['rev-parse', '--verify', 'HEAD'], worktreePath)
+      const head = stdout.trim()
+      if (head) {
+        return head
+      }
+    } catch {
+      // Status already established repository ownership; a missing HEAD means an unborn branch.
+    }
+    const { stdout } = await this.git(['mktree'], worktreePath, { stdin: '' })
+    const emptyTree = stdout.trim()
+    if (!emptyTree) {
+      throw new Error('Git did not create an empty tree for the unborn repository')
+    }
+    return emptyTree
+  }
+
   private async abortMerge(params: Record<string, unknown>) {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
@@ -631,18 +748,6 @@ export class GitHandler {
     return { current, branches }
   }
 
-  private normalizeGitPathForCompare(filePath: string): string {
-    return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
-  }
-
-  private isTrackedPathSpec(filePath: string, trackedPaths: readonly string[]): boolean {
-    const normalized = this.normalizeGitPathForCompare(filePath)
-    return trackedPaths.some((trackedPath) => {
-      const normalizedTracked = this.normalizeGitPathForCompare(trackedPath)
-      return normalizedTracked === normalized || normalizedTracked.startsWith(`${normalized}/`)
-    })
-  }
-
   private assertInWorktree(worktreePath: string, filePath: string): string {
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
@@ -666,28 +771,22 @@ export class GitHandler {
     try {
       this.assertInWorktree(worktreePath, filePath)
 
-      let tracked = false
-      try {
-        await this.git(
-          ['ls-files', '--error-unmatch', '--', this.literalPathspec(filePath)],
-          worktreePath
-        )
-        tracked = true
-      } catch {
-        // untracked
-      }
+      const kind = (await this.listDiscardPathKinds(worktreePath, [filePath])).get(filePath)
 
-      if (tracked) {
+      if (kind === 'tracked') {
         await this.git(
-          ['restore', '--worktree', '--source=HEAD', '--', this.literalPathspec(filePath)],
+          ['restore', '--worktree', '--', this.literalPathspec(filePath)],
           worktreePath
         )
         return
       }
 
-      await removeSafeUntrackedDiscardTarget(worktreePath, filePath, (targetPath) =>
-        this.cleanUntrackedPaths(worktreePath, [targetPath])
-      )
+      await removeSafeUntrackedDiscardTarget(worktreePath, filePath, async (targetPath) => {
+        if (kind === 'intent-to-add') {
+          await this.resetIntentToAddPaths(worktreePath, [targetPath])
+        }
+        await this.cleanUntrackedPaths(worktreePath, [targetPath])
+      })
     } finally {
       this.clearGitMutationReadCaches()
     }
@@ -705,42 +804,24 @@ export class GitHandler {
         this.assertInWorktree(worktreePath, filePath)
       }
 
-      const trackedPathSpecs: string[] = []
-      for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
-        const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-        const { stdout } = await this.git(
-          ['ls-files', '-z', '--', ...chunk.map((p) => this.literalPathspec(p))],
-          worktreePath
-        )
-        // Why: a selected tracked directory can make `ls-files -z` return enough descendants for push(...split) to exceed the argument limit.
-        for (const trackedPathSpec of stdout.split('\0')) {
-          if (trackedPathSpec) {
-            trackedPathSpecs.push(trackedPathSpec)
-          }
-        }
-      }
-
-      const trackedPaths = filePaths.filter((filePath) =>
-        this.isTrackedPathSpec(filePath, trackedPathSpecs)
+      const kinds = await this.listDiscardPathKinds(worktreePath, filePaths)
+      const trackedPaths = filePaths.filter((filePath) => kinds.get(filePath) === 'tracked')
+      const intentToAddPaths = filePaths.filter(
+        (filePath) => kinds.get(filePath) === 'intent-to-add'
       )
-      const untrackedPaths = filePaths.filter(
-        (filePath) => !this.isTrackedPathSpec(filePath, trackedPathSpecs)
-      )
+      const untrackedPaths = filePaths.filter((filePath) => kinds.get(filePath) !== 'tracked')
       await removeSafeUntrackedDiscardTargets(
         worktreePath,
         untrackedPaths,
-        (targetPaths) => this.cleanUntrackedPaths(worktreePath, targetPaths),
+        async (targetPaths) => {
+          await this.resetIntentToAddPaths(worktreePath, intentToAddPaths)
+          await this.cleanUntrackedPaths(worktreePath, targetPaths)
+        },
         async () => {
           for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
             const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
             await this.git(
-              [
-                'restore',
-                '--worktree',
-                '--source=HEAD',
-                '--',
-                ...chunk.map((p) => this.literalPathspec(p))
-              ],
+              ['restore', '--worktree', '--', ...chunk.map((p) => this.literalPathspec(p))],
               worktreePath
             )
           }
@@ -754,6 +835,38 @@ export class GitHandler {
   private literalPathspec(filePath: string): string {
     // Why: source-control selections are concrete paths, not user-authored Git globs.
     return `:(literal)${filePath}`
+  }
+
+  private async listDiscardPathKinds(
+    worktreePath: string,
+    filePaths: readonly string[]
+  ): Promise<Map<string, GitDiscardPathKind>> {
+    const kinds = new Map<string, GitDiscardPathKind>()
+    for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+      const { stdout } = await this.git(
+        gitDiscardStatusArgs(chunk, (filePath) => this.literalPathspec(filePath)),
+        worktreePath
+      )
+      for (const [filePath, kind] of classifyGitDiscardPaths(stdout, chunk, (selectedPath) =>
+        path.sep === '\\' ? selectedPath.replaceAll('\\', '/') : selectedPath
+      )) {
+        kinds.set(filePath, kind)
+      }
+    }
+    return kinds
+  }
+
+  private async resetIntentToAddPaths(worktreePath: string, filePaths: readonly string[]) {
+    for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+      if (chunk.length > 0) {
+        await this.git(
+          ['reset', '--', ...chunk.map((filePath) => this.literalPathspec(filePath))],
+          worktreePath
+        )
+      }
+    }
   }
 
   private async cleanUntrackedPaths(worktreePath: string, filePaths: readonly string[]) {

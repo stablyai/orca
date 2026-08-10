@@ -64,6 +64,7 @@ describe('runtime updater RPC methods', () => {
       runtimeId: 'runtime-rpc',
       liveTabCount: 2,
       liveLeafCount: 3,
+      capabilities: [],
       appVersion: '1.5.0',
       remoteUpdateSupport: snapshot.support
     })

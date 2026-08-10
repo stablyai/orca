@@ -13,6 +13,7 @@ import type {
   RemoveWorktreeResult
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitStagedDiscardReceipt } from '../../shared/git-staged-discard-receipt'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
 
@@ -39,6 +40,16 @@ export type IGitProvider = {
   unstageFile(worktreePath: string, filePath: string): Promise<void>
   bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void>
   bulkUnstageFiles(worktreePath: string, filePaths: string[]): Promise<void>
+  bulkDiscardStagedChanges(
+    worktreePath: string,
+    filePaths: string[],
+    operationId: string
+  ): Promise<GitStagedDiscardReceipt>
+  getStagedDiscardReceipt(
+    worktreePath: string,
+    operationId: string,
+    affectedPaths: readonly string[]
+  ): Promise<GitStagedDiscardReceipt | null>
   discardChanges(worktreePath: string, filePath: string): Promise<void>
   bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void>
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>

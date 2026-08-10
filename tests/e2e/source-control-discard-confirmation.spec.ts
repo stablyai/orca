@@ -6,14 +6,24 @@ type SeededUntrackedFile = {
   fileName: string
 }
 
+type SeededPartiallyStagedFile = SeededUntrackedFile & {
+  filePath: string
+}
+
 async function openSourceControl(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const state = window.__store?.getState()
-    state?.setRightSidebarOpen(true)
-  })
-  await page.getByRole('button', { name: /Source Control/ }).click()
-  await page.getByTestId('source-control-filter-toggle').click()
-  await expect(page.getByPlaceholder(/Filter files/)).toBeVisible()
+  await expect
+    .poll(async () => {
+      if (await page.getByTestId('source-control-filter-toggle').isVisible()) {
+        return true
+      }
+      await page.evaluate(() => {
+        const state = window.__store?.getState()
+        state?.setRightSidebarOpen(true)
+        state?.setRightSidebarTab('source-control')
+      })
+      return false
+    })
+    .toBe(true)
 }
 
 async function seedUntrackedFile(page: Page): Promise<SeededUntrackedFile> {
@@ -50,6 +60,31 @@ async function seedUntrackedFile(page: Page): Promise<SeededUntrackedFile> {
     return {
       fileName
     }
+  })
+}
+
+async function seedPartiallyStagedFile(page: Page): Promise<SeededPartiallyStagedFile> {
+  return page.evaluate(async () => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('window.__store is not available')
+    }
+    const state = store.getState()
+    const worktree = Object.values(state.worktreesByRepo)
+      .flat()
+      .find((entry) => entry.id === state.activeWorktreeId)
+    if (!worktree) {
+      throw new Error('active worktree not found')
+    }
+
+    const separator = worktree.path.includes('\\') ? '\\' : '/'
+    const fileName = `orca-discard-staged-${Date.now()}.txt`
+    const filePath = `${worktree.path}${separator}${fileName}`
+    await window.api.fs.writeFile({ filePath, content: 'staged content\n' })
+    await window.api.git.stage({ worktreePath: worktree.path, filePath: fileName })
+    await window.api.fs.writeFile({ filePath, content: 'staged content\nunstaged content\n' })
+    state.setGitStatus(worktree.id, await window.api.git.status({ worktreePath: worktree.path }))
+    return { fileName, filePath }
   })
 }
 
@@ -114,6 +149,72 @@ test.describe('Source Control discard confirmation', () => {
     await expect(row).toHaveCount(0, { timeout: 10_000 })
 
     await refreshGitStatus(orcaPage)
+    await expect(
+      orcaPage.locator('[data-testid="source-control-entry"]').filter({
+        hasText: seededFile.fileName
+      })
+    ).toHaveCount(0)
+  })
+
+  test('preserves staged content when discarding through the headed UI @headful', async ({
+    orcaPage
+  }) => {
+    const seededFile = await seedPartiallyStagedFile(orcaPage)
+    await openSourceControl(orcaPage)
+    const unstagedRow = orcaPage
+      .locator('[data-testid="source-control-entry"][data-source-control-area="unstaged"]')
+      .filter({ hasText: seededFile.fileName })
+    await expect(unstagedRow).toBeVisible()
+
+    const discardButton = unstagedRow.getByRole('button', { name: 'Discard changes' })
+    await discardButton.focus()
+    await discardButton.press('Enter')
+    await orcaPage.getByRole('button', { name: 'Discard', exact: true }).last().click()
+
+    await expect(unstagedRow).toHaveCount(0)
+    await expect(
+      orcaPage
+        .locator('[data-testid="source-control-entry"][data-source-control-area="staged"]')
+        .filter({ hasText: seededFile.fileName })
+    ).toBeVisible()
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(
+          async (filePath) => (await window.api.fs.readFile({ filePath })).content,
+          seededFile.filePath
+        )
+      )
+      .toBe('staged content\n')
+  })
+
+  test('discards staged content through one headed Discard all action @headful', async ({
+    orcaPage
+  }) => {
+    const seededFile = await seedPartiallyStagedFile(orcaPage)
+    await openSourceControl(orcaPage)
+    const stagedHeader = orcaPage.getByRole('button', { name: /Staged Changes/ })
+    await expect(stagedHeader).toBeVisible()
+    const discardAll = stagedHeader.locator('..').getByRole('button', { name: 'Discard all' })
+    await discardAll.focus()
+    await discardAll.press('Enter')
+
+    await expect(
+      orcaPage.getByRole('dialog', { name: 'Discard all staged changes?' })
+    ).toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Discard all', exact: true }).last().click()
+
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(async (filePath) => {
+          try {
+            await window.api.fs.readFile({ filePath })
+            return true
+          } catch {
+            return false
+          }
+        }, seededFile.filePath)
+      )
+      .toBe(false)
     await expect(
       orcaPage.locator('[data-testid="source-control-entry"]').filter({
         hasText: seededFile.fileName

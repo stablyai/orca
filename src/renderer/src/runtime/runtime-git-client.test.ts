@@ -18,10 +18,15 @@ import {
   rebaseRuntimeGitFromBase
 } from './runtime-git-client'
 import {
+  createCompatibleRuntimeStatusResponse,
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from './runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
+import {
+  GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY,
+  GIT_INDEX_PRESERVING_DISCARD_UPDATE_REQUIRED_MESSAGE
+} from '../../../shared/protocol-version'
 
 const gitStatus = vi.fn()
 const gitCancelStatus = vi.fn()
@@ -562,7 +567,7 @@ describe('runtime git client', () => {
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
       selector: 'env-1',
-      method: 'git.bulkDiscard',
+      method: 'git.bulkDiscardFromIndex',
       params: { worktree: 'id:wt-1', filePaths: ['c.ts', 'd.ts'] },
       timeoutMs: 15_000
     })
@@ -617,6 +622,80 @@ describe('runtime git client', () => {
       method: 'git.rebaseFromBase',
       params: { worktree: 'id:wt-1', baseRef: 'origin/main' },
       timeoutMs: 30_000
+    })
+  })
+
+  it.each([
+    ['absent', []],
+    ['malformed', 'git.index-preserving-discard.v1']
+  ])('fails closed when discard capability is %s', async (_label, capabilities) => {
+    runtimeEnvironmentTransportCall.mockImplementation(
+      async (args: RuntimeEnvironmentCallRequest) => {
+        if (args.method === 'status.get') {
+          const response = createCompatibleRuntimeStatusResponse()
+          if (!response.ok) {
+            throw new Error('Expected compatible status fixture')
+          }
+          return { ...response, result: { ...response.result, capabilities } }
+        }
+        return runtimeEnvironmentCall(args)
+      }
+    )
+
+    await expect(
+      bulkDiscardRuntimeGitPaths(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo'
+        },
+        ['staged.txt']
+      )
+    ).rejects.toThrow(GIT_INDEX_PRESERVING_DISCARD_UPDATE_REQUIRED_MESSAGE)
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('uses the distinct discard RPC only after capability proof', async () => {
+    runtimeEnvironmentTransportCall.mockImplementation(
+      async (args: RuntimeEnvironmentCallRequest) => {
+        if (args.method === 'status.get') {
+          const response = createCompatibleRuntimeStatusResponse()
+          if (!response.ok) {
+            throw new Error('Expected compatible status fixture')
+          }
+          return {
+            ...response,
+            result: {
+              ...response.result,
+              capabilities: [GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY]
+            }
+          }
+        }
+        return runtimeEnvironmentCall(args)
+      }
+    )
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await bulkDiscardRuntimeGitPaths(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      ['staged.txt']
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.bulkDiscardFromIndex',
+      params: { worktree: 'id:wt-1', filePaths: ['staged.txt'] },
+      timeoutMs: 15_000
     })
   })
 

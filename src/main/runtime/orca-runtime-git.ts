@@ -31,6 +31,7 @@ import {
   abortMerge,
   abortRebase,
   bulkDiscardChanges,
+  bulkDiscardStagedChangesWithReceipt,
   bulkStageFiles,
   bulkUnstageFiles,
   commitChanges,
@@ -47,6 +48,11 @@ import {
   stageFile,
   unstageFile
 } from '../git/status'
+import {
+  pendingGitStagedDiscardReceipt,
+  type GitStagedDiscardReceipt
+} from '../../shared/git-staged-discard-receipt'
+import { GitStagedDiscardReceiptLedger } from '../../shared/git-staged-discard-receipt-ledger'
 import { checkoutBranch, listLocalBranches } from '../git/checkout'
 import type { RuntimeGitCheckoutResult, RuntimeGitLocalBranches } from '../../shared/runtime-types'
 import { getHistory as getGitHistory } from '../git/history'
@@ -179,7 +185,14 @@ export type RuntimeGitCommandHost = {
 }
 
 export class RuntimeGitCommands {
-  constructor(private readonly host: RuntimeGitCommandHost) {}
+  private readonly stagedDiscardReceipts: GitStagedDiscardReceiptLedger
+
+  constructor(
+    private readonly host: RuntimeGitCommandHost,
+    stagedDiscardReceipts = new GitStagedDiscardReceiptLedger()
+  ) {
+    this.stagedDiscardReceipts = stagedDiscardReceipts
+  }
 
   private linkedIssueForTarget(target: RuntimeGitTarget): number | null | undefined {
     const live = this.host.getWorktreeLinkedIssue?.(target.worktree.id)
@@ -954,6 +967,66 @@ export class RuntimeGitCommands {
     }
     await bulkDiscardChanges(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
     return { ok: true }
+  }
+
+  async bulkDiscardStagedRuntimeGitPaths(
+    worktreeSelector: string,
+    filePaths: string[],
+    operationId: string
+  ): Promise<GitStagedDiscardReceipt> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
+    const scope = `${target.connectionId ?? 'local'}\0${target.worktree.path}`
+    return this.stagedDiscardReceipts.run(
+      scope,
+      operationId,
+      relativePaths.join('\0'),
+      pendingGitStagedDiscardReceipt(operationId, relativePaths),
+      async () => {
+        const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+        if (target.connectionId) {
+          if (!provider) {
+            throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+          }
+          return provider.bulkDiscardStagedChanges(target.worktree.path, relativePaths, operationId)
+        }
+        return bulkDiscardStagedChangesWithReceipt(
+          target.worktree.path,
+          relativePaths,
+          operationId,
+          localGitOptionsForTarget(target)
+        )
+      }
+    )
+  }
+
+  async getStagedDiscardRuntimeGitReceipt(
+    worktreeSelector: string,
+    operationId: string
+  ): Promise<GitStagedDiscardReceipt | null> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const scope = `${target.connectionId ?? 'local'}\0${target.worktree.path}`
+    const receipt = this.stagedDiscardReceipts.get(scope, operationId)
+    if (
+      !receipt ||
+      !target.connectionId ||
+      receipt.state === 'succeeded' ||
+      (receipt.state === 'failed' && receipt.mutation !== 'possible')
+    ) {
+      return receipt
+    }
+    const provider = getSshGitProvider(target.connectionId)
+    if (!provider) {
+      return receipt
+    }
+    const authoritative = await provider.getStagedDiscardReceipt(
+      target.worktree.path,
+      operationId,
+      receipt.affectedPaths
+    )
+    return authoritative === null
+      ? receipt
+      : this.stagedDiscardReceipts.reconcileAuthoritative(scope, operationId, authoritative)
   }
 
   async discardRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {

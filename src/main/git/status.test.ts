@@ -152,22 +152,31 @@ describe('discardChanges', () => {
     realpathMock.mockImplementation(async (targetPath: string) => path.resolve(targetPath))
   })
 
-  it('restores tracked files from HEAD', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'src/file.ts\n' })
+  it('restores tracked files from the index, preserving staged changes', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: ' M src/file.ts\0' })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
 
     await discardChanges('/repo', 'src/file.ts')
 
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['ls-files', '--error-unmatch', '--', ':(literal)src/file.ts'],
+      [
+        'status',
+        '--porcelain=v1',
+        '-z',
+        '--untracked-files=all',
+        '--ignored',
+        '--no-renames',
+        '--',
+        ':(literal)src/file.ts'
+      ],
       {
         cwd: '/repo'
       }
     )
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)src/file.ts'],
+      ['restore', '--worktree', '--', ':(literal)src/file.ts'],
       {
         cwd: '/repo'
       }
@@ -176,7 +185,7 @@ describe('discardChanges', () => {
   })
 
   it('removes untracked files from disk', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not tracked'))
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '?? src/new-file.ts\0' })
 
     await discardChanges('/repo', 'src/new-file.ts')
 
@@ -261,7 +270,9 @@ describe('bulk git helpers', () => {
 
   it('discards tracked and untracked paths in bulk', async () => {
     gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'src/file.ts\0docs/readme.md\0' })
+      .mockResolvedValueOnce({
+        stdout: ' M src/file.ts\0?? src/new-file.ts\0 M docs/readme.md\0?? scratch/note.txt\0'
+      })
       .mockResolvedValueOnce({ stdout: '' })
 
     await bulkDiscardChanges('/repo', ['src/file.ts', 'src/new-file.ts', 'docs', 'scratch'])
@@ -269,8 +280,12 @@ describe('bulk git helpers', () => {
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
       [
-        'ls-files',
+        'status',
+        '--porcelain=v1',
         '-z',
+        '--untracked-files=all',
+        '--ignored',
+        '--no-renames',
         '--',
         ':(literal)src/file.ts',
         ':(literal)src/new-file.ts',
@@ -285,7 +300,7 @@ describe('bulk git helpers', () => {
     // tracked descendant, which keeps directory pathspecs on the restore path.
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)src/file.ts', ':(literal)docs'],
+      ['restore', '--worktree', '--', ':(literal)src/file.ts', ':(literal)docs'],
       {
         cwd: '/repo'
       }
@@ -301,7 +316,7 @@ describe('bulk git helpers', () => {
   })
 
   it('handles large tracked path lists during bulk discard classification', async () => {
-    const trackedStdout = Array.from({ length: 150_000 }, (_, index) => `docs/file-${index}.ts`)
+    const trackedStdout = Array.from({ length: 150_000 }, (_, index) => ` M docs/file-${index}.ts`)
       .join('\0')
       .concat('\0')
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: trackedStdout }).mockResolvedValueOnce({
@@ -312,7 +327,7 @@ describe('bulk git helpers', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)docs'],
+      ['restore', '--worktree', '--', ':(literal)docs'],
       {
         cwd: '/repo'
       }

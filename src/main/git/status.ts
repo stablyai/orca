@@ -45,6 +45,24 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
+import {
+  classifyGitDiscardPaths,
+  gitDiscardStatusArgs,
+  type GitDiscardPathKind
+} from '../../shared/git-discard-status'
+import {
+  gitStagedDiscardArgs,
+  gitStagedDiscardStatusArgs,
+  resolveGitStagedDiscardPaths
+} from '../../shared/git-staged-discard-operation'
+import {
+  failedGitStagedDiscardReceipt,
+  createGitStagedDiscardOperationId,
+  projectGitStagedDiscardReceiptPaths,
+  runGitStagedDiscardBatches,
+  throwIfGitStagedDiscardFailed,
+  type GitStagedDiscardReceipt
+} from '../../shared/git-staged-discard-receipt'
 import { readBranchCompareHead } from '../../shared/git-branch-compare-head'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
@@ -2128,39 +2146,24 @@ export async function discardChanges(
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
 
-    let tracked = false
-    try {
-      await gitExecFileAsync(
-        ['ls-files', '--error-unmatch', '--', literalPathspec(filePath, options)],
-        {
-          ...gitOptionsForWorktree(worktreePath, options)
-        }
-      )
-      tracked = true
-    } catch {
-      // File is not tracked by git
-    }
+    const kind = (await listDiscardPathKinds(worktreePath, [filePath], options)).get(filePath)
 
-    if (tracked) {
-      await gitExecFileAsync(
-        ['restore', '--worktree', '--source=HEAD', '--', literalPathspec(filePath, options)],
-        {
-          ...gitOptionsForWorktree(worktreePath, options)
-        }
-      )
+    if (kind === 'tracked') {
+      await gitExecFileAsync(['restore', '--worktree', '--', literalPathspec(filePath, options)], {
+        ...gitOptionsForWorktree(worktreePath, options)
+      })
       return
     }
 
-    await removeSafeUntrackedDiscardTarget(worktreePath, filePath, (targetPath) =>
-      cleanUntrackedPaths(worktreePath, [targetPath], options)
-    )
+    await removeSafeUntrackedDiscardTarget(worktreePath, filePath, async (targetPath) => {
+      if (kind === 'intent-to-add') {
+        await resetIntentToAddPaths(worktreePath, [targetPath], options)
+      }
+      await cleanUntrackedPaths(worktreePath, [targetPath], options)
+    })
   } finally {
     invalidateGitReadCaches()
   }
-}
-
-function normalizeGitPathForCompare(filePath: string): string {
-  return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
 }
 
 function literalPathspec(filePath: string, options: GitRuntimeOptions): string {
@@ -2169,36 +2172,41 @@ function literalPathspec(filePath: string, options: GitRuntimeOptions): string {
   return `:(literal)${runtimePath}`
 }
 
-function isTrackedPathSpec(filePath: string, trackedPaths: readonly string[]): boolean {
-  const normalized = normalizeGitPathForCompare(filePath)
-  return trackedPaths.some((trackedPath) => {
-    const normalizedTracked = normalizeGitPathForCompare(trackedPath)
-    return normalizedTracked === normalized || normalizedTracked.startsWith(`${normalized}/`)
-  })
-}
-
-async function listTrackedPathSpecs(
+async function listDiscardPathKinds(
   worktreePath: string,
   filePaths: readonly string[],
   options: GitRuntimeOptions = {}
-): Promise<string[]> {
-  const trackedPaths: string[] = []
+): Promise<Map<string, GitDiscardPathKind>> {
+  const kinds = new Map<string, GitDiscardPathKind>()
   for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
     const { stdout } = await gitExecFileAsync(
-      ['ls-files', '-z', '--', ...chunk.map((filePath) => literalPathspec(filePath, options))],
+      gitDiscardStatusArgs(chunk, (filePath) => literalPathspec(filePath, options)),
       {
         ...gitOptionsForWorktree(worktreePath, options)
       }
     )
-    // Why: a tracked directory can hold enough paths to exceed the JS argument limit.
-    for (const trackedPath of stdout.split('\0')) {
-      if (trackedPath) {
-        trackedPaths.push(trackedPath)
-      }
+    for (const [filePath, kind] of classifyGitDiscardPaths(stdout, chunk, (selectedPath) =>
+      options.wslDistro || path.sep === '\\' ? selectedPath.replaceAll('\\', '/') : selectedPath
+    )) {
+      kinds.set(filePath, kind)
     }
   }
-  return trackedPaths
+  return kinds
+}
+
+async function resetIntentToAddPaths(
+  worktreePath: string,
+  filePaths: readonly string[],
+  options: GitRuntimeOptions = {}
+): Promise<void> {
+  for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+    const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+    await gitExecFileAsync(
+      ['reset', '--', ...chunk.map((filePath) => literalPathspec(filePath, options))],
+      gitOptionsForWorktree(worktreePath, options)
+    )
+  }
 }
 
 async function cleanUntrackedPaths(
@@ -2218,6 +2226,104 @@ async function cleanUntrackedPaths(
       )
     }
   }
+}
+
+/** Discard staged and working-tree changes through one Git operation per bounded batch. */
+export async function bulkDiscardStagedChanges(
+  worktreePath: string,
+  filePaths: string[],
+  options: GitRuntimeOptions = {}
+): Promise<void> {
+  const receipt = await bulkDiscardStagedChangesWithReceipt(
+    worktreePath,
+    filePaths,
+    createGitStagedDiscardOperationId(),
+    options
+  )
+  throwIfGitStagedDiscardFailed(receipt)
+}
+
+export async function bulkDiscardStagedChangesWithReceipt(
+  worktreePath: string,
+  filePaths: string[],
+  operationId: string,
+  options: GitRuntimeOptions = {}
+): Promise<GitStagedDiscardReceipt> {
+  invalidateGitReadCaches()
+  if (filePaths.length === 0) {
+    return {
+      operationId,
+      state: 'succeeded',
+      mutation: 'none',
+      affectedPaths: [],
+      completedPaths: [],
+      uncertainPaths: [],
+      remainingPaths: []
+    }
+  }
+  try {
+    const resolvedWorktree = path.resolve(worktreePath)
+    for (const filePath of filePaths) {
+      const resolvedTarget = path.resolve(worktreePath, filePath)
+      if (!isWithinWorktree(path, resolvedWorktree, resolvedTarget)) {
+        throw new Error(`Path "${filePath}" resolves outside the worktree`)
+      }
+    }
+    const { stdout: status } = await gitExecFileAsync(
+      gitStagedDiscardStatusArgs(),
+      gitOptionsForWorktree(worktreePath, options)
+    )
+    const selection = resolveGitStagedDiscardPaths(status, filePaths, (filePath) =>
+      options.wslDistro || path.sep === '\\' ? filePath.replaceAll('\\', '/') : filePath
+    )
+    if (selection.hasConflict) {
+      throw new Error('Cannot discard staged changes for conflicted paths')
+    }
+    const source = await resolveGitStagedDiscardSource(worktreePath, options)
+    return projectGitStagedDiscardReceiptPaths(
+      await runGitStagedDiscardBatches(
+        operationId,
+        selection.paths,
+        BULK_CHUNK_SIZE,
+        async (chunk) => {
+          await gitExecFileAsync(
+            gitStagedDiscardArgs(
+              chunk.map((filePath) => literalPathspec(filePath, options)),
+              source
+            ),
+            gitOptionsForWorktree(worktreePath, options)
+          )
+        }
+      ),
+      filePaths
+    )
+  } catch (error) {
+    return failedGitStagedDiscardReceipt(operationId, filePaths, error)
+  } finally {
+    invalidateGitReadCaches()
+  }
+}
+
+async function resolveGitStagedDiscardSource(
+  worktreePath: string,
+  options: GitRuntimeOptions
+): Promise<string> {
+  const gitOptions = gitOptionsForWorktree(worktreePath, options)
+  try {
+    const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', 'HEAD'], gitOptions)
+    const head = stdout.trim()
+    if (head) {
+      return head
+    }
+  } catch {
+    // Status already established repository ownership; a missing HEAD means an unborn branch.
+  }
+  const { stdout } = await gitExecFileAsync(['mktree'], { ...gitOptions, stdin: '' })
+  const emptyTree = stdout.trim()
+  if (!emptyTree) {
+    throw new Error('Git did not create an empty tree for the unborn repository')
+  }
+  return emptyTree
 }
 
 /**
@@ -2242,17 +2348,17 @@ export async function bulkDiscardChanges(
       }
     }
 
-    const trackedPathSpecs = await listTrackedPathSpecs(worktreePath, filePaths, options)
-    const trackedPaths = filePaths.filter((filePath) =>
-      isTrackedPathSpec(filePath, trackedPathSpecs)
-    )
-    const untrackedPaths = filePaths.filter(
-      (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
-    )
+    const kinds = await listDiscardPathKinds(worktreePath, filePaths, options)
+    const trackedPaths = filePaths.filter((filePath) => kinds.get(filePath) === 'tracked')
+    const intentToAddPaths = filePaths.filter((filePath) => kinds.get(filePath) === 'intent-to-add')
+    const untrackedPaths = filePaths.filter((filePath) => kinds.get(filePath) !== 'tracked')
     await removeSafeUntrackedDiscardTargets(
       worktreePath,
       untrackedPaths,
-      (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths, options),
+      async (targetPaths) => {
+        await resetIntentToAddPaths(worktreePath, intentToAddPaths, options)
+        await cleanUntrackedPaths(worktreePath, targetPaths, options)
+      },
       async () => {
         for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
           const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
@@ -2260,7 +2366,6 @@ export async function bulkDiscardChanges(
             [
               'restore',
               '--worktree',
-              '--source=HEAD',
               '--',
               ...chunk.map((filePath) => literalPathspec(filePath, options))
             ],

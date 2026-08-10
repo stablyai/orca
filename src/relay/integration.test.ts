@@ -298,13 +298,15 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
       expect(result.modifiedContent).toBe('staged version')
     })
 
-    it('git.discard restores tracked file to HEAD', async () => {
+    it('git.discard restores a tracked file from the index', async () => {
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'staged')
+      execFileSync('git', ['add', 'file.txt'], { cwd: tmpDir, stdio: 'pipe' })
       writeFileSync(path.join(tmpDir, 'file.txt'), 'dirty')
 
       await mux.request('git.discard', { worktreePath: tmpDir, filePath: 'file.txt' })
 
       const content = await readFile(path.join(tmpDir, 'file.txt'), 'utf-8')
-      expect(content).toBe('initial')
+      expect(content).toBe('staged')
     })
 
     it('git.discard removes untracked file', async () => {

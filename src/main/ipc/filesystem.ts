@@ -53,6 +53,7 @@ import {
   bulkStageFiles,
   bulkUnstageFiles,
   bulkDiscardChanges,
+  bulkDiscardStagedChangesWithReceipt,
   discardChanges,
   getStagedCommitContext,
   getBranchCompare,
@@ -60,6 +61,11 @@ import {
   getCommitCompare,
   getCommitDiff
 } from '../git/status'
+import {
+  pendingGitStagedDiscardReceipt,
+  type GitStagedDiscardReceipt
+} from '../../shared/git-staged-discard-receipt'
+import { getLocalGitStagedDiscardReceiptLedger } from '../git/staged-discard-receipt-ledger'
 import { getHistory } from '../git/history'
 import {
   cancelGenerateCommitMessageLocal,
@@ -503,6 +509,7 @@ export function registerFilesystemHandlers(
   store: Store,
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
 ): void {
+  const stagedDiscardReceipts = getLocalGitStagedDiscardReceiptLedger()
   const activeTextSearches = new Map<string, ChildProcess>()
   const downloadSessions = new Map<string, DownloadSession>()
 
@@ -2221,6 +2228,84 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       await bulkDiscardChanges(worktreePath, filePaths, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:bulkDiscardStaged',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        filePaths: string[]
+        operationId: string
+        connectionId?: string
+      }
+    ): Promise<GitStagedDiscardReceipt> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        const scope = `${args.connectionId}\0${args.worktreePath}`
+        return stagedDiscardReceipts.run(
+          scope,
+          args.operationId,
+          args.filePaths.join('\0'),
+          pendingGitStagedDiscardReceipt(args.operationId, args.filePaths),
+          () =>
+            provider.bulkDiscardStagedChanges(args.worktreePath, args.filePaths, args.operationId)
+        )
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return stagedDiscardReceipts.run(
+        worktreePath,
+        args.operationId,
+        filePaths.join('\0'),
+        pendingGitStagedDiscardReceipt(args.operationId, filePaths),
+        () =>
+          bulkDiscardStagedChangesWithReceipt(worktreePath, filePaths, args.operationId, gitOptions)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'git:getStagedDiscardReceipt',
+    async (
+      _event,
+      args: { worktreePath: string; operationId: string; connectionId?: string }
+    ): Promise<GitStagedDiscardReceipt | null> => {
+      if (args.connectionId) {
+        const scope = `${args.connectionId}\0${args.worktreePath}`
+        const receipt = stagedDiscardReceipts.get(scope, args.operationId)
+        if (
+          !receipt ||
+          receipt.state === 'succeeded' ||
+          (receipt.state === 'failed' && receipt.mutation !== 'possible')
+        ) {
+          return receipt
+        }
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return receipt
+        }
+        const authoritative = await provider.getStagedDiscardReceipt(
+          args.worktreePath,
+          args.operationId,
+          receipt.affectedPaths
+        )
+        return authoritative === null
+          ? receipt
+          : stagedDiscardReceipts.reconcileAuthoritative(scope, args.operationId, authoritative)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return stagedDiscardReceipts.get(worktreePath, args.operationId)
     }
   )
 

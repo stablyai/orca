@@ -32,6 +32,13 @@ import {
 } from '../git/max-buffer-overflow'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
+import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../../shared/protocol-version'
+import { SshGitStagedDiscardCapability } from './ssh-git-staged-discard-capability'
+import {
+  assertGitStagedDiscardReceipt,
+  pendingGitStagedDiscardReceipt,
+  type GitStagedDiscardReceipt
+} from '../../shared/git-staged-discard-receipt'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -85,6 +92,7 @@ function filterUntrackedPorcelainStatus(stdout: string | undefined): string | un
 
 export class SshGitProvider implements IGitProvider {
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult | GitDiffResult[]>()
+  private readonly stagedDiscardCapability: SshGitStagedDiscardCapability
 
   private connectionId: string
   private mux: SshChannelMultiplexer
@@ -109,6 +117,7 @@ export class SshGitProvider implements IGitProvider {
   ) {
     this.connectionId = connectionId
     this.mux = mux
+    this.stagedDiscardCapability = new SshGitStagedDiscardCapability(mux)
   }
 
   getConnectionId(): string {
@@ -446,6 +455,60 @@ export class SshGitProvider implements IGitProvider {
     } finally {
       this.gitDiffReadDedupe.clear()
     }
+  }
+
+  async bulkDiscardStagedChanges(
+    worktreePath: string,
+    filePaths: string[],
+    operationId: string
+  ): Promise<GitStagedDiscardReceipt> {
+    if (!(await this.stagedDiscardCapability.supports())) {
+      throw new Error(
+        'Discarding staged changes requires the latest SSH relay. Reconnect and try again.'
+      )
+    }
+    this.gitDiffReadDedupe.clear()
+    let authoritativeReceipt: GitStagedDiscardReceipt
+    try {
+      try {
+        const receipt = await this.mux.request('git.bulkDiscardStaged', {
+          worktreePath,
+          filePaths,
+          operationId,
+          stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+        })
+        authoritativeReceipt = assertGitStagedDiscardReceipt(receipt, operationId, filePaths)
+      } catch (error) {
+        const receipt = await this.mux
+          .request('git.getStagedDiscardReceipt', { worktreePath, operationId })
+          .catch(() => null)
+        if (receipt === null) {
+          if (isJsonRpcApplicationError(error)) {
+            throw error
+          }
+          authoritativeReceipt = pendingGitStagedDiscardReceipt(operationId, filePaths)
+        } else {
+          authoritativeReceipt = assertGitStagedDiscardReceipt(receipt, operationId, filePaths)
+        }
+      }
+      return authoritativeReceipt
+    } finally {
+      this.gitDiffReadDedupe.clear()
+    }
+  }
+
+  async getStagedDiscardReceipt(
+    worktreePath: string,
+    operationId: string,
+    affectedPaths: readonly string[]
+  ): Promise<GitStagedDiscardReceipt | null> {
+    const receipt = await this.mux.request('git.getStagedDiscardReceipt', {
+      worktreePath,
+      operationId
+    })
+    return receipt === null
+      ? null
+      : assertGitStagedDiscardReceipt(receipt, operationId, affectedPaths)
   }
 
   async discardChanges(worktreePath: string, filePath: string): Promise<void> {
@@ -953,4 +1016,12 @@ export class SshGitProvider implements IGitProvider {
     }
     return buildHostedRemoteCommitUrl(remoteUrl, sha)
   }
+}
+
+function isJsonRpcApplicationError(error: unknown): boolean {
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    typeof (error as { code?: unknown }).code === 'number'
+  )
 }

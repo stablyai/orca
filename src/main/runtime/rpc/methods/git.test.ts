@@ -221,7 +221,8 @@ describe('git RPC methods', () => {
       stageRuntimeGitPath: vi.fn().mockResolvedValue({ ok: true }),
       bulkUnstageRuntimeGitPaths: vi.fn().mockResolvedValue({ ok: true }),
       discardRuntimeGitPath: vi.fn().mockResolvedValue({ ok: true }),
-      bulkDiscardRuntimeGitPaths: vi.fn().mockResolvedValue({ ok: true })
+      bulkDiscardRuntimeGitPaths: vi.fn().mockResolvedValue({ ok: true }),
+      bulkDiscardStagedRuntimeGitPaths: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
 
@@ -237,12 +238,62 @@ describe('git RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('git.bulkDiscard', { worktree: 'id:wt-1', filePaths: ['src/a.ts', 'b.ts'] })
     )
+    await dispatcher.dispatch(
+      makeRequest('git.discardFromIndex', { worktree: 'id:wt-1', filePath: 'src/c.ts' })
+    )
+    await dispatcher.dispatch(
+      makeRequest('git.bulkDiscardFromIndex', {
+        worktree: 'id:wt-1',
+        filePaths: ['src/c.ts', 'd.ts']
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('git.bulkDiscardStaged', {
+        worktree: 'id:wt-1',
+        filePaths: ['src/e.ts', 'f.ts'],
+        operationId: 'op-1',
+        stagedDiscardOperationVersion: 2
+      })
+    )
 
     expect(runtime.stageRuntimeGitPath).toHaveBeenCalledWith('id:wt-1', 'src/a.ts')
     expect(runtime.bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['src/a.ts', 'b.ts'])
     expect(runtime.discardRuntimeGitPath).toHaveBeenCalledWith('id:wt-1', 'src/a.ts')
     expect(runtime.bulkDiscardRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['src/a.ts', 'b.ts'])
+    expect(runtime.discardRuntimeGitPath).toHaveBeenCalledWith('id:wt-1', 'src/c.ts')
+    expect(runtime.bulkDiscardRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['src/c.ts', 'd.ts'])
+    expect(runtime.bulkDiscardStagedRuntimeGitPaths).toHaveBeenCalledWith(
+      'id:wt-1',
+      ['src/e.ts', 'f.ts'],
+      'op-1'
+    )
   })
+
+  it.each([undefined, '2', 1])(
+    'rejects staged discard version %s before the runtime mutation',
+    async (stagedDiscardOperationVersion) => {
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        bulkDiscardStagedRuntimeGitPaths: vi.fn()
+      } as unknown as OrcaRuntimeService
+      const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+      const response = await dispatcher.dispatch(
+        makeRequest('git.bulkDiscardStaged', {
+          worktree: 'id:wt-1',
+          filePaths: ['staged.txt'],
+          operationId: 'op-rejected',
+          stagedDiscardOperationVersion
+        })
+      )
+
+      expect(response).toMatchObject({
+        ok: false,
+        error: expect.objectContaining({ code: 'invalid_argument' })
+      })
+      expect(runtime.bulkDiscardStagedRuntimeGitPaths).not.toHaveBeenCalled()
+    }
+  )
 
   it('rejects empty bulk mutation paths before calling the runtime', async () => {
     const runtime = {

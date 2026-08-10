@@ -16,6 +16,7 @@ vi.mock('./runner', () => ({
 
 import {
   bulkDiscardChanges,
+  bulkDiscardStagedChanges,
   bulkStageFiles,
   bulkUnstageFiles,
   discardChanges,
@@ -30,7 +31,7 @@ const wslOptions = { wslDistro: 'Ubuntu' }
 describe('WSL git pathspecs', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'tests/breakgit\0', stderr: '' })
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: ' M tests/breakgit\0', stderr: '' })
   })
 
   it('uses POSIX separators for tracked file mutations executed inside WSL', async () => {
@@ -55,12 +56,21 @@ describe('WSL git pathspecs', () => {
 
     try {
       gitExecFileAsyncMock
-        .mockRejectedValueOnce(new Error('not tracked'))
+        .mockResolvedValueOnce({ stdout: '?? tests/breakgit\0', stderr: '' })
         .mockResolvedValue({ stdout: '', stderr: '' })
       await discardChanges(repo, windowsRelativePath, wslOptions)
 
       expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
-        ['ls-files', '--error-unmatch', '--', ':(literal)tests/breakgit'],
+        [
+          'status',
+          '--porcelain=v1',
+          '-z',
+          '--untracked-files=all',
+          '--ignored',
+          '--no-renames',
+          '--',
+          ':(literal)tests/breakgit'
+        ],
         ['clean', '-ffdx', '--', ':(literal)tests/breakgit']
       ])
 
@@ -69,12 +79,45 @@ describe('WSL git pathspecs', () => {
       await bulkDiscardChanges(repo, [windowsRelativePath], wslOptions)
 
       expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
-        ['ls-files', '-z', '--', ':(literal)tests/breakgit'],
+        [
+          'status',
+          '--porcelain=v1',
+          '-z',
+          '--untracked-files=all',
+          '--ignored',
+          '--no-renames',
+          '--',
+          ':(literal)tests/breakgit'
+        ],
         ['clean', '-ffdx', '--', ':(literal)tests/breakgit']
       ])
     } finally {
       await rm(repo, { recursive: true, force: true })
     }
+  })
+
+  it('uses one POSIX pathspec for the combined staged WSL restore', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'R  tests/breakgit\0tests/old-breakgit\0',
+      stderr: ''
+    })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'head-oid\n', stderr: '' })
+
+    await bulkDiscardStagedChanges(worktreePath, [windowsRelativePath], wslOptions)
+
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+      ['status', '--porcelain=v1', '-z', '--untracked-files=no', '--renames'],
+      ['rev-parse', '--verify', 'HEAD'],
+      [
+        'restore',
+        '--source=head-oid',
+        '--staged',
+        '--worktree',
+        '--',
+        ':(literal)tests/breakgit',
+        ':(literal)tests/old-breakgit'
+      ]
+    ])
   })
 
   it('preserves backslashes for host Git where they can be literal filename characters', async () => {

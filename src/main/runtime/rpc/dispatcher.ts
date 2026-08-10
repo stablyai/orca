@@ -31,12 +31,14 @@ export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonl
 export class RpcDispatcher {
   private readonly runtime: OrcaRuntimeService
   private readonly registry: RpcRegistry
+  private readonly registeredMethods: ReadonlySet<string>
   private readonly orchestrationMutations: OrchestrationMutationExecutor
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility
 
   constructor({ runtime, methods = ALL_RPC_METHODS }: DispatcherOptions) {
     this.runtime = runtime
     this.registry = buildRegistry(methods)
+    this.registeredMethods = new Set(this.registry.keys())
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
   }
@@ -93,6 +95,7 @@ export class RpcDispatcher {
         const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
         return method.handler(effectiveParams, {
           runtime: this.runtime,
+          registeredMethods: this.registeredMethods,
           signal: options?.signal,
           requestId: request.id,
           orchestrationCapability: request.orchestrationCapability,
@@ -181,6 +184,7 @@ export class RpcDispatcher {
           const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
           return method.handler(effectiveParams, {
             runtime: this.runtime,
+            registeredMethods: this.registeredMethods,
             signal: options?.signal,
             requestId: request.id,
             connectionId: options?.connectionId,
@@ -243,6 +247,7 @@ export class RpcDispatcher {
         parsedParams.value,
         {
           runtime: this.runtime,
+          registeredMethods: this.registeredMethods,
           signal: options?.signal,
           requestId: request.id,
           connectionId: options?.connectionId,

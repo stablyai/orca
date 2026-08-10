@@ -9,6 +9,14 @@ import type {
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { parseHostAccessLink } from '../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing-verification'
+import { assertGitIndexPreservingDiscardCapability } from '../../../shared/git-index-preserving-discard-capability'
+import { assertGitStagedDiscardCapability } from '../../../shared/git-staged-discard-operation'
+import {
+  assertGitStagedDiscardReceipt,
+  pendingGitStagedDiscardReceipt,
+  type GitStagedDiscardReceipt
+} from '../../../shared/git-staged-discard-receipt'
+import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../../../shared/protocol-version'
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import type {
@@ -2242,12 +2250,52 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       mutateGitPath('git.unstage', worktreePath, filePath),
     bulkUnstage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkUnstage', worktreePath, filePaths),
-    discard: async ({ worktreePath, filePath }) =>
-      mutateGitPath('git.discard', worktreePath, filePath),
+    discard: async ({ worktreePath, filePath }) => {
+      assertGitIndexPreservingDiscardCapability(await callRuntimeResult('status.get'))
+      await mutateGitPath('git.discardFromIndex', worktreePath, filePath)
+    },
     bulkDiscard: async ({ worktreePath, filePaths }) => {
-      for (const filePath of filePaths) {
-        await mutateGitPath('git.discard', worktreePath, filePath)
+      assertGitIndexPreservingDiscardCapability(await callRuntimeResult('status.get'))
+      await mutateGitPaths('git.bulkDiscardFromIndex', worktreePath, filePaths)
+    },
+    bulkDiscardStaged: async ({ worktreePath, filePaths, operationId }) => {
+      assertGitStagedDiscardCapability(await callRuntimeResult('status.get'))
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      const selector = toRuntimeWorktreeSelector(worktree.id)
+      let receiptValue: unknown = undefined
+      try {
+        receiptValue = await callRuntimeResult<GitStagedDiscardReceipt>('git.bulkDiscardStaged', {
+          worktree: selector,
+          filePaths,
+          operationId,
+          stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+        })
+      } catch (error) {
+        if (error instanceof WebRuntimeApplicationError) {
+          throw error
+        }
+        try {
+          const recovered = await callRuntimeResult<GitStagedDiscardReceipt | null>(
+            'git.getStagedDiscardReceipt',
+            { worktree: selector, operationId }
+          )
+          receiptValue =
+            recovered === null ? pendingGitStagedDiscardReceipt(operationId, filePaths) : recovered
+        } catch (recoveryError) {
+          if (recoveryError instanceof WebRuntimeApplicationError) {
+            throw recoveryError
+          }
+          receiptValue = pendingGitStagedDiscardReceipt(operationId, filePaths)
+        }
       }
+      return assertGitStagedDiscardReceipt(receiptValue, operationId, filePaths)
+    },
+    getStagedDiscardReceipt: async ({ worktreePath, operationId }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult<GitStagedDiscardReceipt | null>('git.getStagedDiscardReceipt', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        operationId
+      })
     },
     remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -3444,9 +3492,19 @@ async function callRuntimeResult<TResult>(
 ): Promise<TResult> {
   const response = await callRuntimeEnvelope(method, params, timeoutMs)
   if (!response.ok) {
-    throw new Error(response.error.message)
+    throw new WebRuntimeApplicationError(response.error.code, response.error.message)
   }
   return response.result as TResult
+}
+
+class WebRuntimeApplicationError extends Error {
+  constructor(
+    readonly code: string,
+    message: string
+  ) {
+    super(message)
+    this.name = 'WebRuntimeApplicationError'
+  }
 }
 
 async function callRuntimeResultWithOwner<TResult>(
