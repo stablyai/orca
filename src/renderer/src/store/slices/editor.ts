@@ -4193,15 +4193,29 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const hugeUnchanged = (prevHuge?.limit ?? null) === (nextHuge?.limit ?? null)
 
       const prevBranchLineTotal = s.gitBranchLineTotalByWorktree[worktreeId] ?? null
-      // Why: an omitted field means "not known exact"; keeping the old total would render a confidently wrong chip.
-      const nextBranchLineTotal = status.branchLineTotal ?? null
+      // Why: an omitted field means "not computed on this pass" — soft-deadline
+      // miss, cooldown, old host — not "zero", so dropping it blanks a published
+      // chip between polls. Staleness is handled where it can be: the host
+      // carries its cache forward, and SourceControl hides any total whose
+      // mergeBase no longer matches the fork point. A capped listing skips the
+      // ranged diff outright, so nothing will refresh it — clear it there.
+      const nextBranchLineTotal = status.didHitLimit
+        ? null
+        : (status.branchLineTotal ?? prevBranchLineTotal)
       const branchLineTotalUnchanged =
         prevBranchLineTotal === nextBranchLineTotal ||
         (prevBranchLineTotal !== null &&
           nextBranchLineTotal !== null &&
           prevBranchLineTotal.added === nextBranchLineTotal.added &&
           prevBranchLineTotal.removed === nextBranchLineTotal.removed &&
-          prevBranchLineTotal.mergeBase === nextBranchLineTotal.mergeBase)
+          prevBranchLineTotal.mergeBase === nextBranchLineTotal.mergeBase &&
+          (prevBranchLineTotal.test?.added ?? null) === (nextBranchLineTotal.test?.added ?? null) &&
+          (prevBranchLineTotal.test?.removed ?? null) ===
+            (nextBranchLineTotal.test?.removed ?? null) &&
+          (prevBranchLineTotal.generated?.added ?? null) ===
+            (nextBranchLineTotal.generated?.added ?? null) &&
+          (prevBranchLineTotal.generated?.removed ?? null) ===
+            (nextBranchLineTotal.generated?.removed ?? null))
 
       const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
       const nextStatusHead = getKnownGitHead(status.head)

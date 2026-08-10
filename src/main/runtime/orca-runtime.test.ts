@@ -202,6 +202,7 @@ const restoreLocalWatcherAfterFailedRemovalMock = vi.hoisted(() => vi.fn())
 const restoreRemoteWatcherAfterFailedRemovalMock = vi.hoisted(() => vi.fn())
 const forgetLocalWatcherRemovalSnapshotMock = vi.hoisted(() => vi.fn())
 const forgetRemoteWatcherRemovalSnapshotMock = vi.hoisted(() => vi.fn())
+const scanLocalRepoWorktreesForResolutionMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => electronMocks)
 vi.mock('../ipc/filesystem-watcher', () => ({
@@ -412,6 +413,10 @@ vi.mock('../git/worktree', () => ({
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock,
   forceDeleteLocalBranch: forceDeleteLocalBranchMock
+}))
+
+vi.mock('./repo-worktree-resolution-scan', () => ({
+  scanLocalRepoWorktreesForResolution: scanLocalRepoWorktreesForResolutionMock
 }))
 
 vi.mock('../terminal-history-deletion', () => ({
@@ -653,6 +658,18 @@ function resetRuntimeTestMocks(): void {
   forgetRemoteWatcherRemovalSnapshotMock.mockReset()
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
+  scanLocalRepoWorktreesForResolutionMock
+    .mockReset()
+    .mockImplementation(async (repoPath: string, options: { wslDistro?: string }) => {
+      try {
+        const worktrees = options.wslDistro
+          ? await listWorktrees(repoPath, options)
+          : await listWorktrees(repoPath)
+        return { ok: true, worktrees }
+      } catch {
+        return { ok: false, worktrees: [] }
+      }
+    })
   vi.mocked(addWorktree).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockResolvedValue(undefined)
@@ -1029,6 +1046,11 @@ class InMemoryOrchestrationMessages {
 
   private messages: MessageRow[] = []
 
+  private runs = new Map<
+    string,
+    { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
+  >()
+
   insertMessage(msg: {
     from: string
     to: string
@@ -1082,6 +1104,30 @@ class InMemoryOrchestrationMessages {
 
   getActiveCoordinatorRun(): { coordinator_handle: string } | null {
     return this.activeCoordinatorRun
+  }
+
+  setRun(run: {
+    id: string
+    coordinator_handle: string | null
+    coordinator_pane_key?: string | null
+  }): void {
+    this.runs.set(run.id, { coordinator_pane_key: null, ...run })
+  }
+
+  getRun(
+    id: string
+  ):
+    | { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
+    | undefined {
+    return this.runs.get(id)
+  }
+
+  getCurrentRunForPane(
+    paneKey: string
+  ):
+    | { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
+    | undefined {
+    return [...this.runs.values()].find((run) => run.coordinator_pane_key === paneKey)
   }
 
   markAsDelivered(ids: string[]): void {
@@ -1769,7 +1815,7 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ disabledTuiAgents: ['claude'] }),
       expect.objectContaining({
         shouldContinue: expect.any(Function),
-        shouldHydrateShellPath: process.platform !== 'win32'
+        shouldHydrateShellPath: true
       })
     )
   })
@@ -3510,6 +3556,50 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).not.toHaveBeenCalled()
     expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([folderWorktreeId])
     expect(terminals.terminals[0]?.worktreePath).toBe(TEST_FOLDER_WORKSPACE_PATH)
+  })
+
+  it('keeps same-path folder workspace instance PTYs scoped to their exact ids', async () => {
+    const firstWorktreeId = `${TEST_REPO_ID}::${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-4111-8111-111111111111`
+    const secondWorktreeId = `${TEST_REPO_ID}::${TEST_FOLDER_WORKSPACE_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}22222222-2222-4222-8222-222222222222`
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockRejectedValue(
+      new Error('folder explicit-id fallback should not rescan worktrees')
+    )
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: 'first-folder-pty',
+          cwd: TEST_FOLDER_WORKSPACE_PATH,
+          title: 'first',
+          worktreeId: firstWorktreeId
+        },
+        {
+          id: 'second-folder-pty',
+          cwd: TEST_FOLDER_WORKSPACE_PATH,
+          title: 'second',
+          worktreeId: secondWorktreeId
+        }
+      ]
+    })
+
+    const terminals = await runtime.listTerminals(`id:${secondWorktreeId}`)
+
+    expect(listWorktrees).not.toHaveBeenCalled()
+    expect(terminals.terminals).toHaveLength(1)
+    expect(terminals.terminals[0]).toMatchObject({
+      ptyId: 'second-folder-pty',
+      worktreeId: secondWorktreeId,
+      worktreePath: TEST_FOLDER_WORKSPACE_PATH
+    })
+    const internals = runtime as unknown as {
+      ptysById: Map<string, { worktreeId: string }>
+    }
+    expect(internals.ptysById.get('first-folder-pty')).toBeUndefined()
+    expect(internals.ptysById.get('second-folder-pty')?.worktreeId).toBe(secondWorktreeId)
   })
 
   it('routes PTY output through the PTY leaf index in large terminal graphs', () => {
@@ -8997,6 +9087,103 @@ describe('OrcaRuntimeService', () => {
       expect(runtime.getPtyOutputSequence('pty-1')).toBe(0)
     })
 
+    it('emits live Cursor identity without storing it as liveness evidence', async () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.onPtyData('pty-1', '\x1b]0;Cursor Agent\x07', 100)
+
+      expect(batches.flatMap((batch) => batch.facts)).toEqual([
+        { kind: 'title', normalizedTitle: 'Cursor Agent', rawTitle: 'Cursor Agent' }
+      ])
+      expect((await runtime.listTerminals()).terminals[0].title).not.toBe('Cursor Agent')
+      expect(runtime.getTerminalSideEffectSnapshot('pty-1')).toMatchObject({
+        facts: [{ kind: 'title', normalizedTitle: 'Cursor Agent', rawTitle: 'Cursor Agent' }]
+      })
+    })
+
+    it('keeps live Cursor identity in mobile titles without making it agent liveness', async () => {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-1',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Terminal 1',
+            activeLeafId: 'pane:1',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-1',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-1'
+          }
+        ],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'epoch-cursor',
+            snapshotVersion: 1,
+            activeGroupId: null,
+            activeTabId: 'tab-1::pane:1',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'tab-1::pane:1',
+                parentTabId: 'tab-1',
+                leafId: 'pane:1',
+                ptyId: 'pty-1',
+                title: 'Terminal 1',
+                isActive: true
+              }
+            ]
+          }
+        ]
+      })
+
+      runtime.onPtyData('pty-1', '\x1b]0;Cursor Agent\x07', 100)
+
+      const terminal = (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs[0]
+      expect(terminal).toMatchObject({ type: 'terminal', title: 'Cursor Agent' })
+      expect(terminal).not.toHaveProperty('agentStatus')
+    })
+
+    it('lets an explicit terminal rename override cached Cursor identity and restores it after clearing', async () => {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`)
+
+      runtime.onPtyData('pty-1', '\x1b]0;Cursor Agent\x07', 100)
+      const mobileTerminal = (
+        await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+      ).tabs.find((tab) => tab.type === 'terminal')
+      if (mobileTerminal?.type !== 'terminal' || !mobileTerminal.terminal) {
+        throw new Error('expected mobile terminal handle')
+      }
+      expect(mobileTerminal.terminal).toBe(created.handle)
+
+      await runtime.renameTerminal(mobileTerminal.terminal, 'Pinned Cursor')
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs[0]).toMatchObject(
+        { type: 'terminal', title: 'Pinned Cursor' }
+      )
+
+      await runtime.renameTerminal(mobileTerminal.terminal, null)
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs[0]).toMatchObject(
+        { type: 'terminal', title: 'Cursor Agent' }
+      )
+    })
+
     it('confirms title-based agent exits against the foreground process', async () => {
       const { runtime, batches } = createSideEffectRuntime()
       syncSinglePty(runtime)
@@ -9808,12 +9995,12 @@ describe('OrcaRuntimeService', () => {
       expect(runtime.getTerminalSideEffectSnapshot('pty-unknown')).toBeNull()
     })
 
-    it('drops the cursor-agent literal from record-fallback snapshots', () => {
+    it('keeps the cursor-agent literal in record-fallback snapshots only without a tracker title', () => {
       const { runtime } = createSideEffectRuntime()
       syncSinglePty(runtime)
 
       runtime.onPtyData('pty-1', 'plain output\n', 100)
-      // Simulate a record title restored by a path that bypassed the tracker (which itself refuses to store the bare native title).
+      // Simulate a record title restored by a path that bypassed the tracker.
       const records = (
         runtime as unknown as {
           ptysById: Map<string, { lastOscTitle: string | null }>
@@ -9821,7 +10008,17 @@ describe('OrcaRuntimeService', () => {
       ).ptysById
       records.get('pty-1')!.lastOscTitle = 'Cursor Agent'
 
-      expect(runtime.getTerminalSideEffectSnapshot('pty-1')).toBeNull()
+      // Why: a hookless Cursor pane has no other identity to restore (#10258).
+      expect(runtime.getTerminalSideEffectSnapshot('pty-1')).toMatchObject({
+        facts: [{ kind: 'title', normalizedTitle: 'Cursor Agent', rawTitle: 'Cursor Agent' }]
+      })
+
+      // A synthesized Cursor title owns the pane; the bare literal must not replay over it.
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Cursor Agent\x07')
+
+      expect(runtime.getTerminalSideEffectSnapshot('pty-1')).toMatchObject({
+        facts: [{ kind: 'title', normalizedTitle: '⠋ Cursor Agent', rawTitle: '⠋ Cursor Agent' }]
+      })
     })
 
     it('emits the chunk agentStatus events before its side-effect batch', () => {
@@ -18468,23 +18665,24 @@ describe('OrcaRuntimeService', () => {
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
 
-      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: hello'))
-      // Why: the split Enter write lands after the 500ms delay; advance past it before asserting on delivered_at.
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
       await vi.advanceTimersByTimeAsync(500)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
 
-      // Why: design doc §3.2 splits delivered vs. read — push-on-idle stamps delivered_at but must not flip read; only the agent's check consumes, so rows stay unread.
       const unread = db.getUnreadMessages(terminal.handle)
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
-      expect(unread[0].delivered_at).not.toBeNull()
+      expect(unread[0].delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('injects pending orchestration messages into the active coordinator without auto-submitting', async () => {
+  it('submits the mail pointer in an active coordinator pane', async () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
@@ -18512,18 +18710,18 @@ describe('OrcaRuntimeService', () => {
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        expect.stringContaining('Subject: hello coordinator')
+        expect.stringContaining('You have 1 orchestration message')
       )
       await vi.advanceTimersByTimeAsync(500)
       const submitWrites = write.mock.calls.filter(
         ([ptyId, text]) => ptyId === 'pty-1' && text === '\r'
       )
-      expect(submitWrites).toHaveLength(0)
+      expect(submitWrites).toHaveLength(1)
 
       const unread = db.getUnreadMessages(terminal.handle)
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
-      expect(unread[0].delivered_at).not.toBeNull()
+      expect(unread[0].delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -18551,18 +18749,20 @@ describe('OrcaRuntimeService', () => {
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
 
-      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: hello cursor'))
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
       await vi.advanceTimersByTimeAsync(500)
       const submitWrites = write.mock.calls.filter(
         ([ptyId, text]) => ptyId === 'pty-1' && text === '\r'
       )
       expect(submitWrites).toHaveLength(0)
 
-      // Why: Cursor Agent treats injected PTY text as editable prompt input, so the user submits manually but the banner must not replay on the next idle transition.
       const unread = db.getUnreadMessages(terminal.handle)
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
-      expect(unread[0].delivered_at).not.toBeNull()
+      expect(unread[0].delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -18591,7 +18791,10 @@ describe('OrcaRuntimeService', () => {
       runtime.deliverPendingMessagesForHandle(terminal.handle)
       await vi.advanceTimersByTimeAsync(500)
 
-      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: hello claude'))
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
       db.close()
     } finally {
@@ -18622,16 +18825,16 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(500)
 
       const firstInjections = write.mock.calls.filter(
-        (c) => typeof c[1] === 'string' && c[1].includes('Subject: hello')
+        (c) => typeof c[1] === 'string' && c[1].includes('orca orchestration check')
       ).length
       expect(firstInjections).toBe(1)
 
-      // Second idle transition: the row is unread but already delivered, so push-on-idle must skip it to avoid the replay bug.
+      // The row remains pending, so the in-memory sequence watermark prevents replay.
       runtime.deliverPendingMessagesForHandle(terminal.handle)
       await vi.advanceTimersByTimeAsync(500)
 
       const totalInjections = write.mock.calls.filter(
-        (c) => typeof c[1] === 'string' && c[1].includes('Subject: hello')
+        (c) => typeof c[1] === 'string' && c[1].includes('orca orchestration check')
       ).length
       expect(totalInjections).toBe(1)
       db.close()
@@ -33284,14 +33487,122 @@ describe('OrcaRuntimeService', () => {
 
       // The push is deferred one microtask so it lands behind any resolved check.
       await Promise.resolve()
-      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: after wait'))
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
+      expect(write).not.toHaveBeenCalledWith('pty-1', expect.stringContaining('after wait'))
       await vi.advanceTimersByTimeAsync(500)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
-      expect(message.delivered_at).not.toBeNull()
+      expect(message.delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('points a Run mailbox at its live-idle coordinator without replaying pending rows', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      db.setRun({
+        id: 'run_mailbox',
+        coordinator_handle: terminal.handle,
+        coordinator_pane_key: `${terminal.tabId}:${terminal.leafId}`
+      })
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      const message = db.insertMessage({
+        from: 'term_worker',
+        to: 'run:run_mailbox',
+        subject: 'one P3 finding',
+        body: 'private worker report',
+        type: 'worker_done'
+      })
+
+      runtime.notifyMessageArrived('run:run_mailbox', 'worker_done')
+      await Promise.resolve()
+      expect(write).not.toHaveBeenCalled()
+
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        '\nYou have 1 orchestration message. Run `orca orchestration check`.\n'
+      )
+      expect(write).not.toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('private worker report')
+      )
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write).toHaveBeenCalledWith('pty-1', '\r')
+      expect(message.delivered_at).toBeNull()
+
+      runtime.notifyMessageArrived('run:run_mailbox', 'worker_done')
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(500)
+      expect(
+        write.mock.calls.filter(
+          ([, payload]) =>
+            typeof payload === 'string' && payload.includes('orca orchestration check')
+        )
+      ).toHaveLength(1)
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('points already-idle Run mail after Codex replaces its completion title', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const db = new InMemoryOrchestrationMessages()
+    const write = vi.fn().mockReturnValue(true)
+    setInMemoryOrchestrationMessages(runtime, db)
+    runtime.setPtyController({
+      write,
+      kill: vi.fn(),
+      getForegroundProcess: async () => 'codex'
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    db.setRun({
+      id: 'run_codex_native_title',
+      coordinator_handle: terminal.handle,
+      coordinator_pane_key: `${terminal.tabId}:${terminal.leafId}`
+    })
+    runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
+    runtime.onPtyData('pty-1', '\x1b]0;fix-12953-orchestration-mail-pointer\x07', 101)
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    db.insertMessage({
+      from: 'term_worker',
+      to: 'run:run_codex_native_title',
+      subject: 'real-agent smoke complete',
+      body: 'The package name is orca.',
+      type: 'worker_done'
+    })
+
+    runtime.notifyMessageArrived('run:run_codex_native_title', 'worker_done')
+    await Promise.resolve()
+
+    await vi.waitFor(() => {
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        '\nYou have 1 orchestration message. Run `orca orchestration check`.\n'
+      )
+    })
+    db.close()
   })
 
   it('does not inject pending mail on notify when the recipient is still working', async () => {
@@ -33355,9 +33666,12 @@ describe('OrcaRuntimeService', () => {
       // is no transition — only the liveness edge can release the row (#12536).
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 100)
 
-      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: restored idle'))
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
       await vi.advanceTimersByTimeAsync(600)
-      expect(message.delivered_at).not.toBeNull()
+      expect(message.delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -33399,9 +33713,12 @@ describe('OrcaRuntimeService', () => {
       // The first live idle frame authorizes it and the row still delivers.
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
-      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: seeded idle'))
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 1 orchestration message')
+      )
       await vi.advanceTimersByTimeAsync(600)
-      expect(message.delivered_at).not.toBeNull()
+      expect(message.delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -33503,9 +33820,11 @@ describe('OrcaRuntimeService', () => {
       const payloads = write.mock.calls
         .map(([, data]) => data)
         .filter((data): data is string => typeof data === 'string')
-      expect(payloads.some((data) => data.includes('Subject: unclaimed status'))).toBe(true)
-      expect(payloads.some((data) => data.includes('Subject: reserved completion'))).toBe(false)
-      expect(status.delivered_at).not.toBeNull()
+      expect(payloads).toContain(
+        '\nYou have 1 orchestration message. Run `orca orchestration check`.\n'
+      )
+      expect(payloads.some((data) => data.includes('reserved completion'))).toBe(false)
+      expect(status.delivered_at).toBeNull()
       expect(done.delivered_at).toBeNull()
       db.close()
     } finally {
@@ -33684,10 +34003,10 @@ describe('OrcaRuntimeService', () => {
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        expect.stringContaining('Subject: after republish')
+        expect.stringContaining('You have 1 orchestration message')
       )
       await vi.advanceTimersByTimeAsync(600)
-      expect(message.delivered_at).not.toBeNull()
+      expect(message.delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -33738,10 +34057,10 @@ describe('OrcaRuntimeService', () => {
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 200)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        expect.stringContaining('Subject: after same id respawn')
+        expect.stringContaining('You have 1 orchestration message')
       )
       await vi.advanceTimersByTimeAsync(600)
-      expect(message.delivered_at).not.toBeNull()
+      expect(message.delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -33787,10 +34106,10 @@ describe('OrcaRuntimeService', () => {
       await Promise.resolve()
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        expect.stringContaining('Subject: unfiltered status')
+        expect.stringContaining('You have 1 orchestration message')
       )
       await vi.advanceTimersByTimeAsync(600)
-      expect(message.delivered_at).not.toBeNull()
+      expect(message.delivered_at).toBeNull()
 
       // The filtered waiter stays blocked; the push did not consume its wake.
       await vi.advanceTimersByTimeAsync(5_000)
@@ -33865,10 +34184,10 @@ describe('OrcaRuntimeService', () => {
       runtime.notifyMessageArrived(terminal.handle, 'status')
       await Promise.resolve()
 
-      const payloadWrites = write.mock.calls.filter(
-        ([, payload]) => typeof payload === 'string' && payload.includes('Subject: once only')
+      const pointerWrites = write.mock.calls.filter(
+        ([, payload]) => typeof payload === 'string' && payload.includes('orca orchestration check')
       )
-      expect(payloadWrites).toHaveLength(1)
+      expect(pointerWrites).toHaveLength(1)
 
       await vi.advanceTimersByTimeAsync(500)
       const enterWrites = write.mock.calls.filter(([, payload]) => payload === '\r')
@@ -33910,9 +34229,10 @@ describe('OrcaRuntimeService', () => {
       await Promise.resolve()
       expect(
         write.mock.calls.filter(
-          ([, payload]) => typeof payload === 'string' && payload.includes('Subject: second')
+          ([, payload]) =>
+            typeof payload === 'string' && payload.includes('orca orchestration check')
         )
-      ).toHaveLength(0)
+      ).toHaveLength(1)
       expect(second.delivered_at).toBeNull()
 
       // Why: release must not require another agent-status OSC — only the
@@ -33920,13 +34240,18 @@ describe('OrcaRuntimeService', () => {
       // timer-only settle (CodeRabbit settling-timeout gap, #12584).
       await vi.advanceTimersByTimeAsync(3_000)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
-      expect(first.delivered_at).not.toBeNull()
+      expect(first.delivered_at).toBeNull()
       expect(
         write.mock.calls.filter(
-          ([, payload]) => typeof payload === 'string' && payload.includes('Subject: second')
+          ([, payload]) =>
+            typeof payload === 'string' && payload.includes('orca orchestration check')
         )
-      ).toHaveLength(1)
-      expect(second.delivered_at).not.toBeNull()
+      ).toHaveLength(2)
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 2 orchestration messages')
+      )
+      expect(second.delivered_at).toBeNull()
       db.close()
     } finally {
       vi.useRealTimers()
@@ -33953,7 +34278,10 @@ describe('OrcaRuntimeService', () => {
 
     runtime.deliverPendingMessagesForHandle(terminal.handle)
 
-    expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: after wait'))
+    expect(write).toHaveBeenCalledWith(
+      'pty-1',
+      expect.stringContaining('You have 1 orchestration message')
+    )
     db.close()
   })
 
@@ -39020,24 +39348,31 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('worktree scan cache: does not cache non-authoritative scan failures', async () => {
-    vi.mocked(listWorktrees).mockClear()
-    const runtime = createRuntime()
-    vi.mocked(listWorktrees)
+  it('worktree scan cache: does not cache non-authoritative SSH scan failures', async () => {
+    const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+    const remoteStore = {
+      ...store,
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getRepos: () => [remoteRepo]
+    }
+    const provider = { listWorktrees: vi.fn() }
+    provider.listWorktrees
       .mockRejectedValueOnce(new Error('git unavailable'))
       .mockResolvedValueOnce([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+    registerSshGitProvider('ssh-1', provider as never)
+    const runtime = new OrcaRuntimeService(remoteStore as never)
 
-    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
-      {
-        authoritative: false
-      }
-    )
-    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
-      {
-        authoritative: true
-      }
-    )
-    expect(listWorktrees).toHaveBeenCalledTimes(2)
+    try {
+      await expect(
+        runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      ).resolves.toMatchObject({ authoritative: false })
+      await expect(
+        runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      ).resolves.toMatchObject({ authoritative: true })
+      expect(provider.listWorktrees).toHaveBeenCalledTimes(2)
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+    }
   })
 
   it('worktree scan cache: invalidates when SSH availability changes', async () => {

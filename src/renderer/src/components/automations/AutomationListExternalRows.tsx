@@ -21,10 +21,7 @@ import {
   getExternalTargetKindLabel
 } from './external-automation-display'
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
-import {
-  getExternalAutomationActionDisabledMessage,
-  getExternalAutomationSourceAvailability
-} from './external-automation-source-availability'
+import { getExternalAutomationActionDisabledMessage } from './external-automation-source-availability'
 import { translate } from '@/i18n/i18n'
 
 export function AutomationListExternalRows({
@@ -55,53 +52,6 @@ export function AutomationListExternalRows({
       {entries.map((entry) => {
         const providerLabel = getExternalProviderLabel(entry.manager)
         const targetKindLabel = getExternalTargetKindLabel(entry.manager)
-        if (entry.kind === 'source') {
-          const sshStatus =
-            entry.manager.target.type === 'ssh'
-              ? sshConnectionStates.get(entry.manager.target.connectionId)?.status
-              : undefined
-          const sourceAvailability = getExternalAutomationSourceAvailability({
-            manager: entry.manager,
-            providerLabel,
-            targetKindLabel,
-            sshStatus
-          })
-          return (
-            <button
-              key={entry.key}
-              type="button"
-              onClick={() => onSelect(entry.key)}
-              className={cn(
-                'mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors',
-                selectedExternalKey === entry.key
-                  ? 'border-foreground/30 bg-muted/70 text-foreground shadow-sm'
-                  : 'border-transparent hover:bg-muted/50'
-              )}
-            >
-              <span className="min-w-0">
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="size-2 rounded-full bg-muted-foreground/40" />
-                  <span className="truncate font-medium">{entry.manager.targetLabel}</span>
-                </span>
-                <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                  <span>
-                    {providerLabel}{' '}
-                    {translate('auto.components.automations.AutomationsPage.82eb6cb933', 'source')}
-                  </span>
-                  <span className="shrink-0">/</span>
-                  <span className="truncate">{targetKindLabel}</span>
-                </span>
-                <span className="mt-1 block truncate text-xs text-muted-foreground">
-                  {sourceAvailability.summary}
-                </span>
-              </span>
-              <span className="flex max-w-28 flex-col items-end gap-1 text-right text-xs text-muted-foreground">
-                <Clock className="size-3.5" />
-                <span className="line-clamp-2">{sourceAvailability.statusLabel}</span>
-              </span>
-            </button>
-          )
-        }
         const nextRunLabel = entry.job.enabled
           ? formatExternalDate(entry.job.nextRunAt, relativeNow)
           : translate('auto.components.automations.AutomationsPage.paused', 'Paused')

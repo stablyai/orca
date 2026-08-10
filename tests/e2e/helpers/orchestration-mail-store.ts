@@ -3,9 +3,8 @@
  *
  * Why read SQLite instead of `orchestration.check`: check is itself a consumer —
  * it marks rows read and backfills `delivered_at` — so using it to observe would
- * destroy the very distinction these specs exist to test. The two markers are
- * independent on purpose: `delivered_at` means a push typed the row into a pane,
- * `read` means a pull consumed it. Only an out-of-band read can tell them apart.
+ * destroy the very distinction these specs exist to test. A pointer changes
+ * neither marker; only an out-of-band read can prove that before check consumes.
  */
 import path from 'node:path'
 import Database from '../../../src/main/sqlite/sync-database'
@@ -49,13 +48,10 @@ export function readMailbox(userDataDir: string, toHandle: string): MailRow[] {
 }
 
 /**
- * Mark `handle` as the running coordinator — the state that makes push delivery
- * withhold the synthesized Enter, because that prompt holds user-typed input.
+ * Mark `handle` as a legacy running coordinator to prove it no longer suppresses Enter.
  *
- * Why seed the row instead of calling `orchestration.run`: that RPC also starts
- * a live coordinator loop which dispatches workers on a timer, and its
- * scheduling would race every assertion here. The carve-out reads nothing but
- * this row.
+ * Why seed instead of calling `orchestration.run`: that RPC starts a coordinator
+ * loop whose scheduling would race the assertion.
  */
 export function startCoordinatorRun(userDataDir: string, handle: string): void {
   withMailDb(userDataDir, (db) => {
@@ -67,7 +63,7 @@ export function startCoordinatorRun(userDataDir: string, handle: string): void {
 }
 
 /**
- * How a row was consumed, if at all.
+ * How a row was consumed under either the current or historical push behavior.
  *
  * `read` is checked first because a pull backfills `delivered_at` via COALESCE,
  * so a pulled row also carries a delivery stamp — the stamp alone cannot prove

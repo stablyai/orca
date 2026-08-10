@@ -15,6 +15,7 @@ vi.mock('@xterm/addon-image', () => ({
 }))
 
 const webLinksAddonMock = vi.hoisted(() => ({
+  handler: null as ((event: MouseEvent, uri: string) => void) | null,
   options: null as { hover?: (event: MouseEvent, uri: string) => void; leave?: () => void } | null
 }))
 
@@ -43,7 +44,8 @@ vi.mock('@xterm/addon-unicode11', () => ({
 }))
 
 vi.mock('@xterm/addon-web-links', () => ({
-  WebLinksAddon: vi.fn().mockImplementation(function WebLinksAddon(_handler, options) {
+  WebLinksAddon: vi.fn().mockImplementation(function WebLinksAddon(handler, options) {
+    webLinksAddonMock.handler = handler
     webLinksAddonMock.options = options
     return {}
   })
@@ -171,5 +173,24 @@ describe('createPaneDOM link tooltips', () => {
 
     expect(linkOpenHint).toHaveBeenCalledWith(7)
     expect(formatLinkTooltip).toHaveBeenCalledWith(7, 'http://localhost:5180/', 'open hint')
+  })
+
+  it('identifies the clicked pane to link routing', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+    const onLinkClick = vi.fn()
+    createPaneDOM(
+      7,
+      leafId,
+      { linkOpenHint: () => 'open hint', onLinkClick },
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
+    const event = {} as MouseEvent
+
+    webLinksAddonMock.handler?.(event, 'https://example.com')
+
+    expect(onLinkClick).toHaveBeenCalledWith(7, event, 'https://example.com')
   })
 })

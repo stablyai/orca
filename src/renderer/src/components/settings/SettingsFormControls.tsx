@@ -52,7 +52,7 @@ export function SettingsSwitch({
       <span
         className={cn(
           'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
-          checked ? 'translate-x-4' : 'translate-x-0.5'
+          checked ? 'translate-x-4.5' : 'translate-x-0.5'
         )}
       />
     </button>
@@ -108,6 +108,7 @@ type SettingsSwitchRowProps = {
   onChange: () => void
   className?: string
   ariaLabel?: string
+  disabled?: boolean
 }
 
 export function SettingsSwitchRow({
@@ -116,7 +117,8 @@ export function SettingsSwitchRow({
   checked,
   onChange,
   className,
-  ariaLabel
+  ariaLabel,
+  disabled
 }: SettingsSwitchRowProps): React.JSX.Element {
   return (
     <SettingsRow
@@ -127,6 +129,7 @@ export function SettingsSwitchRow({
         <SettingsSwitch
           checked={checked}
           onChange={onChange}
+          disabled={disabled}
           ariaLabel={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
         />
       }

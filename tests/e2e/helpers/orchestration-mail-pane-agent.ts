@@ -6,7 +6,7 @@
  * writing into the pane's foreground process. A shell echoes rather than
  * records, so it can prove the gate but never the payload. This process owns
  * both sides — the test drives its title through a control file and it appends
- * every stdin chunk to a ledger, which is what makes "the banner and the Enter
+ * every stdin chunk to a ledger, which is what makes "the pointer and the Enter
  * reached the agent" an assertion instead of an inference.
  *
  * Titles come from a polled file, not stdin, because orchestration writes to
@@ -54,12 +54,12 @@ log({ event: 'start' })
 
 // Raw mode is what every agent TUI does, and it is load-bearing here: a cooked
 // PTY applies ICRNL, so the synthesized Enter would arrive as \\n and be
-// indistinguishable from the banner's own newlines.
+// indistinguishable from the pointer's own newlines.
 if (process.stdin.isTTY) {
   process.stdin.setRawMode(true)
 }
 
-// Every byte orchestration pushes lands here — banner text and Enter alike.
+// Every byte orchestration pushes lands here — pointer text and Enter alike.
 process.stdin.on('data', (chunk) => log({ event: 'stdin', data: chunk.toString() }))
 process.stdin.resume()
 

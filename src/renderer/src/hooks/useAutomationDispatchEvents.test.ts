@@ -293,6 +293,19 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalled()
   })
 
+  it('does not stamp the created workspace with an empty agent-launch fallback', async () => {
+    await registerAndDispatch()
+
+    expect(mockCreateWorktree.mock.calls[0][10]).toBeUndefined()
+    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'claude',
+        prompt: 'run this',
+        worktreeId: 'wt-created'
+      })
+    )
+  })
+
   it('keeps launching the agent when background setup terminal launch fails', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     mockLaunchWorktreeBackgroundTerminals.mockRejectedValue(new Error('tab launch failed'))

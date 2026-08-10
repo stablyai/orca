@@ -25,6 +25,14 @@ export const AGENT_MAP_AGENT_RADIUS = 20
 export const AGENT_MAP_AGGREGATE_ZOOM = 1.15
 export const AGENT_MAP_RING_HEADER_HEIGHT = 40
 
+/**
+ * Every map node is a top-level pane agent — in-process subagent rows are folded
+ * into their parent card's `subagents` roster and never become cards themselves
+ * (`build-dashboard-snapshot.ts`). So an edge between two nodes is always an
+ * orchestration dispatch, and there is no second relation to distinguish.
+ */
+export const AGENT_MAP_LINEAGE_RELATION = 'orchestration'
+
 const PROJECT_PADDING = 12
 const WORLD_MARGIN = 32
 const RING_CONTENT_OFFSET = AGENT_MAP_RING_HEADER_HEIGHT / 2

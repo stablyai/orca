@@ -110,6 +110,17 @@ describe('PluginOverlayManager', () => {
     ).toContain('// omp extension')
   })
 
+  it('uses only the Prime-specific source in the default Prime agent dir', () => {
+    manager.setSources({ piExtensionSource: '// pi extension' })
+    expect(manager.materializePi('tab-prime-missing:0', undefined, 'prime-agent')).toBeNull()
+
+    manager.setSources({ primeAgentExtensionSource: '// prime extension' })
+    const result = manager.materializePi('tab-prime:0', undefined, 'prime-agent')
+    expect(result?.sourceAgentDir).toBe(join(homeDir, '.prime', 'agent'))
+    expect(readFileSync(result!.statusExtensionPath!, 'utf8')).toContain('// prime extension')
+    expect(readFileSync(result!.statusExtensionPath!, 'utf8')).not.toContain('// pi extension')
+  })
+
   it('installs Orca status extension into the remote default Pi agent dir', () => {
     const piAgentDir = join(homeDir, '.pi', 'agent')
     mkdirSync(join(piAgentDir, 'skills', 'my-skill'), { recursive: true })
@@ -259,6 +270,7 @@ describe('PluginOverlayManager', () => {
       // own extension dir. Pi state must never cross-pollinate in.
       seedAgentDir('.pi', 'pi')
       expect(existsSync(join(homeDir, '.omp'))).toBe(false)
+      expect(existsSync(join(homeDir, '.prime'))).toBe(false)
 
       manager.setSources({ piExtensionSource: '// pi extension' })
       const result = manager.materializePi('tab-relay-omp-empty:0', undefined, 'omp')
@@ -276,7 +288,8 @@ describe('PluginOverlayManager', () => {
       expect(existsSync(join(homeDir, '.omp'))).toBe(false)
       manager.setSources({
         piExtensionSource: '// pi extension',
-        ompExtensionSource: '// omp extension'
+        ompExtensionSource: '// omp extension',
+        primeAgentExtensionSource: '// prime extension'
       })
 
       expect(
@@ -296,6 +309,12 @@ describe('PluginOverlayManager', () => {
       expect(readFileSync(bareOmp!.statusExtensionPath!, 'utf8')).toContain('// omp extension')
       expect(existsSync(join(homeDir, '.pi'))).toBe(false)
       expect(existsSync(join(homeDir, '.omp'))).toBe(false)
+      expect(
+        manager.materializePi('tab-bare-prime:0', undefined, 'prime-agent', {
+          materializeDefaultHome: false
+        })
+      ).toBeNull()
+      expect(existsSync(join(homeDir, '.prime'))).toBe(false)
     })
   })
 

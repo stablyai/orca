@@ -267,12 +267,9 @@ describe('GrokHookService', () => {
     expect(script).toContain('/hook/grok')
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
-      expect(script).toContain('if not defined GROK_HOME goto :orca_grok_home_ready')
-      expect(script).toContain('%GROK_HOME:~4096,1%')
+      // Why: windows-grok-hook-script.test.ts pins the GROK_HOME guard shape itself,
+      // and does so on every platform rather than only on Windows runners.
       expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME%"')
-      expect(script).toContain('%ORCA_GROK_HOME:~4096,1%')
-      expect(script).toContain('if not defined ORCA_GROK_HOME goto :orca_grok_home_ready')
-      expect(script).toContain('if "%ORCA_GROK_HOME:~-1%"=="\\"')
       expect(script).toContain('--data-urlencode "grokHome=%ORCA_GROK_HOME%"')
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands

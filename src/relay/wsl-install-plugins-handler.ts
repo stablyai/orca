@@ -14,7 +14,7 @@ import {
 } from '../shared/wsl-hook-relay-contract'
 
 export type InstallPluginsResult = {
-  installed: { opencode: boolean; pi: boolean; omp: boolean }
+  installed: { opencode: boolean; pi: boolean; omp: boolean; primeAgent: boolean }
   overlayDirs: { opencode?: string }
 }
 
@@ -41,14 +41,17 @@ export function createInstallPluginsHandler(
     const opencode = params.opencodePluginSource
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
+    const primeAgent = params.primeAgentExtensionSource
     // Why: bound per-source bytes so a buggy/hostile host can't OOM the guest relay.
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
+    assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
-      ompExtensionSource: typeof omp === 'string' ? omp : undefined
+      ompExtensionSource: typeof omp === 'string' ? omp : undefined,
+      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
     })
     let opencodeDir: string | undefined
     if (pluginOverlay.hasOpenCodeSource()) {
@@ -81,7 +84,8 @@ export function createInstallPluginsHandler(
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
         pi: pluginOverlay.hasPiSource('pi'),
-        omp: pluginOverlay.hasPiSource('omp')
+        omp: pluginOverlay.hasPiSource('omp'),
+        primeAgent: pluginOverlay.hasPiSource('prime-agent')
       },
       overlayDirs: opencodeDir ? { opencode: opencodeDir } : {}
     }

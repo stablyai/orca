@@ -398,10 +398,22 @@ describe('gitlab client — MR operations', () => {
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         [
           'api',
-          'projects/g%2Fp/merge_requests?source_branch=feature%2Ffoo&order_by=updated_at&sort=desc&per_page=1'
+          'projects/g%2Fp/merge_requests?source_branch=feature%2Ffoo&order_by=updated_at&sort=desc&per_page=1&with_merge_status_recheck=true'
         ],
         { cwd: '/repo' }
       )
+    })
+
+    // Why: GitLab does not proactively recompute merge status on list endpoints, so without the
+    // recheck request the row can sit at `unchecked` forever and the sidebar merge button — which
+    // gates on MERGEABLE — never becomes available.
+    it('asks GitLab to recheck merge status on the branch lookup', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+      await getMergeRequestForBranch('/repo', 'feature/recheck')
+      const callArgs = glabExecFileAsyncMock.mock.calls[0][0] as string[]
+      expect(callArgs[1]).toContain('with_merge_status_recheck=true')
     })
 
     it('uses legacy pipeline payloads when branch MR lists omit head_pipeline', async () => {

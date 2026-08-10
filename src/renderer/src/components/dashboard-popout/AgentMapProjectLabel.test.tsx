@@ -41,6 +41,7 @@ describe('AgentMapScene project labels', () => {
           mapScale={0.5}
           selectedPaneKey={null}
           allowAggregation
+          showOrchestrationLinks
           nodeRefs={{ current: new Map() }}
           onSelectAgent={vi.fn()}
           onAgentKeyDown={vi.fn()}

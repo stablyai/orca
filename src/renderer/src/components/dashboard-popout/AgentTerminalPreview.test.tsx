@@ -24,6 +24,7 @@ const terminalHarness = vi.hoisted(() => ({
     input: ReturnType<typeof vi.fn>
     scrollToTop: ReturnType<typeof vi.fn>
     scrollToBottom: ReturnType<typeof vi.fn>
+    selectAll: ReturnType<typeof vi.fn>
     modes: { bracketedPasteMode: boolean }
     selectionText: string
     customKeyHandler: ((event: KeyboardEvent) => boolean) | null
@@ -45,8 +46,7 @@ const imeHarness = vi.hoisted(() => ({
     sendInput: (data: string) => void
   }[],
   trackers: [] as { dispose: ReturnType<typeof vi.fn> }[],
-  claimResult: false,
-  inputSourceTrackerRequests: 0
+  claimResult: false
 }))
 
 vi.mock('@xterm/xterm', () => ({
@@ -83,6 +83,7 @@ vi.mock('@xterm/xterm', () => ({
     attachCustomWheelEventHandler = vi.fn()
     scrollToTop = vi.fn()
     scrollToBottom = vi.fn()
+    selectAll = vi.fn()
     getSelection = vi.fn(() => this.selectionText)
     attachCustomKeyEventHandler = vi.fn((handler: (event: KeyboardEvent) => boolean) => {
       this.customKeyHandler = handler
@@ -131,12 +132,6 @@ vi.mock('@/components/terminal-pane/terminal-ime-composition-tracker', () => ({
     return tracker
   }
 }))
-vi.mock('@/components/terminal-pane/terminal-ime-input-source', () => ({
-  getMacNativeTextInputSourceTracker: () => {
-    imeHarness.inputSourceTrackerRequests++
-    return { getFeatures: () => ({}) }
-  }
-}))
 vi.mock('@/store', () => {
   const useAppStore = (selector: (s: typeof storeState) => unknown): unknown => selector(storeState)
   useAppStore.getState = (): typeof storeState => storeState
@@ -156,6 +151,7 @@ describe('AgentTerminalPreview', () => {
   const writeTerminalClipboardText = vi.fn(async () => {})
   let emitData: ((payload: unknown) => void) | null
   let emitAppMenuPaste: (() => void) | null
+  let emitAppMenuSelectionAction: ((action: 'copy' | 'select-all') => void) | null
 
   beforeEach(() => {
     terminalHarness.instances.length = 0
@@ -165,9 +161,9 @@ describe('AgentTerminalPreview', () => {
     imeHarness.forwarders.length = 0
     imeHarness.trackers.length = 0
     imeHarness.claimResult = false
-    imeHarness.inputSourceTrackerRequests = 0
     emitData = null
     emitAppMenuPaste = null
+    emitAppMenuSelectionAction = null
     connect.mockResolvedValue({
       snapshot: { data: '', cols: 80, rows: 24, seq: 1 },
       replay: []
@@ -193,7 +189,12 @@ describe('AgentTerminalPreview', () => {
           onAppMenuPaste: (listener: () => void) => {
             emitAppMenuPaste = listener
             return vi.fn()
-          }
+          },
+          onAppMenuSelectionAction: (listener: (action: 'copy' | 'select-all') => void) => {
+            emitAppMenuSelectionAction = listener
+            return vi.fn()
+          },
+          performNativeSelectionAction: vi.fn()
         }
       }
     })
@@ -235,7 +236,6 @@ describe('AgentTerminalPreview', () => {
     await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
     expect(imeHarness.forwarders).toHaveLength(1)
     expect(imeHarness.trackers).toHaveLength(1)
-    expect(imeHarness.inputSourceTrackerRequests).toBe(1)
 
     imeHarness.forwarders[0]!.sendInput('。')
     expect(terminal.input).toHaveBeenCalledOnce()
@@ -246,7 +246,7 @@ describe('AgentTerminalPreview', () => {
     imeHarness.claimResult = true
     terminal.selectionText = 'selected text'
     const handled = terminal.customKeyHandler!(
-      new KeyboardEvent('keydown', { key: 'C', code: 'KeyC', metaKey: true, shiftKey: true })
+      new KeyboardEvent('keydown', { key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true })
     )
     expect(handled).toBe(false)
     expect(writeClipboardText).not.toHaveBeenCalled()
@@ -255,12 +255,11 @@ describe('AgentTerminalPreview', () => {
     // Unclaimed events still reach the chord handling.
     imeHarness.claimResult = false
     const copied = terminal.customKeyHandler!(
-      new KeyboardEvent('keydown', { key: 'C', code: 'KeyC', metaKey: true, shiftKey: true })
+      new KeyboardEvent('keydown', { key: 'c', code: 'KeyC', metaKey: true })
     )
     expect(copied).toBe(false)
     expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text')
     expect(writeClipboardText).not.toHaveBeenCalled()
-    expect(imeHarness.inputSourceTrackerRequests).toBe(1)
   })
 
   it('does not install the IME native-text forwarder off macOS', async () => {
@@ -337,6 +336,47 @@ describe('AgentTerminalPreview', () => {
     expect(writeTerminalClipboardText).not.toHaveBeenCalled()
   })
 
+  it('leaves bare Ctrl+C available to the terminal without a selection', async () => {
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const handled = terminal.customKeyHandler!(
+      new KeyboardEvent('keydown', { key: 'c', code: 'KeyC', ctrlKey: true })
+    )
+    expect(handled).toBe(true)
+    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
+  })
+
+  it('selects all terminal text on Cmd+A and blocks xterm handling', async () => {
+    platformState.value = 'darwin'
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const keydown = new KeyboardEvent('keydown', {
+      key: 'a',
+      code: 'KeyA',
+      metaKey: true,
+      cancelable: true
+    })
+    expect(terminal.customKeyHandler!(keydown)).toBe(false)
+    expect(keydown.defaultPrevented).toBe(true)
+
+    const repeat = new KeyboardEvent('keydown', {
+      key: 'a',
+      code: 'KeyA',
+      metaKey: true,
+      repeat: true,
+      cancelable: true
+    })
+    expect(terminal.customKeyHandler!(repeat)).toBe(false)
+    expect(repeat.defaultPrevented).toBe(true)
+    expect(terminal.selectAll).toHaveBeenCalledOnce()
+  })
+
   it('pastes clipboard text on the app-menu paste signal while the preview owns focus', async () => {
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
@@ -351,6 +391,41 @@ describe('AgentTerminalPreview', () => {
     act(() => emitAppMenuPaste!())
     await waitFor(() => expect(terminal.paste).toHaveBeenCalledWith('clip-text'))
     expect(input).toHaveBeenCalledWith('pty-1', 'clip-text')
+  })
+
+  it('handles app-menu selection actions while the preview owns focus', async () => {
+    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    terminal.selectionText = 'selected text'
+
+    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
+    const focusTarget = document.createElement('textarea')
+    focusTarget.className = 'xterm-helper-textarea'
+    host.appendChild(focusTarget)
+    focusTarget.focus()
+
+    act(() => emitAppMenuSelectionAction?.('select-all'))
+    act(() => emitAppMenuSelectionAction?.('copy'))
+
+    expect(terminal.selectAll).toHaveBeenCalledOnce()
+    await waitFor(() => expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text'))
+  })
+
+  it('keeps app-menu selection actions native for text controls inside the preview', async () => {
+    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+
+    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
+    const focusTarget = document.createElement('input')
+    host.appendChild(focusTarget)
+    focusTarget.focus()
+
+    act(() => emitAppMenuSelectionAction?.('select-all'))
+
+    expect(terminal.selectAll).not.toHaveBeenCalled()
+    expect(window.api.ui.performNativeSelectionAction).toHaveBeenCalledWith('select-all')
   })
 
   it('ignores the app-menu paste signal when focus is outside the preview', async () => {

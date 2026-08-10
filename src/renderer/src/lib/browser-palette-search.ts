@@ -1,6 +1,7 @@
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
+import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 import { resolveWorktreeDisplayName } from './worktree-default-display-name'
 import type { MatchRange } from './worktree-palette-search'
 
@@ -43,7 +44,7 @@ export function isBrowserPaletteQueryTooLarge(
 }
 
 function compareText(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { sensitivity: 'base' })
+  return compareBaseSensitivityLocaleText(a, b)
 }
 
 export function isBlankBrowserUrl(url: string): boolean {

@@ -24,9 +24,9 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
 import {
-  hasUnreadAgentCompletionForTerminalTab,
   isTerminalTabActivityLive,
-  resolveTerminalTabActivityStatus
+  resolveTerminalTabActivityStatus,
+  terminalTabHasUnreadActivity
 } from './terminal-tab-activity-status'
 
 type SortableTabProps = {
@@ -88,10 +88,12 @@ export default function SortableTab({
   onToggleViewMode
 }: SortableTabProps): React.JSX.Element {
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
-  const hasUnreadActivity = useAppStore(
-    (s) =>
-      s.unreadTerminalTabs[tab.id] === true ||
-      hasUnreadAgentCompletionForTerminalTab(s.unreadAgentCompletionPanes, tab.id)
+  const hasUnreadActivity = useAppStore((s) =>
+    terminalTabHasUnreadActivity({
+      terminalTabId: tab.id,
+      unreadTerminalTabs: s.unreadTerminalTabs,
+      unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
+    })
   )
   // Why: resolver returns a primitive so unrelated agent updates can't repaint this tab (pane bucketing memoized per snapshot).
   const activityStatus = useAppStore((s) =>

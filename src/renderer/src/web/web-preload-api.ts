@@ -9,7 +9,12 @@ import type {
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { parseHostAccessLink } from '../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing-verification'
+import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
+import type {
+  AiVaultSessionTitlesArgs,
+  AiVaultSessionTitlesResult
+} from '../../../shared/ai-vault-session-title'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
@@ -284,6 +289,7 @@ type WebGitHubRouteKey =
   | 'prCheckDetails'
   | 'rerunPRChecks'
   | 'prComments'
+  | 'setPRCommentReaction'
   | 'resolveReviewThread'
   | 'setPRFileViewed'
   | 'updatePRTitle'
@@ -332,6 +338,7 @@ type WebGitHubRuntimeMethod =
   | 'github.prCheckDetails'
   | 'github.rerunPRChecks'
   | 'github.prComments'
+  | 'github.setPRCommentReaction'
   | 'github.resolveReviewThread'
   | 'github.setPRFileViewed'
   | 'github.updatePRTitle'
@@ -433,6 +440,7 @@ export const GITHUB_WEB_RPC_METHODS = {
   prCheckDetails: 'github.prCheckDetails',
   rerunPRChecks: 'github.rerunPRChecks',
   prComments: 'github.prComments',
+  setPRCommentReaction: 'github.setPRCommentReaction',
   resolveReviewThread: 'github.resolveReviewThread',
   setPRFileViewed: 'github.setPRFileViewed',
   updatePRTitle: 'github.updatePRTitle',
@@ -1532,6 +1540,19 @@ function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
         executionHostId
       })
     },
+    resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => {
+      const environment = requireActiveEnvironment()
+      const executionHostId = toRuntimeExecutionHostId(environment.id)
+      if (
+        args.executionHostScope &&
+        normalizeExecutionHostScope(args.executionHostScope) !== executionHostId
+      ) {
+        return Promise.resolve({ titles: [] })
+      }
+      return callRuntimeResult<AiVaultSessionTitlesResult>('aiVault.resolveSessionTitles', {
+        requests: args.requests
+      }).catch(() => ({ titles: [] }))
+    },
     // Why: the runtime RPC transport has no cancel verb, so the in-flight scan
     // settles on its own timeout. The renderer's refreshId guard already drops
     // the late result; this only means web pays for a scan nobody reads.
@@ -1542,6 +1563,15 @@ function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
     listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
     // Why: full first-prompt re-parse is local-FS only; web/runtime falls back to preview text.
     getFirstUserPrompt: () => Promise.resolve({ prompt: null }),
+    // Why: session deletion is local-only and has no runtime RPC; a web
+    // client's sessions are runtime-hosted, so report the same non-local
+    // rejection the UI already gates on rather than pretend to delete.
+    deleteSession: (args: AiVaultDeleteSessionArgs) =>
+      Promise.resolve({
+        outcome: 'rejected',
+        agent: args.agent,
+        reason: 'non-local-host' as const
+      }),
     onWindowFocused: () => noopUnsubscribe
   }
 }
@@ -2358,6 +2388,11 @@ function createGitHubApi(): WebGitHubApi {
       route<WebGitHubResult<'rerunPRChecks'>>(GITHUB_WEB_RPC_METHODS.rerunPRChecks, args),
     prComments: (args) =>
       route<WebGitHubResult<'prComments'>>(GITHUB_WEB_RPC_METHODS.prComments, args),
+    setPRCommentReaction: (args) =>
+      route<WebGitHubResult<'setPRCommentReaction'>>(
+        GITHUB_WEB_RPC_METHODS.setPRCommentReaction,
+        args
+      ),
     resolveReviewThread: (args) =>
       route<WebGitHubResult<'resolveReviewThread'>>(
         GITHUB_WEB_RPC_METHODS.resolveReviewThread,
@@ -2669,8 +2704,12 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     performNativePaste: () => {
       document.execCommand?.('paste')
     },
+    performNativeSelectionAction: (action) => {
+      document.execCommand?.(action === 'copy' ? 'copy' : 'selectAll')
+    },
     onExportPdfRequested: () => noopUnsubscribe,
     onAppMenuPaste: () => noopUnsubscribe,
+    onAppMenuSelectionAction: () => noopUnsubscribe,
     onEditableContextPaste: () => noopUnsubscribe,
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
@@ -3725,6 +3764,11 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
       runtimeSettings.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
         result.settings.prBotAuthorOverrides
       )
+    }
+    // Read-only mirror: the host owns this capability and `syncRuntimeBackedSettings` never
+    // sends it back, so web shows what the host enforces instead of a local value it ignores.
+    if (typeof result.settings.artifactSharingEnabled === 'boolean') {
+      runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled
     }
     const next = mergeSettings(local, runtimeSettings)
     writeStoredSettings(next)
