@@ -86,6 +86,38 @@ describe('readAiVaultFirstUserPrompt', () => {
     expect(result.prompt?.length).toBeGreaterThan(220)
   })
 
+  it('extracts full Trae input_text content blocks (not preview-capped)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-trae-'))
+    tempRoots.push(root)
+    const sessionPath = join(root, 'sessions', '2026', '08', '10', 'rollout-full-trae.jsonl')
+    await mkdir(join(root, 'sessions', '2026', '08', '10'), { recursive: true })
+    const longPrompt = `Review the Trae session and preserve the full prompt.\n\n${'context '.repeat(60).trimEnd()}`
+    await writeFile(
+      sessionPath,
+      [
+        JSON.stringify({
+          timestamp: '2026-08-10T10:00:00.000Z',
+          type: 'session_meta',
+          payload: { cwd: '/repo/trae' }
+        }),
+        JSON.stringify({
+          timestamp: '2026-08-10T10:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: longPrompt }]
+          }
+        })
+      ].join('\n')
+    )
+
+    const result = await readAiVaultFirstUserPrompt({ agent: 'trae', filePath: sessionPath })
+
+    expect(result.prompt).toBe(longPrompt)
+    expect(result.prompt?.length).toBeGreaterThan(220)
+  })
+
   it('skips meta/harness user turns and returns the first real ask', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-meta-'))
     tempRoots.push(root)

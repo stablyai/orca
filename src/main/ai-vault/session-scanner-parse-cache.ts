@@ -4,6 +4,7 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { createCodexSessionResumeState } from './session-scanner-codex-parser'
+import { createTraeSessionResumeState } from './session-scanner-trae-parser'
 import { createDroidSessionResumeState } from './session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from './session-scanner-graph-parsers'
 import { createClaudeSessionResumeState } from './session-scanner-primary-parsers'
@@ -13,7 +14,7 @@ import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
-import { refreshCachedCodexTitle } from './session-scanner-codex-cached-title'
+import { refreshCachedRolloutTitle } from './session-scanner-rollout-cached-title'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
@@ -52,6 +53,8 @@ function resumableStateFactoryFor(
       return () => createClaudeSessionResumeState(candidate.file)
     case 'codex':
       return () => createCodexSessionResumeState(candidate.file, candidate.codexHome)
+    case 'trae':
+      return () => createTraeSessionResumeState(candidate.file)
     case 'cursor':
       return () => createCursorSessionResumeState(candidate.file)
     case 'copilot':
@@ -164,7 +167,7 @@ function storeEntry(path: string, entry: SessionParseCacheEntry): void {
 /**
  * Parse a session file, reusing prior work where the file is provably
  * unchanged (mtime+size) and, for append-only JSONL transcripts (Claude,
- * Codex, Cursor, Copilot, Droid, OpenClaw/Pi/OMP, Gemini-JSONL), resuming the
+ * Codex/Trae, Cursor, Copilot, Droid, OpenClaw/Pi/OMP, Gemini-JSONL), resuming the
  * parse from the last consumed byte when the file only grew. This is what
  * keeps the renderer's ~5s forced rescans from re-reading gigabytes of
  * transcripts (STA-1278/STA-1417: main process pegging one core during
@@ -206,8 +209,8 @@ export async function parseAgentSessionFileCached(
         entry.session = { ...entry.session, subagentTranscriptCount }
       }
     }
-    if (entry.session && candidate.agent === 'codex') {
-      entry.session = await refreshCachedCodexTitle(candidate, entry.session)
+    if (entry.session && (candidate.agent === 'codex' || candidate.agent === 'trae')) {
+      entry.session = await refreshCachedRolloutTitle(candidate, entry.session)
     }
     storeEntry(file.path, entry)
     return entry.session

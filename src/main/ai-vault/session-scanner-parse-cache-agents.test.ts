@@ -15,6 +15,7 @@ import {
   resetSessionParseCacheForTests
 } from './session-scanner-parse-cache'
 import type { SessionFileCandidate } from './session-scanner-types'
+import { TRAE_FIXTURE_SESSION_ID, traeFixture } from './session-scanner-trae-fixtures'
 
 let tempRoots: string[] = []
 
@@ -136,7 +137,7 @@ describe.each(allIncrementalAgentFixtures())('incremental parse parity: $agent',
   })
 })
 
-describe('codex-specific resume behavior', () => {
+describe('rollout-specific resume behavior', () => {
   it('keeps rejecting worker sessions across incremental appends', async () => {
     const root = await makeTempDir()
     const path = join(root, codexFixture().fileName)
@@ -199,6 +200,30 @@ describe('codex-specific resume behavior', () => {
     expect(renamed).toEqual(
       await parseAgentSessionFile(await candidateFor('codex', path, codexHome), process.platform)
     )
+  })
+
+  it('refreshes a cached Trae title without re-reading the transcript', async () => {
+    const root = await makeTempDir()
+    const traeHome = join(root, '.trae', 'cli')
+    const sessionsDir = join(traeHome, 'sessions', '2026', '08', '10')
+    await mkdir(sessionsDir, { recursive: true })
+    const fixture = traeFixture()
+    const path = join(sessionsDir, fixture.fileName)
+    await writeFile(path, `${fixture.seedLines.join('\n')}\n`)
+
+    const candidate = await candidateFor('trae', path)
+    const seeded = await parseAgentSessionFileCached(candidate, process.platform)
+    expect(seeded?.title).toBe('Trae seed question')
+
+    await writeFile(
+      join(traeHome, 'session_index.jsonl'),
+      `${JSON.stringify({ id: TRAE_FIXTURE_SESSION_ID, thread_name: 'Indexed Trae title' })}\n`
+    )
+    const stats = createSessionParseStats()
+    const renamed = await parseAgentSessionFileCached(candidate, process.platform, stats)
+    expect(stats.reused).toBe(1)
+    expect(renamed?.title).toBe('Indexed Trae title')
+    expect(renamed).toEqual(await parseAgentSessionFile(candidate, process.platform))
   })
 })
 

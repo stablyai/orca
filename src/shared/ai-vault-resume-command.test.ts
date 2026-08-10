@@ -2,7 +2,48 @@ import { describe, expect, it } from 'vitest'
 
 import { buildAiVaultResumeCommand } from './ai-vault-resume-command'
 
+const TRAE_FIXTURE_SESSION_ID = '019fe968-ff04-7e43-8316-983ae577b782'
+
 describe('buildAiVaultResumeCommand', () => {
+  it('resumes Trae without Codex home routing', () => {
+    const command = buildAiVaultResumeCommand({
+      agent: 'trae',
+      sessionId: TRAE_FIXTURE_SESSION_ID,
+      cwd: '/repo/trae app',
+      platform: 'darwin'
+    })
+    expect(command).toBe(
+      "cd '/repo/trae app' && traecli resume '019fe968-ff04-7e43-8316-983ae577b782'"
+    )
+    expect(command).not.toContain('CODEX_HOME')
+  })
+
+  it('quotes Trae resume commands for live Windows shells', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'trae',
+        sessionId: TRAE_FIXTURE_SESSION_ID,
+        cwd: 'C:\\Users\\Ada Lovelace\\repo',
+        platform: 'win32',
+        shell: 'cmd'
+      })
+    ).toBe(
+      'cd /d "C:\\Users\\Ada Lovelace\\repo" && traecli resume "019fe968-ff04-7e43-8316-983ae577b782"'
+    )
+
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'trae',
+        sessionId: TRAE_FIXTURE_SESSION_ID,
+        cwd: 'C:\\Users\\Ada Lovelace\\repo',
+        platform: 'win32',
+        shell: 'powershell'
+      })
+    ).toBe(
+      "Set-Location -LiteralPath 'C:\\Users\\Ada Lovelace\\repo'; traecli resume '019fe968-ff04-7e43-8316-983ae577b782'"
+    )
+  })
+
   it('uses Antigravity conversation ids instead of Gemini resume flags', () => {
     expect(
       buildAiVaultResumeCommand({

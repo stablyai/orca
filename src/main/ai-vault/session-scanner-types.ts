@@ -9,6 +9,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
   codexSessionsDir?: string
+  traeSessionsDir?: string
   additionalCodexSessionsDirs?: readonly string[]
   // Why: tests inject a sandbox "real ~/.codex" so real-home attribution
   // (codexHome null → unprefixed resume) is testable without the user's home.

@@ -32,6 +32,19 @@ describe('parseAiVaultListResult', () => {
     expect(parsed.issues).toEqual([])
   })
 
+  it('accepts Trae rows while preserving unknown-agent tolerance', () => {
+    const parsed = parseAiVaultListResult({
+      sessions: [
+        { ...validSession('trae-session'), agent: 'trae', codexHome: null },
+        { ...validSession('future-session'), agent: 'future-agent' }
+      ],
+      issues: [],
+      scannedAt: '2026-08-10T00:00:00.000Z'
+    })
+    expect(parsed.sessions.map((session) => session.agent)).toEqual(['trae'])
+    expect(parsed.issues).toEqual([])
+  })
+
   it('accepts an all-unknown-agent response as an empty supported session list', () => {
     const parsed = parseAiVaultListResult({
       sessions: [

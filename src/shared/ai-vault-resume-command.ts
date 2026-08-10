@@ -150,6 +150,7 @@ function buildAgentResumeInvocation(
 ): string {
   switch (agent) {
     case 'codex':
+    case 'trae':
       return `${baseCommand} resume ${sessionArg}`
     case 'rovo':
       return `${baseCommand} rovodev run --restore ${sessionArg}`
