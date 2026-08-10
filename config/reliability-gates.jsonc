@@ -8252,6 +8252,166 @@
       "demotionRule": "Cannot promote if success is based only on absence of visible artifacts."
     },
     {
+      "id": "terminal-input.cooked-reply-queue",
+      "title": "Cooked-echo-safe terminal reply backlog stays bounded without evicting ordinary input",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-provider-contract",
+      "surfaces": [
+        "desktop terminal input",
+        "OSC 10/11 replies",
+        "mode-2031 replies",
+        "local PTY",
+        "daemon and SSH PTYs"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh"],
+      "coverageNotes": "Deterministic renderer and IPC-transport tests prove count and text ceilings, oldest-reply shedding, explicit query-reply source routing, ordinary-input preservation, one-reply-per-write delivery, real xterm OSC reply generation, drain-failure containment, and clear/reuse generation fencing. Live macOS Electron tests cover local PTY OSC replies and interactive typing; a macOS-hosted Docker OpenSSH test proves a real Linux SSH process receives xterm's OSC reply through the same queue. No live daemon, WSL, physical Linux/Windows client, or mixed-version run is registered.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/13137",
+        "https://github.com/stablyai/orca/issues/7329"
+      ],
+      "invariant": "The desktop PTY input queue retains at most 64 explicitly sourced pending cooked-echo-safe replies and 4096 UTF-16 code units. Overflow removes the oldest pending query-reply entries, never ordinary input or reply-shaped bytes from the ordinary path, so later user input has a finite reply backlog; every retained reply reaches the established provider path as one atomic write. Drain failures settle without an unhandled rejection and cannot clear a newer queue generation.",
+      "oracle": "Synchronously enqueue 10,000 cooked-echo-safe query replies before the scheduled drain and assert that only the initial immediate reply and newest 64 pending replies are written, each as one provider write, before a trailing keystroke. Repeat behind 10,000 ordinary inputs and through the real IPC transport, requiring ordinary and reply-shaped ordinary-path bytes to survive while only the newest 64 explicit replies remain. Exercise the text ceiling, real xterm OSC 10/11 generation, provider-write failure, rejected yield, and clear/reuse generation fencing.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts",
+        "pnpm exec playwright test tests/e2e/terminal-osc-color-queries.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec playwright test tests/e2e/terminal-typing-latency.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/pty-input-write-queue-ssh.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+        "src/shared/terminal-query-reply.test.ts",
+        "src/shared/pty-startup-ingress-live-query-reply.test.ts",
+        "tests/e2e/terminal-osc-color-queries.spec.ts",
+        "tests/e2e/terminal-typing-latency.spec.ts",
+        "tests/e2e/pty-input-write-queue-ssh.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts",
+          "assertions": [
+            "a synchronous 10,000-reply flood writes only the immediate first and newest 64 pending replies before a trailing keystroke",
+            "10,000 ordinary queued inputs survive a later reply flood while reply retention remains bounded",
+            "reply-shaped bytes from the ordinary input path never enter the shed-able reply budget",
+            "reply count and text overflow remove only the oldest pending replies",
+            "real xterm OSC 10/11 query handlers remain subject to the same retention ceiling",
+            "retained cooked-echo-safe replies stay one provider write each",
+            "provider-write and yield failures settle without unhandled rejection, repeated same-generation admission, or stale-generation clearing",
+            "clear releases saturated reply accounting and fences in-flight validation before later input"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+          "assertions": [
+            "sendInputImmediate applies the reply ceiling while sendInput preserves a reply-shaped ordinary payload in exact IPC write order",
+            "a thrown renderer write triggers one owning-transport recovery callback and rejects later input in that queue generation"
+          ]
+        },
+        {
+          "file": "src/shared/terminal-query-reply.test.ts",
+          "assertions": [
+            "only complete cooked-echo-risk replies are classified and consecutive replies extract losslessly"
+          ]
+        },
+        {
+          "file": "src/shared/pty-startup-ingress-live-query-reply.test.ts",
+          "assertions": [
+            "repeated live query replies are delivered independently and their cooked echoes stay hidden"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-osc-color-queries.spec.ts",
+          "assertions": [
+            "real Electron xterm OSC 10/11 replies reach the active local PTY as separate writes"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-typing-latency.spec.ts",
+          "assertions": [
+            "real keyboard input reaches and echoes from the active local PTY within the interactive latency ceilings"
+          ]
+        },
+        {
+          "file": "tests/e2e/pty-input-write-queue-ssh.spec.ts",
+          "assertions": [
+            "a real Linux SSH process emits an OSC query and receives xterm's synthetic reply through the live PTY queue"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.35,
+          "summary": "Four files and 138 tests passed, including explicit IPC reply-source routing, the 10,000-reply count ceiling, text ceiling, 10,000-entry ordinary backlog preservation, real xterm OSC query flood, single-shot drain-failure recovery, one-reply-per-write echo containment, and clear/reuse generation fencing."
+        },
+        {
+          "date": "2026-08-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/terminal-osc-color-queries.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 13.2,
+          "summary": "The real Electron/xterm OSC 10/11 query path wrote the exact foreground and background replies separately to the active local PTY."
+        },
+        {
+          "date": "2026-08-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/terminal-typing-latency.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 10.6,
+          "summary": "Real keyboard events traversed xterm and the input queue to a local interactive PTY with every sampled key echoed inside the latency ceiling."
+        },
+        {
+          "date": "2026-08-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/pty-input-write-queue-ssh.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 36.8,
+          "summary": "A real Linux process behind Docker OpenSSH emitted an OSC 10 query and observed xterm's synthetic RGB reply after it traversed the live renderer queue, Electron IPC, SSH provider, and relay PTY."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "focused unit, local Electron, and Docker SSH contracts"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Ten consecutive local unit-gate runs passed 1,380 tests in 29.57 seconds total with no fixed timing sleeps. The exact Docker SSH OSC oracle passed three consecutive runs before extraction into its dedicated spec and then passed the registered dedicated command once. CI and the normal soak window are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Without the branch's admission cap, the 10,000-reply fixture writes all replies before the trailing keystroke. Before the source-routing repair, the queue had no API capable of distinguishing reply-shaped ordinary input; before failure containment, a thrown provider write rejected waitForDrain and Vitest recorded an unhandled rejection; the first containment pass retried a failed generation and invoked recovery twice; before generation fencing, a rejected stale yield cleared fresh input. No saved intentional-break artifact is attached yet."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Pending cooked replies are capped at 64 and 4096 UTF-16 code units. Explicit source routing and separate sequence-merged FIFOs keep ordinary input out of the fixed-size reply store; oldest-reply eviction uses an amortized O(1) head advance without scanning ordinary input, consumed prefixes compact at a fixed threshold, and drain coalescing reads the stored classification without repeated reply-regex scans. A synchronous flood forwards only the immediate first and newest 64 replies before the trailing key. Ten complete gate runs, including two 10,000-entry flood shapes each, finished in 29.57 seconds with zero failures. The change adds no polling, timers, listeners, subprocesses, or network retries."
+      },
+      "promotionCriteria": [
+        "Run the gate on Windows and Linux CI.",
+        "Exercise a live daemon PTY with cooked echo enabled and record exact shell-visible and provider-visible bytes.",
+        "Attach an intentional-break run proving reply overflow cannot evict ordinary input or exceed either ceiling.",
+        "Accumulate the normal soak window with zero unexplained flakes."
+      ],
+      "knownGaps": [
+        "No live daemon, WSL, physical Linux/Windows client, mixed-version, or network-fault run is registered.",
+        "The remote-runtime transport has a separate immediate-input queue and is unaffected by this gate.",
+        "Ordinary-input queue growth predates this change and is outside this reply-only gate.",
+        "Reply overload intentionally sheds the oldest synthetic replies; live application behavior under a pathological query flood is not measured."
+      ],
+      "demotionRule": "Keep experimental or revert if ordinary input is evicted, pending replies exceed either ceiling, retained replies are coalesced, a trailing key sits behind more than the bounded reply window, or the gate develops unexplained flakes."
+    },
+    {
       "id": "terminal-query.mobile-view-authority",
       "title": "Mobile xterm answers live terminal queries exactly once without replay or floor side effects",
       "maturity": "experimental",

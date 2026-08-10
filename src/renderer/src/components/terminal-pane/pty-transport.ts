@@ -577,9 +577,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let ptyId: string | null = null
   // Why: replayed eager-buffer data (often from a prior app session) must not fire fresh bells, unread marks, or notifications on reconnect.
   let suppressAttentionEvents = false
+  let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   const inputWriteQueue = createPtyInputWriteQueue({
     isWritable: (id) => connected && ptyId === id,
-    write: (id, data) => window.api.pty.write(id, data)
+    write: (id, data) => window.api.pty.write(id, data),
+    // Guard like the registered writeUnavailable handler: a rebind during the async drain
+    // must not tell the new pane that its write failed.
+    onDrainFailure: (id) => {
+      if (ptyId === id) {
+        storedCallbacks.onWriteUnavailable?.()
+      }
+    }
   })
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
@@ -593,8 +601,6 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     onAgentExited,
     onAgentStatus
   })
-  let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
-
   // Why: a new pane can attach to the same ptyId before the old instance's detach() runs; track owned handlers so unregister never deletes the live one.
   const ownedDataAndReplayHandlers = new Map<
     string,
@@ -1051,7 +1057,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (!connected || !ptyId) {
         return false
       }
-      return inputWriteQueue.enqueue(ptyId, data)
+      return inputWriteQueue.enqueueQueryReply(ptyId, data)
     },
 
     ...(connectionId
