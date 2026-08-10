@@ -1805,7 +1805,7 @@ function capPrRefreshStates(
 }
 
 function shouldRefreshIssueDecorations(state: AppState): boolean {
-  return (state.worktreeCardProperties ?? []).includes('issue')
+  return state.groupBy === 'issue' || (state.worktreeCardProperties ?? []).includes('issue')
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null

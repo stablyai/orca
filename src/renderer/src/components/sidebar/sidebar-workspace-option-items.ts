@@ -22,6 +22,12 @@ export const GROUP_BY_OPTIONS = [
     }
   },
   {
+    id: 'issue',
+    get label() {
+      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.issue', 'Issue')
+    }
+  },
+  {
     id: 'repo',
     get label() {
       return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2170d553cf', 'Project')

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: sidebar row construction keeps every grouping mode in one pure module so reveal, virtualized rendering, and tests share the same flat row contract. */
-import { CircleX, FolderTree, List, Pin } from 'lucide-react'
+import { CircleX, FolderTree, List, Pin, Ticket } from 'lucide-react'
 import type React from 'react'
 import type {
   DetectedWorktree,
@@ -20,6 +20,7 @@ import {
   getWorkspaceStatusGroupKey,
   getWorkspaceStatusVisualMeta
 } from './workspace-status'
+import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
 import {
   ConductorDoneIcon,
   ConductorProgressIcon,
@@ -56,8 +57,79 @@ export { getLineageRenderInfo } from './worktree-lineage-projection'
 
 export { branchName }
 
-export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
+export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status' | 'issue'
 export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
+
+export function getIssueGroupInfo(
+  w: Worktree,
+  issueCache?: Record<string, { data?: { title?: string | null } | null }> | null,
+  repoMap?: Map<string, Repo>,
+  settings?: AppState['settings']
+): { key: string; label: string } {
+  const item = w.linkedWorkItem?.type === 'issue' ? w.linkedWorkItem : null
+  const rawId =
+    item?.jiraIdentifier ??
+    item?.linearIdentifier ??
+    (item?.number ? `#${item.number}` : null) ??
+    w.linkedLinearIssue ??
+    (w.linkedIssue ? `#${w.linkedIssue}` : null) ??
+    (w.linkedGitLabIssue ? `#${w.linkedGitLabIssue}` : null)
+
+  if (rawId) {
+    const identifier = rawId.toUpperCase()
+    let title = item?.title?.trim()
+
+    // Why: resolve numeric GitHub issue title from issueCache if available.
+    if (!title && w.linkedIssue && issueCache && repoMap) {
+      const repo = repoMap.get(w.repoId)
+      if (repo) {
+        const issueKey = getIssueCacheKey(
+          repo.path,
+          repo.id,
+          w.linkedIssue,
+          settings,
+          repo.connectionId,
+          repo.executionHostId,
+          true
+        )
+        const cachedTitle = issueCache[issueKey]?.data?.title?.trim()
+        if (cachedTitle) {
+          title = cachedTitle
+        }
+      }
+    }
+
+    // Why: strip leading issue key prefix from title to prevent duplicating the identifier in the group header.
+    if (title && title.toUpperCase().startsWith(identifier)) {
+      title = title
+        .slice(identifier.length)
+        .replace(/^[:\s-]+/, '')
+        .trim()
+    }
+
+    const isNumericIssue = identifier.startsWith('#')
+    const label = title
+      ? `${identifier}: ${title}`
+      : isNumericIssue && !item?.title
+        ? `Issue ${identifier}`
+        : identifier
+
+    const providerScope = item?.provider
+      ? `${item.provider}:${item.repoId ?? w.repoId}`
+      : isNumericIssue
+        ? w.linkedGitLabIssue
+          ? `gitlab:${w.repoId}`
+          : `github:${w.repoId}`
+        : 'issue'
+
+    return { key: `issue:${providerScope}:${identifier}`, label }
+  }
+
+  return {
+    key: 'issue:none',
+    label: translate('auto.components.sidebar.worktree.list.groups.noIssue', 'No issue')
+  }
+}
 
 export function getPinnedWorktreeDisplayPolicy(
   settings?: { showPinnedWorktreesInGroups?: boolean } | null
@@ -811,7 +883,8 @@ function getRenderedNaturalAnchorRepoIds({
   collapsedGroups,
   workspaceStatuses,
   settings,
-  projectGrouping
+  projectGrouping,
+  issueCache
 }: {
   groupBy: WorktreeGroupBy
   worktrees: readonly Worktree[]
@@ -821,6 +894,7 @@ function getRenderedNaturalAnchorRepoIds({
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   settings?: AppState['settings']
   projectGrouping?: ProjectGroupingModel
+  issueCache?: Record<string, { data?: { title?: string | null } | null }> | null
 }): Set<string> {
   const renderedRepoIds = new Set<string>()
   if (groupBy === 'none') {
@@ -845,7 +919,8 @@ function getRenderedNaturalAnchorRepoIds({
       prCache,
       workspaceStatuses,
       settings,
-      projectGrouping
+      projectGrouping,
+      issueCache
     )
     if (groupKey && !collapsedGroups.has(groupKey)) {
       renderedRepoIds.add(worktree.repoId)
@@ -1023,7 +1098,8 @@ export function buildRows(
   folderWorkspaces: readonly FolderWorkspace[] = [],
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
+  issueCache?: Record<string, { data?: { title?: string | null } | null }> | null
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
@@ -1119,6 +1195,10 @@ export function buildRows(
       key = getWorkspaceStatusGroupKey(workspaceStatus)
       label =
         workspaceStatuses.find((status) => status.id === workspaceStatus)?.label ?? workspaceStatus
+    } else if (groupBy === 'issue') {
+      const issueGroup = getIssueGroupInfo(w, issueCache, repoMap, settings)
+      key = issueGroup.key
+      label = issueGroup.label
     } else {
       const prGroup = getPRGroupKey(w, repoMap, prCache, settings)
       key = `pr:${prGroup}`
@@ -1225,6 +1305,20 @@ export function buildRows(
         orderedGroups.push([key, group])
       }
     }
+  } else if (groupBy === 'issue') {
+    const entries = Array.from(grouped.entries())
+    entries.sort((a, b) => {
+      if (a[0] === 'issue:none') {
+        return 1
+      }
+      if (b[0] === 'issue:none') {
+        return -1
+      }
+      return a[1].label.localeCompare(b[1].label, undefined, { numeric: true, sensitivity: 'base' })
+    })
+    for (const entry of entries) {
+      orderedGroups.push(entry)
+    }
   } else {
     for (const group of grouped.values()) {
       // Why: logical project headers can contain multiple host setup repos.
@@ -1282,21 +1376,35 @@ export function buildRows(
                   worktreeIds: group.items.map((worktree) => worktree.id)
                 }
               })()
-            : (() => {
-                const prGroup = key.replace(/^pr:/, '') as PRGroupKey
-                const meta = PR_GROUP_META[prGroup]
-                return {
-                  type: 'header' as const,
-                  key,
-                  label: meta.label,
-                  count: group.items.length,
-                  tone: meta.tone,
-                  icon: meta.icon,
-                  hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
-                  hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
-                  worktreeIds: group.items.map((worktree) => worktree.id)
-                }
-              })()
+            : groupBy === 'issue'
+              ? (() => {
+                  return {
+                    type: 'header' as const,
+                    key,
+                    label: group.label,
+                    count: group.items.length,
+                    tone: 'neutral',
+                    icon: Ticket,
+                    hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
+                    hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
+                    worktreeIds: group.items.map((worktree) => worktree.id)
+                  }
+                })()
+              : (() => {
+                  const prGroup = key.replace(/^pr:/, '') as PRGroupKey
+                  const meta = PR_GROUP_META[prGroup]
+                  return {
+                    type: 'header' as const,
+                    key,
+                    label: meta.label,
+                    count: group.items.length,
+                    tone: meta.tone,
+                    icon: meta.icon,
+                    hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
+                    hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
+                    worktreeIds: group.items.map((worktree) => worktree.id)
+                  }
+                })()
 
       result.push(header)
       if (!isCollapsed) {
@@ -1497,13 +1605,17 @@ export function getGroupKeyForWorktree(
   prCache: Record<string, unknown> | null,
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
   settings?: AppState['settings'],
-  projectGrouping?: ProjectGroupingModel
+  projectGrouping?: ProjectGroupingModel,
+  issueCache?: Record<string, { data?: { title?: string | null } | null }> | null
 ): string | null {
   if (groupBy === 'none') {
     return ALL_GROUP_KEY
   }
   if (groupBy === 'workspace-status') {
     return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))
+  }
+  if (groupBy === 'issue') {
+    return getIssueGroupInfo(worktree, issueCache, repoMap, settings).key
   }
   if (groupBy === 'repo') {
     return getProjectGroupingForRepo(
@@ -1523,7 +1635,8 @@ export function getGroupKeysForWorktree(
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
   settings?: AppState['settings'],
   projectGroups: readonly ProjectGroup[] = [],
-  projectGrouping?: ProjectGroupingModel
+  projectGrouping?: ProjectGroupingModel,
+  issueCache?: Record<string, { data?: { title?: string | null } | null }> | null
 ): string[] {
   const groupKey = getGroupKeyForWorktree(
     groupBy,
@@ -1532,7 +1645,8 @@ export function getGroupKeysForWorktree(
     prCache,
     workspaceStatuses,
     settings,
-    projectGrouping
+    projectGrouping,
+    issueCache
   )
   if (!groupKey) {
     return []

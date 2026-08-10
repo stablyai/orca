@@ -254,6 +254,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const settings = useAppStore((s) => s.settings)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
+  const groupBy = useAppStore((s) => s.groupBy)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
@@ -768,7 +769,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       isFolder ||
       !worktree.linkedIssue ||
       !issueCacheKey ||
-      !showIssue
+      (!showIssue && groupBy !== 'issue')
     ) {
       return
     }
@@ -780,7 +781,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       run: () => void fetchIssue(repo.path, issueNumber, { repoId: repo.id }),
       intervalMs: 5 * 60_000
     })
-  }, [repo, isFolder, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
+  }, [repo, isFolder, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue, groupBy])
 
   useEffect(() => {
     if (
