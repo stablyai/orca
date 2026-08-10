@@ -38,6 +38,10 @@ vi.mock('./SidebarSettingsHelpMenu', () => ({
   SidebarSettingsHelpMenu: () => <button type="button">Settings</button>
 }))
 
+vi.mock('./SidebarSpaceSwitcher', () => ({
+  default: () => <div>Spaces</div>
+}))
+
 const roots: Root[] = []
 
 async function renderToolbar(onWorkspaceBoardToggle = vi.fn()): Promise<{
@@ -152,6 +156,7 @@ describe('SidebarToolbar moved workspace board hint', () => {
     const { container } = await renderToolbar()
 
     expect(container.textContent).not.toContain('Profile')
+    expect(container.textContent).toContain('Spaces')
     expect(container.textContent).toContain('Settings')
   })
 })

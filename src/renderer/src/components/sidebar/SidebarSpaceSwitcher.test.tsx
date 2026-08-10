@@ -17,57 +17,28 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Partial<AppState>) => unknown) => selector(mocks.state)
 }))
 
-// Radix pointer events do not open under happy-dom.
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuContent: ({ children }: { children: ReactNode }) => (
-    <div data-space-menu="">{children}</div>
-  ),
-  DropdownMenuSeparator: () => <hr />,
-  DropdownMenuRadioGroup: ({
-    children,
-    value,
-    onValueChange
-  }: {
-    children: ReactNode
-    value: string
-    onValueChange: (next: string) => void
-  }) => (
-    <div
-      data-radio-group=""
-      data-value={value}
-      onClick={(event) => {
-        const spaceId = (event.target as HTMLElement).closest<HTMLElement>('[data-space-id]')
-          ?.dataset.spaceId
-        if (spaceId) {
-          onValueChange(spaceId)
-        }
-      }}
-    >
-      {children}
-    </div>
-  ),
-  DropdownMenuRadioItem: ({ children, value }: { children: ReactNode; value: string }) => (
-    <button type="button" data-space-id={value}>
-      {children}
-    </button>
-  ),
-  DropdownMenuItem: ({ children, onSelect }: { children: ReactNode; onSelect?: () => void }) => (
+vi.mock('@/components/ui/context-menu', () => ({
+  ContextMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  ContextMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  ContextMenuSeparator: () => <hr />,
+  ContextMenuItem: ({ children, onSelect }: { children: ReactNode; onSelect?: () => void }) => (
     <button type="button" onClick={onSelect}>
       {children}
     </button>
   )
 }))
 
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
+}))
+
 import SidebarSpaceSwitcher from './SidebarSpaceSwitcher'
 
 function space(overrides: Partial<Space> & Pick<Space, 'id' | 'name' | 'emoji'>): Space {
-  return {
-    createdAt: 0,
-    updatedAt: 0,
-    ...overrides
-  }
+  return { createdAt: 0, updatedAt: 0, ...overrides }
 }
 
 const DEFAULT_SPACE = space({ id: DEFAULT_SPACE_ID, name: 'Default', emoji: null })
@@ -82,24 +53,8 @@ function setSpaces(spaces: Space[], activeSpaceId = DEFAULT_SPACE_ID): void {
   } as unknown as Partial<AppState>
 }
 
-function renderSwitcher(): void {
-  render(<SidebarSpaceSwitcher fallbackTitle="Projects" sectionTitle="projects" />)
-}
-
-function trigger(): HTMLButtonElement {
-  return document.querySelector<HTMLButtonElement>('[data-sidebar-space-switcher]')!
-}
-
-function menuRows(): HTMLButtonElement[] {
-  return Array.from(
-    document.querySelectorAll<HTMLButtonElement>('[data-space-menu] button[data-space-id]')
-  )
-}
-
 describe('SidebarSpaceSwitcher', () => {
-  beforeEach(() => {
-    setSpaces([DEFAULT_SPACE])
-  })
+  beforeEach(() => setSpaces([DEFAULT_SPACE]))
 
   afterEach(() => {
     cleanup()
@@ -107,63 +62,92 @@ describe('SidebarSpaceSwitcher', () => {
     vi.clearAllMocks()
   })
 
-  it('preserves the plain sidebar while keeping first-Space actions reachable', async () => {
+  it('renders the active Space as a dot and keeps creation reachable', async () => {
     const user = userEvent.setup()
-    renderSwitcher()
+    render(<SidebarSpaceSwitcher />)
 
-    expect(trigger().textContent).toBe('Projects')
-    expect(trigger().dataset.spaceId).toBeUndefined()
-    expect(menuRows()).toHaveLength(0)
-    const actions = Array.from(
-      document.querySelectorAll<HTMLButtonElement>('[data-space-menu] button:not([data-space-id])')
+    expect(screen.getByRole('group', { name: 'Spaces' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Default' }).getAttribute('aria-current')).toBe(
+      'true'
     )
-    expect(actions.map((action) => action.textContent)).toEqual(['Edit Space', 'New Space'])
 
-    await user.click(actions[1] as HTMLButtonElement)
+    await user.click(screen.getByRole('button', { name: 'New Space' }))
     expect(mocks.openModal).toHaveBeenCalledWith('space-editor')
   })
 
-  it('keeps a customized Default visible without custom Spaces', () => {
-    setSpaces([{ ...DEFAULT_SPACE, name: 'Personal', emoji: '🏠' }])
+  it('renders emoji Spaces and switches directly without a dropdown', async () => {
+    setSpaces([DEFAULT_SPACE, WORK_SPACE])
+    const user = userEvent.setup()
+    render(<SidebarSpaceSwitcher />)
 
-    renderSwitcher()
-
-    expect(trigger().textContent).toContain('🏠Personal')
-    expect(trigger().getAttribute('aria-label')).toBe('Spaces: Personal')
+    expect(screen.getByRole('button', { name: 'Work' }).textContent).toContain('💼')
+    await user.click(screen.getByRole('button', { name: 'Work' }))
+    expect(mocks.setActiveSpace).toHaveBeenCalledWith('space-work')
   })
 
-  it('keeps paired web clients on the plain all-project view', () => {
+  it('edits and deletes a custom Space but does not offer Default deletion', async () => {
+    setSpaces([DEFAULT_SPACE, WORK_SPACE], 'space-work')
+    const user = userEvent.setup()
+    render(<SidebarSpaceSwitcher />)
+
+    const deleteButtons = screen.getAllByRole('button', { name: 'Delete Space' })
+    expect(deleteButtons).toHaveLength(1)
+    await user.click(screen.getAllByRole('button', { name: 'Edit Space' })[1])
+    expect(mocks.openModal).toHaveBeenCalledWith('space-editor', { spaceId: 'space-work' })
+    await user.click(deleteButtons[0])
+    expect(mocks.openModal).toHaveBeenCalledWith('delete-space', { spaceId: 'space-work' })
+  })
+
+  // Why: happy-dom reports zero-sized rects, so the strip geometry has to be simulated.
+  // The strip viewport is 0..100; the active indicator is 24 wide at `activeLeft`.
+  function stubGeometry(activeLeft: number): () => void {
+    const original = Element.prototype.getBoundingClientRect
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      if (this.getAttribute('role') === 'group') {
+        return { left: 0, right: 100 } as DOMRect
+      }
+      if (this.getAttribute('aria-current') === 'true') {
+        return { left: activeLeft, right: activeLeft + 24 } as DOMRect
+      }
+      return original.call(this)
+    }
+    return () => {
+      Element.prototype.getBoundingClientRect = original
+    }
+  }
+
+  const MANY_SPACES = Array.from({ length: 12 }, (_, i) =>
+    space({ id: `space-${i}`, name: `S${i}`, emoji: null })
+  )
+
+  it('scrolls an off-screen active Space into view', () => {
+    setSpaces(MANY_SPACES, 'space-11')
+    const restore = stubGeometry(260)
+    try {
+      render(<SidebarSpaceSwitcher />)
+      // 284 (right edge + 12 fade) - 100 (viewport width) = 196
+      expect(screen.getByRole('group', { name: 'Spaces' }).scrollLeft).toBe(196)
+    } finally {
+      restore()
+    }
+  })
+
+  it('leaves the strip alone when the active Space is already visible', () => {
+    setSpaces(MANY_SPACES, 'space-1')
+    const restore = stubGeometry(40)
+    try {
+      render(<SidebarSpaceSwitcher />)
+      expect(screen.getByRole('group', { name: 'Spaces' }).scrollLeft).toBe(0)
+    } finally {
+      restore()
+    }
+  })
+
+  it('keeps paired web clients on the all-project view', () => {
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     setSpaces([DEFAULT_SPACE, WORK_SPACE], 'space-work')
 
-    renderSwitcher()
-
-    expect(screen.getByText('Projects')).toBeTruthy()
-    expect(document.querySelector('[data-sidebar-space-switcher]')).toBeNull()
-    expect(document.querySelector('[data-space-menu]')).toBeNull()
-  })
-
-  it('renders, switches, edits, and deletes a custom Space without offering Default deletion', async () => {
-    setSpaces([DEFAULT_SPACE, WORK_SPACE], 'space-work')
-    const user = userEvent.setup()
-
-    renderSwitcher()
-
-    expect(trigger().textContent).toContain('💼Work')
-    expect(trigger().dataset.spaceId).toBe('space-work')
-    expect(menuRows().map((row) => row.dataset.spaceId)).toEqual([DEFAULT_SPACE_ID, 'space-work'])
-    await user.click(menuRows()[0] as HTMLButtonElement)
-    expect(mocks.setActiveSpace).toHaveBeenCalledWith(DEFAULT_SPACE_ID)
-    await user.click(screen.getByText('Edit Space'))
-    expect(mocks.openModal).toHaveBeenCalledWith('space-editor', { spaceId: 'space-work' })
-    await user.click(screen.getByText('Delete Space'))
-    expect(mocks.openModal).toHaveBeenCalledWith('delete-space', { spaceId: 'space-work' })
-
-    cleanup()
-    setSpaces([DEFAULT_SPACE, WORK_SPACE], DEFAULT_SPACE_ID)
-    renderSwitcher()
-
-    expect(screen.queryByText('Delete Space')).toBeNull()
-    expect(screen.getByText('Edit Space')).toBeTruthy()
+    const { container } = render(<SidebarSpaceSwitcher />)
+    expect(container.childElementCount).toBe(0)
   })
 })

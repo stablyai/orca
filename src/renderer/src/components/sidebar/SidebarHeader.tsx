@@ -4,7 +4,6 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
-import SidebarSpaceSwitcher from './SidebarSpaceSwitcher'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
 import { translate } from '@/i18n/i18n'
@@ -25,10 +24,12 @@ const SidebarHeader = React.memo(function SidebarHeader({
   return (
     <div className="mt-2 flex h-8 items-center justify-between px-2 gap-2">
       <div className="flex min-w-0 items-center gap-1">
-        <SidebarSpaceSwitcher
-          fallbackTitle={sidebarTitle}
-          sectionTitle={groupBy === 'repo' ? 'projects' : 'workspaces'}
-        />
+        <span
+          className="pl-2 pr-0.5 text-xs font-semibold text-muted-foreground/80 select-none"
+          data-sidebar-section-title={groupBy === 'repo' ? 'projects' : 'workspaces'}
+        >
+          {sidebarTitle}
+        </span>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <SidebarWorkspaceOptionsMenu
