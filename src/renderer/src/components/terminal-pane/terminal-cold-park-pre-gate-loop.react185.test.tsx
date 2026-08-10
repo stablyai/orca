@@ -1,5 +1,6 @@
 /** @vitest-environment happy-dom */
 import { act, StrictMode } from 'react'
+import type * as ReactModule from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup, TerminalTab } from '../../../../shared/types'
@@ -8,11 +9,23 @@ import type { Tab, TabGroup, TerminalTab } from '../../../../shared/types'
 
 const harness = vi.hoisted(() => ({
   worktreeId: 'repo::/cold-park-pre-gate',
+  discardMemoCaches: false,
   coverageCalls: 0,
   syncCalls: 0,
   slotRenders: 0,
   renderedParkedSets: [] as string[][]
 }))
+
+vi.mock('react', async () => {
+  const actual = await vi.importActual<typeof ReactModule>('react')
+  return {
+    ...actual,
+    useMemo: ((calculate, dependencies) =>
+      harness.discardMemoCaches
+        ? calculate()
+        : actual.useMemo(calculate, dependencies)) as typeof actual.useMemo
+  }
+})
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
@@ -164,6 +177,7 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
   let root: Root | undefined
 
   beforeEach(() => {
+    harness.discardMemoCaches = false
     harness.coverageCalls = 0
     harness.syncCalls = 0
     harness.slotRenders = 0
@@ -309,5 +323,18 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
 
     expect(renderProductionLayer(root)).toBeNull()
     expect(harness.renderedParkedSets.at(-1)).toEqual([...TAB_IDS])
+  })
+
+  it('settles equivalent publications after memo cache discard', () => {
+    harness.discardMemoCaches = true
+    root = createRoot(container)
+
+    const thrown = renderProductionLayer(root)
+
+    expect(thrown).toBeNull()
+    expect(harness.syncCalls).toBeLessThan(10)
+    expect(new Set(harness.renderedParkedSets.map((ids) => ids.join(',')))).toEqual(
+      new Set([TAB_IDS.join(',')])
+    )
   })
 })

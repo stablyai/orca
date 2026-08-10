@@ -10,7 +10,6 @@ import { shouldMountBackgroundWorktreeTab } from '../terminal/background-termina
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
-import { useWorktreeParkTerminalAssignments } from './use-worktree-park-terminal-assignments'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
@@ -100,12 +99,10 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     }
     return entries
   }, [groupActiveTabById, unifiedTabs])
-  const parkingAssignments = useWorktreeParkTerminalAssignments(assignments, coldParkTerminalPanes)
-
   const parkedTerminalTabIds = useTerminalTabColdParking({
     worktreeId,
     terminalTabs,
-    assignments: parkingAssignments,
+    assignments,
     isWorktreeActive,
     coldParkTerminalPanes,
     isForceParked,
