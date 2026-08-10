@@ -1218,6 +1218,50 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
+  it.each([
+    { ext: 'xlsx', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+    { ext: 'xlsm', mime: 'application/vnd.ms-excel.sheet.macroEnabled.12' }
+  ])('returns base64 content for $ext workbooks', async ({ ext, mime }) => {
+    const buf = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00])
+    statMock.mockResolvedValue({ size: buf.length, isDirectory: () => false, mtimeMs: 123 })
+    readFileMock.mockResolvedValue(buf)
+    registerFilesystemHandlers(store as never)
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: path.resolve(`/workspace/repo/book.${ext}`) })
+    ).resolves.toEqual({
+      content: buf.toString('base64'),
+      isBinary: true,
+      isImage: true,
+      mimeType: mime
+    })
+  })
+
+  it('rejects workbooks beyond the tighter spreadsheet read budget', async () => {
+    // Why: a workbook is inflated and parsed in renderer memory, so it does not
+    // get the 50MB budget images and PDFs stream straight to a viewer.
+    statMock.mockResolvedValue({ size: 21 * 1024 * 1024, isDirectory: () => false, mtimeMs: 123 })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/huge.xlsx') })
+    ).rejects.toThrow('exceeds 20MB limit')
+
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('still allows images up to the previewable-binary budget', async () => {
+    const buf = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+    statMock.mockResolvedValue({ size: 21 * 1024 * 1024, isDirectory: () => false, mtimeMs: 123 })
+    readFileMock.mockResolvedValue(buf)
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/big.png') })
+    ).resolves.toMatchObject({ mimeType: 'image/png', isBinary: true })
+  })
+
   it('opens text files larger than the old 5MB guard', async () => {
     const content = 'a'.repeat(6 * 1024 * 1024)
     statMock.mockResolvedValue({ size: content.length, isDirectory: () => false, mtimeMs: 123 })

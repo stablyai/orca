@@ -13778,6 +13778,15 @@
           "insertColumnRight": "Insert column right",
           "deleteRow": "Delete row",
           "deleteColumn": "Delete column"
+        },
+        "XlsxViewer": {
+          "4688c4c466": "Loading workbook...",
+          "16c54c41e5": "Unable to render workbook",
+          "2952ec35f8": "Empty sheet",
+          "aaf26ba2b6": "{{name}} (hidden)",
+          "cb88b1b447": "{{rowCount}} rows",
+          "2ce5b9eecb": "{{columnCount}} columns",
+          "2c8df21237": "truncated at {{limit}} rows"
         }
       },
       "diff": {

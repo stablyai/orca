@@ -133,6 +133,10 @@ import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-er
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import {
+  SPREADSHEET_FILE_MIME_TYPES,
+  resolvePreviewableBinaryByteLimit
+} from '../../shared/spreadsheet-file-extensions'
 import { registerLocalLogTailHandlers } from './local-log-tail'
 import { localLogFileIdentity } from '../ai-vault/local-log-tail-reader'
 import { sanitizeLocalDownloadFilename } from '../local-download-filename'
@@ -159,7 +163,8 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
+  '.pdf': 'application/pdf',
+  ...SPREADSHEET_FILE_MIME_TYPES
 }
 async function readLocalLogSnapshot(filePath: string): Promise<{
   content: string
@@ -596,7 +601,9 @@ export function registerFilesystemHandlers(
       }
       const stats = await stat(filePath)
       const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-      const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+      const sizeLimit = mimeType
+        ? resolvePreviewableBinaryByteLimit(mimeType, MAX_PREVIEWABLE_BINARY_SIZE)
+        : MAX_TEXT_FILE_SIZE
       if (stats.size > sizeLimit) {
         throw new Error(
           `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
@@ -608,7 +615,7 @@ export function registerFilesystemHandlers(
         return {
           content: buffer.toString('base64'),
           isBinary: true,
-          // Why: the renderer keys previewable-binary rendering off `isImage`, so set it for PDFs too to stay compatible.
+          // Why: the renderer keys previewable-binary rendering off `isImage`, so set it for PDFs and workbooks too to stay compatible.
           isImage: true,
           mimeType
         }
