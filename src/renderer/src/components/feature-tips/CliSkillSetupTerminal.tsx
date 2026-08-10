@@ -25,7 +25,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
   const setupTerminalCommand = buildSkillSetupTerminalCommand(
     skillCommand,
     activeSkillRuntime.terminalShellOverride,
-    activeSkillRuntime.agentRuntime
+    activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime
   )
 
   const handleCopySkillCommand = async (): Promise<void> => {
