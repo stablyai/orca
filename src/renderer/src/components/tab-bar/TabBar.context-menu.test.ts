@@ -497,6 +497,45 @@ describe('TabBar context menu wiring', () => {
     expect(menuLabels[3]).toContain('New Browser Tab')
   })
 
+  it('routes both the New File menu item and its search result to the untitled-file command', async () => {
+    const onNewFileTab = vi.fn()
+    const onNewUntitledFileTab = vi.fn()
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      onNewFileTab,
+      onNewUntitledFileTab,
+      onOpenEntry: async () => {}
+    })
+
+    const newFileItem = findChildrenByType(element, 'DropdownMenuItem').find(
+      (item) => extractText(item.props.children).trim() === 'New File'
+    )
+    if (!newFileItem) {
+      throw new Error('New File menu item not rendered')
+    }
+    ;(newFileItem.props.onSelect as () => void)()
+    expect(onNewUntitledFileTab).toHaveBeenCalledTimes(1)
+    expect(onNewFileTab).not.toHaveBeenCalled()
+
+    // The typed-query surface has its own dispatch switch, so it can rot independently.
+    const createEntry = findChildrenByType(element, 'TabBarCreateEntry')[0]
+    const menuOptions = createEntry.props.menuOptions as { kind: string }[]
+    const untitledOption = menuOptions.find((option) => option.kind === 'new-untitled-file')
+    expect(untitledOption).toBeTruthy()
+    ;(createEntry.props.onSelectMenuOption as (option: unknown) => void)(untitledOption)
+    expect(onNewUntitledFileTab).toHaveBeenCalledTimes(2)
+    expect(onNewFileTab).not.toHaveBeenCalled()
+  })
+
+  it('omits the New File entry when the surface has no untitled-file command', async () => {
+    const element = await renderTabBar({ tabs: [TERMINAL_TAB], onNewFileTab: () => {} })
+
+    const labels = findChildrenByType(element, 'DropdownMenuItem').map((item) =>
+      extractText(item.props.children).trim()
+    )
+    expect(labels).not.toContain('New File')
+  })
+
   it('turns New Mobile Emulator into a go-to action when the workspace already has one', async () => {
     const onNewSimulatorTab = vi.fn()
     appStoreSnapshot.unifiedTabsByWorktree = {

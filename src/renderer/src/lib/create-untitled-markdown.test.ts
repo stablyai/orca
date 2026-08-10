@@ -167,6 +167,46 @@ describe('createUntitledMarkdownFile', () => {
     )
   })
 
+  it('interpolates the collision-resolved file name into the template', async () => {
+    const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
+    const createFile = vi.fn().mockResolvedValueOnce(undefined)
+    const readFile = vi.fn().mockResolvedValueOnce({
+      content: '# {{title}}\n{{filename}}\n',
+      isBinary: false
+    })
+    const writeFile = vi.fn().mockResolvedValueOnce(undefined)
+    const pathExists = vi.fn(async ({ filePath }: { filePath: string }) =>
+      filePath.endsWith('/untitled.md')
+    )
+
+    vi.stubGlobal('window', {
+      api: {
+        shell: { pathExists: vi.fn() },
+        fs: { createFile, pathExists, readFile, stat, writeFile }
+      }
+    })
+
+    await expect(
+      createUntitledMarkdownFile('/repo', 'wt-1', undefined, undefined, {
+        template: {
+          id: '.orca/templates/daily.md',
+          name: 'Daily',
+          filePath: '/repo/.orca/templates/daily.md',
+          relativePath: '.orca/templates/daily.md',
+          templateRelativePath: 'daily.md',
+          basename: 'daily.md'
+        }
+      })
+    ).resolves.toMatchObject({ relativePath: 'untitled-2.md' })
+
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/repo/untitled-2.md',
+        content: '# Untitled 2\nuntitled-2.md\n'
+      })
+    )
+  })
+
   it('discovers templates before creating a new markdown file and applies the selected template', async () => {
     const readDir = vi.fn().mockResolvedValueOnce([
       { name: 'daily.md', isDirectory: false, isSymlink: false },

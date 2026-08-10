@@ -61,6 +61,19 @@ For diff status, file-tree decorations, and the changes view, use the git decora
 
 Use these _only_ for git status. Don't reuse them for unrelated state colors — that breaks the convention.
 
+The editor's change gutter has its own set, because a bar carries its meaning by hue alone while a
+file-tree label is read next to its filename:
+
+| Token                       | State    |
+| --------------------------- | -------- |
+| `--editor-gutter-added`      | Added    |
+| `--editor-gutter-modified`   | Modified |
+| `--editor-gutter-deleted`    | Deleted  |
+
+These mirror VS Code's `editorGutter.*` roles, so modified is **blue** here rather than the amber
+the file-tree palette uses — at 3px wide, amber and the added olive are hard to tell apart. Use
+them for gutter marks only, and the `--git-decoration-*` set everywhere else.
+
 ### List rows: hover, selected, current
 
 A common point of drift. Use these conventions for any list-style row (worktrees, command palette items, settings nav):

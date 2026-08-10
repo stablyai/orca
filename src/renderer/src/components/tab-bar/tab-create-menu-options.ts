@@ -10,6 +10,7 @@ export type TabCreateMenuOptionKind =
   | 'new-simulator'
   | 'new-terminal'
   | 'new-terminal-shell'
+  | 'new-untitled-file'
   | 'open-markdown'
 
 export type TabCreateMenuOption = {
@@ -23,6 +24,7 @@ export type TabCreateMenuOption = {
 export type TabCreateMenuOptionsContext = {
   hasNewBrowser: boolean
   hasNewMarkdown: boolean
+  hasNewUntitledFile: boolean
   hasOpenMarkdown: boolean
   hasSimulator: boolean
   simulatorIsGoTo: boolean
@@ -126,6 +128,21 @@ export function buildTabCreateMenuOptions(
         translate('auto.components.tab.bar.tab.create.menu.options.fb50e3d874', 'new markdown'),
         translate('auto.components.tab.bar.tab.create.menu.options.6d8b6b4117', 'new file'),
         translate('auto.components.tab.bar.tab.create.menu.options.b330f72434', 'mark')
+      ]
+    })
+  }
+
+  if (context.hasNewUntitledFile) {
+    const label = translate('auto.components.tab.bar.TabBar.5f5c8cc8de', 'New File')
+    options.push({
+      id: 'new-untitled-file',
+      kind: 'new-untitled-file',
+      label,
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.6d8b6b4117', 'new file'),
+        translate('auto.components.tab.bar.tab.create.menu.options.e6e405fd9b', 'file'),
+        translate('auto.components.tab.bar.tab.create.menu.options.0e9a01f0a2', 'untitled'),
+        translate('auto.components.tab.bar.tab.create.menu.options.2b3e677f7e', 'blank file')
       ]
     })
   }

@@ -251,7 +251,8 @@
           "51f15c37d3": "Cannot open directory: {{value0}}",
           "f2e00db373": "File not found: {{value0}}",
           "checkRunDetailsUnavailable": "No details are available for this check.",
-          "checkRunDetailsLoadFailed": "Failed to load check details."
+          "checkRunDetailsLoadFailed": "Failed to load check details.",
+          "985bc00bf0": "Failed to create untitled file."
         },
         "github": {
           "f129c42773": "GitHub did not return the new comment.",
@@ -3104,7 +3105,8 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "Could not build launch command for {{value0}}.",
             "7a9b4af2af": "Scroll tabs left",
-            "232e075b07": "Scroll tabs right"
+            "232e075b07": "Scroll tabs right",
+            "5f5c8cc8de": "New File"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Create file",
@@ -3180,7 +3182,10 @@
                   "1baeb07c17": "ios simulator",
                   "8a580f88cf": "iphone",
                   "7ecdc5ef08": "ipad",
-                  "14965cc123": "mobile"
+                  "14965cc123": "mobile",
+                  "e6e405fd9b": "file",
+                  "0e9a01f0a2": "untitled",
+                  "2b3e677f7e": "blank file"
                 }
               }
             }
@@ -10509,6 +10514,10 @@
           "openAutomationsDescription": "Create schedules and inspect recent runs.",
           "title": "Automations",
           "description": "Schedule agent work and choose whether Automations appears in the sidebar."
+        },
+        "EditorGitGutterSetting": {
+          "0d6a6bc1e3": "Git Change Indicators",
+          "68bbcab1b6": "Show added, modified, and deleted line markers in the editor gutter, compared against the last commit."
         }
       },
       "right": {
@@ -13525,7 +13534,8 @@
           "c8ac7868e6": "file name",
           "b6ed807cc6": "Name",
           "e365f3c638": "Name your markdown file and pick a folder.",
-          "674b046582": "Save as"
+          "674b046582": "Save as",
+          "02a35a6863": "Name your file and pick a folder."
         },
         "export": {
           "active": {

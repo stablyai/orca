@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
+import { isMarkdownUntitledName, resolveUntitledRenameFileName } from './untitled-file-rename-path'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -33,7 +34,9 @@ export function UntitledFileRenameDialog({
   onClose,
   onConfirm
 }: UntitledFileRenameDialogProps): React.JSX.Element {
-  const baseName = currentName.replace(/\.md$/, '')
+  // Why: only "New Markdown" pins a .md suffix; "New File" placeholders carry whatever the user types.
+  const isMarkdown = isMarkdownUntitledName(currentName)
+  const baseName = isMarkdown ? currentName.replace(/\.md$/i, '') : currentName
   const [name, setName] = useState(baseName)
   const [dir, setDir] = useState(worktreePath)
   const [error, setError] = useState<string | null>(null)
@@ -90,12 +93,12 @@ export function UntitledFileRenameDialog({
   }, [dir, mountedRef, worktreePath])
 
   const handleSubmit = useCallback(() => {
-    const trimmedName = name.trim().replace(/\.md$/, '')
-    if (!trimmedName) {
+    const fileName = resolveUntitledRenameFileName(currentName, name)
+    if (!fileName) {
       setError('Name cannot be empty')
       return
     }
-    if (/[/\\]/.test(trimmedName)) {
+    if (/[/\\]/.test(fileName)) {
       setError('Name cannot contain path separators')
       return
     }
@@ -112,10 +115,9 @@ export function UntitledFileRenameDialog({
       return
     }
 
-    const fileName = `${trimmedName}.md`
     const relativePath = relDir ? `${relDir}/${fileName}` : fileName
     onConfirm(relativePath)
-  }, [name, dir, worktreePath, onConfirm])
+  }, [name, currentName, dir, worktreePath, onConfirm])
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -137,10 +139,15 @@ export function UntitledFileRenameDialog({
             {translate('auto.components.editor.UntitledFileRenameDialog.674b046582', 'Save as')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
-              'auto.components.editor.UntitledFileRenameDialog.e365f3c638',
-              'Name your markdown file and pick a folder.'
-            )}
+            {isMarkdown
+              ? translate(
+                  'auto.components.editor.UntitledFileRenameDialog.e365f3c638',
+                  'Name your markdown file and pick a folder.'
+                )
+              : translate(
+                  'auto.components.editor.UntitledFileRenameDialog.02a35a6863',
+                  'Name your file and pick a folder.'
+                )}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
@@ -169,9 +176,11 @@ export function UntitledFileRenameDialog({
                 className="h-8 text-sm"
                 aria-invalid={!!displayError}
               />
-              <span className="text-xs text-muted-foreground shrink-0">
-                {translate('auto.components.editor.UntitledFileRenameDialog.2d7d39dc63', '.md')}
-              </span>
+              {isMarkdown && (
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {translate('auto.components.editor.UntitledFileRenameDialog.2d7d39dc63', '.md')}
+                </span>
+              )}
             </div>
           </div>
           <div>

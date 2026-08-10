@@ -375,6 +375,9 @@ function Terminal(): React.JSX.Element | null {
     (s) => s.openNewBrowserTabInActiveWorkspace
   )
   const openNewMarkdownInActiveWorkspace = useAppStore((s) => s.openNewMarkdownInActiveWorkspace)
+  const openNewUntitledFileInActiveWorkspace = useAppStore(
+    (s) => s.openNewUntitledFileInActiveWorkspace
+  )
   const openNewTerminalTabInActiveWorkspace = useAppStore(
     (s) => s.openNewTerminalTabInActiveWorkspace
   )
@@ -1673,18 +1676,32 @@ function Terminal(): React.JSX.Element | null {
     [activeWorktreeId, createBrowserTab]
   )
 
-  const handleNewFile = useCallback(async () => {
+  const resolveNewTabTargetGroupId = useCallback((): string | undefined => {
     if (!activeWorktreeId) {
-      return
+      return undefined
     }
-    const targetGroupId =
-      useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
-      useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
+    const state = useAppStore.getState()
+    return (
+      state.activeGroupIdByWorktree[activeWorktreeId] ??
+      state.groupsByWorktree[activeWorktreeId]?.[0]?.id
+    )
+  }, [activeWorktreeId])
+
+  const handleNewFile = useCallback(async () => {
+    const targetGroupId = resolveNewTabTargetGroupId()
     if (!targetGroupId) {
       return
     }
     await openNewMarkdownInActiveWorkspace(targetGroupId)
-  }, [activeWorktreeId, openNewMarkdownInActiveWorkspace])
+  }, [openNewMarkdownInActiveWorkspace, resolveNewTabTargetGroupId])
+
+  const handleNewUntitledFile = useCallback(async () => {
+    const targetGroupId = resolveNewTabTargetGroupId()
+    if (!targetGroupId) {
+      return
+    }
+    await openNewUntitledFileInActiveWorkspace(targetGroupId)
+  }, [openNewUntitledFileInActiveWorkspace, resolveNewTabTargetGroupId])
 
   const handleCloseTab = useCallback((tabId: string) => {
     closeTerminalTab(tabId)
@@ -2388,6 +2405,7 @@ function Terminal(): React.JSX.Element | null {
             onNewSimulatorTab={mobileEmulatorEnabled ? handleNewSimulatorTab : undefined}
             onOpenEntry={handleOpenEntry}
             onNewFileTab={handleNewFile}
+            onNewUntitledFileTab={handleNewUntitledFile}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}
             expandedPaneByTabId={expandedPaneByTabId}

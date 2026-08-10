@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   isWebRuntimeSessionActive: vi.fn(() => false),
   makePreviewFilePermanent: vi.fn(),
   openFile: vi.fn(),
+  openNewUntitledFileInActiveWorkspace: vi.fn(),
   pinFile: vi.fn(),
   recordFeatureInteraction: vi.fn(),
   setActiveBrowserTab: vi.fn(),
@@ -150,6 +151,7 @@ function resetStore(): void {
     focusGroup: mocks.focusGroup,
     makePreviewFilePermanent: mocks.makePreviewFilePermanent,
     openFile: mocks.openFile,
+    openNewUntitledFileInActiveWorkspace: mocks.openNewUntitledFileInActiveWorkspace,
     pinFile: mocks.pinFile,
     recordFeatureInteraction: mocks.recordFeatureInteraction,
     setActiveBrowserTab: mocks.setActiveBrowserTab,
@@ -194,6 +196,17 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
+  })
+
+  it('creates the untitled file in the owning group, not the globally focused one', async () => {
+    // The "+" menu can fire from an unfocused panel, so global focus must lose.
+    storeBox.state = { ...storeBox.state, activeGroupIdByWorktree: { 'wt-1': 'group-2' } }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    await model.commands.newUntitledFileTab()
+
+    expect(mocks.openNewUntitledFileInActiveWorkspace).toHaveBeenCalledWith('group-1')
   })
 
   it('falls back to a local shell when the typed remote-create outcome is unavailable', async () => {
