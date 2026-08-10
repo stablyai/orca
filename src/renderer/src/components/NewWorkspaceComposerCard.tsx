@@ -19,6 +19,9 @@ import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
+import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { normalizeGlobalWindowsRuntimeDefault } from '../../../shared/project-execution-runtime'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   filterEnabledTuiAgents
@@ -388,6 +391,8 @@ export default function NewWorkspaceComposerCard({
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
+  const localWindowsRuntimeDefault = useAppStore((s) => s.settings?.localWindowsRuntimeDefault)
   const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const branchNameInputId = React.useId()
   const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
@@ -441,6 +446,36 @@ export default function NewWorkspaceComposerCard({
     },
     [updateSettings]
   )
+
+  // Why: a Windows host with no detected agents usually has its CLIs installed
+  // in WSL. Offer the existing WSL agent runtime instead of an empty picker.
+  const appPlatform = getRendererAppPlatform()
+  const wslCapabilities = useWindowsTerminalCapabilities(appPlatform === 'win32')
+  const windowsRuntimeDefault = normalizeGlobalWindowsRuntimeDefault(localWindowsRuntimeDefault)
+  const wslDetectionHint = React.useMemo(() => {
+    if (appPlatform !== 'win32') {
+      return null
+    }
+    if (windowsRuntimeDefault.kind === 'wsl') {
+      return null
+    }
+    if (detectedAgentIds === null || detectedAgentIds.size > 0) {
+      return null
+    }
+    if (!wslCapabilities.wslAvailable) {
+      return null
+    }
+    return wslCapabilities.wslDistros.find((distro) => distro.trim().length > 0) ?? null
+  }, [appPlatform, windowsRuntimeDefault, detectedAgentIds, wslCapabilities])
+
+  const handleDetectWslAgents = React.useCallback((): void => {
+    if (!wslDetectionHint) {
+      return
+    }
+    void Promise.resolve(
+      updateSettings({ localWindowsRuntimeDefault: { kind: 'wsl', distro: wslDetectionHint } })
+    ).then(() => refreshDetectedAgents())
+  }, [updateSettings, refreshDetectedAgents, wslDetectionHint])
 
   const cancelNameInputFocusFrame = React.useCallback((): void => {
     if (nameInputFocusFrameRef.current === null) {
@@ -936,6 +971,29 @@ export default function NewWorkspaceComposerCard({
             triggerClassName="h-9 w-full min-w-0 border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
             onTriggerEnter={createDisabled ? undefined : onCreate}
           />
+          {wslDetectionHint ? (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-border px-2 py-1.5">
+              <span className="text-[11px] leading-tight text-muted-foreground">
+                {translate(
+                  'auto.components.NewWorkspaceComposerCard.detectWslAgentsHint',
+                  'No agents found on Windows. Your coding agents may be installed in WSL.'
+                )}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={handleDetectWslAgents}
+                className="h-6 shrink-0 whitespace-nowrap text-[11px]"
+              >
+                {translate(
+                  'auto.components.NewWorkspaceComposerCard.detectWslAgentsAction',
+                  'Detect in WSL ({{value0}})',
+                  { value0: wslDetectionHint }
+                )}
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         {/* Why: keep the Advanced disclosure header grouped with the content below while preserving spacing from the Agent field above. */}

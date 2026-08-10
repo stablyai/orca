@@ -1456,6 +1456,8 @@
         "ba64270bdb": "Configure agents",
         "ab63f25397": "Open agent settings",
         "01d1e8f601": "Agent",
+        "detectWslAgentsHint": "No agents found on Windows. Your coding agents may be installed in WSL.",
+        "detectWslAgentsAction": "Detect in WSL ({{value0}})",
         "0c5d6a479c": "[Optional]",
         "b5a0796911": "Connect",
         "dccd26d4e4": "Choose project",

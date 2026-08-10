@@ -12,7 +12,15 @@ const storeMocks = vi.hoisted(() => ({
   openModal: vi.fn(),
   openSettingsPage: vi.fn(),
   openSettingsTarget: vi.fn(),
-  setRuntimeEnvironmentStatus: vi.fn()
+  setRuntimeEnvironmentStatus: vi.fn(),
+  updateSettings: vi.fn(),
+  refreshDetectedAgents: vi.fn()
+}))
+
+const storeSettings = vi.hoisted(() => ({
+  defaultTuiAgent: null as string | null,
+  disabledTuiAgents: [] as unknown[],
+  localWindowsRuntimeDefault: undefined as unknown
 }))
 
 const apiMocks = vi.hoisted(() => ({
@@ -29,9 +37,10 @@ vi.mock('@/store', () => ({
         openSettingsPage: storeMocks.openSettingsPage,
         openSettingsTarget: storeMocks.openSettingsTarget,
         setRuntimeEnvironmentStatus: storeMocks.setRuntimeEnvironmentStatus,
+        refreshDetectedAgents: storeMocks.refreshDetectedAgents,
         activeModal: 'none',
-        settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
-        updateSettings: vi.fn(),
+        settings: storeSettings,
+        updateSettings: storeMocks.updateSettings,
         projects: [],
         repos: []
       }),
@@ -45,6 +54,27 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
   useContextualTour: vi.fn()
+}))
+
+const platformMock = vi.hoisted(() => vi.fn(() => 'linux'))
+vi.mock('@/lib/renderer-app-platform', () => ({
+  getRendererAppPlatform: platformMock
+}))
+
+const wslCapabilitiesMock = vi.hoisted(() =>
+  vi.fn(
+    (capabilities: unknown) =>
+      capabilities ?? {
+        wslAvailable: false,
+        wslDistros: [],
+        pwshAvailable: false,
+        gitBashAvailable: false,
+        hostPlatform: null
+      }
+  )
+)
+vi.mock('@/lib/windows-terminal-capabilities', () => ({
+  useWindowsTerminalCapabilities: wslCapabilitiesMock
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -918,5 +948,89 @@ describe('NewWorkspaceComposerCard note sizing', () => {
     expect(className).toContain('overflow-y-auto')
     expect(className).toContain('scrollbar-sleek')
     expect(className).not.toContain('overflow-hidden')
+  })
+})
+
+describe('NewWorkspaceComposerCard WSL agent detection hint', () => {
+  const WSL_CAPABILITIES = {
+    wslAvailable: true,
+    wslDistros: ['Ubuntu', 'docker-desktop'],
+    pwshAvailable: false,
+    gitBashAvailable: false,
+    hostPlatform: 'win32'
+  }
+
+  beforeEach(() => {
+    platformMock.mockReturnValue('win32')
+    wslCapabilitiesMock.mockReturnValue(WSL_CAPABILITIES)
+    storeMocks.updateSettings.mockClear()
+    storeMocks.refreshDetectedAgents.mockClear()
+    storeSettings.localWindowsRuntimeDefault = undefined
+  })
+
+  afterEach(() => {
+    act(() => current?.root.unmount())
+    current?.container.remove()
+    current = null
+  })
+
+  function findWslHint(container: HTMLElement): HTMLElement | null {
+    return (
+      [...container.querySelectorAll<HTMLElement>('div')].find((node) =>
+        node.textContent?.includes('No agents found on Windows')
+      ) ?? null
+    )
+  }
+
+  it('offers WSL detection when no agents are detected on Windows and WSL is available', () => {
+    const { container } = renderCard({ detectedAgentIds: new Set() })
+    const hint = findWslHint(container)
+    expect(hint).toBeTruthy()
+    const action = [...(hint?.querySelectorAll('button') ?? [])].find((button) =>
+      button.textContent?.includes('Detect in WSL (Ubuntu)')
+    )
+    expect(action).toBeTruthy()
+  })
+
+  it('clicking the hint enables the WSL agent runtime and refreshes detection', async () => {
+    const { container } = renderCard({ detectedAgentIds: new Set() })
+    const action = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Detect in WSL (Ubuntu)')
+    )
+    expect(action).toBeTruthy()
+    act(() => action?.click())
+    expect(storeMocks.updateSettings).toHaveBeenCalledWith({
+      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+    await act(async () => {})
+    expect(storeMocks.refreshDetectedAgents).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the hint when agents are already detected', () => {
+    const { container } = renderCard({ detectedAgentIds: new Set(['claude']) })
+    expect(findWslHint(container)).toBeNull()
+  })
+
+  it('hides the hint while detection is still in flight', () => {
+    const { container } = renderCard({ detectedAgentIds: null })
+    expect(findWslHint(container)).toBeNull()
+  })
+
+  it('hides the hint when WSL is unavailable', () => {
+    wslCapabilitiesMock.mockReturnValue({ ...WSL_CAPABILITIES, wslAvailable: false })
+    const { container } = renderCard({ detectedAgentIds: new Set() })
+    expect(findWslHint(container)).toBeNull()
+  })
+
+  it('hides the hint when the agent runtime is already WSL', () => {
+    storeSettings.localWindowsRuntimeDefault = { kind: 'wsl', distro: 'Ubuntu' }
+    const { container } = renderCard({ detectedAgentIds: new Set() })
+    expect(findWslHint(container)).toBeNull()
+  })
+
+  it('hides the hint on non-Windows platforms', () => {
+    platformMock.mockReturnValue('linux')
+    const { container } = renderCard({ detectedAgentIds: new Set() })
+    expect(findWslHint(container)).toBeNull()
   })
 })
