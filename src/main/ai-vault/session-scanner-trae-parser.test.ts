@@ -47,3 +47,38 @@ it('parses installed Trae rollouts without a metadata session id', async () => {
     ]
   })
 })
+
+it('keeps the Trae session metadata cwd when later turns use another directory', async () => {
+  const session = await parseTraeSessionContent({
+    file: {
+      path: `/fixtures/rollout-${TRAE_FIXTURE_SESSION_ID}.jsonl`,
+      mtimeMs: 0,
+      modifiedAt: '2026-08-10T10:04:00.000Z'
+    },
+    content: [
+      {
+        timestamp: '2026-08-10T10:00:00.000Z',
+        type: 'session_meta',
+        payload: { cwd: '/repo/original' }
+      },
+      {
+        timestamp: '2026-08-10T10:01:00.000Z',
+        type: 'turn_context',
+        payload: { cwd: '/repo/later-turn', model: 'trae-model' }
+      },
+      {
+        timestamp: '2026-08-10T10:01:01.000Z',
+        type: 'event_msg',
+        payload: { type: 'user_message', message: 'Keep the original workspace' }
+      }
+    ]
+      .map((record) => JSON.stringify(record))
+      .join('\n'),
+    platform: 'darwin'
+  })
+
+  expect(session).toMatchObject({
+    cwd: '/repo/original',
+    resumeCommand: "cd '/repo/original' && traecli resume '019fe968-ff04-7e43-8316-983ae577b782'"
+  })
+})

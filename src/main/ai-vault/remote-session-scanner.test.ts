@@ -564,6 +564,60 @@ describe('scanRemoteAiVaultSessions', () => {
     )
   })
 
+  it('discovers indexed Trae rollouts on Windows SSH hosts', async () => {
+    const provider = new MemoryRemoteProvider()
+    const rolloutName = `rollout-2026-08-10T10-03-20-${TRAE_FIXTURE_SESSION_ID}.jsonl`
+    provider.addFile(
+      'C:\\Users\\Ada\\.trae\\cli\\session_index.jsonl',
+      jsonLines([{ id: TRAE_FIXTURE_SESSION_ID, thread_name: 'Indexed Windows Trae title' }]),
+      1
+    )
+    provider.addFile(
+      `C:\\Users\\Ada\\.trae\\cli\\sessions\\2026\\08\\10\\${rolloutName}`,
+      jsonLines([
+        {
+          timestamp: '2026-08-10T10:03:20.000Z',
+          type: 'session_meta',
+          payload: { cwd: 'C:\\repo\\trae app' }
+        },
+        {
+          timestamp: '2026-08-10T10:03:20.500Z',
+          type: 'turn_context',
+          payload: { cwd: 'C:\\repo\\later turn', model: 'trae-model' }
+        },
+        {
+          timestamp: '2026-08-10T10:03:21.000Z',
+          type: 'event_msg',
+          payload: { type: 'user_message', message: 'Windows Trae fallback title' }
+        }
+      ]),
+      10
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:win-trae-box',
+      remoteHome: 'C:\\Users\\Ada',
+      hostPlatform: getRemoteHostPlatform('win32-x64')
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(provider.readDirPaths).toContain('C:/Users/Ada/.trae/cli/sessions')
+    expect(result.sessions[0]).toMatchObject({
+      executionHostId: 'ssh:win-trae-box',
+      executionHostPlatform: 'win32',
+      agent: 'trae',
+      sessionId: TRAE_FIXTURE_SESSION_ID,
+      title: 'Indexed Windows Trae title',
+      cwd: 'C:\\repo\\trae app',
+      filePath: `C:/Users/Ada/.trae/cli/sessions/2026/08/10/${rolloutName}`,
+      codexHome: null,
+      resumeCommand:
+        'cmd /d /s /c "cd /d ""C:\\repo\\trae app"" && traecli resume ""019fe968-ff04-7e43-8316-983ae577b782"""'
+    })
+  })
+
   it('loads Antigravity workspace history with Windows remote paths', async () => {
     const provider = new MemoryRemoteProvider()
     const sessionId = 'dddddddd-eeee-4fff-8aaa-bbbbbbbbbbbb'

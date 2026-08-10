@@ -12,7 +12,9 @@ import { allIncrementalAgentFixtures } from './session-scanner-incremental-fixtu
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,
-  resetSessionParseCacheForTests
+  resetSessionParseCacheForTests,
+  seedSessionParseCache,
+  snapshotSessionParseCacheForPersistence
 } from './session-scanner-parse-cache'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { TRAE_FIXTURE_SESSION_ID, traeFixture } from './session-scanner-trae-fixtures'
@@ -138,6 +140,47 @@ describe.each(allIncrementalAgentFixtures())('incremental parse parity: $agent',
 })
 
 describe('rollout-specific resume behavior', () => {
+  it('keeps the original Trae cwd when an appended turn context uses another directory', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `rollout-${TRAE_FIXTURE_SESSION_ID}.jsonl`)
+    await writeFile(
+      path,
+      `${JSON.stringify({
+        timestamp: '2026-08-10T10:00:00.000Z',
+        type: 'session_meta',
+        payload: { cwd: '/repo/original' }
+      })}\n${JSON.stringify({
+        timestamp: '2026-08-10T10:00:01.000Z',
+        type: 'event_msg',
+        payload: { type: 'user_message', message: 'Keep the original workspace' }
+      })}\n`
+    )
+    const seededCandidate = await candidateFor('trae', path)
+    expect((await parseAgentSessionFileCached(seededCandidate, process.platform))?.cwd).toBe(
+      '/repo/original'
+    )
+
+    await appendFile(
+      path,
+      `${JSON.stringify({
+        timestamp: '2026-08-10T10:01:00.000Z',
+        type: 'turn_context',
+        payload: { cwd: '/repo/later-turn' }
+      })}\n`
+    )
+    const stats = createSessionParseStats()
+    const appended = await parseAgentSessionFileCached(
+      await candidateFor('trae', path),
+      process.platform,
+      stats
+    )
+    expect(stats.incremental).toBe(1)
+    expect(appended).toMatchObject({
+      cwd: '/repo/original',
+      resumeCommand: "cd '/repo/original' && traecli resume '019fe968-ff04-7e43-8316-983ae577b782'"
+    })
+  })
+
   it('keeps rejecting worker sessions across incremental appends', async () => {
     const root = await makeTempDir()
     const path = join(root, codexFixture().fileName)
@@ -224,6 +267,51 @@ describe('rollout-specific resume behavior', () => {
     expect(stats.reused).toBe(1)
     expect(renamed?.title).toBe('Indexed Trae title')
     expect(renamed).toEqual(await parseAgentSessionFile(candidate, process.platform))
+  })
+
+  it.each([
+    { agent: 'codex' as const, sessionId: CODEX_FIXTURE_SESSION_ID },
+    { agent: 'trae' as const, sessionId: TRAE_FIXTURE_SESSION_ID }
+  ])('keeps $agent metadata titles when an unchanged cache entry is reused', async (fixture) => {
+    const root = await makeTempDir()
+    const sessionHome = join(root, fixture.agent === 'codex' ? '.codex' : '.trae', 'cli')
+    const sessionsDir = join(sessionHome, 'sessions', '2026', '08', '10')
+    await mkdir(sessionsDir, { recursive: true })
+    const path = join(sessionsDir, `rollout-${fixture.sessionId}.jsonl`)
+    await writeFile(
+      path,
+      `${JSON.stringify({
+        timestamp: '2026-08-10T10:00:00.000Z',
+        type: 'session_meta',
+        payload: { id: fixture.sessionId, cwd: '/repo/original', title: 'Metadata title' }
+      })}\n`
+    )
+    const candidate = await candidateFor(
+      fixture.agent,
+      path,
+      fixture.agent === 'codex' ? sessionHome : null
+    )
+
+    expect((await parseAgentSessionFileCached(candidate, process.platform))?.title).toBe(
+      'Metadata title'
+    )
+    await writeFile(
+      join(sessionHome, 'session_index.jsonl'),
+      `${JSON.stringify({ id: fixture.sessionId, thread_name: 'Conflicting index title' })}\n`
+    )
+
+    const stats = createSessionParseStats()
+    const reused = await parseAgentSessionFileCached(candidate, process.platform, stats)
+    expect(stats.reused).toBe(1)
+    expect(reused?.title).toBe('Metadata title')
+
+    const persisted = snapshotSessionParseCacheForPersistence()
+    resetSessionParseCacheForTests()
+    seedSessionParseCache(persisted)
+    const restartedStats = createSessionParseStats()
+    const restarted = await parseAgentSessionFileCached(candidate, process.platform, restartedStats)
+    expect(restartedStats.reused).toBe(1)
+    expect(restarted?.title).toBe('Metadata title')
   })
 })
 

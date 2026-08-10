@@ -86,11 +86,14 @@ export type ResumableParseFinalizeOptions = {
   executionHostPlatform?: NodeJS.Platform | null
 }
 
+export type RolloutTitleSource = 'meta' | 'user' | null
+
 // One in-progress parse of an append-only transcript, resumable across scans.
 // The parse cache stores a state per file and feeds it only newly appended
 // lines; `clone` must deep-copy anything `consumeLine` mutates so a failed
 // read or a display-only trailing line can never corrupt the cached fold.
 export type ResumableSessionParseState = {
+  readonly rolloutTitleSource?: RolloutTitleSource
   consumeLine(line: string): void
   clone(): ResumableSessionParseState
   // Refresh per-scan file metadata (mtime display string) without re-parsing.

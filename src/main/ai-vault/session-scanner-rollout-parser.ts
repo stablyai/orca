@@ -12,11 +12,16 @@ import {
   updateTimeline
 } from './session-scanner-accumulator'
 import { readRolloutSessionIndexTitle } from './session-scanner-rollout-title-index'
+import {
+  extractRolloutSessionMetadataTitle,
+  isRolloutWorkerSession
+} from './session-scanner-rollout-metadata'
 import type {
   CodexUsageSnapshot,
   FileWithMtime,
   ResumableParseFinalizeOptions,
   ResumableSessionParseState,
+  RolloutTitleSource,
   SessionAccumulator
 } from './session-scanner-types'
 import {
@@ -27,7 +32,6 @@ import {
   extractModel,
   extractString,
   normalizeCodexUsage,
-  normalizeTitleText,
   parseJsonObject,
   subtractCodexUsage
 } from './session-scanner-values'
@@ -38,7 +42,7 @@ type RolloutSessionParseState = {
   previousTotals: CodexUsageSnapshot | null
   rejectedWorkerSession: boolean
   sawSessionMeta: boolean
-  titleSource: 'meta' | 'user' | null
+  titleSource: RolloutTitleSource
 }
 export async function parseRolloutSessionFile(args: {
   agent: RolloutSessionAgent
@@ -102,6 +106,11 @@ function createRolloutParseState(
 function cloneRolloutParseState(state: RolloutSessionParseState): RolloutSessionParseState {
   return { ...state, accumulator: cloneSessionAccumulator(state.accumulator) }
 }
+function applyRolloutCwd(accumulator: SessionAccumulator, cwd: string | null): void {
+  if (cwd && (accumulator.agent === 'codex' || !accumulator.cwd)) {
+    accumulator.cwd = cwd
+  }
+}
 function consumeRolloutRecordLine(state: RolloutSessionParseState, line: string): void {
   if (state.rejectedWorkerSession) {
     return
@@ -127,13 +136,13 @@ function consumeRolloutRecordLine(state: RolloutSessionParseState, line: string)
       state.titleSource = 'meta'
     }
     const cwd = extractString(payload.cwd)
-    accumulator.cwd = cwd || accumulator.cwd
+    applyRolloutCwd(accumulator, cwd)
     accumulator.branch = extractGitBranch(payload.git) ?? accumulator.branch
     return
   }
   if (record.type === 'turn_context' && payload) {
     const cwd = extractString(payload.cwd)
-    accumulator.cwd = cwd || accumulator.cwd
+    applyRolloutCwd(accumulator, cwd)
     const model = extractModel(payload)
     accumulator.model = model || accumulator.model
     return
@@ -235,6 +244,9 @@ function rolloutResumeStateFromParseState(
   titleReader: (sessionId: string) => Promise<string | null>
 ): ResumableSessionParseState {
   return {
+    get rolloutTitleSource() {
+      return state.titleSource
+    },
     consumeLine: (line) => consumeRolloutRecordLine(state, line),
     clone: () =>
       rolloutResumeStateFromParseState(
@@ -273,22 +285,6 @@ async function parseRolloutSessionLines(args: {
     executionHostPlatform: args.executionHostPlatform
   })
 }
-function isRolloutWorkerSession(payload: Record<string, unknown>): boolean {
-  const threadSource = extractString(payload.thread_source) ?? extractString(payload.threadSource)
-  if (threadSource) {
-    return threadSource.toLowerCase() !== 'user'
-  }
-  const source = asRecord(payload.source)
-  return Boolean(asRecord(source?.subagent))
-}
-function extractRolloutSessionMetadataTitle(payload: Record<string, unknown>): string | null {
-  return (
-    normalizeTitleText(extractString(payload.title) ?? '') ??
-    normalizeTitleText(extractString(payload.thread_name) ?? '') ??
-    normalizeTitleText(extractString(payload.threadName) ?? '')
-  )
-}
-
 function readRolloutSessionFileIndexTitle(
   file: FileWithMtime,
   sessionHome: string | null,

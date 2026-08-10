@@ -13,7 +13,7 @@ import {
 } from './session-scanner-parse-cache'
 
 // Bump when the persisted entry layout changes; a mismatched file is discarded whole.
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 // Debounce so back-to-back scans (desktop IPC + runtime RPC) collapse into one write.
 const SAVE_DEBOUNCE_MS = 1_500
 // The payload contains transcript-derived preview text; keep it user-only
@@ -179,13 +179,22 @@ function parsePersistedEntry(item: unknown): [string, PersistedSessionParseCache
   if (entry.session !== null && typeof entry.session !== 'object') {
     return null
   }
+  if (
+    entry.rolloutTitleSource !== null &&
+    entry.rolloutTitleSource !== 'meta' &&
+    entry.rolloutTitleSource !== 'user'
+  ) {
+    return null
+  }
   return [
     path,
     {
       mtimeMs: entry.mtimeMs,
       sizeBytes: entry.sizeBytes,
       platform: entry.platform as NodeJS.Platform,
-      session: entry.session as PersistedSessionParseCacheEntry['session']
+      session: entry.session as PersistedSessionParseCacheEntry['session'],
+      rolloutTitleSource:
+        entry.rolloutTitleSource as PersistedSessionParseCacheEntry['rolloutTitleSource']
     }
   ]
 }

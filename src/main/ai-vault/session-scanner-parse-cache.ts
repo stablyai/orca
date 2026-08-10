@@ -1,5 +1,3 @@
-import { createReadStream } from 'node:fs'
-import { open } from 'node:fs/promises'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
@@ -7,21 +5,23 @@ import { createCodexSessionResumeState } from './session-scanner-codex-parser'
 import { createTraeSessionResumeState } from './session-scanner-trae-parser'
 import { createDroidSessionResumeState } from './session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from './session-scanner-graph-parsers'
+import { consumeCompleteJsonlLines, endsWithNewlineAt } from './session-scanner-jsonl-byte-reader'
 import { createClaudeSessionResumeState } from './session-scanner-primary-parsers'
 import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
 import { createCopilotSessionResumeState } from './session-scanner-copilot-parser'
 import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
-import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
+import type {
+  ResumableSessionParseState,
+  RolloutTitleSource,
+  SessionFileCandidate
+} from './session-scanner-types'
 import { refreshCachedRolloutTitle } from './session-scanner-rollout-cached-title'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
 const MAX_CACHE_ENTRIES = 4096
-
-const NEWLINE_BYTE = 0x0a
-const CARRIAGE_RETURN_BYTE = 0x0d
 
 type ResumePoint = {
   state: ResumableSessionParseState
@@ -35,6 +35,7 @@ type SessionParseCacheEntry = {
   sizeBytes: number | null
   platform: NodeJS.Platform
   session: AiVaultSession | null
+  rolloutTitleSource: RolloutTitleSource
   resume: ResumePoint | null
 }
 
@@ -121,7 +122,8 @@ export function snapshotSessionParseCacheForPersistence(): [
       mtimeMs: entry.mtimeMs,
       sizeBytes: entry.sizeBytes,
       platform: entry.platform,
-      session: entry.session
+      session: entry.session,
+      rolloutTitleSource: entry.rolloutTitleSource
     }
   ])
 }
@@ -148,6 +150,7 @@ export function seedSessionParseCache(
       sizeBytes: entry.sizeBytes,
       platform: entry.platform,
       session: entry.session,
+      rolloutTitleSource: entry.rolloutTitleSource,
       resume: null
     })
   }
@@ -210,7 +213,11 @@ export async function parseAgentSessionFileCached(
       }
     }
     if (entry.session && (candidate.agent === 'codex' || candidate.agent === 'trae')) {
-      entry.session = await refreshCachedRolloutTitle(candidate, entry.session)
+      entry.session = await refreshCachedRolloutTitle(
+        candidate,
+        entry.session,
+        entry.rolloutTitleSource
+      )
     }
     storeEntry(file.path, entry)
     return entry.session
@@ -239,6 +246,7 @@ export async function parseAgentSessionFileCached(
     sizeBytes: file.sizeBytes ?? null,
     platform,
     session,
+    rolloutTitleSource: null,
     resume: null
   })
   return session
@@ -293,93 +301,13 @@ async function parseResumableCandidate(args: {
     displayState.consumeLine(readResult.trailingPartialLine)
   }
 
+  const session = await displayState.finalize(args.platform)
   return {
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
     platform: args.platform,
-    session: await displayState.finalize(args.platform),
+    session,
+    rolloutTitleSource: displayState.rolloutTitleSource ?? null,
     resume: { state, byteOffset: readResult.consumedThrough }
-  }
-}
-
-// A resume point is only valid if it still sits just past a line break;
-// anything else means the file was rewritten, not appended. Heuristic: a
-// grown rewrite keeping '\n' at exactly this byte would slip through, but
-// agent transcripts are append-only so that trade is accepted (worst case is
-// a stale vault row until the file is next truncated or the app restarts).
-async function endsWithNewlineAt(path: string, offset: number): Promise<boolean> {
-  const handle = await open(path, 'r')
-  try {
-    const { bytesRead, buffer } = await handle.read(Buffer.alloc(1), 0, 1, offset - 1)
-    return bytesRead === 1 && buffer[0] === NEWLINE_BYTE
-  } finally {
-    await handle.close()
-  }
-}
-
-type JsonlReadResult = {
-  consumedThrough: number
-  trailingPartialLine: string | null
-  bytesRead: number
-}
-
-// Byte-accurate replacement for readline: offsets must count bytes (not
-// UTF-8-decoded characters) so a resumed read starts exactly where the last
-// complete line ended.
-async function consumeCompleteJsonlLines(args: {
-  path: string
-  start: number
-  onLine: (line: string) => void
-}): Promise<JsonlReadResult> {
-  let consumedThrough = args.start
-  let bytesRead = 0
-  // Why a piece list: re-joining the partial line with every chunk made one
-  // oversized record (a big tool result) cost O(record^2). Joining once, when a
-  // newline finally arrives, keeps it linear.
-  let remainderParts: Buffer[] = []
-  let remainderLength = 0
-
-  const stream = createReadStream(args.path, { start: args.start })
-  for await (const chunk of stream as AsyncIterable<Buffer>) {
-    bytesRead += chunk.length
-    // Why check the chunk alone: the pieces held over are all mid-line, so none
-    // of them contains a newline.
-    if (!chunk.includes(NEWLINE_BYTE)) {
-      remainderParts.push(chunk)
-      remainderLength += chunk.length
-      continue
-    }
-    const data =
-      remainderLength > 0
-        ? Buffer.concat([...remainderParts, chunk], remainderLength + chunk.length)
-        : chunk
-    remainderParts = []
-    remainderLength = 0
-    let lineStart = 0
-    let newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
-    while (newlineIndex !== -1) {
-      let lineEnd = newlineIndex
-      if (lineEnd > lineStart && data[lineEnd - 1] === CARRIAGE_RETURN_BYTE) {
-        lineEnd--
-      }
-      args.onLine(data.toString('utf-8', lineStart, lineEnd))
-      lineStart = newlineIndex + 1
-      newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
-    }
-    consumedThrough += lineStart
-    if (lineStart < data.length) {
-      // Copy the tail so retaining it doesn't pin the whole chunk buffer.
-      remainderParts = [Buffer.from(data.subarray(lineStart))]
-      remainderLength = data.length - lineStart
-    }
-  }
-
-  const trailingPartialLine =
-    remainderLength > 0 ? Buffer.concat(remainderParts, remainderLength).toString('utf-8') : null
-
-  return {
-    consumedThrough,
-    trailingPartialLine,
-    bytesRead
   }
 }
