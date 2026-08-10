@@ -94,6 +94,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'orchestration_migration_required',
   'operation_unknown',
   'question_not_found',
+  'ask_self_addressed',
   'answer_conflict',
   'stale_delivery',
   'waiter_exists',

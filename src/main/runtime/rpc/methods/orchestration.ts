@@ -19,6 +19,7 @@ import {
   orchestrationSkillRecoveryData
 } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
+import { assertAskIsAnswerable } from './orchestration-ask-self-addressed'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import { resolveRunScope } from './orchestration-run-scope'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
@@ -1412,6 +1413,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           throw new OrchestrationError('dispatch_capability_invalid', authority.reason)
         }
       }
+      // Why: refuse before the Question exists, so a self-addressed ask applies no effects.
+      assertAskIsAnswerable({
+        db,
+        runId: activeDispatch.run_id,
+        dispatchId: activeDispatch.id,
+        callerPaneKey: paneKey
+      })
       const options =
         params.options
           ?.split(',')
