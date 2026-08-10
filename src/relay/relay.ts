@@ -45,6 +45,7 @@ import { AiVaultHandler } from './ai-vault-handler'
 import { createRelayAiVaultService } from './ai-vault-service-factory'
 import { getRemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
 import { parseUnameToRelayPlatform } from '../main/ssh/relay-protocol'
+import { NativeChatHandler } from './native-chat-handler'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import { PluginOverlayManager } from './plugin-overlay'
 import {
@@ -739,6 +740,9 @@ async function main(): Promise<void> {
     service: aiVaultService ?? undefined
   })
   void _aiVaultHandler
+
+  const _nativeChatHandler = new NativeChatHandler(dispatcher)
+  void _nativeChatHandler
 
   // Why: relay-hosted plugin provisioning is a later phase. Register the
   // enforcement boundary now with no consented identities or runtime services.

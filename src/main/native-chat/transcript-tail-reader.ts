@@ -111,7 +111,8 @@ export async function readNativeChatTranscriptTailFile(
     if (cursor === 0 && lineParts.length > 0 && newestFirst.length <= limit) {
       decodeLine(0, newestFirst)
     }
-    const chronological = newestFirst.toReversed()
+    // oxlint-disable-next-line unicorn/no-array-reverse -- `.toReversed()` is Node 20+, and this reader now also runs inside the SSH relay, whose Node-18 baseline src/relay/subprocess.test.ts enforces. The copy keeps the non-mutating semantics the rule is after.
+    const chronological = [...newestFirst].reverse()
     // Why: slice(-0) returns the whole array, so a non-positive limit must
     // window to nothing explicitly rather than leak every buffered record.
     const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
@@ -152,7 +153,8 @@ export async function readNativeChatTranscriptTailFile(
     lineOffset: number,
     messages: { message: NativeChatMessage; offset: number }[]
   ): void {
-    let line = Buffer.concat([...lineParts].toReversed()).toString('utf8')
+    // oxlint-disable-next-line unicorn/no-array-reverse -- see the Node-18 note above; the spread already copies.
+    let line = Buffer.concat([...lineParts].reverse()).toString('utf8')
     if (line.endsWith('\r')) {
       line = line.slice(0, -1)
     }
