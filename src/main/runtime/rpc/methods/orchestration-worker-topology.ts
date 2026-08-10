@@ -2,6 +2,7 @@ import type { AgentLaunchPreferences } from '../../../../shared/agent-session-ho
 import type { TuiAgent } from '../../../../shared/types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
+import { AGENT_READINESS_OUTCOME_UNKNOWN_CODE } from './orchestration-agent-readiness-wait'
 
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
@@ -272,6 +273,9 @@ export function isUnknownWorkerStartOutcome(error: unknown, stage: string): bool
       ? (error as { code: string }).code
       : ''
   if (code === 'operation_unknown') {
+    return true
+  }
+  if (code === AGENT_READINESS_OUTCOME_UNKNOWN_CODE && stage === 'agent_readiness') {
     return true
   }
   if (stage !== 'worktree_create') {

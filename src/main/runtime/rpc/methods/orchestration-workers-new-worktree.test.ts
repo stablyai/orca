@@ -124,6 +124,65 @@ describe('orchestration new-worktree workers', () => {
     }
   }
 
+  function mockAgentTerminal(connected: boolean) {
+    vi.mocked(runtime.showTerminal).mockImplementation(((handle: string) =>
+      Promise.resolve(
+        handle === 'term_worker'
+          ? { handle, worktreeId: 'repo::created', connected }
+          : { handle: 'term_coord', worktreeId: 'repo::parent', status: 'running' }
+      )) as never)
+  }
+
+  it('reports an unknown outcome when readiness times out on a still-running agent', async () => {
+    mockCreatedWorktree()
+    mockAgentTerminal(true)
+    vi.mocked(runtime.waitForTerminal).mockRejectedValue(new Error('timeout'))
+
+    const { result, task } = await startWorker({ name: 'late-agent' })
+
+    expect(result).toMatchObject({
+      state: 'outcome_unknown',
+      failedStage: 'agent_readiness',
+      lastError: 'Agent readiness timed out after 60000ms (terminal running).',
+      residualResources: expect.arrayContaining([
+        expect.objectContaining({ kind: 'worktree', id: 'repo::created' }),
+        expect.objectContaining({ kind: 'terminal', id: 'term_worker' })
+      ]),
+      nextCommands: expect.arrayContaining([expect.stringContaining('worker-abandon')])
+    })
+    expect(db.getTask(task.id)?.status).toBe('blocked')
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('still fails a readiness timeout when the agent terminal is gone', async () => {
+    mockCreatedWorktree()
+    mockAgentTerminal(false)
+    vi.mocked(runtime.waitForTerminal).mockRejectedValue(new Error('timeout'))
+
+    const { result, task } = await startWorker({ name: 'dead-agent' })
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      failedStage: 'agent_readiness',
+      lastError: 'Agent readiness timed out after 60000ms (terminal exited).'
+    })
+    expect(db.getTask(task.id)?.status).toBe('failed')
+  })
+
+  it('still fails when the agent terminal exits during readiness', async () => {
+    mockCreatedWorktree()
+    mockAgentTerminal(true)
+    vi.mocked(runtime.waitForTerminal).mockRejectedValue(new Error('terminal_exited'))
+
+    const { result } = await startWorker({ name: 'exited-agent' })
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      failedStage: 'agent_readiness',
+      lastError: 'terminal_exited'
+    })
+  })
+
   it('creates an independent top-level worktree and reuses its agent terminal', async () => {
     mockCreatedWorktree()
 

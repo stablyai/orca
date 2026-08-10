@@ -2,6 +2,7 @@ import type { TuiAgent } from '../../../../shared/types'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
+import { agentReadinessFailure, observeAgentReadiness } from './orchestration-agent-readiness-wait'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
 import { assertOrchestrationWorktreeCreationSupported } from './orchestration-folder-worktree-placement'
 import { WorkerStartParams } from './orchestration-worker-start-schema'
@@ -194,20 +195,17 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         persistWorkerReadinessStage(setupStage)
 
         failedStage = 'agent_readiness'
-        const wait = await runtime.waitForTerminal(terminalHandle, {
-          condition: 'tui-idle',
+        const readiness = await observeAgentReadiness({
+          runtime,
+          terminalHandle,
           timeoutMs: params.timeoutMs ?? 60_000
         })
-        persistWorkerSetupWaitOutcome({ ...setupStage, wait })
-        if (!wait.satisfied) {
+        persistWorkerSetupWaitOutcome({ ...setupStage, wait: readiness.wait })
+        if (!readiness.wait.satisfied) {
           if (setupReceipt.state === 'failed') {
             failedStage = 'setup_wait'
           }
-          throw new Error(
-            wait.blockedReason
-              ? `Agent startup blocked: ${wait.blockedReason}`
-              : `Agent did not become ready (${wait.status}).`
-          )
+          throw agentReadinessFailure(readiness)
         }
         const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
         const capability = db.prepareStartingWorkerAuthority({

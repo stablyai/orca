@@ -2,6 +2,7 @@ import type { TuiAgent } from '../../../../shared/types'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
+import { agentReadinessFailure, observeAgentReadiness } from './orchestration-agent-readiness-wait'
 import { assertOrchestrationWorktreeCreationSupported } from './orchestration-folder-worktree-placement'
 import {
   appendFederationSetupEffect,
@@ -195,20 +196,17 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
         }
         persistFederatedReadinessStage(setupStage)
         failedStage = 'agent_readiness'
-        const wait = await runtime.waitForTerminal(terminalHandle, {
-          condition: 'tui-idle',
+        const readiness = await observeAgentReadiness({
+          runtime,
+          terminalHandle,
           timeoutMs: params.timeoutMs ?? 60_000
         })
-        persistFederatedSetupWaitOutcome({ ...setupStage, wait })
-        if (!wait.satisfied) {
+        persistFederatedSetupWaitOutcome({ ...setupStage, wait: readiness.wait })
+        if (!readiness.wait.satisfied) {
           if (setup.state === 'failed') {
             failedStage = 'setup_wait'
           }
-          throw new Error(
-            wait.blockedReason
-              ? `Agent startup blocked: ${wait.blockedReason}`
-              : `Agent did not become ready (${wait.status}).`
-          )
+          throw agentReadinessFailure(readiness)
         }
         const paneKey = runtime.getTerminalPaneKey(terminalHandle)
         const processIncarnation = runtime.getTerminalProcessIncarnation(terminalHandle)
