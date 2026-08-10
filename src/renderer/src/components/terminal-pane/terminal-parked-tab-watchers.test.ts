@@ -130,7 +130,7 @@ function capturePanes(
 }
 
 function setWorktreeConnection(connectionId: string | null): void {
-  mockStoreState.repos = [{ id: 'repo', connectionId }]
+  mockStoreState.worktreesByRepo.repo![0]!.hostId = connectionId ? `ssh:${connectionId}` : 'local'
 }
 
 function setWorktreeRuntimeEnvironment(environmentId: string): void {

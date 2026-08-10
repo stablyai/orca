@@ -11,6 +11,7 @@ import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-str
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { hasWebSessionTerminalParkAuthority } from '@/runtime/web-session-terminal-park-authority'
 
 // Why: snapshot-backed = local daemon session owned by this worktree (foreign
 // ids reattach through a path parking cannot replay). SSH is restorable too,
@@ -38,11 +39,14 @@ export type TerminalParkRestorePolicy = {
 }
 
 /** What the worktree's own transport resolves to, from the same sources the spawn path uses. */
-export type TerminalParkWorktreeOwner = {
-  /** `undefined` when the repo has not hydrated; `null` when the worktree is local. */
-  connectionId: string | null | undefined
-  runtimeEnvironmentId: string | null
-}
+export type TerminalParkWorktreeOwner =
+  | { kind: 'local' }
+  | { kind: 'ssh'; connectionId: string }
+  | { kind: 'runtime'; environmentId: string }
+  | { kind: 'unknown' }
+  | { kind: 'ambiguous' }
+
+export type TerminalParkPaneIdentity = { tabId: string; leafId: string | null }
 
 export function selectPairedRuntimeParkingEnvironmentIds(
   statuses: ReadonlyMap<string, { status: { capabilities?: readonly string[] } | null | undefined }>
@@ -56,40 +60,44 @@ export function selectPairedRuntimeParkingEnvironmentIds(
   return capable
 }
 
-// Why: an owner the resolver left unproven is not evidence of a foreign session,
-// and refusing one strips the tab's parked watchers (bells, titles, completions)
-// while the pane is torn down anyway.
-function isProvenForeignOwner(worktreeOwner: string | null | undefined, ptyOwner: string): boolean {
-  return Boolean(worktreeOwner) && worktreeOwner !== ptyOwner
-}
-
-// Why: SSH uses local main's model; paired PTYs are eligible only when their
-// exact host advertises authoritative bounded restore. On top of that, a pty
-// whose embedded owner is *known* to be a different connection or environment is
-// some other worktree's session, so parking it here would reveal a stranger's
-// shell. Not a guard against relay pty-id reuse: two worktrees on one connection
-// share a connection id, so no owner comparison can separate them.
 export function isParkRestorableTerminalPty(
   ptyId: string | null,
   worktreeId: string,
   worktreeOwner: TerminalParkWorktreeOwner,
-  policy?: TerminalParkRestorePolicy
+  policy?: TerminalParkRestorePolicy,
+  paneIdentity?: TerminalParkPaneIdentity
 ): boolean {
   if (isSnapshotBackedTerminalPty(ptyId, worktreeId)) {
     return true
   }
   if (ptyId && isRemoteRuntimePtyId(ptyId)) {
     const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+    if (
+      environmentId === null ||
+      policy?.pairedRuntimeParkingEnvironmentIds?.has(environmentId) !== true
+    ) {
+      return false
+    }
+    if (worktreeOwner.kind === 'runtime') {
+      return worktreeOwner.environmentId === environmentId
+    }
     return (
-      environmentId !== null &&
-      !isProvenForeignOwner(worktreeOwner.runtimeEnvironmentId, environmentId) &&
-      policy?.pairedRuntimeParkingEnvironmentIds?.has(environmentId) === true
+      worktreeOwner.kind === 'local' &&
+      paneIdentity?.leafId != null &&
+      hasWebSessionTerminalParkAuthority({
+        environmentId,
+        worktreeId,
+        tabId: paneIdentity.tabId,
+        leafId: paneIdentity.leafId,
+        ptyId
+      })
     )
   }
   const sshConnectionId = ptyId ? (parseAppSshPtyId(ptyId)?.connectionId ?? null) : null
   return (
     policy?.sshParkingEnabled === true &&
     sshConnectionId !== null &&
-    !isProvenForeignOwner(worktreeOwner.connectionId, sshConnectionId)
+    worktreeOwner.kind === 'ssh' &&
+    worktreeOwner.connectionId === sshConnectionId
   )
 }

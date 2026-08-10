@@ -112,13 +112,9 @@ import {
   selectColdParkedTerminalWorktrees,
   type TerminalWorktreeColdParkCandidate
 } from './terminal-pane/terminal-hidden-view-parking'
-import {
-  isParkRestorableTerminalPty,
-  selectPairedRuntimeParkingEnvironmentIds
-} from './terminal-pane/terminal-park-pty-restore-eligibility'
+import { selectPairedRuntimeParkingEnvironmentIds } from './terminal-pane/terminal-park-pty-restore-eligibility'
 import {
   getTerminalParkWorktreeOwner,
-  useTerminalParkWorktreeOwner,
   useTerminalParkWorktreeOwnerState
 } from './terminal-pane/terminal-park-worktree-owner'
 import {
@@ -152,6 +148,7 @@ import {
   type ActivityTerminalPortalTarget
 } from './activity/activity-terminal-portal'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import {
   activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab,
@@ -328,7 +325,6 @@ function Terminal(): React.JSX.Element | null {
   const activeWorktreeDeferralHostId = useAppStore((s) =>
     getResolvedExecutionHostIdForWorktree(s, renderedActiveWorktreeId)
   )
-  const activeWorktreeParkOwner = useTerminalParkWorktreeOwner(renderedActiveWorktreeId)
   const activeView = useAppStore((s) => s.activeView)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
@@ -975,7 +971,10 @@ function Terminal(): React.JSX.Element | null {
       retentionCandidates.push({
         worktreeId,
         worktreeOwner: getTerminalParkWorktreeOwner(terminalParkWorktreeOwnerState, worktreeId),
-        terminalTabs: tabsByWorktree[worktreeId] ?? [],
+        terminalTabs: (tabsByWorktree[worktreeId] ?? []).map((tab) => ({
+          ...tab,
+          activeLeafId: useAppStore.getState().terminalLayoutsByTabId[tab.id]?.activeLeafId ?? null
+        })),
         isVisible,
         shouldMeasureHiddenWorktree,
         hasActivityTerminalPortal,
@@ -1316,12 +1315,13 @@ function Terminal(): React.JSX.Element | null {
       executionHostId: activeWorktreeDeferralHostId,
       pairedRuntimeParkingEnvironmentIds
     })
-    const isColdActivationPtyEligible = (ptyId: string): boolean =>
-      isRemoteRuntimePtyId(ptyId)
-        ? isParkRestorableTerminalPty(ptyId, renderedActiveWorktreeId, activeWorktreeParkOwner, {
-            pairedRuntimeParkingEnvironmentIds
-          })
-        : terminalProviderHasAuthoritativeSnapshot(ptyId)
+    const isColdActivationPtyEligible = (ptyId: string): boolean => {
+      if (!isRemoteRuntimePtyId(ptyId)) {
+        return terminalProviderHasAuthoritativeSnapshot(ptyId)
+      }
+      const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+      return environmentId !== null && pairedRuntimeParkingEnvironmentIds.has(environmentId)
+    }
     if (lastActivationWorktreeIdRef.current !== renderedActiveWorktreeId) {
       lastActivationWorktreeIdRef.current = renderedActiveWorktreeId
       const tabById = new Map(worktreeTabs.map((tab) => [tab.id, tab]))

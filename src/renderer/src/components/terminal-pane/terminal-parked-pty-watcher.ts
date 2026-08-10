@@ -43,7 +43,8 @@ export function startParkedPtyWatcher(args: {
       ptyId,
       worktreeId,
       getTerminalParkWorktreeOwner(state, worktreeId),
-      restorePolicy
+      restorePolicy,
+      { tabId: tab.id, leafId: pane.leafId }
     )
   ) {
     return

@@ -95,7 +95,10 @@ export function canWatcherCoverParkedTerminalTab(
       (pane) =>
         pane.ptyId !== null &&
         isTerminalLeafId(pane.leafId) &&
-        isParkRestorableTerminalPty(pane.ptyId, worktreeId, worktreeOwner, restorePolicy) &&
+        isParkRestorableTerminalPty(pane.ptyId, worktreeId, worktreeOwner, restorePolicy, {
+          tabId: tab.id,
+          leafId: pane.leafId
+        }) &&
         isPtyEligible(pane.ptyId)
     )
   )
@@ -195,7 +198,10 @@ function watchablePanes(
     resolveParkedTerminalPaneCandidates(tab, state).flatMap((pane) =>
       pane.ptyId &&
       isTerminalLeafId(pane.leafId) &&
-      isParkRestorableTerminalPty(pane.ptyId, worktreeId, worktreeOwner, restorePolicy)
+      isParkRestorableTerminalPty(pane.ptyId, worktreeId, worktreeOwner, restorePolicy, {
+        tabId: tab.id,
+        leafId: pane.leafId
+      })
         ? [[pane.ptyId, pane] as const]
         : []
     )

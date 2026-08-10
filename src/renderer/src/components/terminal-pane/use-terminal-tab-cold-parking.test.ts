@@ -121,14 +121,12 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
         { ...terminalTab('tab-2'), ptyId: `remote:${environmentId}@@term-2` }
       ]
     }
-    // Why the owner column: row 3 is the only one capability alone would park,
-    // and rows 4-5 are the ones a stricter owner check would wrongly refuse — an
-    // unhydrated worktree and one whose ptys a paired HUB owns behind its SSH host.
+    // Capability is necessary but never substitutes for owner authority.
     for (const [advertisedEnvironmentId, worktreeOwner, expected] of [
       [environmentId, { hostId: `runtime:${environmentId}` }, new Set(['tab-2'])],
       ['other-env', { hostId: `runtime:${environmentId}` }, new Set()],
       [environmentId, { hostId: 'runtime:other-env' }, new Set()],
-      [environmentId, null, new Set(['tab-2'])],
+      [environmentId, null, new Set()],
       [
         environmentId,
         { hostId: 'ssh:conn-1', runtimeOwnerEnvironmentId: environmentId },

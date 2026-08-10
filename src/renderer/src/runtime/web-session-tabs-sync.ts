@@ -84,6 +84,12 @@ import {
 } from './web-agent-session-handoff'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { useRuntimeSessionMirrorEnvironmentKey } from './use-runtime-session-mirror-environment-key'
+import {
+  clearWebSessionTerminalParkAuthorityForEnvironment,
+  clearWebSessionTerminalParkAuthorityForWorktree,
+  replaceWebSessionTerminalParkAuthority,
+  resetWebSessionTerminalParkAuthorityForTests
+} from './web-session-terminal-park-authority'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -258,6 +264,7 @@ export function shouldApplyWebSessionTabsSnapshot(
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion
   })
+  replaceWebSessionTerminalParkAuthority(snapshot, environmentId)
   // Why: a mounted mirror that exhausted bounded polling needs fresh host evidence without subscribing to every store write.
   queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
   return true
@@ -331,6 +338,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   replayableSessionTabsSnapshotByWorktree.clear()
   lastHostTerminalTabCountByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
+  resetWebSessionTerminalParkAuthorityForTests()
 }
 
 export function _getWebSessionTabsTrackingCountsForTest(): {
@@ -352,6 +360,7 @@ function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeI
   clearWebSessionReorderIntentsForWorktree({ environmentId }, worktreeId)
   clearWebSessionCloseIntentsForWorktree({ environmentId }, worktreeId)
   clearWebAgentSessionHandoffsForWorktree(environmentId, worktreeId)
+  clearWebSessionTerminalParkAuthorityForWorktree(environmentId, worktreeId)
   const keyPrefix = `${environmentId}:${worktreeId}:`
   for (const key of hostSessionTabIdByLocalKey.keys()) {
     if (key.startsWith(keyPrefix)) {
@@ -387,6 +396,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
     }
   }
   clearWebAgentSessionHandoffsForEnvironment(trimmedEnvironmentId)
+  clearWebSessionTerminalParkAuthorityForEnvironment(trimmedEnvironmentId)
   clearAllWebRuntimeWakeTerminalRespawn()
 }
 

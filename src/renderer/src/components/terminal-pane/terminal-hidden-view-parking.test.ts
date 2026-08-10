@@ -18,7 +18,7 @@ import {
   selectPairedRuntimeParkingEnvironmentIds
 } from './terminal-park-pty-restore-eligibility'
 
-const LOCAL_WORKTREE_OWNER = { connectionId: null, runtimeEnvironmentId: null }
+const LOCAL_WORKTREE_OWNER = { kind: 'local' as const }
 
 describe('selectPairedRuntimeParkingEnvironmentIds', () => {
   it('selects only reachable hosts advertising the paired parking contract', () => {
@@ -84,7 +84,7 @@ describe('isParkRestorableTerminalPty', () => {
     ...sshPolicy,
     pairedRuntimeParkingEnvironmentIds: new Set(['env-1', 'env-2'])
   }
-  const unhydratedOwner = { connectionId: undefined, runtimeEnvironmentId: null }
+  const unhydratedOwner = { kind: 'unknown' as const }
   const localOwner = LOCAL_WORKTREE_OWNER
 
   it('accepts every snapshot-backed pty regardless of policy or owner', () => {
@@ -102,7 +102,7 @@ describe('isParkRestorableTerminalPty', () => {
   })
 
   it('accepts SSH ptys only when the SSH-parking policy is enabled', () => {
-    const owner = { connectionId: 'ssh-1', runtimeEnvironmentId: null }
+    const owner = { kind: 'ssh' as const, connectionId: 'ssh-1' }
     expect(isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, owner, sshPolicy)).toBe(true)
     expect(isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, owner)).toBe(false)
     expect(
@@ -112,29 +112,27 @@ describe('isParkRestorableTerminalPty', () => {
     ).toBe(false)
   })
 
-  // Why unknown still parks: refusing costs the tab's parked watchers (bells,
-  // titles, completions) while the pane is torn down anyway.
-  it('accepts an SSH pty unless the worktree owns a different connection', () => {
+  it('rejects SSH ptys without an exact authoritative SSH owner', () => {
     for (const owner of [unhydratedOwner, localOwner]) {
       expect(isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, owner, sshPolicy)).toBe(
-        true
+        false
       )
     }
     expect(
       isParkRestorableTerminalPty(
         'ssh:ssh-1@@pty-1',
         worktreeId,
-        { connectionId: 'ssh-2', runtimeEnvironmentId: null },
+        { kind: 'ssh' as const, connectionId: 'ssh-2' },
         sshPolicy
       )
     ).toBe(false)
   })
 
-  it('accepts paired ptys only for a snapshot-capable environment', () => {
+  it('rejects capable paired ptys owned by a local worktree without mirror evidence', () => {
     const capableEnv1 = { ...sshPolicy, pairedRuntimeParkingEnvironmentIds: new Set(['env-1']) }
     expect(
       isParkRestorableTerminalPty('remote:env-1@@terminal-1', worktreeId, localOwner, capableEnv1)
-    ).toBe(true)
+    ).toBe(false)
     expect(
       isParkRestorableTerminalPty('remote:env-2@@terminal-1', worktreeId, localOwner, capableEnv1)
     ).toBe(false)
@@ -150,25 +148,23 @@ describe('isParkRestorableTerminalPty', () => {
       isParkRestorableTerminalPty(
         'remote:env-1@@terminal-1',
         worktreeId,
-        { connectionId: 'ssh-1', runtimeEnvironmentId: 'env-1' },
+        { kind: 'runtime' as const, environmentId: 'env-1' },
         pairedPolicy
       )
     ).toBe(true)
   })
 
-  // Why env-2 also advertises: capability alone would pass this pty, so only the
-  // proven owner mismatch can explain the rejection.
-  it('accepts a paired pty unless the worktree owns a different environment', () => {
+  it('rejects paired ptys without an exact authoritative runtime owner', () => {
     for (const owner of [unhydratedOwner, localOwner]) {
       expect(
         isParkRestorableTerminalPty('remote:env-2@@terminal-1', worktreeId, owner, pairedPolicy)
-      ).toBe(true)
+      ).toBe(false)
     }
     expect(
       isParkRestorableTerminalPty(
         'remote:env-2@@terminal-1',
         worktreeId,
-        { connectionId: null, runtimeEnvironmentId: 'env-1' },
+        { kind: 'runtime' as const, environmentId: 'env-1' },
         pairedPolicy
       )
     ).toBe(false)
@@ -204,7 +200,7 @@ describe('canParkTerminalWorktreeRenderers', () => {
   it('parks a hidden SSH worktree only under the SSH restore policy', () => {
     const sshArgs = {
       ...base,
-      worktreeOwner: { connectionId: 'conn-1', runtimeEnvironmentId: null },
+      worktreeOwner: { kind: 'ssh' as const, connectionId: 'conn-1' },
       terminalTabs: [{ id: 'tab-1', ptyId: 'ssh:conn-1@@pty-1' }]
     }
     expect(canParkTerminalWorktreeRenderers(sshArgs)).toBe(false)
@@ -215,7 +211,7 @@ describe('canParkTerminalWorktreeRenderers', () => {
     expect(
       canParkTerminalWorktreeRenderers({
         ...sshArgs,
-        worktreeOwner: { connectionId: 'conn-2', runtimeEnvironmentId: null },
+        worktreeOwner: { kind: 'ssh' as const, connectionId: 'conn-2' },
         restorePolicy: { sshParkingEnabled: true }
       })
     ).toBe(false)
@@ -327,7 +323,7 @@ describe('canParkTerminalWorktreeRenderers', () => {
     expect(
       canParkTerminalWorktreeRenderers({
         ...base,
-        worktreeOwner: { connectionId: null, runtimeEnvironmentId: 'env-1' },
+        worktreeOwner: { kind: 'runtime' as const, environmentId: 'env-1' },
         terminalTabs: [
           {
             id: 'tab-1',
@@ -367,7 +363,7 @@ describe('canParkTerminalTabRenderer', () => {
     expect(
       canParkTerminalTabRenderer({
         ...base,
-        worktreeOwner: { connectionId: null, runtimeEnvironmentId: 'env-1' },
+        worktreeOwner: { kind: 'runtime' as const, environmentId: 'env-1' },
         terminalTab: {
           ...base.terminalTab,
           ptyId: 'remote:env-1@@terminal-1',

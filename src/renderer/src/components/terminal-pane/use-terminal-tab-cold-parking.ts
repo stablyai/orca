@@ -103,6 +103,11 @@ export function useTerminalTabColdParking(args: {
   const terminalSshParkingEnabled = useAppStore(
     (state) => state.settings?.terminalSshViewParking !== false
   )
+  const terminalParkActiveLeafKey = useAppStore((state) =>
+    terminalTabs
+      .map((tab) => state.terminalLayoutsByTabId[tab.id]?.activeLeafId ?? '')
+      .join('\u0000')
+  )
   const worktreeOwner = useTerminalParkWorktreeOwner(worktreeId)
   const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
   const pairedRuntimeParkingEnvironmentIds = useMemo(
@@ -182,7 +187,8 @@ export function useTerminalTabColdParking(args: {
       measureParkCooldownUntilRef.current = null
     }
 
-    const candidates: TerminalTabColdParkCandidate[] = terminalTabs.map((terminalTab) => {
+    const activeLeafIds = terminalParkActiveLeafKey.split('\u0000')
+    const candidates: TerminalTabColdParkCandidate[] = terminalTabs.map((terminalTab, index) => {
       const assignment = assignments.get(terminalTab.id)
       const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
       const hasActivityTerminalPortal = portalTabIds.has(terminalTab.id)
@@ -201,6 +207,7 @@ export function useTerminalTabColdParking(args: {
       return {
         id: terminalTab.id,
         ptyId: terminalTab.ptyId,
+        activeLeafId: activeLeafIds[index] || null,
         pendingActivationSpawn: terminalTab.pendingActivationSpawn,
         isVisible,
         hasActivityTerminalPortal,
@@ -267,6 +274,7 @@ export function useTerminalTabColdParking(args: {
     runtimeStatusByEnvironmentId,
     shouldMeasureHiddenWorktree,
     terminalParkingEnabled,
+    terminalParkActiveLeafKey,
     terminalSshParkingEnabled,
     terminalTabParkingRevision,
     terminalParkingAssignmentsDependency,

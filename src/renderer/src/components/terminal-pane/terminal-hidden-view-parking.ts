@@ -31,7 +31,12 @@ export type TerminalColdParkPolicyOverrides = {
   retentionLimit?: number
 }
 
-export type ColdParkableTerminalTab = Pick<TerminalTab, 'id' | 'ptyId' | 'pendingActivationSpawn'>
+export type ColdParkableTerminalTab = Pick<
+  TerminalTab,
+  'id' | 'ptyId' | 'pendingActivationSpawn'
+> & {
+  activeLeafId?: string | null
+}
 
 export type TerminalWorktreeColdParkCandidate = {
   worktreeId: string
@@ -112,7 +117,8 @@ export function canParkTerminalWorktreeRenderers(args: {
       tab.ptyId,
       args.worktreeId,
       args.worktreeOwner,
-      args.restorePolicy
+      args.restorePolicy,
+      { tabId: tab.id, leafId: tab.activeLeafId ?? null }
     )
   })
 }
@@ -152,7 +158,8 @@ export function canParkTerminalTabRenderer(args: {
     tab.ptyId,
     args.worktreeId,
     args.worktreeOwner,
-    args.restorePolicy
+    args.restorePolicy,
+    { tabId: tab.id, leafId: tab.activeLeafId ?? null }
   )
 }
 
