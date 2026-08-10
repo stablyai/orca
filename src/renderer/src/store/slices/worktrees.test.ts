@@ -6148,10 +6148,11 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
   })
 
-  it('fails HUB-owned SSH removal closed when the exact id has two HUB owners', async () => {
+  it('fails HUB-owned SSH removal closed when the exact id has two HUB owners and focus matches neither', async () => {
     const store = createTestStore()
     const worktreeId = 'repo-ssh::/srv/same-wt'
     store.setState({
+      settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
       worktreesByRepo: {
         'repo-ssh': [
           makeWorktree({
@@ -6343,25 +6344,45 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([])
   })
 
-  it('fails closed before deleting an exact worktree id owned by multiple hosts', async () => {
+  it('fails closed before deleting an exact worktree id owned by multiple hosts when focus matches neither', async () => {
     const store = createTestStore()
     const worktreeId = 'repo-shared::/same/path'
     store.setState({
+      settings: { activeRuntimeEnvironmentId: 'other-hub' } as never,
       repos: [
-        { id: 'repo-shared', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 0 },
         {
           id: 'repo-shared',
-          path: '/remote',
-          displayName: 'SSH',
+          path: '/remote-a',
+          displayName: 'SSH A',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-a',
+          executionHostId: 'runtime:hub-a'
+        },
+        {
+          id: 'repo-shared',
+          path: '/remote-b',
+          displayName: 'SSH B',
           badgeColor: '#111',
           addedAt: 1,
-          connectionId: 'ssh-1'
+          connectionId: 'ssh-b',
+          executionHostId: 'runtime:hub-b'
         }
       ],
       worktreesByRepo: {
         'repo-shared': [
-          makeWorktree({ id: worktreeId, repoId: 'repo-shared', hostId: 'local' }),
-          makeWorktree({ id: worktreeId, repoId: 'repo-shared', hostId: 'ssh:ssh-1' })
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-a',
+            runtimeOwnerEnvironmentId: 'hub-a'
+          }),
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-b',
+            runtimeOwnerEnvironmentId: 'hub-b'
+          })
         ]
       }
     } as Partial<AppState>)
@@ -6439,10 +6460,11 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.forceDeletePreservedBranch).not.toHaveBeenCalled()
   })
 
-  it('fails preserved branch deletion closed for two HUB owners', async () => {
+  it('fails preserved branch deletion closed for two HUB owners when focus matches neither', async () => {
     const store = createTestStore()
     const worktreeId = 'repo-ssh::/srv/same-wt'
     store.setState({
+      settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
       worktreesByRepo: {
         'repo-ssh': [
           makeWorktree({

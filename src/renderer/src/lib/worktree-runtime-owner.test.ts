@@ -251,9 +251,44 @@ describe('getExplicitRuntimeEnvironmentIdForWorktree', () => {
     )
   })
 
-  it('fails closed for conflicting detected-only HUB ownership', () => {
+  it('prefers the focused HUB for conflicting detected-only ownership (#10491)', () => {
     const ambiguousState: WorktreeRuntimeOwnerState = {
       settings: { activeRuntimeEnvironmentId: 'hub-a' },
+      repos: [],
+      worktreesByRepo: {},
+      detectedWorktreesByRepo: {
+        'repo-a': {
+          worktrees: [
+            {
+              id: 'shared-worktree',
+              repoId: 'repo-a',
+              hostId: 'ssh:private-a',
+              runtimeOwnerEnvironmentId: 'hub-a'
+            }
+          ]
+        },
+        'repo-b': {
+          worktrees: [
+            {
+              id: 'shared-worktree',
+              repoId: 'repo-b',
+              hostId: 'ssh:private-b',
+              runtimeOwnerEnvironmentId: 'hub-b'
+            }
+          ]
+        }
+      }
+    }
+
+    expect(getExplicitRuntimeEnvironmentIdForWorktree(ambiguousState, 'shared-worktree')).toBe(
+      'hub-a'
+    )
+    expect(getExecutionHostIdForWorktree(ambiguousState, 'shared-worktree')).toBe('ssh:private-a')
+  })
+
+  it('fails closed for conflicting detected-only ownership when focus matches neither', () => {
+    const ambiguousState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: 'hub-c' },
       repos: [],
       worktreesByRepo: {},
       detectedWorktreesByRepo: {

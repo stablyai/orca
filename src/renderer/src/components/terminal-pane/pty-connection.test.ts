@@ -18806,7 +18806,51 @@ describe('connectPanePty', () => {
     expect(window.api.ssh.needsPassphrasePrompt).not.toHaveBeenCalled()
   })
 
-  it('fails closed when the same SSH worktree id is projected by two HUBs', async () => {
+  it('routes through the focused HUB when the same SSH worktree id is projected by two HUBs (#10491)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/srv/same-worktree',
+            hostId: 'ssh:same-private-target',
+            runtimeOwnerEnvironmentId: 'hub-a'
+          },
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/srv/same-worktree',
+            hostId: 'ssh:same-private-target',
+            runtimeOwnerEnvironmentId: 'hub-b'
+          }
+        ]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        activeRuntimeEnvironmentId: 'hub-a'
+      }
+    } as StoreState
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ restoredPtyIdByLeafId: { [LEAF_1]: null } }) as never
+    )
+    await flushAsyncTicks()
+
+    expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('hub-a', expect.any(Object))
+    expect(createIpcPtyTransport).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when two HUB projections share an id and focus matches neither', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const { createIpcPtyTransport } = await import('./pty-transport')
@@ -18833,7 +18877,7 @@ describe('connectPanePty', () => {
       },
       settings: {
         ...mockStoreState.settings,
-        activeRuntimeEnvironmentId: 'hub-a'
+        activeRuntimeEnvironmentId: 'hub-c'
       }
     } as StoreState
 
