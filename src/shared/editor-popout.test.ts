@@ -17,8 +17,7 @@ const validRequest = {
     settings: { activeRuntimeEnvironmentId: null },
     worktreeId: 'repo:main',
     worktreePath: '/workspace',
-    expectedExecutionHostId: 'local',
-    expectedEnvironmentPairingRevision: 11
+    expectedExecutionHostId: 'local'
   }
 } satisfies EditorPopoutOpenRequest
 
@@ -61,6 +60,41 @@ describe('admitEditorPopoutOpenRequest', () => {
         operationContext: {
           ...validRequest.operationContext,
           expectedEnvironmentPairingRevision: -1
+        }
+      })
+    ).toBeNull()
+  })
+
+  it('requires a pairing revision that matches the runtime owner', () => {
+    const runtimeRequest = {
+      ...validRequest,
+      document: {
+        ...validRequest.document,
+        runtimeEnvironmentId: 'runtime-1'
+      },
+      operationContext: {
+        ...validRequest.operationContext,
+        settings: { activeRuntimeEnvironmentId: 'runtime-1' },
+        expectedEnvironmentPairingRevision: 11
+      }
+    }
+
+    expect(admitEditorPopoutOpenRequest(runtimeRequest)).toEqual(runtimeRequest)
+    expect(
+      admitEditorPopoutOpenRequest({
+        ...runtimeRequest,
+        operationContext: {
+          ...runtimeRequest.operationContext,
+          expectedEnvironmentPairingRevision: undefined
+        }
+      })
+    ).toBeNull()
+    expect(
+      admitEditorPopoutOpenRequest({
+        ...runtimeRequest,
+        operationContext: {
+          ...runtimeRequest.operationContext,
+          settings: { activeRuntimeEnvironmentId: 'runtime-2' }
         }
       })
     ).toBeNull()

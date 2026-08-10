@@ -220,7 +220,8 @@ describe('runtime file client', () => {
       connectionId: 'ssh-1',
       expectedExecutionHostId: 'ssh:ssh-1' as const,
       expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
+      expectedSshConnectionGeneration: 5,
+      expectedExternalSshTargetId: 'ssh-1'
     }
 
     await writeRuntimeFile(context, '/repo/a.ts', 'a')
@@ -233,7 +234,8 @@ describe('runtime file client', () => {
       connectionId: 'ssh-1',
       expectedExecutionHostId: 'ssh:ssh-1',
       expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
+      expectedSshConnectionGeneration: 5,
+      expectedExternalSshTargetId: 'ssh-1'
     })
     expect(fsRename).toHaveBeenCalledWith({
       oldPath: '/repo/a.ts',
@@ -241,7 +243,8 @@ describe('runtime file client', () => {
       connectionId: 'ssh-1',
       expectedExecutionHostId: 'ssh:ssh-1',
       expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
+      expectedSshConnectionGeneration: 5,
+      expectedExternalSshTargetId: 'ssh-1'
     })
     expect(fsDeletePath).toHaveBeenCalledWith({
       targetPath: '/repo/b.ts',
@@ -249,7 +252,8 @@ describe('runtime file client', () => {
       expectedExecutionHostId: 'ssh:ssh-1',
       recursive: undefined,
       expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
+      expectedSshConnectionGeneration: 5,
+      expectedExternalSshTargetId: 'ssh-1'
     })
   })
 

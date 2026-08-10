@@ -181,6 +181,26 @@ describe('editor popout window', () => {
     expect(window.destroyed).toBe(true)
   })
 
+  it('requires explicit discard when the renderer does not answer a close request', async () => {
+    vi.useFakeTimers()
+    try {
+      showMessageBoxMock.mockResolvedValueOnce({ response: 1 })
+      createOrFocusEditorPopout({
+        ...request,
+        content: request.savedContent
+      })
+      const window = instances[0]
+
+      window.close()
+      await vi.runAllTimersAsync()
+
+      expect(window.destroyed).toBe(true)
+      expect(showMessageBoxMock).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not bypass dirty protection when the main window closes', () => {
     createOrFocusEditorPopout(request)
     const window = instances[0]
@@ -189,6 +209,20 @@ describe('editor popout window', () => {
 
     expect(window.destroyed).toBe(false)
     expect(window.webContents.send).toHaveBeenCalledWith('editorPopout:requestCloseState')
+  })
+
+  it('notifies the main window owner when a dirty popout cancels quit', async () => {
+    showMessageBoxMock.mockResolvedValueOnce({ response: 1 })
+    const onQuitAborted = vi.fn()
+    createOrFocusEditorPopout(request)
+    const window = instances[0]
+
+    closeAllEditorPopouts(onQuitAborted)
+    reportEditorPopoutCloseState(window.webContents as never, true)
+    await Promise.resolve()
+
+    expect(onQuitAborted).toHaveBeenCalledOnce()
+    expect(window.destroyed).toBe(false)
   })
 
   it('asks the detached renderer to save before closing a dirty document', async () => {

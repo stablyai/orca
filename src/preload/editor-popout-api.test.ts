@@ -27,18 +27,35 @@ const request = {
 describe('createEditorPopoutPreloadApi', () => {
   it('exposes only document-scoped editor, filesystem, and runtime APIs', async () => {
     const invoke = vi.fn().mockResolvedValueOnce(request).mockResolvedValue({ ok: true })
+    const send = vi.fn()
+    const sendSync = vi.fn().mockReturnValue({ theme: 'dark' })
     const api = createEditorPopoutPreloadApi({
       invoke,
       on: vi.fn(),
-      removeListener: vi.fn()
+      removeListener: vi.fn(),
+      send,
+      sendSync
     } as never)
 
     await api.editorPopout.getState()
 
-    expect(Object.keys(api).sort()).toEqual(['editorPopout', 'fs', 'runtimeEnvironments'])
-    expect(api).not.toHaveProperty('shell')
+    expect(Object.keys(api).sort()).toEqual([
+      'editorPopout',
+      'fs',
+      'runtimeEnvironments',
+      'settings',
+      'shell',
+      'ui'
+    ])
     expect(api).not.toHaveProperty('terminal')
     expect(api.fs).not.toHaveProperty('authorizeExternalPath')
+    expect(api.settings.getSync()).toEqual({ theme: 'dark' })
+    await api.ui.writeClipboardText('copied')
+    api.ui.setMarkdownEditorFocused(true)
+    await api.shell.openFileUri('https://example.com')
+    expect(send).toHaveBeenCalledWith('ui:setMarkdownEditorFocused', true)
+    expect(invoke).toHaveBeenCalledWith('clipboard:writeText', 'copied')
+    expect(invoke).toHaveBeenCalledWith('shell:openFileUri', 'https://example.com')
   })
 
   it('rejects filesystem and runtime access outside the owned document', async () => {
@@ -50,8 +67,11 @@ describe('createEditorPopoutPreloadApi', () => {
     } as never)
     await api.editorPopout.getState()
 
+    expect(() => api.fs.readFile({ filePath: '/workspace/note.md' })).toThrowError(
+      'Runtime-owned detached editors cannot use host filesystem IPC.'
+    )
     expect(() => api.fs.readFile({ filePath: '/workspace/other.md' })).toThrowError(
-      'Detached editor filesystem access is outside the owned document.'
+      'Runtime-owned detached editors cannot use host filesystem IPC.'
     )
     expect(() =>
       api.runtimeEnvironments.call({

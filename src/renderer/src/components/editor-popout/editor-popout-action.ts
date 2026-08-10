@@ -47,7 +47,10 @@ export function createEditorPopoutAction({
         showFrontmatter
       })
       if (request) {
-        void window.api.editorPopout.open(request).catch(reportEditorPopoutOpenFailure)
+        void window.api.editorPopout
+          .open(request)
+          .then(() => getState().closeFile(file.id))
+          .catch(reportEditorPopoutOpenFailure)
       }
     } catch (cause) {
       reportEditorPopoutOpenFailure(cause)

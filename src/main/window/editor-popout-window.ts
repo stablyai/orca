@@ -7,6 +7,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 
 const EDITOR_POPOUT_PARTITION = 'orca-editor-popout'
+const CLOSE_STATE_TIMEOUT_MS = 1_500
 const MIN_WIDTH = 560
 const MIN_HEIGHT = 420
 
@@ -17,6 +18,8 @@ type EditorPopoutEntry = {
   allowClose: boolean
   closeDialogOpen: boolean
   closeCheckPending: boolean
+  closeCheckTimer: ReturnType<typeof setTimeout> | null
+  onQuitAborted?: () => void
 }
 
 const entriesByKey = new Map<string, EditorPopoutEntry>()
@@ -65,6 +68,41 @@ async function confirmDirtyClose(entry: EditorPopoutEntry): Promise<void> {
   }
   entry.closeDialogOpen = false
   if (result.response === 1) {
+    entry.onQuitAborted?.()
+    entry.onQuitAborted = undefined
+    return
+  }
+  entry.allowClose = true
+  entry.window.close()
+}
+
+async function confirmUnresponsiveClose(entry: EditorPopoutEntry): Promise<void> {
+  const result = await dialog.showMessageBox(entry.window, {
+    type: 'warning',
+    title: translateMain('editorPopout.unsavedChanges', 'Unsaved Changes'),
+    message: translateMain(
+      'editorPopout.closeStateUnavailable',
+      'The detached editor is not responding.'
+    ),
+    detail: translateMain(
+      'editorPopout.closeStateUnavailableDetail',
+      'Its latest changes could not be checked. Closing may discard unsaved work.'
+    ),
+    buttons: [
+      translateMain('editorPopout.cancel', 'Cancel'),
+      translateMain('editorPopout.discard', "Don't Save")
+    ],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  })
+  if (entry.window.isDestroyed()) {
+    return
+  }
+  entry.closeDialogOpen = false
+  if (result.response === 0) {
+    entry.onQuitAborted?.()
+    entry.onQuitAborted = undefined
     return
   }
   entry.allowClose = true
@@ -110,7 +148,8 @@ export function createOrFocusEditorPopout(request: EditorPopoutOpenRequest): Bro
     dirty: request.content !== request.savedContent,
     allowClose: false,
     closeDialogOpen: false,
-    closeCheckPending: false
+    closeCheckPending: false,
+    closeCheckTimer: null
   }
   const webContentsId = window.webContents.id
   entriesByKey.set(key, entry)
@@ -129,9 +168,20 @@ export function createOrFocusEditorPopout(request: EditorPopoutOpenRequest): Bro
     if (!entry.closeDialogOpen && !entry.closeCheckPending) {
       entry.closeCheckPending = true
       window.webContents.send('editorPopout:requestCloseState')
+      entry.closeCheckTimer = setTimeout(() => {
+        entry.closeCheckTimer = null
+        entry.closeCheckPending = false
+        entry.dirty = true
+        entry.closeDialogOpen = true
+        void confirmUnresponsiveClose(entry)
+      }, CLOSE_STATE_TIMEOUT_MS)
     }
   })
   window.on('closed', () => {
+    if (entry.closeCheckTimer) {
+      clearTimeout(entry.closeCheckTimer)
+      entry.closeCheckTimer = null
+    }
     entriesByKey.delete(key)
     entriesByWebContentsId.delete(webContentsId)
   })
@@ -160,6 +210,10 @@ export function reportEditorPopoutCloseState(sender: WebContents, dirty: boolean
   if (!entry || !entry.closeCheckPending) {
     return
   }
+  if (entry.closeCheckTimer) {
+    clearTimeout(entry.closeCheckTimer)
+    entry.closeCheckTimer = null
+  }
   entry.closeCheckPending = false
   entry.dirty = dirty
   if (!dirty) {
@@ -185,9 +239,10 @@ export function completeEditorPopoutSaveAndClose(sender: WebContents, saved: boo
   entry.window.close()
 }
 
-export function closeAllEditorPopouts(): void {
+export function closeAllEditorPopouts(onQuitAborted?: () => void): void {
   for (const entry of entriesByKey.values()) {
     if (!entry.window.isDestroyed()) {
+      entry.onQuitAborted = onQuitAborted
       entry.window.close()
     }
   }

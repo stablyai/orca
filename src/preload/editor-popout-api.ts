@@ -1,7 +1,13 @@
 import type { IpcRenderer } from 'electron'
 import { admitEditorPopoutOpenRequest, type EditorPopoutOpenRequest } from '../shared/editor-popout'
+import {
+  richMarkdownContextMenuCommandChannel,
+  richMarkdownContextMenuTargetChannel,
+  type RichMarkdownContextMenuCommandPayload,
+  type RichMarkdownContextMenuTableTarget
+} from '../shared/rich-markdown-context-menu'
 
-type EditorPopoutIpc = Pick<IpcRenderer, 'invoke' | 'on' | 'removeListener'>
+type EditorPopoutIpc = Pick<IpcRenderer, 'invoke' | 'on' | 'removeListener' | 'send' | 'sendSync'>
 
 type FsReadArgs = {
   filePath: string
@@ -42,6 +48,9 @@ function assertOwnedFilesystemRequest(
   request: EditorPopoutOpenRequest,
   args: FsReadArgs | FsWriteArgs
 ): void {
+  if (request.document.runtimeEnvironmentId) {
+    throw new Error('Runtime-owned detached editors cannot use host filesystem IPC.')
+  }
   if (
     args.filePath !== request.document.filePath ||
     args.connectionId !== request.operationContext.connectionId
@@ -131,6 +140,51 @@ export function createEditorPopoutPreloadApi(ipc: EditorPopoutIpc) {
         assertOwnedRuntimeCall(requireRequest(request), args)
         return ipc.invoke('runtimeEnvironments:call', args)
       }
+    },
+    settings: {
+      get: (): Promise<unknown> => ipc.invoke('settings:get'),
+      getSync: (): unknown => ipc.sendSync('settings:get-sync'),
+      onChanged: (callback: (updates: Record<string, unknown>) => void): (() => void) => {
+        const listener = (
+          _event: Electron.IpcRendererEvent,
+          updates: Record<string, unknown>
+        ): void => callback(updates)
+        ipc.on('settings:changed', listener)
+        return () => ipc.removeListener('settings:changed', listener)
+      }
+    },
+    ui: {
+      readClipboardText: (options?: unknown): Promise<unknown> =>
+        ipc.invoke('clipboard:readText', options),
+      writeClipboardText: (text: string): Promise<unknown> =>
+        ipc.invoke('clipboard:writeText', text),
+      saveClipboardImageAsTempFile: (args?: {
+        connectionId?: string | null
+        runtimeEnvironmentId?: string | null
+      }): Promise<unknown> => ipc.invoke('clipboard:saveImageAsTempFile', args),
+      setMarkdownEditorFocused: (focused: boolean): void => {
+        ipc.send('ui:setMarkdownEditorFocused', focused)
+      },
+      setRichMarkdownContextMenuTarget: (
+        target: RichMarkdownContextMenuTableTarget | null
+      ): void => {
+        ipc.send(richMarkdownContextMenuTargetChannel, target)
+      },
+      onRichMarkdownContextCommand: (
+        callback: (payload: RichMarkdownContextMenuCommandPayload) => void
+      ): (() => void) => {
+        const listener = (
+          _event: Electron.IpcRendererEvent,
+          payload: RichMarkdownContextMenuCommandPayload
+        ): void => callback(payload)
+        ipc.on(richMarkdownContextMenuCommandChannel, listener)
+        return () => ipc.removeListener(richMarkdownContextMenuCommandChannel, listener)
+      }
+    },
+    shell: {
+      pathExists: (filePath: string): Promise<unknown> => ipc.invoke('shell:pathExists', filePath),
+      openFileUri: (uri: string): Promise<unknown> => ipc.invoke('shell:openFileUri', uri),
+      pickImage: (): Promise<unknown> => ipc.invoke('shell:pickImage')
     }
   }
 }

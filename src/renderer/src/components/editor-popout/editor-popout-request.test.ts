@@ -104,4 +104,27 @@ describe('createEditorPopoutOpenRequest', () => {
       })
     ).toBeNull()
   })
+
+  it('does not detach a runtime file before its pairing revision is known', () => {
+    const state = { worktreesByRepo: {} } as AppState
+    findWorktreeByIdMock.mockReturnValue({ path: '/remote' })
+    getEditorFileOperationContextMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreeId: file.worktreeId,
+      worktreePath: '/remote',
+      expectedExecutionHostId: 'local'
+    })
+    getRuntimeEnvironmentRevisionMock.mockReturnValue(undefined)
+
+    expect(
+      createEditorPopoutOpenRequest({
+        state,
+        file,
+        content: '# Draft\n',
+        savedContent: '# Saved\n',
+        viewMode: 'source',
+        showFrontmatter: true
+      })
+    ).toBeNull()
+  })
 })

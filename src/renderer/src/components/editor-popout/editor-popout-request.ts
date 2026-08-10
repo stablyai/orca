@@ -33,6 +33,9 @@ export function createEditorPopoutOpenRequest({
   const expectedEnvironmentPairingRevision = file.runtimeEnvironmentId
     ? getRuntimeEnvironmentRevision(file.runtimeEnvironmentId)
     : undefined
+  if (file.runtimeEnvironmentId && expectedEnvironmentPairingRevision === undefined) {
+    return null
+  }
   return {
     document: {
       id: file.id,

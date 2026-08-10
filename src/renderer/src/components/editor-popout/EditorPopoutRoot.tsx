@@ -24,6 +24,7 @@ function LoadedEditorPopout({ request }: { request: EditorPopoutOpenRequest }): 
   const showFrontmatter = request.showFrontmatter
   const [saving, setSaving] = useState(false)
   const savePromiseRef = useRef<Promise<boolean> | null>(null)
+  const savedContentRef = useRef(savedContent)
   const contentRef = useRef(content)
   const dirtyRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,7 +63,11 @@ function LoadedEditorPopout({ request }: { request: EditorPopoutOpenRequest }): 
         setSaving(true)
         setError(null)
         try {
-          const result = await saveEditorPopoutDocument(request, nextContent, savedContent)
+          const result = await saveEditorPopoutDocument(
+            request,
+            nextContent,
+            savedContentRef.current
+          )
           if (!result.ok) {
             setError(
               result.reason === 'external-change'
@@ -77,6 +82,7 @@ function LoadedEditorPopout({ request }: { request: EditorPopoutOpenRequest }): 
             )
             return false
           }
+          savedContentRef.current = nextContent
           setSavedContent(nextContent)
           return true
         } catch (cause) {
@@ -93,7 +99,7 @@ function LoadedEditorPopout({ request }: { request: EditorPopoutOpenRequest }): 
         }
       })
     },
-    [content, request, savedContent]
+    [content, request]
   )
 
   const reload = useCallback(async (): Promise<void> => {
@@ -115,6 +121,7 @@ function LoadedEditorPopout({ request }: { request: EditorPopoutOpenRequest }): 
         return
       }
       setContent(next.content)
+      savedContentRef.current = next.content
       setSavedContent(next.content)
       setError(null)
     } catch (cause) {

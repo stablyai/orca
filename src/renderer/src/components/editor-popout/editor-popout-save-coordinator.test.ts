@@ -37,4 +37,29 @@ describe('runEditorPopoutSave', () => {
     expect(task).toHaveBeenCalledTimes(2)
     expect(slot.current).toBeNull()
   })
+
+  it('lets a queued save observe the baseline advanced by the previous save', async () => {
+    let finishFirst: (() => void) | undefined
+    const firstPending = new Promise<void>((resolve) => {
+      finishFirst = resolve
+    })
+    let baseline = '# Original\n'
+    const observedBaselines: string[] = []
+    const slot: EditorPopoutSaveSlot = { current: null }
+
+    const first = runEditorPopoutSave(slot, async () => {
+      observedBaselines.push(baseline)
+      await firstPending
+      baseline = '# First\n'
+      return true
+    })
+    const second = runEditorPopoutSave(slot, async () => {
+      observedBaselines.push(baseline)
+      return true
+    })
+
+    finishFirst?.()
+    await Promise.all([first, second])
+    expect(observedBaselines).toEqual(['# Original\n', '# First\n'])
+  })
 })

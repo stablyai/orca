@@ -179,6 +179,19 @@ export function admitEditorPopoutOpenRequest(value: unknown): EditorPopoutOpenRe
   if (!document || !operationContext || document.worktreeId !== operationContext.worktreeId) {
     return null
   }
+  if (
+    document.runtimeEnvironmentId &&
+    (operationContext.settings?.activeRuntimeEnvironmentId !== document.runtimeEnvironmentId ||
+      operationContext.expectedEnvironmentPairingRevision === undefined)
+  ) {
+    return null
+  }
+  if (
+    !document.runtimeEnvironmentId &&
+    operationContext.expectedEnvironmentPairingRevision !== undefined
+  ) {
+    return null
+  }
   return {
     document,
     content: value.content,

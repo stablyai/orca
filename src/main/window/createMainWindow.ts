@@ -1128,7 +1128,7 @@ export function createMainWindow(
   mainWindow.on('closed', () => {
     // Why: companion windows must not outlive the main window on macOS.
     closeDashboardPopout()
-    closeAllEditorPopouts()
+    closeAllEditorPopouts(opts?.onQuitAborted)
     clearInitialRevealFallbackTimer()
     clearQuitRendererAckTimer()
     // Why: default-deny the Cmd+B carve-out after the window is gone so a stale-true flag can't leak into later state.

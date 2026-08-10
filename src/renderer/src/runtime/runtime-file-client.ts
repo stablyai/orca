@@ -90,6 +90,7 @@ function withSshMutationExpectation<T extends object>(
   expectedExecutionHostId: 'local' | `ssh:${string}`
   expectedSshTargetId?: string
   expectedSshConnectionGeneration?: number
+  expectedExternalSshTargetId?: string
 } {
   const sshTargetId = context.expectedSshTargetId ?? context.connectionId
   return {
@@ -102,7 +103,10 @@ function withSshMutationExpectation<T extends object>(
       : { expectedSshTargetId: context.expectedSshTargetId }),
     ...(context.expectedSshConnectionGeneration === undefined
       ? {}
-      : { expectedSshConnectionGeneration: context.expectedSshConnectionGeneration })
+      : { expectedSshConnectionGeneration: context.expectedSshConnectionGeneration }),
+    ...(context.expectedExternalSshTargetId === undefined
+      ? {}
+      : { expectedExternalSshTargetId: context.expectedExternalSshTargetId })
   }
 }
 
