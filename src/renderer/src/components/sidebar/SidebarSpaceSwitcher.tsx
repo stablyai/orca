@@ -16,25 +16,15 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
 import {
   computeTabStripScrollMetrics,
-  type TabStripScrollMetrics
+  getTabStripScrollMaskClassName
 } from '../tab-bar/tab-strip-scroll-metrics'
 import { requestAnimatedSpaceTransition } from './space-transition-controller'
 import { isDefaultSpaceId } from '../../../../shared/spaces'
 import type { Space } from '../../../../shared/types'
 
-/** Mask width of one edge fade; revealed indicators stop short of it. */
+/** Mask width of one edge fade; revealed indicators stop short of it. Mirrors `--strip-fade-width`. */
 const SPACE_STRIP_FADE_PX = 12
-
-export function getSpaceStripFadeClassName(
-  metrics: Pick<TabStripScrollMetrics, 'canScrollStart' | 'canScrollEnd'>
-): string {
-  return [
-    metrics.canScrollStart ? 'sidebar-space-switcher-scroll--fade-start' : '',
-    metrics.canScrollEnd ? 'sidebar-space-switcher-scroll--fade-end' : ''
-  ]
-    .filter(Boolean)
-    .join(' ')
-}
+const SPACE_STRIP_CLASS = 'sidebar-space-switcher-scroll'
 
 type SpaceIndicatorProps = {
   space: Space
@@ -163,7 +153,10 @@ export const SidebarSpaceSwitcher = React.memo(
       if (!container) {
         return
       }
-      const next = getSpaceStripFadeClassName(computeTabStripScrollMetrics(container))
+      const next = getTabStripScrollMaskClassName(
+        computeTabStripScrollMetrics(container),
+        SPACE_STRIP_CLASS
+      )
       setFadeClassName((previous) => (previous === next ? previous : next))
     }, [])
 
@@ -210,7 +203,8 @@ export const SidebarSpaceSwitcher = React.memo(
         onScroll={updateFades}
         // Why: the padding pair keeps focus rings out of the scroll clip without growing the toolbar.
         className={cn(
-          'sidebar-space-switcher-scroll -my-1 min-w-0 flex-1 overflow-x-auto overscroll-x-contain py-1',
+          SPACE_STRIP_CLASS,
+          '-my-1 min-w-0 flex-1 overflow-x-auto overscroll-x-contain py-1',
           fadeClassName
         )}
       >

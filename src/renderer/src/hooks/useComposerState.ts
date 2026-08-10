@@ -260,9 +260,6 @@ export type UseComposerStateOptions = {
   /** Invoked after a successful createWorktree; the caller usually closes its surface (palette modal, full page, etc.). */
   onCreated?: () => void
   isSubmissionCancelled?: () => boolean
-  /** External repoId override — used by TaskPage's work-item list, which drives repo selection from the page header, not the card. */
-  repoIdOverride?: string
-  onRepoIdOverrideChange?: (value: string) => void
   /** Telemetry surface that opened this composer; threaded into createWorktree so workspace_created.source reflects the entry point. Defaults to unknown. */
   telemetrySource?: WorkspaceCreateTelemetrySource
   /** Enables linked-item prompt and issue-command automation for this composer entry point. */
@@ -610,8 +607,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     persistDraft,
     onCreated,
     isSubmissionCancelled = NEVER_CANCEL_COMPOSER_SUBMIT,
-    repoIdOverride,
-    onRepoIdOverrideChange,
     telemetrySource,
     enableIssueAutomation = true,
     createGateMode = 'full',
@@ -692,8 +687,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const eligibleRepos = useMemo(() => getComposerEligibleRepos(repos), [repos])
+  // Why: an out-of-Space seed repo would otherwise leak into the PR start-point selection below.
   const spaceScopedInitialRepoId = resolveComposerEligibleRepoId(eligibleRepos, initialRepoId)
-  const spaceScopedRepoIdOverride = resolveComposerEligibleRepoId(eligibleRepos, repoIdOverride)
   const hostOptions = useMemo(
     () =>
       buildExecutionHostRegistry({
@@ -752,7 +747,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     projects,
     projectHostSetups,
     draftRepoId,
-    initialRepoId: spaceScopedInitialRepoId,
+    initialRepoId,
     activeRepoId: seedActiveRepoId,
     projectId: initialRunSeed.projectId,
     hostId: initialRunSeed.hostId,
@@ -765,7 +760,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       ? resolvedInitialWorkspaceTarget.target.repoId
       : ''
 
-  const [internalRepoId, setInternalRepoId] = useState<string>(resolvedInitialRepoId)
+  const [repoId, setRepoId] = useState<string>(resolvedInitialRepoId)
   const [selectedProjectHostSetupOverrideId, setSelectedProjectHostSetupOverrideId] = useState<
     string | null
   >(
@@ -784,7 +779,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
   const initialProjectGroupAppliedRef = useRef(Boolean(initialFolderProjectGroup))
   const [projectError, setProjectError] = useState<string | null>(null)
-  const repoId = spaceScopedRepoIdOverride ?? internalRepoId
   const selectedProjectGroup = useMemo<ProjectGroup | null>(
     () =>
       findActionableFolderProjectGroup({
@@ -985,16 +979,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     })
   const repoIdRef = useRef(repoId)
   repoIdRef.current = repoId
-  const setRepoId = useCallback(
-    (value: string) => {
-      if (onRepoIdOverrideChange) {
-        onRepoIdOverrideChange(value)
-      } else {
-        setInternalRepoId(value)
-      }
-    },
-    [onRepoIdOverrideChange]
-  )
 
   const [name, setName] = useState<string>(
     persistDraft ? (newWorkspaceDraft?.name ?? initialName) : initialName

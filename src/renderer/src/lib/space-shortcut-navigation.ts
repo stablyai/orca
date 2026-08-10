@@ -1,7 +1,7 @@
 import type { Space } from '../../../shared/types'
 
 export function getIndexedSpace(spaces: readonly Space[], index: number): Space | null {
-  return Number.isInteger(index) && index >= 0 ? (spaces[index] ?? null) : null
+  return spaces[index] ?? null
 }
 
 export function getAdjacentSpace(
@@ -16,5 +16,5 @@ export function getAdjacentSpace(
   // Why: the pager is a loop — swiping past either end already wraps, so the shortcuts must too.
   // The pager animates the wrap by strip position, so next-from-last slides back to the leftmost.
   const step = direction === 'next' ? 1 : -1
-  return spaces[(activeIndex + step + spaces.length) % spaces.length] ?? null
+  return spaces[(activeIndex + step + spaces.length) % spaces.length]
 }

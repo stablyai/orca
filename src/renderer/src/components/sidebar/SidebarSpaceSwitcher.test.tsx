@@ -38,7 +38,8 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
-import SidebarSpaceSwitcher, { getSpaceStripFadeClassName } from './SidebarSpaceSwitcher'
+import SidebarSpaceSwitcher from './SidebarSpaceSwitcher'
+import { getTabStripScrollMaskClassName } from '../tab-bar/tab-strip-scroll-metrics'
 
 function space(overrides: Partial<Space> & Pick<Space, 'id' | 'name' | 'emoji'>): Space {
   return { createdAt: 0, updatedAt: 0, ...overrides }
@@ -205,11 +206,17 @@ describe('SidebarSpaceSwitcher', () => {
   })
 
   it('fades only the edges the strip can still scroll toward', () => {
-    expect(getSpaceStripFadeClassName({ canScrollStart: false, canScrollEnd: false })).toBe('')
-    expect(getSpaceStripFadeClassName({ canScrollStart: false, canScrollEnd: true })).toBe(
+    const mask = (metrics: { canScrollStart: boolean; canScrollEnd: boolean }): string =>
+      getTabStripScrollMaskClassName(
+        { hasOverflow: true, ...metrics },
+        'sidebar-space-switcher-scroll'
+      )
+
+    expect(mask({ canScrollStart: false, canScrollEnd: false })).toBe('')
+    expect(mask({ canScrollStart: false, canScrollEnd: true })).toBe(
       'sidebar-space-switcher-scroll--fade-end'
     )
-    expect(getSpaceStripFadeClassName({ canScrollStart: true, canScrollEnd: true })).toBe(
+    expect(mask({ canScrollStart: true, canScrollEnd: true })).toBe(
       'sidebar-space-switcher-scroll--fade-start sidebar-space-switcher-scroll--fade-end'
     )
   })

@@ -52,8 +52,10 @@ export function computeTabStripThumbLayout(
   }
 }
 
+/** `classPrefix` names the strip whose fade rules apply; see `--strip-fade-width` in main.css. */
 export function getTabStripScrollMaskClassName(
-  metrics: Pick<TabStripScrollMetrics, 'canScrollStart' | 'canScrollEnd' | 'hasOverflow'>
+  metrics: Pick<TabStripScrollMetrics, 'canScrollStart' | 'canScrollEnd' | 'hasOverflow'>,
+  classPrefix = 'terminal-tab-strip'
 ): string {
   if (!metrics.hasOverflow) {
     return ''
@@ -61,10 +63,10 @@ export function getTabStripScrollMaskClassName(
 
   const classes: string[] = []
   if (metrics.canScrollStart) {
-    classes.push('terminal-tab-strip--fade-start')
+    classes.push(`${classPrefix}--fade-start`)
   }
   if (metrics.canScrollEnd) {
-    classes.push('terminal-tab-strip--fade-end')
+    classes.push(`${classPrefix}--fade-end`)
   }
   return classes.join(' ')
 }

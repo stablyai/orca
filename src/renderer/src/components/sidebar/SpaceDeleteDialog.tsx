@@ -18,8 +18,8 @@ import {
   isRepoInSpace
 } from '../../../../shared/spaces'
 
+// Why: App mounts this only while `activeModal === 'delete-space'`, so it is always open.
 export default function SpaceDeleteDialog(): React.JSX.Element | null {
-  const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const spaces = useAppStore((s) => s.spaces)
@@ -32,7 +32,6 @@ export default function SpaceDeleteDialog(): React.JSX.Element | null {
   const space = spaces.find((entry) => entry.id === spaceId) ?? null
   const defaultSpaceName =
     spaces.find((entry) => entry.id === DEFAULT_SPACE_ID)?.name ?? DEFAULT_SPACE_FALLBACK_NAME
-  const open = activeModal === 'delete-space' && space !== null && !isDefaultSpaceId(space.id)
   // Why: repos holds one row per (project, host), so a project on both local and SSH would count twice.
   const projectCount = React.useMemo(
     () =>
@@ -67,12 +66,12 @@ export default function SpaceDeleteDialog(): React.JSX.Element | null {
     })
   }, [closeModal, deleteSpace, space])
 
-  if (!open || !space) {
+  if (!space || isDefaultSpaceId(space.id)) {
     return null
   }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && closeModal()}>
+    <Dialog open onOpenChange={(nextOpen) => !nextOpen && closeModal()}>
       <DialogContent
         className="max-w-sm sm:max-w-sm"
         showCloseButton={false}

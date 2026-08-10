@@ -643,61 +643,61 @@
   height: 0;
 }
 
-/* Why: overflowing Space indicators recede before reaching adjacent toolbar controls;
-   an edge that cannot scroll stays unmasked so its focus ring is not faded away. */
-.sidebar-space-switcher-scroll--fade-start.sidebar-space-switcher-scroll--fade-end {
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent,
-    #000 0.75rem,
-    #000 calc(100% - 0.75rem),
-    transparent
-  );
-  mask-image: linear-gradient(
-    to right,
-    transparent,
-    #000 0.75rem,
-    #000 calc(100% - 0.75rem),
-    transparent
-  );
+/* Why: mask fades avoid painting card-colored overlays that mismatch active tabs, and an
+   edge that cannot scroll stays unmasked so its focus ring is not faded away. Each strip
+   only picks its own fade width. */
+.sidebar-space-switcher-scroll {
+  /* Keep in sync with SPACE_STRIP_FADE_PX in SidebarSpaceSwitcher.tsx. */
+  --strip-fade-width: 0.75rem;
 }
 
-.sidebar-space-switcher-scroll--fade-start:not(.sidebar-space-switcher-scroll--fade-end) {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 0.75rem, #000 100%);
-  mask-image: linear-gradient(to right, transparent, #000 0.75rem, #000 100%);
+.terminal-tab-strip {
+  --strip-fade-width: 1.5rem;
 }
 
-.sidebar-space-switcher-scroll--fade-end:not(.sidebar-space-switcher-scroll--fade-start) {
-  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 0.75rem), transparent);
-  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 0.75rem), transparent);
-}
-
-/* Why: mask fades avoid painting card-colored overlays that mismatch active tabs. */
+.sidebar-space-switcher-scroll--fade-start.sidebar-space-switcher-scroll--fade-end,
 .terminal-tab-strip--fade-start.terminal-tab-strip--fade-end {
   -webkit-mask-image: linear-gradient(
     to right,
     transparent,
-    #000 1.5rem,
-    #000 calc(100% - 1.5rem),
+    #000 var(--strip-fade-width),
+    #000 calc(100% - var(--strip-fade-width)),
     transparent
   );
   mask-image: linear-gradient(
     to right,
     transparent,
-    #000 1.5rem,
-    #000 calc(100% - 1.5rem),
+    #000 var(--strip-fade-width),
+    #000 calc(100% - var(--strip-fade-width)),
     transparent
   );
 }
 
+.sidebar-space-switcher-scroll--fade-start:not(.sidebar-space-switcher-scroll--fade-end),
 .terminal-tab-strip--fade-start:not(.terminal-tab-strip--fade-end) {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
-  mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--strip-fade-width),
+    #000 100%
+  );
+  mask-image: linear-gradient(to right, transparent, #000 var(--strip-fade-width), #000 100%);
 }
 
+.sidebar-space-switcher-scroll--fade-end:not(.sidebar-space-switcher-scroll--fade-start),
 .terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start) {
-  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
-  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - var(--strip-fade-width)),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - var(--strip-fade-width)),
+    transparent
+  );
 }
 
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in

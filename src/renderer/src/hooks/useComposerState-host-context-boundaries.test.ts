@@ -315,7 +315,7 @@ describe('useComposerState host-context boundaries', () => {
       projectHostSetupId: 'setup-local'
     })
 
-    const section = sourceBetween(HOOK_SOURCE, 'const initialRunSeed', 'const [internalRepoId')
+    const section = sourceBetween(HOOK_SOURCE, 'const initialRunSeed', 'const [repoId, setRepoId]')
 
     expect(section).toContain('resolveInitialWorkspaceRunSeed')
     expect(section).toContain('initialTaskSourceContext')

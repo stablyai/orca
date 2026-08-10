@@ -20,15 +20,14 @@ type SpaceDraft = { name: string; emoji: string | null }
 
 const EMPTY_DRAFT: SpaceDraft = { name: '', emoji: null }
 
-export default function SpaceEditorDialog(): React.JSX.Element | null {
-  const activeModal = useAppStore((s) => s.activeModal)
+// Why: App mounts this only while `activeModal === 'space-editor'`, so it is always open.
+export default function SpaceEditorDialog(): React.JSX.Element {
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const spaces = useAppStore((s) => s.spaces)
   const createSpace = useAppStore((s) => s.createSpace)
   const updateSpace = useAppStore((s) => s.updateSpace)
 
-  const open = activeModal === 'space-editor'
   const spaceId = typeof modalData.spaceId === 'string' ? modalData.spaceId : null
   const editedSpace = spaces.find((entry) => entry.id === spaceId) ?? null
   const editedSpaceId = editedSpace?.id ?? null
@@ -45,12 +44,9 @@ export default function SpaceEditorDialog(): React.JSX.Element | null {
   const nameInputId = React.useId()
 
   React.useEffect(() => {
-    if (!open) {
-      return
-    }
     setDraft(editedSpaceId ? { name: editedSpaceName, emoji: editedSpaceEmoji } : EMPTY_DRAFT)
     setSaveFailed(false)
-  }, [editedSpaceEmoji, editedSpaceId, editedSpaceName, open])
+  }, [editedSpaceEmoji, editedSpaceId, editedSpaceName])
 
   React.useEffect(() => {
     // Why: StrictMode reuses the ref across its mount/unmount/remount, so this must re-arm on mount.
@@ -84,13 +80,9 @@ export default function SpaceEditorDialog(): React.JSX.Element | null {
     [closeModal, createSpace, draft.emoji, editedSpace, saving, trimmedName, updateSpace]
   )
 
-  if (!open) {
-    return null
-  }
-
   return (
     <Dialog
-      open={open}
+      open
       onOpenChange={(nextOpen) => {
         if (!nextOpen && !saving) {
           closeModal()
