@@ -362,12 +362,11 @@ function rendererBreadcrumbCoalesceKey(
   if (name === PARK_VERDICT_CHURN_BREADCRUMB) {
     return `${name}:${String(data?.trigger ?? '')}`
   }
-  // Why kind and not name alone: a context loss (GPU/driver gave up on this
-  // renderer) and an atlas reset (routine post-wake repaint) must never
-  // suppress each other. Within one kind the count is the whole signal — every
-  // live pane emits on a GPU death.
+  // Preserve distinct GPU failures and atlas-reset triggers while coalescing each storm.
   if (name === TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB) {
-    return `${name}:${String(data?.kind ?? '')}`
+    const kind = String(data?.kind ?? '')
+    const reason = kind === 'webgl-atlas-reset' ? data?.reason : undefined
+    return reason ? `${name}:${kind}:${String(reason)}` : `${name}:${kind}`
   }
   // Why: a stale map can emit once per tab-id/verdict; key by verdict so
   // last-write coalescing cannot erase the other signal while remaining bounded.

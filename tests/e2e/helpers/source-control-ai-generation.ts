@@ -31,22 +31,30 @@ export async function openChecks(page: Page, worktreeId: string): Promise<void> 
     const state = window.__store?.getState()
     state?.setActiveWorktree(targetWorktreeId)
     state?.setRightSidebarOpen(true)
-    state?.setRightSidebarTab('checks')
   }, worktreeId)
   await expect
     .poll(
       () =>
         page.evaluate((targetWorktreeId) => {
           const state = window.__store?.getState()
-          return (
-            state?.activeWorktreeId === targetWorktreeId &&
-            state.rightSidebarOpen &&
-            state.rightSidebarTab === 'checks'
-          )
+          return state?.activeWorktreeId === targetWorktreeId && state.rightSidebarOpen
         }, worktreeId),
       { timeout: 5_000 }
     )
     .toBe(true)
+  const checksButton = page.getByRole('button', { name: 'Checks', exact: true })
+  await expect
+    .poll(
+      async () => {
+        if ((await page.evaluate(() => window.__store?.getState().rightSidebarTab)) !== 'checks') {
+          await checksButton.click()
+        }
+        await page.waitForTimeout(250)
+        return page.evaluate(() => window.__store?.getState().rightSidebarTab)
+      },
+      { timeout: 10_000 }
+    )
+    .toBe('checks')
 }
 
 export async function seedCreatePrComposer(page: Page): Promise<{

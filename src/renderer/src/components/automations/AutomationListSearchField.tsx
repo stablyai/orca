@@ -34,6 +34,7 @@ export function AutomationListSearchField({
       <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
       <Input
         ref={inputRef}
+        autoFocus
         value={query}
         aria-label={translate(
           'auto.components.automations.AutomationListSearchField.label',

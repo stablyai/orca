@@ -17,6 +17,8 @@ import {
   validateWorkingDirectory
 } from '../providers/local-pty-utils'
 import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
+import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
+import { readPtsName } from '../pty/node-pty-pts-name'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
@@ -126,6 +128,7 @@ export type PtySubprocessOptions = {
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
 }
 
 function deleteRequestedDaemonEnvKeys(
@@ -543,6 +546,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
   cols: number
   rows: number
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
+  onMacosTccSpawnStrategy?: PtySubprocessOptions['onMacosTccSpawnStrategy']
 }): {
   process: pty.IPty
   shellPath: string
@@ -551,7 +555,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
 } {
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
-    return pty.spawn(wrapped.file, wrapped.args, {
+    const proc = pty.spawn(wrapped.file, wrapped.args, {
       name: args.env.TERM ?? 'xterm-256color',
       cols: args.cols,
       rows: args.rows,
@@ -560,6 +564,8 @@ function spawnDaemonPtyWithWindowsFallback(args: {
       // Why: legacy system ConPTY can corrupt full-width TUI rows in scrollback; bundled ConPTY has the wrap-marker behavior xterm expects.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
+    args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
+    return proc
   }
 
   try {
@@ -837,7 +843,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       env,
       cols: size.cols,
       rows: size.rows,
-      windowsFallbackAttempts
+      windowsFallbackAttempts,
+      onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy
     })
     proc = spawned.process
     // Why: a Windows fallback (e.g. cmd.exe) carries its own argv-embedded startup command; adopt the winning shell's identity + delivery flag.
@@ -1234,11 +1241,22 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       if (dead) {
         return
       }
-      try {
-        process.kill(proc.pid, sig)
-      } catch {
-        // Process may already be dead
+      const signalRootPid = (): void => {
+        try {
+          process.kill(proc.pid, sig)
+        } catch {
+          // Process may already be dead
+        }
       }
+      // Why only SIGWINCH: the kernel delivers a real resize to the tty's foreground
+      // group, and proc.pid is never in it (the shell setpgid's away, and on macOS
+      // proc.pid is login(1), which drops SIGWINCH). Destructive signals keep the
+      // narrower root-pid target.
+      if (sig === 'SIGWINCH') {
+        signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), sig, signalRootPid)
+        return
+      }
+      signalRootPid()
     },
     onData: (cb) => {
       onDataCb = cb

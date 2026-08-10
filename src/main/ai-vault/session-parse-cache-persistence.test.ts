@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ensureSessionParseCacheLoaded,
   flushSessionParseCachePersistForTests,
+  getSessionParseCachePersistenceOptions,
   initSessionParseCachePersistence,
   resetSessionParseCachePersistenceForTests,
   scheduleSessionParseCachePersist
@@ -126,6 +127,16 @@ async function coldParseStats(path: string): Promise<SessionParseStats> {
 }
 
 describe('session parse cache persistence', () => {
+  it('exposes a copy of the active configuration for background scanners', () => {
+    const configured = { filePath: '/tmp/ai-vault-cache.json', appVersion: APP_VERSION }
+    initSessionParseCachePersistence(configured)
+
+    const snapshot = getSessionParseCachePersistenceOptions()
+
+    expect(snapshot).toEqual(configured)
+    expect(snapshot).not.toBe(configured)
+  })
+
   it('round-trips: a persisted entry is a reused hit after a restart, without reading the transcript', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'vault-state', 'session-parse-cache.json')

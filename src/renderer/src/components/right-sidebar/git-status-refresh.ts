@@ -1,4 +1,5 @@
 import { getRuntimeGitStatus, getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-client'
+import { getBranchLineTotalMergeBase } from './branch-line-total-request-gate'
 import {
   clearAutomaticPushTargetUpstreamStatusCache,
   getCachedAutomaticPushTargetUpstreamStatus,
@@ -117,9 +118,13 @@ export async function refreshGitStatusForWorktree({
     reuseLineStats?: boolean
     signal?: AbortSignal
     shouldApply?: () => boolean
+    onStatusAccepted?: (status: GitStatusResult) => void
   }
 }): Promise<void> {
   const refreshOrder = beginAutomaticUpstreamRefresh(worktreeId)
+  // Why: every status path must carry the merge base, or the chip blanks out on
+  // whichever poll happened to omit it.
+  const branchLineTotalMergeBase = getBranchLineTotalMergeBase(worktreeId)
   try {
     const status = (await getRuntimeGitStatus(
       {
@@ -128,12 +133,11 @@ export async function refreshGitStatusForWorktree({
         worktreePath,
         connectionId
       },
-      request
-        ? {
-            ...(request.reuseLineStats === true ? { reuseLineStats: true } : {}),
-            ...(request.signal ? { signal: request.signal } : {})
-          }
-        : undefined
+      {
+        ...(request?.reuseLineStats === true ? { reuseLineStats: true } : {}),
+        ...(request?.signal ? { signal: request.signal } : {}),
+        ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
+      }
     )) as GitStatusResult
 
     if (!claimAutomaticUpstreamRefreshApply(worktreeId, refreshOrder, request?.shouldApply)) {
@@ -149,6 +153,7 @@ export async function refreshGitStatusForWorktree({
       // explicit clear signal so stale branch names don't linger in the UI.
       branch: status.branch ?? (status.head ? null : undefined)
     })
+    request?.onStatusAccepted?.(status)
     if (pushTarget) {
       // Why: porcelain status reports Git's configured upstream. Source Control
       // actions for PR-created worktrees must instead reconcile with Orca's
@@ -245,6 +250,7 @@ export async function refreshGitStatusForWorktreeStrict({
 }): Promise<{ status: GitStatusResult; upstreamStatus: GitUpstreamStatus }> {
   beginStrictUpstreamRefresh(worktreeId)
   clearAutomaticPushTargetUpstreamStatusCache()
+  const strictBranchLineTotalMergeBase = getBranchLineTotalMergeBase(worktreeId)
   const status = (await getRuntimeGitStatus(
     {
       settings,
@@ -255,7 +261,12 @@ export async function refreshGitStatusForWorktreeStrict({
     {
       // Why: strict refreshes are user-triggered reconciliation and must not reuse
       // automatic polling's no-upstream backoff window.
-      bypassEffectiveUpstreamNegativeCache: true
+      bypassEffectiveUpstreamNegativeCache: true,
+      // Why: an absent total clears the chip, so a path that skipped the gate
+      // would blank it right after the commit or push that moved the number.
+      ...(strictBranchLineTotalMergeBase
+        ? { branchLineTotalMergeBase: strictBranchLineTotalMergeBase }
+        : {})
     }
   )) as GitStatusResult
 

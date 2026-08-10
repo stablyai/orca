@@ -1,9 +1,46 @@
 // Japanese phrase fixes from high-visibility UI audit rounds 1–4.
 // Why: keep locale-phrase-fixes.mjs under max-lines while preserving repair coverage.
+
+const JA_SENTENCE_CHAR = '[぀-ヿ一-龯、。・「」（）]'
+
+// Two-word commands (`git commit`, `orca terminal`) must keep their second word in Latin.
+const COMMAND_HEAD = '(?<!\\b(?:git|gh|glab|orca|npm|pnpm|npx|yarn|docker|kubectl) )'
+
+// #12113 stopped new damage; ~700 values still read "terminal を閉じる" and are healed here.
+// Anchored on adjacent Japanese, so `--agent`, agents.md and "Agent SDK" keep their spelling.
+const RELOCALIZED_GENERIC_TERMS = [
+  ['[Tt]erminals?', 'ターミナル', 'terminal'],
+  ['[Cc]ommits?', 'コミット', 'commit'],
+  ['[Rr]epos?', 'リポジトリ', 'repo'],
+  // Agent stays Latin in ja; this only normalizes the case.
+  ['[Aa]gents?', 'Agent', 'agent'],
+  ['[Ww]orktrees?', 'ワークツリー', 'worktree']
+].flatMap(([latin, katakana, whenEnIncludes]) => [
+  {
+    // The trailing space only goes when Japanese follows, so 和欧間スペース survives before {{…}}.
+    pattern: new RegExp(
+      `(?<=${JA_SENTENCE_CHAR}) ?${COMMAND_HEAD}${latin}(?![-\\w.])(?! [A-Za-z])(?: (?=${JA_SENTENCE_CHAR}))?`,
+      'g'
+    ),
+    replacement: katakana,
+    whenEnIncludes
+  },
+  {
+    pattern: new RegExp(
+      `(?<![-\\w])${COMMAND_HEAD}${latin}(?![-\\w.]) ?(?=${JA_SENTENCE_CHAR})`,
+      'g'
+    ),
+    replacement: katakana,
+    whenEnIncludes
+  }
+])
+
 export const JA_PHRASE_FIXES = [
+  ...RELOCALIZED_GENERIC_TERMS,
+  { pattern: /エージェント/g, replacement: 'Agent', whenEnIncludes: 'agent' },
   { pattern: /解雇/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
   { pattern: /却下/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
-  { pattern: /代理人/g, replacement: 'エージェント', whenEnIncludes: 'agent' },
+  { pattern: /代理人/g, replacement: 'Agent', whenEnIncludes: 'agent' },
   { pattern: /支店/g, replacement: 'ブランチ', whenEnIncludes: 'ranch' },
   { pattern: /港(?!口)/g, replacement: 'ポート', whenEnIncludes: 'ort' },
   { pattern: /会議/g, replacement: 'セッション', whenEnIncludes: 'session' },
@@ -198,7 +235,7 @@ export const JA_PHRASE_FIXES = [
   { pattern: /電話サイズ/g, replacement: 'スマートフォンサイズ', whenEnIncludes: 'phone' },
   {
     pattern: /コンピュータと電話/g,
-    replacement: 'コンピューターとスマートフォン',
+    replacement: 'コンピュータとスマートフォン',
     whenEnIncludes: 'phone'
   },
   { pattern: /前の問題/g, replacement: 'フロントマター', whenEnIncludes: 'Front Matter' },
@@ -235,11 +272,40 @@ export const JA_PHRASE_FIXES = [
     whenEnIncludes: 'More PR actions'
   },
   { pattern: /アクション/g, replacement: '操作', whenEnIncludes: 'action' },
-  { pattern: /を選択してください/g, replacement: 'を選択', whenEnIncludes: 'Select' },
-  { pattern: /を選択してください/g, replacement: 'を選択', whenEnIncludes: 'Choose' },
-  { pattern: /入力してください/g, replacement: '入力', whenEnIncludes: 'Enter' },
-  { pattern: /追加してください/g, replacement: '追加', whenEnIncludes: 'Add' },
-  { pattern: /試してください/g, replacement: '試す', whenEnIncludes: 'Try' },
+  // Orca's host covers SSH hosts and this computer; skipped where the English also says server.
+  {
+    pattern: /(ランタイム)?サーバー/g,
+    replacement: 'ホスト',
+    whenEnMatches: /^(?![\s\S]*\bservers?\b)[\s\S]*\bhosts?\b/i
+  },
+  { pattern: /上流/g, replacement: 'upstream', whenEnIncludes: 'upstream' },
+  { pattern: /起源/g, replacement: 'origin', whenEnIncludes: 'origin' },
+  { pattern: /段階的な変更/g, replacement: 'ステージ済みの変更', whenEnIncludes: 'staged' },
+  { pattern: /紛争/g, replacement: '競合', whenEnIncludes: 'conflict' },
+  { pattern: /資格情報/g, replacement: '認証情報', whenEnIncludes: 'credential' },
+  { pattern: /未知/g, replacement: '不明', whenEnIncludes: 'unknown' },
+  { pattern: /クッキー/g, replacement: 'Cookie', whenEnIncludes: 'cookie' },
+  { pattern: /プロフィール/g, replacement: 'プロファイル', whenEnIncludes: 'profile' },
+  { pattern: /(?<![ンプリ])ロード中/g, replacement: '読み込み中', whenEnIncludes: 'load' },
+  {
+    pattern: /(?<![ンプリ])ロードしています/g,
+    replacement: '読み込んでいます',
+    whenEnIncludes: 'load'
+  },
+  { pattern: /構成されて/g, replacement: '設定されて', whenEnIncludes: 'configur' },
+  { pattern: /第一方/g, replacement: 'ファーストパーティ', whenEnIncludes: 'first-party' },
+  { pattern: /早送り/g, replacement: 'fast-forward', whenEnIncludes: 'fast-forward' },
+  { pattern: /ファストフォワード/g, replacement: 'fast-forward', whenEnIncludes: 'fast-forward' },
+  { pattern: /([぀-ヿ一-龯])\.\.\./g, replacement: '$1…', whenEnMatches: /./ },
+  { pattern: /([゠-ヿ]) (?=[゠-ヿ])/g, replacement: '$1', whenEnMatches: /./ },
+  { pattern: /サーバ(?!ー)/g, replacement: 'サーバー', whenEnMatches: /./ },
+  { pattern: /フォルダ(?!ー)/g, replacement: 'フォルダー', whenEnMatches: /./ },
+  { pattern: /エディタ(?!ー)/g, replacement: 'エディター', whenEnMatches: /./ },
+  { pattern: /レンダラ(?!ー)/g, replacement: 'レンダラー', whenEnMatches: /./ },
+  { pattern: /ブラウザー/g, replacement: 'ブラウザ', whenEnMatches: /./ },
+  { pattern: /エミュレーター/g, replacement: 'エミュレータ', whenEnMatches: /./ },
+  { pattern: /コンピューター/g, replacement: 'コンピュータ', whenEnMatches: /./ },
+  { pattern: /インターフェイス/g, replacement: 'インターフェース', whenEnMatches: /./ },
   // Why: JP engineers use "Issue" in Latin, not katakana. Runs last so all *→イシュー fixes above normalize to Issue.
   { pattern: /イシュー/g, replacement: 'Issue', whenEnIncludes: 'issue' }
 ]

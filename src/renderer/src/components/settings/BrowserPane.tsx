@@ -12,6 +12,7 @@ import { BrowserUseSetup } from './BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './BrowserLinkRoutingSetting'
 import { BrowserLinkRoutingModifierSetting } from './BrowserLinkRoutingModifierSetting'
+import { BrowserTerminalLinkActionsSetting } from './BrowserTerminalLinkActionsSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
@@ -104,8 +105,11 @@ export function BrowserPane({
   const showLinkRoutingModifier = matchesSettingsSearch(searchQuery, [
     getBrowserPaneSearchEntries()[4]
   ])
-  const showLocalhostLabels = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[5]])
-  const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[6]])
+  const showTerminalLinkActions = matchesSettingsSearch(searchQuery, [
+    getBrowserPaneSearchEntries()[5]
+  ])
+  const showLocalhostLabels = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[6]])
+  const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[7]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -248,6 +252,14 @@ export function BrowserPane({
 
       {showLinkRoutingModifier ? (
         <BrowserLinkRoutingModifierSetting
+          settings={settings}
+          isMac={isMac}
+          updateSettings={updateSettings}
+        />
+      ) : null}
+
+      {showTerminalLinkActions ? (
+        <BrowserTerminalLinkActionsSetting
           settings={settings}
           isMac={isMac}
           updateSettings={updateSettings}

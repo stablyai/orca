@@ -47,7 +47,12 @@ describe('notification route coordination', () => {
     const harness = navigationHarness(undefined)
     const push = vi.fn()
 
-    navigateToHostStackRoute(harness.navigation, { push }, target!.hostId, target!.sessionTarget!)
+    navigateToHostStackRoute(
+      harness.navigation,
+      { push, replace: vi.fn() },
+      target!.hostId,
+      target!.sessionTarget!
+    )
 
     expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()

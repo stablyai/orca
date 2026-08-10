@@ -502,6 +502,50 @@ describe('SshChannelMultiplexer', () => {
       await expect(mux.request('pty.spawn')).rejects.toThrow('Multiplexer disposed')
     })
 
+    it('tags a request after a shutdown dispose with DISPOSED', async () => {
+      mux.dispose()
+
+      const error = (await mux.request('pty.spawn').catch((e: unknown) => e)) as Error & {
+        code?: string
+      }
+      expect(error.code).toBe('DISPOSED')
+    })
+
+    it('reports a request after a lost connection as transient', async () => {
+      transport.closeCallbacks[0]()
+
+      const error = (await mux
+        .request('fs.readDir', { path: '/home/me' })
+        .catch((e: unknown) => e)) as Error & { code?: string }
+      expect(error.message).toBe('SSH connection lost, reconnecting...')
+      expect(error.code).toBe('CONNECTION_LOST')
+    })
+
+    it('reports a settled notify after a lost connection as transient', () => {
+      transport.closeCallbacks[0]()
+
+      const settled = vi.fn()
+      mux.notifyWithSettlement('pty.data', { id: 'pty-1', data: 'x' }, settled)
+
+      expect(settled).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          message: 'SSH connection lost, reconnecting...',
+          code: 'CONNECTION_LOST'
+        })
+      })
+    })
+
+    it('fires a dispose handler registered after dispose with the recorded reason', () => {
+      mux.dispose('connection_lost')
+
+      const disposeHandler = vi.fn()
+      mux.onDispose(disposeHandler)
+
+      expect(disposeHandler).toHaveBeenCalledWith('connection_lost')
+      expect(disposeHandler).toHaveBeenCalledTimes(1)
+    })
+
     it('ignores notify after dispose', () => {
       mux.dispose()
       mux.notify('pty.data', { id: 'pty-1', data: 'x' })

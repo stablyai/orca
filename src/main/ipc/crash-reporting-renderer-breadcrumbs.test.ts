@@ -316,6 +316,26 @@ describe('renderer breadcrumb IPC routing', () => {
     ])
   })
 
+  it('coalesces atlas resets per trigger reason', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_webgl_diagnostic',
+      data: { kind: 'webgl-atlas-reset', reason: 'terminal-output' }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_webgl_diagnostic',
+      data: { kind: 'webgl-atlas-reset', reason: 'system-resume' }
+    })
+
+    expect(
+      recordCoalescedCrashBreadcrumbMock.mock.calls.map(
+        (call) => (call[0] as { coalesceKey: string }).coalesceKey
+      )
+    ).toEqual([
+      'terminal_webgl_diagnostic:webgl-atlas-reset:terminal-output',
+      'terminal_webgl_diagnostic:webgl-atlas-reset:system-resume'
+    ])
+  })
+
   // Why: the renderer guard is once per tab-id/verdict, so one stale worktree
   // map can emit enough crumbs to evict the pre-crash trail.
   it('coalesces duplicate-tab-owner notices across tabs', () => {

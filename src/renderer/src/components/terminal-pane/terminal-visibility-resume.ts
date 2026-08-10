@@ -15,6 +15,8 @@ import {
 } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 import { focusActivePane } from './pane-helpers'
 import { scheduleTabRevealWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
+import { flushDeferredPaneMetricOptionsIfMeasurable } from '@/lib/pane-manager/pane-fit'
+import { repairPaneWebglCanvasDprMismatch } from '@/lib/pane-manager/terminal-canvas-dpr-repair'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024
@@ -72,6 +74,15 @@ export function resumeTerminalVisibility({
   captureViewportPositions(!wasVisible)
   withSuppressedScrollTracking(() => {
     if (shouldUseLightTabResume) {
+      let flushedDeferredMetrics = false
+      for (const pane of manager.getPanes()) {
+        if (flushDeferredPaneMetricOptionsIfMeasurable(pane)) {
+          flushedDeferredMetrics = true
+        }
+        // Why here: the light path neither recreates WebGL nor fits, so a dpr
+        // change that landed while this tab was hidden has no other repair point.
+        repairPaneWebglCanvasDprMismatch(pane)
+      }
       // Why: intra-worktree tab switches only toggle the overlay. Keeping
       // synchronous drain and atlas rebuilds off this path avoids racing the
       // overlay's delayed geometry fit. Still request hidden-output recovery:
@@ -81,17 +92,24 @@ export function resumeTerminalVisibility({
       // — a background agent streaming in another pane must not defer this tab's
       // atlas rebuild.
       scheduleTabRevealWebglAtlasRecovery()
+      if (flushedDeferredMetrics) {
+        // Why: the light path normally skips fitting, but flushed metrics changed
+        // cell size — refit so cols/rows match before the overlay settles.
+        manager.fitAllRevealedPanes()
+      }
       if (isActive) {
         focusActivePane(manager)
       }
     } else {
+      // fitAllRevealedPanes flushes after WebGL reattaches, avoiding a redundant
+      // full refresh in the suspended DOM renderer while preserving first paint.
       resumeTerminalVisibilityHeavy(manager, isActive)
     }
     enforceTerminalViewportIntents(manager)
     if (!shouldUseLightTabResume) {
       // Why: this clear wipes the glyph atlas shared with other same-config
       // terminals; refresh after reset so rebuilt atlases repaint from xterm.
-      resetAndRefreshAllTerminalWebglAtlases()
+      resetAndRefreshAllTerminalWebglAtlases('visibility-resume')
     }
     // Why: the synchronous recovery above can fire before the revealed pane is
     // attached and laid out. Follow up after layout with one shared-atlas-safe
@@ -168,7 +186,7 @@ export function recoverVisibleTerminalWindowWake({
     // every same-config pane re-rasterize at once, and xterm's atlas page-merge
     // clear-model flag is consumed by one renderer (xterm.js #4480), so panes
     // that lose that race paint garbled glyphs mid-stream.
-    resetAndRefreshAllTerminalWebglAtlases()
+    resetAndRefreshAllTerminalWebglAtlases('system-resume')
     manager.scheduleRevealRepaint()
   } else {
     // Why: the reveal repaint runs a shared-atlas reset, so a plain refocus

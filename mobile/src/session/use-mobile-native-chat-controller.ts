@@ -1,98 +1,28 @@
-import {
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  type Dispatch,
-  type MutableRefObject,
-  type SetStateAction
-} from 'react'
+import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
-import {
-  parseAskFromStatus,
-  type AskAnswerSelection,
-  type AskPrompt
-} from './mobile-native-chat-ask'
 import { type MobileNativeChatTab, resolveMobileNativeChat } from './mobile-native-chat-eligibility'
-import { detectAgentPermission } from './mobile-native-chat-permission'
-import { parseAgentQuestion } from './mobile-native-chat-question'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
 import { useMobileNativeChatCancelAsk } from './use-mobile-native-chat-cancel-ask'
-import {
-  useMobileNativeChatDrafts,
-  type MobileNativeChatPendingMessage
-} from './use-mobile-native-chat-drafts'
+import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileNativeChatSessionOptions } from './use-mobile-native-chat-session-options'
-import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
+import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
+
+export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
 const NATIVE_CHAT_STREAM_THROTTLE_MS = 50
-
-export type MobileNativeChatController = {
-  /** Whether a tab's effective view is chat (per-tab override, else the default). */
-  isTabChatView: (tabId: string) => boolean
-  toggleTabChatView: (tabId: string) => void
-  showNativeChat: boolean
-  showNativeChatRef: MutableRefObject<boolean>
-  /** Resolved agent for the active chat tab (names the empty-state copy). */
-  nativeChatAgent: string | null
-  chatComposerText: string
-  setChatComposerText: Dispatch<SetStateAction<string>>
-  chatPending: MobileNativeChatPendingMessage[]
-  nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
-  nativeChatAgentWorking: boolean
-  nativeChatStreamingText?: string
-  /** Agent mid-turn, regardless of whether chat is the visible view. */
-  nativeChatStreamLive: boolean
-  /** Host/workspace/tab/session scope for stateful streaming suppression. */
-  nativeChatStreamScopeKey: string
-  nativeChatPermission: ReturnType<typeof detectAgentPermission>
-  nativeChatQuestion: ReturnType<typeof parseAgentQuestion>
-  /** The pending ask, already null while dismissed (dismissal lives here so it
-   *  survives the chat-view subtree unmounting on a view toggle). */
-  nativeChatAsk: ReturnType<typeof parseAskFromStatus>
-  /** Stable key for the current ask card (keys the card component). */
-  nativeChatAskKey: string | null
-  /** Hide the current ask until a genuinely different question arrives. */
-  dismissNativeChatAsk: () => void
-  handleNativeChatAnswerAsk: (
-    prompt: AskPrompt,
-    selections: AskAnswerSelection[]
-  ) => Promise<boolean>
-  handleNativeChatCancelAsk: () => Promise<boolean>
-  handleNativeChatRespondPermission: (text: string) => Promise<boolean>
-  handleNativeChatStop: () => void
-  nativeChatFilePaths: string[]
-  loadNativeChatFiles: (query: string) => void
-  handleNativeChatQuestionAnswer: (text: string) => Promise<boolean>
-  handleNativeChatSend: (text: string, images?: string[]) => Promise<boolean>
-  /** Outcome-preserving send: callers that pasted terminal input beforehand
-   *  (image sends) must see 'unknown' to heal a possibly-orphaned paste. Such a
-   *  caller passes its own `deadline` so the paste it already spent and this text
-   *  body share one budget instead of holding the composer for two. */
-  handleNativeChatSendWithOutcome: (
-    text: string,
-    images?: string[],
-    deadline?: number
-  ) => Promise<MobileNativeChatSendOutcome>
-  /** Launch-context text still parked on the agent's TUI input line, or null.
-   *  Image sends read it to size their leading clear (one Ctrl+U per line). */
-  readSeededLaunchDraft: () => string | null
-  /** Model/session-option pickers for the composer, or null when the active
-   *  agent has no session-option catalog. */
-  nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
-}
 
 /** Owns mobile native-chat state and teardown outside the already dense session
  *  route. The route remains responsible only for choosing and rendering the view. */
@@ -152,6 +82,7 @@ export function useMobileNativeChatController(args: {
 
   const nativeChatSession = useMobileNativeChatSession({
     client,
+    sourceIdentity: encodeNativeChatTranscriptIdentity([hostId, worktreeId]),
     agent: activeChatResolution?.agent ?? null,
     sessionId: activeChatSessionId,
     transcriptPath: activeChatResolution?.transcriptPath ?? null
@@ -160,6 +91,7 @@ export function useMobileNativeChatController(args: {
     composerText: chatComposerText,
     setComposerText: setChatComposerText,
     pending: chatPending,
+    imagePreviewsByMessageId: chatImagePreviewsByMessageId,
     captureSendOrigin,
     readSeededLaunchDraft,
     readSeededLaunchDraftSeed,
@@ -201,7 +133,8 @@ export function useMobileNativeChatController(args: {
   } = useMobileNativeChatPrompts({
     enabled: activeChatResolution != null,
     status: nativeChatStatus,
-    messages: nativeChatSession.messages
+    messages: nativeChatSession.messages,
+    transcriptLoading: nativeChatSession.transcriptLoading
   })
   // A never-read transcript cannot prove that a dismissed prompt cleared.
   const nativeChatTranscriptSettled =
@@ -295,8 +228,7 @@ export function useMobileNativeChatController(args: {
     onSendError
   })
 
-  // A Codex-style model change happens in the agent's own TUI picker — bring
-  // the terminal view forward so the dispatched `/model` selector is visible.
+  // Bring the terminal view forward when an agent-owned picker command is used.
   const handleAgentPicker = useCallback(() => {
     if (activeSessionTabId && isTabChatView(activeSessionTabId)) {
       toggleTabChatView(activeSessionTabId)
@@ -327,6 +259,7 @@ export function useMobileNativeChatController(args: {
     chatComposerText,
     setChatComposerText,
     chatPending,
+    chatImagePreviewsByMessageId,
     nativeChatSession,
     nativeChatAgentWorking,
     nativeChatStreamingText,

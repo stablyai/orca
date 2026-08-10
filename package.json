@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.169-rc.0",
+  "version": "1.4.178-rc.2",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -109,6 +109,8 @@
     "bench:macos-computer-helper-owner-loss": "node config/scripts/macos-computer-helper-owner-loss-benchmark.mjs",
     "bench:startup": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/startup-time-bench.mjs",
     "bench:daemon-coldstart": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/daemon-coldstart-bench.mjs",
+    "bench:wsl-hook-relay-reattach": "pnpm run build:relay && node config/scripts/wsl-hook-relay-reattach-benchmark.mjs",
+    "bench:wsl-git-shell": "node config/scripts/wsl-git-shell-benchmark.mjs",
     "bench:hang-watchdog-memory": "pnpm run ensure:electron-runtime && node config/scripts/hang-watchdog-memory-benchmark.mjs",
     "bench:main-thread-jank": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/main-thread-jank-bench.mjs",
     "bench:worktree-deletion": "node tests/tools/benchmarks/worktree-deletion-dev-bench.mjs",
@@ -136,6 +138,7 @@
     "jsonc-parser": "^3.3.1",
     "node-pty": "^1.1.0",
     "posthog-node": "^5.33.3",
+    "psl": "1.15.0",
     "qrcode": "^1.5.4",
     "react-i18next": "^17.0.8",
     "serve-sim": "^0.1.40",
@@ -193,7 +196,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.13",
     "electron": "^43.1.0",
     "electron-builder": "^26.15.3",
     "electron-builder-squirrel-windows": "^26.15.3",
@@ -209,13 +212,13 @@
     "lowlight": "^3.3.0",
     "lucide-react": "^0.577.0",
     "marked": "^17.0.1",
-    "mermaid": "^11.16.0",
+    "mermaid": "^11.16.1",
     "monaco-editor": "^0.55.1",
     "oxfmt": "^0.52.0",
     "oxlint": "^1.75.0",
     "oxlint-plugin-react-doctor": "0.9.1",
     "oxlint-tsgolint": "7.0.2001",
-    "pdfjs-dist": "^5.7.284",
+    "pdfjs-dist": "^6.2.108",
     "pngjs": "^7.0.0",
     "radix-ui": "^1.6.2",
     "react": "^19.2.7",
@@ -272,8 +275,7 @@
   "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a",
   "pnpm": {
     "overrides": {
-      "@modelcontextprotocol/sdk>@hono/node-server": "2.0.10",
-      "monaco-editor>dompurify": "3.4.12"
+      "monaco-editor>dompurify": "3.4.13"
     },
     "supportedArchitectures": {
       "os": [

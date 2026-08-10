@@ -1,5 +1,5 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
-import { isTerminalHttpLinkActivation } from './terminal-http-link-activation'
+import { isTerminalLinkDirectActivation } from './terminal-link-activation'
 
 const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
 
@@ -31,17 +31,12 @@ export function installTerminalLinkPtyMouseSuppression(
     queueMicrotask(restore)
   }
   const handleMouseDown = (event: MouseEvent): void => {
-    if (
-      event.button !== 0 ||
-      !isTerminalHttpLinkActivation(event) ||
-      !shouldSuppressMouseEvent(event)
-    ) {
+    if (!isTerminalLinkDirectActivation(event) || !shouldSuppressMouseEvent(event)) {
       return
     }
     restore()
     previousMouseEventsRequireAlt = Boolean(terminal.options.mouseEventsRequireAlt)
-    // Why: xterm otherwise forwards the same Cmd/Ctrl link gesture to a mouse-aware
-    // TUI, letting the terminal and the child process both open the URL.
+    // Why: an Orca-owned link gesture must not also reach a mouse-aware child TUI.
     terminal.options.mouseEventsRequireAlt = true
     ownerDocument?.addEventListener('mouseup', queueRestore)
     ownerWindow?.addEventListener('blur', restore)

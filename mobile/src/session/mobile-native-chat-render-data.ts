@@ -3,10 +3,10 @@ import {
   formatNativeChatEmptyStateCopy,
   type NativeChatEmptyStateCopy
 } from '../../../src/shared/native-chat-empty-state'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { foldToolMessages } from './mobile-native-chat-blocks'
+import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
+import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
+import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { normalizeImageTranscriptMessages } from './mobile-native-chat-image-transcript-markers'
-import { stripNoiseMessages } from './mobile-native-chat-noise'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 /** The centered empty-state copy for a chat with no messages, mirroring the
@@ -55,15 +55,37 @@ export function foldMobileNativeChatMessages(messages: NativeChatMessage[]): Nat
 export function buildMobileNativeChatTransientData({
   folded,
   streaming,
-  pending
+  pending,
+  imagePreviewsByMessageId
 }: {
   folded: NativeChatMessage[]
   /** Streaming bubble text, already gated by `deriveMobileNativeChatStreaming`. */
   streaming: string | null
   pending: MobileNativeChatPendingItem[]
+  imagePreviewsByMessageId?: Record<string, string[]>
 }): { folded: NativeChatMessage[]; streaming: string | null; data: NativeChatMessage[] } {
+  const renderedFolded = folded.map((message) => {
+    const previews = imagePreviewsByMessageId?.[message.id]
+    if (message.role !== 'user' || !previews?.length) {
+      return message
+    }
+    let previewIndex = 0
+    const blocks = message.blocks.map((block) => {
+      if (!isImageRefBlock(block)) {
+        return block
+      }
+      const url = previews[previewIndex]
+      previewIndex += 1
+      return url ? { ...block, url } : block
+    })
+    while (previewIndex < previews.length) {
+      blocks.push({ type: 'image-ref', url: previews[previewIndex] })
+      previewIndex += 1
+    }
+    return { ...message, blocks }
+  })
   const data: NativeChatMessage[] = [
-    ...folded,
+    ...renderedFolded,
     ...(streaming
       ? [
           {
@@ -88,5 +110,5 @@ export function buildMobileNativeChatTransientData({
       source: 'transcript' as const
     }))
   ]
-  return { folded, streaming, data }
+  return { folded: renderedFolded, streaming, data }
 }

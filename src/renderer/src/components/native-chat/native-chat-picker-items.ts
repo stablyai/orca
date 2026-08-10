@@ -4,6 +4,7 @@ import {
   isSafeDisplayCharacter,
   stripUnsafeDisplayCharacters
 } from '../../../../shared/skill-display-text'
+import { compareBaseSensitivityLocaleText } from '@/lib/locale-text-collators'
 
 // Send classification lives in shared so mobile gates optimistic echoes with
 // the same rules; re-exported here to keep renderer import paths stable.
@@ -191,7 +192,7 @@ function sanitizePickerText(value: string, maxLength: number): string {
 function compareDiscoveredSkills(a: DiscoveredSkill, b: DiscoveredSkill): number {
   return (
     SCOPE_PRIORITY[a.sourceKind] - SCOPE_PRIORITY[b.sourceKind] ||
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
+    compareBaseSensitivityLocaleText(a.name, b.name) ||
     a.skillFilePath.localeCompare(b.skillFilePath)
   )
 }
@@ -202,7 +203,7 @@ function comparePickerSkills(
 ): number {
   return (
     SCOPE_PRIORITY[a.sources[0].sourceKind] - SCOPE_PRIORITY[b.sources[0].sourceKind] ||
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    compareBaseSensitivityLocaleText(a.name, b.name)
   )
 }
 

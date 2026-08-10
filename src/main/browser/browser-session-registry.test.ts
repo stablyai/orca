@@ -393,13 +393,89 @@ describe('BrowserSessionRegistry', () => {
       expect(modified['sec-ch-ua']).not.toContain('Microsoft Edge')
     })
 
-    it('does not register handler for non-Chrome UA', () => {
+    it('registers handler even for non-Chrome UA but leaves sec-ch-ua untouched off auth hosts', () => {
       const onBeforeSendHeaders = vi.fn()
       const mockSess = { webRequest: { onBeforeSendHeaders } } as never
 
+      // Why: the Google-auth Firefox switch must install regardless of the base UA.
       setupClientHintsOverride(mockSess, 'Mozilla/5.0 (compatible; MSIE 10.0)')
 
-      expect(onBeforeSendHeaders).not.toHaveBeenCalled()
+      expect(onBeforeSendHeaders).toHaveBeenCalledWith(
+        { urls: ['https://*/*'] },
+        expect.any(Function)
+      )
+      const callback = vi.fn()
+      const listener = onBeforeSendHeaders.mock.calls[0][1]
+      listener({ url: 'https://example.com/', requestHeaders: { 'sec-ch-ua': 'old' } }, callback)
+      expect(callback.mock.calls[0][0].requestHeaders['sec-ch-ua']).toBe('old')
+    })
+
+    it('presents a Firefox UA and strips client hints on Google auth hosts', () => {
+      const onBeforeSendHeaders = vi.fn()
+      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
+      setupClientHintsOverride(
+        mockSess,
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36'
+      )
+
+      const callback = vi.fn()
+      const listener = onBeforeSendHeaders.mock.calls[0][1]
+      listener(
+        {
+          url: 'https://accounts.google.com/v3/signin/identifier',
+          requestHeaders: {
+            'User-Agent': 'Chrome/147',
+            'sec-ch-ua': 'old',
+            'sec-ch-ua-full-version-list': 'old',
+            'sec-ch-ua-platform': '"macOS"'
+          }
+        },
+        callback
+      )
+      const modified = callback.mock.calls[0][0].requestHeaders
+      expect(modified['User-Agent']).toMatch(/Firefox\/\d/)
+      expect(modified['User-Agent']).not.toContain('Chrome')
+      expect(modified['sec-ch-ua']).toBeUndefined()
+      expect(modified['sec-ch-ua-full-version-list']).toBeUndefined()
+      expect(modified['sec-ch-ua-platform']).toBeUndefined()
+    })
+
+    it('keeps Chrome client hints on Google app subdomains (not auth hosts)', () => {
+      const onBeforeSendHeaders = vi.fn()
+      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
+      setupClientHintsOverride(
+        mockSess,
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36'
+      )
+
+      const callback = vi.fn()
+      const listener = onBeforeSendHeaders.mock.calls[0][1]
+      listener(
+        { url: 'https://myaccount.google.com/', requestHeaders: { 'sec-ch-ua': 'old' } },
+        callback
+      )
+      expect(callback.mock.calls[0][0].requestHeaders['sec-ch-ua']).toContain('Google Chrome')
+    })
+
+    it('keeps an imported native UA on auth hosts while aligning its Chrome hints', () => {
+      const onBeforeSendHeaders = vi.fn()
+      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
+      const importedUa =
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36'
+      setupClientHintsOverride(mockSess, importedUa, { googleAuthOverride: false })
+
+      const callback = vi.fn()
+      const listener = onBeforeSendHeaders.mock.calls[0][1]
+      listener(
+        {
+          url: 'https://accounts.google.com/v3/signin/identifier',
+          requestHeaders: { 'User-Agent': importedUa, 'sec-ch-ua': 'old' }
+        },
+        callback
+      )
+      const modified = callback.mock.calls[0][0].requestHeaders
+      expect(modified['User-Agent']).toBe(importedUa)
+      expect(modified['sec-ch-ua']).toContain('Google Chrome')
     })
 
     it('leaves non-Client-Hints headers unchanged', () => {

@@ -81,7 +81,7 @@ describe('mobile session route', () => {
       name: 'Fix #1'
     })
 
-    navigateToHostStackRoute(harness.navigation, { push }, 'host/one', target)
+    navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', target)
 
     expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()

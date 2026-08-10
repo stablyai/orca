@@ -85,8 +85,12 @@ const AGENT_HOOK_JSON_STRUCTURE_LIMITS = {
 } as const
 
 function parseAgentHookJson(content: string): unknown {
-  assertJsonTextStructureWithinLimits(content, AGENT_HOOK_JSON_STRUCTURE_LIMITS)
-  return JSON.parse(content) as unknown
+  // Why: Cursor on Windows writes UTF-8-with-BOM to the hook's stdin and `JSON.parse` rejects U+FEFF,
+  // so the whole event was dropped. Strip exactly one leading BOM — not a trim — to keep every other
+  // malformed payload rejected as before.
+  const normalizedContent = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
+  assertJsonTextStructureWithinLimits(normalizedContent, AGENT_HOOK_JSON_STRUCTURE_LIMITS)
+  return JSON.parse(normalizedContent) as unknown
 }
 
 /** Bound the warn-once Sets so a client varying `version`/`env` per request can't grow them unbounded. */
@@ -2039,7 +2043,7 @@ function extractCopilotToolFields(
 function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
-  agentKind: 'pi' | 'omp'
+  agentKind: 'pi' | 'omp' | 'prime-agent'
 ): ToolSnapshot {
   if (
     eventName === 'tool_call' ||
@@ -2405,9 +2409,11 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of falling through to false.
   switch (source) {
     case 'claude':
-    // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
-    // falls through
+      // Why: SessionStart lands an idle row (STA-3386) and must also drop stale
+      // tool/prompt caches left by the pane's previous session.
+      return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'kimi':
+      // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
       return eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
@@ -2424,6 +2430,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
     case 'pi':
     case 'omp':
+    case 'prime-agent':
       return eventName === 'before_agent_start'
     case 'droid':
       return eventName === 'UserPromptSubmit'
@@ -2518,6 +2525,7 @@ function extractToolFields(
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
     case 'omp':
+    case 'prime-agent':
       return extractPiToolFields(eventName, hookPayload, source)
     case 'droid':
       return extractDroidToolFields(eventName, hookPayload)
@@ -2739,6 +2747,35 @@ function normalizeClaudeEvent(
   ) {
     return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
+  if (eventName === 'SessionStart') {
+    // Why: SessionStart is the only signal a resumed session emits before its first prompt
+    // (STA-3386). Land it as a session-boundary 'done' row: 'working' would show a phantom
+    // spinner on an idle TUI (why Devin/Pi/Grok drop the event), and the sessionBoundary
+    // flag keeps completion-reactive consumers (notifications, automation runs) out of it.
+    const sessionStartSource = hookPayload['source']
+    if (
+      eventAgentId !== undefined ||
+      (sessionStartSource !== 'startup' &&
+        sessionStartSource !== 'resume' &&
+        sessionStartSource !== 'clear')
+    ) {
+      // Why: allowlist idle boundaries and fail closed — a compact restart (or any unknown
+      // source) fires mid-turn, and a child-attributed SessionStart must not flip the lead's
+      // live turn to an idle row.
+      return null
+    }
+    // Why: a new process owns the pane; stale children/tasks/crons must not gate the
+    // fresh session's idle row back up to 'working' (same reset Codex does on SessionStart).
+    state.claudeSubagentRosterByPaneKey.delete(paneKey)
+    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+    state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done' })
+    return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
+      stateName: 'done',
+      updateToolSnapshot: true,
+      sessionBoundary: true
+    })
+  }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   // Why: only a turn boundary may declare an interrupt or carry a prior one forward; any other event starts a fresh turn and drops it.
   const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
@@ -2890,7 +2927,12 @@ function buildClaudeStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: { stateName: AgentStatusState; updateToolSnapshot: boolean; interrupted?: boolean }
+  options: {
+    stateName: AgentStatusState
+    updateToolSnapshot: boolean
+    interrupted?: boolean
+    sessionBoundary?: boolean
+  }
 ): ParsedAgentStatusPayload | null {
   // Why: child-driven refreshes are roster bookkeeping, not lead tool activity; read the cached snapshot without merging so they can't clear a live AskUserQuestion card or clobber the tool preview.
   const snapshot = options.updateToolSnapshot
@@ -2913,6 +2955,7 @@ function buildClaudeStatusPayload(
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     interrupted: options.interrupted,
+    sessionBoundary: options.sessionBoundary,
     subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey))
   })
 }
@@ -3762,13 +3805,13 @@ function normalizeCopilotEvent(
 
 function normalizePiCompatibleEvent(
   state: HookListenerState,
-  agentType: 'pi' | 'omp',
+  agentType: 'pi' | 'omp' | 'prime-agent',
   eventName: unknown,
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  if (agentType === 'pi' && eventName === 'session_start') {
+  if (agentType !== 'omp' && eventName === 'session_start') {
     // Why: Pi's session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
     clearPaneTurnCacheState(state, paneKey)
     return null
@@ -4232,6 +4275,16 @@ export function normalizeHookPayload(
         hookPayloadRecord
       )
       break
+    case 'prime-agent':
+      payload = normalizePiCompatibleEvent(
+        state,
+        'prime-agent',
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
+      break
     case 'droid':
       payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
@@ -4281,12 +4334,14 @@ export function normalizeHookPayload(
 
   // Why: connectionId is null here; ingestRemote stamps it from mux identity on receive. See docs/design/agent-status-over-ssh.md §5.
   const providerSessionOnly =
-    source === 'pi' && eventName === 'session_start' && providerSession !== null
-  // Why: Pi session_start carries resume identity while idle; providerSessionOnly makes receivers discard the placeholder row.
+    (source === 'pi' || source === 'prime-agent') &&
+    eventName === 'session_start' &&
+    providerSession !== null
+  // Why: transcript session_start carries resume identity while idle; receivers discard the placeholder row.
   const transportPayload =
     payload ??
     (providerSessionOnly
-      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: 'pi' })
+      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
       : null)
   return transportPayload
     ? {
@@ -4342,6 +4397,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
   '/hook/omp': 'omp',
+  '/hook/prime-agent': 'prime-agent',
   '/hook/droid': 'droid',
   '/hook/command-code': 'command-code',
   '/hook/grok': 'grok',
