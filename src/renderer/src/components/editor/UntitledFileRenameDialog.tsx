@@ -139,10 +139,15 @@ export function UntitledFileRenameDialog({
             {translate('auto.components.editor.UntitledFileRenameDialog.674b046582', 'Save as')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
-              'auto.components.editor.UntitledFileRenameDialog.e365f3c638',
-              'Name your markdown file and pick a folder.'
-            )}
+            {isMarkdown
+              ? translate(
+                  'auto.components.editor.UntitledFileRenameDialog.e365f3c638',
+                  'Name your markdown file and pick a folder.'
+                )
+              : translate(
+                  'auto.components.editor.UntitledFileRenameDialog.02a35a6863',
+                  'Name your file and pick a folder.'
+                )}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
