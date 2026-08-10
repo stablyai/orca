@@ -10,7 +10,10 @@ const mocks = vi.hoisted(() => ({
     runtimeStatusByEnvironmentId: new Map(),
     runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
     settings: {} as Record<string, unknown>,
-    terminalLayoutsByTabId: {} as Record<string, { ptyIdsByLeafId?: Record<string, string> }>,
+    terminalLayoutsByTabId: {} as Record<
+      string,
+      { activeLeafId?: string; ptyIdsByLeafId?: Record<string, string> }
+    >,
     /** Transport ownership the park predicate compares a remote pty id's owner against. */
     worktreesByRepo: {} as Record<
       string,
@@ -74,7 +77,10 @@ vi.mock('./terminal-eviction-exempt-tabs', () => ({
 }))
 
 vi.mock('@/runtime/web-session-terminal-park-authority', () => ({
-  useWebSessionTerminalParkAuthorityRevisionKey: (_worktreeId: string, key: string) => key
+  hasWebSessionTerminalParkAuthority: ({ ptyId }: { ptyId: string }) =>
+    mocks.webMirrorAuthorityPtyIds.has(ptyId),
+  useWebSessionTerminalParkAuthorityRevisionKey: (_worktreeId: string, key: string) =>
+    `${key}:${mocks.webMirrorAuthorityRevision}`
 }))
 
 vi.mock('./terminal-parked-tab-watchers', () => ({
@@ -395,6 +401,43 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     mocks.webMirrorAuthorityRevision += 1
     act(() => rerender(stableArgs))
     expect(result.current).toEqual(new Set(['tab-1', 'tab-2']))
+  })
+
+  it('refreshes ordinary parking when exact web-mirror authority changes', () => {
+    const environmentId = 'env-owner'
+    const remotePtyIds = [`remote:${environmentId}@@term-1`, `remote:${environmentId}@@term-2`]
+    const stableArgs = {
+      ...hookArgs(false),
+      terminalTabs: [
+        { ...terminalTab('tab-1'), ptyId: remotePtyIds[0] },
+        { ...terminalTab('tab-2'), ptyId: remotePtyIds[1] }
+      ]
+    }
+    setWorktreeOwner({ hostId: 'local' })
+    mocks.storeState.runtimeStatusByEnvironmentId = new Map([
+      [environmentId, { status: { capabilities: ['terminal.paired-parking.v1'] } }]
+    ])
+    mocks.storeState.terminalLayoutsByTabId = {
+      'tab-1': { activeLeafId: '11111111-1111-4111-8111-111111111111' },
+      'tab-2': { activeLeafId: '22222222-2222-4222-8222-222222222222' }
+    }
+    mocks.webMirrorAuthorityPtyIds = new Set(remotePtyIds)
+    const { result, rerender } = renderHook(
+      (args: typeof stableArgs) => useTerminalTabColdParking(args),
+      { initialProps: stableArgs }
+    )
+    act(() => vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1))
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    mocks.webMirrorAuthorityPtyIds.clear()
+    mocks.webMirrorAuthorityRevision += 1
+    act(() => rerender(stableArgs))
+    expect(result.current).toEqual(new Set())
+
+    mocks.webMirrorAuthorityPtyIds = new Set(remotePtyIds)
+    mocks.webMirrorAuthorityRevision += 1
+    act(() => rerender(stableArgs))
+    expect(result.current).toEqual(new Set(['tab-2']))
   })
 
   // Why: resolving an exemption re-reads the store and walks the layout tree per

@@ -1,9 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { useWebSessionTerminalParkAuthorityRevisionKey } from '@/runtime/web-session-terminal-park-authority'
 import type { TerminalParkWorktreeOwner } from './terminal-park-pty-restore-eligibility'
 import {
-  selectEvictionExemptTerminalTabAuthorityEnvironmentKey,
   selectEvictionExemptTerminalTabIds,
   selectEvictionExemptTerminalTabLayoutKey
 } from './terminal-eviction-exempt-tabs'
@@ -16,19 +14,11 @@ export function useTerminalForceParkExemptTabIds(args: {
   tabs: readonly ParkableTerminalTabModel[]
   worktreeId: string
   worktreeOwner: TerminalParkWorktreeOwner
+  authorityRevisionKey: string
 }): ReadonlySet<string> {
-  const { isForceParked, tabs, worktreeId, worktreeOwner } = args
+  const { authorityRevisionKey, isForceParked, tabs, worktreeId, worktreeOwner } = args
   const layoutKey = useAppStore((state) =>
     isForceParked ? selectEvictionExemptTerminalTabLayoutKey(state, tabs) : ''
-  )
-  const authorityEnvironmentKey = useAppStore((state) =>
-    isForceParked
-      ? selectEvictionExemptTerminalTabAuthorityEnvironmentKey(state, tabs, worktreeOwner)
-      : ''
-  )
-  const authorityRevisionKey = useWebSessionTerminalParkAuthorityRevisionKey(
-    worktreeId,
-    authorityEnvironmentKey
   )
   const worktreeOwnerKey = JSON.stringify(worktreeOwner)
   return useMemo(

@@ -117,6 +117,8 @@ import {
   getTerminalParkWorktreeOwner,
   useTerminalParkWorktreeOwnerState
 } from './terminal-pane/terminal-park-worktree-owner'
+import { selectTerminalWorktreeParkAuthorityRevisionScopeKey } from './terminal-pane/terminal-park-authority-revision'
+import { useWebSessionTerminalParkAuthorityRevisionScopeKey } from '@/runtime/web-session-terminal-park-authority'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
   hasPendingRetentionSpawnWork,
@@ -335,6 +337,19 @@ function Terminal(): React.JSX.Element | null {
     () => selectPairedRuntimeParkingEnvironmentIds(runtimeStatusByEnvironmentId),
     [runtimeStatusByEnvironmentId]
   )
+  const terminalParkWorktreeIds = useMemo(
+    () => workspaceSurfaces.map((workspace) => workspace.id),
+    [workspaceSurfaces]
+  )
+  const terminalWorktreeParkAuthorityScopeKey = useAppStore((state) =>
+    selectTerminalWorktreeParkAuthorityRevisionScopeKey(
+      state,
+      terminalParkWorktreeIds,
+      tabsByWorktree
+    )
+  )
+  const terminalWorktreeParkAuthorityRevisionKey =
+    useWebSessionTerminalParkAuthorityRevisionScopeKey(terminalWorktreeParkAuthorityScopeKey)
   const terminalRetentionBudgetEnabled = useAppStore(
     (s) => s.settings?.terminalHiddenWorktreeRetentionBudget !== false
   )
@@ -1175,6 +1190,7 @@ function Terminal(): React.JSX.Element | null {
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
     terminalParkWorktreeOwnerState,
+    terminalWorktreeParkAuthorityRevisionKey,
     workspaceSurfaces
   ])
   // Why here: downloads outlive the pane-local state of hidden (unmounted)

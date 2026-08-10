@@ -5,7 +5,10 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-typ
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import {
   clearWebSessionTerminalParkAuthorityForEnvironment,
+  clearWebSessionTerminalParkAuthorityForWorktree,
   getWebSessionTerminalParkAuthorityCountForTests,
+  getWebSessionTerminalParkAuthorityRevisionKey,
+  getWebSessionTerminalParkAuthorityTrackingCountsForTests,
   hasWebSessionTerminalParkAuthority,
   replaceWebSessionTerminalParkAuthority,
   resetWebSessionTerminalParkAuthorityForTests,
@@ -119,6 +122,7 @@ describe('web session terminal park authority', () => {
     const emptyRevision = result.current
     act(() => replaceWebSessionTerminalParkAuthority(snapshot(), 'env-b'))
     expect(result.current).toBe(emptyRevision)
+    expect(getWebSessionTerminalParkAuthorityTrackingCountsForTests().revisions).toBe(0)
 
     act(() => replaceWebSessionTerminalParkAuthority(snapshot(), 'env-a'))
     const exactRevision = result.current
@@ -129,5 +133,75 @@ describe('web session terminal park authority', () => {
     act(() => replaceWebSessionTerminalParkAuthority(snapshot(), 'env-a'))
     expect(result.current).not.toBe(revokedRevision)
     unmount()
+  })
+
+  it('drops cleared session revisions back to zero', () => {
+    const { unmount } = renderHook(() =>
+      useWebSessionTerminalParkAuthorityRevisionKey(WORKTREE_ID, 'env-a')
+    )
+    act(() => replaceWebSessionTerminalParkAuthority(snapshot(), 'env-a'))
+    expect(getWebSessionTerminalParkAuthorityRevisionKey(WORKTREE_ID, ['env-a'])).not.toBe(
+      'env-a:0'
+    )
+
+    act(() => clearWebSessionTerminalParkAuthorityForEnvironment('env-a'))
+    expect(getWebSessionTerminalParkAuthorityRevisionKey(WORKTREE_ID, ['env-a'])).toBe('env-a:0')
+    unmount()
+  })
+
+  it('bounds authority tracking through every cleanup boundary', () => {
+    const { unmount } = renderHook(() =>
+      useWebSessionTerminalParkAuthorityRevisionKey(WORKTREE_ID, 'env-a')
+    )
+    expect(getWebSessionTerminalParkAuthorityTrackingCountsForTests()).toEqual({
+      authorities: 0,
+      sessions: 0,
+      revisions: 0,
+      listeners: 1,
+      listenerWorktrees: 1
+    })
+
+    act(() => replaceWebSessionTerminalParkAuthority(snapshot(), 'env-a'))
+    expect(getWebSessionTerminalParkAuthorityTrackingCountsForTests()).toEqual({
+      authorities: 1,
+      sessions: 1,
+      revisions: 1,
+      listeners: 1,
+      listenerWorktrees: 1
+    })
+
+    act(() =>
+      replaceWebSessionTerminalParkAuthority(
+        snapshot({ status: 'pending-handle', version: 2 }),
+        'env-a'
+      )
+    )
+    expect(getWebSessionTerminalParkAuthorityTrackingCountsForTests()).toEqual({
+      authorities: 0,
+      sessions: 0,
+      revisions: 0,
+      listeners: 1,
+      listenerWorktrees: 1
+    })
+
+    act(() => replaceWebSessionTerminalParkAuthority(snapshot({ version: 3 }), 'env-a'))
+    act(() => clearWebSessionTerminalParkAuthorityForWorktree('env-a', WORKTREE_ID))
+    expect(getWebSessionTerminalParkAuthorityTrackingCountsForTests().revisions).toBe(0)
+
+    act(() => replaceWebSessionTerminalParkAuthority(snapshot({ version: 4 }), 'env-a'))
+    act(() => clearWebSessionTerminalParkAuthorityForEnvironment('env-a'))
+    expect(getWebSessionTerminalParkAuthorityTrackingCountsForTests().revisions).toBe(0)
+
+    act(() => replaceWebSessionTerminalParkAuthority(snapshot({ version: 5 }), 'env-a'))
+    unmount()
+    expect(getWebSessionTerminalParkAuthorityTrackingCountsForTests()).toEqual({
+      authorities: 1,
+      sessions: 1,
+      revisions: 0,
+      listeners: 0,
+      listenerWorktrees: 0
+    })
+    clearWebSessionTerminalParkAuthorityForEnvironment('env-a')
+    expect(getWebSessionTerminalParkAuthorityTrackingCountsForTests().sessions).toBe(0)
   })
 })

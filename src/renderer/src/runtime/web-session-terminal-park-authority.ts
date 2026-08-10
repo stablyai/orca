@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
@@ -17,7 +17,7 @@ type MirrorPaneAuthority = {
 const authorityByPaneKey = new Map<string, MirrorPaneAuthority>()
 const paneKeysBySessionKey = new Map<string, Set<string>>()
 const authorityRevisionBySessionKey = new Map<string, number>()
-const authorityListenersByWorktreeId = new Map<string, Set<() => void>>()
+const authorityListenersBySessionKey = new Map<string, Set<() => void>>()
 let nextAuthorityRevision = 1
 
 function sessionKey(environmentId: string, worktreeId: string): string {
@@ -53,9 +53,23 @@ function deleteSessionAuthority(session: string): boolean {
   return Boolean(paneKeys?.size)
 }
 
-function publishSessionAuthorityRevision(environmentId: string, worktreeId: string): void {
-  authorityRevisionBySessionKey.set(sessionKey(environmentId, worktreeId), nextAuthorityRevision++)
-  for (const listener of authorityListenersByWorktreeId.get(worktreeId) ?? []) {
+function parseSessionKey(session: string): [string, string] {
+  return JSON.parse(session) as [string, string]
+}
+
+function publishSessionAuthorityChange(
+  environmentId: string,
+  worktreeId: string,
+  hasAuthority: boolean
+): void {
+  const session = sessionKey(environmentId, worktreeId)
+  const listeners = authorityListenersBySessionKey.get(session)
+  if (hasAuthority && listeners?.size) {
+    authorityRevisionBySessionKey.set(session, nextAuthorityRevision++)
+  } else {
+    authorityRevisionBySessionKey.delete(session)
+  }
+  for (const listener of listeners ?? []) {
     listener()
   }
 }
@@ -93,7 +107,7 @@ export function replaceWebSessionTerminalParkAuthority(
     paneKeysBySessionKey.set(session, paneKeys)
   }
   if (authoritySignature(paneKeys) !== priorSignature) {
-    publishSessionAuthorityRevision(environmentId, snapshot.worktree)
+    publishSessionAuthorityChange(environmentId, snapshot.worktree, paneKeys.size > 0)
   }
 }
 
@@ -119,19 +133,27 @@ export function clearWebSessionTerminalParkAuthorityForWorktree(
   worktreeId: string
 ): void {
   const session = sessionKey(environmentId, worktreeId)
-  if (deleteSessionAuthority(session)) {
-    publishSessionAuthorityRevision(environmentId, worktreeId)
+  const hadAuthority = deleteSessionAuthority(session)
+  const hadRevision = authorityRevisionBySessionKey.delete(session)
+  if (hadAuthority || hadRevision) {
+    publishSessionAuthorityChange(environmentId, worktreeId, false)
   }
 }
 
 export function clearWebSessionTerminalParkAuthorityForEnvironment(environmentId: string): void {
-  for (const session of Array.from(paneKeysBySessionKey.keys())) {
-    const parsed = JSON.parse(session) as [string, string]
+  const sessions = new Set([
+    ...paneKeysBySessionKey.keys(),
+    ...authorityRevisionBySessionKey.keys()
+  ])
+  for (const session of sessions) {
+    const parsed = parseSessionKey(session)
     if (parsed[0] !== environmentId) {
       continue
     }
-    if (deleteSessionAuthority(session)) {
-      publishSessionAuthorityRevision(parsed[0], parsed[1])
+    const hadAuthority = deleteSessionAuthority(session)
+    const hadRevision = authorityRevisionBySessionKey.delete(session)
+    if (hadAuthority || hadRevision) {
+      publishSessionAuthorityChange(parsed[0], parsed[1], false)
     }
   }
 }
@@ -148,32 +170,88 @@ export function getWebSessionTerminalParkAuthorityRevisionKey(
     .join('|')
 }
 
+type AuthorityRevisionScope = readonly (readonly [worktreeId: string, environmentIds: string[]])[]
+
+export function createWebSessionTerminalParkAuthorityRevisionScopeKey(
+  scope: AuthorityRevisionScope
+): string {
+  return JSON.stringify(scope.filter(([, environmentIds]) => environmentIds.length > 0))
+}
+
+function parseAuthorityRevisionScopeKey(scopeKey: string): AuthorityRevisionScope {
+  return scopeKey ? (JSON.parse(scopeKey) as AuthorityRevisionScope) : []
+}
+
+function seedAuthorityRevisions(scope: AuthorityRevisionScope): void {
+  for (const [worktreeId, environmentIds] of scope) {
+    for (const environmentId of environmentIds) {
+      const session = sessionKey(environmentId, worktreeId)
+      if (paneKeysBySessionKey.has(session) && !authorityRevisionBySessionKey.has(session)) {
+        authorityRevisionBySessionKey.set(session, nextAuthorityRevision++)
+      }
+    }
+  }
+}
+
+function getAuthorityRevisionScopeSnapshot(scope: AuthorityRevisionScope): string {
+  return JSON.stringify(
+    scope.flatMap(([worktreeId, environmentIds]) =>
+      environmentIds.map((environmentId) => [
+        worktreeId,
+        environmentId,
+        authorityRevisionBySessionKey.get(sessionKey(environmentId, worktreeId)) ?? 0
+      ])
+    )
+  )
+}
+
+export function useWebSessionTerminalParkAuthorityRevisionScopeKey(scopeKey: string): string {
+  const scope = useMemo(() => parseAuthorityRevisionScopeKey(scopeKey), [scopeKey])
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      if (scope.length === 0) {
+        return () => undefined
+      }
+      const sessions = new Set(
+        scope.flatMap(([worktreeId, environmentIds]) =>
+          environmentIds.map((environmentId) => sessionKey(environmentId, worktreeId))
+        )
+      )
+      for (const session of sessions) {
+        const listeners = authorityListenersBySessionKey.get(session) ?? new Set<() => void>()
+        listeners.add(listener)
+        authorityListenersBySessionKey.set(session, listeners)
+      }
+      seedAuthorityRevisions(scope)
+      return () => {
+        for (const session of sessions) {
+          const listeners = authorityListenersBySessionKey.get(session)
+          listeners?.delete(listener)
+          if (listeners?.size === 0) {
+            authorityListenersBySessionKey.delete(session)
+            authorityRevisionBySessionKey.delete(session)
+          }
+        }
+      }
+    },
+    [scope]
+  )
+  const getSnapshot = useCallback(() => getAuthorityRevisionScopeSnapshot(scope), [scope])
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
 export function useWebSessionTerminalParkAuthorityRevisionKey(
   worktreeId: string,
   environmentIdsKey: string
 ): string {
-  const subscribe = useCallback(
-    (listener: () => void) => {
-      if (!environmentIdsKey) {
-        return () => undefined
-      }
-      const listeners = authorityListenersByWorktreeId.get(worktreeId) ?? new Set<() => void>()
-      listeners.add(listener)
-      authorityListenersByWorktreeId.set(worktreeId, listeners)
-      return () => {
-        listeners.delete(listener)
-        if (listeners.size === 0) {
-          authorityListenersByWorktreeId.delete(worktreeId)
-        }
-      }
-    },
+  const scopeKey = useMemo(
+    () =>
+      createWebSessionTerminalParkAuthorityRevisionScopeKey([
+        [worktreeId, environmentIdsKey ? environmentIdsKey.split('\u0000') : []]
+      ]),
     [environmentIdsKey, worktreeId]
   )
-  const getSnapshot = useCallback(() => {
-    const environmentIds = environmentIdsKey ? environmentIdsKey.split('\u0000') : []
-    return getWebSessionTerminalParkAuthorityRevisionKey(worktreeId, environmentIds)
-  }, [environmentIdsKey, worktreeId])
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useWebSessionTerminalParkAuthorityRevisionScopeKey(scopeKey)
 }
 
 export function resetWebSessionTerminalParkAuthorityForTests(): void {
@@ -181,7 +259,7 @@ export function resetWebSessionTerminalParkAuthorityForTests(): void {
   paneKeysBySessionKey.clear()
   authorityRevisionBySessionKey.clear()
   nextAuthorityRevision = 1
-  for (const listeners of authorityListenersByWorktreeId.values()) {
+  for (const listeners of authorityListenersBySessionKey.values()) {
     for (const listener of listeners) {
       listener()
     }
@@ -190,4 +268,26 @@ export function resetWebSessionTerminalParkAuthorityForTests(): void {
 
 export function getWebSessionTerminalParkAuthorityCountForTests(): number {
   return authorityByPaneKey.size
+}
+
+export function getWebSessionTerminalParkAuthorityTrackingCountsForTests(): {
+  authorities: number
+  sessions: number
+  revisions: number
+  listeners: number
+  listenerWorktrees: number
+} {
+  let listeners = 0
+  const listenerWorktreeIds = new Set<string>()
+  for (const [session, sessionListeners] of authorityListenersBySessionKey) {
+    listeners += sessionListeners.size
+    listenerWorktreeIds.add(parseSessionKey(session)[1])
+  }
+  return {
+    authorities: authorityByPaneKey.size,
+    sessions: paneKeysBySessionKey.size,
+    revisions: authorityRevisionBySessionKey.size,
+    listeners,
+    listenerWorktrees: listenerWorktreeIds.size
+  }
 }

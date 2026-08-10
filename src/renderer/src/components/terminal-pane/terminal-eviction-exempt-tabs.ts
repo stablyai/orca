@@ -6,10 +6,10 @@
  * owner authority must stay mounted so eviction cannot orphan a shell.
  */
 import { useAppStore } from '@/store'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { isEvictionExemptTerminalPty } from './terminal-hidden-worktree-retention'
 import { getTerminalParkWorktreeOwner } from './terminal-park-worktree-owner'
 import type { TerminalParkWorktreeOwner } from './terminal-park-pty-restore-eligibility'
+import { selectTerminalParkAuthorityEnvironmentKey } from './terminal-park-authority-revision'
 import {
   resolveParkedTerminalPaneCandidates,
   type ParkableTerminalTabModel
@@ -103,22 +103,5 @@ export function selectEvictionExemptTerminalTabAuthorityEnvironmentKey(
   tabs: readonly ParkableTerminalTabModel[],
   worktreeOwner: TerminalParkWorktreeOwner
 ): string {
-  if (worktreeOwner.kind !== 'local') {
-    return ''
-  }
-  const environmentIds = new Set<string>()
-  const addPty = (ptyId: string | null | undefined): void => {
-    const environmentId = ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null
-    if (environmentId) {
-      environmentIds.add(environmentId)
-    }
-  }
-  for (const tab of tabs) {
-    addPty(tab.ptyId)
-    const ptyIdsByLeafId = state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}
-    for (const ptyId of Object.values(ptyIdsByLeafId)) {
-      addPty(ptyId)
-    }
-  }
-  return Array.from(environmentIds).sort().join('\u0000')
+  return selectTerminalParkAuthorityEnvironmentKey(state, tabs, worktreeOwner)
 }

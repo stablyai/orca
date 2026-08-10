@@ -9,10 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TerminalTab } from '../../../../shared/types'
 import { useAppStore } from '../../store'
-import {
-  findActivityTerminalPortal,
-  type ActivityTerminalPortalTarget
-} from '../activity/activity-terminal-portal'
+import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
 import { getTerminalTabColdParkRecheckDelayMs } from './terminal-cold-park-recheck-deadlines'
 import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
@@ -28,18 +25,16 @@ import {
 import { withholdUnparkableTerminalTabs } from './terminal-cold-park-withheld-tabs'
 import { getTerminalParkingPolicyOverrides } from './terminal-parking-e2e-overrides'
 import { selectSleepingRecordParkExemptTabIds } from './sleeping-record-park-exemption'
-import { canWatcherCoverParkedTerminalTab } from './terminal-parked-tab-watchers'
 import { useTerminalForceParkExemptTabIds } from './use-terminal-force-park-exempt-tabs'
+import { useTerminalParkAuthorityRevisionKey } from './terminal-park-authority-revision'
+import { selectRenderedParkedTerminalTabIds } from './terminal-rendered-parked-tab-ids'
 import {
   getTerminalParkingAssignmentsKey,
   getTerminalParkingInputsKey,
   useParkedTerminalWatcherSynchronization
 } from './use-parked-terminal-watcher-synchronization'
 
-type TerminalOverlayTabAssignment = {
-  groupId: string
-  isActiveInGroup: boolean
-}
+type TerminalOverlayTabAssignment = { groupId: string; isActiveInGroup: boolean }
 
 function haveSameTerminalTabIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
   if (left.size !== right.size) {
@@ -108,6 +103,11 @@ export function useTerminalTabColdParking(args: {
   const pairedRuntimeParkingEnvironmentIds = useMemo(
     () => selectPairedRuntimeParkingEnvironmentIds(runtimeStatusByEnvironmentId),
     [runtimeStatusByEnvironmentId]
+  )
+  const terminalParkAuthorityRevisionKey = useTerminalParkAuthorityRevisionKey(
+    worktreeId,
+    terminalTabs,
+    worktreeOwner
   )
   const sleepingAgentSessionsByPaneKey = useAppStore(
     (state) => state.sleepingAgentSessionsByPaneKey
@@ -269,6 +269,7 @@ export function useTerminalTabColdParking(args: {
     runtimeStatusByEnvironmentId,
     shouldMeasureHiddenWorktree,
     terminalParkingEnabled,
+    terminalParkAuthorityRevisionKey,
     terminalParkActiveLeafKey,
     terminalSshParkingEnabled,
     terminalTabParkingRevision,
@@ -282,69 +283,43 @@ export function useTerminalTabColdParking(args: {
     isForceParked,
     tabs: terminalTabs,
     worktreeId,
-    worktreeOwner
+    worktreeOwner,
+    authorityRevisionKey: terminalParkAuthorityRevisionKey
   })
 
   // Why: the rendered park verdict — worktree-level park (prop from
   // Terminal.tsx) or per-tab cold park, never portal-hosted tabs. Render and
   // the watcher-sync effect must share this exact set so watcher lifecycle
   // tracks the committed unmounts.
-  const parkedTerminalTabIds = useMemo(() => {
-    const parked = new Set<string>()
-    for (const terminalTab of terminalTabs) {
-      const assignment = assignments.get(terminalTab.id)
-      const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
-      const hasActivityTerminalPortal =
-        findActivityTerminalPortal(activityTerminalPortals, {
-          worktreeId,
-          tabId: terminalTab.id
-        }) !== null
-      if (
-        (coldParkTerminalPanes ||
-          (!isVisible &&
-            coldParkedTerminalTabIds.has(terminalTab.id) &&
-            // Why: a pane owning a sleeping-session record must stay mountable
-            // on an active worktree — parked it can never cold-restore, so the
-            // agent's resume strands until the user reveals the tab. Scoped to
-            // per-tab parks: the worktree-level park clears on activation.
-            !sleepingRecordOwnedTabIds.has(terminalTab.id))) &&
-        !hasActivityTerminalPortal &&
-        // Why: a force-parked worktree's eviction-exempt tabs keep their
-        // mounted panes — a remount would orphan their live pty. Scoped to
-        // force-parks: ordinary parks never contain exempt tabs (eligibility
-        // requires every tab restorable, so the memo is empty for them).
-        !evictionExemptTerminalTabIds.has(terminalTab.id) &&
-        // Why: the hidden-measuring startup probe needs mounted panes; gate
-        // here too so the reveal lands in the same render that starts it.
-        !shouldMeasureHiddenWorktree
-      ) {
-        parked.add(terminalTab.id)
-      }
-      // Why: activation-deferred tabs render no pane regardless of the park
-      // policy, so watchers must own their side effects immediately. Targeted
-      // restrictions do not enter this set or add a new eager watcher burst.
-      if (
-        activationDeferredMountTabIds?.has(terminalTab.id) &&
-        !hasActivityTerminalPortal &&
-        canWatcherCoverParkedTerminalTab(worktreeId, terminalTab)
-      ) {
-        parked.add(terminalTab.id)
-      }
-    }
-    return parked
-  }, [
-    activityTerminalPortals,
-    assignments,
-    coldParkTerminalPanes,
-    coldParkedTerminalTabIds,
-    activationDeferredMountTabIds,
-    evictionExemptTerminalTabIds,
-    isWorktreeActive,
-    shouldMeasureHiddenWorktree,
-    sleepingRecordOwnedTabIds,
-    terminalTabs,
-    worktreeId
-  ])
+  const parkedTerminalTabIds = useMemo(
+    () =>
+      selectRenderedParkedTerminalTabIds({
+        worktreeId,
+        terminalTabs,
+        assignments,
+        isWorktreeActive,
+        coldParkTerminalPanes,
+        coldParkedTerminalTabIds,
+        sleepingRecordOwnedTabIds,
+        evictionExemptTerminalTabIds,
+        shouldMeasureHiddenWorktree,
+        activityTerminalPortals,
+        activationDeferredMountTabIds
+      }),
+    [
+      activityTerminalPortals,
+      assignments,
+      coldParkTerminalPanes,
+      coldParkedTerminalTabIds,
+      activationDeferredMountTabIds,
+      evictionExemptTerminalTabIds,
+      isWorktreeActive,
+      shouldMeasureHiddenWorktree,
+      sleepingRecordOwnedTabIds,
+      terminalTabs,
+      worktreeId
+    ]
+  )
 
   // Why: observation only — records whether the *rendered* park verdict churns,
   // so a crash bundle can confirm or refute a park-flip update loop. Watching
