@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   terminalProps: [] as {
     command: string
     description: string
+    shellOverride?: string
     onTerminalExit?: () => void
     onCommandFinished?: (bestEffortExitCode: number | null) => void
   }[],
@@ -46,6 +47,7 @@ vi.mock('../onboarding/OnboardingInlineCommandTerminal', () => ({
   OnboardingInlineCommandTerminal: (props: {
     command: string
     description: string
+    shellOverride?: string
     onTerminalExit?: () => void
     onCommandFinished?: (bestEffortExitCode: number | null) => void
   }) => {
@@ -434,6 +436,32 @@ describe('AgentSkillSetupPanel', () => {
     expect(container?.textContent).toContain(INSTALL_COMMAND)
     expect(container?.textContent).not.toContain(UPDATE_COMMAND)
     expect(mocks.terminalProps.at(-1)).toMatchObject({ command: INSTALL_COMMAND })
+  })
+
+  it('keeps an open terminal on the WSL runtime captured when it opened', async () => {
+    await renderInteractivePanel({
+      terminalShellOverride: 'powershell.exe',
+      terminalRuntime: { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' }
+    })
+    await clickButton('Install')
+    const openedCommand = mocks.terminalProps.at(-1)?.command
+
+    await rerenderInteractivePanel({
+      terminalShellOverride: 'powershell.exe',
+      terminalRuntime: { runtime: 'wsl', wslDistro: 'Fedora', label: 'WSL Fedora' }
+    })
+
+    expect(mocks.terminalProps.at(-1)?.command).toBe(openedCommand)
+    expect(openedCommand).toContain("wsl.exe -d 'Ubuntu'")
+
+    await rerenderInteractivePanel({
+      terminalRuntime: { runtime: 'host', label: 'Windows' }
+    })
+
+    expect(mocks.terminalProps.at(-1)).toMatchObject({
+      command: openedCommand,
+      shellOverride: 'powershell.exe'
+    })
   })
 
   it('falls back to the install command for installed callers without installedCommand', async () => {
