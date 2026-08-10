@@ -12,6 +12,7 @@ vi.mock('node:child_process', () => ({
 
 import {
   __resetPersistedWindowsPathCacheForTests,
+  invalidatePersistedWindowsPathCache,
   mergePersistedWindowsPath,
   mergePersistedWindowsPathAsync,
   readPersistedWindowsPathSegments,
@@ -103,6 +104,31 @@ describe('readPersistedWindowsPathSegments', () => {
         'C:\\User',
         'C:\\Program Files\\GitHub CLI'
       ])
+      expect(defaultExecFileSyncMock).toHaveBeenCalledTimes(4)
+    } finally {
+      __resetPersistedWindowsPathCacheForTests()
+      defaultExecFileSyncMock.mockReset()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('invalidates the cache after Windows reports an environment change', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    defaultExecFileSyncMock
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\OldMachine\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\OldUser\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\NewMachine\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\NewUser\r\n')
+    __resetPersistedWindowsPathCacheForTests()
+
+    try {
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\OldMachine', 'C:\\OldUser'])
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\OldMachine', 'C:\\OldUser'])
+
+      invalidatePersistedWindowsPathCache()
+
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\NewMachine', 'C:\\NewUser'])
       expect(defaultExecFileSyncMock).toHaveBeenCalledTimes(4)
     } finally {
       __resetPersistedWindowsPathCacheForTests()
@@ -240,6 +266,37 @@ describe('readPersistedWindowsPathSegments', () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
+
+  it('does not let an invalidated asynchronous read repopulate the cache', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const callbacks: ExecCallback[] = []
+    defaultExecFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecCallback) => {
+        callbacks.push(callback)
+        return {} as never
+      }
+    )
+    __resetPersistedWindowsPathCacheForTests()
+
+    try {
+      const staleRead = readPersistedWindowsPathSegmentsAsync()
+      invalidatePersistedWindowsPathCache()
+      callbacks[0]?.(null, '    Path    REG_SZ    C:\\OldMachine\r\n', '')
+      callbacks[1]?.(null, '    Path    REG_SZ    C:\\OldUser\r\n', '')
+      await expect(staleRead).resolves.toEqual(['C:\\OldMachine', 'C:\\OldUser'])
+
+      const freshRead = readPersistedWindowsPathSegmentsAsync()
+      callbacks[2]?.(null, '    Path    REG_SZ    C:\\NewMachine\r\n', '')
+      callbacks[3]?.(null, '    Path    REG_SZ    C:\\NewUser\r\n', '')
+      await expect(freshRead).resolves.toEqual(['C:\\NewMachine', 'C:\\NewUser'])
+      expect(defaultExecFileMock).toHaveBeenCalledTimes(4)
+    } finally {
+      __resetPersistedWindowsPathCacheForTests()
+      defaultExecFileMock.mockReset()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
 })
 
 describe('mergePersistedWindowsPath', () => {
@@ -255,7 +312,7 @@ describe('mergePersistedWindowsPath', () => {
     expect(env.Path).toBe('C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows')
   })
 
-  it('appends missing persisted segments without reordering the inherited PATH', () => {
+  it('adopts persisted machine and user PATH ordering', () => {
     const execFileSync = vi
       .fn()
       .mockReturnValueOnce(
@@ -279,7 +336,7 @@ describe('mergePersistedWindowsPath', () => {
     mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
 
     expect(env.Path).toBe(
-      'C:\\Existing;C:\\Windows\\System32;C:\\Users\\me\\AppData\\Local\\Orca\\bin'
+      'C:\\Windows\\System32;C:\\Existing;C:\\Users\\me\\AppData\\Local\\Orca\\bin'
     )
   })
 
@@ -325,6 +382,73 @@ describe('mergePersistedWindowsPath', () => {
     })
 
     expect(env).toEqual({ Path: 'C:\\Root\\Live;C:\\Machine;C:\\User' })
+  })
+
+  it('stops an inherited WindowsApps alias from shadowing a newly installed Python', () => {
+    const python = 'C:\\Users\\me\\AppData\\Local\\Programs\\Python\\Python314\\'
+    const scripts = `${python}Scripts\\`
+    const windowsApps = 'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps'
+    const execFileSync = vi
+      .fn()
+      .mockReturnValueOnce('    Path    REG_EXPAND_SZ    C:\\Windows\\system32;C:\\Windows\r\n')
+      .mockReturnValueOnce(`    Path    REG_EXPAND_SZ    ${python};${scripts};${windowsApps}\r\n`)
+    const env = { Path: `C:\\Windows\\system32;C:\\Windows;${windowsApps}` }
+
+    mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
+
+    const segments = env.Path.split(';')
+    expect(segments.indexOf(python)).toBeLessThan(segments.indexOf(windowsApps))
+    expect(env.Path).toBe(`C:\\Windows\\system32;C:\\Windows;${python};${scripts};${windowsApps}`)
+  })
+
+  it('keeps injected entries ahead of the persisted PATH', () => {
+    const injected = 'C:\\Users\\me\\AppData\\Local\\Orca\\resources\\bin'
+    const python = 'C:\\Users\\me\\AppData\\Local\\Programs\\Python\\Python314\\'
+    const windowsApps = 'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps'
+    const execFileSync = vi
+      .fn()
+      .mockReturnValueOnce('    Path    REG_EXPAND_SZ    C:\\Windows\\system32\r\n')
+      .mockReturnValueOnce(`    Path    REG_EXPAND_SZ    ${python};${windowsApps}\r\n`)
+    const env = { Path: `${injected};C:\\Windows\\system32;${windowsApps}` }
+
+    mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
+
+    expect(env.Path).toBe(`${injected};C:\\Windows\\system32;${python};${windowsApps}`)
+  })
+
+  it('leaves the inherited PATH untouched when both registry reads are blocked', () => {
+    const execFileSync = vi.fn().mockImplementation(() => {
+      throw new Error('ERROR: Access is denied.')
+    })
+    const env = { Path: 'C:\\Windows\\system32;C:\\Existing' }
+
+    mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
+
+    expect(env.Path).toBe('C:\\Windows\\system32;C:\\Existing')
+  })
+
+  it('deduplicates segments that differ only by trailing separators', () => {
+    const execFileSync = vi
+      .fn()
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\Tools\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    \r\n')
+    const env = { Path: 'C:\\Tools\\' }
+
+    mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
+
+    expect(env.Path.split(';')).toEqual(['C:\\Tools'])
+  })
+
+  it('canonicalizes drive-root slash style and repetition for comparison', () => {
+    const execFileSync = vi
+      .fn()
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\\\\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    \r\n')
+    const env = { Path: 'C:/' }
+
+    mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
+
+    expect(env.Path.split(';')).toEqual(['C:\\\\'])
   })
 })
 
