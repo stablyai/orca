@@ -39,8 +39,11 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['repo', 'add'],
     summary: 'Add a project to Orca by filesystem path',
-    usage: 'orca repo add --path <path> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'path']
+    usage: 'orca repo add --path <path> [--kind git|folder] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'path', 'kind'],
+    notes: [
+      'Defaults to git (requires a valid git repository). Pass --kind folder to register a non-git folder the same way as Open as Folder in the app.'
+    ]
   },
   {
     path: ['repo', 'show'],

@@ -2620,6 +2620,47 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('forwards repo.add --kind folder to the runtime', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_repo_add_folder', {
+        repo: {
+          id: 'folder:notes',
+          path: path.resolve('/tmp/notes'),
+          displayName: 'notes',
+          kind: 'folder'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['repo', 'add', '--path', '/tmp/notes', '--kind', 'folder', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('repo.add', {
+      path: path.resolve('/tmp/notes'),
+      kind: 'folder'
+    })
+  })
+
+  it('rejects invalid repo.add --kind values', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['repo', 'add', '--path', '/tmp/notes', '--kind', 'zip', '--json'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: '--kind must be git or folder'
+      }
+    })
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('lists projects through the project-first runtime API', async () => {
     queueFixtures(
       callMock,

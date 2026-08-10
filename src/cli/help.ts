@@ -255,7 +255,7 @@ Common Commands:
   orca project setup-update --setup <setup-id> [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]
   orca project setup-delete --setup <setup-id> [--json]
   orca repo list [--json]
-  orca repo add --path <path> [--json]
+  orca repo add --path <path> [--kind git|folder] [--json]
   orca repo show --repo <selector> [--json]
   orca repo set-base-ref --repo <selector> --ref <ref> [--json]
   orca repo search-refs --repo <selector> --query <text> [--limit <n>] [--json]
