@@ -34,15 +34,14 @@ function hasManagedCommand(hook: TestHook, matcher: (command: string | undefined
 }
 
 describe('getWindowsManagedLifecycleHook', () => {
-  it('keeps cmd metacharacters out of the headless client command line', () => {
+  it('resolves the managed script from the runtime Windows profile', () => {
     const scriptPath = 'C:\\Users\\%name%\\a^b&c\\.orca\\agent-hooks\\claude-hook.cmd'
     const hook = getWindowsManagedLifecycleHook(scriptPath)
-    const encodedCommand = hook.args?.at(-1)
 
     expect(hook.args?.[0]).toBe('--headless')
-    expect(hook.args?.[1]).toMatch(/\\WindowsPowerShell\\v1\.0\\powershell\.exe$/i)
+    expect(hook.args?.[1]).toMatch(/\\System32\\cmd\.exe$/i)
+    expect(hook.args?.at(-1)).toBe('%USERPROFILE%\\.orca\\agent-hooks\\claude-hook.cmd')
     expect(hook.args).not.toContain(scriptPath)
-    expect(Buffer.from(encodedCommand!, 'base64').toString('utf16le')).toContain(scriptPath)
   })
 })
 
@@ -185,6 +184,10 @@ describe('ClaudeHookService.install', () => {
       expect(legacyHooks.map((hook: TestHook) => hook.command)).toContain(
         '/usr/local/bin/user-hook'
       )
+      const managedHook = legacyHooks.find((hook: TestHook) =>
+        hasManagedCommand(hook, isClaudeManagedCommand)
+      )
+      expect(JSON.stringify(managedHook)).not.toContain(tmpHome.replaceAll('\\', '/'))
       expect(
         legacyHooks.some((hook: TestHook) => hasManagedCommand(hook, isClaudeManagedCommand))
       ).toBe(true)
@@ -216,7 +219,13 @@ describe('ClaudeHookService.install', () => {
         readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8')
       ) as { statusLine?: { type: string; command: string } }
       expect(settings.statusLine?.type).toBe('command')
-      expect(settings.statusLine?.command).toContain('claude-statusline')
+      expect(settings.statusLine?.command).toContain(
+        '"$HOME/.orca/agent-hooks/claude-statusline.cmd"'
+      )
+      expect(settings.statusLine?.command).toContain(
+        '"$HOME/.orca/agent-hooks/claude-statusline.sh"'
+      )
+      expect(settings.statusLine?.command).not.toContain(tmpHome.replaceAll('\\', '/'))
 
       const script = readFileSync(
         join(tmpHome, '.orca', 'agent-hooks', STATUSLINE_SCRIPT_FILE_NAME),
@@ -330,7 +339,7 @@ describe('ClaudeHookService.install', () => {
   })
 
   it.skipIf(process.platform !== 'win32')(
-    'runs managed hooks through headless exec form and preserves profile-path spaces',
+    'runs portable managed hooks through headless exec form',
     () => {
       const tmpHome = mkdtempSync(join(tmpdir(), 'orca claude home with spaces '))
       vi.stubEnv('HOME', tmpHome)
@@ -344,15 +353,22 @@ describe('ClaudeHookService.install', () => {
 
         const system32 = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
         const scriptPath = join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME)
+        const runtimeScriptPath = join(
+          '%USERPROFILE%',
+          '.orca',
+          'agent-hooks',
+          CLAUDE_SCRIPT_FILE_NAME
+        )
 
         for (const eventName of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
           const hook = settings.hooks[eventName]?.[0]?.hooks?.[0]
           expect(hook).toEqual({
             type: 'command',
             command: join(system32, 'conhost.exe'),
-            args: ['--headless', join(system32, 'cmd.exe'), '/d', '/c', scriptPath],
+            args: ['--headless', join(system32, 'cmd.exe'), '/d', '/c', runtimeScriptPath],
             timeout: 10
           })
+          expect(hook.args).not.toContain(scriptPath)
         }
       } finally {
         vi.unstubAllEnvs()
@@ -395,11 +411,7 @@ describe('ClaudeHookService.installRemote', () => {
     const settings = fs.files.get('/home/dev/.claude/settings.json')
     expect(settings).toBeTruthy()
     const parsed = JSON.parse(settings!)
-    // Why: every load-bearing event must be present and point at the
-    // remote-shaped script path with the guarded launcher applied. Drift in
-    // any of these is a real bug — Claude
-    // Code rejects unknown shapes silently and the agent-hooks pipeline
-    // goes dark.
+    // Why: Claude silently rejects drifted hook shapes, so assert every load-bearing event.
     for (const event of [
       // Why: SessionStart is the only signal a resumed/idle session ever emits;
       // without it the sidebar row waits for the first prompt (STA-3386).
@@ -417,8 +429,8 @@ describe('ClaudeHookService.installRemote', () => {
     ]) {
       expect(parsed.hooks[event]).toBeTruthy()
       const cmd = parsed.hooks[event][0].hooks[0].command as string
-      expect(cmd).toContain('/home/dev/.orca/agent-hooks/claude-hook.sh')
-      expect(cmd).toMatch(/^if \[ -f /)
+      expect(cmd).toContain('"$HOME/.orca/agent-hooks/claude-hook.sh"')
+      expect(cmd).not.toContain('/home/dev/.orca/agent-hooks/claude-hook.sh')
     }
     // Managed script body
     const script = fs.files.get('/home/dev/.orca/agent-hooks/claude-hook.sh')
@@ -541,7 +553,8 @@ describe('OpenClaudeHookService-compatible install', () => {
     })
     const parsed = JSON.parse(fs.files.get('/home/dev/.openclaude/settings.json')!)
     const command = parsed.hooks.StopFailure[0].hooks[0].command as string
-    expect(command).toContain('/home/dev/.orca/agent-hooks/openclaude-hook.sh')
+    expect(command).toContain('"$HOME/.orca/agent-hooks/openclaude-hook.sh"')
+    expect(command).not.toContain('/home/dev/.orca/agent-hooks/openclaude-hook.sh')
     expect(fs.files.get('/home/dev/.orca/agent-hooks/openclaude-hook.sh')).toContain('/hook/claude')
   })
 })

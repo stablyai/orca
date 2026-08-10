@@ -262,7 +262,7 @@ export class ClaudeHookService {
         }
       }
 
-      // Why: the POSIX wrapper is identical regardless of where the script lands; only the path differs.
+      // Why: settings resolve HOME at runtime while SFTP still targets the discovered remote home.
       const hook = buildManagedCommandHook(getRemoteManagedCommand(remoteScriptPath))
       const nextConfig = applyManagedHooks(config, hook, remoteScriptFileName)
 

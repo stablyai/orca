@@ -79,12 +79,9 @@ import { GeminiHookService } from '../gemini/hook-service'
 import { GrokHookService } from '../grok/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
-import {
-  wrapPosixHookCommand,
-  wrapWindowsGitBashHookCommand,
-  wrapWindowsHookCommand
-} from './installer-utils'
+import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
+import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
@@ -387,9 +384,9 @@ describe('Windows managed hook stdin structure', () => {
             args: ['/d', '/c', wrapWindowsHookCommand(missingScript)]
           },
           {
-            name: 'Git Bash fast path',
+            name: 'portable Git Bash launcher',
             executable: gitBash,
-            args: ['-lc', wrapWindowsGitBashHookCommand(missingScript)]
+            args: ['-lc', wrapRuntimeHomeHookCommand('missing-orca-hook')]
           }
         ]
         for (const launcher of launcherCases) {
