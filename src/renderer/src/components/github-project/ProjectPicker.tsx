@@ -36,6 +36,7 @@ import {
   rememberProjectPickerBrowseCacheEntry
 } from './project-picker-browse-cache'
 import { translate } from '@/i18n/i18n'
+import { formatGitHubProjectErrorMessage } from '@/lib/github-project-error-copy'
 import {
   githubProjectHost,
   githubProjectIdentityKey
@@ -351,7 +352,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
           }
         } else {
           setViewList([])
-          toast.error(res.error.message)
+          toast.error(formatGitHubProjectErrorMessage(res.error.message))
         }
       } catch (err) {
         // Why: IPC transport errors (channel disconnect, serialization
@@ -397,7 +398,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         return
       }
       if (!res.ok) {
-        setPasteError(res.error.message)
+        setPasteError(formatGitHubProjectErrorMessage(res.error.message))
         return
       }
       setPasteInput('')
@@ -849,7 +850,7 @@ function AuthErrorBanner({
   // Non-auth errors keep the legacy single-line banner.
   return (
     <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-      <div>{error.message}</div>
+      <div>{formatGitHubProjectErrorMessage(error.message)}</div>
     </div>
   )
 }

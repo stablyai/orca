@@ -979,7 +979,10 @@
         "detail": {
           "devLauncherOnly": "Development mode uses a generated launcher for validation only.",
           "launcherMissing": "The bundled CLI launcher is missing from this Orca build.",
-          "platformUnsupported": "CLI registration is not implemented on this platform."
+          "platformUnsupported": "CLI registration is not implemented on this platform.",
+          "registerForWsl": "Register {{path}} to use Orca from WSL.",
+          "registerForTerminal": "Register {{path}} to use Orca from the terminal.",
+          "registerForWindowsShell": "Register {{path}} to use Orca from Command Prompt or PowerShell."
         }
       },
       "emulator": {
@@ -1554,7 +1557,10 @@
         "createWorkspaceAction": "Create workspace",
         "createWorktreeAction": "Create worktree",
         "moveUpWorkspace": "Move up workspace",
-        "moveDownWorkspace": "Move down workspace"
+        "moveDownWorkspace": "Move down workspace",
+        "installGit": "Install Git",
+        "installGitHubCli": "Install GitHub CLI",
+        "learnMore": "Learn more"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -2566,7 +2572,11 @@
             "1aa7c952b9": "Project view",
             "f352abf7c3": "Repository list is updating.",
             "1ce21b8cff": "This item is outside the selected repositories.",
-            "030de75bc5": "This item matches multiple selected repositories."
+            "030de75bc5": "This item matches multiple selected repositories.",
+            "viewTooLarge": "This view has {{value0}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
+            "many": "many",
+            "unsupportedLayout": "Orca only renders table views yet. This is a Board or Roadmap view.",
+            "schemaDrift": "Could not read this project view."
           },
           "slug": {
             "dialog": {
@@ -2601,6 +2611,13 @@
                 "7c302f8174": "Untitled"
               }
             }
+          },
+          "error": {
+            "couldNotFindProjectOrView": "Could not find this project or view.",
+            "projectOrViewNotFound": "Project or view not found.",
+            "projectNotFound": "Project not found.",
+            "selectedViewNotFound": "Could not find the selected view.",
+            "networkError": "Network error — check your connection."
           }
         },
         "GitHubMarkdownComposer": {
@@ -2631,7 +2648,8 @@
           "13b3ac0a84": "Status",
           "79c54552f7": "Filters",
           "8a2ffbf9b3": "Remove {{value0}} filter",
-          "19bb6f115f": "reviewed-by"
+          "19bb6f115f": "reviewed-by",
+          "currentUser": "Current user"
         },
         "PRFilterPickers": {
           "fdf387297c": "Clear (",
@@ -2664,7 +2682,9 @@
           "4e50c7bc03": "assignee",
           "7bf3a6e5ac": "author",
           "66256a73b3": "status",
-          "3ce4d5e96e": "prs"
+          "3ce4d5e96e": "prs",
+          "filterOrTypeLogin": "Filter or type a login...",
+          "filterLabels": "Filter labels..."
         },
         "github": {
           "rate": {
@@ -3037,6 +3057,10 @@
               "18ec58881e": "Search teams..."
             }
           }
+        },
+        "command": {
+          "paletteTitle": "Command Palette",
+          "paletteDescription": "Search for a command to run..."
         }
       },
       "terminal": {
@@ -4313,7 +4337,10 @@
           "14952d451e": "{{value0}} directories",
           "e9283eb171": "1 directory",
           "69c020eddc": "Edit preset",
-          "bd6cec2056": "new"
+          "bd6cec2056": "new",
+          "nameRequired": "Name is required.",
+          "nameTooLong": "Name must be 80 characters or fewer.",
+          "nameExists": "\"{{name}}\" already exists."
         }
       },
       "source": {
@@ -4659,7 +4686,18 @@
           "2251d41ebb": "Hidden worktree groups",
           "f54f2bec5d": "{{value0}} hidden worktrees for {{value1}}",
           "5a9688802a": "Show {{value0}} more",
-          "294de4aeb2": "Show fewer"
+          "294de4aeb2": "Show fewer",
+          "showError": "Could not show discovered worktrees. Try again.",
+          "keepHiddenError": "Could not keep discovered worktrees hidden. Try again.",
+          "keepHidden": "Keep hidden - recover from the project menu",
+          "keepHiddenAriaOne": "Keep 1 discovered worktree hidden for {{name}}; recover from the project menu",
+          "keepHiddenAriaOther": "Keep {{count}} discovered worktrees hidden for {{name}}; recover from the project menu",
+          "hidingInRepoOne": "Hiding 1 discovered worktree in {{name}}",
+          "hidingInRepoOther": "Hiding {{count}} discovered worktrees in {{name}}",
+          "hidingOne": "Hiding 1 discovered worktree",
+          "hidingOther": "Hiding {{count}} discovered worktrees",
+          "collapse": "Collapse",
+          "expand": "Expand"
         },
         "NonGitFolderDialog": {
           "e52454b7f6": "Open as Folder",
@@ -5119,7 +5157,13 @@
           "deleteWorktree": "Delete Worktree",
           "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
-          "deleteWithDescendants": "Delete with Descendants…"
+          "deleteWithDescendants": "Delete with Descendants…",
+          "sleepOneWorkspace": "Sleep 1 Workspace",
+          "sleepManyWorkspaces": "Sleep {{count}} Workspaces",
+          "sleep": "Sleep",
+          "deleteOneWorkspace": "Delete 1 Workspace",
+          "deleteManyWorkspaces": "Delete {{count}} Workspaces",
+          "deleteSelected": "Delete Selected"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -5163,7 +5207,9 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "hideNonOrcaWorktrees": "Hide non-Orca worktrees",
+          "showHiddenWorktrees": "Show hidden worktrees"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -5687,6 +5733,16 @@
           "localLinux": "Local Linux",
           "thisComputer": "This computer",
           "host": "Host"
+        },
+        "AddRepoDialog": {
+          "scanningForRepositories": "Scanning for repositories...",
+          "openingProject": "Opening project...",
+          "openingFolder": "Opening folder...",
+          "chooseAFolder": "Choose a folder..."
+        },
+        "worktreeCount": {
+          "one": "1 worktree",
+          "other": "{{count}} worktrees"
         }
       },
       "shared": {
@@ -6825,7 +6881,16 @@
         "McpConfigFileRow": {
           "b145eb6009": "env:",
           "e720c139cd": "Open",
-          "845ae248e8": "valid"
+          "845ae248e8": "valid",
+          "unreadable": "Unreadable",
+          "notFound": "Not found",
+          "invalidJson": "Invalid JSON",
+          "noServers": "No servers",
+          "oneServer": "1 server",
+          "nServers": "{{count}} servers",
+          "httpServer": "HTTP server",
+          "stdioServer": "stdio server",
+          "invalidServer": "Invalid server"
         },
         "McpConfigSection": {
           "4d16a0d9ac": "Checked",
@@ -7227,7 +7292,8 @@
           "868c5c9b56": "Failed to import repo icon",
           "emojiTooLongForRepoIcon": "This emoji can't be used as a repo icon",
           "currentEmojiSelection": "Current: {{value0}}",
-          "searchEmojiPlaceholder": "Search emoji"
+          "searchEmojiPlaceholder": "Search emoji",
+          "custom": "Custom"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root",
@@ -7711,7 +7777,10 @@
           "b532b9c17d": "1 directory will be saved",
           "623b4cf910": "Edit Preset",
           "68bbcd864a": "new",
-          "2ef2b2674b": "Delete {{value0}}"
+          "2ef2b2674b": "Delete {{value0}}",
+          "nameRequired": "Name is required.",
+          "nameTooLong": "Name must be 80 characters or fewer.",
+          "nameExists": "\"{{name}}\" already exists."
         },
         "SshDestructiveActionDialog": {
           "895b216267": "Cancel"
@@ -10920,6 +10989,16 @@
           "on": "On",
           "auto": "Auto",
           "off": "Off"
+        },
+        "repositorySourceControlAiLabels": {
+          "customizedForRepo": "Customized for this repository",
+          "usingGlobalSettings": "Using global settings",
+          "repositoryCustomPrompt": "Repository custom prompt",
+          "orcaDefaultPrompt": "Orca default prompt",
+          "globalCustomPrompt": "Global custom prompt",
+          "repositoryCustomArgs": "Repository custom args",
+          "noArgs": "No args",
+          "globalCustomArgs": "Global custom args"
         }
       },
       "right": {
@@ -12642,7 +12721,13 @@
             "searchJira": "Search Jira issues or paste an issue URL",
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
-            "emoji": "Emoji"
+            "emoji": "Emoji",
+            "emptyHintSmart": "Start typing to create a name or find a source.",
+            "emptyHintGithub": "Start typing to search GitHub PRs and issues.",
+            "emptyHintGitlab": "Start typing to search GitLab MRs and issues.",
+            "emptyHintBranches": "No matching branches.",
+            "emptyHintLinear": "Start typing to search Linear issues.",
+            "emptyHintJira": "Start typing to search Jira issues, or paste an issue URL."
           },
           "ProjectHostSetupCombobox": {
             "empty": "No hosts are ready for this project.",
@@ -13442,7 +13527,9 @@
             "8241897205": "Rebind the shortcut anytime in"
           },
           "FeatureTipActions": {
-            "eb04abece8": "Maybe Later"
+            "eb04abece8": "Maybe Later",
+            "installing": "Installing...",
+            "working": "Working..."
           },
           "FeatureTipsModal": {
             "c169298e4d": "Done",
@@ -13463,6 +13550,24 @@
             "d20ccf1e61": "done",
             "379d776971": "typing",
             "0418f9becc": "open"
+          },
+          "copy": {
+            "eyebrow": "Tip",
+            "orcaCli": {
+              "title": "Let agents drive Orca with the Orca CLI",
+              "description": "Enable agents to coordinate child worktrees and communicate between worktrees.",
+              "cta": "Install CLI & Skills"
+            },
+            "cmdJPalette": {
+              "title": "Jump to a worktree with <shortcut>",
+              "description": "Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard.",
+              "cta": "Got it"
+            },
+            "voiceDictation": {
+              "title": "Dictate into any pane",
+              "description": "Start voice dictation in any focused pane, then use the shortcut again to stop.",
+              "cta": "Set up voice dictation"
+            }
           }
         }
       },
@@ -14362,6 +14467,17 @@
                 }
               }
             }
+          },
+          "workspaceAgentSessions": {
+            "splitPane": {
+              "title": "Split a terminal pane",
+              "body": "Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.",
+              "action": "Split terminal"
+            },
+            "parallelTask": {
+              "title": "Start another task in parallel",
+              "body": "Each worktree gets its own branch, so parallel work stays separate."
+            }
           }
         }
       },
@@ -15175,7 +15291,30 @@
       "taskSourceContextSummary": {
         "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
         "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
-        "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
+        "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source.",
+        "sourceHostsCount": "{{count}} source hosts",
+        "noHost": "No host",
+        "accountPrefix": "Account: {{value0}}",
+        "projectsCount": "{{count}} projects",
+        "selectedProject": "Selected project",
+        "hostPrefix": "Host: {{value0}}",
+        "availabilityPrefix": "Availability: {{value0}}",
+        "sourcePrefix": "Source: {{value0}}",
+        "selectedProjectsCount": "{{count}} selected projects",
+        "currentAccount": "Current account",
+        "providerSource": "{{value0}} source",
+        "checkingServerCapabilities": "checking server capabilities",
+        "serverUpdateNeededForTaskSources": "server update needed for task sources",
+        "providerAuthNeeded": "provider auth needed",
+        "sourceToolUnavailable": "source tool unavailable",
+        "providerUnsupportedOnHost": "provider unsupported on this host",
+        "connecting": "connecting",
+        "serverUpdateNeeded": "server update needed",
+        "disconnected": "disconnected",
+        "connectionIssue": "connection issue",
+        "unavailableCount": "{{count}} unavailable",
+        "connected": "connected",
+        "authNeeded": "auth needed"
       },
       "ShortcutKeyCombo": {
         "07eb4985a1": "Double-tap {{value0}}"
@@ -15562,6 +15701,20 @@
           "updating": "Updating…",
           "update": "Update shared content"
         }
+      },
+      "osReveal": {
+        "revealInFinder": "Reveal in Finder",
+        "openContainingFolder": "Open Containing Folder",
+        "revealInFileExplorer": "Reveal in File Explorer",
+        "fileManagerFinder": "Finder",
+        "fileManagerExplorer": "File Explorer",
+        "fileManagerGeneric": "File Manager",
+        "openInFileManager": "Open in {{name}}",
+        "openInPrefix": "Open in "
+      },
+      "jiraConnectDialog": {
+        "tokenStoredRemote": "Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.",
+        "tokenStoredLocal": "Your token is stored locally and encrypted when local runtime storage supports it."
       }
     },
     "i18n": {
@@ -15617,7 +15770,31 @@
           "insertColumnLeft": "Insert column left",
           "insertColumnRight": "Insert column right",
           "deleteColumn": "Delete column",
-          "deleteTable": "Delete table"
+          "deleteTable": "Delete table",
+          "pasteAsPlainText": "Paste as plain text",
+          "addToDictionary": "Add to dictionary",
+          "addLink": "Add link",
+          "format": "Format",
+          "bold": "Bold",
+          "italic": "Italic",
+          "strike": "Strike",
+          "inlineCode": "Inline code",
+          "codeBlock": "Code block",
+          "quote": "Quote",
+          "paragraph": "Paragraph",
+          "bodyText": "Body text",
+          "heading1": "Heading 1",
+          "heading2": "Heading 2",
+          "heading3": "Heading 3",
+          "heading4": "Heading 4",
+          "heading5": "Heading 5",
+          "bulletList": "Bullet list",
+          "numberedList": "Numbered list",
+          "checklist": "Checklist",
+          "insert": "Insert",
+          "link": "Link",
+          "image": "Image",
+          "divider": "Divider"
         }
       }
     }

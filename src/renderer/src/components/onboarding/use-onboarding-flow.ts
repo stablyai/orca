@@ -32,6 +32,11 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { buildOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 import { openProjectDefaultCheckout } from '../sidebar/project-added-default-checkout'
+import {
+  addRepoOpeningFolderLabel,
+  addRepoOpeningProjectLabel,
+  addRepoScanningRepositoriesLabel
+} from '../sidebar/add-repo-busy-labels'
 import { translate } from '@/i18n/i18n'
 import { resolveAgentPermissionModeSummary } from '../../../../shared/tui-agent-permissions'
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
@@ -725,7 +730,9 @@ export function useOnboardingFlow(
           return
         }
         track('onboarding_step4_path_clicked', { path: 'open_folder' })
-        setBusyLabel(kind === 'git' ? 'Scanning for repositories…' : 'Opening folder…')
+        setBusyLabel(
+          kind === 'git' ? addRepoScanningRepositoriesLabel() : addRepoOpeningFolderLabel()
+        )
         try {
           if (kind === 'git') {
             const attemptId = createNestedRepoTelemetryAttemptId()
@@ -744,7 +751,7 @@ export function useOnboardingFlow(
               return
             }
           }
-          setBusyLabel(kind === 'git' ? 'Opening project…' : 'Opening folder…')
+          setBusyLabel(kind === 'git' ? addRepoOpeningProjectLabel() : addRepoOpeningFolderLabel())
           const repo = await addRepoPath(path, kind)
           if (!repo) {
             track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'invalid_path' })
@@ -767,11 +774,11 @@ export function useOnboardingFlow(
         track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'cancelled' })
         return
       }
-      setBusyLabel('Opening project…')
+      setBusyLabel(addRepoOpeningProjectLabel())
       try {
         let result = await window.api.repos.add({ path })
         if ('error' in result && result.error.includes('Not a valid git repository')) {
-          setBusyLabel('Scanning for repositories...')
+          setBusyLabel(addRepoScanningRepositoriesLabel())
           const attemptId = createNestedRepoTelemetryAttemptId()
           const scanId = createNestedRepoScanId()
           nestedScanIdRef.current = scanId

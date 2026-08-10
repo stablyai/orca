@@ -449,12 +449,30 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const removesProject = shouldRemoveProjectFromContextMenu(repo, worktree)
   const sleepLabel =
     isMultiContext && sleepableWorktrees.length > 0
-      ? `Sleep ${sleepableWorktrees.length} Workspace${sleepableWorktrees.length === 1 ? '' : 's'}`
-      : 'Sleep'
+      ? sleepableWorktrees.length === 1
+        ? translate(
+            'auto.components.sidebar.WorktreeContextMenu.sleepOneWorkspace',
+            'Sleep 1 Workspace'
+          )
+        : translate(
+            'auto.components.sidebar.WorktreeContextMenu.sleepManyWorkspaces',
+            'Sleep {{count}} Workspaces',
+            { count: sleepableWorktrees.length }
+          )
+      : translate('auto.components.sidebar.WorktreeContextMenu.sleep', 'Sleep')
   const deleteLabel =
     isMultiContext && batchDeleteWorktrees.length > 0
-      ? `Delete ${batchDeleteWorktrees.length} Workspace${batchDeleteWorktrees.length === 1 ? '' : 's'}`
-      : 'Delete Selected'
+      ? batchDeleteWorktrees.length === 1
+        ? translate(
+            'auto.components.sidebar.WorktreeContextMenu.deleteOneWorkspace',
+            'Delete 1 Workspace'
+          )
+        : translate(
+            'auto.components.sidebar.WorktreeContextMenu.deleteManyWorkspaces',
+            'Delete {{count}} Workspaces',
+            { count: batchDeleteWorktrees.length }
+          )
+      : translate('auto.components.sidebar.WorktreeContextMenu.deleteSelected', 'Delete Selected')
   const hasParentLink = hasWorktreeParentLink(
     worktree,
     worktreeLineageById,

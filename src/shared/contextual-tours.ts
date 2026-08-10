@@ -75,6 +75,7 @@ export const CONTEXTUAL_TOURS = [
     id: 'workspace-agent-sessions',
     steps: [
       {
+        id: 'workspace-agent-sessions-split-pane',
         title: 'Split a terminal pane',
         body: 'Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.',
         targetSelector:
@@ -85,6 +86,7 @@ export const CONTEXTUAL_TOURS = [
         advanceOnFeatureInteraction: 'terminal-pane-split'
       },
       {
+        id: 'workspace-agent-sessions-parallel-task',
         title: 'Start another task in parallel',
         body: 'Each worktree gets its own branch, so parallel work stays separate.',
         targetSelector: '[data-contextual-tour-target="workspace-create-control"]',

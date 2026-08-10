@@ -130,7 +130,7 @@ async function minifyWebOutput() {
           legalComments: 'none',
           loader,
           minify: true,
-          target: 'es2020'
+          target: 'es2022'
         })
         writeFileSync(targetPath, result.code)
       })

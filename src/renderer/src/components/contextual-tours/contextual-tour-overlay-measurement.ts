@@ -55,7 +55,47 @@ const LOCALIZED_STEP_COPY: Record<string, { title: () => string; body: () => str
         'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body',
         'Runs show when automations ran, what happened, and where to inspect their output.'
       )
+  },
+  'workspace-agent-sessions-split-pane': {
+    title: () =>
+      translate(
+        'auto.components.contextual.tours.workspaceAgentSessions.splitPane.title',
+        'Split a terminal pane'
+      ),
+    body: () =>
+      translate(
+        'auto.components.contextual.tours.workspaceAgentSessions.splitPane.body',
+        'Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.'
+      )
+  },
+  'workspace-agent-sessions-parallel-task': {
+    title: () =>
+      translate(
+        'auto.components.contextual.tours.workspaceAgentSessions.parallelTask.title',
+        'Start another task in parallel'
+      ),
+    body: () =>
+      translate(
+        'auto.components.contextual.tours.workspaceAgentSessions.parallelTask.body',
+        'Each worktree gets its own branch, so parallel work stays separate.'
+      )
   }
+}
+
+function localizeTourActionLabel(label: string): string {
+  if (label === 'Split terminal') {
+    return translate(
+      'auto.components.contextual.tours.workspaceAgentSessions.splitPane.action',
+      'Split terminal'
+    )
+  }
+  if (label === 'Next') {
+    return translate(
+      'auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418',
+      'Next'
+    )
+  }
+  return label
 }
 
 export function getContextualTourDisplayProgress(args: {
@@ -163,7 +203,19 @@ export function measureContextualTourOverlayRenderState(args: {
         )
       } as const)
     : activeStep.primaryAction
-  const secondaryAction = sidebarAlreadyVisible ? undefined : activeStep.secondaryAction
+      ? {
+          ...activeStep.primaryAction,
+          label: localizeTourActionLabel(activeStep.primaryAction.label)
+        }
+      : undefined
+  const secondaryAction = sidebarAlreadyVisible
+    ? undefined
+    : activeStep.secondaryAction
+      ? {
+          ...activeStep.secondaryAction,
+          label: localizeTourActionLabel(activeStep.secondaryAction.label)
+        }
+      : undefined
 
   return {
     kind: 'render',

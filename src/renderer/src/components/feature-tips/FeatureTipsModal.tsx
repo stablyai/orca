@@ -22,6 +22,7 @@ import { CliSkillSetupTerminal } from './CliSkillSetupTerminal'
 import { FeatureTipActions } from './FeatureTipActions'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
+import { localizeFeatureTip } from './feature-tip-copy'
 import {
   getOrcaCliFeatureTipTelemetrySource,
   trackCmdJPaletteFeatureTipAcknowledged,
@@ -58,13 +59,14 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const [primaryBusy, setPrimaryBusy] = useState(false)
   const [skillTerminalOpen, setSkillTerminalOpen] = useState(false)
   const isOpen = activeModal === 'feature-tips'
-  const currentTip = getFeatureTipForModal({
+  const rawTip = getFeatureTipForModal({
     cliInstalled: true,
     modalData,
     seenTipIds,
     featureInteractions,
     settings
   })
+  const currentTip = rawTip ? localizeFeatureTip(rawTip) : null
 
   useEffect(() => {
     activeModalRef.current = activeModal

@@ -347,7 +347,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.mobile.MobileHero.cd4e5e816f': {
     ko: '주머니 속의 워크스페이스.',
-    zh: '您的工作区就在您的口袋里',
+    zh: '工作区就在您的口袋里',
     ja: 'ワークスペースをポケットに。'
   },
   'auto.components.GitHubItemDialog.dbe5e2448e': {
@@ -552,7 +552,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.settings.IntegrationsPane.c0c8575e05': {
     ko: 'PR, 이슈 및 검사를 활성화하려면 GitHub CLI를 설치하세요.',
-    zh: '安装 GitHub CLI 以启用拉取请求、议题和检查。',
+    zh: '安装 GitHub CLI 以启用拉取请求、议题和检查',
     ja: 'GitHub CLI をインストールして PR、イシュー、チェックを有効にします。'
   },
   'auto.components.dashboard.DashboardAgentRow.92a7017987': {

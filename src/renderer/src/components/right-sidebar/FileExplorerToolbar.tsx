@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { WorktreeOpenInMenuItems } from '@/components/sidebar/WorktreeOpenInMenu'
+import { getOpenInLocalFileManagerPrefix } from '@/lib/local-file-manager-label'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 
@@ -173,7 +174,7 @@ export function FileExplorerToolbar({
           <WorktreeOpenInMenuItems
             worktreePath={worktreePath}
             connectionId={connectionId}
-            labelPrefix="Open in "
+            labelPrefix={getOpenInLocalFileManagerPrefix()}
           />
         </DropdownMenuContent>
       </DropdownMenu>

@@ -15,8 +15,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
-import { hasRemoteProviderRuntime } from '@/lib/provider-runtime-context'
 import { translate } from '@/i18n/i18n'
+import { jiraConnectCredentialStorageCopy } from './jira-connect-credential-storage-copy'
+import {
+  jiraConnectDialogCancelLabel,
+  jiraConnectDialogDescription,
+  jiraConnectDialogSubmitLabel
+} from './jira-connect-dialog-description'
 
 type JiraConnectDialogProps = {
   open: boolean
@@ -28,13 +33,8 @@ type JiraConnectDialogProps = {
 
 type ConnectState = 'idle' | 'connecting' | 'error'
 type JiraInstanceType = 'cloud' | 'server'
-// Self-hosted Jira accepts either a personal access token (Bearer) or classic
-// username + password (Basic); older Server/DC instances predate PATs.
 type ServerAuthMethod = 'pat' | 'basic'
 
-// Why: mirrors the inline Jira connect dialog in TaskPage so the onboarding
-// "Connect integrations" step can reuse the same site URL + email + API token
-// flow without depending on TaskPage's local state.
 export function JiraConnectDialog({
   open,
   onOpenChange,
@@ -58,9 +58,6 @@ export function JiraConnectDialog({
   const [connectState, setConnectState] = useState<ConnectState>('idle')
   const [connectError, setConnectError] = useState<string | null>(null)
 
-  // Start every open with a clean slate so a previously-typed secret, stale
-  // instance/auth-method selection, or old error can't linger across reopens.
-  // Runs before paint so a stale credential never renders for a frame.
   useLayoutEffect(() => {
     if (!open) {
       return
@@ -75,9 +72,6 @@ export function JiraConnectDialog({
   }, [open])
 
   const isServer = instanceType === 'server'
-  // `needsIdentity` folds "Cloud Atlassian email" and "self-hosted Basic
-  // username" — the identity slot that keys/labels the stored site. PAT auth
-  // uses no identity, so the email field is hidden and left empty.
   const isServerBasic = isServer && serverAuthMethod === 'basic'
   const needsIdentity = !isServer || isServerBasic
   const canSubmit =
@@ -85,9 +79,7 @@ export function JiraConnectDialog({
     (!needsIdentity || Boolean(email.trim())) &&
     Boolean(apiToken.trim()) &&
     connectState !== 'connecting'
-  const credentialStorageCopy = hasRemoteProviderRuntime(settings)
-    ? 'Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.'
-    : 'Your token is stored locally and encrypted when local runtime storage supports it.'
+  const credentialStorageCopy = jiraConnectCredentialStorageCopy(settings)
 
   const clearErrorOnEdit = (): void => {
     if (connectState === 'error') {
@@ -96,10 +88,6 @@ export function JiraConnectDialog({
     }
   }
 
-  // A Cloud email, a Server username, a PAT, and an account password are
-  // different secrets; drop the credential fields when the deployment or auth
-  // method changes so one can't be submitted as another (e.g. a password
-  // silently riding along as a Bearer PAT).
   const clearCredentialsOnModeSwitch = (): void => {
     setEmail('')
     setApiToken('')
@@ -170,20 +158,7 @@ export function JiraConnectDialog({
             {translate('auto.components.jira.connect.dialog.8388bdea2b', 'Connect Jira site')}
           </DialogTitle>
           <DialogDescription>
-            {!isServer
-              ? translate(
-                  'auto.components.jira.connect.dialog.d785c42b8b',
-                  'Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.'
-                )
-              : isServerBasic
-                ? translate(
-                    'auto.components.jira.connect.dialog.1d947a07ab',
-                    'Use a self-hosted Jira base URL, username, and password to browse issues.'
-                  )
-                : translate(
-                    'auto.components.jira.connect.dialog.2e2b69e48e',
-                    'Use a self-hosted Jira base URL and a personal access token to browse issues.'
-                  )}
+            {jiraConnectDialogDescription({ isServer, isServerBasic })}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -403,16 +378,16 @@ export function JiraConnectDialog({
               onClick={() => onOpenChange(false)}
               disabled={connectState === 'connecting'}
             >
-              {translate('auto.components.jira.connect.dialog.79e7aaed39', 'Cancel')}
+              {jiraConnectDialogCancelLabel()}
             </Button>
             <Button type="submit" disabled={!canSubmit}>
               {connectState === 'connecting' ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  {translate('auto.components.jira.connect.dialog.4a2ab52781', 'Verifying…')}
+                  {jiraConnectDialogSubmitLabel(true)}
                 </>
               ) : (
-                translate('auto.components.jira.connect.dialog.63ce735809', 'Connect')
+                jiraConnectDialogSubmitLabel(false)
               )}
             </Button>
           </DialogFooter>

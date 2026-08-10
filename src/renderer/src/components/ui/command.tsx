@@ -6,6 +6,7 @@ import { SearchIcon } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
@@ -22,8 +23,11 @@ function Command({ className, ...props }: React.ComponentProps<typeof CommandPri
 
 function CommandDialog({
   children,
-  title = 'Command Palette',
-  description = 'Search for a command to run...',
+  title = translate('auto.components.ui.command.paletteTitle', 'Command Palette'),
+  description = translate(
+    'auto.components.ui.command.paletteDescription',
+    'Search for a command to run...'
+  ),
   shouldFilter,
   onOpenAutoFocus,
   onCloseAutoFocus,

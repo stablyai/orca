@@ -1,5 +1,6 @@
 import type { Repo } from '../../../../shared/types'
 import { mergeExternalWorktreeInboxPaths } from '../../../../shared/external-worktree-inbox'
+import { translate } from '@/i18n/i18n'
 
 export type ImportedWorktreeCardActionState = {
   pending: boolean
@@ -30,9 +31,19 @@ type ImportedWorktreeCardActionDeps = {
   ) => Promise<boolean>
 }
 
-export const IMPORTED_WORKTREES_SHOW_ERROR = 'Could not show discovered worktrees. Try again.'
-export const IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR =
-  'Could not keep discovered worktrees hidden. Try again.'
+export function getImportedWorktreesShowError(): string {
+  return translate(
+    'auto.components.sidebar.ImportedWorktreesVisibilityLine.showError',
+    'Could not show discovered worktrees. Try again.'
+  )
+}
+
+export function getImportedWorktreesKeepHiddenError(): string {
+  return translate(
+    'auto.components.sidebar.ImportedWorktreesVisibilityLine.keepHiddenError',
+    'Could not keep discovered worktrees hidden. Try again.'
+  )
+}
 
 export async function showImportedWorktreesCard(
   args: ImportedWorktreeCardActionDeps
@@ -48,7 +59,7 @@ export async function showImportedWorktreesCard(
   if (!updated) {
     args.setCardState(args.projectId, {
       pending: false,
-      error: IMPORTED_WORKTREES_SHOW_ERROR,
+      error: getImportedWorktreesShowError(),
       ...(forceVisible ? { forceVisible: true } : {})
     })
     return
@@ -58,7 +69,7 @@ export async function showImportedWorktreesCard(
     const rolledBack = await args.updateRepo(args.projectId, { externalWorktreeVisibility: 'hide' })
     args.setCardState(args.projectId, {
       pending: false,
-      error: IMPORTED_WORKTREES_SHOW_ERROR,
+      error: getImportedWorktreesShowError(),
       ...(rolledBack ? {} : { forceVisible: true })
     })
     return
@@ -84,7 +95,7 @@ export async function keepImportedWorktreesHiddenCard(
   if (!updated) {
     args.setCardState(args.projectId, {
       pending: false,
-      error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
+      error: getImportedWorktreesKeepHiddenError()
     })
     return
   }

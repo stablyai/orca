@@ -15,18 +15,22 @@ type McpConfigFileRowProps = {
 
 function statusLabel(config: LoadedMcpConfigInspection): string {
   if (config.readError) {
-    return 'Unreadable'
+    return translate('auto.components.settings.McpConfigFileRow.unreadable', 'Unreadable')
   }
   if (config.status === 'missing') {
-    return 'Not found'
+    return translate('auto.components.settings.McpConfigFileRow.notFound', 'Not found')
   }
   if (config.status === 'invalid') {
-    return 'Invalid JSON'
+    return translate('auto.components.settings.McpConfigFileRow.invalidJson', 'Invalid JSON')
   }
   if (config.servers.length === 0) {
-    return 'No servers'
+    return translate('auto.components.settings.McpConfigFileRow.noServers', 'No servers')
   }
-  return `${config.servers.length} server${config.servers.length === 1 ? '' : 's'}`
+  return config.servers.length === 1
+    ? translate('auto.components.settings.McpConfigFileRow.oneServer', '1 server')
+    : translate('auto.components.settings.McpConfigFileRow.nServers', '{{count}} servers', {
+        count: config.servers.length
+      })
 }
 
 function statusClassName(config: LoadedMcpConfigInspection): string {
@@ -41,12 +45,20 @@ function statusClassName(config: LoadedMcpConfigInspection): string {
 
 function serverDetailLabel(server: LoadedMcpConfigInspection['servers'][number]): string {
   if (server.transport === 'http') {
-    return server.url ?? 'HTTP server'
+    return (
+      server.url ?? translate('auto.components.settings.McpConfigFileRow.httpServer', 'HTTP server')
+    )
   }
   if (server.transport === 'stdio') {
-    return server.command ?? 'stdio server'
+    return (
+      server.command ??
+      translate('auto.components.settings.McpConfigFileRow.stdioServer', 'stdio server')
+    )
   }
-  return server.issue ?? 'Invalid server'
+  return (
+    server.issue ??
+    translate('auto.components.settings.McpConfigFileRow.invalidServer', 'Invalid server')
+  )
 }
 
 export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): React.JSX.Element {

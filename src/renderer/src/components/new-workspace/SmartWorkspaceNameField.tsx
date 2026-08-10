@@ -57,14 +57,14 @@ import {
   buildJiraIssueSearchJql,
   buildSmartWorkspaceSourceRows,
   getBranchSearchRequest,
-  getSmartWorkspaceEmptyHint,
   getVisibleBranchResults,
   getVisibleHeldProviderResults,
   isBlockingJiraUrlIntent,
   isSmartWorkspaceSourceQueryWithinLimit,
   type SmartNameMode,
   type SmartWorkspaceSourceRow
-} from './smart-workspace-source-results'
+} from '../../../../shared/new-workspace/smart-workspace-source-results'
+import { translateSmartWorkspaceEmptyHint } from './smart-workspace-empty-hint'
 import { filterAvailableTaskProviders } from '../../../../shared/task-providers'
 import type {
   BaseRefSearchResult,
@@ -2026,7 +2026,7 @@ export default function SmartWorkspaceNameField({
                           'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',
                           'Connect Linear in Settings to search issues.'
                         )
-                      : getSmartWorkspaceEmptyHint(mode)}
+                      : translateSmartWorkspaceEmptyHint(mode)}
                 </div>
               ) : searchResultRows.length > 0 ? (
                 <CommandGroup className="p-1">

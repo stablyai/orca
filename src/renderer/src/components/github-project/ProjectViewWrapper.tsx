@@ -60,6 +60,7 @@ import {
   type CachedVisibleProjectTable
 } from './project-visible-table-cache'
 import { translate } from '@/i18n/i18n'
+import { formatGitHubProjectErrorMessage } from '@/lib/github-project-error-copy'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
 import {
   githubProjectHost,
@@ -693,7 +694,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
         ...(remove.length ? { removeAssignees: remove } : {})
       })
       if (!res.ok) {
-        toast.error(res.error.message)
+        toast.error(formatGitHubProjectErrorMessage(res.error.message))
       }
     },
     [currentCacheKey, patchProjectIssueOrPr]
@@ -709,7 +710,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
         ...(remove.length ? { removeLabels: remove } : {})
       })
       if (!res.ok) {
-        toast.error(res.error.message)
+        toast.error(formatGitHubProjectErrorMessage(res.error.message))
       }
     },
     [currentCacheKey, patchProjectIssueOrPr]
@@ -722,7 +723,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       }
       const res = await patchProjectRowIssueType(currentCacheKey, row.id, issueType)
       if (!res.ok) {
-        toast.error(res.error.message)
+        toast.error(formatGitHubProjectErrorMessage(res.error.message))
       }
     },
     [currentCacheKey, patchProjectRowIssueType]
@@ -742,7 +743,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
           ? await clearProjectFieldValue(currentCacheKey, row.id, fieldId)
           : await updateProjectFieldValue(currentCacheKey, row.id, fieldId, value)
       if (!result.ok) {
-        toast.error(result.error.message)
+        toast.error(formatGitHubProjectErrorMessage(result.error.message))
       }
     },
     [clearProjectFieldValue, currentCacheKey, updateProjectFieldValue]
@@ -1300,14 +1301,31 @@ function ErrorState({
   }
   const copy =
     error.type === 'too_large'
-      ? `This view has ${totalCount ?? 'many'} items — too large to render in Orca. Narrow the view's filter on GitHub.`
+      ? translate(
+          'auto.components.github.project.ProjectViewWrapper.viewTooLarge',
+          "This view has {{value0}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
+          {
+            value0:
+              totalCount ??
+              translate('auto.components.github.project.ProjectViewWrapper.many', 'many')
+          }
+        )
       : error.type === 'unsupported_layout'
-        ? 'Orca only renders table views yet. This is a Board or Roadmap view.'
+        ? translate(
+            'auto.components.github.project.ProjectViewWrapper.unsupportedLayout',
+            'Orca only renders table views yet. This is a Board or Roadmap view.'
+          )
         : error.type === 'not_found'
-          ? 'Could not find this project or view.'
+          ? translate(
+              'auto.components.github.project.error.couldNotFindProjectOrView',
+              'Could not find this project or view.'
+            )
           : error.type === 'schema_drift'
-            ? 'Could not read this project view.'
-            : error.message
+            ? translate(
+                'auto.components.github.project.ProjectViewWrapper.schemaDrift',
+                'Could not read this project view.'
+              )
+            : formatGitHubProjectErrorMessage(error.message)
   return (
     <div className="flex flex-1 flex-col items-start gap-3 p-6 text-sm">
       <div className="text-muted-foreground">{copy}</div>

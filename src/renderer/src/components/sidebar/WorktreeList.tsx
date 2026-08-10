@@ -251,7 +251,7 @@ import NewExternalWorktreesInboxLine from './NewExternalWorktreesInboxLine'
 import SuppressExternalWorktreeInboxDialog from './SuppressExternalWorktreeInboxDialog'
 import {
   keepImportedWorktreesHiddenCard,
-  IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR,
+  getImportedWorktreesKeepHiddenError,
   showImportedWorktreesCard,
   type ImportedWorktreeCardActionState
 } from './imported-worktrees-card-actions'
@@ -629,7 +629,12 @@ function getWorktreeVisibilityMenuLabel(repo: Repo): string {
     repo,
     isLegacyRepoForExternalWorktreeVisibility(repo)
   )
-  return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Show hidden worktrees'
+  return visibility === 'show'
+    ? translate(
+        'auto.components.sidebar.WorktreeList.hideNonOrcaWorktrees',
+        'Hide non-Orca worktrees'
+      )
+    : translate('auto.components.sidebar.WorktreeList.showHiddenWorktrees', 'Show hidden worktrees')
 }
 
 const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
@@ -6022,7 +6027,7 @@ const WorktreeList = React.memo(function WorktreeList({
         if (!refreshed) {
           setImportedWorktreeCardState(projectId, {
             pending: false,
-            error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
+            error: getImportedWorktreesKeepHiddenError()
           })
           return
         }
@@ -6031,7 +6036,7 @@ const WorktreeList = React.memo(function WorktreeList({
       if (detected?.authoritative !== true) {
         setImportedWorktreeCardState(projectId, {
           pending: false,
-          error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
+          error: getImportedWorktreesKeepHiddenError()
         })
         return
       }

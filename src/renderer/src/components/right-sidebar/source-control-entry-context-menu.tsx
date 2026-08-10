@@ -13,7 +13,10 @@ import {
 import { useAppStore } from '@/store'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
-import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
+import {
+  getLocalFileManagerLabel,
+  getOpenInLocalFileManagerLabel
+} from '@/lib/local-file-manager-label'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
@@ -155,10 +158,7 @@ export function SourceControlEntryContextMenu({
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={handleRevealInOrcaExplorer} disabled={!absolutePath}>
           <FolderOpen className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SourceControl.cc05b2d088',
-            'Open in File Explorer'
-          )}
+          {getOpenInLocalFileManagerLabel()}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

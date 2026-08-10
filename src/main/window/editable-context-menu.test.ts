@@ -96,11 +96,11 @@ describe('buildEditableContextMenuTemplate', () => {
       'Insert',
       'Table',
       'separator',
-      'cut',
-      'copy',
+      'Cut',
+      'Copy',
       'Paste',
       'Paste as plain text',
-      'selectAll'
+      'Select All'
     ])
 
     template[0].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
@@ -230,11 +230,11 @@ describe('buildEditableContextMenuTemplate', () => {
     )
 
     expect(template.map((item) => item.label ?? item.role ?? item.type)).toEqual([
-      'cut',
-      'copy',
+      'Cut',
+      'Copy',
       'Paste',
       'Paste as plain text',
-      'selectAll'
+      'Select All'
     ])
 
     template[2].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
@@ -260,11 +260,11 @@ describe('buildEditableContextMenuTemplate', () => {
       'separator',
       'Add to dictionary',
       'separator',
-      'cut',
-      'copy',
+      'Cut',
+      'Copy',
       'Paste',
       'Paste as plain text',
-      'selectAll'
+      'Select All'
     ])
 
     template[7].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)

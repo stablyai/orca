@@ -19,6 +19,7 @@ import {
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../shared/worktree-ownership'
 import { translate } from '@/i18n/i18n'
+import { formatWorktreeCountLabel } from './worktree-count-label'
 
 export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -38,8 +39,8 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
     : false
   const hiddenCount = getHiddenExternalWorktrees(detected).length
   const otherCount = getVisibleExternalWorktrees(detected).length
-  const hiddenWorktreeLabel = `${hiddenCount} ${hiddenCount === 1 ? 'worktree' : 'worktrees'}`
-  const shownWorktreeLabel = `${otherCount} ${otherCount === 1 ? 'worktree' : 'worktrees'}`
+  const hiddenWorktreeLabel = formatWorktreeCountLabel(hiddenCount)
+  const shownWorktreeLabel = formatWorktreeCountLabel(otherCount)
 
   const handleToggle = useCallback(async () => {
     if (!repoId) {

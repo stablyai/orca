@@ -291,7 +291,10 @@ export function SectionDetail({
           activeValue={parsed.author}
           loading={false}
           error={null}
-          searchPlaceholder="Filter or type a login..."
+          searchPlaceholder={translate(
+            'auto.components.github.PRFilterSections.filterOrTypeLogin',
+            'Filter or type a login...'
+          )}
           emptyText={translate('auto.components.github.PRFilterSections.458ea3602b', 'No authors')}
           allowCustomValue
           renderOption={(opt) => <UserOptionRow option={opt} />}
@@ -304,7 +307,10 @@ export function SectionDetail({
           activeValue={parsed.assignee}
           loading={usersLoading}
           error={usersError}
-          searchPlaceholder="Filter or type a login..."
+          searchPlaceholder={translate(
+            'auto.components.github.PRFilterSections.filterOrTypeLogin',
+            'Filter or type a login...'
+          )}
           emptyText={translate('auto.components.github.PRFilterSections.a00830d3f7', 'No users')}
           allowCustomValue
           renderOption={(opt) => <UserOptionRow option={opt} />}
@@ -317,7 +323,10 @@ export function SectionDetail({
           selected={parsed.labels}
           loading={labelsLoading}
           error={labelsError}
-          searchPlaceholder="Filter labels..."
+          searchPlaceholder={translate(
+            'auto.components.github.PRFilterSections.filterLabels',
+            'Filter labels...'
+          )}
           emptyText={translate('auto.components.github.PRFilterSections.de26e2eb06', 'No labels')}
           onChange={(next) => onSelect({ labels: next })}
         />
@@ -355,7 +364,10 @@ export function SectionDetail({
             activeValue={reviewerMode === 'requested' ? parsed.reviewRequested : parsed.reviewedBy}
             loading={usersLoading}
             error={usersError}
-            searchPlaceholder="Filter or type a login..."
+            searchPlaceholder={translate(
+              'auto.components.github.PRFilterSections.filterOrTypeLogin',
+              'Filter or type a login...'
+            )}
             emptyText={translate('auto.components.github.PRFilterSections.a00830d3f7', 'No users')}
             allowCustomValue
             renderOption={(opt) => <UserOptionRow option={opt} />}

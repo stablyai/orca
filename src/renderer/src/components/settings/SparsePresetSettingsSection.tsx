@@ -56,11 +56,21 @@ export function SparsePresetSettingsSection({
 
   const nameError =
     draft && trimmedName.length === 0
-      ? 'Name is required.'
+      ? translate(
+          'auto.components.settings.SparsePresetSettingsSection.nameRequired',
+          'Name is required.'
+        )
       : trimmedName.length > 80
-        ? 'Name must be 80 characters or fewer.'
+        ? translate(
+            'auto.components.settings.SparsePresetSettingsSection.nameTooLong',
+            'Name must be 80 characters or fewer.'
+          )
         : collidingPreset
-          ? `"${collidingPreset.name}" already exists.`
+          ? translate(
+              'auto.components.settings.SparsePresetSettingsSection.nameExists',
+              '"{{name}}" already exists.',
+              { name: collidingPreset.name }
+            )
           : null
   const canSaveDraft =
     !!draft && !submitting && !nameError && parsedDirectories !== null && !parsedDirectories.error

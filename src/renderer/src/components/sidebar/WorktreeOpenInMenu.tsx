@@ -10,7 +10,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
-import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
+import {
+  getLocalFileManagerLabel,
+  getOpenInLocalFileManagerLabel
+} from '@/lib/local-file-manager-label'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { getExternalEditorOpenCapability } from '@/lib/external-editor-open-capability'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
@@ -331,8 +334,9 @@ export function WorktreeOpenInMenuItems({
               <ExternalLink className="size-3.5" />
             )}
             <span className="min-w-0 truncate">
-              {labelPrefix}
-              {entry.label}
+              {entry.target === 'file-manager' && labelPrefix
+                ? getOpenInLocalFileManagerLabel()
+                : `${labelPrefix}${entry.label}`}
             </span>
             {availability.metadata ? (
               <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">

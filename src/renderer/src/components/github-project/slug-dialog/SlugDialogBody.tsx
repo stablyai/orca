@@ -13,6 +13,7 @@ import { LabelsEditor } from './LabelsEditor'
 import { AssigneesEditor } from './AssigneesEditor'
 import { CommentsList, NewCommentForm } from './Comments'
 import { translate } from '@/i18n/i18n'
+import { formatGitHubProjectErrorMessage } from '@/lib/github-project-error-copy'
 
 export function SlugDialogBody({
   projectOrigin,
@@ -75,7 +76,7 @@ export function SlugDialogBody({
         if (res.ok) {
           setDetails(res.details)
         } else {
-          setError(res.error.message)
+          setError(formatGitHubProjectErrorMessage(res.error.message))
         }
       })
       .catch((err) => {
@@ -113,7 +114,7 @@ export function SlugDialogBody({
     }
     const res = await patchProjectIssueOrPr(cacheKey, row.id, { title: next })
     if (!res.ok) {
-      toast.error(res.error.message)
+      toast.error(formatGitHubProjectErrorMessage(res.error.message))
     }
   }, [titleDraft, title, patchProjectIssueOrPr, cacheKey, row])
 
@@ -132,7 +133,7 @@ export function SlugDialogBody({
     }
     const res = await patchProjectIssueOrPr(cacheKey, row.id, { body: bodyDraft })
     if (!res.ok) {
-      toast.error(res.error.message)
+      toast.error(formatGitHubProjectErrorMessage(res.error.message))
       return
     }
     setDetails((prev) => (prev ? { ...prev, body: bodyDraft } : prev))
@@ -235,7 +236,7 @@ export function SlugDialogBody({
                 ...(remove.length ? { removeLabels: remove } : {})
               })
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(formatGitHubProjectErrorMessage(res.error.message))
               }
             }}
           />
@@ -255,7 +256,7 @@ export function SlugDialogBody({
                 ...(remove.length ? { removeAssignees: remove } : {})
               })
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(formatGitHubProjectErrorMessage(res.error.message))
               }
             }}
           />

@@ -11,6 +11,7 @@ import type {
 } from '../../../../shared/source-control-ai-types'
 import type { CustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
+import { translate } from '@/i18n/i18n'
 
 export const ACTION_MODE_INHERIT = 'inherit'
 export const ACTION_MODE_OVERRIDE = 'override'
@@ -70,7 +71,15 @@ export function completeRepoActionRecipe(
 }
 
 export function actionScopeLabel(hasOverride: boolean): string {
-  return hasOverride ? 'Customized for this repository' : 'Using global settings'
+  return hasOverride
+    ? translate(
+        'auto.components.settings.repositorySourceControlAiLabels.customizedForRepo',
+        'Customized for this repository'
+      )
+    : translate(
+        'auto.components.settings.repositorySourceControlAiLabels.usingGlobalSettings',
+        'Using global settings'
+      )
 }
 
 export function commandTemplateStateLabel(args: {
@@ -79,11 +88,20 @@ export function commandTemplateStateLabel(args: {
   actionId: SourceControlActionId
 }): string {
   if (args.hasOverride) {
-    return 'Repository custom prompt'
+    return translate(
+      'auto.components.settings.repositorySourceControlAiLabels.repositoryCustomPrompt',
+      'Repository custom prompt'
+    )
   }
   return args.inheritedTemplate === DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[args.actionId]
-    ? 'Orca default prompt'
-    : 'Global custom prompt'
+    ? translate(
+        'auto.components.settings.repositorySourceControlAiLabels.orcaDefaultPrompt',
+        'Orca default prompt'
+      )
+    : translate(
+        'auto.components.settings.repositorySourceControlAiLabels.globalCustomPrompt',
+        'Global custom prompt'
+      )
 }
 
 export function agentArgsStateLabel(args: {
@@ -92,7 +110,17 @@ export function agentArgsStateLabel(args: {
   repoAgentArgs: string
 }): string {
   if (args.hasOverride) {
-    return args.repoAgentArgs.trim() ? 'Repository custom args' : 'No args'
+    return args.repoAgentArgs.trim()
+      ? translate(
+          'auto.components.settings.repositorySourceControlAiLabels.repositoryCustomArgs',
+          'Repository custom args'
+        )
+      : translate('auto.components.settings.repositorySourceControlAiLabels.noArgs', 'No args')
   }
-  return args.inheritedAgentArgs.trim() ? 'Global custom args' : 'No args'
+  return args.inheritedAgentArgs.trim()
+    ? translate(
+        'auto.components.settings.repositorySourceControlAiLabels.globalCustomArgs',
+        'Global custom args'
+      )
+    : translate('auto.components.settings.repositorySourceControlAiLabels.noArgs', 'No args')
 }
