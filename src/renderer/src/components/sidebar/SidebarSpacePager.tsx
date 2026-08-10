@@ -151,7 +151,15 @@ function SidebarSpacePager({
         }
         const direction = spaceSlideDirection(fromIndex, targetIndex)
         const destination = (slot + (direction === 'next' ? 1 : -1) + total) % total
+        // Why: pins from earlier hops outlive their own slide, so a chain has to release the two
+        // that would fight this one — the slot being slid into, and whoever still holds the target.
         const pinned = new Map(latest.travel?.pinned)
+        pinned.delete(destination)
+        for (const [heldSlot, heldId] of pinned) {
+          if (heldId === spaceId) {
+            pinned.delete(heldSlot)
+          }
+        }
         pinned.set(slot, latest.spaces[fromIndex].id)
         travellingRef.current = true
         // Anchor the rotation so the slide being swiped into already holds the target Space.

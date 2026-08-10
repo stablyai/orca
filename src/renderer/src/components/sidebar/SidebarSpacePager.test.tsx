@@ -362,6 +362,21 @@ describe('SidebarSpacePager', () => {
     expect(mocks.setActiveSpace).toHaveBeenLastCalledWith('e')
   })
 
+  it('shows the arriving Space when jumps chain past a slot an earlier hop pinned', () => {
+    // Why: the pin from a -> c held slot 0; without releasing it, the third hop slid back into
+    // slot 0 and kept rendering that stale Space while activeSpaceId had already moved on.
+    renderPager('a', SIX_SPACES)
+    const instance = swiper(0, SIX_SPACES.length)
+    attach(instance)
+
+    expect(transitionTo('c')).toBe(true)
+    expect(transitionTo('d')).toBe(true)
+    expect(transitionTo('a')).toBe(true)
+
+    expect(slotContents()[instance.realIndex]).toBe('a')
+    expect(mocks.setActiveSpace).toHaveBeenLastCalledWith('a')
+  })
+
   it('leaves the switch to the caller when reduced motion is preferred', () => {
     mocks.prefersReducedMotion = true
     renderPager()
