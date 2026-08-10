@@ -60,6 +60,7 @@ export function MobileNativeChatOverlay({
     <View style={styles.overlay}>
       <MobileNativeChatView
         messages={session.messages}
+        tailFollowScopeKey={controller.nativeChatStreamScopeKey}
         folded={folded}
         status={session.status}
         error={session.error}

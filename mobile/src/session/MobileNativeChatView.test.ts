@@ -1,17 +1,25 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
-vi.mock('react-native', () => ({
-  ActivityIndicator: 'ActivityIndicator',
-  FlatList: 'FlatList',
-  Pressable: 'Pressable',
-  StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
-  Text: 'Text',
-  View: 'View'
-}))
+const scrollToEnd = vi.hoisted(() => vi.fn())
+
+vi.mock('react-native', async () => {
+  const React = await import('react')
+  return {
+    ActivityIndicator: 'ActivityIndicator',
+    FlatList: React.forwardRef((props, ref) => {
+      React.useImperativeHandle(ref, () => ({ scrollToEnd }))
+      return React.createElement('FlatList', props)
+    }),
+    Pressable: 'Pressable',
+    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+    Text: 'Text',
+    View: 'View'
+  }
+})
 
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
@@ -72,6 +80,7 @@ type Overrides = {
   inputLockReason?: 'disconnected' | 'waiting' | null
   onSend?: (text: string) => Promise<boolean>
   pending?: Parameters<typeof MobileNativeChatView>[0]['pending']
+  tailFollowScopeKey?: string
 }
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
@@ -88,12 +97,18 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
     pending: [],
     composerText: '',
     onComposerTextChange: vi.fn(),
+    tailFollowScopeKey: 'session-1',
     ...overrides
   })
 }
 
 describe('MobileNativeChatView', () => {
   let renderer: ReactTestRenderer | null = null
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    scrollToEnd.mockReset()
+  })
 
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -202,6 +217,86 @@ describe('MobileNativeChatView', () => {
 
     expect(listIds()).toEqual(['pending-1'])
     expect(renderedRow('pending-1').props).not.toHaveProperty('queued')
+  })
+
+  it('coalesces transcript and layout tail-follow requests into one scroll', async () => {
+    vi.useFakeTimers()
+    try {
+      const folded = [assistantTurn('a1', 'one')]
+      await render({ folded })
+      await act(async () => vi.advanceTimersByTime(16))
+      scrollToEnd.mockClear()
+
+      const list = renderer!.root.find((node) => node.type === 'FlatList')
+      await act(async () => {
+        list.props.onContentSizeChange()
+        list.props.onContentSizeChange()
+        renderer?.update(chatViewElement({ folded: [...folded, assistantTurn('a2', 'two')] }))
+      })
+      await act(async () => vi.advanceTimersByTime(16))
+
+      expect(scrollToEnd).toHaveBeenCalledOnce()
+      expect(scrollToEnd).toHaveBeenCalledWith({ animated: false })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels tail following when the user scrolls away from the bottom', async () => {
+    vi.useFakeTimers()
+    try {
+      await render({ folded: [assistantTurn('a1', 'one')] })
+      await act(async () => vi.advanceTimersByTime(16))
+      scrollToEnd.mockClear()
+      const list = renderer!.root.find((node) => node.type === 'FlatList')
+
+      await act(async () => {
+        list.props.onContentSizeChange()
+        list.props.onScroll({
+          nativeEvent: {
+            contentOffset: { y: 0 },
+            contentSize: { height: 1_000 },
+            layoutMeasurement: { height: 200 }
+          }
+        })
+      })
+      await act(async () => vi.advanceTimersByTime(32))
+
+      expect(scrollToEnd).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('starts tail following when the active conversation changes', async () => {
+    vi.useFakeTimers()
+    try {
+      await render({ folded: [assistantTurn('a1', 'one')] })
+      await act(async () => vi.advanceTimersByTime(16))
+      scrollToEnd.mockClear()
+      const list = renderer!.root.find((node) => node.type === 'FlatList')
+      await act(async () => {
+        list.props.onScroll({
+          nativeEvent: {
+            contentOffset: { y: 0 },
+            contentSize: { height: 1_000 },
+            layoutMeasurement: { height: 200 }
+          }
+        })
+        renderer?.update(
+          chatViewElement({
+            folded: [assistantTurn('b1', 'new conversation')],
+            tailFollowScopeKey: 'session-2'
+          })
+        )
+      })
+      await act(async () => vi.advanceTimersByTime(16))
+
+      expect(scrollToEnd).toHaveBeenCalledOnce()
+      expect(scrollToEnd).toHaveBeenCalledWith({ animated: false })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps a visible lock through a subscribed-end lease blip', async () => {
