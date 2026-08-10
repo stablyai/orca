@@ -2690,7 +2690,7 @@
     },
     {
       "id": "direct-ssh.remote-workspace-snapshot-ordering",
-      "title": "Direct SSH snapshot reconciliation preserves only post-request terminal tabs",
+      "title": "Direct SSH snapshots reconcile unacknowledged terminal-tab mutations",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "desktop-ssh",
@@ -2705,17 +2705,18 @@
       "providers": ["ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "Deterministic renderer tests cover request fencing, authoritative deletion, write release, duplicate repair, and the fixed suppression deadline. A visible and headless macOS Electron client reached a throwaway Linux Docker OpenSSH target and real Git repository without ssh localhost; both preserved the exact new tab and PTY through a held stale snapshot and proved terminal input on the target. Linux and Windows client journeys remain gaps.",
+      "coverageNotes": "Deterministic renderer tests cover target-scoped addition/deletion acknowledgement, request fencing, authoritative deletion, bounded overflow, write release, duplicate repair, and the fixed suppression deadline. A visible and headless macOS Electron client reached a throwaway Linux Docker OpenSSH target and real Git repository without ssh localhost; both preserved the exact new tab and PTY through a held stale snapshot and proved terminal input on the target. Linux and Windows client journeys remain gaps.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/13013"],
-      "invariant": "A direct SSH snapshot may remove tabs that existed when its request began, but it cannot remove a local tab created after that boundary. A relevant session write suppressed by snapshot application must persist after the trailing idle window or at one fixed 60-second ceiling that later mutations cannot postpone.",
-      "oracle": "Capture the remoteWorkspace:get result before a new terminal exists, hold its return, create a terminal through the visible UI while relevant mutations keep persistence pending, then release the stale result. Require the exact tab id and PTY id to survive, require the next remote snapshot to contain the tab, and write a proof file through that PTY on a real SSH target. Separately apply a newer snapshot that omits a pre-request live tab and require deletion, then use a fake clock to prove idle release and the non-sliding 60-second write ceiling.",
+      "invariant": "A direct SSH snapshot may change acknowledged terminal-tab presence, but it cannot erase an unacknowledged target-local creation or resurrect an unacknowledged target-local deletion. A relevant session write suppressed by snapshot application must persist after the trailing idle window or at one fixed 60-second ceiling that later mutations cannot postpone.",
+      "oracle": "Hold a requested snapshot, close one of its tabs, release it, and require the close to remain absent. Create a local tab before unsolicited-event delivery, apply a snapshot that omits it, and require the tab to survive until a returned or incoming snapshot acknowledges its presence. Also hold a real remoteWorkspace:get, create a terminal through the visible UI, require its exact tab and PTY identity in the next remote snapshot, and write a proof file through that PTY on a real SSH target.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-remote-workspace-snapshot-race.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-remote-workspace-snapshot-race.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
+        "src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts",
         "src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts",
         "src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts",
         "src/renderer/src/hooks/remote-workspace-target-sync.test.ts",
@@ -2727,10 +2728,25 @@
       ],
       "assertionRefs": [
         {
+          "file": "src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts",
+          "assertions": [
+            "tab presence mutations remain scoped to one direct SSH target until a matching snapshot acknowledges them",
+            "snapshot hydration records no local mutation and per-target overflow fails closed until a full local snapshot is acknowledged",
+            "target removal clears retained mutation and snapshot-apply state"
+          ]
+        },
+        {
           "file": "src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts",
           "assertions": [
             "a tab created after the snapshot request boundary survives apply with its layout and PTY id",
             "a newer authoritative snapshot may delete a pre-request tab even while its PTY is attached"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/remote-workspace-target-sync.test.ts",
+          "assertions": [
+            "a stale requested snapshot cannot resurrect a tab closed after request start",
+            "an unsolicited snapshot cannot erase an unacknowledged local tab created before delivery"
           ]
         },
         {
@@ -2754,10 +2770,10 @@
           "date": "2026-08-10",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 2,
-          "summary": "Seven focused files passed 65 snapshot, target-sync, persistence, patch-queue, and relay-handler tests."
+          "summary": "Eight focused files passed 73 mutation-ledger, snapshot, target-sync, persistence, patch-queue, and relay-handler tests."
         },
         {
           "date": "2026-08-10",
@@ -2788,11 +2804,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "On latest origin/main bbcf89e221, the held-snapshot oracle erases the post-request tab and drops its pending write. The rebased published implementation 7daf37968d preserves that tab but fails authoritative deletion by resurrecting any attached pre-request PTY, and continuous mutations postpone its retry ceiling. The corrected temporal fence passes all four focused oracles and both real-SSH Electron journeys."
+        "evidence": "On latest origin/main bbcf89e221, the held-snapshot oracle erases the post-request tab and drops its pending write. The rebased published implementation 7daf37968d preserves that tab but fails authoritative deletion and slides its retry ceiling. Corrected request fence 03053f8ceb still fails both bidirectional barriers at test oracle 0e279f592a: it resurrects a post-request close and erases a pre-delivery local creation. Mutation acknowledgement implementation 66422d8a04 passes both barriers, the complete focused gate, and retains both real-SSH Electron journeys."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Snapshot fencing scans only tabs in the exact target worktree set. Suppression retains one listener, one deadline timer, and the existing bounded changed-field set; 59 seconds of fake-clock suppression performs no repeated predicate polling, and completion or unsubscribe clears the timer and listener."
+        "evidence": "Tab observation reuses cached exact-target scopes and skips unchanged tab/scope references. Each target retains at most 2,048 coalesced presence mutations, then refuses snapshot apply until a full local snapshot is acknowledged; target removal and App cleanup clear the ledger. Suppression retains one listener and one deadline timer with no predicate polling."
       },
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",
@@ -2802,9 +2818,10 @@
       "knownGaps": [
         "No physical Linux or Windows client journey was run; cross-platform relay artifacts only received build coverage.",
         "Folder workspaces are outside the existing direct-SSH snapshot projection and remain unaffected rather than newly covered.",
-        "Paired remote-runtime snapshots use a separate path and were not changed or exercised by this gate."
+        "Paired remote-runtime snapshots use a separate path and were not changed or exercised by this gate.",
+        "The acknowledgement ledger is renderer-lifetime state; crash/restart convergence continues to rely on the already-persisted host partition and the next full remote snapshot/write."
       ],
-      "demotionRule": "Demote or quarantine if the exact post-request tab or PTY disappears, a pre-request deletion is resurrected, the write deadline slides, polling returns, or the real-SSH gate flakes without a product or harness bug."
+      "demotionRule": "Demote or quarantine if an unacknowledged creation disappears, an unacknowledged deletion is resurrected, mutations cross targets, the write deadline slides, polling returns, or the real-SSH gate flakes without a product or harness bug."
     },
     {
       "id": "terminal-session.layout-pty-ownership",
