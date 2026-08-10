@@ -166,6 +166,18 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     expect(remaining.stdout).toContain('deferred-add-wt')
   })
 
+  it('compare-deletes a failed-create branch on the Git 2.25 baseline', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    await runGit(['update-ref', 'refs/heads/compat-create-rollback', head])
+
+    await expect(
+      runGit(['update-ref', '-d', 'refs/heads/compat-create-rollback', head])
+    ).resolves.toBeDefined()
+    await expect(
+      runGit(['show-ref', '--verify', 'refs/heads/compat-create-rollback'])
+    ).rejects.toBeDefined()
+  })
+
   it('recognizes ref and merge-tree compatibility boundaries', async () => {
     await expectPreferredOrRecognizedFallback(
       ['for-each-ref', '--format=%(refname)', '--exclude=refs/remotes/**/HEAD', '--count=10'],

@@ -92,10 +92,16 @@ export async function shareGitCryptStateWithWorktree(
   gitCryptDir: string,
   worktreePath: string,
   resolveGitPath: ResolveGitOutputPath = resolvePathFromGit,
-  deadline?: GitWorktreeCreateDeadline
+  deadline?: GitWorktreeCreateDeadline,
+  worktreeGitDir?: string
 ): Promise<void> {
-  const { stdout } = await git(['rev-parse', '--absolute-git-dir'], worktreePath)
-  const destination = path.join(resolveGitPath(worktreePath, stdout), 'git-crypt')
+  const gitDir =
+    worktreeGitDir ??
+    resolveGitPath(
+      worktreePath,
+      (await git(['rev-parse', '--absolute-git-dir'], worktreePath)).stdout
+    )
+  const destination = path.join(gitDir, 'git-crypt')
   // Why: one repository-wide authority preserves lock/unlock semantics and never duplicates raw keys.
   const link = () =>
     symlink(gitCryptDir, destination, process.platform === 'win32' ? 'junction' : 'dir')

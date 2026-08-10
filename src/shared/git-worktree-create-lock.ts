@@ -1,5 +1,6 @@
 import { realpath } from 'node:fs/promises'
 import * as path from 'node:path'
+import { acquireGitWorktreeHostLock } from './git-worktree-host-lock'
 import {
   remainingGitWorktreeCreateMs,
   runWithinGitWorktreeDeadline,
@@ -90,14 +91,6 @@ export async function resolveGitWorktreeCreateLockIdentity(
   return { repository, target }
 }
 
-function createLockKeys(identity: GitWorktreeCreateLockIdentity, branchName: string): string[] {
-  const branch = branchName.replace(/^refs\/heads\//, '')
-  return [
-    `${identity.repository}\0branch\0${branch}`,
-    `${identity.repository}\0target\0${identity.target}`
-  ].sort()
-}
-
 function releaseCreateLock(key: string, state: CreateLockState): void {
   const next = state.waiters.values().next().value as LockWaiter | undefined
   if (next) {
@@ -161,19 +154,23 @@ async function acquireCreateLock(
 
 export async function withGitWorktreeCreateLock<T>(
   identity: GitWorktreeCreateLockIdentity,
-  branchName: string,
   deadline: GitWorktreeCreateDeadline,
-  operation: () => Promise<T>
+  operation: (lockedIdentity: GitWorktreeCreateLockIdentity) => Promise<T>
 ): Promise<T> {
-  const releases: (() => void)[] = []
+  const releaseProcessLock = await acquireCreateLock(identity.repository, deadline)
+  let releaseHostLock: (() => Promise<void>) | undefined
   try {
-    for (const key of createLockKeys(identity, branchName)) {
-      releases.push(await acquireCreateLock(key, deadline))
+    releaseHostLock = await acquireGitWorktreeHostLock(identity.repository, deadline)
+    const lockedIdentity = {
+      repository: identity.repository,
+      target: await canonicalizePath(identity.target, deadline)
     }
-    return await operation()
+    return await operation(lockedIdentity)
   } finally {
-    for (const release of releases.toReversed()) {
-      release()
+    try {
+      await releaseHostLock?.()
+    } finally {
+      releaseProcessLock()
     }
   }
 }

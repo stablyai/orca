@@ -40,16 +40,15 @@ function mockUnlockedRepo(): void {
 }
 
 function createGitMock(): ReturnType<typeof vi.fn<GitExec>> {
-  let showRefCalls = 0
   return vi.fn<GitExec>(async (args) => {
     if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
       return { stdout: `${join(REPO, '.git')}\n`, stderr: '' }
     }
-    if (args[0] === 'show-ref' && showRefCalls++ === 0) {
-      throw Object.assign(new Error('missing branch'), { code: 1 })
-    }
     if (args[0] === 'rev-parse' && args[1] === '--absolute-git-dir') {
       return { stdout: `${WORKTREE_GIT_DIR}\n`, stderr: '' }
+    }
+    if (args[0] === 'rev-parse' && args[1] === '--verify') {
+      return { stdout: 'def456\n', stderr: '' }
     }
     return { stdout: '', stderr: '' }
   })
@@ -211,10 +210,15 @@ describe('SSH worktree creation with git-crypt', () => {
       '--force',
       WORKTREE
     ])
-    expect(git.mock.calls.map((call) => call[0])).toContainEqual(['branch', '-D', '--', BRANCH])
+    expect(git.mock.calls.map((call) => call[0])).toContainEqual([
+      'update-ref',
+      '-d',
+      `refs/heads/${BRANCH}`,
+      'def456'
+    ])
   })
 
-  it('owns rollback when worktree add itself leaves partial state', async () => {
+  it('does not roll back state that worktree add failed to identify', async () => {
     mockUnlockedRepo()
     const git = createGitMock()
     let showRefCalls = 0
@@ -238,13 +242,12 @@ describe('SSH worktree creation with git-crypt', () => {
       addWorktreeOp(git, { repoPath: REPO, targetDir: WORKTREE, branchName: BRANCH })
     ).rejects.toThrow('partial add failure')
 
-    expect(git.mock.calls.map((call) => call[0])).toContainEqual([
+    expect(git.mock.calls.map((call) => call[0])).not.toContainEqual([
       'worktree',
       'remove',
       '--force',
       WORKTREE
     ])
-    expect(git.mock.calls.map((call) => call[0])).toContainEqual(['branch', '-D', '--', BRANCH])
   })
 
   it('does not roll back a pre-existing same-target relay winner', async () => {
@@ -275,11 +278,38 @@ describe('SSH worktree creation with git-crypt', () => {
     expect(commands).not.toContainEqual(['branch', '-D', '--', BRANCH])
   })
 
-  it('reports removed worktree and preserved branch precisely', async () => {
+  it('does not remove a worktree whose post-add attempt identity changed', async () => {
     mockUnlockedRepo()
     symlinkMock.mockRejectedValue(Object.assign(new Error('cannot link state'), { code: 'EIO' }))
     const git = createGitMock()
-    let showRefCalls = 0
+    let identityReads = 0
+    git.mockImplementation(async (args) => {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
+        return { stdout: `${join(REPO, '.git')}\n`, stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args[1] === '--absolute-git-dir') {
+        identityReads += 1
+        return {
+          stdout: `${WORKTREE_GIT_DIR}${identityReads === 1 ? '' : '-replacement'}\n`,
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      addWorktreeOp(git, { repoPath: REPO, targetDir: WORKTREE, branchName: BRANCH })
+    ).rejects.toThrow('cleanup skipped')
+
+    const commands = git.mock.calls.map((call) => call[0])
+    expect(commands).not.toContainEqual(['worktree', 'remove', '--force', WORKTREE])
+    expect(commands.find((args) => args[0] === 'update-ref')).toBeUndefined()
+  })
+
+  it('reports a cleanup failure when compare-and-delete preserves the branch', async () => {
+    mockUnlockedRepo()
+    symlinkMock.mockRejectedValue(Object.assign(new Error('cannot link state'), { code: 'EIO' }))
+    const git = createGitMock()
     git.mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: `${join(REPO, '.git')}\n`, stderr: '' }
@@ -287,18 +317,18 @@ describe('SSH worktree creation with git-crypt', () => {
       if (args[0] === 'rev-parse' && args[1] === '--absolute-git-dir') {
         return { stdout: `${WORKTREE_GIT_DIR}\n`, stderr: '' }
       }
-      if (args[0] === 'branch' && args[1] === '-D') {
-        throw new Error('branch delete failed')
+      if (args[0] === 'rev-parse' && args[1] === '--verify') {
+        return { stdout: 'def456\n', stderr: '' }
       }
-      if (args[0] === 'show-ref' && showRefCalls++ === 0) {
-        throw Object.assign(new Error('missing branch'), { code: 1 })
+      if (args[0] === 'update-ref') {
+        throw new Error('branch delete failed')
       }
       return { stdout: '', stderr: '' }
     })
 
     await expect(
       addWorktreeOp(git, { repoPath: REPO, targetDir: WORKTREE, branchName: BRANCH })
-    ).rejects.toThrow(`worktree was removed, but branch "${BRANCH}" was preserved`)
+    ).rejects.toThrow('cleanup also failed')
   })
 
   it('cancels the active child and never starts checkout after cancellation', async () => {

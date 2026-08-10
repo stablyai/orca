@@ -14,6 +14,11 @@ import {
   resolveGitWorktreeCreateLockIdentity,
   withGitWorktreeCreateLock
 } from '../shared/git-worktree-create-lock'
+import {
+  captureGitWorktreeCreateAttempt,
+  gitWorktreeCreateAttemptMatches,
+  type GitWorktreeCreateAttempt
+} from '../shared/git-worktree-create-attempt'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 import type { GitExec } from './git-handler-ops'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
@@ -23,42 +28,34 @@ async function rollbackRelayWorktreeCreate(
   git: GitExec,
   repoPath: string,
   targetDir: string,
-  branchName: string,
-  ownership: { target: boolean; branch: boolean },
+  attempt: GitWorktreeCreateAttempt,
+  deleteBranch: boolean,
   error: unknown
 ): Promise<never> {
   const wrapped = error instanceof Error ? error : new Error(String(error))
-  if (!ownership.target && !ownership.branch) {
-    throw wrapped
-  }
-  let worktreeRemoved = !ownership.target
+  let worktreeRemoved = false
   try {
-    if (ownership.target) {
-      try {
-        await git(['worktree', 'remove', '--force', targetDir], repoPath)
-      } catch {
-        // Why: add may fail after creating only a branch or a stale registration; prune and verify below.
-      }
-      await git(['worktree', 'prune'], repoPath)
-      const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
-      worktreeRemoved = !stdout
-        .split(/\n(?=worktree )/)
-        .map((entry) => entry.match(/^worktree (.+)$/m)?.[1])
-        .some((candidate) => candidate && areRelayWorktreePathsEqual(candidate, targetDir))
+    if (!(await gitWorktreeCreateAttemptMatches(git, targetDir, attempt))) {
+      wrapped.message = `${wrapped.message} (cleanup skipped — the created worktree no longer matches this attempt)`
+      throw wrapped
     }
-    if (ownership.branch) {
-      try {
-        await git(['show-ref', '--verify', '--quiet', `refs/heads/${branchName}`], repoPath)
-        await git(['branch', '-D', '--', branchName], repoPath)
-      } catch (branchError) {
-        if ((branchError as { code?: unknown })?.code !== 1) {
-          if (worktreeRemoved) {
-            wrapped.message = `${wrapped.message} (cleanup also failed — the worktree was removed, but branch "${branchName}" was preserved)`
-            throw wrapped
-          }
-          throw branchError
-        }
-      }
+    let branchOid = ''
+    if (deleteBranch) {
+      branchOid = (await git(['rev-parse', '--verify', attempt.branchRef], repoPath)).stdout.trim()
+    }
+    try {
+      await git(['worktree', 'remove', '--force', targetDir], repoPath)
+    } catch {
+      // Why: add may fail after creating only a branch or a stale registration; prune and verify below.
+    }
+    await git(['worktree', 'prune'], repoPath)
+    const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
+    worktreeRemoved = !stdout
+      .split(/\n(?=worktree )/)
+      .map((entry) => entry.match(/^worktree (.+)$/m)?.[1])
+      .some((candidate) => candidate && areRelayWorktreePathsEqual(candidate, targetDir))
+    if (deleteBranch) {
+      await git(['update-ref', '-d', attempt.branchRef, branchOid], repoPath)
     }
   } catch (cleanupError) {
     if (cleanupError !== wrapped || !worktreeRemoved) {
@@ -66,29 +63,6 @@ async function rollbackRelayWorktreeCreate(
     }
   }
   throw wrapped
-}
-
-async function captureRelayWorktreeCreateOwnership(
-  git: GitExec,
-  repoPath: string,
-  targetDir: string,
-  branchName: string
-): Promise<{ target: boolean; branch: boolean }> {
-  const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
-  const targetExists = stdout
-    .split(/\n(?=worktree )/)
-    .map((entry) => entry.match(/^worktree (.+)$/m)?.[1])
-    .some((candidate) => candidate && areRelayWorktreePathsEqual(candidate, targetDir))
-  let branchExists = true
-  try {
-    await git(['show-ref', '--verify', '--quiet', `refs/heads/${branchName}`], repoPath)
-  } catch (error) {
-    if ((error as { code?: unknown })?.code !== 1) {
-      throw error
-    }
-    branchExists = false
-  }
-  return { target: !targetExists, branch: !branchExists }
 }
 
 async function persistRelayWorktreeCreationBase(
@@ -152,7 +126,8 @@ export async function addWorktreeOp(
   )
   targetDir = identity.target
 
-  return withGitWorktreeCreateLock(identity, branchName, deadline, async () => {
+  return withGitWorktreeCreateLock(identity, deadline, async (lockedIdentity) => {
+    targetDir = lockedIdentity.target
     // Why: mirror local --no-track semantics so create has the same push UX over SSH.
     const effectiveBase =
       base && !checkoutExistingBranch
@@ -194,36 +169,32 @@ export async function addWorktreeOp(
     }
 
     if (gitCryptDir) {
-      const ownership = await captureRelayWorktreeCreateOwnership(
-        runWorktreeGit,
-        repoPath,
-        targetDir,
-        branchName
-      )
+      let attempt: GitWorktreeCreateAttempt | undefined
       try {
-        // Why: rollback ownership begins before Git can leave a branch or registration behind.
         await runWorktreeGit(args, repoPath)
+        attempt = await captureGitWorktreeCreateAttempt(runWorktreeGit, targetDir, branchName)
         await shareGitCryptStateWithWorktree(
           runWorktreeGit,
           gitCryptDir,
           targetDir,
           undefined,
-          deadline
+          deadline,
+          attempt.gitDir
         )
         if (deferCheckoutForGitCrypt) {
           await runWorktreeGit(['checkout'], targetDir)
         }
       } catch (error) {
+        if (!attempt) {
+          throw error
+        }
         const cleanupGit = runWithDeadline(createGitWorktreeCleanupDeadline())
         return rollbackRelayWorktreeCreate(
           cleanupGit,
           repoPath,
           targetDir,
-          branchName,
-          {
-            target: ownership.target,
-            branch: ownership.branch && !checkoutExistingBranch
-          },
+          attempt,
+          !checkoutExistingBranch,
           error
         )
       }
