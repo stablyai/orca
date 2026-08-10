@@ -20779,7 +20779,7 @@ export class OrcaRuntimeService {
       scan = { ok: false, worktrees: [] }
     }
     if (scan.ok) {
-      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
+      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees, scan.lineageRevision)
     }
     const agentScratchWorktreePathMatcher = createAgentScratchWorktreePathMatcher([
       repo.path,
@@ -28750,7 +28750,12 @@ export class OrcaRuntimeService {
           )) ?? { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
         const gitWorktrees = scan.worktrees
         if (scan.ok) {
-          pruneLineageForMissingRepoWorktrees(this.requireStore(), repo, gitWorktrees)
+          pruneLineageForMissingRepoWorktrees(
+            this.requireStore(),
+            repo,
+            gitWorktrees,
+            scan.lineageRevision
+          )
         }
         return gitWorktrees.map((gitWorktree) => {
           const worktreeId = `${repo.id}::${gitWorktree.path}`
@@ -28856,10 +28861,12 @@ export class OrcaRuntimeService {
     repo: Repo,
     projectRuntime: ProjectExecutionRuntimeResolution | undefined
   ): Promise<RuntimeWorktreeScanResult> {
+    const lineageRevision = this.requireStore().getLineageRevision?.()
     if (!repo.connectionId) {
       return await scanLocalRepoWorktreesForResolution(
         repo.path,
-        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
+        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime),
+        lineageRevision
       )
     }
     const provider = getSshGitProvider(repo.connectionId)
@@ -28867,7 +28874,11 @@ export class OrcaRuntimeService {
       return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
     try {
-      return { ok: true, worktrees: await provider.listWorktrees(repo.path) }
+      return {
+        ok: true,
+        lineageRevision,
+        worktrees: await provider.listWorktrees(repo.path)
+      }
     } catch {
       return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }

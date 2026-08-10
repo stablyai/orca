@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-09",
+  "updatedAt": "2026-08-10",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -10,6 +10,127 @@
     }
   },
   "gates": [
+    {
+      "id": "git-worktree.lineage-scan-create-ordering",
+      "title": "Worktree scans prune only lineage they could have observed",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "worktree-runtime",
+      "layer": "main-process-git-lineage-contract",
+      "surfaces": [
+        "local worktree discovery",
+        "SSH worktree discovery",
+        "runtime-host worktree discovery",
+        "workspace lineage pruning"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "paired-runtime", "folder-workspace"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh", "paired-runtime", "folder-workspace"],
+      "coverageNotes": "A real macOS Git repository pins discovery before a real linked-worktree create, rolls the wall clock backward, and releases pruning only after both lineage records advance the Store-owned causal revision. Deterministic Store, IPC, and runtime tests cover every lineage mutation owner, forward clock skew, SSH providers, cached and joined scans, scan failures, host ownership, and folder-workspace bypass; live Linux, Windows, SSH transport, and paired-runtime journeys remain uncollected.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/12631"],
+      "invariant": "A successful worktree listing may prune missing lineage only when the Store-owned lineage revision still equals the causal revision captured before listing began. Missing or mismatched authority fails closed regardless of wall-clock rollback or forward skew; cached or joined listings retain their original revision, failed scans never prune, one execution host cannot mutate another host's lineage, and folder workspaces never enter Git-worktree pruning.",
+      "oracle": "Hold prune application behind an explicit barrier after a real Git worktree listing, create a real linked worktree, roll the wall clock backward, advance both Store lineage records, then release the stale listing and require both records to survive while a fresh listing contains the child. Separately require a revision-matched scan to prune forward-skewed stale lineage, and pin capture, mutation, cache, local, SSH, failed, multi-host, and folder-workspace seams without elapsed-time waits.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/worktree-lineage-pruning-real-git.test.ts src/main/worktree-lineage-pruning.test.ts src/main/runtime/repo-worktree-resolution-scan.test.ts src/main/ipc/worktrees.test.ts src/main/runtime/orca-runtime.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/persistence.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/main/worktree-lineage-pruning-real-git.test.ts",
+        "src/main/worktree-lineage-pruning.test.ts",
+        "src/main/runtime/repo-worktree-resolution-scan.test.ts",
+        "src/main/persistence.test.ts",
+        "src/main/ipc/worktrees.test.ts",
+        "src/main/runtime/orca-runtime.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/worktree-lineage-pruning-real-git.test.ts",
+          "assertions": [
+            "discovery completed before the physical child worktree and causal lineage revision existed",
+            "wall-clock rollback after discovery cannot authorize destructive pruning",
+            "a fresh real Git listing contains the child after creation",
+            "stale discovery removes neither worktree nor workspace lineage"
+          ]
+        },
+        {
+          "file": "src/main/worktree-lineage-pruning.test.ts",
+          "assertions": [
+            "causally newer lineage fails closed even when its timestamp rolls backward",
+            "causally old forward-skewed lineage remains prunable",
+            "cached replay preserves the original lineage revision",
+            "host ownership prevents cross-host lineage mutation"
+          ]
+        },
+        {
+          "file": "src/main/runtime/repo-worktree-resolution-scan.test.ts",
+          "assertions": [
+            "successful scans retain the causal revision supplied before listing starts",
+            "Git execution failure remains non-authoritative"
+          ]
+        },
+        {
+          "file": "src/main/persistence.test.ts",
+          "assertions": [
+            "each worktree and workspace lineage set/removal advances the revision",
+            "metadata, folder cleanup, and identity migration advance the same authority"
+          ]
+        },
+        {
+          "file": "src/main/ipc/worktrees.test.ts",
+          "assertions": [
+            "SSH listing retains its pre-create revision while causal lineage lands",
+            "provider failure and folder workspaces do not apply Git pruning"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "runtime local and SSH scan failures preserve lineage",
+            "bounded scan caching shares one in-flight provider call",
+            "folder-repo detection remains outside Git-worktree pruning"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/worktree-lineage-pruning-real-git.test.ts src/main/worktree-lineage-pruning.test.ts src/main/runtime/repo-worktree-resolution-scan.test.ts src/main/ipc/worktrees.test.ts src/main/runtime/orca-runtime.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 14,
+          "summary": "The focused causal-order gate plus Store revision slice passed locally, including real-Git rollback, forward-skew cleanup, scan capture, SSH race, failure, ownership, folder, cache, and mutation-owner contracts."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "real Git barrier plus main-process Store, worktree scan, and lineage contracts"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "New deterministic barrier gate; it has one local pass and no soak history."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical real-Git rollback oracle removes both newly recorded lineage records on origin/main, the timestamp candidate, and the causal gate disabled, while the corrected candidate preserves both; the forward-skew oracle proves corrected cleanup does not depend on createdAt."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The product change carries one number per cached or in-flight scan and performs one constant-time Store revision read/comparison before iterating lineage. Mutation owners increment one process-local number. It adds no scans, Git subprocesses, provider calls, polling, timers, listeners, retries, wire fields, or fanout."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Run the real barrier on Linux and Windows with Git 2.25.5.",
+        "Collect one live direct-SSH and one headed paired-runtime host journey."
+      ],
+      "knownGaps": [
+        "The real Git barrier ran on macOS with Git 2.50.1, not physical Linux or Windows.",
+        "SSH and paired-runtime paths are deterministic provider/runtime contracts rather than live transports.",
+        "The local Git 2.25.5 matrix covers the unchanged listing command contract separately, not this real-worktree barrier file."
+      ],
+      "demotionRule": "Demote if a pre-create listing can remove later lineage, failed or wrong-host scans mutate lineage, the gate gains elapsed-time sleeps, or scan/provider/subprocess counts increase."
+    },
     {
       "id": "editor.restored-sibling-owner-reparent",
       "title": "Restored sibling tabs migrate filesystem authority before becoming editable",

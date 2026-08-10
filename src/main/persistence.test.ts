@@ -11477,6 +11477,83 @@ describe('Store.migrateTabSwitchKeybindings', () => {
   })
 })
 
+describe('Store lineage revision', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('advances for each set and actual removal', async () => {
+    const store = await createStore()
+    const childId = 'r1::/path/child'
+    const childKey = worktreeWorkspaceKey(childId)
+
+    expect(store.getLineageRevision()).toBe(0)
+    store.setWorktreeLineage(childId, makeWorktreeLineage({ worktreeId: childId }))
+    expect(store.getLineageRevision()).toBe(1)
+    store.setWorkspaceLineage(makeWorkspaceLineage({ childWorkspaceKey: childKey }))
+    expect(store.getLineageRevision()).toBe(2)
+    store.removeWorktreeLineage(childId)
+    expect(store.getLineageRevision()).toBe(3)
+    store.removeWorkspaceLineage(childKey)
+    expect(store.getLineageRevision()).toBe(4)
+
+    store.removeWorktreeLineage(childId)
+    store.removeWorkspaceLineage(childKey)
+    expect(store.getLineageRevision()).toBe(4)
+  })
+
+  it('advances once when metadata removal drops both lineage records', async () => {
+    const store = await createStore()
+    const childId = 'r1::/path/child'
+    store.setWorktreeMeta(childId, {})
+    store.setWorktreeLineage(childId, makeWorktreeLineage({ worktreeId: childId }))
+    store.setWorkspaceLineage(
+      makeWorkspaceLineage({ childWorkspaceKey: worktreeWorkspaceKey(childId) })
+    )
+    const before = store.getLineageRevision()
+
+    store.removeWorktreeMeta(childId)
+
+    expect(store.getLineageRevision()).toBe(before + 1)
+  })
+
+  it('advances when identity migration re-keys either lineage map', async () => {
+    const store = await createStore()
+    const oldId = 'r1::/path/child'
+    const newId = 'r1::/path/renamed'
+    store.setWorkspaceLineage(
+      makeWorkspaceLineage({ childWorkspaceKey: worktreeWorkspaceKey(oldId) })
+    )
+    const before = store.getLineageRevision()
+
+    store.migrateWorktreeIdentity(oldId, newId)
+
+    expect(store.getLineageRevision()).toBe(before + 1)
+  })
+
+  it('advances when folder cleanup removes child workspace lineage', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Folder group',
+      parentPath: '/workspace/folder-group',
+      createdFrom: 'folder-scan'
+    })
+    const folder = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Parent' })
+    store.setWorkspaceLineage(
+      makeWorkspaceLineage({ parentWorkspaceKey: folderWorkspaceKey(folder.id) })
+    )
+    const before = store.getLineageRevision()
+
+    store.removeFolderWorkspace(folder.id)
+
+    expect(store.getLineageRevision()).toBe(before + 1)
+  })
+})
+
 describe('Store.migrateWorktreeIdentity', () => {
   const OLD = 'repo1::/ws/cunner'
   const NEW = 'repo1::/ws/worktree-creation-spinner'

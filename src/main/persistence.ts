@@ -2793,6 +2793,8 @@ export class Store {
   private pendingSnapshotFileWork: Promise<void> | null = null
   private readonly staleTempCleanup: Promise<void>
   private writeGeneration = 0
+  // A restart cannot preserve an in-flight scan, so this causal boundary is process-local.
+  private lineageRevision = 0
   private inFlightAsyncTmpFile: string | null = null
   // Prevent a sync flush from interleaving a second rotation with awaited ring mutations.
   private backupRotationInFlight = false
@@ -4767,6 +4769,7 @@ export class Store {
   // Prune worktree meta/lineage for a repo id; hostId null prunes all entries, else only that host's (missing meta.hostId = local).
   private pruneWorktreeStateForRepo(id: string, hostId: ExecutionHostId | null): void {
     const prefix = `${id}::`
+    let removedLineage = false
     // Why snapshot up front: the first loop deletes metas, so reading meta.hostId live later would misclassify an SSH worktree as local.
     const hostMembership = new Map<string, boolean>()
     const belongsToHost = (key: string): boolean => {
@@ -4848,6 +4851,7 @@ export class Store {
     for (const [childId, lineage] of Object.entries(this.state.worktreeLineageById)) {
       if (belongsToHost(childId) || belongsToHost(lineage.parentWorktreeId)) {
         delete this.state.worktreeLineageById[childId]
+        removedLineage = true
       }
     }
     for (const [childKey, lineage] of Object.entries(this.state.workspaceLineageByChildKey)) {
@@ -4855,11 +4859,16 @@ export class Store {
       const parentScope = parseWorkspaceKey(lineage.parentWorkspaceKey)
       if (childScope?.type === 'worktree' && belongsToHost(childScope.worktreeId)) {
         delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+        removedLineage = true
         continue
       }
       if (parentScope?.type === 'worktree' && belongsToHost(parentScope.worktreeId)) {
         delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+        removedLineage = true
       }
+    }
+    if (removedLineage) {
+      this.advanceLineageRevision()
     }
     this.pruneMobileClientTabSelections(belongsToHost)
   }
@@ -5491,9 +5500,15 @@ export class Store {
             !this.partitionHasOtherRepoWorktreeTabs(worktreeId, partition))
       )
     )
+    const removedLineage =
+      worktreeId in this.state.worktreeLineageById ||
+      worktreeWorkspaceKey(worktreeId) in this.state.workspaceLineageByChildKey
     delete this.state.worktreeMeta[worktreeId]
     delete this.state.worktreeLineageById[worktreeId]
     delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+    if (removedLineage) {
+      this.advanceLineageRevision()
+    }
     for (const partition of partitions) {
       this.removeWorkspaceSessionOwnerInPartition(worktreeId, partition, {
         advanceTerminalTopologyRevision: fencedPartitions.has(partition)
@@ -5506,18 +5521,31 @@ export class Store {
     return this.state.worktreeLineageById[worktreeId]
   }
 
+  getLineageRevision(): number {
+    return this.lineageRevision
+  }
+
+  private advanceLineageRevision(): void {
+    this.lineageRevision += 1
+  }
+
   getAllWorktreeLineage(): Record<string, WorktreeLineage> {
     return this.state.worktreeLineageById
   }
 
   setWorktreeLineage(worktreeId: string, lineage: WorktreeLineage): WorktreeLineage {
     this.state.worktreeLineageById[worktreeId] = lineage
+    this.advanceLineageRevision()
     this.scheduleSave()
     return lineage
   }
 
   removeWorktreeLineage(worktreeId: string): void {
+    const removed = worktreeId in this.state.worktreeLineageById
     delete this.state.worktreeLineageById[worktreeId]
+    if (removed) {
+      this.advanceLineageRevision()
+    }
     this.scheduleSave()
   }
 
@@ -5671,6 +5699,18 @@ export class Store {
       }
     }
 
+    const reKeyedLineage =
+      oldWorktreeId in this.state.worktreeLineageById ||
+      oldWorkspaceKey in this.state.workspaceLineageByChildKey ||
+      Object.values(this.state.worktreeLineageById).some(
+        (lineage) => lineage.parentWorktreeId === oldWorktreeId
+      ) ||
+      Object.values(this.state.workspaceLineageByChildKey).some(
+        (lineage) => lineage.parentWorkspaceKey === oldWorkspaceKey
+      )
+    if (reKeyedLineage) {
+      this.advanceLineageRevision()
+    }
     changed = moveKey(this.state.worktreeLineageById) || changed
     const movedLineage = this.state.worktreeLineageById[newWorktreeId]
     if (movedLineage && movedLineage.worktreeId === oldWorktreeId) {
@@ -5732,21 +5772,31 @@ export class Store {
 
   setWorkspaceLineage(lineage: WorkspaceLineage): WorkspaceLineage {
     this.state.workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage
+    this.advanceLineageRevision()
     this.scheduleSave()
     return lineage
   }
 
   removeWorkspaceLineage(childWorkspaceKey: WorkspaceKey): void {
+    const removed = childWorkspaceKey in this.state.workspaceLineageByChildKey
     delete this.state.workspaceLineageByChildKey[childWorkspaceKey]
+    if (removed) {
+      this.advanceLineageRevision()
+    }
     this.scheduleSave()
   }
 
   private removeWorkspaceLineageForFolderParent(folderWorkspaceId: string): void {
     const parentKey = folderWorkspaceKey(folderWorkspaceId)
+    let removed = false
     for (const [childKey, lineage] of Object.entries(this.state.workspaceLineageByChildKey)) {
       if (lineage.parentWorkspaceKey === parentKey) {
         delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+        removed = true
       }
+    }
+    if (removed) {
+      this.advanceLineageRevision()
     }
   }
 

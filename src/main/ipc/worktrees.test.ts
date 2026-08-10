@@ -312,9 +312,11 @@ describe('registerWorktreeHandlers', () => {
     getProjectHostSetups: vi.fn(),
     removeWorktreeMeta: vi.fn(),
     removeWorkspaceSessionStateForWorktree: vi.fn(),
+    getLineageRevision: vi.fn(),
     getAllWorktreeLineage: vi.fn(),
     removeWorktreeLineage: vi.fn(),
     getAllWorkspaceLineage: vi.fn(),
+    removeWorkspaceLineage: vi.fn(),
     getFolderWorkspaces: vi.fn(),
     getProjectGroups: vi.fn()
   }
@@ -395,9 +397,11 @@ describe('registerWorktreeHandlers', () => {
       store.getProjectHostSetups,
       store.removeWorktreeMeta,
       store.removeWorkspaceSessionStateForWorktree,
+      store.getLineageRevision,
       store.getAllWorktreeLineage,
       store.removeWorktreeLineage,
       store.getAllWorkspaceLineage,
+      store.removeWorkspaceLineage,
       store.getFolderWorkspaces,
       store.getProjectGroups,
       killAllProcessesForWorktreeMock,
@@ -463,6 +467,7 @@ describe('registerWorktreeHandlers', () => {
         updatedAt: 0
       }
     ])
+    store.getLineageRevision.mockReturnValue(0)
     store.getAllWorktreeLineage.mockReturnValue({})
     store.getAllWorkspaceLineage.mockReturnValue({})
     store.getFolderWorkspaces.mockReturnValue([])
@@ -6496,6 +6501,131 @@ describe('registerWorktreeHandlers', () => {
       'repo-ssh::/remote/missing-parent',
       expect.objectContaining({ instanceId: expect.any(String) })
     )
+  })
+
+  it('fails closed when SSH lineage changes while the listing is in flight', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    }
+    // The listing stays pending so the revision capture cannot slide to completion.
+    let startListing: () => void = () => {}
+    let finishListing: (worktrees: unknown[]) => void = () => {}
+    const listingStarted = new Promise<void>((resolve) => {
+      startListing = resolve
+    })
+    const listing = new Promise<unknown[]>((resolve) => {
+      finishListing = resolve
+    })
+    const provider = {
+      listWorktrees: vi.fn().mockImplementation(() => {
+        startListing()
+        return listing
+      })
+    }
+    let worktreeLineage: Record<string, unknown> = {}
+    let workspaceLineage: Record<string, unknown> = {}
+    let lineageRevision = 0
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    store.getLineageRevision.mockImplementation(() => lineageRevision)
+    getSshGitProviderMock.mockReturnValue(provider)
+    store.getAllWorktreeLineage.mockImplementation(() => worktreeLineage)
+    store.getAllWorkspaceLineage.mockImplementation(() => workspaceLineage)
+    store.getWorktreeMeta.mockReturnValue(undefined)
+
+    const listed = handlers['worktrees:list'](null, { repoId: 'repo-ssh' })
+    await listingStarted
+
+    worktreeLineage = {
+      'repo-ssh::/remote/just-created': {
+        parentWorktreeId: 'repo-ssh::/remote/live',
+        createdAt: -10_000
+      },
+      'repo-ssh::/remote/long-gone': {
+        parentWorktreeId: 'repo-ssh::/remote/live',
+        createdAt: 1
+      }
+    }
+    workspaceLineage = {
+      'worktree:repo-ssh::/remote/just-created': {
+        childWorkspaceKey: 'worktree:repo-ssh::/remote/just-created',
+        parentWorkspaceKey: 'worktree:repo-ssh::/remote/live',
+        createdAt: -10_000
+      }
+    }
+    lineageRevision += 1
+
+    finishListing([
+      {
+        path: '/remote/live',
+        head: 'abc123',
+        branch: 'refs/heads/live',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    await listed
+
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalledWith('repo-ssh::/remote/long-gone')
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalledWith('repo-ssh::/remote/just-created')
+    expect(store.removeWorkspaceLineage).not.toHaveBeenCalledWith(
+      'worktree:repo-ssh::/remote/just-created'
+    )
+  })
+
+  it('captures local lineage authority before the listing runs', async () => {
+    const repo = {
+      id: 'repo-local',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    let startListing: () => void = () => {}
+    let finishListing: (worktrees: unknown[]) => void = () => {}
+    const listingStarted = new Promise<void>((resolve) => {
+      startListing = resolve
+    })
+    const listing = new Promise<unknown[]>((resolve) => {
+      finishListing = resolve
+    })
+    listWorktreesMock.mockImplementation(() => {
+      startListing()
+      return listing
+    })
+    let lineageRevision = 11
+    let worktreeLineage: Record<string, unknown> = {}
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    store.getLineageRevision.mockImplementation(() => lineageRevision)
+    store.getAllWorktreeLineage.mockImplementation(() => worktreeLineage)
+    store.getAllWorkspaceLineage.mockReturnValue({})
+
+    const listed = handlers['worktrees:list'](null, { repoId: repo.id })
+    await listingStarted
+    worktreeLineage = {
+      'repo-local::/local/just-created': {
+        parentWorktreeId: 'repo-local::/local/live'
+      }
+    }
+    lineageRevision += 1
+    finishListing([
+      {
+        path: '/local/live',
+        head: 'abc123',
+        branch: 'refs/heads/live',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    await listed
+
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
   })
 
   it('does not repeatedly rotate already-invalid missing parent metadata', async () => {

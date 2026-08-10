@@ -662,16 +662,22 @@ function resetRuntimeTestMocks(): void {
   vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
   scanLocalRepoWorktreesForResolutionMock
     .mockReset()
-    .mockImplementation(async (repoPath: string, options: { wslDistro?: string }) => {
-      try {
-        const worktrees = options.wslDistro
-          ? await listWorktrees(repoPath, options)
-          : await listWorktrees(repoPath)
-        return { ok: true, worktrees }
-      } catch {
-        return { ok: false, worktrees: [] }
+    .mockImplementation(
+      async (
+        repoPath: string,
+        options: { wslDistro?: string },
+        lineageRevision: number | undefined
+      ) => {
+        try {
+          const worktrees = options.wslDistro
+            ? await listWorktrees(repoPath, options)
+            : await listWorktrees(repoPath)
+          return { ok: true, worktrees, lineageRevision }
+        } catch {
+          return { ok: false, worktrees: [] }
+        }
       }
-    })
+    )
   vi.mocked(addWorktree).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockResolvedValue(undefined)
@@ -38764,6 +38770,7 @@ describe('OrcaRuntimeService', () => {
     const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
     const runtimeStore = {
       ...store,
+      getLineageRevision: () => 0,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {

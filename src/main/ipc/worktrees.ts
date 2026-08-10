@@ -590,16 +590,19 @@ const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
 type DetectedWorktreeScanCacheEntry = {
   expiresAt: number
   worktrees: GitWorktreeInfo[]
+  lineageRevision: number | undefined
 }
 
 type DetectedWorktreeScan = {
   invalidated: boolean
   promise: Promise<GitWorktreeInfo[]>
+  lineageRevision: number | undefined
 }
 
 type DetectedWorktreeScanResult = {
   gitWorktrees: GitWorktreeInfo[]
   fresh: boolean
+  lineageRevision: number | undefined
 }
 
 const detectedWorktreeScanCache = new Map<string, DetectedWorktreeScanCacheEntry>()
@@ -651,25 +654,36 @@ async function listDetectedGitWorktrees(
 ): Promise<DetectedWorktreeScanResult> {
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   if (repo.connectionId || isFolderRepo(repo)) {
+    const lineageRevision = store.getLineageRevision?.()
     return {
       gitWorktrees: await listRepoWorktrees(repo, localWorktreeGitOptions),
-      fresh: true
+      fresh: true,
+      lineageRevision
     }
   }
 
   const cacheKey = getDetectedWorktreeScanCacheKey(repo.id, localWorktreeGitOptions)
   const cached = detectedWorktreeScanCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) {
-    return { gitWorktrees: cached.worktrees, fresh: false }
+    return {
+      gitWorktrees: cached.worktrees,
+      fresh: false,
+      lineageRevision: cached.lineageRevision
+    }
   }
 
   const inFlight = detectedWorktreeScanInFlight.get(cacheKey)
   if (inFlight) {
-    return { gitWorktrees: await inFlight.promise, fresh: false }
+    return {
+      gitWorktrees: await inFlight.promise,
+      fresh: false,
+      lineageRevision: inFlight.lineageRevision
+    }
   }
 
   const scan: DetectedWorktreeScan = {
     invalidated: false,
+    lineageRevision: store.getLineageRevision?.(),
     promise: listRepoWorktrees(repo, localWorktreeGitOptions)
   }
   detectedWorktreeScanInFlight.set(cacheKey, scan)
@@ -679,10 +693,15 @@ async function listDetectedGitWorktrees(
     if (!scan.invalidated) {
       detectedWorktreeScanCache.set(cacheKey, {
         worktrees: gitWorktrees,
-        expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS
+        expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
+        lineageRevision: scan.lineageRevision
       })
     }
-    return { gitWorktrees, fresh: !scan.invalidated }
+    return {
+      gitWorktrees,
+      fresh: !scan.invalidated,
+      lineageRevision: scan.lineageRevision
+    }
   } finally {
     if (detectedWorktreeScanInFlight.get(cacheKey) === scan) {
       detectedWorktreeScanInFlight.delete(cacheKey)
@@ -1172,6 +1191,7 @@ async function listDetectedWorktreesForCapturedRepo(
   try {
     let gitWorktrees: GitWorktreeInfo[]
     let freshScan = true
+    let scanLineageRevision: number | undefined = store.getLineageRevision?.()
     if (isFolderRepo(repo)) {
       if (!isCurrent()) {
         return null
@@ -1214,6 +1234,7 @@ async function listDetectedWorktreesForCapturedRepo(
           worktrees: buildDisconnectedDetectedWorktrees(store, repo, worktrees)
         }
       }
+      scanLineageRevision = store.getLineageRevision?.()
       gitWorktrees = await capturedProvider.listWorktrees(repo.path, {
         signal: providerAbort?.signal
       })
@@ -1221,6 +1242,7 @@ async function listDetectedWorktreesForCapturedRepo(
       const scan = await listDetectedGitWorktrees(store, repo)
       gitWorktrees = scan.gitWorktrees
       freshScan = scan.fresh
+      scanLineageRevision = scan.lineageRevision
     }
     const aborted = abortedResult()
     if (aborted) {
@@ -1240,7 +1262,7 @@ async function listDetectedWorktreesForCapturedRepo(
     }
     if (freshScan) {
       rememberLocalWorktreeRoots(store, repo, gitWorktrees)
-      pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+      pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees, scanLineageRevision)
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
     return {
@@ -1825,6 +1847,7 @@ export function registerWorktreeHandlers(
       try {
         let gitWorktrees
         let freshScan = true
+        let scanLineageRevision: number | undefined = store.getLineageRevision?.()
         if (isFolderRepo(repo)) {
           return listVisibleFolderWorkspaces(store, repo)
         } else if (repo.connectionId) {
@@ -1838,6 +1861,7 @@ export function registerWorktreeHandlers(
             return listDisconnectedSshWorktrees(store, repo, sshWorktreeMetaIndex)
           }
           loggedUnavailableSshGitProviders.delete(`${repo.connectionId}:${repo.id}`)
+          scanLineageRevision = store.getLineageRevision?.()
           try {
             gitWorktrees = await provider.listWorktrees(repo.path)
           } catch (err) {
@@ -1853,10 +1877,11 @@ export function registerWorktreeHandlers(
           const scan = await listDetectedGitWorktrees(store, repo)
           gitWorktrees = scan.gitWorktrees
           freshScan = scan.fresh
+          scanLineageRevision = scan.lineageRevision
         }
         if (freshScan) {
           rememberLocalWorktreeRoots(store, repo, gitWorktrees)
-          pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+          pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees, scanLineageRevision)
         }
         loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
         return buildDetectedGitWorktrees(store, repo, gitWorktrees)
@@ -1889,6 +1914,7 @@ export function registerWorktreeHandlers(
     try {
       let gitWorktrees
       let freshScan = true
+      let scanLineageRevision: number | undefined = store.getLineageRevision?.()
       if (isFolderRepo(repo)) {
         return listVisibleFolderWorkspaces(store, repo)
       } else if (repo.connectionId) {
@@ -1902,6 +1928,7 @@ export function registerWorktreeHandlers(
           return listDisconnectedSshWorktrees(store, repo, sshWorktreeMetaIndex)
         }
         loggedUnavailableSshGitProviders.delete(`${repo.connectionId}:${repo.id}`)
+        scanLineageRevision = store.getLineageRevision?.()
         try {
           gitWorktrees = await provider.listWorktrees(repo.path)
         } catch (err) {
@@ -1917,10 +1944,11 @@ export function registerWorktreeHandlers(
         const scan = await listDetectedGitWorktrees(store, repo)
         gitWorktrees = scan.gitWorktrees
         freshScan = scan.fresh
+        scanLineageRevision = scan.lineageRevision
       }
       if (freshScan) {
         rememberLocalWorktreeRoots(store, repo, gitWorktrees)
-        pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+        pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees, scanLineageRevision)
       }
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
       return buildDetectedGitWorktrees(store, repo, gitWorktrees)

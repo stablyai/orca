@@ -116,6 +116,7 @@ function makeStore(options: StoreOptions = {}) {
       return metaById[id]
     },
     removeWorktreeMeta: () => {},
+    getLineageRevision: () => 0,
     getAllWorktreeLineage: () => lineageById,
     getAllWorkspaceLineage: () => ({ [`worktree:${WORKTREE_ID}`]: { parentWorkspaceKey: null } }),
     removeWorktreeLineage: options.removeWorktreeLineage ?? vi.fn(),

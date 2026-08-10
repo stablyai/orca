@@ -35,8 +35,18 @@ function hasStoredRepoLineage(
 export function pruneLineageForMissingRepoWorktrees(
   store: Store,
   repo: Repo,
-  gitWorktrees: GitWorktreeInfo[]
+  gitWorktrees: GitWorktreeInfo[],
+  scanLineageRevision: number | undefined
 ): void {
+  // The listing cannot judge lineage written after it began; missing or changed
+  // store authority defers destructive cleanup to a causally newer scan.
+  if (
+    typeof store.getLineageRevision !== 'function' ||
+    !Number.isSafeInteger(scanLineageRevision) ||
+    store.getLineageRevision() !== scanLineageRevision
+  ) {
+    return
+  }
   if (
     typeof store.getAllWorktreeLineage !== 'function' ||
     typeof store.removeWorktreeLineage !== 'function'
@@ -70,6 +80,9 @@ export function pruneLineageForMissingRepoWorktrees(
       isWorkspaceKey(childWorkspaceKey)
     ) {
       store.removeWorkspaceLineage?.(childWorkspaceKey)
+      console.warn(
+        `[worktrees] dropped workspace lineage for ${childWorkspaceKey}; the scan no longer lists it`
+      )
     }
   }
   for (const [childId, lineage] of Object.entries(worktreeLineage)) {
@@ -81,6 +94,11 @@ export function pruneLineageForMissingRepoWorktrees(
       // Why: a proven-missing path must not transfer its lineage to a future checkout at that path.
       store.removeWorktreeLineage(childId)
       store.removeWorkspaceLineage?.(worktreeWorkspaceKey(childId))
+      // Why: this removes a link the user can see in the sidebar, so leave a trace —
+      // silent removal makes a wrongly dropped parent near-impossible to attribute.
+      console.warn(
+        `[worktrees] dropped lineage for ${childId} (parent ${lineage.parentWorktreeId}); the scan no longer lists it`
+      )
     }
     if (
       worktreeIdBelongsToRepo(lineage.parentWorktreeId, repoPrefix) &&

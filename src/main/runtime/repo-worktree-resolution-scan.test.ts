@@ -14,7 +14,7 @@ describe('scanLocalRepoWorktreesForResolution', () => {
       Object.assign(new Error('spawn git EAGAIN'), { code: 'EAGAIN' })
     )
 
-    await expect(scanLocalRepoWorktreesForResolution('/repo', {})).resolves.toEqual({
+    await expect(scanLocalRepoWorktreesForResolution('/repo', {}, 3)).resolves.toEqual({
       ok: false,
       worktrees: []
     })
@@ -24,8 +24,24 @@ describe('scanLocalRepoWorktreesForResolution', () => {
     vi.mocked(listWorktreesStrict).mockResolvedValue([])
 
     await expect(
-      scanLocalRepoWorktreesForResolution('/repo', { wslDistro: 'Ubuntu' })
-    ).resolves.toEqual({ ok: true, worktrees: [] })
+      scanLocalRepoWorktreesForResolution('/repo', { wslDistro: 'Ubuntu' }, 3)
+    ).resolves.toEqual({ ok: true, worktrees: [], lineageRevision: 3 })
     expect(listWorktreesStrict).toHaveBeenCalledWith('/repo', { wslDistro: 'Ubuntu' })
+  })
+
+  it('retains the causal revision supplied before the listing runs', async () => {
+    let liveRevision = 12
+    vi.mocked(listWorktreesStrict).mockImplementation(async () => {
+      liveRevision += 1
+      return []
+    })
+
+    const result = await scanLocalRepoWorktreesForResolution('/repo', {}, liveRevision)
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.lineageRevision).toBe(12)
+      expect(liveRevision).toBe(13)
+    }
   })
 })
