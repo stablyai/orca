@@ -264,6 +264,85 @@ describe('createRemoteWorkspaceTargetSync', () => {
     })
   })
 
+  it('keeps a terminal tab created after the snapshot request starts', async () => {
+    const hydrateTabsSession = vi.fn()
+    const state = appState({ hydrateTabsSession })
+    const pendingGet = deferred<RemoteWorkspaceSnapshot | null>()
+    const harness = createHarness(state, () => pendingGet.promise)
+
+    const pending = harness.sync.syncAfterConnect(token())
+    await flush()
+    state.tabsByWorktree = {
+      'repo-a::/remote/work': [
+        {
+          id: 'fresh-tab',
+          worktreeId: 'repo-a::/remote/work',
+          ptyId: 'ssh:target-a@@pty-fresh',
+          generation: 1
+        }
+      ]
+    }
+    state.ptyIdsByTabId = { 'fresh-tab': ['ssh:target-a@@pty-fresh'] }
+    state.terminalLayoutsByTabId = { 'fresh-tab': { activeLeafId: 'leaf-fresh' } }
+    pendingGet.resolve(
+      snapshot(4, {
+        '/remote/work': [
+          {
+            id: 'remote-tab',
+            worktreePath: '/remote/work',
+            ptyId: 'ssh:target-a@@pty-remote',
+            generation: 1
+          } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
+        ]
+      })
+    )
+    await pending
+
+    const merged = hydrateTabsSession.mock.calls[0][0]
+    expect(
+      merged.tabsByWorktree['repo-a::/remote/work'].map((tab: { id: string }) => tab.id)
+    ).toEqual(['remote-tab', 'fresh-tab'])
+    expect(merged.terminalLayoutsByTabId['fresh-tab']).toEqual({ activeLeafId: 'leaf-fresh' })
+  })
+
+  it('accepts a newer snapshot that deletes a pre-request live tab', async () => {
+    const hydrateTabsSession = vi.fn()
+    const state = appState({
+      tabsByWorktree: {
+        'repo-a::/remote/work': [
+          {
+            id: 'deleted-remotely',
+            worktreeId: 'repo-a::/remote/work',
+            ptyId: 'ssh:target-a@@pty-old',
+            generation: 1
+          }
+        ]
+      },
+      ptyIdsByTabId: { 'deleted-remotely': ['ssh:target-a@@pty-old'] },
+      hydrateTabsSession
+    })
+    const harness = createHarness(state, async () => null)
+
+    await harness.sync.applyUnsolicitedSnapshot(
+      'target-a',
+      snapshot(5, {
+        '/remote/work': [
+          {
+            id: 'remote-tab',
+            worktreePath: '/remote/work',
+            ptyId: 'ssh:target-a@@pty-remote',
+            generation: 1
+          } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
+        ]
+      })
+    )
+
+    const merged = hydrateTabsSession.mock.calls[0][0]
+    expect(
+      merged.tabsByWorktree['repo-a::/remote/work'].map((tab: { id: string }) => tab.id)
+    ).toEqual(['remote-tab'])
+  })
+
   it('prepares an unsolicited snapshot once and preserves newer local terminal fields', async () => {
     const calls: string[] = []
     const state = appState({

@@ -594,7 +594,6 @@ describe('createSessionWriteSubscriber', () => {
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
     vi.advanceTimersByTime(200)
     persist.mockClear()
-
     shouldSchedule = false
     useAppStore.setState({ activeTabId: 'tab-created-during-apply' })
     vi.advanceTimersByTime(1_000)
@@ -622,7 +621,6 @@ describe('createSessionWriteSubscriber', () => {
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
     vi.advanceTimersByTime(200)
     persist.mockClear()
-
     useAppStore.setState({ activeTabId: 'tab-created-before-apply' })
     vi.advanceTimersByTime(50)
     shouldSchedule = false
@@ -662,6 +660,30 @@ describe('createSessionWriteSubscriber', () => {
     vi.advanceTimersByTime(45_000)
     expect(persist).toHaveBeenCalledTimes(1)
     expect(persist.mock.calls[0]?.[0]?.patch).toHaveProperty('activeTabId', 'tab-held-past-ceiling')
+    cleanup()
+  })
+
+  it('bounds suppression while relevant updates keep resetting the debounce', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    let shouldSchedule = true
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => shouldSchedule,
+      debounceMs: 150
+    })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+    shouldSchedule = false
+    for (let elapsed = 0; elapsed < 61_000; elapsed += 100) {
+      useAppStore.setState({ activeTabId: `tab-${elapsed}` })
+      vi.advanceTimersByTime(100)
+    }
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.activeTabId).toBe('tab-59900')
     cleanup()
   })
 
