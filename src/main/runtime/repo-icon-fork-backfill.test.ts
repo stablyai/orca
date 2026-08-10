@@ -94,15 +94,30 @@ describe('startup fork-upstream backfill', () => {
     })
   })
 
-  it('never migrates an icon the user chose', async () => {
+  it('keeps an icon chosen while avatar detection is pending', async () => {
     const runtime = new OrcaRuntimeService()
-    const updateRepo = attachStore(runtime, [
-      makeRepo({ repoIcon: { type: 'emoji', emoji: '🚀' } })
-    ])
+    const repo = makeRepo()
+    const repos = [repo]
+    const updateRepo = attachStore(runtime, repos)
     getRepoUpstream.mockResolvedValue({ owner: 'upstream-org', repo: 'rocket' })
-    getRepoSlug.mockResolvedValue({ owner: 'acme', repo: 'rocket-pro' })
+    let resolveSlug!: (value: { owner: string; repo: string }) => void
+    let markSlugStarted!: () => void
+    const slugStarted = new Promise<void>((resolve) => {
+      markSlugStarted = resolve
+    })
+    getRepoSlug.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSlug = resolve
+          markSlugStarted()
+        })
+    )
 
-    await (runtime as unknown as BackfillInternals).backfillForkUpstreams()
+    const backfill = (runtime as unknown as BackfillInternals).backfillForkUpstreams()
+    await slugStarted
+    repos[0] = { ...repo, repoIcon: { type: 'emoji', emoji: '🚀' } }
+    resolveSlug({ owner: 'acme', repo: 'rocket-pro' })
+    await backfill
 
     expect(updateRepo).toHaveBeenCalledExactlyOnceWith('repo-1', {
       upstream: { owner: 'upstream-org', repo: 'rocket' }
