@@ -35,6 +35,9 @@ export type OrchestrationCheckOutput = {
   messages: OrchestrationMessageSummary[]
   count: number
   formatted?: string
+  // Why: set when this terminal is a dispatched worker as well as a bound coordinator, so the
+  // Dispatch shelf it did not read stays visible instead of silently shadowed.
+  shadowedDispatchId?: string
   deliveryId?: string | null
   timedOut?: boolean
   cancelled?: boolean
@@ -80,20 +83,23 @@ export function formatOrchestrationCheckText(
         : '[LEGACY COMPATIBILITY]\n'
     : ''
   const deliveryNotice = formatCurrentDeliveryNotice(prepared.legacyCompatibility?.currentDelivery)
+  const shadowNotice = prepared.shadowedDispatchId
+    ? `\nDispatch ${prepared.shadowedDispatchId} also holds mail for this terminal; read it with --as dispatch.`
+    : ''
   if (prepared.formatted) {
-    return `${legacyHeader}${prepared.formatted}${deliveryNotice}`
+    return `${legacyHeader}${prepared.formatted}${deliveryNotice}${shadowNotice}`
   }
   if (prepared.count === 0) {
     if (prepared.timedOut) {
-      return `${legacyHeader}Wait timed out; no messages were consumed.${deliveryNotice}`
+      return `${legacyHeader}Wait timed out; no messages were consumed.${deliveryNotice}${shadowNotice}`
     }
     if (prepared.cancelled) {
       const cancelled = prepared.connectionLost
         ? 'Wait cancelled because the connection closed; no messages were consumed.'
         : 'Wait cancelled; no messages were consumed.'
-      return `${legacyHeader}${cancelled}${deliveryNotice}`
+      return `${legacyHeader}${cancelled}${deliveryNotice}${shadowNotice}`
     }
-    return `${legacyHeader}No messages.${deliveryNotice}`
+    return `${legacyHeader}No messages.${deliveryNotice}${shadowNotice}`
   }
   const rendered = prepared.messages
     .map(
@@ -105,7 +111,7 @@ export function formatOrchestrationCheckText(
     )
     .join('\n')
   const output = prepared.deliveryId ? `Delivery ${prepared.deliveryId}\n${rendered}` : rendered
-  return `${legacyHeader}${output}${deliveryNotice}`
+  return `${legacyHeader}${output}${deliveryNotice}${shadowNotice}`
 }
 
 export function prepareOrchestrationCheckOutput<T extends OrchestrationCheckOutput>(

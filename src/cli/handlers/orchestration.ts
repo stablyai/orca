@@ -623,6 +623,13 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
+    const mailbox = getOptionalStringFlag(flags, 'as')
+    if (mailbox !== undefined && mailbox !== 'dispatch' && mailbox !== 'coordinator') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Invalid --as. Expected dispatch or coordinator.'
+      )
+    }
 
     // Why: Claude Code auto-backgrounds subprocesses silent ~2 min; emit JSON keepalives to stderr (stdout stays one payload). See §3.4.
     const stopKeepalive = wait ? startCheckKeepalive(timeoutMs) : null
@@ -630,6 +637,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       messages: MessageSummary[]
       count: number
       formatted?: string
+      shadowedDispatchId?: string
       deliveryId?: string | null
       runId?: string
       timedOut?: boolean
@@ -651,6 +659,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         inject: flags.has('inject') ? true : undefined,
         compatibilityCliCommand: resolveCompatibilityCliCommand(),
         run: getOptionalStringFlag(flags, 'run'),
+        as: mailbox,
         ack: getOptionalStringFlag(flags, 'ack'),
         wait: wait ? true : undefined,
         timeoutMs

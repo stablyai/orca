@@ -121,6 +121,8 @@ const CheckParams = z
     compatibilityQuestionAck: OptionalString,
     compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
     run: OptionalString,
+    // Why: a terminal can be both a dispatched worker and a bound coordinator; this picks which mailbox to read.
+    as: z.enum(['dispatch', 'coordinator']).optional(),
     wait: OptionalBoolean,
     timeoutMs: OptionalFiniteNumber
   })
@@ -135,6 +137,12 @@ const CheckParams = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose at most one message read mode: --unread, --peek, or --all.'
+      })
+    }
+    if (params.as === 'dispatch' && params.run) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--run selects a Run mailbox and cannot be combined with --as dispatch.'
       })
     }
   })
@@ -695,7 +703,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
       const paneKey = runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
       const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
-      if (params.run || boundRun) {
+      // Why: a dispatched sub-coordinator holds both roles; its Dispatch shelf used to be unreachable
+      // because the Run binding always won. Report it, and let --as pick the other mailbox.
+      const shadowedDispatch =
+        boundRun && params.as !== 'dispatch'
+          ? db.getActiveDispatchForIdentity(handle, paneKey ?? undefined)
+          : undefined
+      const shadowed = shadowedDispatch ? { shadowedDispatchId: shadowedDispatch.id } : {}
+      if (params.as !== 'dispatch' && (params.run || boundRun)) {
         const run = resolveRunScope(runtime, {
           runId: params.run,
           callerTerminalHandle: handle,
@@ -734,11 +749,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           if (params.format || params.inject) {
             return {
               ...result,
+              ...shadowed,
               formatted: messages.map(formatMessageBanner).join('\n\n'),
               runId: run.id
             }
           }
-          return { ...result, runId: run.id }
+          return { ...result, ...shadowed, runId: run.id }
         }
 
         const readDelivery = (wakeTypes?: MessageType[]) =>
@@ -750,6 +766,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         let current = readDelivery(params.wait ? typeFilter : undefined)
         if (current) {
           return {
+            ...shadowed,
             runId: run.id,
             deliveryId: current.delivery.id,
             messages: current.messages,
@@ -766,6 +783,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         if (!params.wait) {
           return {
+            ...shadowed,
             runId: run.id,
             deliveryId: null,
             messages: [],
@@ -812,6 +830,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         if (waitResult === 'timed_out') {
           return {
+            ...shadowed,
             runId: run.id,
             deliveryId: null,
             messages: [],
@@ -824,6 +843,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         if (waitResult === 'cancelled') {
           return {
+            ...shadowed,
             runId: run.id,
             deliveryId: null,
             messages: [],
@@ -837,6 +857,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
         current = readDelivery(typeFilter)
         return {
+          ...shadowed,
           runId: run.id,
           deliveryId: current?.delivery.id ?? null,
           messages: current?.messages ?? [],
@@ -873,6 +894,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         : remoteAttachment
           ? { dispatchId: remoteAttachment.dispatch_id, runId: undefined }
           : undefined
+      // Why: --as dispatch names one mailbox, so falling back to the handle inbox would repeat the
+      // silent substitution this selector exists to end.
+      if (params.as === 'dispatch' && !workerMailbox) {
+        throw new OrchestrationError(
+          'dispatch_not_found',
+          `Terminal ${handle} holds no active Dispatch to read.`
+        )
+      }
       if (workerMailbox) {
         const address = `dispatch:${workerMailbox.dispatchId}`
         const showAll = params.all === true || (params.unread === false && params.peek !== true)

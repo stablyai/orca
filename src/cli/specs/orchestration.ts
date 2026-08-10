@@ -80,8 +80,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'check'],
     summary: 'Check messages for a terminal',
     usage:
-      'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--json]\n' +
+      'orca orchestration check [--terminal <handle>] [--run <run_id>] [--as <dispatch|coordinator>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--json]\n' +
       "  default: return the bound Run's oldest unacknowledged FIFO batch.\n" +
+      "  --as dispatch: read this terminal's Dispatch mailbox even while it is bound as a coordinator.\n" +
       '  --ack: acknowledge the prior whole batch before checking/waiting.\n' +
       '  --peek: return only unread messages without marking them read.\n' +
       '  --all: return every message for the handle; does not mark read.\n' +
@@ -94,6 +95,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       ...GLOBAL_FLAGS,
       'terminal',
       'run',
+      'as',
       'ack',
       'unread',
       'peek',
@@ -107,7 +109,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
       '--format renders the returned rows as local text only; it never writes to another terminal.',
-      'A bound Run replays the same Delivery until --ack; process every message before acknowledging.'
+      'A bound Run replays the same Delivery until --ack; process every message before acknowledging.',
+      'A terminal that is both dispatched and bound as a coordinator reads the Run mailbox by default; the response reports the Dispatch it shadowed, and --as dispatch reads that shelf instead.'
     ]
   },
   {

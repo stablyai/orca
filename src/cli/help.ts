@@ -499,6 +499,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'worktree create' && flag === 'parent-worktree') {
     return '--parent-worktree <selector> Parent selector such as active/current, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, folder:<id>, or worktree:<worktreeId>'
   }
+  if (command === 'orchestration check' && flag === 'as') {
+    return '--as <mailbox>        Mailbox to read: dispatch or coordinator (default: coordinator when a Run is bound)'
+  }
   if (command === 'orchestration task-create' && flag === 'task-title') {
     return '--task-title <text>  Concise title for the orchestration task'
   }
