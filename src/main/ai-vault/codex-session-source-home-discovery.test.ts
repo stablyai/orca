@@ -11,6 +11,7 @@ const testHome = vi.hoisted(() => {
   const root: string = mkdtempSync(joinPath(tmpdir(), 'orca-codex-source-home-'))
   const home: string = joinPath(root, 'home')
   mkdirSync(home, { recursive: true })
+  const previousOrcaUserDataPath = process.env.ORCA_USER_DATA_PATH
   process.env.ORCA_USER_DATA_PATH = joinPath(root, 'userdata')
   mkdirSync(process.env.ORCA_USER_DATA_PATH, { recursive: true })
   // Why: that same module bakes `process.env.CODEX_HOME` into the default root
@@ -18,7 +19,7 @@ const testHome = vi.hoisted(() => {
   // and the users this fix targets are exactly the ones who set it.
   const previousCodexHome = process.env.CODEX_HOME
   delete process.env.CODEX_HOME
-  return { root, home, previousCodexHome }
+  return { root, home, previousCodexHome, previousOrcaUserDataPath }
 })
 
 vi.mock('node:os', async () => {
@@ -81,6 +82,11 @@ afterAll(async () => {
   // Workers are reused across files, so leave the env as this one found it.
   if (testHome.previousCodexHome !== undefined) {
     process.env.CODEX_HOME = testHome.previousCodexHome
+  }
+  if (testHome.previousOrcaUserDataPath === undefined) {
+    delete process.env.ORCA_USER_DATA_PATH
+  } else {
+    process.env.ORCA_USER_DATA_PATH = testHome.previousOrcaUserDataPath
   }
   await rm(testHome.root, { recursive: true, force: true })
 })

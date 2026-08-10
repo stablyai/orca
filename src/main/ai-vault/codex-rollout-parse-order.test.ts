@@ -104,14 +104,12 @@ describe('Codex rollout parse ordering', () => {
 
   it('never moves a non-Codex or non-rollout candidate', () => {
     let moved = 0
-    let immovable = 0
     for (let seed = 1; seed <= 500; seed += 1) {
       const input = randomCandidates(seed, 60)
       const output = promoteCanonicalCodexRolloutAliases(input, accessors)
       input.forEach((candidate, index) => {
         const isRollout = /^rollout-.+\.jsonl$/.test(candidate.path.split(/[\\/]/).at(-1)!)
         if (candidate.agent !== 'codex' || !isRollout) {
-          immovable += 1
           if (output[index]!.id !== candidate.id) {
             moved += 1
           }
@@ -127,7 +125,6 @@ describe('Codex rollout parse ordering', () => {
       const input = randomCandidates(seed, 60)
       const output = promoteCanonicalCodexRolloutAliases(input, accessors)
       // Slots that changed must all belong to one alias group key.
-      const changedKeys = new Set<string>()
       input.forEach((candidate, index) => {
         if (output[index]!.id === candidate.id) {
           return
@@ -137,7 +134,6 @@ describe('Codex rollout parse ordering', () => {
         if (before === null || before !== after) {
           outsideChanges += 1
         }
-        changedKeys.add(String(before))
       })
     }
     expect(outsideChanges).toBe(0)
@@ -210,7 +206,7 @@ describe('Codex rollout parse ordering', () => {
       // Both passes rank by codexSessionRootRank; the survivor of a hardlink
       // group must never be out-ranked by a promoted sibling in the same group.
       const byKey = new Map<string, number>()
-      ordered.forEach((candidate, index) => {
+      ordered.forEach((candidate) => {
         const key = groupKey(candidate)
         if (key === null) {
           return
@@ -221,7 +217,6 @@ describe('Codex rollout parse ordering', () => {
           orderingConflicts += 1
         }
         byKey.set(key, bestSoFar === undefined ? rank : Math.min(bestSoFar, rank))
-        void index
       })
     }
     expect(resurrected).toBe(0)
