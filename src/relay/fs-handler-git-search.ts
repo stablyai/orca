@@ -1,4 +1,4 @@
-import type { SearchOptions, SearchResult } from '../../shared/types'
+import { spawn } from 'node:child_process'
 import {
   buildGitGrepArgs,
   buildSubmatchRegex,
@@ -6,26 +6,19 @@ import {
   finalize,
   ingestGitGrepLine,
   SEARCH_TIMEOUT_MS
-} from '../../shared/text-search'
+} from '../shared/text-search'
 import {
   createTextSearchAbortError,
   throwIfTextSearchAborted
-} from '../../shared/text-search-cancellation'
-import { gitSpawn } from '../git/runner'
-import { terminateSpawnedChild } from '../../shared/spawned-child-cancellation'
+} from '../shared/text-search-cancellation'
+import type { SearchOptions, SearchResult } from './fs-handler-utils'
+import { buildRelayGitEnv } from './relay-command-env'
+import { terminateSpawnedChild } from '../shared/spawned-child-cancellation'
 
-/**
- * Fallback text search using git grep. Used when rg is not available.
- *
- * Why: On Linux, rg may not be installed or may not be in PATH when the app
- * is launched from a desktop entry (which inherits a minimal system PATH).
- * git grep is always available since this is a git-focused app.
- */
 export function searchWithGitGrep(
   rootPath: string,
-  args: SearchOptions,
-  maxResults: number,
-  localGitOptions: { wslDistro?: string } = {},
+  query: string,
+  opts: SearchOptions,
   signal?: AbortSignal
 ): Promise<SearchResult> {
   try {
@@ -34,15 +27,15 @@ export function searchWithGitGrep(
     return Promise.reject(error)
   }
   return new Promise((resolve, reject) => {
-    const gitArgs = buildGitGrepArgs(args.query, args)
-    const matchRegex = buildSubmatchRegex(args.query, args)
+    const gitArgs = buildGitGrepArgs(query, opts)
+    const matchRegex = buildSubmatchRegex(query, opts)
     const acc = createAccumulator()
     let stdoutBuffer = ''
     let done = false
 
-    const child = gitSpawn(gitArgs, {
+    const child = spawn('git', gitArgs, {
       cwd: rootPath,
-      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+      env: buildRelayGitEnv(),
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let killTimeout: ReturnType<typeof setTimeout> | null = null
@@ -65,8 +58,7 @@ export function searchWithGitGrep(
       }
       done = true
       cleanup()
-      // Why: child.kill() is advisory. If git ignores it, detach our
-      // closures so repeated fallback searches do not retain old scans.
+      // Why: kill is advisory over SSH; detach listeners before it can emit close synchronously.
       if (options.kill) {
         terminateSpawnedChild(child)
       }
@@ -84,7 +76,7 @@ export function searchWithGitGrep(
     }
 
     function processLine(line: string): void {
-      const verdict = ingestGitGrepLine(line, rootPath, matchRegex, acc, maxResults)
+      const verdict = ingestGitGrepLine(line, rootPath, matchRegex, acc, opts.maxResults)
       if (verdict === 'stop') {
         terminateSpawnedChild(child)
       }
@@ -94,8 +86,8 @@ export function searchWithGitGrep(
       stdoutBuffer += chunk
       const lines = stdoutBuffer.split('\n')
       stdoutBuffer = lines.pop() ?? ''
-      for (const l of lines) {
-        processLine(l)
+      for (const line of lines) {
+        processLine(line)
       }
     }
 

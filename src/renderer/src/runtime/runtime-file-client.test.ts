@@ -46,6 +46,7 @@ const fsDeletePath = vi.fn()
 const fsStat = vi.fn()
 const fsPathExists = vi.fn()
 const fsSearch = vi.fn()
+const fsCancelSearch = vi.fn()
 const fsListFiles = vi.fn()
 const fsCancelListFiles = vi.fn()
 const fsDownloadFile = vi.fn()
@@ -76,6 +77,8 @@ beforeEach(() => {
   fsStat.mockReset()
   fsPathExists.mockReset()
   fsSearch.mockReset()
+  fsCancelSearch.mockReset()
+  fsCancelSearch.mockResolvedValue(undefined)
   fsListFiles.mockReset()
   fsCancelListFiles.mockReset()
   fsCancelListFiles.mockResolvedValue(undefined)
@@ -120,6 +123,7 @@ beforeEach(() => {
         stat: fsStat,
         pathExists: fsPathExists,
         search: fsSearch,
+        cancelSearch: fsCancelSearch,
         listFiles: fsListFiles,
         cancelListFiles: fsCancelListFiles,
         downloadFile: fsDownloadFile,
@@ -2023,6 +2027,121 @@ describe('runtime file client', () => {
       params: { worktree: 'id:wt-1', query: 'needle', caseSensitive: true, maxResults: 50 },
       timeoutMs: 15_000
     })
+  })
+
+  it('pairs local text-search cancellation with its request token', async () => {
+    const controller = new AbortController()
+    let resolveSearch!: (result: {
+      files: never[]
+      totalMatches: number
+      truncated: boolean
+    }) => void
+    fsSearch.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSearch = resolve
+        })
+    )
+
+    const request = searchRuntimeFiles(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'ssh-1'
+      },
+      { query: 'needle', rootPath: '/repo', maxResults: 50 },
+      controller.signal
+    )
+    await vi.waitFor(() => expect(fsSearch).toHaveBeenCalledOnce())
+    const searchArgs = fsSearch.mock.calls[0]?.[0] as { requestToken?: string }
+
+    controller.abort()
+    resolveSearch({ files: [], totalMatches: 0, truncated: false })
+
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fsSearch).toHaveBeenCalledWith({
+      query: 'needle',
+      rootPath: '/repo',
+      maxResults: 50,
+      connectionId: 'ssh-1',
+      requestToken: expect.any(String)
+    })
+    expect(fsCancelSearch).toHaveBeenCalledWith({ requestToken: searchArgs.requestToken })
+  })
+
+  it('starts no local text search for a pre-aborted signal', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      searchRuntimeFiles(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo'
+        },
+        { query: 'needle', rootPath: '/repo', maxResults: 50 },
+        controller.signal
+      )
+    ).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(fsSearch).not.toHaveBeenCalled()
+    expect(fsCancelSearch).not.toHaveBeenCalled()
+  })
+
+  it('starts no paired-runtime work for a pre-aborted text search', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      searchRuntimeFiles(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        { query: 'needle', rootPath: '/remote/repo', maxResults: 50 },
+        controller.signal
+      )
+    ).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(runtimeEnvironmentTransportCall).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentSubscribe).not.toHaveBeenCalled()
+  })
+
+  it('uses an abortable subscription for paired-runtime text search', async () => {
+    const controller = new AbortController()
+    const unsubscribe = vi.fn()
+    runtimeEnvironmentSubscribe.mockResolvedValue({ unsubscribe, sendBinary: vi.fn() })
+
+    const request = searchRuntimeFiles(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      { query: 'needle', rootPath: '/remote/repo', maxResults: 50 },
+      controller.signal
+    )
+    await vi.waitFor(() => expect(runtimeEnvironmentSubscribe).toHaveBeenCalledOnce())
+
+    controller.abort()
+
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledOnce())
+    expect(runtimeEnvironmentSubscribe).toHaveBeenCalledWith(
+      {
+        selector: 'env-1',
+        method: 'files.search',
+        params: { worktree: 'id:wt-1', query: 'needle', maxResults: 50 },
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: undefined,
+        subscriptionId: expect.any(String)
+      },
+      expect.any(Object)
+    )
+    expect(fsSearch).not.toHaveBeenCalled()
   })
 
   it('rejects oversized text search input before local IPC or runtime RPC', async () => {

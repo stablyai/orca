@@ -131,6 +131,61 @@ describe('WebRuntimeClient', () => {
     expect(child.close).toHaveBeenCalledWith({ notifySubscriptions: false })
   })
 
+  it('starts no child subscription socket for a pre-aborted signal', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const controller = new AbortController()
+    controller.abort()
+
+    try {
+      await expect(
+        client.subscribe('files.search', {}, { onResponse: vi.fn() }, { signal: controller.signal })
+      ).rejects.toMatchObject({ name: 'AbortError' })
+      expect(fakeSockets).toHaveLength(1)
+    } finally {
+      client.close()
+    }
+  })
+
+  it('closes and releases a connecting child subscription when aborted', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const controller = new AbortController()
+    const internals = client as unknown as { childClients: Set<WebRuntimeClient> }
+    let pending: Promise<unknown> | null = null
+
+    try {
+      pending = client
+        .subscribe(
+          'files.search',
+          { query: 'needle' },
+          { onResponse: vi.fn() },
+          { signal: controller.signal }
+        )
+        .catch((error: unknown) => error)
+      const childSocket = fakeSockets[1]!
+      expect(fakeSockets).toHaveLength(2)
+      expect(internals.childClients.size).toBe(1)
+
+      controller.abort()
+
+      expect(childSocket.close).toHaveBeenCalledOnce()
+      expect(internals.childClients.size).toBe(0)
+      await expect(pending).resolves.toMatchObject({ name: 'AbortError' })
+    } finally {
+      client.close()
+      await pending
+    }
+  })
+
   it('does not report locally closed subscriptions as remote closes', () => {
     const client = new WebRuntimeClient({
       v: 2,

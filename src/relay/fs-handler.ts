@@ -16,7 +16,8 @@ import {
   listFilesWithRg,
   checkRgAvailable
 } from './fs-handler-utils'
-import { listFilesWithGit, searchWithGitGrep } from './fs-handler-git-fallback'
+import { listFilesWithGit } from './fs-handler-git-fallback'
+import { searchWithGitGrep } from './fs-handler-git-search'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
 import { ListFilesScanCoordinator } from './fs-list-files-scan-coordinator'
 import {
@@ -119,7 +120,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.renameNoClobber', (p) => this.renameNoClobber(p))
     this.dispatcher.onRequest('fs.copy', (p) => this.copy(p))
     this.dispatcher.onRequest('fs.realpath', (p) => this.realpath(p))
-    this.dispatcher.onRequest('fs.search', (p) => this.search(p))
+    this.dispatcher.onRequest('fs.search', (p, c) => this.search(p, c))
     this.dispatcher.onRequest('fs.listFiles', (p, c) => this.listFiles(p, c))
     this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))
     this.dispatcher.onRequest('fs.watch', (p, context) =>
@@ -315,7 +316,7 @@ export class FsHandler {
     return await realpath(filePath)
   }
 
-  private async search(params: Record<string, unknown>) {
+  private async search(params: Record<string, unknown>, context?: RequestContext) {
     const query = params.query as string
     const rootPath = expandTilde(params.rootPath as string)
     const caseSensitive = params.caseSensitive as boolean | undefined
@@ -328,26 +329,37 @@ export class FsHandler {
       DEFAULT_MAX_RESULTS
     )
 
-    const rgAvailable = await checkRgAvailable()
+    const rgAvailable = await checkRgAvailable(context?.signal)
+    context?.signal?.throwIfAborted()
     if (!rgAvailable) {
-      return searchWithGitGrep(rootPath, query, {
+      return searchWithGitGrep(
+        rootPath,
+        query,
+        {
+          caseSensitive,
+          wholeWord,
+          useRegex,
+          includePattern,
+          excludePattern,
+          maxResults
+        },
+        context?.signal
+      )
+    }
+
+    return searchWithRg(
+      rootPath,
+      query,
+      {
         caseSensitive,
         wholeWord,
         useRegex,
         includePattern,
         excludePattern,
         maxResults
-      })
-    }
-
-    return searchWithRg(rootPath, query, {
-      caseSensitive,
-      wholeWord,
-      useRegex,
-      includePattern,
-      excludePattern,
-      maxResults
-    })
+      },
+      context?.signal
+    )
   }
 
   private listFiles(params: Record<string, unknown>, context?: RequestContext): Promise<string[]> {

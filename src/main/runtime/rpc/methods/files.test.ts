@@ -781,6 +781,7 @@ describe('file RPC methods', () => {
   })
 
   it('searches files for a selected worktree', async () => {
+    const controller = new AbortController()
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       searchRuntimeFiles: vi.fn().mockResolvedValue({
@@ -797,18 +798,23 @@ describe('file RPC methods', () => {
         query: 'needle',
         caseSensitive: true,
         maxResults: 50
-      })
+      }),
+      { signal: controller.signal }
     )
 
-    expect(runtime.searchRuntimeFiles).toHaveBeenCalledWith('id:wt-1', {
-      query: 'needle',
-      caseSensitive: true,
-      wholeWord: undefined,
-      useRegex: undefined,
-      includePattern: undefined,
-      excludePattern: undefined,
-      maxResults: 50
-    })
+    expect(runtime.searchRuntimeFiles).toHaveBeenCalledWith(
+      'id:wt-1',
+      {
+        query: 'needle',
+        caseSensitive: true,
+        wholeWord: undefined,
+        useRegex: undefined,
+        includePattern: undefined,
+        excludePattern: undefined,
+        maxResults: 50
+      },
+      controller.signal
+    )
     expect(response).toMatchObject({ ok: true, result: { files: [], totalMatches: 0 } })
   })
 

@@ -6,19 +6,9 @@ import { PassThrough } from 'node:stream'
 import { SshFilesystemProvider } from './ssh-filesystem-provider'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 
-type MockMultiplexer = {
-  request: ReturnType<typeof vi.fn>
-  notify: ReturnType<typeof vi.fn>
-  onNotification: ReturnType<typeof vi.fn>
-  onNotificationByMethod: ReturnType<typeof vi.fn>
-  onDispose: ReturnType<typeof vi.fn>
-  dispose: ReturnType<typeof vi.fn>
-  isDisposed: ReturnType<typeof vi.fn>
-  _methodHandlers: Map<string, Set<(params: Record<string, unknown>) => void>>
-  _emitMethod: (method: string, params: Record<string, unknown>) => void
-}
+type MockMultiplexer = ReturnType<typeof createMockMux>
 
-function createMockMux(): MockMultiplexer {
+function createMockMux() {
   const methodHandlers = new Map<string, Set<(params: Record<string, unknown>) => void>>()
   return {
     request: vi.fn().mockResolvedValue(undefined),
@@ -472,18 +462,22 @@ describe('SshFilesystemProvider', () => {
     expect(result).toBe('/home/user/real/path')
   })
 
-  it('search sends fs.search request with all options', async () => {
+  it('search keeps cancellation out of params and preserves the legacy call shape', async () => {
     const searchResult = { files: [], totalMatches: 0, truncated: false }
+    const controller = new AbortController()
+    const opts = { query: 'TODO', rootPath: '/home/user/project', caseSensitive: true }
     mux.request.mockResolvedValue(searchResult)
 
-    const opts = {
-      query: 'TODO',
-      rootPath: '/home/user/project',
-      caseSensitive: true
-    }
-    const result = await provider.search(opts)
-    expect(mux.request).toHaveBeenCalledWith('fs.search', opts)
-    expect(result).toEqual(searchResult)
+    await expect(provider.search(opts)).resolves.toEqual(searchResult)
+    await expect(provider.search(opts, { signal: controller.signal })).resolves.toEqual(
+      searchResult
+    )
+
+    expect(mux.request.mock.calls).toEqual([
+      ['fs.search', opts],
+      ['fs.search', opts, { signal: controller.signal }]
+    ])
+    expect(mux.request.mock.calls[1]?.[1]).not.toHaveProperty('signal')
   })
 
   it('listFiles sends fs.listFiles request', async () => {

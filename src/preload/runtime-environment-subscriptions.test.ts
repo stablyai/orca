@@ -55,6 +55,38 @@ function dispatch(ipc: ReturnType<typeof createIpc>, event: SubscriptionEvent): 
 }
 
 describe('subscribeRuntimeEnvironmentFromPreload', () => {
+  it('forwards a caller-provided subscription id without generating another', async () => {
+    const ipc = createIpc()
+    const createSubscriptionId = vi.fn(() => 'generated-sub')
+    ipc.invoke.mockImplementation((channel: string, args: unknown) =>
+      channel === 'runtimeEnvironments:subscribe'
+        ? Promise.resolve({
+            subscriptionId: (args as { subscriptionId: string }).subscriptionId,
+            requestId: 'rpc-provided'
+          })
+        : Promise.resolve({})
+    )
+
+    const handle = await subscribeRuntimeEnvironmentFromPreload(
+      ipc,
+      {
+        selector: 'desk',
+        method: 'files.search',
+        subscriptionId: 'provided-sub'
+      },
+      { onResponse: vi.fn() },
+      createSubscriptionId
+    )
+
+    expect(createSubscriptionId).not.toHaveBeenCalled()
+    expect(ipc.invoke).toHaveBeenCalledWith('runtimeEnvironments:subscribe', {
+      selector: 'desk',
+      method: 'files.search',
+      subscriptionId: 'provided-sub'
+    })
+    handle.unsubscribe()
+  })
+
   it('registers the subscription event listener before invoking main', async () => {
     const subscription = deferred<{ subscriptionId: string; requestId: string }>()
     const ipc = createIpc()

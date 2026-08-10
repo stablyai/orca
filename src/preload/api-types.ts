@@ -2877,7 +2877,10 @@ export type PreloadApi = {
       requestToken?: string
     }) => Promise<string[]>
     cancelListFiles: (args: { requestToken: string }) => Promise<void>
-    search: (args: SearchOptions & { connectionId?: string }) => Promise<SearchResult>
+    search: (
+      args: SearchOptions & { connectionId?: string; requestToken?: string }
+    ) => Promise<SearchResult>
+    cancelSearch: (args: { requestToken: string }) => Promise<void>
     importExternalPaths: (
       args: {
         sourcePaths: string[]
@@ -3470,6 +3473,7 @@ export type PreloadApi = {
         params?: unknown
         timeoutMs?: number
         expectedEnvironmentPairingRevision?: number
+        subscriptionId?: string
       },
       callbacks: {
         onResponse: (response: RuntimeRpcResponse<unknown>) => void
@@ -3478,6 +3482,7 @@ export type PreloadApi = {
         onClose?: () => void
       }
     ) => Promise<RuntimeEnvironmentSubscriptionHandle>
+    cancelSubscription?: (args: { subscriptionId: string }) => Promise<{ unsubscribed: boolean }>
   }
   rateLimits: {
     get: () => Promise<RateLimitState>

@@ -56,6 +56,12 @@ type HandshakeState = 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
 
 function ignoreSettledRemoteRuntimeSocketError(): void {}
 
+function createRemoteRuntimeSubscriptionAbortError(): Error {
+  const error = new Error('Remote runtime subscription aborted.')
+  error.name = 'AbortError'
+  return error
+}
+
 function formatRemoteRuntimeCloseMessage(code: number, reason: Buffer): string {
   const suffixParts: string[] = []
   if (code !== 1005 && code !== 1006) {
@@ -501,8 +507,12 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
   params: unknown,
   timeoutMs: number,
   callbacks: RemoteRuntimeSubscriptionCallbacks<TResult>,
-  livenessOptions?: RemoteRuntimeSocketLivenessOptions
+  livenessOptions?: RemoteRuntimeSocketLivenessOptions,
+  signal?: AbortSignal
 ): Promise<RemoteRuntimeSubscription> {
+  if (signal?.aborted) {
+    throw createRemoteRuntimeSubscriptionAbortError()
+  }
   const requestId = randomUUID()
   const serializedRequest = serializeRemoteRuntimeRpcRequest({
     requestId,
@@ -569,6 +579,11 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       )
     }, timeoutMs)
 
+    const cleanupPendingSetup = (): void => {
+      clearTimeout(timeout)
+      signal?.removeEventListener('abort', onAbort)
+    }
+
     const close = (): void => {
       try {
         ws?.close()
@@ -621,14 +636,14 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         return
       }
       settled = true
-      clearTimeout(timeout)
+      cleanupPendingSetup()
       resolve({ requestId, close, sendBinary })
     }
 
     const fail = (error: RemoteRuntimeClientError): void => {
       if (!settled) {
         settled = true
-        clearTimeout(timeout)
+        cleanupPendingSetup()
         closeSocketAfterCleanup()
         reject(error)
         return
@@ -639,6 +654,22 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       // and lets the IPC subscription registry drop its retained callbacks.
       closeSocketAfterCleanup()
       callbacks.onClose?.()
+    }
+
+    function onAbort(): void {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanupPendingSetup()
+      closeSocketAfterCleanup()
+      reject(createRemoteRuntimeSubscriptionAbortError())
+    }
+
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+      return
     }
 
     try {
@@ -668,7 +699,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     }
 
     function onClose(code: number, reason: Buffer): void {
-      clearTimeout(timeout)
+      cleanupPendingSetup()
       cleanupSocketListeners()
       if (!settled) {
         settled = true

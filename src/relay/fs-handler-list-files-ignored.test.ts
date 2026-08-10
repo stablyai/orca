@@ -33,6 +33,7 @@ function createMockProcess(): ChildProcess {
     }
   ).setEncoding = vi.fn()
   ;(p as unknown as Record<string, unknown>).stderr = new EventEmitter()
+  ;(p as unknown as Record<string, unknown>).pid = 1234
   ;(p as unknown as Record<string, unknown>).kill = vi.fn()
   ;(p as unknown as Record<string, unknown>).exitCode = null
   ;(p as unknown as Record<string, unknown>).signalCode = null

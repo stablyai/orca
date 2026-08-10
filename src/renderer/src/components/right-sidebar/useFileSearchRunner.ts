@@ -28,27 +28,44 @@ type UseFileSearchRunnerArgs = {
   updateActiveSearchState: UpdateSearchState
 }
 
+type CancelPendingSearchOptions = {
+  discardResults?: boolean
+}
+
 export function useFileSearchRunner({
   activeWorktreeId,
   worktreePath,
   updateActiveSearchState
 }: UseFileSearchRunnerArgs): {
   executeSearch: (query: string) => void
-  cancelPendingSearch: () => void
+  cancelPendingSearch: (options?: CancelPendingSearchOptions) => boolean
 } {
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeSearchControllerRef = useRef<AbortController | null>(null)
   // Why: runtime searches can finish out of order; ids keep stale results
   // from overwriting the newest query state.
   const latestSearchIdRef = useRef(0)
 
-  const cancelPendingSearch = useCallback(() => {
-    latestSearchIdRef.current += 1
-    if (searchTimerRef.current) {
-      clearTimeout(searchTimerRef.current)
-      searchTimerRef.current = null
-    }
-    updateActiveSearchState({ loading: false })
-  }, [updateActiveSearchState])
+  const cancelPendingSearch = useCallback(
+    (options: CancelPendingSearchOptions = {}) => {
+      const hadPendingSearch =
+        searchTimerRef.current !== null || activeSearchControllerRef.current !== null
+      latestSearchIdRef.current += 1
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current)
+        searchTimerRef.current = null
+      }
+      activeSearchControllerRef.current?.abort()
+      activeSearchControllerRef.current = null
+      updateActiveSearchState(
+        options.discardResults && hadPendingSearch
+          ? { results: null, resultOwner: null, loading: false }
+          : { loading: false }
+      )
+      return hadPendingSearch
+    },
+    [updateActiveSearchState]
+  )
 
   const executeSearch = useCallback(
     (query: string) => {
@@ -59,6 +76,8 @@ export function useFileSearchRunner({
         clearTimeout(searchTimerRef.current)
         searchTimerRef.current = null
       }
+      activeSearchControllerRef.current?.abort()
+      activeSearchControllerRef.current = null
 
       if (!worktreePath || !activeWorktreeId) {
         updateActiveSearchState({ results: null, resultOwner: null, loading: false })
@@ -90,6 +109,8 @@ export function useFileSearchRunner({
       updateActiveSearchState({ loading: true })
       searchTimerRef.current = setTimeout(async () => {
         searchTimerRef.current = null
+        const controller = new AbortController()
+        activeSearchControllerRef.current = controller
         // Why: results can outlive the selected worktree; clicks must reuse the route that produced them.
         const runtimeSettings = getRightSidebarWorktreeRuntimeSettings(activeWorktreeId)
         const resultOwner = createFileSearchResultOwner(activeWorktreeId, runtimeSettings)
@@ -129,12 +150,16 @@ export function useFileSearchRunner({
               includePattern: activeSearchState?.includePattern || undefined,
               excludePattern: activeSearchState?.excludePattern || undefined,
               maxResults: SEARCH_MAX_RESULTS
-            }
+            },
+            controller.signal
           )
           if (latestSearchIdRef.current === searchId) {
             updateActiveSearchState({ results, resultOwner })
           }
         } catch (err) {
+          if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
+            return
+          }
           console.error('Search failed:', err)
           if (latestSearchIdRef.current === searchId) {
             updateActiveSearchState({
@@ -143,6 +168,9 @@ export function useFileSearchRunner({
             })
           }
         } finally {
+          if (activeSearchControllerRef.current === controller) {
+            activeSearchControllerRef.current = null
+          }
           if (latestSearchIdRef.current === searchId) {
             updateActiveSearchState({ loading: false })
           }
@@ -152,7 +180,12 @@ export function useFileSearchRunner({
     [activeWorktreeId, updateActiveSearchState, worktreePath]
   )
 
-  useEffect(() => cancelPendingSearch, [cancelPendingSearch])
+  useEffect(
+    () => () => {
+      cancelPendingSearch({ discardResults: true })
+    },
+    [activeWorktreeId, cancelPendingSearch, worktreePath]
+  )
 
   return { executeSearch, cancelPendingSearch }
 }

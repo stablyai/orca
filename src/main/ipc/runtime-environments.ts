@@ -20,6 +20,16 @@ import {
   subscribeRuntimeEnvironment
 } from './runtime-environment-transport-routing'
 import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
+import {
+  beginRuntimeEnvironmentSubscriptionSetup,
+  cancelAllRuntimeEnvironmentSubscriptionSetups,
+  cancelRuntimeEnvironmentSubscriptionSetup,
+  cancelRuntimeEnvironmentSubscriptionSetupsForEnvironment,
+  createRuntimeSubscriptionSetupAbortError,
+  finishRuntimeEnvironmentSubscriptionSetup,
+  hasRuntimeEnvironmentSubscriptionSetup,
+  isRuntimeEnvironmentSubscriptionSetupCurrent
+} from './runtime-environment-subscription-setup'
 
 type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
   environmentId: string
@@ -31,17 +41,13 @@ const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscrip
 const getUserDataPath = (): string => app.getPath('userData')
 
 function closeSubscriptionsForEnvironment(environmentId: string): void {
-  // Why: removed runtimes must not retain terminal/browser WebSockets until renderer teardown.
+  cancelRuntimeEnvironmentSubscriptionSetupsForEnvironment(environmentId)
   for (const [subscriptionId, subscription] of remoteRuntimeSubscriptions) {
     if (subscription.environmentId !== environmentId) {
       continue
     }
     remoteRuntimeSubscriptions.delete(subscriptionId)
-    // Why: one failing teardown must not abandon this environment's other
-    // sockets -- that strands exactly the dead handles this sweep exists to
-    // retire. Guard the two steps independently so neither can skip the other,
-    // and so the isolation stays structural rather than resting on a claim that
-    // nothing inside notifyClosed will ever throw.
+    // Why: one failing teardown must not strand this environment's other sockets.
     try {
       subscription.close()
     } catch (error) {
@@ -64,9 +70,9 @@ export function invalidateRuntimeEnvironmentTransport(environmentId: string): vo
 }
 
 export function registerRuntimeEnvironmentHandlers(store: Store): void {
-  // Why: keep direct re-registration safe even though register-core-handlers
-  // normally guards this path; otherwise the binary send listener can stack.
+  // Why: direct re-registration must not stack the binary send listener.
   resetSharedControlSupport()
+  cancelAllRuntimeEnvironmentSubscriptionSetups()
   for (const channel of RUNTIME_ENVIRONMENT_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
   }
@@ -96,7 +102,10 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         typeof args.subscriptionId === 'string' && args.subscriptionId.length > 0
           ? args.subscriptionId
           : randomUUID()
-      if (remoteRuntimeSubscriptions.has(subscriptionId)) {
+      if (
+        remoteRuntimeSubscriptions.has(subscriptionId) ||
+        hasRuntimeEnvironmentSubscriptionSetup(subscriptionId)
+      ) {
         throw new Error('Runtime environment subscription id already exists')
       }
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
@@ -115,9 +124,19 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         getRuntimeEnvironmentTransportGeneration(environment.id) === transportGeneration
       const sender = event.sender
       const ownerWebContentsId = sender.id
+      const setupController = beginRuntimeEnvironmentSubscriptionSetup({
+        subscriptionId,
+        environmentId: environment.id,
+        ownerWebContentsId
+      })
       let senderDestroyed = sender.isDestroyed()
       let subscription: RemoteRuntimeSubscription | null = null
+      let retainedSubscription: RetainedRemoteRuntimeSubscription | null = null
+      let subscriptionClosed = false
       let destroyedListenerAttached = false
+      const ownsSubscriptionId = (): boolean =>
+        isRuntimeEnvironmentSubscriptionSetupCurrent(subscriptionId, setupController) ||
+        remoteRuntimeSubscriptions.get(subscriptionId) === retainedSubscription
       const removeDestroyedListener = (): void => {
         if (!destroyedListenerAttached) {
           return
@@ -127,18 +146,17 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
       }
       const closeSubscription = (): void => {
         senderDestroyed = true
+        cancelRuntimeEnvironmentSubscriptionSetup(subscriptionId, ownerWebContentsId)
         const retained = remoteRuntimeSubscriptions.get(subscriptionId) ?? null
-        remoteRuntimeSubscriptions.delete(subscriptionId)
-        if (retained) {
+        if (retained && retained === retainedSubscription) {
+          remoteRuntimeSubscriptions.delete(subscriptionId)
           retained.close()
           return
         }
         removeDestroyedListener()
         subscription?.close()
       }
-      // Why: the renderer treats close as terminal and drops its handle, so send it once.
-      // Latch before sending so a re-entrant call cannot duplicate it, and never
-      // throw: a dying renderer must not abort its siblings' retirement.
+      // Why: a re-entrant or dying renderer must not duplicate or interrupt close notices.
       let closeNotified = false
       const notifyClosed = (): void => {
         if (closeNotified || sender.isDestroyed()) {
@@ -162,13 +180,14 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
           args.timeoutMs,
           {
             onEvent: (payload) => {
+              if (!ownsSubscriptionId() || sender.isDestroyed()) {
+                return
+              }
               if (payload.type === 'close') {
-                // Why: retirement advances the generation before closing, so gating
-                // close on it stranded the renderer with a dead subscription.
                 notifyClosed()
                 return
               }
-              if (transportIsCurrent() && !sender.isDestroyed()) {
+              if (transportIsCurrent()) {
                 sender.send('runtimeEnvironments:subscriptionEvent', {
                   subscriptionId,
                   ...payload
@@ -176,15 +195,28 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
               }
             },
             onClose: () => {
-              const retained = remoteRuntimeSubscriptions.get(subscriptionId) ?? null
-              retained?.removeDestroyedListener()
-              remoteRuntimeSubscriptions.delete(subscriptionId)
+              subscriptionClosed = true
+              removeDestroyedListener()
+              if (remoteRuntimeSubscriptions.get(subscriptionId) === retainedSubscription) {
+                remoteRuntimeSubscriptions.delete(subscriptionId)
+              }
             }
-          }
+          },
+          setupController.signal
         )
       } catch (error) {
         removeDestroyedListener()
         throw error
+      } finally {
+        finishRuntimeEnvironmentSubscriptionSetup(subscriptionId, setupController)
+      }
+      if (setupController.signal.aborted) {
+        removeDestroyedListener()
+        subscription.close()
+        throw createRuntimeSubscriptionSetupAbortError()
+      }
+      if (subscriptionClosed) {
+        throw new Error('Runtime environment subscription closed during setup')
       }
       let pairingIsCurrent = false
       try {
@@ -204,7 +236,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         subscription.close()
         return { subscriptionId, requestId: subscription.requestId }
       }
-      remoteRuntimeSubscriptions.set(subscriptionId, {
+      retainedSubscription = {
         requestId: subscription.requestId,
         environmentId: environment.id,
         ownerWebContentsId,
@@ -215,13 +247,17 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
           removeDestroyedListener()
           subscription?.close()
         }
-      })
+      }
+      remoteRuntimeSubscriptions.set(subscriptionId, retainedSubscription)
       return { subscriptionId, requestId: subscription.requestId }
     }
   )
   ipcMain.handle(
     'runtimeEnvironments:unsubscribe',
     (event, args: { subscriptionId: string }): { unsubscribed: boolean } => {
+      if (cancelRuntimeEnvironmentSubscriptionSetup(args.subscriptionId, event.sender.id)) {
+        return { unsubscribed: true }
+      }
       const subscription = remoteRuntimeSubscriptions.get(args.subscriptionId)
       if (!subscription || subscription.ownerWebContentsId !== event.sender.id) {
         return { unsubscribed: false }

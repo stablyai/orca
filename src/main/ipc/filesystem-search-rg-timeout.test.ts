@@ -76,6 +76,7 @@ import { registerFilesystemHandlers } from './filesystem'
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
+  ;(p as unknown as Record<string, unknown>).pid = 1234
   ;(p as unknown as Record<string, unknown>).stdout = new EventEmitter()
   ;(
     (p as unknown as Record<string, unknown>).stdout as EventEmitter & {
@@ -130,6 +131,69 @@ describe('filesystem rg search timeout', () => {
     }
   })
 
+  it('rejects an aborted rg search and detaches every listener', async () => {
+    const child = createMockProcess()
+    let searchSignal: AbortSignal | undefined
+    checkRgAvailableMock.mockImplementation(
+      async (_rootPath: string, _wslDistro: string | undefined, signal: AbortSignal) => {
+        searchSignal = signal
+        return true
+      }
+    )
+    wslAwareSpawnMock.mockReturnValue(child)
+    registerFilesystemHandlers({} as never)
+
+    const senderEvent = { sender: { id: 7 } }
+    const promise = handlers.get('fs:search')!(senderEvent, {
+      rootPath: '/repo',
+      query: 'ok',
+      requestToken: 'search-1'
+    }) as Promise<unknown>
+    await vi.waitFor(() => expect(wslAwareSpawnMock).toHaveBeenCalledTimes(1))
+    const removeAbortListener = vi.spyOn(searchSignal!, 'removeEventListener')
+
+    await handlers.get('fs:cancelSearch')!(senderEvent, { requestToken: 'search-1' })
+
+    expect(searchSignal?.aborted).toBe(true)
+    expect(child.kill).toHaveBeenCalledTimes(1)
+    expect((child.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+    expect((child.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+    expect(removeAbortListener).toHaveBeenCalledWith('abort', expect.any(Function))
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('does not spawn rg when cancellation wins before availability resolves', async () => {
+    let searchSignal: AbortSignal | undefined
+    let resolveAvailability!: (available: boolean) => void
+    checkRgAvailableMock.mockImplementation(
+      (_rootPath: string, _wslDistro: string | undefined, signal: AbortSignal) => {
+        searchSignal = signal
+        return new Promise<boolean>((resolve) => {
+          resolveAvailability = resolve
+        })
+      }
+    )
+    registerFilesystemHandlers({} as never)
+
+    const senderEvent = { sender: { id: 7 } }
+    const promise = handlers.get('fs:search')!(senderEvent, {
+      rootPath: '/repo',
+      query: 'ok',
+      requestToken: 'search-before-spawn'
+    }) as Promise<unknown>
+    await vi.waitFor(() => expect(searchSignal).toBeDefined())
+
+    await handlers.get('fs:cancelSearch')!(senderEvent, {
+      requestToken: 'search-before-spawn'
+    })
+    resolveAvailability(true)
+
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(wslAwareSpawnMock).not.toHaveBeenCalled()
+  })
+
   it('routes rg through the registered WSL project runtime for Windows-path worktrees', async () => {
     const child = createMockProcess()
     wslAwareSpawnMock.mockReturnValue(child)
@@ -147,7 +211,7 @@ describe('filesystem rg search timeout', () => {
 
     await promise
 
-    expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
+    expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu', undefined)
     expect(wslAwareSpawnMock).toHaveBeenCalledWith(
       'rg',
       expect.any(Array),

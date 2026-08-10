@@ -41,6 +41,10 @@ import {
   SEARCH_TIMEOUT_MS
 } from '../../shared/text-search'
 import {
+  createTextSearchAbortError,
+  throwIfTextSearchAborted
+} from '../../shared/text-search-cancellation'
+import {
   getStatus,
   getSubmoduleStatus,
   abortMerge,
@@ -139,6 +143,7 @@ import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
+import { terminateSpawnedChild } from '../../shared/spawned-child-cancellation'
 import {
   applyGitStatusUpstreamRefWatchRequest,
   type GitStatusUpstreamRefWatchRequest
@@ -962,117 +967,179 @@ export function registerFilesystemHandlers(
   )
 
   // ─── Search ────────────────────────────────────────────
+  const textSearchCancellations = createSenderScopedRequestCancellations()
   ipcMain.handle(
     'fs:search',
-    async (event, args: SearchOptions & { connectionId?: string }): Promise<SearchResult> => {
-      if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.search(args)
-      }
-      const rootPath = await resolveAuthorizedPath(args.rootPath, store)
-      const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.rootPath,
-        rootPath
-      )
-      const maxResults = Math.max(
-        1,
-        Math.min(args.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
-      )
-      const searchKey = `${event.sender.id}:${rootPath}`
+    async (
+      event,
+      args: SearchOptions & { connectionId?: string; requestToken?: string }
+    ): Promise<SearchResult> => {
+      const controller = textSearchCancellations.begin(event, args.requestToken)
+      const signal = controller?.signal
+      const { connectionId, requestToken: _requestToken, ...searchOptions } = args
+      try {
+        if (connectionId) {
+          const provider = requireSshFilesystemProvider(connectionId)
+          const result = await provider.search(searchOptions, { signal })
+          throwIfTextSearchAborted(signal)
+          return result
+        }
+        const rootPath = await resolveAuthorizedPath(searchOptions.rootPath, store)
+        const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
+          store,
+          searchOptions.rootPath,
+          rootPath
+        )
+        const maxResults = Math.max(
+          1,
+          Math.min(
+            searchOptions.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS,
+            DEFAULT_SEARCH_MAX_RESULTS
+          )
+        )
+        const searchKey = `${event.sender.id}:${rootPath}`
 
-      // Why: probe rg upfront; on some platforms spawn emits 'close' before 'error', resolving empty before the git-grep fallback runs.
-      const rgAvailable = await checkRgAvailable(rootPath, localGitOptions.wslDistro)
-      if (!rgAvailable) {
-        return searchWithGitGrep(rootPath, args, maxResults, localGitOptions)
-      }
-
-      return new Promise((resolvePromise) => {
-        const rgArgs = buildRgArgs(args.query, rootPath, args)
-
-        // Why: kill the prior rg so it stops parsing thousands of matches on the main thread (the large-repo freeze) after the UI moved on.
-        activeTextSearches.get(searchKey)?.kill()
-
-        const acc = createAccumulator()
-        let stdoutBuffer = ''
-        let resolved = false
-        let child: ChildProcess | null = null
-        let killTimeout: ReturnType<typeof setTimeout>
-
-        // Why: WSL-routed rg emits Linux paths; UNC repos carry the distro in the path, Windows-path repos in project runtime.
-        const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
-        const transformAbsPath = wslDistroForOutput
-          ? (p: string): string => (p.startsWith('/') ? toWindowsWslPath(p, wslDistroForOutput) : p)
-          : undefined
-
-        const resolveOnce = (): void => {
-          if (resolved) {
-            return
-          }
-          resolved = true
-          if (activeTextSearches.get(searchKey) === child) {
-            activeTextSearches.delete(searchKey)
-          }
-          clearTimeout(killTimeout)
-          // Why: child.kill() is advisory; detach our closures so repeated searches don't retain old scans if rg ignores it.
-          child?.stdout?.off('data', handleStdoutData)
-          child?.stderr?.off('data', handleStderrData)
-          child?.off('error', handleError)
-          child?.off('close', handleClose)
-          resolvePromise(finalize(acc))
+        // Why: probe rg upfront; on some platforms spawn emits 'close' before 'error', resolving empty before the git-grep fallback runs.
+        const rgAvailable = await checkRgAvailable(rootPath, localGitOptions.wslDistro, signal)
+        throwIfTextSearchAborted(signal)
+        if (!rgAvailable) {
+          return await searchWithGitGrep(
+            rootPath,
+            searchOptions,
+            maxResults,
+            localGitOptions,
+            signal
+          )
         }
 
-        const processLine = (line: string): void => {
-          const verdict = ingestRgJsonLine(line, rootPath, acc, maxResults, transformAbsPath)
-          if (verdict === 'stop') {
-            child?.kill()
-          }
-        }
+        return await new Promise<SearchResult>((resolvePromise, rejectPromise) => {
+          const rgArgs = buildRgArgs(searchOptions.query, rootPath, searchOptions)
 
-        const nextChild = wslAwareSpawn('rg', rgArgs, {
-          cwd: rootPath,
-          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-          stdio: ['ignore', 'pipe', 'pipe']
+          // Why: kill the prior rg so it stops parsing thousands of matches on the main thread (the large-repo freeze) after the UI moved on.
+          const previousChild = activeTextSearches.get(searchKey)
+          if (previousChild) {
+            terminateSpawnedChild(previousChild)
+          }
+
+          const acc = createAccumulator()
+          let stdoutBuffer = ''
+          let resolved = false
+          let child: ChildProcess | null = null
+          let killTimeout: ReturnType<typeof setTimeout> | null = null
+
+          // Why: WSL-routed rg emits Linux paths; UNC repos carry the distro in the path, Windows-path repos in project runtime.
+          const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
+          const transformAbsPath = wslDistroForOutput
+            ? (p: string): string =>
+                p.startsWith('/') ? toWindowsWslPath(p, wslDistroForOutput) : p
+            : undefined
+
+          const cleanup = (): void => {
+            if (killTimeout) {
+              clearTimeout(killTimeout)
+              killTimeout = null
+            }
+            child?.stdout?.off('data', handleStdoutData)
+            child?.stderr?.off('data', handleStderrData)
+            child?.off('error', handleError)
+            child?.off('close', handleClose)
+            signal?.removeEventListener('abort', handleAbort)
+          }
+
+          const finish = (): boolean => {
+            if (resolved) {
+              return false
+            }
+            resolved = true
+            if (activeTextSearches.get(searchKey) === child) {
+              activeTextSearches.delete(searchKey)
+            }
+            cleanup()
+            return true
+          }
+
+          const resolveOnce = (options: { kill?: boolean } = {}): void => {
+            if (!finish()) {
+              return
+            }
+            // Why: child.kill() is advisory; detach our closures so repeated searches don't retain old scans if rg ignores it.
+            if (options.kill && child) {
+              terminateSpawnedChild(child)
+            }
+            resolvePromise(finalize(acc))
+          }
+
+          const rejectAborted = (): void => {
+            if (!finish()) {
+              return
+            }
+            if (child) {
+              terminateSpawnedChild(child)
+            }
+            rejectPromise(createTextSearchAbortError())
+          }
+
+          const processLine = (line: string): void => {
+            const verdict = ingestRgJsonLine(line, rootPath, acc, maxResults, transformAbsPath)
+            if (verdict === 'stop' && child) {
+              terminateSpawnedChild(child)
+            }
+          }
+
+          const nextChild = wslAwareSpawn('rg', rgArgs, {
+            cwd: rootPath,
+            ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+            stdio: ['ignore', 'pipe', 'pipe']
+          })
+          child = nextChild
+          activeTextSearches.set(searchKey, nextChild)
+
+          const handleStdoutData = (chunk: string): void => {
+            stdoutBuffer += chunk
+            const lines = stdoutBuffer.split('\n')
+            stdoutBuffer = lines.pop() ?? ''
+            for (const line of lines) {
+              processLine(line)
+            }
+          }
+          const handleStderrData = (): void => {
+            // Drain stderr so rg cannot block on a full pipe.
+          }
+          const handleError = (): void => resolveOnce()
+          const handleClose = (): void => {
+            if (stdoutBuffer) {
+              processLine(stdoutBuffer)
+            }
+            resolveOnce()
+          }
+          const handleAbort = (): void => {
+            rejectAborted()
+          }
+
+          nextChild.stdout!.setEncoding('utf-8')
+          nextChild.stdout!.on('data', handleStdoutData)
+          nextChild.stderr!.on('data', handleStderrData)
+          nextChild.once('error', handleError)
+          nextChild.once('close', handleClose)
+
+          // Why: timeout kills the child mid-scan; mark truncated so the UI shows incomplete results.
+          killTimeout = setTimeout(() => {
+            acc.truncated = true
+            resolveOnce({ kill: true })
+          }, SEARCH_TIMEOUT_MS)
+          signal?.addEventListener('abort', handleAbort, { once: true })
+          if (signal?.aborted) {
+            handleAbort()
+          }
         })
-        child = nextChild
-        activeTextSearches.set(searchKey, nextChild)
-
-        const handleStdoutData = (chunk: string): void => {
-          stdoutBuffer += chunk
-          const lines = stdoutBuffer.split('\n')
-          stdoutBuffer = lines.pop() ?? ''
-          for (const line of lines) {
-            processLine(line)
-          }
-        }
-        const handleStderrData = (): void => {
-          // Drain stderr so rg cannot block on a full pipe.
-        }
-        const handleError = (): void => {
-          resolveOnce()
-        }
-        const handleClose = (): void => {
-          if (stdoutBuffer) {
-            processLine(stdoutBuffer)
-          }
-          resolveOnce()
-        }
-
-        nextChild.stdout!.setEncoding('utf-8')
-        nextChild.stdout!.on('data', handleStdoutData)
-        nextChild.stderr!.on('data', handleStderrData)
-        nextChild.once('error', handleError)
-        nextChild.once('close', handleClose)
-
-        // Why: timeout kills the child mid-scan; mark truncated so the UI shows incomplete results.
-        killTimeout = setTimeout(() => {
-          acc.truncated = true
-          child?.kill()
-          resolveOnce()
-        }, SEARCH_TIMEOUT_MS)
-      })
+      } finally {
+        textSearchCancellations.finish(event, args.requestToken, controller)
+      }
     }
   )
+  ipcMain.handle('fs:cancelSearch', (event, args: { requestToken: string }): void => {
+    textSearchCancellations.cancel(event, args.requestToken)
+  })
 
   // ─── List all files (for quick-open) ─────────────────────
   // Why #7721: token-keyed so a workspace switch aborts the prior full-tree scan (SSH otherwise stacks scans past the 30s timeout).

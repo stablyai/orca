@@ -171,7 +171,8 @@ export async function subscribeRuntimeEnvironment(
         | { type: 'close' }
     ) => void
     onClose: () => void
-  }
+  },
+  signal?: AbortSignal
 ): Promise<RemoteRuntimeSubscription> {
   const environment = resolveEnvironment(userDataPath, selector)
   const pairing = getPreferredPairingOffer(environment)
@@ -207,33 +208,59 @@ export async function subscribeRuntimeEnvironment(
   // Why: an initial-connect failure rejects (mid-stream drops go through
   // onError above), so the hint is applied to the thrown error here too.
   try {
+    signal?.throwIfAborted()
     if (
       shouldUseSharedControlSubscription(method) &&
       !shouldKeepDedicatedSubscriptionSocket(method) &&
       (await supportsSharedControl(userDataPath, environment, pairing, effectiveTimeoutMs))
     ) {
-      return await subscribeRemoteRuntimeSharedControlRequest(
-        environment.id,
+      signal?.throwIfAborted()
+      return retainActiveRuntimeSubscription(
+        await subscribeRemoteRuntimeSharedControlRequest(
+          environment.id,
+          pairing,
+          method,
+          params,
+          effectiveTimeoutMs,
+          callbacksWithMarkUsed
+        ),
+        signal
+      )
+    }
+    signal?.throwIfAborted()
+    return retainActiveRuntimeSubscription(
+      await subscribeRemoteRuntimeRequest(
         pairing,
         method,
         params,
         effectiveTimeoutMs,
-        callbacksWithMarkUsed
-      )
-    }
-    return await subscribeRemoteRuntimeRequest(
-      pairing,
-      method,
-      params,
-      effectiveTimeoutMs,
-      callbacksWithMarkUsed
+        callbacksWithMarkUsed,
+        undefined,
+        signal
+      ),
+      signal
     )
   } catch (error) {
-    if (error instanceof Error) {
+    if (error instanceof Error && error.name !== 'AbortError') {
       error.message = withRemoteRuntimeTailscaleHint(error.message, pairing.endpoint)
     }
     throw error
   }
+}
+
+function retainActiveRuntimeSubscription(
+  subscription: RemoteRuntimeSubscription,
+  signal?: AbortSignal
+): RemoteRuntimeSubscription {
+  if (signal?.aborted) {
+    try {
+      subscription.close()
+    } catch {
+      // Best-effort cleanup must not mask cancellation.
+    }
+    signal.throwIfAborted()
+  }
+  return subscription
 }
 
 function markEnvironmentUsedFromResponse(

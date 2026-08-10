@@ -59,6 +59,7 @@ export type WebRuntimeSubscriptionHandle = {
 
 export type SubscribeOptions = {
   timeoutMs?: number
+  signal?: AbortSignal
   // Why: token-keyed server cleanup needs an explicit unsubscribe to be reaped on view-toggle, not just socket close.
   buildUnsubscribe?: (params: unknown) => { method: string; params: unknown } | null
 }
@@ -72,6 +73,12 @@ const SHARED_CONNECTION_SUBSCRIPTION_METHODS = new Set(['files.watch'])
 const HEARTBEAT_INTERVAL_MS = 10_000
 const HEARTBEAT_IDLE_MS = 25_000
 const HEARTBEAT_PROBE_GRACE_MS = 20_000
+
+function createWebRuntimeSubscriptionAbortError(): Error {
+  const error = new Error('Remote runtime subscription aborted.')
+  error.name = 'AbortError'
+  return error
+}
 
 export class WebRuntimeClient {
   private ws: WebSocket | null = null
@@ -133,12 +140,17 @@ export class WebRuntimeClient {
       // Why: sharing the main socket for file watches avoids exhausting the server's WebSocket connection cap.
       return this.subscribeSharedFileWatch(params, callbacks, options)
     }
+    if (options?.signal?.aborted) {
+      throw createWebRuntimeSubscriptionAbortError()
+    }
     const client = new WebRuntimeClient(this.pairing)
     this.childClients.add(client)
     const closeChild = (notifySubscriptions = false): void => {
       this.childClients.delete(client)
       client.close({ notifySubscriptions })
     }
+    const onAbort = (): void => closeChild()
+    options?.signal?.addEventListener('abort', onAbort, { once: true })
     try {
       const wrappedCallbacks: SubscriptionCallbacks = {
         ...callbacks,
@@ -167,7 +179,12 @@ export class WebRuntimeClient {
       }
     } catch (error) {
       closeChild()
+      if (options?.signal?.aborted) {
+        throw createWebRuntimeSubscriptionAbortError()
+      }
       throw error
+    } finally {
+      options?.signal?.removeEventListener('abort', onAbort)
     }
   }
 

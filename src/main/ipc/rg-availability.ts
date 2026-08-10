@@ -1,4 +1,5 @@
 import { wslAwareSpawn } from '../git/runner'
+import { terminateSpawnedChild } from '../../shared/spawned-child-cancellation'
 
 const RG_AVAILABILITY_TIMEOUT_MS = 5000
 
@@ -14,8 +15,15 @@ const RG_AVAILABILITY_TIMEOUT_MS = 5000
 // while a positive cache could mask an rg that was uninstalled or broken
 // mid-session.
 
-export function checkRgAvailable(searchPath?: string, wslDistro?: string): Promise<boolean> {
-  return new Promise((resolve) => {
+export function checkRgAvailable(
+  searchPath?: string,
+  wslDistro?: string,
+  signal?: AbortSignal
+): Promise<boolean> {
+  if (signal?.aborted) {
+    return Promise.reject(createRgAvailabilityAbortError())
+  }
+  return new Promise((resolve, reject) => {
     let settled = false
     // Why: pass cwd plus project-runtime distro so WSL projects are checked
     // inside their distro even when the search root is a Windows path.
@@ -24,12 +32,16 @@ export function checkRgAvailable(searchPath?: string, wslDistro?: string): Promi
       ...(wslDistro ? { wslDistro } : {}),
       stdio: 'ignore'
     })
-    let timeout: ReturnType<typeof setTimeout>
+    let timeout: ReturnType<typeof setTimeout> | null = null
 
     const cleanup = (): void => {
-      clearTimeout(timeout)
+      if (timeout) {
+        clearTimeout(timeout)
+        timeout = null
+      }
       child.off('error', onError)
       child.off('close', onClose)
+      signal?.removeEventListener('abort', onAbort)
     }
 
     const settle = (available: boolean, options?: { kill?: boolean }): void => {
@@ -39,13 +51,22 @@ export function checkRgAvailable(searchPath?: string, wslDistro?: string): Promi
       settled = true
       cleanup()
       if (options?.kill) {
-        child.kill()
+        terminateSpawnedChild(child)
       }
       resolve(available)
     }
 
     const onError = (): void => settle(false)
     const onClose = (code: number | null): void => settle(code === 0)
+    const onAbort = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      terminateSpawnedChild(child)
+      reject(createRgAvailabilityAbortError())
+    }
 
     child.once('error', onError)
     child.once('close', onClose)
@@ -53,5 +74,15 @@ export function checkRgAvailable(searchPath?: string, wslDistro?: string): Promi
     if (typeof timeout.unref === 'function') {
       timeout.unref()
     }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+    }
   })
+}
+
+function createRgAvailabilityAbortError(): Error {
+  const error = new Error('rg availability check aborted')
+  error.name = 'AbortError'
+  return error
 }

@@ -70,6 +70,10 @@ import {
   ingestRgJsonLine,
   SEARCH_TIMEOUT_MS
 } from '../../shared/text-search'
+import {
+  createTextSearchAbortError,
+  throwIfTextSearchAborted
+} from '../../shared/text-search-cancellation'
 import type { Store } from '../persistence'
 import {
   getSshFilesystemProvider,
@@ -90,6 +94,7 @@ import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
+import { terminateSpawnedChild } from '../../shared/spawned-child-cancellation'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
@@ -1840,9 +1845,12 @@ export class RuntimeFileCommands {
 
   async searchRuntimeFiles(
     worktreeSelector: string,
-    options: Omit<SearchOptions, 'rootPath'>
+    options: Omit<SearchOptions, 'rootPath'>,
+    signal?: AbortSignal
   ): Promise<SearchResult> {
+    throwIfTextSearchAborted(signal)
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    throwIfTextSearchAborted(signal)
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     const rootPath = target.worktree.path
     const searchOptions = { ...options, rootPath }
@@ -1850,9 +1858,11 @@ export class RuntimeFileCommands {
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.search(searchOptions)
+      const result = await provider.search(searchOptions, { signal })
+      throwIfTextSearchAborted(signal)
+      return result
     }
-    return this.searchLocalRuntimeFiles(rootPath, searchOptions)
+    return this.searchLocalRuntimeFiles(rootPath, searchOptions, signal)
   }
 
   async listRuntimeFiles(
@@ -1907,10 +1917,13 @@ export class RuntimeFileCommands {
 
   private async searchLocalRuntimeFiles(
     rootPath: string,
-    options: SearchOptions
+    options: SearchOptions,
+    signal?: AbortSignal
   ): Promise<SearchResult> {
+    throwIfTextSearchAborted(signal)
     const store = this.host.requireStore()
     const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
+    throwIfTextSearchAborted(signal)
     const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
       store,
       rootPath,
@@ -1920,15 +1933,23 @@ export class RuntimeFileCommands {
       1,
       Math.min(options.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
     )
-    const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
+    const rgAvailable = await checkRgAvailable(
+      authorizedRootPath,
+      localGitOptions.wslDistro,
+      signal
+    )
+    throwIfTextSearchAborted(signal)
     if (!rgAvailable) {
-      return searchWithGitGrep(authorizedRootPath, options, maxResults, localGitOptions)
+      return searchWithGitGrep(authorizedRootPath, options, maxResults, localGitOptions, signal)
     }
 
-    return new Promise((resolvePromise) => {
+    return new Promise((resolvePromise, rejectPromise) => {
       const searchKey = `${this.host.getRuntimeId()}:${authorizedRootPath}`
       const rgArgs = buildRgArgs(options.query, authorizedRootPath, options)
-      this.activeRuntimeTextSearches.get(searchKey)?.kill()
+      const previousChild = this.activeRuntimeTextSearches.get(searchKey)
+      if (previousChild) {
+        terminateSpawnedChild(previousChild)
+      }
 
       const acc = createAccumulator()
       let stdoutBuffer = ''
@@ -1938,18 +1959,6 @@ export class RuntimeFileCommands {
       const transformAbsPath = wslInfo
         ? (p: string): string => toWindowsWslPath(p, wslInfo.distro)
         : undefined
-
-      const resolveOnce = (): void => {
-        if (resolved) {
-          return
-        }
-        resolved = true
-        if (this.activeRuntimeTextSearches.get(searchKey) === child) {
-          this.activeRuntimeTextSearches.delete(searchKey)
-        }
-        cleanupListeners()
-        resolvePromise(finalize(acc))
-      }
 
       let killTimeout: ReturnType<typeof setTimeout> | null = null
       const cleanupListeners = (): void => {
@@ -1961,6 +1970,39 @@ export class RuntimeFileCommands {
         child?.stderr?.off('data', onStderrData)
         child?.off('error', onError)
         child?.off('close', onClose)
+        signal?.removeEventListener('abort', onAbort)
+      }
+
+      const finish = (): boolean => {
+        if (resolved) {
+          return false
+        }
+        resolved = true
+        if (this.activeRuntimeTextSearches.get(searchKey) === child) {
+          this.activeRuntimeTextSearches.delete(searchKey)
+        }
+        cleanupListeners()
+        return true
+      }
+
+      const resolveOnce = (options: { kill?: boolean } = {}): void => {
+        if (!finish()) {
+          return
+        }
+        if (options.kill && child) {
+          terminateSpawnedChild(child)
+        }
+        resolvePromise(finalize(acc))
+      }
+
+      const rejectAborted = (): void => {
+        if (!finish()) {
+          return
+        }
+        if (child) {
+          terminateSpawnedChild(child)
+        }
+        rejectPromise(createTextSearchAbortError())
       }
 
       const processLine = (line: string): void => {
@@ -1971,8 +2013,8 @@ export class RuntimeFileCommands {
           maxResults,
           transformAbsPath
         )
-        if (verdict === 'stop') {
-          child?.kill()
+        if (verdict === 'stop' && child) {
+          terminateSpawnedChild(child)
         }
       }
 
@@ -2003,6 +2045,9 @@ export class RuntimeFileCommands {
         }
         resolveOnce()
       }
+      const onAbort = (): void => {
+        rejectAborted()
+      }
 
       nextChild.stdout!.on('data', onStdoutData)
       nextChild.stderr!.on('data', onStderrData)
@@ -2011,9 +2056,12 @@ export class RuntimeFileCommands {
 
       killTimeout = setTimeout(() => {
         acc.truncated = true
-        child?.kill()
-        resolveOnce()
+        resolveOnce({ kill: true })
       }, SEARCH_TIMEOUT_MS)
+      signal?.addEventListener('abort', onAbort, { once: true })
+      if (signal?.aborted) {
+        onAbort()
+      }
     })
   }
 

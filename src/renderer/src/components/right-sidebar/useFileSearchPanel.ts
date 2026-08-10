@@ -62,6 +62,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
   const seededInputSelectionRafRef = useRef<number | null>(null)
   const includeInputRef = useRef<HTMLInputElement>(null)
   const excludeInputRef = useRef<HTMLInputElement>(null)
+  const resumableSearchRef = useRef<{ worktreeId: string; query: string } | null>(null)
 
   const updateActiveSearchState = useCallback(
     (updates: Partial<NonNullable<typeof searchState>>) => {
@@ -174,11 +175,40 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
 
   const previousExplorerViewRef = useRef(explorerView)
   useEffect(() => {
-    if (previousExplorerViewRef.current !== 'search' && explorerView === 'search') {
+    const previousExplorerView = previousExplorerViewRef.current
+    const resumableSearch = resumableSearchRef.current
+    if (previousExplorerView === 'search' && explorerView !== 'search') {
+      resumableSearchRef.current =
+        cancelPendingSearch({ discardResults: true }) && activeWorktreeId
+          ? { worktreeId: activeWorktreeId, query: fileSearchQuery }
+          : null
+    } else if (previousExplorerView !== 'search' && explorerView === 'search') {
       focusQueryInput()
+      resumableSearchRef.current = null
+      if (
+        resumableSearch?.worktreeId === activeWorktreeId &&
+        resumableSearch.query === fileSearchQuery &&
+        fileSearchSeedRequestId === undefined
+      ) {
+        executeSearch(fileSearchQuery)
+      }
+    } else if (
+      explorerView !== 'search' &&
+      resumableSearch &&
+      (resumableSearch.worktreeId !== activeWorktreeId || resumableSearch.query !== fileSearchQuery)
+    ) {
+      resumableSearchRef.current = null
     }
     previousExplorerViewRef.current = explorerView
-  }, [explorerView, focusQueryInput])
+  }, [
+    activeWorktreeId,
+    cancelPendingSearch,
+    executeSearch,
+    explorerView,
+    fileSearchQuery,
+    fileSearchSeedRequestId,
+    focusQueryInput
+  ])
 
   const handleClearSearch = useCallback(() => {
     cancelPendingSearch()

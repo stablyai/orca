@@ -14,8 +14,13 @@ import {
   ingestRgJsonLine,
   SEARCH_TIMEOUT_MS as SHARED_SEARCH_TIMEOUT_MS
 } from '../shared/text-search'
+import {
+  createTextSearchAbortError,
+  throwIfTextSearchAborted
+} from '../shared/text-search-cancellation'
 import { IMAGE_FILE_MIME_TYPES } from '../shared/image-file-extensions'
 import type { SearchResult as SharedSearchResult } from '../shared/types'
+import { terminateSpawnedChild } from '../shared/spawned-child-cancellation'
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -87,9 +92,15 @@ export type SearchResult = SharedSearchResult
 export function searchWithRg(
   rootPath: string,
   query: string,
-  opts: SearchOptions
+  opts: SearchOptions,
+  signal?: AbortSignal
 ): Promise<SearchResult> {
-  return new Promise((resolve) => {
+  try {
+    throwIfTextSearchAborted(signal)
+  } catch (error) {
+    return Promise.reject(error)
+  }
+  return new Promise((resolve, reject) => {
     const rgArgs = buildRgArgs(query, rootPath, opts)
     const acc = createAccumulator()
     let buffer = ''
@@ -110,27 +121,48 @@ export function searchWithRg(
       return
     }
 
-    let killTimeout: ReturnType<typeof setTimeout>
+    let killTimeout: ReturnType<typeof setTimeout> | null = null
 
-    function resolveOnce(): void {
-      if (resolved) {
-        return
+    function cleanup(): void {
+      if (killTimeout) {
+        clearTimeout(killTimeout)
+        killTimeout = null
       }
-      resolved = true
-      clearTimeout(killTimeout)
-      // Why: child.kill() is advisory over SSH; detach listeners if the
-      // process ignores timeout kill so old searches cannot retain closures.
       child.stdout!.off('data', handleStdoutData)
       child.stderr!.off('data', handleStderrData)
       child.off('error', handleError)
       child.off('close', handleClose)
+      signal?.removeEventListener('abort', handleAbort)
+    }
+
+    function resolveOnce(options: { kill?: boolean } = {}): void {
+      if (resolved) {
+        return
+      }
+      resolved = true
+      cleanup()
+      // Why: child.kill() is advisory over SSH; detach listeners if the
+      // process ignores timeout kill so old searches cannot retain closures.
+      if (options.kill) {
+        terminateSpawnedChild(child)
+      }
       resolve(finalize(acc))
+    }
+
+    function rejectAborted(): void {
+      if (resolved) {
+        return
+      }
+      resolved = true
+      cleanup()
+      terminateSpawnedChild(child)
+      reject(createTextSearchAbortError())
     }
 
     function processLine(line: string): void {
       const verdict = ingestRgJsonLine(line, rootPath, acc, opts.maxResults)
       if (verdict === 'stop') {
-        child.kill()
+        terminateSpawnedChild(child)
       }
     }
 
@@ -158,6 +190,10 @@ export function searchWithRg(
       resolveOnce()
     }
 
+    function handleAbort(): void {
+      rejectAborted()
+    }
+
     child.stdout!.setEncoding('utf-8')
     child.stdout!.on('data', handleStdoutData)
     child.stderr!.on('data', handleStderrData)
@@ -166,9 +202,12 @@ export function searchWithRg(
 
     killTimeout = setTimeout(() => {
       acc.truncated = true
-      child.kill()
-      resolveOnce()
+      resolveOnce({ kill: true })
     }, SEARCH_TIMEOUT_MS)
+    signal?.addEventListener('abort', handleAbort, { once: true })
+    if (signal?.aborted) {
+      handleAbort()
+    }
   })
 }
 
@@ -182,8 +221,11 @@ export function searchWithRg(
 // to paper over, so re-checking per call is both simpler and safer.
 const RG_AVAILABILITY_TIMEOUT_MS = 5000
 
-export function checkRgAvailable(): Promise<boolean> {
-  return new Promise((resolve) => {
+export function checkRgAvailable(signal?: AbortSignal): Promise<boolean> {
+  if (signal?.aborted) {
+    return Promise.reject(createRgAvailabilityAbortError())
+  }
+  return new Promise((resolve, reject) => {
     let settled = false
     const child = execFile('rg', ['--version'])
     let timeout: ReturnType<typeof setTimeout> | null = null
@@ -194,6 +236,7 @@ export function checkRgAvailable(): Promise<boolean> {
       }
       child.off('error', onError)
       child.off('close', onClose)
+      signal?.removeEventListener('abort', onAbort)
     }
     const settle = (available: boolean, options?: { kill?: boolean }): void => {
       if (settled) {
@@ -202,12 +245,21 @@ export function checkRgAvailable(): Promise<boolean> {
       settled = true
       cleanup()
       if (options?.kill) {
-        child.kill()
+        terminateSpawnedChild(child)
       }
       resolve(available)
     }
     const onError = (): void => settle(false)
     const onClose = (code: number | null): void => settle(code === 0)
+    const onAbort = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      terminateSpawnedChild(child)
+      reject(createRgAvailabilityAbortError())
+    }
 
     child.once('error', onError)
     child.once('close', onClose)
@@ -215,7 +267,17 @@ export function checkRgAvailable(): Promise<boolean> {
     if (typeof timeout.unref === 'function') {
       timeout.unref()
     }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+    }
   })
+}
+
+function createRgAvailabilityAbortError(): Error {
+  const error = new Error('rg availability check aborted')
+  error.name = 'AbortError'
+  return error
 }
 
 // Moved to fs-handler-list-files.ts to keep this file under 300 lines (oxlint)

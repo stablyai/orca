@@ -37,6 +37,7 @@ import {
   captureRuntimeEnvironmentRequestRevision,
   getRuntimeEnvironmentRevision
 } from './runtime-environment-revision'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type RuntimeReadableFileContent = {
   content: string
@@ -929,25 +930,58 @@ async function ensureRuntimeDirectory(
 
 export async function searchRuntimeFiles(
   context: RuntimeFileOperationArgs,
-  options: SearchOptions
+  options: SearchOptions,
+  signal?: AbortSignal
 ): Promise<SearchResult> {
   if (getRuntimeFileSearchRejectedField(options)) {
     return createEmptyRuntimeFileSearchResult()
   }
+  if (signal?.aborted) {
+    throw createRuntimeFileSearchAbortError()
+  }
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind !== 'environment' || !context.worktreeId) {
-    return window.api.fs.search({
-      ...options,
-      connectionId: context.connectionId
-    })
+    return searchLocalRuntimeFiles({ ...options, connectionId: context.connectionId }, signal)
   }
   const { rootPath: _rootPath, ...runtimeOptions } = options
   return callRuntimeRpc<SearchResult>(
     target,
     'files.search',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...runtimeOptions },
-    { timeoutMs: 15_000 }
+    { timeoutMs: 15_000, signal }
   )
+}
+
+function createRuntimeFileSearchAbortError(): Error {
+  const error = new Error('Runtime file search aborted')
+  error.name = 'AbortError'
+  return error
+}
+
+async function searchLocalRuntimeFiles(
+  args: SearchOptions & { connectionId?: string },
+  signal?: AbortSignal
+): Promise<SearchResult> {
+  if (!signal) {
+    return window.api.fs.search(args)
+  }
+  if (signal.aborted) {
+    throw createRuntimeFileSearchAbortError()
+  }
+  const requestToken = createBrowserUuid()
+  const cancel = (): void => {
+    void window.api.fs.cancelSearch({ requestToken }).catch(() => {})
+  }
+  signal.addEventListener('abort', cancel, { once: true })
+  try {
+    const result = await window.api.fs.search({ ...args, requestToken })
+    if (signal.aborted) {
+      throw createRuntimeFileSearchAbortError()
+    }
+    return result
+  } finally {
+    signal.removeEventListener('abort', cancel)
+  }
 }
 
 export async function listRuntimeFiles(

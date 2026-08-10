@@ -3098,6 +3098,113 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
+  it('fs:cancelSearch only aborts the issuing sender remote search', async () => {
+    const searches: {
+      signal: AbortSignal | undefined
+      resolve: (result: { files: []; totalMatches: number; truncated: boolean }) => void
+    }[] = []
+    const searchMock = vi.fn(
+      (
+        _options: unknown,
+        context: { signal?: AbortSignal }
+      ): Promise<{ files: []; totalMatches: number; truncated: boolean }> =>
+        new Promise((resolve) => searches.push({ signal: context.signal, resolve }))
+    )
+    getSshFilesystemProviderMock.mockReturnValue({ search: searchMock })
+    registerFilesystemHandlers(store as never)
+
+    const ownerEvent = { sender: { id: 7 } }
+    const otherEvent = { sender: { id: 8 } }
+    const pending = handlers.get('fs:search')!(ownerEvent, {
+      rootPath: '/home/user/repo',
+      query: 'needle',
+      connectionId: 'conn-1',
+      requestToken: 'search-1'
+    }) as Promise<unknown>
+    await vi.waitFor(() => expect(searches).toHaveLength(1))
+
+    await handlers.get('fs:cancelSearch')!(otherEvent, { requestToken: 'search-1' })
+    expect(searches[0]?.signal?.aborted).toBe(false)
+
+    await handlers.get('fs:cancelSearch')!(ownerEvent, { requestToken: 'search-1' })
+    expect(searches[0]?.signal?.aborted).toBe(true)
+    expect(searchMock).toHaveBeenCalledWith(
+      { rootPath: '/home/user/repo', query: 'needle' },
+      { signal: searches[0]?.signal }
+    )
+
+    searches[0]?.resolve({ files: [], totalMatches: 0, truncated: false })
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('fs:search token reuse aborts its predecessor without dropping the replacement', async () => {
+    const searches: {
+      signal: AbortSignal | undefined
+      resolve: (result: { files: []; totalMatches: number; truncated: boolean }) => void
+    }[] = []
+    const searchMock = vi.fn(
+      (
+        _options: unknown,
+        context: { signal?: AbortSignal }
+      ): Promise<{ files: []; totalMatches: number; truncated: boolean }> =>
+        new Promise((resolve) => searches.push({ signal: context.signal, resolve }))
+    )
+    getSshFilesystemProviderMock.mockReturnValue({ search: searchMock })
+    registerFilesystemHandlers(store as never)
+
+    const senderEvent = { sender: { id: 7 } }
+    const first = handlers.get('fs:search')!(senderEvent, {
+      rootPath: '/home/user/repo',
+      query: 'first',
+      connectionId: 'conn-1',
+      requestToken: 'reused'
+    }) as Promise<unknown>
+    const second = handlers.get('fs:search')!(senderEvent, {
+      rootPath: '/home/user/repo',
+      query: 'second',
+      connectionId: 'conn-1',
+      requestToken: 'reused'
+    }) as Promise<unknown>
+    await vi.waitFor(() => expect(searches).toHaveLength(2))
+
+    expect(searches[0]?.signal?.aborted).toBe(true)
+    expect(searches[1]?.signal?.aborted).toBe(false)
+
+    searches[0]?.resolve({ files: [], totalMatches: 0, truncated: false })
+    await expect(first).rejects.toMatchObject({ name: 'AbortError' })
+    await handlers.get('fs:cancelSearch')!(senderEvent, { requestToken: 'reused' })
+    expect(searches[1]?.signal?.aborted).toBe(true)
+
+    searches[1]?.resolve({ files: [], totalMatches: 0, truncated: false })
+    await expect(second).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('fs:cancelSearch ignores settled and unknown tokens', async () => {
+    let settledSignal: AbortSignal | undefined
+    const searchMock = vi.fn((_options: unknown, context: { signal?: AbortSignal }) => {
+      settledSignal = context.signal
+      return Promise.resolve({ files: [], totalMatches: 0, truncated: false })
+    })
+    getSshFilesystemProviderMock.mockReturnValue({ search: searchMock })
+    registerFilesystemHandlers(store as never)
+
+    const senderEvent = { sender: { id: 7 } }
+    await handlers.get('fs:search')!(senderEvent, {
+      rootPath: '/home/user/repo',
+      query: 'settled',
+      connectionId: 'conn-1',
+      requestToken: 'settled'
+    })
+
+    expect(() =>
+      handlers.get('fs:cancelSearch')!(senderEvent, { requestToken: 'settled' })
+    ).not.toThrow()
+    expect(() =>
+      handlers.get('fs:cancelSearch')!(senderEvent, { requestToken: 'unknown' })
+    ).not.toThrow()
+    expect(settledSignal?.aborted).toBe(false)
+  })
+
   // Why: the original SSH Quick Open bug had two halves — relay-side policy
   // drift AND the main dispatcher silently dropping excludePaths before the
   // provider saw them. This test guards the second half: regardless of

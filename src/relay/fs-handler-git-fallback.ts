@@ -1,14 +1,12 @@
 /**
- * Git-based fallbacks for file listing and text search.
+ * Git-based fallback for file listing.
  *
  * Why: the relay depends on ripgrep (rg) for fs.listFiles and fs.search, but
- * rg is not installed on many remote machines. These functions use git ls-files
- * and git grep as universal fallbacks — git is always available since this is
- * a git-focused app.
+ * rg is not installed on many remote machines. This uses git ls-files as a
+ * universal fallback — git is always available since this is a git-focused app.
  */
 import { spawn } from 'node:child_process'
 import { fileListingCancellationError } from '../shared/file-listing-cancellation'
-import type { SearchOptions, SearchResult } from './fs-handler-utils'
 import {
   buildGitLsFilesArgsForQuickOpen,
   shouldExcludeQuickOpenRelPath,
@@ -18,14 +16,6 @@ import {
   expandQuickOpenGitFileListing,
   parseQuickOpenGitLsFilesEntry
 } from '../shared/quick-open-readdir-walk'
-import {
-  buildGitGrepArgs,
-  buildSubmatchRegex,
-  createAccumulator,
-  finalize,
-  ingestGitGrepLine,
-  SEARCH_TIMEOUT_MS
-} from '../shared/text-search'
 import { buildRelayGitEnv } from './relay-command-env'
 
 /**
@@ -263,86 +253,4 @@ export function listFilesWithGit(
     .finally(() => {
       signal?.removeEventListener('abort', onAbort)
     })
-}
-
-/**
- * Text search using `git grep`. Fallback when rg is not installed.
- */
-export function searchWithGitGrep(
-  rootPath: string,
-  query: string,
-  opts: SearchOptions
-): Promise<SearchResult> {
-  return new Promise((resolve) => {
-    const gitArgs = buildGitGrepArgs(query, opts)
-    const matchRegex = buildSubmatchRegex(query, opts)
-    const acc = createAccumulator()
-    let stdoutBuffer = ''
-    let done = false
-
-    const child = spawn('git', gitArgs, {
-      cwd: rootPath,
-      env: buildRelayGitEnv(),
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
-    let killTimeout: ReturnType<typeof setTimeout>
-
-    function resolveOnce(): void {
-      if (done) {
-        return
-      }
-      done = true
-      clearTimeout(killTimeout)
-      // Why: child.kill() is advisory. If git ignores it, detach our
-      // closures so repeated relay searches do not retain old scans.
-      child.stdout!.off('data', handleStdoutData)
-      child.stderr!.off('data', handleStderrData)
-      child.off('error', handleError)
-      child.off('close', handleClose)
-      resolve(finalize(acc))
-    }
-
-    function processLine(line: string): void {
-      const verdict = ingestGitGrepLine(line, rootPath, matchRegex, acc, opts.maxResults)
-      if (verdict === 'stop') {
-        child.kill()
-      }
-    }
-
-    function handleStdoutData(chunk: string): void {
-      stdoutBuffer += chunk
-      const lines = stdoutBuffer.split('\n')
-      stdoutBuffer = lines.pop() ?? ''
-      for (const l of lines) {
-        processLine(l)
-      }
-    }
-
-    function handleStderrData(): void {
-      /* drain */
-    }
-
-    function handleError(): void {
-      resolveOnce()
-    }
-
-    function handleClose(): void {
-      if (stdoutBuffer) {
-        processLine(stdoutBuffer)
-      }
-      resolveOnce()
-    }
-
-    child.stdout!.setEncoding('utf-8')
-    child.stdout!.on('data', handleStdoutData)
-    child.stderr!.on('data', handleStderrData)
-    child.once('error', handleError)
-    child.once('close', handleClose)
-
-    killTimeout = setTimeout(() => {
-      acc.truncated = true
-      child.kill()
-      resolveOnce()
-    }, SEARCH_TIMEOUT_MS)
-  })
 }

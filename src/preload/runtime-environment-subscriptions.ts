@@ -5,6 +5,7 @@ type RuntimeEnvironmentSubscribeArgs = {
   method: string
   params?: unknown
   timeoutMs?: number
+  subscriptionId?: string
 }
 
 type RuntimeEnvironmentSubscriptionCallbacks = {
@@ -128,7 +129,7 @@ export async function subscribeRuntimeEnvironmentFromPreload(
   callbacks: RuntimeEnvironmentSubscriptionCallbacks,
   createSubscriptionId = createRuntimeEnvironmentSubscriptionId
 ): Promise<RuntimeEnvironmentSubscriptionHandle> {
-  const subscriptionId = createSubscriptionId()
+  const subscriptionId = args.subscriptionId?.trim() || createSubscriptionId()
   // Why: streaming RPCs can emit their first frame before ipcMain.handle()
   // resolves, so the dispatcher must be routing this id before invoking.
   const dispatcher = getOrCreateDispatcher(ipc)

@@ -433,16 +433,20 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'files.search',
     params: FileSearch,
-    handler: async (params, { runtime }) =>
-      runtime.searchRuntimeFiles(params.worktree, {
-        query: params.query,
-        caseSensitive: params.caseSensitive,
-        wholeWord: params.wholeWord,
-        useRegex: params.useRegex,
-        includePattern: params.includePattern,
-        excludePattern: params.excludePattern,
-        maxResults: params.maxResults
-      })
+    handler: async (params, { runtime, signal }) =>
+      runtime.searchRuntimeFiles(
+        params.worktree,
+        {
+          query: params.query,
+          caseSensitive: params.caseSensitive,
+          wholeWord: params.wholeWord,
+          useRegex: params.useRegex,
+          includePattern: params.includePattern,
+          excludePattern: params.excludePattern,
+          maxResults: params.maxResults
+        },
+        signal
+      )
   }),
   defineMethod({
     name: 'files.listAll',

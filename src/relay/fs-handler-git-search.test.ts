@@ -8,12 +8,13 @@ vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
-import { EventEmitter } from 'node:events'
+import { EventEmitter, getEventListeners } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
-import { searchWithGitGrep } from './fs-handler-git-fallback'
+import { searchWithGitGrep } from './fs-handler-git-search'
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
+  ;(p as unknown as Record<string, unknown>).pid = 1234
   ;(p as unknown as Record<string, unknown>).stdout = new EventEmitter()
   ;(
     (p as unknown as Record<string, unknown>).stdout as EventEmitter & {
@@ -23,6 +24,14 @@ function createMockProcess(): ChildProcess {
   ;(p as unknown as Record<string, unknown>).stderr = new EventEmitter()
   ;(p as unknown as Record<string, unknown>).kill = vi.fn()
   return p
+}
+
+function expectDetached(proc: ChildProcess, signal: AbortSignal): void {
+  expect((proc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+  expect((proc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+  expect(proc.listenerCount('error')).toBe(0)
+  expect(proc.listenerCount('close')).toBe(0)
+  expect(getEventListeners(signal, 'abort')).toHaveLength(0)
 }
 
 describe('relay git grep fallback', () => {
@@ -55,5 +64,31 @@ describe('relay git grep fallback', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('does not spawn git grep for a pre-aborted search', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    const promise = searchWithGitGrep('/remote/root', 'ok', { maxResults: 100 }, controller.signal)
+
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+  })
+
+  it('aborts an in-flight git grep and detaches every listener', async () => {
+    const proc = createMockProcess()
+    const controller = new AbortController()
+    spawnMock.mockReturnValue(proc)
+
+    const promise = searchWithGitGrep('/remote/root', 'ok', { maxResults: 100 }, controller.signal)
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(1)
+
+    controller.abort()
+
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(proc.kill).toHaveBeenCalledTimes(1)
+    expectDetached(proc, controller.signal)
   })
 })

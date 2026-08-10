@@ -1127,14 +1127,18 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'browser.screencast',
       { pageId: 'page-1' },
       15_000,
-      expect.any(Object)
+      expect.any(Object),
+      undefined,
+      expect.any(AbortSignal)
     )
     expect(subscribeRemoteRuntimeRequestMock).toHaveBeenCalledWith(
       expect.any(Object),
       'terminal.multiplex',
       { client: { id: 'client-1' } },
       15_000,
-      expect.any(Object)
+      expect.any(Object),
+      undefined,
+      expect.any(AbortSignal)
     )
     expect(subscribeRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })
@@ -1315,7 +1319,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'session.tabs.subscribeAll',
       undefined,
       15_000,
-      expect.any(Object)
+      expect.any(Object),
+      undefined,
+      expect.any(AbortSignal)
     )
     expect(subscribeRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })
@@ -1659,7 +1665,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'terminal.subscribe',
       { terminal: 't1' },
       25,
-      expect.any(Object)
+      expect.any(Object),
+      undefined,
+      expect.any(AbortSignal)
     )
     expect(sent).toEqual([
       expect.objectContaining({ subscriptionId: result.subscriptionId, type: 'response' }),
@@ -2242,10 +2250,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     ;(destroyedHandler as () => void)()
     resolveSubscribe({ requestId: 'stream-late', close, sendBinary: vi.fn() })
 
-    await expect(resultPromise).resolves.toEqual({
-      subscriptionId: 'late-sub',
-      requestId: 'stream-late'
-    })
+    await expect(resultPromise).rejects.toMatchObject({ name: 'AbortError' })
     expect(close).toHaveBeenCalledTimes(1)
     expect(destroyedListenerRemoved).toHaveBeenCalledWith('destroyed', expect.any(Function))
 
@@ -2335,9 +2340,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       expect(senderSend).not.toHaveBeenCalled()
       resolveSubscribe({ requestId: 'retired-stream', close, sendBinary })
 
-      await expect(resultPromise).rejects.toThrow(
-        'Runtime environment pairing changed; refresh and try again'
-      )
+      await expect(resultPromise).rejects.toMatchObject({ name: 'AbortError' })
       expect(close).toHaveBeenCalledTimes(1)
 
       const binaryListener = onMock.mock.calls.find(

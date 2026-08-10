@@ -35,6 +35,63 @@ afterEach(async () => {
 })
 
 describe('subscribeRemoteRuntimeRequest', () => {
+  it('rejects a pre-aborted subscription before reading pairing data', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const pairing = new Proxy({} as PairingOffer, {
+      get: () => {
+        throw new Error('Pairing data was read')
+      }
+    })
+
+    await expect(
+      subscribeRemoteRuntimeRequest(
+        pairing,
+        'terminal.subscribe',
+        {},
+        1000,
+        { onResponse: vi.fn(), onError: vi.fn() },
+        undefined,
+        controller.signal
+      )
+    ).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('closes a connecting socket and removes its listener when setup is aborted', async () => {
+    const server = await createSubscriptionServer()
+    const controller = new AbortController()
+    const closeStates: number[] = []
+    const originalClose = WebSocketClient.prototype.close
+    const closeSpy = vi.spyOn(WebSocketClient.prototype, 'close').mockImplementation(function (
+      this: WebSocketClient,
+      ...args: Parameters<WebSocketClient['close']>
+    ) {
+      closeStates.push(this.readyState)
+      return originalClose.apply(this, args)
+    })
+    const removeListenerSpy = vi.spyOn(controller.signal, 'removeEventListener')
+    try {
+      const pending = subscribeRemoteRuntimeRequest(
+        server.pairing,
+        'terminal.subscribe',
+        {},
+        1000,
+        { onResponse: vi.fn(), onError: vi.fn() },
+        undefined,
+        controller.signal
+      )
+
+      controller.abort()
+
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+      expect(closeStates).toEqual([WebSocketClient.CONNECTING])
+      expect(removeListenerSpy).toHaveBeenCalledWith('abort', expect.any(Function))
+    } finally {
+      closeSpy.mockRestore()
+      removeListenerSpy.mockRestore()
+    }
+  })
+
   it('includes WebSocket close details when subscription admission is rejected', async () => {
     const server = await createClosingServer(1013, 'Maximum connections reached')
 
@@ -52,6 +109,8 @@ describe('subscribeRemoteRuntimeRequest', () => {
     const server = await createSubscriptionServer()
     const onResponse = vi.fn()
     const onError = vi.fn()
+    const controller = new AbortController()
+    const removeListenerSpy = vi.spyOn(controller.signal, 'removeEventListener')
 
     const subscription = await subscribeRemoteRuntimeRequest(
       server.pairing,
@@ -61,9 +120,12 @@ describe('subscribeRemoteRuntimeRequest', () => {
       {
         onResponse,
         onError
-      }
+      },
+      undefined,
+      controller.signal
     )
 
+    expect(removeListenerSpy).toHaveBeenCalledWith('abort', expect.any(Function))
     await vi.waitFor(() =>
       expect(onResponse).toHaveBeenCalledWith(
         expect.objectContaining({ ok: true, result: { type: 'subscribed' } })
@@ -82,6 +144,7 @@ describe('subscribeRemoteRuntimeRequest', () => {
     await expect(server.nextBinary).resolves.toEqual(bytes)
     expect(onError).not.toHaveBeenCalled()
     subscription.close()
+    removeListenerSpy.mockRestore()
   })
 
   it('detaches subscription socket listeners after close', async () => {

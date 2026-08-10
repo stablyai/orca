@@ -107,6 +107,7 @@ import {
 import { SEARCH_TIMEOUT_MS } from '../../shared/text-search'
 
 type MockRuntimeSearchChild = EventEmitter & {
+  pid: number
   stdout: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> }
   stderr: EventEmitter
   kill: ReturnType<typeof vi.fn>
@@ -195,6 +196,7 @@ function createRuntimeFileCommands(options?: {
 
 function createRuntimeSearchChild(): MockRuntimeSearchChild {
   const child = new EventEmitter() as MockRuntimeSearchChild
+  child.pid = 1234
   child.stdout = new EventEmitter() as MockRuntimeSearchChild['stdout']
   child.stdout.setEncoding = vi.fn()
   child.stderr = new EventEmitter()
@@ -756,6 +758,72 @@ describe('RuntimeFileCommands', () => {
     expect(child.listenerCount('close')).toBe(0)
   })
 
+  it('forwards runtime text-search cancellation to nested SSH', async () => {
+    const controller = new AbortController()
+    let resolveSearch!: (result: {
+      files: never[]
+      totalMatches: number
+      truncated: boolean
+    }) => void
+    const search = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveSearch = resolve
+        })
+    )
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ search } as never)
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      connectionId: 'ssh-1'
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+
+    const result = commands.searchRuntimeFiles(
+      'id:wt-1',
+      { query: 'needle', maxResults: 10 },
+      controller.signal
+    )
+    await vi.waitFor(() => expect(search).toHaveBeenCalledOnce())
+    controller.abort()
+    resolveSearch({ files: [], totalMatches: 0, truncated: false })
+
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(search).toHaveBeenCalledWith(
+      { query: 'needle', maxResults: 10, rootPath: '/remote/repo' },
+      { signal: controller.signal }
+    )
+  })
+
+  it('kills and detaches an aborted runtime rg search', async () => {
+    const controller = new AbortController()
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
+      connectionId: null
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+    const child = createRuntimeSearchChild()
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    checkRgAvailableMock.mockResolvedValue(true)
+    wslAwareSpawnMock.mockReturnValue(child)
+
+    const resultPromise = commands.searchRuntimeFiles(
+      'id:wt-1',
+      { query: 'needle', maxResults: 10 },
+      controller.signal
+    )
+    await vi.waitFor(() => expect(wslAwareSpawnMock).toHaveBeenCalledOnce())
+    controller.abort()
+
+    await expect(resultPromise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(child.kill).toHaveBeenCalledOnce()
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+    expect(checkRgAvailableMock).toHaveBeenCalledWith('/repo', undefined, controller.signal)
+  })
+
   it('routes runtime rg searches through the registered WSL project runtime', async () => {
     const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: {
@@ -787,7 +855,7 @@ describe('RuntimeFileCommands', () => {
       'C:\\repo',
       'C:\\repo'
     )
-    expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
+    expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu', undefined)
     expect(wslAwareSpawnMock).toHaveBeenCalledWith(
       'rg',
       expect.any(Array),

@@ -468,6 +468,73 @@ describe('web runtime environment identity', () => {
     })
   })
 
+  it('keeps a reused subscription id owned by its newest pending setup', async () => {
+    const signals: AbortSignal[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        subscribe(
+          _method: string,
+          _params: unknown,
+          _callbacks: unknown,
+          options?: { signal?: AbortSignal }
+        ): Promise<never> {
+          const signal = options?.signal
+          if (!signal) {
+            throw new Error('Expected pending subscription setup signal')
+          }
+          signals.push(signal)
+          return new Promise((_resolve, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                const error = new Error('aborted')
+                error.name = 'AbortError'
+                reject(error)
+              },
+              { once: true }
+            )
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const args = {
+      selector: 'web-server-a',
+      method: 'files.search',
+      subscriptionId: 'reused-sub'
+    }
+
+    const first = globals.window.api.runtimeEnvironments.subscribe(args, {
+      onResponse: vi.fn()
+    })
+    const firstRejection = expect(first).rejects.toMatchObject({ name: 'AbortError' })
+    const second = globals.window.api.runtimeEnvironments.subscribe(args, {
+      onResponse: vi.fn()
+    })
+    const secondRejection = expect(second).rejects.toMatchObject({ name: 'AbortError' })
+
+    await firstRejection
+    expect(signals).toHaveLength(2)
+    expect(signals[0]?.aborted).toBe(true)
+    expect(signals[1]?.aborted).toBe(false)
+    await expect(
+      globals.window.api.runtimeEnvironments.cancelSubscription?.({
+        subscriptionId: 'reused-sub'
+      })
+    ).resolves.toEqual({ unsubscribed: true })
+    await secondRejection
+    await expect(
+      globals.window.api.runtimeEnvironments.cancelSubscription?.({
+        subscriptionId: 'reused-sub'
+      })
+    ).resolves.toEqual({ unsubscribed: false })
+  })
+
   it.each(['active runtime', 'selected environment'] as const)(
     'returns a disconnect envelope when a queued %s call disconnects',
     async (route) => {
@@ -3421,6 +3488,29 @@ describe('web SSH preload API', () => {
 })
 
 describe('web file preload API', () => {
+  const webFileWorktree = {
+    id: 'wt-1',
+    repoId: 'repo-1',
+    path: '/workspace/repo',
+    head: 'abc123',
+    branch: 'refs/heads/main',
+    isBare: false,
+    isMainWorktree: true,
+    displayName: 'repo',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    linkedGitLabMR: null,
+    linkedGitLabIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    workspaceStatus: 'todo'
+  }
+
   beforeEach(() => {
     vi.resetModules()
   })
@@ -3455,28 +3545,6 @@ describe('web file preload API', () => {
 
   it('returns false for runtime missing-path errors from fs.pathExists', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
-    const worktree = {
-      id: 'wt-1',
-      repoId: 'repo-1',
-      path: '/workspace/repo',
-      head: 'abc123',
-      branch: 'refs/heads/main',
-      isBare: false,
-      isMainWorktree: true,
-      displayName: 'repo',
-      comment: '',
-      linkedIssue: null,
-      linkedPR: null,
-      linkedLinearIssue: null,
-      linkedGitLabMR: null,
-      linkedGitLabIssue: null,
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 0,
-      lastActivityAt: 0,
-      workspaceStatus: 'todo'
-    }
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
@@ -3493,7 +3561,11 @@ describe('web file preload API', () => {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
               ok: true,
-              result: { repoId: 'repo-1', authoritative: true, worktrees: [worktree] },
+              result: {
+                repoId: 'repo-1',
+                authoritative: true,
+                worktrees: [webFileWorktree]
+              },
               _meta: { runtimeId: 'runtime-1' }
             })
           }
@@ -3522,6 +3594,218 @@ describe('web file preload API', () => {
       { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
       { method: 'files.stat', params: { worktree: 'id:wt-1', relativePath: 'untitled.md' } }
     ])
+  })
+
+  it('keeps untokenized search unary and cancels only the matching tokenized subscription', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    const subscriptions: {
+      method: string
+      params: unknown
+      onResponse: (response: RuntimeRpcResponse<unknown>) => void
+      unsubscribe: ReturnType<typeof vi.fn>
+    }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          const result =
+            method === 'repo.list'
+              ? { repos: [{ id: 'repo-1' }] }
+              : method === 'worktree.detectedList'
+                ? { repoId: 'repo-1', authoritative: true, worktrees: [webFileWorktree] }
+                : { files: [], totalMatches: 0, truncated: false }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result,
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        subscribe(
+          method: string,
+          params: unknown,
+          callbacks: { onResponse: (response: RuntimeRpcResponse<unknown>) => void }
+        ): Promise<{ unsubscribe: () => void }> {
+          const subscription = {
+            method,
+            params,
+            onResponse: callbacks.onResponse,
+            unsubscribe: vi.fn()
+          }
+          subscriptions.push(subscription)
+          return Promise.resolve({ unsubscribe: subscription.unsubscribe })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const searchArgs = { rootPath: '/workspace/repo', query: 'needle' }
+
+    await expect(globals.window.api.fs.search(searchArgs)).resolves.toEqual({
+      files: [],
+      totalMatches: 0,
+      truncated: false
+    })
+    expect(subscriptions).toHaveLength(0)
+
+    const firstSearch = globals.window.api.fs.search({ ...searchArgs, requestToken: 'search-1' })
+    const firstRejection = expect(firstSearch).rejects.toMatchObject({ name: 'AbortError' })
+    const secondSearch = globals.window.api.fs.search({ ...searchArgs, requestToken: 'search-2' })
+    const secondSearchSettled = trackPromiseSettled(secondSearch)
+    await vi.waitFor(() => expect(subscriptions).toHaveLength(2))
+    await Promise.resolve()
+
+    await globals.window.api.fs.cancelSearch({ requestToken: 'search-1' })
+    await firstRejection
+    expect(subscriptions[0].unsubscribe).toHaveBeenCalledOnce()
+    expect(subscriptions[1].unsubscribe).not.toHaveBeenCalled()
+    expect(secondSearchSettled()).toBe(false)
+
+    subscriptions[1].onResponse({
+      id: 'search-2',
+      ok: true,
+      result: { files: [], totalMatches: 0, truncated: false },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await expect(secondSearch).resolves.toEqual({ files: [], totalMatches: 0, truncated: false })
+    expect(subscriptions[1].unsubscribe).toHaveBeenCalledOnce()
+    await globals.window.api.fs.cancelSearch({ requestToken: 'search-2' })
+    expect(subscriptions[1].unsubscribe).toHaveBeenCalledOnce()
+
+    expect(runtimeCalls.filter((call) => call.method === 'files.search')).toHaveLength(1)
+    expect(subscriptions.map(({ method }) => method)).toEqual(['files.search', 'files.search'])
+  })
+
+  it('cancels a token while its runtime file path is still resolving', async () => {
+    const runtimeMethods: string[] = []
+    const subscribe = vi.fn()
+    let resolveWorktrees!: (response: RuntimeRpcResponse<unknown>) => void
+    const pendingWorktrees = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
+      resolveWorktrees = resolve
+    })
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeMethods.push(method)
+          if (method === 'repo.list') {
+            return Promise.resolve({
+              id: 'repos',
+              ok: true,
+              result: { repos: [{ id: 'repo-1' }] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'worktree.detectedList') {
+            return pendingWorktrees
+          }
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: { files: [], totalMatches: 0, truncated: false },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        subscribe = subscribe
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const search = globals.window.api.fs.search({
+      rootPath: '/workspace/repo',
+      query: 'needle',
+      requestToken: 'search-during-resolution'
+    })
+    const rejection = expect(search).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => expect(runtimeMethods).toContain('worktree.detectedList'))
+    await globals.window.api.fs.cancelSearch({ requestToken: 'search-during-resolution' })
+    resolveWorktrees({
+      id: 'worktrees',
+      ok: true,
+      result: { repoId: 'repo-1', authoritative: true, worktrees: [webFileWorktree] },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+
+    await rejection
+    expect(subscribe).not.toHaveBeenCalled()
+    expect(runtimeMethods).not.toContain('files.search')
+  })
+
+  it('keeps a reused token owned by its successor after aborting the predecessor', async () => {
+    const subscriptions: {
+      params: unknown
+      unsubscribe: ReturnType<typeof vi.fn>
+    }[] = []
+    let resolveWorktrees!: (response: RuntimeRpcResponse<unknown>) => void
+    const pendingWorktrees = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
+      resolveWorktrees = resolve
+    })
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'repo.list') {
+            return Promise.resolve({
+              id: 'repos',
+              ok: true,
+              result: { repos: [{ id: 'repo-1' }] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return pendingWorktrees
+        }
+
+        subscribe(_method: string, params: unknown): Promise<{ unsubscribe: () => void }> {
+          const subscription = { params, unsubscribe: vi.fn() }
+          subscriptions.push(subscription)
+          return Promise.resolve({ unsubscribe: subscription.unsubscribe })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const requestToken = 'reused-search-token'
+    const firstSearch = globals.window.api.fs.search({
+      rootPath: '/workspace/repo',
+      query: 'first',
+      requestToken
+    })
+    const firstRejection = expect(firstSearch).rejects.toMatchObject({ name: 'AbortError' })
+    await Promise.resolve()
+    const secondSearch = globals.window.api.fs.search({
+      rootPath: '/workspace/repo',
+      query: 'second',
+      requestToken
+    })
+    const secondRejection = expect(secondSearch).rejects.toMatchObject({ name: 'AbortError' })
+    resolveWorktrees({
+      id: 'worktrees',
+      ok: true,
+      result: { repoId: 'repo-1', authoritative: true, worktrees: [webFileWorktree] },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+
+    await firstRejection
+    await vi.waitFor(() => expect(subscriptions).toHaveLength(1))
+    expect(subscriptions[0].params).toMatchObject({ query: 'second' })
+    await globals.window.api.fs.cancelSearch({ requestToken })
+    await secondRejection
+    expect(subscriptions[0].unsubscribe).toHaveBeenCalledOnce()
   })
 })
 
