@@ -4673,6 +4673,9 @@
           "branchFolderPathIdentity": "Branch or folder path",
           "ef18787206": "Queued for deletion"
         },
+        "WorktreeRenameQuickAction": {
+          "renameWorkspace": "Rename workspace"
+        },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
         },

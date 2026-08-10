@@ -4487,6 +4487,9 @@
           "branchFolderPathIdentity": "分支或文件夹路径",
           "ef18787206": "已排队删除"
         },
+        "WorktreeRenameQuickAction": {
+          "renameWorkspace": "重命名工作区"
+        },
         "WorktreeCardAgents": {
           "1b0a156717": "智能体"
         },

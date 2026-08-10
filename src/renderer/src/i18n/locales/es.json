@@ -4494,6 +4494,9 @@
           "branchFolderPathIdentity": "Rama o ruta de carpeta",
           "ef18787206": "En cola para eliminación"
         },
+        "WorktreeRenameQuickAction": {
+          "renameWorkspace": "Cambiar nombre del espacio de trabajo"
+        },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
         },

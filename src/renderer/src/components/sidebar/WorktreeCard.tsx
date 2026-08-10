@@ -26,6 +26,10 @@ import { LinearAgentSkillSetupPrompt } from './LinearAgentSkillSetupPrompt'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
+import {
+  WorktreeRenameQuickAction,
+  worktreeHeaderActionsPaddingClass
+} from './WorktreeRenameQuickAction'
 import { cn } from '@/lib/utils'
 import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
@@ -983,6 +987,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
       worktree.id
     ]
   )
+  // Why: routes through the same store request the workspace.rename shortcut uses,
+  // so the inline editor stays the single owner of save/cancel/IME handling.
+  const handleRenameQuickAction = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      setRenamingWorktreeId(worktree.id)
+    },
+    [setRenamingWorktreeId, worktree.id]
+  )
   const handleOpenRenameErrorDialog = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault()
     event.stopPropagation()
@@ -1227,7 +1241,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const hasMetaRow = compactCards
     ? hasMetadataBadge || cacheStartedAt != null
     : hasDetailedMetaRowContent
-  const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
+  // Why: inline rename is otherwise reachable only by double-click, the "Update"
+  // metadata modal, or a shortcut that has no default binding off macOS.
+  const showRenameQuickAction = !affiliateListMode && !isDeleting
+  const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction || showRenameQuickAction
   // Why: normalize the title once so title/branch de-dupe and identity-only hover eligibility stay in sync.
   const trimmedVisibleCardTitle = visibleCardTitle.trim()
   const showBranchIdentityHover = newCardStyle
@@ -1599,7 +1616,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
           </div>
 
           {showHeaderActions && (
-            <div className="ml-auto flex shrink-0 items-center justify-center gap-1 pr-1.5">
+            <div
+              className={cn(
+                'ml-auto flex shrink-0 items-center justify-center gap-1',
+                worktreeHeaderActionsPaddingClass(showTitleRowPrimary || showDeleteQuickAction)
+              )}
+            >
               {showTitleRowPrimary && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1620,6 +1642,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
                     )}
                   </TooltipContent>
                 </Tooltip>
+              )}
+
+              {showRenameQuickAction && (
+                <WorktreeRenameQuickAction
+                  hasPrecedingAction={showTitleRowPrimary}
+                  onPointerDown={stopQuickActionPointerPropagation}
+                  onRename={handleRenameQuickAction}
+                />
               )}
 
               {showDeleteQuickAction && (

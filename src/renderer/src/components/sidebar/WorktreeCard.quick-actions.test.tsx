@@ -24,12 +24,13 @@ let settings: Partial<GlobalSettings> | null = null
 let projectGroups: unknown[] = []
 let workspaceDeleteModifierPressed = false
 let gitConflictOperationByWorktree: Record<string, GitConflictOperation> = {}
+let deleteStateByWorktreeId: Record<string, { isDeleting: boolean }> = {}
 let WorktreeCard: typeof WorktreeCardComponent
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
     selector({
-      deleteStateByWorktreeId: {},
+      deleteStateByWorktreeId,
       fetchHostedReviewForBranch,
       fetchIssue,
       gitConflictOperationByWorktree,
@@ -144,6 +145,7 @@ describe('WorktreeCard quick actions', () => {
     projectGroups = []
     workspaceDeleteModifierPressed = false
     gitConflictOperationByWorktree = {}
+    deleteStateByWorktreeId = {}
   })
 
   it('marks the unread toggle as a workspace-board-preserving action', () => {
@@ -297,6 +299,58 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('aria-label="Auto-rename failed: view error"')
     expect(markup).toContain('rename failed')
     expect(markup).not.toContain('rename pending')
+  })
+
+  it('renders the rename quick action as a workspace-board-preserving action', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('aria-label="Rename workspace"')
+    expect(markup).toContain('data-worktree-rename-quick-action=""')
+  })
+
+  it('keeps the rename quick action collapsed until the card is hovered or focused', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    const button = markup
+      .match(/<button[^>]*>/g)
+      ?.find((tag) => tag.includes('data-worktree-rename-quick-action'))
+    expect(button).toBeDefined()
+    // Why: opacity alone would still reserve the button's width plus the group's
+    // trailing gutter, shifting every row that renders no other header action.
+    expect(button).toContain('max-w-0')
+    expect(button).toContain('opacity-0')
+    expect(button).toContain('group-hover/worktree-card:max-w-4')
+    expect(button).toContain('group-focus-within/worktree-card:max-w-4')
+    expect(markup).toContain('group-hover/worktree-card:pr-1.5')
+  })
+
+  it('does not render the rename quick action while the workspace is being deleted', () => {
+    deleteStateByWorktreeId = {
+      'repo-1::/repo/worktrees/quick-action': { isDeleting: true }
+    }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).not.toContain('data-worktree-rename-quick-action')
+  })
+
+  it('does not render the rename quick action in affiliate list mode', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree()}
+        repo={makeRepo()}
+        isActive={false}
+        affiliateListMode
+      />
+    )
+
+    expect(markup).not.toContain('data-worktree-rename-quick-action')
   })
 
   it('renders the migrated branch metadata row when branch is enabled', () => {
