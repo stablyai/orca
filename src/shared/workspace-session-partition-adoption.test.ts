@@ -36,6 +36,41 @@ function layout(ptyId: string | null): TerminalLayoutSnapshot {
 }
 
 describe('adoptOrphanedWorkspaceSessionPartition', () => {
+  it.each([1000, 2000])(
+    'indexes %i equivalent workspaces without per-workspace global layout scans',
+    (workspaceCount) => {
+      let globalLayoutScans = 0
+      const makeEquivalentSession = (): WorkspaceSessionState => {
+        const tabsByWorktree: WorkspaceSessionState['tabsByWorktree'] = {}
+        const terminalLayoutsByTabId: WorkspaceSessionState['terminalLayoutsByTabId'] = {}
+        for (let index = 0; index < workspaceCount; index += 1) {
+          const workspaceKey = `repo-${index}::/srv/worktree-${index}`
+          const tabId = `tab-${index}`
+          tabsByWorktree[workspaceKey] = [tab(tabId, workspaceKey, null)]
+          terminalLayoutsByTabId[tabId] = layout(null)
+        }
+        return session({
+          tabsByWorktree,
+          terminalLayoutsByTabId: new Proxy(terminalLayoutsByTabId, {
+            ownKeys(target) {
+              globalLayoutScans += 1
+              return Reflect.ownKeys(target)
+            }
+          })
+        })
+      }
+
+      const base = makeEquivalentSession()
+      const source = makeEquivalentSession()
+      const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
+
+      expect(adoption.ambiguousWorktreeIds).toEqual([])
+      expect(adoption.reconciledWorktreeIds).toHaveLength(workspaceCount)
+      expect(globalLayoutScans).toBe(3)
+    },
+    20_000
+  )
+
   it.each([
     ['git worktrees', 'repo-a::/srv/a', 'repo-b::/srv/b'],
     ['folder workspaces', folderWorkspaceKey('folder-a'), folderWorkspaceKey('folder-b')]

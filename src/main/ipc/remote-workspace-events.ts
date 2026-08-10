@@ -1,7 +1,10 @@
+import type { DirectSshAuthority } from '../../shared/ssh-types'
+
 type RemoteWorkspaceNotificationHandler = (
   targetId: string,
   method: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  authority: DirectSshAuthority
 ) => void
 
 const handlers = new Set<RemoteWorkspaceNotificationHandler>()
@@ -16,9 +19,10 @@ export function registerRemoteWorkspaceNotificationHandler(
 export function notifyRemoteWorkspaceHandlers(
   targetId: string,
   method: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  authority: DirectSshAuthority
 ): void {
   for (const handler of handlers) {
-    handler(targetId, method, params)
+    handler(targetId, method, params, authority)
   }
 }

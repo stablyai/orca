@@ -73,6 +73,32 @@ describe('mergeDirectSshRemoteWorkspaceSession', () => {
     ).toBeNull()
   })
 
+  it.each([
+    ['git worktrees', 'repo-a::/work-a', 'repo-b::/work-b'],
+    ['folder workspaces', 'folder:folder-a', 'folder:folder-b']
+  ])(
+    'fails closed when one target owns a duplicate tab across %s',
+    (_kind, worktreeA, worktreeB) => {
+      const current = session({})
+      const remote = session({
+        [worktreeA]: [tab(worktreeA, 'ssh:target-a@@remote-a', 4)],
+        [worktreeB]: [tab(worktreeB, 'ssh:target-a@@remote-b', 5)]
+      })
+
+      expect(
+        mergeDirectSshRemoteWorkspaceSession(
+          current,
+          remote,
+          new Set([worktreeA, worktreeB]),
+          current.tabsByWorktree,
+          new Set(),
+          {},
+          authority
+        )
+      ).toBeNull()
+    }
+  )
+
   it('rejects foreign tab, layout, mounted-leaf, and session PTYs before merge', () => {
     const worktreeId = 'repo-a::/work-a'
     const local = tab(worktreeId, 'ssh:target-a@@local-a', 9)

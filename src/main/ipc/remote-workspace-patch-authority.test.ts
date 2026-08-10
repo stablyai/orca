@@ -201,4 +201,44 @@ describe('remote workspace queued patch authority', () => {
       expect.objectContaining({ patch: expect.objectContaining({ kind: 'replace-session' }) })
     )
   })
+
+  it('rejects a late snapshot from a replaced provider without poisoning its retry cache', async () => {
+    const originalAuthority = currentAuthority
+    const replacementAuthority = authority('epoch-2', 2)
+    let releaseOriginalSnapshot!: () => void
+    const originalSnapshotCanFinish = new Promise<void>((resolve) => {
+      releaseOriginalSnapshot = resolve
+    })
+    const originalRequest = vi.fn(async (method: string) => {
+      if (method === 'workspace.get') {
+        await originalSnapshotCanFinish
+        return snapshot(emptyRemoteSession('/stale-provider'), 99)
+      }
+      return { ok: false, reason: 'unavailable', message: 'provider replaced' }
+    })
+    const replacementPatchRevisions: number[] = []
+    const replacementRequest = vi.fn(async (method: string, params: Record<string, unknown>) => {
+      if (method === 'workspace.get') {
+        return snapshot(emptyRemoteSession('/replacement'), 4)
+      }
+      replacementPatchRevisions.push(params.baseRevision as number)
+      return { ok: true, snapshot: snapshot(patchedSession(params), 5) }
+    })
+    currentMux = { request: originalRequest }
+
+    const stale = exportExplicit(sessionWithTab('/stale', 'stale-tab'), originalAuthority)
+    await vi.waitFor(() =>
+      expect(originalRequest).toHaveBeenCalledWith('workspace.get', expect.anything())
+    )
+    currentAuthority = replacementAuthority
+    currentMux = { request: replacementRequest }
+    releaseOriginalSnapshot()
+
+    await expect(stale).resolves.toEqual([])
+    await expect(
+      exportExplicit(sessionWithTab('/current', 'current-tab'), replacementAuthority)
+    ).resolves.toMatchObject([{ targetId: TARGET.id, result: { ok: true } }])
+    expect(replacementRequest).toHaveBeenCalledWith('workspace.get', expect.anything())
+    expect(replacementPatchRevisions).toEqual([4])
+  })
 })

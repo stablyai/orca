@@ -1,5 +1,6 @@
 import type { WorkspaceSessionState } from './types'
 import {
+  createWorkspaceSessionAuthorityIndex,
   findWorkspaceTabIdOwnerCollisions,
   workspaceTerminalAuthority
 } from './workspace-session-partition-authority'
@@ -42,13 +43,24 @@ export function adoptOrphanedWorkspaceSessionPartition(
   }
   const sourceKeys = collectWorkspaceKeys(source)
   const baseKeys = collectWorkspaceKeys(base)
+  const baseAuthorityIndex = createWorkspaceSessionAuthorityIndex(base)
+  const sourceAuthorityIndex = createWorkspaceSessionAuthorityIndex(source)
   const authorityByWorkspaceKey = new Map(
     [...sourceKeys].map((key) => [
       key,
-      workspaceTerminalAuthority(base, source, key, {
-        base: baseKeys.has(key),
-        source: true
-      })
+      workspaceTerminalAuthority(
+        base,
+        source,
+        key,
+        {
+          base: baseKeys.has(key),
+          source: true
+        },
+        {
+          base: baseAuthorityIndex,
+          source: sourceAuthorityIndex
+        }
+      )
     ])
   )
   const ambiguousWorktreeIds = new Set([

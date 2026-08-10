@@ -22,8 +22,17 @@ const {
     providerEpoch: `epoch-${targetId}`,
     connectionGeneration: 1
   })),
-  isCurrentSshProviderAuthorityMock: vi.fn(() => true),
-  registerRemoteWorkspaceNotificationHandlerMock: vi.fn(() => vi.fn())
+  isCurrentSshProviderAuthorityMock: vi.fn((_candidate: DirectSshAuthority) => true),
+  registerRemoteWorkspaceNotificationHandlerMock: vi.fn(
+    (
+      _handler: (
+        targetId: string,
+        method: string,
+        params: Record<string, unknown>,
+        authority: DirectSshAuthority
+      ) => void
+    ) => vi.fn()
+  )
 }))
 
 vi.mock('electron', () => ({
@@ -48,6 +57,7 @@ vi.mock('../ssh/ssh-provider-authority', () => ({
 }))
 
 import {
+  _getRemoteWorkspaceSnapshotForTests,
   _resetRemoteWorkspaceCachesForTests,
   registerRemoteWorkspaceHandlers,
   remoteWorkspaceSessionMatchesSnapshot
@@ -60,6 +70,15 @@ function snapshot(session: RemoteWorkspaceSession, revision = 7): RemoteWorkspac
     updatedAt: 123,
     schemaVersion: 1,
     session
+  }
+}
+
+function emptyRemoteSession(): RemoteWorkspaceSession {
+  return {
+    activeWorktreePath: null,
+    activeTabId: null,
+    tabsByWorktreePath: {},
+    terminalLayoutsByTabId: {}
   }
 }
 
@@ -273,6 +292,43 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
 
     expect(getSshConnectionStoreMock).not.toHaveBeenCalled()
     expect(getActiveMultiplexerMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a late workspace notification from replaced provider authority', () => {
+    const currentAuthority = authority('target-1')
+    const staleAuthority = {
+      ...currentAuthority,
+      providerEpoch: 'stale-epoch' as SshProviderEpoch,
+      connectionGeneration: 0
+    }
+    getSshConnectionStoreMock.mockReturnValue({
+      listTargets: () => targets,
+      getTarget: (targetId: string) => targets.find((target) => target.id === targetId)
+    })
+    isCurrentSshProviderAuthorityMock.mockImplementation(
+      (candidate: DirectSshAuthority) =>
+        candidate.providerEpoch === currentAuthority.providerEpoch &&
+        candidate.connectionGeneration === currentAuthority.connectionGeneration
+    )
+    const notificationHandler =
+      registerRemoteWorkspaceNotificationHandlerMock.mock.calls.at(-1)?.[0]
+    expect(notificationHandler).toBeTypeOf('function')
+
+    notificationHandler?.(
+      'target-1',
+      'workspace.changed',
+      { snapshot: snapshot({ ...emptyRemoteSession(), activeWorktreePath: '/stale' }, 99) },
+      staleAuthority
+    )
+    expect(_getRemoteWorkspaceSnapshotForTests(currentAuthority)).toBeUndefined()
+
+    notificationHandler?.(
+      'target-1',
+      'workspace.changed',
+      { snapshot: snapshot({ ...emptyRemoteSession(), activeWorktreePath: '/current' }, 4) },
+      currentAuthority
+    )
+    expect(_getRemoteWorkspaceSnapshotForTests(currentAuthority)?.revision).toBe(4)
   })
 
   it('does not export an explicit session without target provenance', async () => {

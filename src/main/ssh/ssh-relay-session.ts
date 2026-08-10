@@ -62,6 +62,7 @@ import {
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
+import { getSshProviderAuthority } from './ssh-provider-authority'
 import { PortScanner } from './ssh-port-scanner'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
 import type { SshPortForwardManager } from './ssh-port-forward'
@@ -1455,8 +1456,9 @@ export class SshRelaySession {
   }
 
   private wireUpRemoteWorkspaceEvents(mux: SshChannelMultiplexer): void {
+    const authority = getSshProviderAuthority(this.targetId)
     mux.onNotification((method, params) => {
-      notifyRemoteWorkspaceHandlers(this.targetId, method, params)
+      notifyRemoteWorkspaceHandlers(this.targetId, method, params, authority)
     })
   }
 

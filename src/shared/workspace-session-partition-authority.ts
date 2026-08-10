@@ -28,40 +28,135 @@ function canonicalJson(value: unknown): string {
   })
 }
 
-function workspaceBundle(session: WorkspaceSessionState, workspaceKey: string): unknown {
-  const tabs = session.tabsByWorktree[workspaceKey] ?? []
-  const tabIds = new Set(tabs.map((tab) => tab.id))
+const EMPTY_WORKSPACE_BUNDLE_SIGNATURE = canonicalJson({
+  workspaceRecords: {},
+  layouts: {},
+  remoteSessions: {},
+  incarnations: {},
+  sleepingAgents: {},
+  tombstones: {},
+  browserPages: {}
+})
+
+type WorkspaceSessionBundle = {
+  workspaceRecords: Record<string, unknown>
+  layouts: Record<string, unknown>
+  remoteSessions: Record<string, unknown>
+  incarnations: Record<string, unknown>
+  sleepingAgents: Record<string, unknown>
+  tombstones: Record<string, unknown>
+  browserPages: Record<string, unknown>
+}
+
+export type WorkspaceSessionAuthorityIndex = {
+  workspaceKeys: ReadonlySet<string>
+  bundleSignaturesByWorkspaceKey: ReadonlyMap<string, string>
+}
+
+function emptyWorkspaceBundle(
+  session: WorkspaceSessionState,
+  workspaceKey: string
+): WorkspaceSessionBundle {
   return {
     workspaceRecords: Object.fromEntries(
-      WORKTREE_RECORD_FIELDS.map((field) => [field, session[field]?.[workspaceKey]])
+      WORKTREE_RECORD_FIELDS.map((field) => {
+        const value = session[field]?.[workspaceKey]
+        return [field, value === undefined ? undefined : canonicalJson(value)]
+      })
     ),
-    layouts: Object.fromEntries(
-      Object.entries(session.terminalLayoutsByTabId).filter(([tabId]) => tabIds.has(tabId))
-    ),
-    remoteSessions: Object.fromEntries(
-      Object.entries(session.remoteSessionIdsByTabId ?? {}).filter(([tabId]) => tabIds.has(tabId))
-    ),
-    incarnations: Object.fromEntries(
-      Object.entries(session.terminalPtyIncarnationsByPaneKey ?? {}).filter(([paneKey]) =>
-        tabIds.has(paneTabId(paneKey))
-      )
-    ),
-    sleepingAgents: Object.fromEntries(
-      Object.entries(session.sleepingAgentSessionsByPaneKey ?? {}).filter(
-        ([, record]) => record.worktreeId === workspaceKey
-      )
-    ),
-    tombstones: Object.fromEntries(
-      Object.entries(session.terminalSurfaceTombstonesByPaneKey ?? {}).filter(
-        ([, tombstone]) => tombstone.worktreeId === workspaceKey
-      )
-    ),
-    browserPages: Object.fromEntries(
-      Object.entries(session.browserPagesByWorkspace ?? {}).filter(([, pages]) =>
-        pages.some((page) => page.worktreeId === workspaceKey)
-      )
+    layouts: {},
+    remoteSessions: {},
+    incarnations: {},
+    sleepingAgents: {},
+    tombstones: {},
+    browserPages: {}
+  }
+}
+
+export function createWorkspaceSessionAuthorityIndex(
+  session: WorkspaceSessionState
+): WorkspaceSessionAuthorityIndex {
+  const workspaceKeys = collectWorkspaceKeys(session)
+  const bundles = new Map(
+    [...workspaceKeys].map((workspaceKey) => [
+      workspaceKey,
+      emptyWorkspaceBundle(session, workspaceKey)
+    ])
+  )
+  const ownersByTabId = new Map<string, Set<string>>()
+  for (const [workspaceKey, tabs] of Object.entries(session.tabsByWorktree)) {
+    for (const tab of tabs) {
+      const owners = ownersByTabId.get(tab.id) ?? new Set<string>()
+      owners.add(workspaceKey)
+      ownersByTabId.set(tab.id, owners)
+    }
+  }
+  const addForTabOwners = (
+    field: 'layouts' | 'remoteSessions' | 'incarnations',
+    recordKey: string,
+    tabId: string,
+    value: unknown
+  ): void => {
+    for (const workspaceKey of ownersByTabId.get(tabId) ?? []) {
+      const bundle = bundles.get(workspaceKey)
+      if (bundle) {
+        bundle[field][recordKey] = value
+      }
+    }
+  }
+  for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId)) {
+    addForTabOwners('layouts', tabId, tabId, canonicalJson(layout))
+  }
+  for (const [tabId, remoteSessionId] of Object.entries(session.remoteSessionIdsByTabId ?? {})) {
+    addForTabOwners('remoteSessions', tabId, tabId, canonicalJson(remoteSessionId))
+  }
+  for (const [paneKey, incarnationId] of Object.entries(
+    session.terminalPtyIncarnationsByPaneKey ?? {}
+  )) {
+    addForTabOwners('incarnations', paneKey, paneTabId(paneKey), canonicalJson(incarnationId))
+  }
+  for (const [paneKey, record] of Object.entries(session.sleepingAgentSessionsByPaneKey ?? {})) {
+    const bundle = bundles.get(record.worktreeId)
+    if (bundle) {
+      bundle.sleepingAgents[paneKey] = canonicalJson(record)
+    }
+  }
+  for (const [paneKey, tombstone] of Object.entries(
+    session.terminalSurfaceTombstonesByPaneKey ?? {}
+  )) {
+    const bundle = bundles.get(tombstone.worktreeId)
+    if (bundle) {
+      bundle.tombstones[paneKey] = canonicalJson(tombstone)
+    }
+  }
+  for (const [browserWorkspaceKey, pages] of Object.entries(
+    session.browserPagesByWorkspace ?? {}
+  )) {
+    const pagesSignature = canonicalJson(pages)
+    for (const workspaceKey of new Set(pages.map((page) => page.worktreeId))) {
+      const bundle = bundles.get(workspaceKey)
+      if (bundle) {
+        bundle.browserPages[browserWorkspaceKey] = pagesSignature
+      }
+    }
+  }
+  return {
+    workspaceKeys,
+    bundleSignaturesByWorkspaceKey: new Map(
+      [...bundles].map(([workspaceKey, bundle]) => [workspaceKey, canonicalJson(bundle)])
     )
   }
+}
+
+function indexedWorkspaceSessionBundlesEquivalent(
+  base: WorkspaceSessionAuthorityIndex,
+  source: WorkspaceSessionAuthorityIndex,
+  workspaceKey: string
+): boolean {
+  return (
+    (base.bundleSignaturesByWorkspaceKey.get(workspaceKey) ?? EMPTY_WORKSPACE_BUNDLE_SIGNATURE) ===
+    (source.bundleSignaturesByWorkspaceKey.get(workspaceKey) ?? EMPTY_WORKSPACE_BUNDLE_SIGNATURE)
+  )
 }
 
 export function workspaceSessionBundlesEquivalent(
@@ -69,9 +164,10 @@ export function workspaceSessionBundlesEquivalent(
   source: WorkspaceSessionState,
   workspaceKey: string
 ): boolean {
-  return (
-    canonicalJson(workspaceBundle(base, workspaceKey)) ===
-    canonicalJson(workspaceBundle(source, workspaceKey))
+  return indexedWorkspaceSessionBundlesEquivalent(
+    createWorkspaceSessionAuthorityIndex(base),
+    createWorkspaceSessionAuthorityIndex(source),
+    workspaceKey
   )
 }
 
@@ -81,7 +177,11 @@ export function workspaceTerminalAuthority(
   base: WorkspaceSessionState,
   source: WorkspaceSessionState,
   workspaceKey: string,
-  presence?: { base: boolean; source: boolean }
+  presence?: { base: boolean; source: boolean },
+  indexes?: {
+    base: WorkspaceSessionAuthorityIndex
+    source: WorkspaceSessionAuthorityIndex
+  }
 ): WorkspaceTerminalAuthority {
   const repoId = repoIdForWorkspaceKey(workspaceKey)
   const baseRevision = repoId ? (base.terminalTopologyRevisionByRepoId?.[repoId] ?? 0) : 0
@@ -89,8 +189,10 @@ export function workspaceTerminalAuthority(
   if (sourceRevision !== baseRevision) {
     return sourceRevision > baseRevision ? 'source' : 'base'
   }
-  const baseHasKey = presence?.base ?? collectWorkspaceKeys(base).has(workspaceKey)
-  const sourceHasKey = presence?.source ?? collectWorkspaceKeys(source).has(workspaceKey)
+  const baseIndex = indexes?.base ?? createWorkspaceSessionAuthorityIndex(base)
+  const sourceIndex = indexes?.source ?? createWorkspaceSessionAuthorityIndex(source)
+  const baseHasKey = presence?.base ?? baseIndex.workspaceKeys.has(workspaceKey)
+  const sourceHasKey = presence?.source ?? sourceIndex.workspaceKeys.has(workspaceKey)
   if (sourceHasKey && !baseHasKey) {
     return 'source'
   }
@@ -105,23 +207,35 @@ export function workspaceTerminalAuthority(
   if (baseTabs.length > 0 && sourceTabs.length === 0) {
     return 'base'
   }
-  return workspaceSessionBundlesEquivalent(base, source, workspaceKey) ? 'equivalent' : 'ambiguous'
+  return indexedWorkspaceSessionBundlesEquivalent(baseIndex, sourceIndex, workspaceKey)
+    ? 'equivalent'
+    : 'ambiguous'
 }
 
 export function findAmbiguousWorkspaceSessionKeys(
   sources: readonly WorkspaceSessionState[]
 ): Set<string> {
   const ambiguous = new Set<string>()
-  const keysBySource = sources.map(collectWorkspaceKeys)
+  const indexes = sources.map(createWorkspaceSessionAuthorityIndex)
+  const keysBySource = indexes.map((index) => index.workspaceKeys)
   for (let left = 0; left < sources.length; left += 1) {
     for (let right = left + 1; right < sources.length; right += 1) {
       const keys = new Set([...keysBySource[left], ...keysBySource[right]])
       for (const key of keys) {
         if (
-          workspaceTerminalAuthority(sources[left], sources[right], key, {
-            base: keysBySource[left].has(key),
-            source: keysBySource[right].has(key)
-          }) === 'ambiguous'
+          workspaceTerminalAuthority(
+            sources[left],
+            sources[right],
+            key,
+            {
+              base: keysBySource[left].has(key),
+              source: keysBySource[right].has(key)
+            },
+            {
+              base: indexes[left],
+              source: indexes[right]
+            }
+          ) === 'ambiguous'
         ) {
           ambiguous.add(key)
         }

@@ -17,10 +17,7 @@ import type { WorkspaceSessionState } from '../../shared/types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import { isAdmissibleDirectSshAuthority } from '../../shared/ssh-retained-payload-admission'
 import { adoptOrphanedWorkspaceSessionPartition } from '../../shared/workspace-session-partition-adoption'
-import {
-  findAmbiguousWorkspaceSessionKeys,
-  workspaceSessionBundlesEquivalent
-} from '../../shared/workspace-session-partition-authority'
+import { findAmbiguousWorkspaceSessionKeys } from '../../shared/workspace-session-partition-authority'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 import {
@@ -38,18 +35,27 @@ const SNAPSHOT_SCHEMA_VERSION = 1
 export const REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES = 64
 
 let mainWindowGetter: (() => BrowserWindow | null) | null = null
-const latestSnapshotByTargetId = new Map<string, RemoteWorkspaceSnapshot>()
+type RemoteWorkspaceSnapshotCacheEntry = {
+  authority: DirectSshAuthority
+  snapshot: RemoteWorkspaceSnapshot
+}
+
+const latestSnapshotByTargetId = new Map<string, RemoteWorkspaceSnapshotCacheEntry>()
 const remoteWorkspacePatchTailByTargetId = new Map<string, Promise<void>>()
 let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
 
 function rememberRemoteWorkspaceSnapshot(
-  targetId: string,
+  authority: DirectSshAuthority,
   snapshot: RemoteWorkspaceSnapshot
 ): void {
+  if (!isCurrentSshProviderAuthority(authority)) {
+    return
+  }
+  const targetId = authority.targetId
   if (latestSnapshotByTargetId.has(targetId)) {
     latestSnapshotByTargetId.delete(targetId)
   }
-  latestSnapshotByTargetId.set(targetId, snapshot)
+  latestSnapshotByTargetId.set(targetId, { authority: { ...authority }, snapshot })
   while (latestSnapshotByTargetId.size > REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES) {
     const oldest = latestSnapshotByTargetId.keys().next()
     if (oldest.done) {
@@ -59,15 +65,30 @@ function rememberRemoteWorkspaceSnapshot(
   }
 }
 
-function getCachedRemoteWorkspaceSnapshot(targetId: string): RemoteWorkspaceSnapshot | undefined {
-  const snapshot = latestSnapshotByTargetId.get(targetId)
-  if (!snapshot) {
+function authoritiesEqual(left: DirectSshAuthority, right: DirectSshAuthority): boolean {
+  return (
+    left.targetId === right.targetId &&
+    left.providerEpoch === right.providerEpoch &&
+    left.connectionGeneration === right.connectionGeneration
+  )
+}
+
+function getCachedRemoteWorkspaceSnapshot(
+  authority: DirectSshAuthority
+): RemoteWorkspaceSnapshot | undefined {
+  const entry = latestSnapshotByTargetId.get(authority.targetId)
+  if (!entry) {
+    return undefined
+  }
+  if (!authoritiesEqual(entry.authority, authority) || !isCurrentSshProviderAuthority(authority)) {
+    latestSnapshotByTargetId.delete(authority.targetId)
     return undefined
   }
   // Why: remote workspace snapshots can contain the whole tab/layout session
   // for a target. Touch cache hits so deleted or rarely used targets age out.
-  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
-  return snapshot
+  latestSnapshotByTargetId.delete(authority.targetId)
+  latestSnapshotByTargetId.set(authority.targetId, entry)
+  return entry.snapshot
 }
 
 export function _resetRemoteWorkspaceCachesForTests(): void {
@@ -87,17 +108,32 @@ export function _getRemoteWorkspaceCacheSizesForTests(): {
 
 /** @internal - exposed for cache-bound tests only. */
 export function _rememberRemoteWorkspaceSnapshotForTests(
-  targetId: string,
+  authority: DirectSshAuthority,
   snapshot: RemoteWorkspaceSnapshot
 ): void {
-  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
+  const targetId = authority.targetId
+  latestSnapshotByTargetId.delete(targetId)
+  latestSnapshotByTargetId.set(targetId, { authority: { ...authority }, snapshot })
+  while (latestSnapshotByTargetId.size > REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES) {
+    const oldest = latestSnapshotByTargetId.keys().next()
+    if (oldest.done) {
+      break
+    }
+    latestSnapshotByTargetId.delete(oldest.value)
+  }
 }
 
 /** @internal - exposed for cache-bound tests only. */
 export function _getRemoteWorkspaceSnapshotForTests(
-  targetId: string
+  authority: DirectSshAuthority
 ): RemoteWorkspaceSnapshot | undefined {
-  return getCachedRemoteWorkspaceSnapshot(targetId)
+  const entry = latestSnapshotByTargetId.get(authority.targetId)
+  if (!entry || !authoritiesEqual(entry.authority, authority)) {
+    return undefined
+  }
+  latestSnapshotByTargetId.delete(authority.targetId)
+  latestSnapshotByTargetId.set(authority.targetId, entry)
+  return entry.snapshot
 }
 
 function emptyRemoteSession(): RemoteWorkspaceSession {
@@ -233,18 +269,27 @@ function getExplicitHydratedTargetIds(value: unknown): Set<string> | null {
   return new Set(value)
 }
 
-async function getRemoteSnapshot(target: SshTarget): Promise<RemoteWorkspaceSnapshot | null> {
+async function getRemoteSnapshot(
+  target: SshTarget,
+  authority: DirectSshAuthority
+): Promise<RemoteWorkspaceSnapshot | null> {
   const mux = getActiveMultiplexer(target.id)
-  if (!mux) {
+  if (!mux || authority.targetId !== target.id || !isCurrentSshProviderAuthority(authority)) {
     return null
   }
   const namespace = getRemoteWorkspaceNamespace(target)
   try {
     const raw = await mux.request('workspace.get', { namespace })
+    if (!isCurrentSshProviderAuthority(authority)) {
+      return null
+    }
     const snapshot = normalizeSnapshot(raw, namespace)
-    rememberRemoteWorkspaceSnapshot(target.id, snapshot)
+    rememberRemoteWorkspaceSnapshot(authority, snapshot)
     return snapshot
   } catch (err) {
+    if (!isCurrentSshProviderAuthority(authority)) {
+      return null
+    }
     if ((err as { code?: unknown })?.code === -32601) {
       return null
     }
@@ -289,7 +334,12 @@ async function patchRemoteWorkspaceSession(
   }
   const namespace = getRemoteWorkspaceNamespace(target)
   const current =
-    getCachedRemoteWorkspaceSnapshot(target.id) ?? (await getRemoteSnapshot(target)) ?? undefined
+    getCachedRemoteWorkspaceSnapshot(authority) ??
+    (await getRemoteSnapshot(target, authority)) ??
+    undefined
+  if (!isCurrentSshProviderAuthority(authority)) {
+    return null
+  }
   if (current && remoteWorkspaceSessionMatchesSnapshot(current, session)) {
     // Why: a pulled workspace snapshot rehydrates local state and can trigger
     // session persistence. Identical target sessions must stay a local no-op or
@@ -299,7 +349,10 @@ async function patchRemoteWorkspaceSession(
 
   const requestPatch = async (
     baseRevision: number | undefined
-  ): Promise<RemoteWorkspacePatchResult> => {
+  ): Promise<RemoteWorkspacePatchResult | null> => {
+    if (!isCurrentSshProviderAuthority(authority)) {
+      return null
+    }
     try {
       return (await mux.request('workspace.patch', {
         namespace,
@@ -308,6 +361,9 @@ async function patchRemoteWorkspaceSession(
         patch: { kind: 'replace-session', session }
       })) as RemoteWorkspacePatchResult
     } catch (err) {
+      if (!isCurrentSshProviderAuthority(authority)) {
+        return null
+      }
       return (err as { code?: unknown })?.code === -32601
         ? {
             ok: false,
@@ -323,12 +379,15 @@ async function patchRemoteWorkspaceSession(
   }
 
   const result = await requestPatch(current?.revision)
+  if (!result) {
+    return null
+  }
   if (result.ok) {
-    rememberRemoteWorkspaceSnapshot(target.id, result.snapshot)
+    rememberRemoteWorkspaceSnapshot(authority, result.snapshot)
     return result
   }
   if (result.snapshot) {
-    rememberRemoteWorkspaceSnapshot(target.id, result.snapshot)
+    rememberRemoteWorkspaceSnapshot(authority, result.snapshot)
   }
 
   if (
@@ -345,10 +404,13 @@ async function patchRemoteWorkspaceSession(
     // only for backwards revisions restores the blank-slate target without
     // overwriting a newer snapshot from another device.
     const retry = await requestPatch(result.snapshot.revision)
+    if (!retry) {
+      return null
+    }
     if (retry.ok) {
-      rememberRemoteWorkspaceSnapshot(target.id, retry.snapshot)
+      rememberRemoteWorkspaceSnapshot(authority, retry.snapshot)
     } else if (retry.snapshot) {
-      rememberRemoteWorkspaceSnapshot(target.id, retry.snapshot)
+      rememberRemoteWorkspaceSnapshot(authority, retry.snapshot)
     }
     return retry
   }
@@ -359,9 +421,14 @@ async function patchRemoteWorkspaceSession(
 export function handleRemoteWorkspaceNotification(
   targetId: string,
   method: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  authority: DirectSshAuthority
 ): void {
-  if (method !== 'workspace.changed') {
+  if (
+    method !== 'workspace.changed' ||
+    authority.targetId !== targetId ||
+    !isCurrentSshProviderAuthority(authority)
+  ) {
     return
   }
   const target = getSshConnectionStore()?.getTarget(targetId)
@@ -370,7 +437,7 @@ export function handleRemoteWorkspaceNotification(
   }
   const namespace = getRemoteWorkspaceNamespace(target)
   const snapshot = normalizeSnapshot(params.snapshot, namespace)
-  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
+  rememberRemoteWorkspaceSnapshot(authority, snapshot)
   const event: RemoteWorkspaceChangedEvent = {
     targetId,
     snapshot,
@@ -402,7 +469,7 @@ export function registerRemoteWorkspaceHandlers(
     if (!target) {
       return null
     }
-    return getRemoteSnapshot(target)
+    return getRemoteSnapshot(target, getSshProviderAuthority(target.id))
   })
 
   ipcMain.handle(
@@ -467,9 +534,7 @@ export function registerRemoteWorkspaceHandlers(
               targetPartition
             ])
             const hasPopulatedLocalConflict = [...ambiguousKeys].some(
-              (key) =>
-                (fallbackSession.tabsByWorktree[key]?.length ?? 0) > 0 &&
-                !workspaceSessionBundlesEquivalent(fallbackSession, targetPartition, key)
+              (key) => (fallbackSession.tabsByWorktree[key]?.length ?? 0) > 0
             )
             if (hasPopulatedLocalConflict) {
               return null

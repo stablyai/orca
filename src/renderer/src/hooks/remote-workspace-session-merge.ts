@@ -32,18 +32,16 @@ function isTargetPtyId(ptyId: string | null | undefined, targetId: string): ptyI
 function hasAmbiguousResultTabIds(
   current: WorkspaceSessionState,
   remote: WorkspaceSessionState,
-  replaceWorktreeIds: ReadonlySet<string>,
-  targetId: string
+  replaceWorktreeIds: ReadonlySet<string>
 ): boolean {
-  const ownerByTabId = new Map<string, { worktreeId: string; targetOwned: boolean }>()
+  const ownerByTabId = new Map<string, string>()
   const addOwner = (worktreeId: string, tab: TerminalTab): boolean => {
-    const targetOwned = isTargetPtyId(tab.ptyId, targetId)
     const tabId = tab.id
     const owner = ownerByTabId.get(tabId)
-    if (owner && owner.worktreeId !== worktreeId && (!owner.targetOwned || !targetOwned)) {
+    if (owner && owner !== worktreeId) {
       return false
     }
-    ownerByTabId.set(tabId, { worktreeId, targetOwned })
+    ownerByTabId.set(tabId, worktreeId)
     return true
   }
   for (const [worktreeId, tabs] of Object.entries(current.tabsByWorktree)) {
@@ -111,7 +109,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
   reconnectPtyIdByTabId: Readonly<Record<string, string>>,
   authority: DirectSshAuthority
 ): WorkspaceSessionState | null {
-  if (hasAmbiguousResultTabIds(current, remote, replaceWorktreeIds, authority.targetId)) {
+  if (hasAmbiguousResultTabIds(current, remote, replaceWorktreeIds)) {
     return null
   }
   const { targetId } = authority
