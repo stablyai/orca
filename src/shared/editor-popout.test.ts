@@ -17,7 +17,8 @@ const validRequest = {
     settings: { activeRuntimeEnvironmentId: null },
     worktreeId: 'repo:main',
     worktreePath: '/workspace',
-    expectedExecutionHostId: 'local'
+    expectedExecutionHostId: 'local',
+    expectedEnvironmentPairingRevision: 11
   }
 } satisfies EditorPopoutOpenRequest
 
@@ -51,6 +52,15 @@ describe('admitEditorPopoutOpenRequest', () => {
         operationContext: {
           ...validRequest.operationContext,
           expectedExecutionHostId: 'runtime:remote'
+        }
+      })
+    ).toBeNull()
+    expect(
+      admitEditorPopoutOpenRequest({
+        ...validRequest,
+        operationContext: {
+          ...validRequest.operationContext,
+          expectedEnvironmentPairingRevision: -1
         }
       })
     ).toBeNull()

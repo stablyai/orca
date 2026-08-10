@@ -2,9 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 
-const { findWorktreeByIdMock, getEditorFileOperationContextMock } = vi.hoisted(() => ({
+const {
+  findWorktreeByIdMock,
+  getEditorFileOperationContextMock,
+  getRuntimeEnvironmentRevisionMock
+} = vi.hoisted(() => ({
   findWorktreeByIdMock: vi.fn(),
-  getEditorFileOperationContextMock: vi.fn()
+  getEditorFileOperationContextMock: vi.fn(),
+  getRuntimeEnvironmentRevisionMock: vi.fn()
 }))
 
 vi.mock('@/store/slices/worktree-helpers', () => ({
@@ -13,6 +18,10 @@ vi.mock('@/store/slices/worktree-helpers', () => ({
 
 vi.mock('@/lib/editor-file-operation-owner', () => ({
   getEditorFileOperationContext: getEditorFileOperationContextMock
+}))
+
+vi.mock('@/runtime/runtime-environment-revision', () => ({
+  getRuntimeEnvironmentRevision: getRuntimeEnvironmentRevisionMock
 }))
 
 import { createEditorPopoutOpenRequest } from './editor-popout-request'
@@ -42,6 +51,7 @@ describe('createEditorPopoutOpenRequest', () => {
       expectedSshTargetId: 'ssh-1',
       expectedSshConnectionGeneration: 7
     })
+    getRuntimeEnvironmentRevisionMock.mockReturnValue(11)
 
     expect(
       createEditorPopoutOpenRequest({
@@ -65,6 +75,7 @@ describe('createEditorPopoutOpenRequest', () => {
         connectionId: 'ssh-1',
         expectedExecutionHostId: 'ssh:ssh-1',
         expectedSshConnectionGeneration: 7,
+        expectedEnvironmentPairingRevision: 11,
         expectedExternalSshTargetId: 'ssh-1'
       }
     })

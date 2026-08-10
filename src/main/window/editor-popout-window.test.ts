@@ -59,7 +59,15 @@ const { instances, BrowserWindowMock, showMessageBoxMock, translateMainMock } = 
     }
 
     close = vi.fn(() => {
-      this.emit('close', { preventDefault: vi.fn() })
+      let prevented = false
+      this.emit('close', {
+        preventDefault: vi.fn(() => {
+          prevented = true
+        })
+      })
+      if (prevented) {
+        return
+      }
       this.destroyed = true
       this.emit('closed')
     })
@@ -90,6 +98,7 @@ import {
   completeEditorPopoutSaveAndClose,
   createOrFocusEditorPopout,
   getEditorPopoutRequest,
+  reportEditorPopoutCloseState,
   setEditorPopoutDirty
 } from './editor-popout-window'
 
@@ -122,6 +131,11 @@ describe('editor popout window', () => {
 
   afterEach(() => {
     closeAllEditorPopouts()
+    for (const window of instances) {
+      if (!window.destroyed) {
+        completeEditorPopoutSaveAndClose(window.webContents as never, true)
+      }
+    }
     vi.unstubAllEnvs()
   })
 
@@ -132,6 +146,7 @@ describe('editor popout window', () => {
     expect(instances).toHaveLength(1)
     expect(window.options.title).toBe('note.md - Orca')
     expect(window.options.webPreferences?.partition).toBe('orca-editor-popout')
+    expect(window.options.webPreferences?.preload).toContain('editor-popout.js')
     expect(window.loadFile).toHaveBeenCalledWith(expect.stringContaining('popout.html'), {
       search: 'surface=editor'
     })
@@ -149,6 +164,33 @@ describe('editor popout window', () => {
     expect(first.focus).toHaveBeenCalledOnce()
   })
 
+  it('requests current renderer state before closing an initially clean document', () => {
+    createOrFocusEditorPopout({
+      ...request,
+      content: request.savedContent
+    })
+    const window = instances[0]
+
+    window.close()
+
+    expect(window.destroyed).toBe(false)
+    expect(window.webContents.send).toHaveBeenCalledWith('editorPopout:requestCloseState')
+
+    reportEditorPopoutCloseState(window.webContents as never, false)
+
+    expect(window.destroyed).toBe(true)
+  })
+
+  it('does not bypass dirty protection when the main window closes', () => {
+    createOrFocusEditorPopout(request)
+    const window = instances[0]
+
+    closeAllEditorPopouts()
+
+    expect(window.destroyed).toBe(false)
+    expect(window.webContents.send).toHaveBeenCalledWith('editorPopout:requestCloseState')
+  })
+
   it('asks the detached renderer to save before closing a dirty document', async () => {
     showMessageBoxMock.mockResolvedValue({ response: 0 })
     createOrFocusEditorPopout(request)
@@ -157,6 +199,7 @@ describe('editor popout window', () => {
     const closeEvent = { preventDefault: vi.fn() }
 
     window.emit('close', closeEvent)
+    reportEditorPopoutCloseState(window.webContents as never, true)
     await Promise.resolve()
 
     expect(closeEvent.preventDefault).toHaveBeenCalledOnce()
@@ -184,6 +227,7 @@ describe('editor popout window', () => {
     const closeEvent = { preventDefault: vi.fn() }
 
     window.emit('close', closeEvent)
+    reportEditorPopoutCloseState(window.webContents as never, true)
     await Promise.resolve()
     window.emit('close', closeEvent)
     await Promise.resolve()
@@ -192,6 +236,7 @@ describe('editor popout window', () => {
 
     completeEditorPopoutSaveAndClose(window.webContents as never, false)
     window.emit('close', closeEvent)
+    reportEditorPopoutCloseState(window.webContents as never, true)
     await Promise.resolve()
 
     expect(showMessageBoxMock).toHaveBeenCalledTimes(2)
@@ -203,6 +248,7 @@ describe('editor popout window', () => {
     const window = instances[0]
 
     window.emit('close', { preventDefault: vi.fn() })
+    reportEditorPopoutCloseState(window.webContents as never, true)
     await Promise.resolve()
     completeEditorPopoutSaveAndClose(window.webContents as never, true)
 
@@ -219,6 +265,7 @@ describe('editor popout window', () => {
         throw new TypeError('Object has been destroyed')
       }
     })
+    window.destroyed = true
 
     expect(() => window.emit('closed')).not.toThrow()
     expect(getEditorPopoutRequest(sender as never)).toBeNull()

@@ -2547,7 +2547,9 @@ export type PreloadApi = {
     open: (request: EditorPopoutOpenRequest) => Promise<void>
     getState: () => Promise<EditorPopoutOpenRequest | null>
     setDirty: (dirty: boolean) => Promise<void>
+    reportCloseState: (dirty: boolean) => Promise<void>
     completeSaveAndClose: (saved: boolean) => Promise<void>
+    onRequestCloseState: (callback: () => void) => () => void
     onSaveAndClose: (callback: () => void) => () => void
   }
   terminalPreview: {

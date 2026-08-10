@@ -16,6 +16,7 @@ type EditorPopoutEntry = {
   dirty: boolean
   allowClose: boolean
   closeDialogOpen: boolean
+  closeCheckPending: boolean
 }
 
 const entriesByKey = new Map<string, EditorPopoutEntry>()
@@ -91,7 +92,7 @@ export function createOrFocusEditorPopout(request: EditorPopoutOpenRequest): Bro
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: join(__dirname, '../preload/editor-popout.js'),
       sandbox: true,
       partition: EDITOR_POPOUT_PARTITION,
       webviewTag: false
@@ -108,7 +109,8 @@ export function createOrFocusEditorPopout(request: EditorPopoutOpenRequest): Bro
     request,
     dirty: request.content !== request.savedContent,
     allowClose: false,
-    closeDialogOpen: false
+    closeDialogOpen: false,
+    closeCheckPending: false
   }
   const webContentsId = window.webContents.id
   entriesByKey.set(key, entry)
@@ -120,13 +122,13 @@ export function createOrFocusEditorPopout(request: EditorPopoutOpenRequest): Bro
     }
   })
   window.on('close', (event) => {
-    if (entry.allowClose || !entry.dirty) {
+    if (entry.allowClose) {
       return
     }
     event.preventDefault()
-    if (!entry.closeDialogOpen) {
-      entry.closeDialogOpen = true
-      void confirmDirtyClose(entry)
+    if (!entry.closeDialogOpen && !entry.closeCheckPending) {
+      entry.closeCheckPending = true
+      window.webContents.send('editorPopout:requestCloseState')
     }
   })
   window.on('closed', () => {
@@ -153,6 +155,22 @@ export function setEditorPopoutDirty(sender: WebContents, dirty: boolean): void 
   }
 }
 
+export function reportEditorPopoutCloseState(sender: WebContents, dirty: boolean): void {
+  const entry = entriesByWebContentsId.get(sender.id)
+  if (!entry || !entry.closeCheckPending) {
+    return
+  }
+  entry.closeCheckPending = false
+  entry.dirty = dirty
+  if (!dirty) {
+    entry.allowClose = true
+    entry.window.close()
+    return
+  }
+  entry.closeDialogOpen = true
+  void confirmDirtyClose(entry)
+}
+
 export function completeEditorPopoutSaveAndClose(sender: WebContents, saved: boolean): void {
   const entry = entriesByWebContentsId.get(sender.id)
   if (!entry) {
@@ -170,10 +188,7 @@ export function completeEditorPopoutSaveAndClose(sender: WebContents, saved: boo
 export function closeAllEditorPopouts(): void {
   for (const entry of entriesByKey.values()) {
     if (!entry.window.isDestroyed()) {
-      entry.allowClose = true
       entry.window.close()
     }
   }
-  entriesByKey.clear()
-  entriesByWebContentsId.clear()
 }

@@ -1,8 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runEditorPopoutSave, type EditorPopoutSaveSlot } from './editor-popout-save-coordinator'
+import {
+  canCloseEditorPopoutAfterSave,
+  isEditorPopoutContentDirty,
+  runEditorPopoutSave,
+  type EditorPopoutSaveSlot
+} from './editor-popout-save-coordinator'
 
 describe('runEditorPopoutSave', () => {
-  it('reuses an in-flight save and permits the next save after it settles', async () => {
+  it('treats trailing whitespace changes as unsaved content', () => {
+    expect(isEditorPopoutContentDirty('# Note\n\n', '# Note\n')).toBe(true)
+    expect(isEditorPopoutContentDirty('# Note\n', '# Note\n')).toBe(false)
+  })
+
+  it('keeps the window open when content changes during save', () => {
+    expect(canCloseEditorPopoutAfterSave(true, '# Saving\n', '# Newer\n')).toBe(false)
+    expect(canCloseEditorPopoutAfterSave(true, '# Saving\n', '# Saving\n')).toBe(true)
+    expect(canCloseEditorPopoutAfterSave(false, '# Saving\n', '# Saving\n')).toBe(false)
+  })
+
+  it('serializes a newer save behind an in-flight save', async () => {
     let finishFirst: ((saved: boolean) => void) | undefined
     const firstResult = new Promise<boolean>((resolve) => {
       finishFirst = resolve
@@ -13,14 +29,12 @@ describe('runEditorPopoutSave', () => {
     const first = runEditorPopoutSave(slot, task)
     const concurrent = runEditorPopoutSave(slot, task)
 
-    expect(concurrent).toBe(first)
     expect(task).toHaveBeenCalledOnce()
 
     finishFirst?.(true)
     await first
-    const next = runEditorPopoutSave(slot, task)
-
-    await expect(next).resolves.toBe(true)
+    await expect(concurrent).resolves.toBe(true)
     expect(task).toHaveBeenCalledTimes(2)
+    expect(slot.current).toBeNull()
   })
 })

@@ -9,7 +9,11 @@ import { translate } from '@/i18n/i18n'
 import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
 import type { EditorPopoutOpenRequest } from '../../../../shared/editor-popout'
 import { readEditorPopoutDocument, saveEditorPopoutDocument } from './editor-popout-save'
-import { runEditorPopoutSave } from './editor-popout-save-coordinator'
+import {
+  canCloseEditorPopoutAfterSave,
+  isEditorPopoutContentDirty,
+  runEditorPopoutSave
+} from './editor-popout-save-coordinator'
 
 const MARKDOWN_VIEW_MODES = ['source', 'rich', 'preview'] as const
 
@@ -20,8 +24,12 @@ function LoadedEditorPopout({ request }: { request: EditorPopoutOpenRequest }): 
   const showFrontmatter = request.showFrontmatter
   const [saving, setSaving] = useState(false)
   const savePromiseRef = useRef<Promise<boolean> | null>(null)
+  const contentRef = useRef(content)
+  const dirtyRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
-  const dirty = content.trimEnd() !== savedContent.trimEnd()
+  const dirty = isEditorPopoutContentDirty(content, savedContent)
+  contentRef.current = content
+  dirtyRef.current = dirty
   const file = useMemo<OpenFile>(
     () => ({ ...request.document, isDirty: dirty, mode: 'edit' }),
     [dirty, request]
@@ -121,8 +129,20 @@ function LoadedEditorPopout({ request }: { request: EditorPopoutOpenRequest }): 
   }, [dirty, request])
 
   useEffect(() => {
+    const offRequestCloseState = window.api.editorPopout.onRequestCloseState(() => {
+      void window.api.editorPopout.reportCloseState(dirtyRef.current)
+    })
+    return offRequestCloseState
+  }, [])
+
+  useEffect(() => {
     const offSaveAndClose = window.api.editorPopout.onSaveAndClose(() => {
-      void save().then((saved) => window.api.editorPopout.completeSaveAndClose(saved))
+      const contentSnapshot = contentRef.current
+      void save(contentSnapshot).then((saved) =>
+        window.api.editorPopout.completeSaveAndClose(
+          canCloseEditorPopoutAfterSave(saved, contentSnapshot, contentRef.current)
+        )
+      )
     })
     return offSaveAndClose
   }, [save])

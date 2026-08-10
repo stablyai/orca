@@ -2,6 +2,7 @@ import type { AppState } from '@/store'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import type { EditorPopoutOpenRequest } from '../../../../shared/editor-popout'
 
 export function createEditorPopoutOpenRequest({
@@ -29,6 +30,9 @@ export function createEditorPopoutOpenRequest({
   }
   const worktree = findWorktreeById(state.worktreesByRepo ?? {}, file.worktreeId)
   const owner = getEditorFileOperationContext(state, file, worktree?.path ?? null)
+  const expectedEnvironmentPairingRevision = file.runtimeEnvironmentId
+    ? getRuntimeEnvironmentRevision(file.runtimeEnvironmentId)
+    : undefined
   return {
     document: {
       id: file.id,
@@ -57,6 +61,9 @@ export function createEditorPopoutOpenRequest({
       ...(owner.expectedSshConnectionGeneration === undefined
         ? {}
         : { expectedSshConnectionGeneration: owner.expectedSshConnectionGeneration }),
+      ...(expectedEnvironmentPairingRevision === undefined
+        ? {}
+        : { expectedEnvironmentPairingRevision }),
       ...(file.externalSshTargetId ? { expectedExternalSshTargetId: file.externalSshTargetId } : {})
     }
   }

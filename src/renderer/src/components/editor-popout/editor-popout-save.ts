@@ -13,6 +13,7 @@ export function readEditorPopoutDocument(request: EditorPopoutOpenRequest) {
     relativePath: document.relativePath,
     worktreeId: document.worktreeId,
     connectionId: operationContext.connectionId,
+    expectedEnvironmentPairingRevision: operationContext.expectedEnvironmentPairingRevision,
     expectedExternalSshTargetId: operationContext.expectedExternalSshTargetId
   })
 }

@@ -2369,8 +2369,15 @@ const api = {
     getState: (): Promise<EditorPopoutOpenRequest | null> =>
       ipcRenderer.invoke('editorPopout:getState'),
     setDirty: (dirty: boolean): Promise<void> => ipcRenderer.invoke('editorPopout:setDirty', dirty),
+    reportCloseState: (dirty: boolean): Promise<void> =>
+      ipcRenderer.invoke('editorPopout:reportCloseState', dirty),
     completeSaveAndClose: (saved: boolean): Promise<void> =>
       ipcRenderer.invoke('editorPopout:completeSaveAndClose', saved),
+    onRequestCloseState: (callback: () => void): (() => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('editorPopout:requestCloseState', listener)
+      return () => ipcRenderer.removeListener('editorPopout:requestCloseState', listener)
+    },
     onSaveAndClose: (callback: () => void): (() => void) => {
       const listener = (): void => callback()
       ipcRenderer.on('editorPopout:saveAndClose', listener)

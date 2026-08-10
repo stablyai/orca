@@ -29,7 +29,8 @@ const request = {
     settings: { activeRuntimeEnvironmentId: null },
     worktreeId: 'repo:main',
     worktreePath: '/workspace',
-    expectedExecutionHostId: 'local'
+    expectedExecutionHostId: 'local',
+    expectedEnvironmentPairingRevision: 11
   }
 } satisfies EditorPopoutOpenRequest
 
@@ -52,6 +53,9 @@ describe('saveEditorPopoutDocument', () => {
       request.operationContext,
       request.document.filePath,
       '# Updated\n'
+    )
+    expect(readRuntimeFileContentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedEnvironmentPairingRevision: 11 })
     )
   })
 

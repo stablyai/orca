@@ -23,6 +23,7 @@ export type EditorPopoutOperationContext = {
   expectedExecutionHostId: 'local' | `ssh:${string}`
   expectedSshTargetId?: string
   expectedSshConnectionGeneration?: number
+  expectedEnvironmentPairingRevision?: number
   expectedExternalSshTargetId?: string
 }
 
@@ -130,6 +131,7 @@ function admitOperationContext(value: unknown): EditorPopoutOperationContext | n
     MAX_IDENTIFIER_LENGTH
   )
   const generation = value.expectedSshConnectionGeneration
+  const pairingRevision = value.expectedEnvironmentPairingRevision
   if (
     settings === undefined ||
     !isBoundedString(value.worktreeId, MAX_IDENTIFIER_LENGTH) ||
@@ -139,7 +141,11 @@ function admitOperationContext(value: unknown): EditorPopoutOperationContext | n
     expectedExternalSshTargetId === null ||
     !isExecutionHostId(value.expectedExecutionHostId) ||
     (generation !== undefined &&
-      (typeof generation !== 'number' || !Number.isInteger(generation) || generation < 0))
+      (typeof generation !== 'number' || !Number.isInteger(generation) || generation < 0)) ||
+    (pairingRevision !== undefined &&
+      (typeof pairingRevision !== 'number' ||
+        !Number.isInteger(pairingRevision) ||
+        pairingRevision < 0))
   ) {
     return null
   }
@@ -151,6 +157,9 @@ function admitOperationContext(value: unknown): EditorPopoutOperationContext | n
     ...(connectionId === undefined ? {} : { connectionId }),
     ...(expectedSshTargetId === undefined ? {} : { expectedSshTargetId }),
     ...(generation === undefined ? {} : { expectedSshConnectionGeneration: generation }),
+    ...(pairingRevision === undefined
+      ? {}
+      : { expectedEnvironmentPairingRevision: pairingRevision }),
     ...(expectedExternalSshTargetId === undefined ? {} : { expectedExternalSshTargetId })
   }
 }

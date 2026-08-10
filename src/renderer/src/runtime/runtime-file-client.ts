@@ -52,6 +52,7 @@ export type RuntimeFileReadArgs = {
   relativePath?: string
   worktreeId?: string
   connectionId?: string
+  expectedEnvironmentPairingRevision?: number
   expectedExternalSshTargetId?: string
   includeLocalLogMetadata?: boolean
 }
@@ -64,6 +65,7 @@ export type RuntimeFileOperationArgs = {
   expectedExecutionHostId?: 'local' | `ssh:${string}`
   expectedSshTargetId?: string
   expectedSshConnectionGeneration?: number
+  expectedEnvironmentPairingRevision?: number
   expectedExternalSshTargetId?: string
 }
 
@@ -243,6 +245,7 @@ export async function readRuntimeFileContent({
   relativePath,
   worktreeId,
   connectionId,
+  expectedEnvironmentPairingRevision,
   expectedExternalSshTargetId,
   includeLocalLogMetadata
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
@@ -265,7 +268,7 @@ export async function readRuntimeFileContent({
       target,
       'files.read',
       { worktree, relativePath },
-      { timeoutMs: 15_000 }
+      { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
     )
   } catch (err) {
     // Why: files.read rejects binary paths with the typed 'binary_file' error; fall
@@ -498,7 +501,8 @@ export async function writeRuntimeFile(
       relativePath: remoteArgs.relativePath,
       content
     }),
-    15_000
+    15_000,
+    context.expectedEnvironmentPairingRevision
   )
 }
 
