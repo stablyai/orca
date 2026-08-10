@@ -829,6 +829,12 @@ function matchesSelector(
   return 'none'
 }
 
+// Why: empty filter must not use Projects `items(query:)` — GitHub's search
+// index can return totalCount 0 for minutes after bulk populate (#12648).
+export function projectViewItemsUseSearchQuery(query: string): boolean {
+  return query.trim().length > 0
+}
+
 // ─── Items fetch (paginated) ──────────────────────────────────────────
 
 type RawItemsPage = {
@@ -863,11 +869,21 @@ async function fetchItemsPageWithRaw(args: {
   const root = ownerQueryRoot(args.ownerType)
   const afterArg = args.after ? `, after: $after` : ''
   const afterVar = args.after ? `$after:String!, ` : ''
+  // Why: empty query still hits Projects search index and can return 0 during
+  // index lag on unfiltered views; omit query: for no filter (#12648).
+  const filterQuery = args.query.trim()
+  const useSearchQuery = projectViewItemsUseSearchQuery(filterQuery)
+  const queryVars = useSearchQuery
+    ? `${afterVar}$owner:String!, $num:Int!, $q:String!, $first:Int!`
+    : `${afterVar}$owner:String!, $num:Int!, $first:Int!`
+  const itemsArgs = useSearchQuery
+    ? `first:$first${afterArg}, query:$q, orderBy:{ field: POSITION, direction: ASC }`
+    : `first:$first${afterArg}, orderBy:{ field: POSITION, direction: ASC }`
   const query = `
-    query(${afterVar}$owner:String!, $num:Int!, $q:String!, $first:Int!) {
+    query(${queryVars}) {
       ${root}(login:$owner) {
         projectV2(number:$num) {
-          items(first:$first${afterArg}, query:$q, orderBy:{ field: POSITION, direction: ASC }) {
+          items(${itemsArgs}) {
             totalCount
             pageInfo { hasNextPage endCursor }
             nodes {
@@ -886,7 +902,9 @@ async function fetchItemsPageWithRaw(args: {
   const argsArr: string[] = ['api', 'graphql', '-f', `query=${query}`]
   argsArr.push('-f', `owner=${args.owner}`)
   argsArr.push('-F', `num=${args.projectNumber}`)
-  argsArr.push('-f', `q=${args.query}`)
+  if (useSearchQuery) {
+    argsArr.push('-f', `q=${filterQuery}`)
+  }
   argsArr.push('-F', `first=${args.first}`)
   if (args.after) {
     argsArr.push('-f', `after=${args.after}`)
@@ -1167,7 +1185,11 @@ async function fetchItemsCountOnly(args: {
   host?: string
 }): Promise<number | null> {
   const root = ownerQueryRoot(args.ownerType)
-  const query = `
+  const filterQuery = args.query.trim()
+  const useSearchQuery = projectViewItemsUseSearchQuery(filterQuery)
+  // Why: match item fetch — unfiltered count must not use the lagging search index (#12648).
+  const query = useSearchQuery
+    ? `
     query($owner:String!, $num:Int!, $q:String!) {
       ${root}(login:$owner) {
         projectV2(number:$num) {
@@ -1176,11 +1198,22 @@ async function fetchItemsCountOnly(args: {
       }
     }
   `
+    : `
+    query($owner:String!, $num:Int!) {
+      ${root}(login:$owner) {
+        projectV2(number:$num) {
+          items(first:1) { totalCount }
+        }
+      }
+    }
+  `
   const res = await runGraphql<
     Record<string, { projectV2?: { items?: { totalCount?: number } | null } | null } | null>
   >(
     query,
-    { owner: args.owner, num: args.projectNumber, q: args.query },
+    useSearchQuery
+      ? { owner: args.owner, num: args.projectNumber, q: filterQuery }
+      : { owner: args.owner, num: args.projectNumber },
     projectGhExecOptions(args.host)
   )
   if (!res.ok) {
