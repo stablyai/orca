@@ -27,6 +27,7 @@ import {
 } from './native-chat-composer-target'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
+import { useNativeChatWorkspaceDrop } from './use-native-chat-workspace-drop'
 import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
@@ -203,6 +204,11 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       attachResolvedPaths,
       insertTypedText,
       setCaret,
+      setNotice
+    })
+    const { onDragOver, onDrop } = useNativeChatWorkspaceDrop({
+      disabled,
+      insertTypedText,
       setNotice
     })
 
@@ -420,6 +426,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
           }
         }}
         onPaste={handlePaste}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
         pickerListboxId={picker.listboxId}
         onChoosePickerItem={completeItem}
         onRetrySkills={picker.retrySkills}

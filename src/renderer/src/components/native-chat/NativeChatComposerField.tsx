@@ -1,6 +1,7 @@
 import type {
   ClipboardEventHandler,
   CompositionEventHandler,
+  DragEventHandler,
   KeyboardEventHandler,
   RefObject
 } from 'react'
@@ -41,6 +42,8 @@ export type NativeChatComposerFieldProps = {
   onCompositionStart: CompositionEventHandler<HTMLTextAreaElement>
   onCompositionEnd: CompositionEventHandler<HTMLTextAreaElement>
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>
+  onDragOver: DragEventHandler<HTMLDivElement>
+  onDrop: DragEventHandler<HTMLDivElement>
   pickerListboxId: string
   onChoosePickerItem: (item: NativeChatPickerItem) => void
   onRetrySkills: () => void
@@ -83,6 +86,8 @@ export function NativeChatComposerField({
   onCompositionStart,
   onCompositionEnd,
   onPaste,
+  onDragOver,
+  onDrop,
   pickerListboxId,
   onChoosePickerItem,
   onRetrySkills,
@@ -122,6 +127,8 @@ export function NativeChatComposerField({
           ) : null}
           <div
             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
             className={cn(
               // Why: always-on hairline (token-level border, not focus ring) —
               // no focus/click border flash. The box is a container, not a
