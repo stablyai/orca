@@ -203,6 +203,43 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(block.text).toBe(`${text.slice(0, 64_000)}\n… (truncated)`)
   })
 
+  it.each(['mobile', 'runtime', undefined] as const)(
+    'omits inline image bodies and oversized metadata for %s clients',
+    async (clientKind) => {
+      cachedResult.value = {
+        messages: [
+          {
+            ...makeMessage('ignored'),
+            blocks: [
+              {
+                type: 'image-ref',
+                url: `data:image/png;base64,${'a'.repeat(10_000)}`,
+                alt: 'Inline image'
+              },
+              { type: 'image-ref', url: ' \tdata:image/png;base64,abc' },
+              { type: 'image-ref', url: 'https://example.com/reference.png' },
+              { type: 'image-ref', path: '/'.repeat(600) }
+            ]
+          }
+        ]
+      }
+
+      const result = await readSessionHandler()(
+        { agent: 'codex', sessionId: 's' },
+        ctxWith(clientKind)
+      )
+      const messages = (result as { messages: NativeChatMessage[] }).messages
+
+      expect(messages[0].blocks).toEqual([
+        { type: 'image-ref', alt: 'Inline image' },
+        { type: 'image-ref' },
+        { type: 'image-ref', url: 'https://example.com/reference.png' },
+        { type: 'image-ref' }
+      ])
+      expect(JSON.stringify(messages).length).toBeLessThan(1_000)
+    }
+  )
+
   it('bounds raw tool-call inputs before sending them to mobile', async () => {
     cachedResult.value = {
       messages: [

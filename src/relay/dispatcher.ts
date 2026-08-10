@@ -582,9 +582,8 @@ export class RelayDispatcher {
       method,
       ...(params !== undefined ? { params } : {})
     }
-    const frame = this.prepareFrame(msg)
-    const frameBytes = frame.frameBytes
     this.runPublicationTransaction(() => {
+      let frame: PreparedRelayFrame | undefined
       for (const client of this.clients.values()) {
         if (client.closed) {
           continue
@@ -592,6 +591,7 @@ export class RelayDispatcher {
         if (method === 'pty.data' && !this.admitsPtyDataPublication(client.id, params ?? {})) {
           continue
         }
+        frame ??= this.prepareFrame(msg)
         if (method === 'pty.replay') {
           // Why: replay is never re-sent, so it takes the control lane where overflow is fatal — the
           // writer closes the client and reconnect reloads history rather than stranding a short buffer.
@@ -601,7 +601,7 @@ export class RelayDispatcher {
         // Why: closing can never make an oversized frame sendable — the producer regenerates it after
         // reattach and re-kills the link, turning a recoverable drop into an endless reconnect loop.
         if (!this.publishPreparedToClient(client, frame, 'ordinary')) {
-          this.logDroppedProducerNotification(client, method, frameBytes)
+          this.logDroppedProducerNotification(client, method, frame.frameBytes)
         }
       }
     })
