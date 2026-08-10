@@ -18,9 +18,16 @@ const PREPARATION_OPTIONS = expect.objectContaining({
   cwd: '/repo',
   signal: expect.any(AbortSignal)
 })
+const REMOTE_TIMEOUT = {
+  asymmetricMatch: (value: unknown) =>
+    typeof value === 'number' &&
+    value > 0 &&
+    value <= GIT_REMOTE_OPERATION_TIMEOUT_MS - GIT_REMOTE_OPERATION_CLEANUP_RESERVE_MS,
+  toString: () => 'positive remaining remote-operation timeout'
+}
 const REMOTE_OPTIONS = expect.objectContaining({
   cwd: '/repo',
-  timeout: GIT_REMOTE_OPERATION_TIMEOUT_MS - GIT_REMOTE_OPERATION_CLEANUP_RESERVE_MS,
+  timeout: REMOTE_TIMEOUT,
   signal: expect.any(AbortSignal),
   killProcessTree: true,
   useConfiguredSshCommandForNetwork: true
