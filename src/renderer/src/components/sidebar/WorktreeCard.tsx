@@ -1422,7 +1422,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
         )}
       >
         {/* Header row: Title */}
-        <div className="flex min-w-0 items-center justify-between gap-2">
+        <div
+          className={cn(
+            'flex min-w-0 items-center justify-between gap-2 rounded-md transition-[background-color,box-shadow]',
+            isLineageDropTarget && 'bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50'
+          )}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {showPinnedRepoIcon && (
               <RepoIdentityChip repo={repo}>
@@ -1759,6 +1764,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             worktreeId={worktree.id}
             agents={agentActivityDisplayMode === 'compact' ? compactInlineAgentRows : undefined}
             className={hasMetaRow || remoteBranchConflict ? 'mt-0' : '-mt-1'}
+            isLineageDropTarget={isLineageDropTarget}
           />
         )}
 
@@ -1806,7 +1812,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
         )}
 
         {!newCardStyle && lineageChildren && (
-          <div className="-ml-[1.125rem] mt-1.5 w-[calc(100%+1.125rem)] space-y-1">
+          <div
+            className="-ml-[1.125rem] mt-1.5 w-[calc(100%+1.125rem)] space-y-1"
+            data-worktree-legacy-lineage-children=""
+          >
             {lineageChildren}
           </div>
         )}
@@ -1873,13 +1882,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
         'rounded-lg',
         // Why: the live data attribute updates before React state during navigation,
         // so it must own the complete active style without stale utility classes.
-        isLineageDropTarget
-          ? 'border border-accent-foreground/20 bg-accent/80'
-          : isActiveSurface
-            ? 'border border-transparent'
-            : isMultiSelected
-              ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
-              : 'border border-transparent worktree-sidebar-card-hover',
+        isActiveSurface
+          ? 'border border-transparent'
+          : isMultiSelected
+            ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
+            : 'border border-transparent worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
         revealHighlight && [
           'scroll-to-current-workspace-reveal-highlight',
@@ -1893,6 +1900,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         isRuntimeDisconnected && !isDeleting && 'opacity-60'
       )}
       data-worktree-card-surface="true"
+      data-worktree-lineage-drop-target={isLineageDropTarget ? 'true' : undefined}
       data-worktree-card-active={isActiveSurface ? activeSurfaceVariant : undefined}
       onClick={handleClick}
       onDoubleClick={affiliateListMode ? undefined : handleDoubleClick}

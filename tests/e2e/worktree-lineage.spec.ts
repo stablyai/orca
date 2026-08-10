@@ -5,11 +5,12 @@ import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   markWorkspaceTerminalSlept,
+  seedLongSidebarDragScenario,
   seedLineageScenario,
   seedWorkspaceAgentStatus,
   seedWorkspaceLiveTerminal
 } from './worktree-lineage-state'
-import { worktreeRow } from './worktree-row-locators'
+import { worktreeRow, worktreeRowSurface } from './worktree-row-locators'
 
 function worktreeOption(page: Page, worktreeId: string) {
   return worktreeRow(page, worktreeId)
@@ -33,12 +34,158 @@ async function captureSidebarEvidence(page: Page, name: string): Promise<void> {
   await captureEvidence(page, name, page.locator('[data-worktree-sidebar]').first())
 }
 
+async function pauseRecordedProof(page: Page, durationMs = 600): Promise<void> {
+  if (process.env.ORCA_E2E_RECORD_VIDEO === '1') {
+    await page.waitForTimeout(durationMs)
+  }
+}
+
 test.describe('Worktree Lineage', () => {
   test.describe.configure({ mode: 'serial' })
 
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
+  })
+
+  test('autoscrolls through nested agent rows and nests a workspace from its title', async ({
+    orcaPage
+  }) => {
+    const scenario = await seedLongSidebarDragScenario(orcaPage)
+    const scroller = orcaPage.locator('[data-worktree-sidebar]')
+    const sourceRow = worktreeRow(orcaPage, scenario.sourceId)
+    const targetRow = worktreeRow(orcaPage, scenario.targetId)
+    const sourceTitle = sourceRow.locator('[data-worktree-title-inline-rename]').first()
+    const targetEndAgent = targetRow.getByText('Target agent 15')
+    const targetDropAgent = targetRow.getByText('Target agent 13')
+
+    await expect(sourceRow).toBeVisible()
+    await expect(sourceRow.getByText('Source agent 15')).toBeVisible()
+    await expect
+      .poll(() =>
+        scroller.evaluate((element) => Math.max(0, element.scrollHeight - element.clientHeight))
+      )
+      .toBeGreaterThan(80)
+    await scroller.evaluate((element) => {
+      element.scrollTop = 0
+    })
+    await pauseRecordedProof(orcaPage)
+
+    const [sourceBox, sourceTitleBox, scrollerBox] = await Promise.all([
+      sourceRow.boundingBox(),
+      sourceTitle.boundingBox(),
+      scroller.boundingBox()
+    ])
+    if (!sourceBox || !sourceTitleBox || !scrollerBox) {
+      throw new Error('Expected long sidebar drag geometry')
+    }
+    const dragX = sourceTitleBox.x + sourceTitleBox.width / 2
+    await orcaPage.mouse.move(dragX, sourceTitleBox.y + sourceTitleBox.height / 2)
+    await orcaPage.mouse.down()
+    try {
+      await orcaPage.mouse.move(dragX, sourceTitleBox.y + sourceTitleBox.height + 8, { steps: 4 })
+      await expect(orcaPage.locator('html')).toHaveAttribute(
+        'data-worktree-sidebar-pointer-dragging',
+        ''
+      )
+      const preview = orcaPage.locator('[data-worktree-sidebar-drag-preview="true"]')
+      await expect(preview).toBeVisible()
+      const previewBox = await preview.boundingBox()
+      expect(previewBox?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(sourceBox.height)
+
+      const initialScrollTop = await scroller.evaluate((element) => element.scrollTop)
+      await orcaPage.mouse.move(dragX, scrollerBox.y + scrollerBox.height - 3, { steps: 12 })
+      await expect
+        .poll(() => scroller.evaluate((element) => element.scrollTop), { timeout: 15_000 })
+        .toBeGreaterThan(initialScrollTop + 50)
+      await expect
+        .poll(
+          async () => {
+            const [agentBox, sidebarBox] = await Promise.all([
+              targetEndAgent.boundingBox(),
+              scroller.boundingBox()
+            ])
+            return Boolean(
+              agentBox &&
+              sidebarBox &&
+              agentBox.y >= sidebarBox.y &&
+              agentBox.y + agentBox.height <= sidebarBox.y + sidebarBox.height
+            )
+          },
+          { timeout: 15_000, message: 'pointer autoscroll did not reveal the target agent' }
+        )
+        .toBe(true)
+      const targetDropAgentBox = await targetDropAgent.boundingBox()
+      if (!targetDropAgentBox) {
+        throw new Error('Expected the autoscrolled lineage target agent')
+      }
+      // Why: the final row borders the reorder gutter; an interior row proves the owned agent surface.
+      await orcaPage.mouse.move(
+        targetDropAgentBox.x + targetDropAgentBox.width / 2,
+        targetDropAgentBox.y + targetDropAgentBox.height / 2
+      )
+      await expect(worktreeRowSurface(orcaPage, scenario.targetId)).toHaveAttribute(
+        'data-worktree-lineage-drop-target',
+        'true'
+      )
+      const targetAgentList = worktreeRowSurface(orcaPage, scenario.targetId)
+        .locator('[data-worktree-card-agent-list]')
+        .first()
+      const sourceAgentList = worktreeRowSurface(orcaPage, scenario.sourceId)
+        .locator('[data-worktree-card-agent-list]')
+        .first()
+      await expect(targetAgentList).toHaveAttribute(
+        'data-worktree-card-agent-list-drop-target',
+        'true'
+      )
+      await expect
+        .poll(async () => {
+          const [targetStyle, sourceStyle] = await Promise.all(
+            [targetAgentList, sourceAgentList].map((agentList) =>
+              agentList.evaluate((element) => {
+                const style = getComputedStyle(element)
+                return { backgroundColor: style.backgroundColor, boxShadow: style.boxShadow }
+              })
+            )
+          )
+          return (
+            targetStyle.backgroundColor !== sourceStyle.backgroundColor &&
+            targetStyle.boxShadow !== sourceStyle.boxShadow
+          )
+        })
+        .toBe(true)
+      await pauseRecordedProof(orcaPage)
+      await orcaPage.mouse.up()
+
+      await expect(
+        targetRow.getByRole('button', {
+          name: /Hide \d+ child workspaces?/
+        })
+      ).toBeVisible({ timeout: 15_000 })
+      await expect
+        .poll(() =>
+          targetRow.evaluate(
+            (element, sourceId) =>
+              Boolean(
+                [...element.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
+                  (candidate) => candidate.dataset.worktreeId === sourceId
+                )
+              ),
+            scenario.sourceId
+          )
+        )
+        .toBe(true)
+      await expect(preview).toHaveCount(0)
+      await expect(orcaPage.locator('html')).not.toHaveAttribute(
+        'data-worktree-sidebar-pointer-dragging'
+      )
+      await pauseRecordedProof(orcaPage, 900)
+    } finally {
+      await orcaPage.mouse.up().catch(() => {})
+      await orcaPage.evaluate(async (sourceId) => {
+        await window.__store?.getState().updateWorktreeLineage(sourceId, { noParent: true })
+      }, scenario.sourceId)
+    }
   })
 
   test('renders existing child lineage in the sidebar', async ({ orcaPage }) => {

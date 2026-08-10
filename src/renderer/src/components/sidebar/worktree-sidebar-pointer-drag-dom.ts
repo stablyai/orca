@@ -1,6 +1,14 @@
 const POINTER_DRAGGING_ATTR = 'data-worktree-sidebar-pointer-dragging'
 const POINTER_DRAG_PREVIEW_ATTR = 'data-worktree-sidebar-drag-preview'
 const POINTER_DRAG_COUNT_ATTR = 'data-worktree-sidebar-drag-count'
+const PREVIEW_OMITTED_CONTENT_SELECTOR =
+  '[data-worktree-card-agent-list],[data-worktree-lineage-children],[data-worktree-legacy-lineage-children]'
+const PREVIEW_IDENTITY_ATTRIBUTES = [
+  'data-worktree-drag-id',
+  'data-worktree-id',
+  'data-worktree-lineage-drop-id',
+  'data-worktree-row-key'
+] as const
 
 const INTERACTIVE_DRAG_BLOCKER_SELECTOR = [
   'button',
@@ -42,13 +50,18 @@ export function setSidebarPointerDragDocumentStyles(enabled: boolean): void {
 function stripDuplicatePreviewAttributes(preview: HTMLElement): void {
   preview.removeAttribute('id')
   preview.removeAttribute('aria-describedby')
-  preview.removeAttribute('data-worktree-drag-id')
   preview.querySelectorAll<HTMLElement>('[id],[aria-describedby]').forEach((element) => {
     element.removeAttribute('id')
     element.removeAttribute('aria-describedby')
   })
-  preview.querySelectorAll<HTMLElement>('[data-worktree-drag-id]').forEach((element) => {
-    element.removeAttribute('data-worktree-drag-id')
+  for (const attribute of PREVIEW_IDENTITY_ATTRIBUTES) {
+    preview.removeAttribute(attribute)
+    preview.querySelectorAll<HTMLElement>(`[${attribute}]`).forEach((element) => {
+      element.removeAttribute(attribute)
+    })
+  }
+  preview.querySelectorAll<HTMLElement>(PREVIEW_OMITTED_CONTENT_SELECTOR).forEach((element) => {
+    element.remove()
   })
 }
 
@@ -74,7 +87,7 @@ export function createSidebarDragPreview(args: {
   const preview = document.createElement('div')
   const clone = args.sourceRow.cloneNode(true) as HTMLElement
   const offsetX = Math.min(Math.max(args.pointerX - rect.left, 0), rect.width)
-  const offsetY = Math.min(Math.max(args.pointerY - rect.top, 0), rect.height)
+  const sourceOffsetY = Math.min(Math.max(args.pointerY - rect.top, 0), rect.height)
 
   stripDuplicatePreviewAttributes(clone)
   preview.setAttribute(POINTER_DRAG_PREVIEW_ATTR, 'true')
@@ -92,9 +105,11 @@ export function createSidebarDragPreview(args: {
   preview.style.left = '0'
   preview.style.top = '0'
   preview.style.width = `${rect.width}px`
-  preview.style.height = `${rect.height}px`
   preview.style.pointerEvents = 'none'
   preview.style.transformOrigin = 'top left'
+  document.body.appendChild(preview)
+  const height = preview.offsetHeight > 0 ? preview.offsetHeight : rect.height
+  const offsetY = Math.min(sourceOffsetY, height)
   updateSidebarDragPreviewPosition({
     preview,
     pointerX: args.pointerX,
@@ -102,6 +117,5 @@ export function createSidebarDragPreview(args: {
     offsetX,
     offsetY
   })
-  document.body.appendChild(preview)
-  return { preview, offsetX, offsetY, height: rect.height }
+  return { preview, offsetX, offsetY, height }
 }

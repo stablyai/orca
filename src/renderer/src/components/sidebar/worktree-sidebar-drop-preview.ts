@@ -82,6 +82,7 @@ function hasWorktreeSidebarStatusDropTarget(
 export function resolveWorktreeSidebarStatusDropCommitTarget(args: {
   currentTarget: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
   currentPreview: WorktreeSidebarDropPreview | null
+  currentReorderTargetActive: boolean
   latestTrackedTarget: WorktreeSidebarTrackedStatusDropTarget | null
   x: number
   y: number
@@ -89,14 +90,19 @@ export function resolveWorktreeSidebarStatusDropCommitTarget(args: {
   target: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
   preview: WorktreeSidebarDropPreview | null
 } {
-  if (hasWorktreeSidebarStatusDropTarget(args.currentTarget)) {
+  if (hasWorktreeSidebarStatusDropTarget(args.currentTarget) || args.currentReorderTargetActive) {
     return { target: args.currentTarget, preview: args.currentPreview }
   }
   const latest = args.latestTrackedTarget
+  const distance = latest
+    ? Math.hypot(args.x - latest.x, args.y - latest.y)
+    : Number.POSITIVE_INFINITY
+  if (latest?.target.lineageParentId && distance <= STATUS_DROP_TARGET_FALLBACK_TOLERANCE_PX) {
+    return { target: latest.target, preview: latest.preview }
+  }
   if (!latest || !hasWorktreeSidebarStatusDropTarget(latest.target)) {
     return { target: args.currentTarget, preview: args.currentPreview }
   }
-  const distance = Math.hypot(args.x - latest.x, args.y - latest.y)
   return distance <= STATUS_DROP_TARGET_FALLBACK_TOLERANCE_PX
     ? { target: latest.target, preview: latest.preview }
     : { target: args.currentTarget, preview: args.currentPreview }

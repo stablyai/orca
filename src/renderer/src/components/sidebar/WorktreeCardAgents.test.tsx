@@ -197,17 +197,21 @@ describe('WorktreeCardAgents', () => {
     capturedRowActivations = []
   })
 
-  it('renders ordinary rows in full mode without a child disclosure', async () => {
+  it('renders full rows and scopes lineage feedback to the targeted list', async () => {
     mockAgentActivityDisplayMode = 'full'
     const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
 
-    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    const targetMarkup = renderToStaticMarkup(
+      <WorktreeCardAgents worktreeId="target" isLineageDropTarget />
+    )
+    const markup =
+      targetMarkup + renderToStaticMarkup(<WorktreeCardAgents worktreeId="descendant" />)
 
-    expect(markup).toContain('role="group"')
-    expect(markup).toContain('aria-label="Agents"')
-    expect(markup).toContain('data-testid="agent-row"')
     expect(markup).not.toContain('<button')
     expect(markup).not.toContain('aria-expanded')
+    expect(markup.match(/data-worktree-card-agent-list-drop-target="true"/g)).toHaveLength(1)
+    expect(markup.match(/bg-worktree-sidebar-accent/g)).toHaveLength(1)
+    expect(markup.match(/ring-worktree-sidebar-ring\/50/g)).toHaveLength(1)
   }, 30_000)
 
   it('uses compact mode when the display preference is absent', async () => {

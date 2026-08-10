@@ -4,8 +4,10 @@ import type {
   WorktreeSidebarDragGrab,
   WorktreeSidebarDropAnchor
 } from './worktree-sidebar-drag-geometry'
+import { getWorktreeSidebarStaticRect } from './worktree-sidebar-static-geometry'
 
 const EDGE_ZONE_PX = 56
+const ACTIVE_LINEAGE_TARGET_EDGE_ZONE_PX = 12
 const MAX_OUTSIDE_EDGE_PX = 48
 const MAX_SCROLL_SPEED_PX_PER_SECOND = 960
 const MAX_FRAME_MS = 32
@@ -50,6 +52,23 @@ export type WorktreeSidebarBoundaryDropResult =
   | { kind: 'inside' }
   | { kind: 'outside' }
 
+export function shouldHoldWorktreeSidebarRowsAtPointerEdge(args: {
+  point: WorktreeSidebarDragPoint
+  containerRect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>
+  scrollHeight: number
+  clientHeight: number
+}): boolean {
+  if (
+    args.scrollHeight <= args.clientHeight ||
+    args.point.clientX < args.containerRect.left ||
+    args.point.clientX > args.containerRect.right
+  ) {
+    return false
+  }
+  // Why: edge intent must stay stable at scroll bounds even after autoscroll has no remaining delta.
+  return Boolean(getVerticalEdgeIntensity(args.point.clientY, args.containerRect, EDGE_ZONE_PX))
+}
+
 export function getWorktreeSidebarDragAutoscroll(args: {
   point: WorktreeSidebarDragPoint
   containerRect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>
@@ -57,6 +76,7 @@ export function getWorktreeSidebarDragAutoscroll(args: {
   scrollHeight: number
   clientHeight: number
   elapsedMs: number
+  lineageTargetActive?: boolean
 }): WorktreeSidebarAutoscrollResult | null {
   const { point, containerRect } = args
   if (point.clientX < containerRect.left || point.clientX > containerRect.right) {
@@ -74,7 +94,11 @@ export function getWorktreeSidebarDragAutoscroll(args: {
     return null
   }
 
-  const edge = getVerticalEdgeIntensity(point.clientY, containerRect)
+  const edge = getVerticalEdgeIntensity(
+    point.clientY,
+    containerRect,
+    args.lineageTargetActive ? ACTIVE_LINEAGE_TARGET_EDGE_ZONE_PX : EDGE_ZONE_PX
+  )
   if (!edge) {
     return null
   }
@@ -141,13 +165,8 @@ export function getWorktreeSidebarDragRectsForGroup(
     if (!worktreeId || !Number.isFinite(groupIndex)) {
       return
     }
-    const rect = element.getBoundingClientRect()
-    const virtualRow = element.closest<HTMLElement>('[data-worktree-virtual-row]')
-    const virtualRowStart = getWorktreeVirtualRowStart(virtualRow)
-    const top =
-      virtualRow && virtualRowStart !== null
-        ? virtualRowStart + rect.top - virtualRow.getBoundingClientRect().top
-        : rect.top - containerRect.top + container.scrollTop
+    const rect = getWorktreeSidebarStaticRect(container, element)
+    const top = rect.top - containerRect.top + container.scrollTop
     rects.push({
       worktreeId,
       groupIndex,
@@ -159,18 +178,6 @@ export function getWorktreeSidebarDragRectsForGroup(
   })
   rects.sort((a, b) => a.top - b.top)
   return rects
-}
-
-function getWorktreeVirtualRowStart(virtualRow: HTMLElement | null): number | null {
-  if (!virtualRow) {
-    return null
-  }
-  const rawStart = virtualRow.getAttribute('data-worktree-virtual-row-start')
-  if (rawStart === null) {
-    return null
-  }
-  const start = Number(rawStart)
-  return Number.isFinite(start) ? start : null
 }
 
 export function refreshWorktreeSidebarDragSession(args: {
@@ -204,7 +211,8 @@ export function refreshWorktreeSidebarDragSession(args: {
 
 function getVerticalEdgeIntensity(
   clientY: number,
-  containerRect: Pick<DOMRect, 'top' | 'bottom'>
+  containerRect: Pick<DOMRect, 'top' | 'bottom'>,
+  edgeZonePx: number
 ): { direction: -1 | 1; intensity: number } | null {
   if (clientY < containerRect.top - MAX_OUTSIDE_EDGE_PX) {
     return null
@@ -212,16 +220,16 @@ function getVerticalEdgeIntensity(
   if (clientY > containerRect.bottom + MAX_OUTSIDE_EDGE_PX) {
     return null
   }
-  if (clientY <= containerRect.top + EDGE_ZONE_PX) {
+  if (clientY <= containerRect.top + edgeZonePx) {
     return {
       direction: -1,
-      intensity: Math.min(1, (containerRect.top + EDGE_ZONE_PX - clientY) / EDGE_ZONE_PX)
+      intensity: Math.min(1, (containerRect.top + edgeZonePx - clientY) / edgeZonePx)
     }
   }
-  if (clientY >= containerRect.bottom - EDGE_ZONE_PX) {
+  if (clientY >= containerRect.bottom - edgeZonePx) {
     return {
       direction: 1,
-      intensity: Math.min(1, (clientY - (containerRect.bottom - EDGE_ZONE_PX)) / EDGE_ZONE_PX)
+      intensity: Math.min(1, (clientY - (containerRect.bottom - edgeZonePx)) / edgeZonePx)
     }
   }
   return null

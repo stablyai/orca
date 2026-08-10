@@ -4,6 +4,7 @@ import {
   getWorktreeSidebarBoundaryDrop,
   getWorktreeSidebarDragRectsForGroup,
   refreshWorktreeSidebarDragSession,
+  shouldHoldWorktreeSidebarRowsAtPointerEdge,
   type WorktreeSidebarDragRect,
   type WorktreeSidebarDragSession
 } from './worktree-sidebar-drag-autoscroll'
@@ -26,6 +27,57 @@ const SESSION: WorktreeSidebarDragSession = {
   anchor: null
 }
 
+describe('shouldHoldWorktreeSidebarRowsAtPointerEdge', () => {
+  it('holds preview rows throughout an overflowing edge zone', () => {
+    expect(
+      shouldHoldWorktreeSidebarRowsAtPointerEdge({
+        point: { clientX: 80, clientY: 488 },
+        containerRect: CONTAINER_RECT,
+        scrollHeight: 1_000,
+        clientHeight: 400
+      })
+    ).toBe(true)
+  })
+
+  it('keeps rows held when autoscroll reaches the list boundary', () => {
+    const point = { clientX: 80, clientY: 488 }
+
+    expect(getAutoscroll(point, { scrollTop: 600 })).toBeNull()
+    expect(
+      shouldHoldWorktreeSidebarRowsAtPointerEdge({
+        point,
+        containerRect: CONTAINER_RECT,
+        scrollHeight: 1_000,
+        clientHeight: 400
+      })
+    ).toBe(true)
+  })
+
+  it('keeps normal previews in the interior, outside the sidebar, and without overflow', () => {
+    const base = {
+      point: { clientX: 80, clientY: 300 },
+      containerRect: CONTAINER_RECT,
+      scrollHeight: 1_000,
+      clientHeight: 400
+    }
+
+    expect(shouldHoldWorktreeSidebarRowsAtPointerEdge(base)).toBe(false)
+    expect(
+      shouldHoldWorktreeSidebarRowsAtPointerEdge({
+        ...base,
+        point: { clientX: 4, clientY: 488 }
+      })
+    ).toBe(false)
+    expect(
+      shouldHoldWorktreeSidebarRowsAtPointerEdge({
+        ...base,
+        point: { clientX: 80, clientY: 488 },
+        scrollHeight: 400
+      })
+    ).toBe(false)
+  })
+})
+
 describe('getWorktreeSidebarDragAutoscroll', () => {
   it('scrolls up near the top edge', () => {
     expect(getAutoscroll({ clientX: 80, clientY: 112 })?.scrollTop).toBeCloseTo(187.93, 2)
@@ -37,6 +89,13 @@ describe('getWorktreeSidebarDragAutoscroll', () => {
 
   it('does nothing away from the vertical edge zones', () => {
     expect(getAutoscroll({ clientX: 80, clientY: 300 })).toBeNull()
+  })
+
+  it('holds an active lineage target unless the pointer reaches the extreme edge', () => {
+    expect(getAutoscroll({ clientX: 80, clientY: 470 }, { lineageTargetActive: true })).toBeNull()
+    expect(
+      getAutoscroll({ clientX: 80, clientY: 496 }, { lineageTargetActive: true })?.scrollTop
+    ).toBeGreaterThan(200)
   })
 
   it('does nothing when the pointer is outside horizontally', () => {

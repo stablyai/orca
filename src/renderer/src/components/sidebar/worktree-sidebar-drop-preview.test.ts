@@ -189,6 +189,7 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
       resolveWorktreeSidebarStatusDropCommitTarget({
         currentTarget: { status: 'completed', isPinDrop: false, lineageParentId: null },
         currentPreview: preview,
+        currentReorderTargetActive: false,
         latestTrackedTarget: {
           target: { status: 'in-progress', isPinDrop: false, lineageParentId: null },
           preview: null,
@@ -209,6 +210,7 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
       resolveWorktreeSidebarStatusDropCommitTarget({
         currentTarget: { status: null, isPinDrop: false, lineageParentId: null },
         currentPreview: null,
+        currentReorderTargetActive: false,
         latestTrackedTarget: {
           target: { status: 'completed', isPinDrop: false, lineageParentId: null },
           preview,
@@ -229,6 +231,7 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
       resolveWorktreeSidebarStatusDropCommitTarget({
         currentTarget: { status: null, isPinDrop: false, lineageParentId: null },
         currentPreview: null,
+        currentReorderTargetActive: false,
         latestTrackedTarget: {
           target: { status: null, isPinDrop: false, lineageParentId: 'parent-worktree' },
           preview: null,
@@ -244,11 +247,54 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
     })
   })
 
+  it('keeps the current status intent ahead of a nearby lineage fallback', () => {
+    expect(
+      resolveWorktreeSidebarStatusDropCommitTarget({
+        currentTarget: { status: 'in-progress', isPinDrop: false, lineageParentId: null },
+        currentPreview: null,
+        currentReorderTargetActive: false,
+        latestTrackedTarget: {
+          target: { status: 'in-progress', isPinDrop: false, lineageParentId: 'parent-worktree' },
+          preview: null,
+          x: 100,
+          y: 100
+        },
+        x: 102,
+        y: 101
+      })
+    ).toEqual({
+      target: { status: 'in-progress', isPinDrop: false, lineageParentId: null },
+      preview: null
+    })
+  })
+
+  it('keeps a reorder gutter ahead of a nearby lineage fallback', () => {
+    expect(
+      resolveWorktreeSidebarStatusDropCommitTarget({
+        currentTarget: { status: null, isPinDrop: false, lineageParentId: null },
+        currentPreview: null,
+        currentReorderTargetActive: true,
+        latestTrackedTarget: {
+          target: { status: null, isPinDrop: false, lineageParentId: 'parent-worktree' },
+          preview: null,
+          x: 100,
+          y: 100
+        },
+        x: 101,
+        y: 100
+      })
+    ).toEqual({
+      target: { status: null, isPinDrop: false, lineageParentId: null },
+      preview: null
+    })
+  })
+
   it('does not reuse a stale status target after the pointer has moved away', () => {
     expect(
       resolveWorktreeSidebarStatusDropCommitTarget({
         currentTarget: { status: null, isPinDrop: false, lineageParentId: null },
         currentPreview: null,
+        currentReorderTargetActive: false,
         latestTrackedTarget: {
           target: { status: 'completed', isPinDrop: false, lineageParentId: null },
           preview,

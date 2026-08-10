@@ -48,13 +48,15 @@ type Props = {
   agents?: DashboardAgentRowData[]
   /** Spacing from the card body above; parent decides whether a divider is appropriate. */
   className?: string
+  isLineageDropTarget?: boolean
 }
 
 /** Inline agent list rendered inside WorktreeCard when 'inline-agents' is enabled. */
 const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   worktreeId,
   agents: precomputedAgents,
-  className
+  className,
+  isLineageDropTarget = false
 }: Props) {
   const selectedAgents = useWorktreeAgentRows(worktreeId, precomputedAgents === undefined)
   const agents = precomputedAgents ?? selectedAgents
@@ -62,19 +64,28 @@ const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
     return null
   }
   // Why: mount the inner body (owns the 30s useNow tick) only for non-empty rows, so idle worktrees pay no timer cost.
-  return <WorktreeCardAgentsBody worktreeId={worktreeId} agents={agents} className={className} />
+  return (
+    <WorktreeCardAgentsBody
+      worktreeId={worktreeId}
+      agents={agents}
+      className={className}
+      isLineageDropTarget={isLineageDropTarget}
+    />
+  )
 })
 
 type BodyProps = {
   worktreeId: string
   agents: DashboardAgentRowData[]
   className?: string
+  isLineageDropTarget: boolean
 }
 
 const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   worktreeId,
   agents,
-  className
+  className,
+  isLineageDropTarget
 }: BodyProps) {
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
@@ -363,13 +374,19 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     return (
       <div
         ref={compactAgentListRootRef}
-        className={cn('flex flex-col mt-1 gap-0.5', className)}
+        className={cn(
+          'flex flex-col mt-1 gap-0.5 rounded-md transition-[background-color,box-shadow]',
+          isLineageDropTarget && 'bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
+          className
+        )}
         onClick={stopBubble}
         onDoubleClick={stopBubble}
         onMouseDown={stopBubble}
         onPointerDown={stopBubble}
         role={hasLineage ? 'tree' : 'group'}
         aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
+        data-worktree-card-agent-list=""
+        data-worktree-card-agent-list-drop-target={isLineageDropTarget ? 'true' : undefined}
         data-compact-agent-list="true"
       >
         {agents.length === 0 ? null : shouldUseSummaryRow ? (
@@ -405,13 +422,19 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   return (
     // Why: swallow bubbling so gutter clicks don't reach WorktreeCard's activate / edit-meta handlers.
     <div
-      className={cn('flex flex-col mt-1', className)}
+      className={cn(
+        'flex flex-col mt-1 rounded-md transition-[background-color,box-shadow]',
+        isLineageDropTarget && 'bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
+        className
+      )}
       onClick={stopBubble}
       onDoubleClick={stopBubble}
       onMouseDown={stopBubble}
       onPointerDown={stopBubble}
       role={hasLineage ? 'tree' : 'group'}
       aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
+      data-worktree-card-agent-list=""
+      data-worktree-card-agent-list-drop-target={isLineageDropTarget ? 'true' : undefined}
     >
       {rootAgents.map((rootAgent) => renderAgentBranch(rootAgent))}
     </div>
