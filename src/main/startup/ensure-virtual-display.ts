@@ -100,12 +100,22 @@ function waitForDisplaySocket(displayNumber: number, deadline: number): boolean 
  * display is available (pre-existing or freshly started), false when browser
  * panes cannot be supported on this host. Safe to call on any platform.
  */
-export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boolean }): boolean {
+export function ensureVirtualDisplayForHeadlessServe(options: {
+  isServeMode: boolean
+  // Why: --no-offscreen-browser skips the offscreen BrowserWindow backend entirely. The
+  // display-skip flag skips the Xvfb subprocess; Chromium flags are still applied so Electron
+  // can boot without an X server, since the main process doesn't mount <webview> either.
+  noOffscreenBrowser?: boolean
+}): boolean {
   if (!options.isServeMode || process.platform !== 'linux') {
     return process.platform !== 'linux'
   }
 
   configureHeadlessServeChromiumFlags()
+
+  if (options.noOffscreenBrowser) {
+    return false
+  }
 
   // Why: respect an externally provided display (a real X server, or the image
   // already running its own Xvfb). Don't start a competing one.

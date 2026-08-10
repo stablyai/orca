@@ -828,7 +828,10 @@ if (hasSingleInstanceLock) {
     enableMainProcessGpuFeatures()
   }
   // Why: headless serve's offscreen BrowserWindows need an X display (Xvfb) on Linux; the result gates whether the offscreen backend is installed.
-  headlessBrowserDisplayAvailable = ensureVirtualDisplayForHeadlessServe({ isServeMode })
+  headlessBrowserDisplayAvailable = ensureVirtualDisplayForHeadlessServe({
+    isServeMode,
+    noOffscreenBrowser: process.argv.includes('--serve-no-offscreen-browser')
+  })
 }
 
 ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
@@ -1770,6 +1773,7 @@ type ServeOptions = {
   wsPort?: number
   pairingAddress: string | null
   noPairing: boolean
+  noOffscreenBrowser: boolean
   mobilePairing: boolean
   recipeJson: boolean
   projectRoot: string | null
@@ -1798,6 +1802,7 @@ function getServeOptions(argv = process.argv): ServeOptions {
     ...(wsPort !== undefined ? { wsPort } : {}),
     pairingAddress: valueAfter('--serve-pairing-address'),
     noPairing: argv.includes('--serve-no-pairing'),
+    noOffscreenBrowser: argv.includes('--serve-no-offscreen-browser'),
     mobilePairing: argv.includes('--serve-mobile-pairing'),
     recipeJson: argv.includes('--serve-recipe-json'),
     projectRoot: valueAfter('--serve-project-root')
@@ -2977,7 +2982,7 @@ void app.whenReady().then(async () => {
     await runtime.refreshRestoredOrchestrationAuthority()
     await runtime.reconcileLegacyWorkerTerminals()
     // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
-    if (headlessBrowserDisplayAvailable) {
+    if (headlessBrowserDisplayAvailable && !serveOptions.noOffscreenBrowser) {
       runtime.setOffscreenBrowserBackend(new OffscreenBrowserBackend(browserManager))
     }
     // Why: headless servers have no renderer graph publisher; publish an explicit empty graph so status clients see a ready server.
