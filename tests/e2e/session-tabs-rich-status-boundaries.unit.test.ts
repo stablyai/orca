@@ -162,6 +162,31 @@ describe('session-tabs rich-status boundaries', () => {
     harness.unsubscribe()
   })
 
+  it('does not carry a stale question into the next title interval', () => {
+    const harness = createHarness()
+    const firstWorkingAt = Date.now()
+    harness.tab.agentStatus = {
+      state: 'waiting',
+      prompt: 'previous question',
+      interactivePrompt: '{"question":"previous question"}',
+      updatedAt: firstWorkingAt,
+      stateStartedAt: firstWorkingAt,
+      agentType: 'cursor',
+      paneKey: harness.tab.id,
+      stateHistory: []
+    }
+    emitTitle(harness, 'Cursor Agent needs confirmation', firstWorkingAt)
+    vi.advanceTimersByTime(1)
+    emitTitle(harness, 'bash')
+    harness.publications.length = 0
+
+    vi.advanceTimersByTime(1)
+    emitTitle(harness, '⠋ Cursor Agent')
+    expect(latestStatus(harness)).toMatchObject({ state: 'working', prompt: '' })
+    expect(latestStatus(harness)).not.toHaveProperty('interactivePrompt')
+    harness.unsubscribe()
+  })
+
   it('does not resurrect retained status after an identity-only owner change', () => {
     const harness = createHarness()
     harness.runtime.registerPty(PTY_ID, WORKTREE_ID, null, {

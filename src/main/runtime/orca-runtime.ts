@@ -30775,7 +30775,13 @@ export class OrcaRuntimeService {
         },
         ownerAgent
       )
-      const renewedStatus = this.renewMobileAgentStatusFromPtyTitle(liveStatus, pty)
+      // A live hook question outranks only the shell title that currently obscures it.
+      const renewedStatus =
+        liveRow === hookRow.live &&
+        liveRow.payload.interactivePrompt != null &&
+        terminalTitleBlocksExplicitAgentStatus(pty?.lastOscTitle ?? null)
+          ? liveStatus
+          : this.renewMobileAgentStatusFromPtyTitle(liveStatus, pty)
       if (renewedStatus) {
         return { agentStatus: renewedStatus }
       }
