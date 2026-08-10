@@ -7380,7 +7380,7 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const handleOpenOrUseGitHubWorkItem = useCallback(
-    (item: GitHubWorkItem): void => {
+    (item: GitHubWorkItem, agentOverride?: TuiAgent): void => {
       const currentAttached = findGithubWorkItemWorkspaceAttachment(
         useAppStore.getState().allWorktrees(),
         item.repoId,
@@ -7388,7 +7388,7 @@ export default function TaskPage(): React.JSX.Element {
         item.number
       )
       if (!currentAttached) {
-        handleUseWorkItem(item)
+        handleUseWorkItem(item, agentOverride)
         return
       }
 
@@ -10577,7 +10577,9 @@ export default function TaskPage(): React.JSX.Element {
                               <GitHubIssueWorkspaceLaunchButton
                                 repo={itemRepo}
                                 onStartDefault={() => handleOpenOrUseGitHubWorkItem(item)}
-                                onStartWithAgent={(agent) => handleUseWorkItem(item, agent)}
+                                onStartWithAgent={(agent) =>
+                                  handleOpenOrUseGitHubWorkItem(item, agent)
+                                }
                               />
                             )}
                             {item.type !== 'pr' ? (
