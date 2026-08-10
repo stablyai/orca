@@ -945,25 +945,21 @@ export async function bulkDiscardStagedRuntimeGitPaths(
   )
   assertGitStagedDiscardCapability(status)
   const worktree = toRuntimeWorktreeSelector(context.worktreeId)
-  let receipt: GitStagedDiscardReceipt
+  let receiptValue: unknown = undefined
   try {
-    receipt = assertGitStagedDiscardReceipt(
-      await abortableGitStagedDiscardPromise(
-        callRuntimeRpc(
-          target,
-          'git.bulkDiscardStaged',
-          {
-            worktree,
-            filePaths,
-            operationId,
-            stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
-          },
-          { timeoutMs: 15_000 }
-        ),
-        signal
+    receiptValue = await abortableGitStagedDiscardPromise(
+      callRuntimeRpc(
+        target,
+        'git.bulkDiscardStaged',
+        {
+          worktree,
+          filePaths,
+          operationId,
+          stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+        },
+        { timeoutMs: 15_000 }
       ),
-      operationId,
-      filePaths
+      signal
     )
   } catch (error) {
     if (signal?.aborted) {
@@ -982,17 +978,16 @@ export async function bulkDiscardStagedRuntimeGitPaths(
         ),
         signal
       )
-      receipt =
-        recovered === null
-          ? pendingGitStagedDiscardReceipt(operationId, filePaths)
-          : assertGitStagedDiscardReceipt(recovered, operationId, filePaths)
+      receiptValue =
+        recovered === null ? pendingGitStagedDiscardReceipt(operationId, filePaths) : recovered
     } catch (recoveryError) {
       if (recoveryError instanceof RuntimeRpcCallError) {
         throw recoveryError
       }
-      receipt = pendingGitStagedDiscardReceipt(operationId, filePaths)
+      receiptValue = pendingGitStagedDiscardReceipt(operationId, filePaths)
     }
   }
+  const receipt = assertGitStagedDiscardReceipt(receiptValue, operationId, filePaths)
   return awaitTerminalGitStagedDiscardReceipt(
     receipt,
     operationId,

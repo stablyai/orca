@@ -13,6 +13,18 @@ import {
 
 const TEST_COMMIT_OID = '0123456789abcdef0123456789abcdef01234567'
 
+function invalidStagedDiscardReceipt(operationId: string): unknown {
+  return {
+    operationId,
+    state: 'succeeded',
+    mutation: 'complete',
+    affectedPaths: ['file.txt'],
+    completedPaths: [],
+    uncertainPaths: [],
+    remainingPaths: []
+  }
+}
+
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>()
 
@@ -3680,6 +3692,58 @@ describe('web git preload API', () => {
     ).resolves.toMatchObject({ state: 'succeeded' })
     expect(receiptReads).toBe(2)
   })
+
+  it.each(['mutation', 'recovery'] as const)(
+    'rejects an invalid staged-discard %s receipt without continuing reconciliation',
+    async (invalidStage) => {
+      const runtimeCalls: string[] = []
+      vi.doMock('./web-runtime-client', () => ({
+        WebRuntimeClient: class {
+          call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+            runtimeCalls.push(method)
+            const operationId = 'op-web-invalid'
+            const results: Record<string, unknown> = {
+              'status.get': { capabilities: [GIT_STAGED_DISCARD_RUNTIME_CAPABILITY] },
+              'repo.list': { repos: [{ id: 'repo-1' }] },
+              'worktree.detectedList': {
+                repoId: 'repo-1',
+                authoritative: true,
+                worktrees: [{ id: 'wt-1', repoId: 'repo-1', path: '/workspace/repo' }]
+              },
+              'git.bulkDiscardStaged': invalidStagedDiscardReceipt(operationId),
+              'git.getStagedDiscardReceipt': invalidStagedDiscardReceipt(operationId)
+            }
+            if (method === 'git.bulkDiscardStaged' && invalidStage === 'recovery') {
+              return Promise.reject(new Error('mutation transport lost'))
+            }
+            return Promise.resolve({
+              id: method,
+              ok: true,
+              result: results[method],
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+
+          close(): void {}
+        }
+      }))
+      const globals = installBrowserGlobals('Linux')
+      writeStoredRuntimeEnvironment(globals.storage)
+      const { installWebPreloadApi } = await import('./web-preload-api')
+      installWebPreloadApi()
+
+      await expect(
+        globals.window.api.git.bulkDiscardStaged({
+          worktreePath: '/workspace/repo',
+          filePaths: ['file.txt'],
+          operationId: 'op-web-invalid'
+        })
+      ).rejects.toThrow('invalid staged discard receipt')
+      expect(
+        runtimeCalls.filter((method) => method === 'git.getStagedDiscardReceipt')
+      ).toHaveLength(invalidStage === 'recovery' ? 1 : 0)
+    }
+  )
 
   it('rejects an old host before resolving or mutating its worktree', async () => {
     const runtimeCalls: string[] = []

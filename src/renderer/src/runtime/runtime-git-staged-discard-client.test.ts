@@ -325,6 +325,48 @@ describe('runtime staged discard client', () => {
     expect(receiptReads).toBe(3)
   })
 
+  it.each(['mutation', 'recovery'] as const)(
+    'rejects an invalid %s receipt without continuing reconciliation',
+    async (invalidStage) => {
+      let receiptReads = 0
+      runtimeEnvironmentCall.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
+        const operationId = (paramsOf(args) as { operationId: string }).operationId
+        if (args.method === 'git.bulkDiscardStaged' && invalidStage === 'recovery') {
+          throw new Error('mutation transport lost')
+        }
+        if (args.method === 'git.getStagedDiscardReceipt') {
+          receiptReads += 1
+        }
+        return {
+          id: 'invalid-receipt',
+          ok: true,
+          result: {
+            operationId,
+            state: 'succeeded',
+            mutation: 'complete',
+            affectedPaths: ['staged.txt'],
+            completedPaths: [],
+            uncertainPaths: [],
+            remainingPaths: []
+          },
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      })
+
+      await expect(
+        bulkDiscardStagedRuntimeGitPaths(
+          {
+            settings: { activeRuntimeEnvironmentId: 'env-1' },
+            worktreeId: 'wt-1',
+            worktreePath: '/repo'
+          },
+          ['staged.txt']
+        )
+      ).rejects.toThrow('invalid staged discard receipt')
+      expect(receiptReads).toBe(invalidStage === 'recovery' ? 1 : 0)
+    }
+  )
+
   it('cancels an in-flight transport without waiting for its timeout', async () => {
     let resolveMutation!: (value: unknown) => void
     runtimeEnvironmentCall.mockImplementation(

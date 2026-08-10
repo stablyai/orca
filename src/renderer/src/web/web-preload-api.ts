@@ -2262,18 +2262,14 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       assertGitStagedDiscardCapability(await callRuntimeResult('status.get'))
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       const selector = toRuntimeWorktreeSelector(worktree.id)
-      let receipt: GitStagedDiscardReceipt
+      let receiptValue: unknown = undefined
       try {
-        receipt = assertGitStagedDiscardReceipt(
-          await callRuntimeResult<GitStagedDiscardReceipt>('git.bulkDiscardStaged', {
-            worktree: selector,
-            filePaths,
-            operationId,
-            stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
-          }),
+        receiptValue = await callRuntimeResult<GitStagedDiscardReceipt>('git.bulkDiscardStaged', {
+          worktree: selector,
+          filePaths,
           operationId,
-          filePaths
-        )
+          stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+        })
       } catch (error) {
         if (error instanceof WebRuntimeApplicationError) {
           throw error
@@ -2283,18 +2279,16 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
             'git.getStagedDiscardReceipt',
             { worktree: selector, operationId }
           )
-          receipt =
-            recovered === null
-              ? pendingGitStagedDiscardReceipt(operationId, filePaths)
-              : assertGitStagedDiscardReceipt(recovered, operationId, filePaths)
+          receiptValue =
+            recovered === null ? pendingGitStagedDiscardReceipt(operationId, filePaths) : recovered
         } catch (recoveryError) {
           if (recoveryError instanceof WebRuntimeApplicationError) {
             throw recoveryError
           }
-          receipt = pendingGitStagedDiscardReceipt(operationId, filePaths)
+          receiptValue = pendingGitStagedDiscardReceipt(operationId, filePaths)
         }
       }
-      return receipt
+      return assertGitStagedDiscardReceipt(receiptValue, operationId, filePaths)
     },
     getStagedDiscardReceipt: async ({ worktreePath, operationId }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
