@@ -7,7 +7,7 @@ import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-a
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import {
   showNoDeletableWorkspacesToast,
-  showWorkspaceNoLongerListedToast
+  showWorkspaceListChangedToast
 } from './stale-workspace-list-toast'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
@@ -30,6 +30,10 @@ type WorktreeDeleteWithToastOptions = {
   onForceDeleted?: (worktreeId: string) => void
   // Why: batch deletes suppress the per-delete focus handoff to focus one survivor after the batch (see runWorktreeDeletesInParallel).
   focusSuccessorOnDelete?: boolean
+}
+
+type WorktreeDeleteOptions = {
+  expectedInstanceId?: string
 }
 
 // Why: a failed delete usually means unresolved changes, so land on the diff panel, not just focus the worktree.
@@ -214,19 +218,18 @@ export function runWorktreeDeleteWithToast(
  * Shared funnel for the standard (non-folder) delete decision tree (WorktreeContextMenu,
  * MemoryStatusSegment); branches on the `skipDeleteWorktreeConfirm` preference.
  *
- * The missing-record guard is defense-in-depth: refuse to act if the record vanished between
- * render and click (concurrent delete, state reset, or a runtime re-pair that drops live rows).
- * Deleting from a caller-held copy would hit a workspace whose tabs and PTYs are already torn
- * down, so report the miss like runWorktreeBatchDelete does instead of failing silently (#11646).
+ * The missing-record and instance guards reject stale actions after concurrent state changes.
  */
-export function runWorktreeDelete(worktreeId: string): void {
+export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOptions = {}): void {
   const state = useAppStore.getState()
   const target = getWorktreeMapFromState(state).get(worktreeId) ?? null
-  if (!target) {
+  const instanceChanged =
+    options.expectedInstanceId !== undefined && target?.instanceId !== options.expectedInstanceId
+  if (!target || instanceChanged) {
     // Why: folder workspaces are never in the worktree map — their callers own that route, so a
     // miss there is a routing gap, not a stale list, and must not claim the workspace is gone.
     if (parseWorkspaceKey(worktreeId)?.type !== 'folder') {
-      showWorkspaceNoLongerListedToast()
+      showWorkspaceListChangedToast()
     }
     return
   }

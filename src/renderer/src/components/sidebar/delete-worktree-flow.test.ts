@@ -301,9 +301,6 @@ describe('runWorktreeBatchDelete', () => {
     })
   })
 
-  // Why: the context menu defers Delete past a menu-close animation, so the row can be dropped
-  // (and later re-added) between click and this call. Deleting it anyway would act on a workspace
-  // whose tabs and PTYs are already torn down, so the delete must fail closed AND say why.
   it('reports a stale list instead of silently dropping a delete whose row vanished', () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }
     setWorktrees([])
@@ -314,11 +311,37 @@ describe('runWorktreeBatchDelete', () => {
     expect(mocks.state.openModal).not.toHaveBeenCalled()
     expect(mocks.state.clearWorktreeDeleteState).not.toHaveBeenCalled()
     expect(toast.info).toHaveBeenCalledWith(
-      'Workspace is no longer listed',
+      'Workspace list changed',
       expect.objectContaining({
         description: 'Refresh Space and try again if the workspace list looks stale.'
       })
     )
+  })
+
+  it('rejects a delayed delete when the path now belongs to a different instance', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([{ id: 'wt-1', instanceId: 'instance-2' }])
+
+    runWorktreeDelete('wt-1', { expectedInstanceId: 'instance-1' })
+
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).not.toHaveBeenCalled()
+    expect(toast.info).toHaveBeenCalledWith(
+      'Workspace list changed',
+      expect.objectContaining({
+        description: 'Refresh Space and try again if the workspace list looks stale.'
+      })
+    )
+  })
+
+  it('runs a delayed delete when the captured instance is still current', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([{ id: 'wt-1', instanceId: 'instance-1', displayName: 'one' }])
+
+    runWorktreeDelete('wt-1', { expectedInstanceId: 'instance-1' })
+
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(mocks.state.removeWorktree).toHaveBeenCalledWith('wt-1', false)
   })
 
   // Why: the delete-current-workspace shortcut (useIpcEvents) forwards whatever workspace is

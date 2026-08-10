@@ -4761,7 +4761,7 @@
               "7488ed8711": "View",
               "2b20ce87b3": "Force Delete",
               "4f3876c0f5": "Force delete failed",
-              "workspaceNoLongerListed": "Workspace is no longer listed"
+              "workspaceListChanged": "Workspace list changed"
             },
             "toast": {
               "1d0fa5c0a5": "Failed to delete workspace {{value0}}",

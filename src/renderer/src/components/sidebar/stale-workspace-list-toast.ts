@@ -12,12 +12,12 @@ function staleWorkspaceListToast(title: string): void {
   })
 }
 
-/** A delete target that is no longer in the store: a refreshing/stale list, not a bad click. */
-export function showWorkspaceNoLongerListedToast(): void {
+/** A delete target changed or vanished after the action was selected. */
+export function showWorkspaceListChangedToast(): void {
   staleWorkspaceListToast(
     translate(
-      'auto.components.sidebar.delete.worktree.flow.workspaceNoLongerListed',
-      'Workspace is no longer listed'
+      'auto.components.sidebar.delete.worktree.flow.workspaceListChanged',
+      'Workspace list changed'
     )
   )
 }
