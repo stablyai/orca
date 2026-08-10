@@ -100,16 +100,14 @@ describe('resolveWindowShortcutAction', () => {
     ).toBeNull()
   })
 
-  it('resolves opt-in Space navigation before tab number shortcuts', () => {
-    // Why: Ctrl+1 is tab.selectByIndex's darwin default, so the collision is real.
-    const arcStyle: KeybindingOverrides = {
-      'space.selectByIndex': ['Ctrl+1']
-    }
+  it('resolves Space navigation before tab number shortcuts', () => {
+    // Space's default Mod+Shift+1-9 row resolves first, so a tab remap onto it is shadowed;
+    // Settings flags that collision through the shared space-tab-index conflict group.
     expect(
       resolveWindowShortcutAction(
-        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
-        'darwin',
-        arcStyle
+        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: true },
+        'linux',
+        { 'tab.selectByIndex': ['Mod+Shift+1'] }
       )
     ).toEqual({ type: 'jumpToSpaceIndex', index: 2 })
     expect(
@@ -190,12 +188,12 @@ describe('resolveWindowShortcutAction', () => {
       )
     ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
 
-    // A custom chord with an extra modifier also resolves.
+    // A custom chord with an extra modifier also resolves, once Space vacates its default row.
     expect(
       resolveWindowShortcutAction(
         { code: 'Digit2', key: '2', meta: false, control: true, alt: false, shift: true },
         'linux',
-        { 'tab.selectByIndex': ['Mod+Shift+1'] }
+        { 'tab.selectByIndex': ['Mod+Shift+1'], 'space.selectByIndex': [] }
       )
     ).toEqual({ type: 'jumpToTabIndex', index: 1 })
 

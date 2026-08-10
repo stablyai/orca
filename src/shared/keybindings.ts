@@ -202,6 +202,17 @@ export type FindKeybindingConflictOptions = {
   relevantActionIds?: Iterable<KeybindingActionId>
 }
 
+/**
+ * Ctrl+Shift+1-9, in the canonical form for each platform (Mod is Ctrl off macOS). This is the
+ * secondary digit row: Mod+1-9 is workspaces and Ctrl/Alt+1-9 is tabs, while ⇧⌘3-6 are reserved by
+ * macOS screenshots — so Ctrl+Shift is the only range free and physically identical everywhere.
+ */
+export const SECONDARY_DIGIT_ROW_BINDINGS: PlatformBindings = {
+  darwin: ['Ctrl+Shift+1'],
+  linux: ['Mod+Shift+1'],
+  win32: ['Mod+Shift+1']
+}
+
 export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
   {
     id: 'worktree.quickOpen',
@@ -264,7 +275,8 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     conflictGroup: 'space-tab-index',
     searchKeywords: ['shortcut', 'space', 'select', 'switch', 'number', 'digit', '1-9', 'index'],
-    defaultBindings: platformBindings([]),
+    // Why: the third digit row; the Arc preset swaps it with workspaces.
+    defaultBindings: SECONDARY_DIGIT_ROW_BINDINGS,
     allowInTerminal: true
   },
   {

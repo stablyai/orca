@@ -1664,8 +1664,19 @@ describe('digit-index shortcuts', () => {
     ).toBe(false)
   })
 
-  it('keeps Space number shortcuts opt-in and blocks collisions with tab numbers', () => {
-    expect(getEffectiveKeybindingsForAction('space.selectByIndex', 'darwin')).toEqual([])
+  it('gives Spaces their own digit row and blocks collisions with tab numbers', () => {
+    // Ctrl+Shift everywhere, in each platform's canonical form. Never Mod+Shift: ⇧⌘3-6 are macOS
+    // screenshot chords the system swallows before Orca ever sees them.
+    expect(getEffectiveKeybindingsForAction('space.selectByIndex', 'darwin')).toEqual([
+      'Ctrl+Shift+1'
+    ])
+    for (const platform of ['linux', 'win32'] as const) {
+      expect(getEffectiveKeybindingsForAction('space.selectByIndex', platform)).toEqual([
+        'Mod+Shift+1'
+      ])
+      expect(findKeybindingConflicts(platform)).toEqual([])
+    }
+    expect(findKeybindingConflicts('darwin')).toEqual([])
     expect(
       findKeybindingConflicts('darwin', {
         'space.selectByIndex': ['Ctrl+1']
