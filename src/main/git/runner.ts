@@ -689,6 +689,10 @@ async function spawnCommandCapture(
         return
       }
       terminating = true
+      // Why: a flooding Git hook can starve taskkill settlement while cleanup awaits it.
+      cleanupListeners()
+      child.stdout?.pause()
+      child.stderr?.pause()
       void killSpawnedCommandTree(child, options.killProcessTree).then(() => {
         terminating = false
         finish(error)

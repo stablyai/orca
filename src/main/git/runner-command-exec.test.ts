@@ -23,8 +23,8 @@ import {
 } from './runner'
 
 type MockChildProcess = EventEmitter & {
-  stdout: EventEmitter
-  stderr: EventEmitter
+  stdout: EventEmitter & { pause: ReturnType<typeof vi.fn> }
+  stderr: EventEmitter & { pause: ReturnType<typeof vi.fn> }
   pid: number
   kill: ReturnType<typeof vi.fn>
   unref?: ReturnType<typeof vi.fn>
@@ -32,8 +32,8 @@ type MockChildProcess = EventEmitter & {
 
 function createMockChildProcess(pid: number): MockChildProcess {
   const child = new EventEmitter() as MockChildProcess
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
+  child.stdout = Object.assign(new EventEmitter(), { pause: vi.fn() })
+  child.stderr = Object.assign(new EventEmitter(), { pause: vi.fn() })
   child.pid = pid
   child.kill = vi.fn()
   return child
@@ -249,6 +249,33 @@ describe('runner execFile timeout handling', () => {
       taskkill.emit('close', 0)
       await expect(promise).rejects.toThrow('git stderr exceeded maxBuffer.')
       expect(settled).toBe(true)
+    })
+  })
+
+  it('quiesces Windows Git output while bounded taskkill cleanup is pending', async () => {
+    await withPlatform('win32', async () => {
+      const command = createMockChildProcess(1234)
+      const taskkill = createMockTaskkillProcess()
+      spawnMock.mockImplementation((cmd: string) => (cmd === 'taskkill' ? taskkill : command))
+
+      const promise = gitExecFileAsync(['push'], {
+        cwd: 'C:\\repo',
+        maxBuffer: 2,
+        killProcessTree: true
+      })
+      void promise.catch(() => {})
+      command.stderr.emit('data', Buffer.from('too much output'))
+
+      expect(command.stdout.listenerCount('data')).toBe(0)
+      expect(command.stderr.listenerCount('data')).toBe(0)
+      expect(command.listenerCount('close')).toBe(0)
+      expect(command.listenerCount('error')).toBe(0)
+
+      await vi.advanceTimersByTimeAsync(2_000)
+
+      await expect(promise).rejects.toThrow('git stderr exceeded maxBuffer.')
+      expect(taskkill.kill).toHaveBeenCalledOnce()
+      expect(command.kill).toHaveBeenCalledOnce()
     })
   })
 
