@@ -167,6 +167,7 @@ describe('createPtySubprocess', () => {
   it('spawns node-pty with correct options', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+    const onMacosTccSpawnStrategy = vi.fn()
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
 
@@ -176,7 +177,8 @@ describe('createPtySubprocess', () => {
         cols: 80,
         rows: 24,
         cwd: '/home/user',
-        env: { SHELL: '/bin/bash', FOO: 'bar' }
+        env: { SHELL: '/bin/bash', FOO: 'bar' },
+        onMacosTccSpawnStrategy
       })
     } finally {
       if (platform) {
@@ -194,6 +196,34 @@ describe('createPtySubprocess', () => {
         name: 'xterm-256color'
       })
     )
+    expect(onMacosTccSpawnStrategy).toHaveBeenCalledWith('direct')
+  })
+
+  it('does not report a spawn strategy when node-pty fails before launch', () => {
+    spawnMock.mockImplementationOnce(() => {
+      throw new Error('spawn failed')
+    })
+    const onMacosTccSpawnStrategy = vi.fn()
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          env: { SHELL: '/bin/bash' },
+          onMacosTccSpawnStrategy
+        })
+      ).toThrow('spawn failed')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(onMacosTccSpawnStrategy).not.toHaveBeenCalled()
   })
 
   it('expands variables in PATH before spawning a Windows shell', () => {

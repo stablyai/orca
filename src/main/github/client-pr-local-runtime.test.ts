@@ -225,10 +225,14 @@ describe('GitHub PR local runtime routing', () => {
         return { stdout: '[]' }
       }
       if (endpoint.endsWith('/pulls/7/comments/11/replies')) {
-        return { stdout: JSON.stringify({ id: 12, user: null, body: 'Reply' }) }
+        return {
+          stdout: JSON.stringify({ id: 12, node_id: 'PRRC_reply_12', user: null, body: 'Reply' })
+        }
       }
       if (endpoint.endsWith('/pulls/7/comments')) {
-        return { stdout: JSON.stringify({ id: 13, user: null, body: 'Inline' }) }
+        return {
+          stdout: JSON.stringify({ id: 13, node_id: 'PRRC_inline_13', user: null, body: 'Inline' })
+        }
       }
       return { stdout: '', stderr: '' }
     })
@@ -250,7 +254,10 @@ describe('GitHub PR local runtime routing', () => {
         prRepo,
         localGitOptions
       )
-    ).resolves.toMatchObject({ ok: true })
+    ).resolves.toMatchObject({
+      ok: true,
+      comment: { reactionSubjectId: 'PRRC_reply_12' }
+    })
     await expect(
       addPRReviewComment({
         repoPath: '/repo-root',
@@ -263,7 +270,10 @@ describe('GitHub PR local runtime routing', () => {
         path: 'src/app.ts',
         line: 10
       })
-    ).resolves.toMatchObject({ ok: true })
+    ).resolves.toMatchObject({
+      ok: true,
+      comment: { reactionSubjectId: 'PRRC_inline_13' }
+    })
     await expect(
       updatePRTitle('/repo-root', 7, 'New title', null, prRepo, localGitOptions)
     ).resolves.toBe(true)

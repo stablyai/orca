@@ -99,15 +99,14 @@ export function patchPackagedProcessPath(): void {
   const extraPaths: string[] = []
 
   if (process.platform !== 'win32') {
-    extraPaths.push(
-      '/opt/homebrew/bin',
-      '/opt/homebrew/sbin',
-      '/usr/local/bin',
-      '/usr/local/sbin',
-      '/snap/bin',
-      '/home/linuxbrew/.linuxbrew/bin',
-      '/nix/var/nix/profiles/default/bin'
-    )
+    extraPaths.push('/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin')
+
+    if (process.platform === 'linux') {
+      // Why: snap and Linuxbrew ship on Linux only, so seeding them elsewhere adds phantom PATH entries every spawn must stat.
+      extraPaths.push('/snap/bin', '/home/linuxbrew/.linuxbrew/bin')
+    }
+
+    extraPaths.push('/nix/var/nix/profiles/default/bin')
 
     if (home) {
       extraPaths.push(

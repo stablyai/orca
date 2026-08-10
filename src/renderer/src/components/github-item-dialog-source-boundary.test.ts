@@ -242,4 +242,23 @@ describe('GitHubItemDialog source host boundaries', () => {
 
     expect(checksTab).toContain('item={displayWorkItem ?? workItem}')
   })
+
+  it('records state authority for dialog state mutations so stale list refetches cannot revert them (STA-3343)', () => {
+    const source = componentSource('GitHubItemDialog.tsx')
+
+    // Issue close/reopen: assert on optimistic apply, revert on failure.
+    const editSection = sourceBetween(source, 'function GHEditSection', 'const closeAsDuplicate')
+    expect(editSection).toContain('assertTaskPageGitHubDialogStateAuthority({')
+    expect(editSection).toContain('if (authority?.revert())')
+
+    // PR close/reopen + merge: same protection for the shared Tasks list rows.
+    const actionsSection = sourceBetween(
+      source,
+      'function PRActionsPanel',
+      'function CommentReplyForm'
+    )
+    expect(actionsSection.match(/assertTaskPageGitHubDialogStateAuthority\(\{/g)).toHaveLength(2)
+    expect(actionsSection).toContain('if (authority.revert())')
+    expect(actionsSection).toContain("state: 'merged'")
+  })
 })

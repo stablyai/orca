@@ -1,11 +1,16 @@
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import type { AiVaultScanOptions } from './session-scanner-types'
 
-const { scanAiVaultSessions } = vi.hoisted(() => ({ scanAiVaultSessions: vi.fn() }))
+const { scanAiVaultSessionsInWorker } = vi.hoisted(() => ({
+  scanAiVaultSessionsInWorker: vi.fn()
+}))
 
-vi.mock('./session-scanner', () => ({ scanAiVaultSessions }))
+vi.mock('./session-scanner-worker-spawn', () => ({
+  scanAiVaultSessionsInWorker,
+  resetAiVaultScannerWorkerForTests: vi.fn()
+}))
 vi.mock('../wsl', () => ({
   getWslHomeAsync: vi.fn(),
   listWslDistrosAsync: vi.fn().mockResolvedValue([])
@@ -13,9 +18,68 @@ vi.mock('../wsl', () => ({
 
 import {
   configureAiVaultSessionSources,
+  invalidateAiVaultSessionListCache,
   listAiVaultSessions,
   resetAiVaultSessionListCacheForTests
 } from './cached-session-list'
+
+function scanResult(scannedAt: string): AiVaultListResult {
+  return { sessions: [], issues: [], scannedAt }
+}
+
+// A scan whose resolution the test controls, so an invalidation can be injected
+// mid-flight.
+function deferredScan(): { resolve: (value: AiVaultListResult) => void } {
+  let resolveFn: (value: AiVaultListResult) => void = () => {}
+  scanAiVaultSessionsInWorker.mockReturnValueOnce(
+    new Promise<AiVaultListResult>((resolve) => {
+      resolveFn = resolve
+    })
+  )
+  return { resolve: resolveFn }
+}
+
+describe('invalidateAiVaultSessionListCache generation guard', () => {
+  beforeEach(() => {
+    resetAiVaultSessionListCacheForTests()
+    scanAiVaultSessionsInWorker.mockReset()
+  })
+  afterEach(() => {
+    resetAiVaultSessionListCacheForTests()
+  })
+
+  it('does not let a scan that started before an invalidation repopulate the cache', async () => {
+    // Scan A starts and is still in flight.
+    const scanA = deferredScan()
+    const inFlight = listAiVaultSessions()
+
+    // A delete invalidates the cache while A is running.
+    invalidateAiVaultSessionListCache()
+
+    // A now resolves with a pre-delete result.
+    scanA.resolve(scanResult('scan-A'))
+    await inFlight
+
+    // A non-force list must re-scan (cache empty) rather than serve A's stale
+    // result — proof A's late .then() did not repopulate the cache.
+    scanAiVaultSessionsInWorker.mockResolvedValueOnce(scanResult('scan-B'))
+    const next = await listAiVaultSessions()
+
+    expect(next.scannedAt).toBe('scan-B')
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(2)
+  })
+
+  it('caches normally when no invalidation interrupts the scan', async () => {
+    scanAiVaultSessionsInWorker.mockResolvedValueOnce(scanResult('scan-A'))
+    await listAiVaultSessions()
+
+    // Second non-force call is a cache hit — no second scan.
+    const cached = await listAiVaultSessions()
+
+    expect(cached.scannedAt).toBe('scan-A')
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
+  })
+})
 
 const EMPTY_RESULT: AiVaultListResult = {
   sessions: [],
@@ -26,8 +90,8 @@ const EMPTY_RESULT: AiVaultListResult = {
 describe('cached Agent History source configuration', () => {
   beforeEach(() => {
     resetAiVaultSessionListCacheForTests()
-    scanAiVaultSessions.mockReset()
-    scanAiVaultSessions.mockResolvedValue(EMPTY_RESULT)
+    scanAiVaultSessionsInWorker.mockReset()
+    scanAiVaultSessionsInWorker.mockResolvedValue(EMPTY_RESULT)
   })
 
   it('scans the configured host Codex session source alongside the default home', async () => {
@@ -38,7 +102,7 @@ describe('cached Agent History source configuration', () => {
 
     await listAiVaultSessions({ force: true })
 
-    const options = scanAiVaultSessions.mock.calls[0]?.[0] as AiVaultScanOptions
+    const options = scanAiVaultSessionsInWorker.mock.calls[0]?.[0] as AiVaultScanOptions
     expect(options.additionalCodexSessionsDirs).toEqual([
       join('/custom/codex/home', 'sessions'),
       join('/runtime/codex/home', 'sessions')
@@ -56,8 +120,8 @@ describe('cached Agent History source configuration', () => {
     sourceHome = '/custom/codex/b'
     await listAiVaultSessions()
 
-    expect(scanAiVaultSessions).toHaveBeenCalledTimes(2)
-    expect(scanAiVaultSessions.mock.calls[1]?.[0]).toMatchObject({
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(2)
+    expect(scanAiVaultSessionsInWorker.mock.calls[1]?.[0]).toMatchObject({
       additionalCodexSessionsDirs: [join('/custom/codex/b', 'sessions')]
     })
   })
@@ -72,7 +136,7 @@ describe('cached Agent History source configuration', () => {
     homes = ['/accounts/a/home', '/runtime/home', '/runtime/home/']
     await listAiVaultSessions()
 
-    expect(scanAiVaultSessions).toHaveBeenCalledTimes(1)
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
   })
 
   it('still rescans when the source set genuinely changes', async () => {
@@ -82,13 +146,13 @@ describe('cached Agent History source configuration', () => {
     homes = ['/runtime/home', '/accounts/a/home']
     await listAiVaultSessions()
 
-    expect(scanAiVaultSessions).toHaveBeenCalledTimes(2)
+    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(2)
   })
 
   it('does not join an in-flight scan for an older source', async () => {
     let sourceHome = '/custom/codex/a'
     const resolveScans: ((result: AiVaultListResult) => void)[] = []
-    scanAiVaultSessions.mockImplementation(
+    scanAiVaultSessionsInWorker.mockImplementation(
       () => new Promise<AiVaultListResult>((resolve) => resolveScans.push(resolve))
     )
     configureAiVaultSessionSources({ getCodexSessionSourceHomePath: () => sourceHome })
@@ -101,7 +165,7 @@ describe('cached Agent History source configuration', () => {
 
     // The point is not just that a second scan started, but that it started
     // against the NEW source rather than re-reading the superseded one.
-    expect(scanAiVaultSessions.mock.calls[1]?.[0]).toMatchObject({
+    expect(scanAiVaultSessionsInWorker.mock.calls[1]?.[0]).toMatchObject({
       additionalCodexSessionsDirs: [join('/custom/codex/b', 'sessions')]
     })
     resolveScans.forEach((resolve) => resolve(EMPTY_RESULT))

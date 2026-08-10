@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime-memory-limits'
 import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
 
 const {
@@ -42,7 +43,8 @@ const {
     ]),
     getDefaultProfile: vi.fn(),
     getProfile: vi.fn(),
-    resolveKnownPartition: vi.fn()
+    resolveKnownPartition: vi.fn(),
+    createProfile: vi.fn()
   }
 }))
 
@@ -129,6 +131,32 @@ describe('RuntimeBrowserCommands browser screencast', () => {
         return browserSessionRegistryMock.profiles.get(profileId)?.partition ?? null
       }
     )
+    browserSessionRegistryMock.createProfile.mockReset()
+  })
+
+  it('creates profiles with the requested user-agent mode', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const profile = {
+      id: 'profile-google',
+      scope: 'isolated',
+      partition: 'persist:orca-browser-session-profile-google',
+      label: 'Google',
+      source: null,
+      userAgentMode: 'native'
+    }
+    browserSessionRegistryMock.createProfile.mockReturnValue(profile)
+    const commands = new RuntimeBrowserCommands(createHost())
+
+    await expect(
+      commands.browserProfileCreate({
+        label: 'Google',
+        scope: 'isolated',
+        userAgentMode: 'native'
+      })
+    ).resolves.toEqual({ profile })
+    expect(browserSessionRegistryMock.createProfile).toHaveBeenCalledWith('isolated', 'Google', {
+      userAgentMode: 'native'
+    })
   })
 
   it('waits for explicit worktree browser registration after requesting a hidden mount', async () => {
@@ -552,6 +580,32 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     await second.session.done
     expect(secondStop).toHaveBeenCalledTimes(1)
   }, 10_000)
+
+  it('admits screencast frames through the paired-runtime size guard', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
+    const done = deferred<void>()
+    startBrowserScreencastMock.mockResolvedValue({
+      stop: vi.fn(() => done.resolve()),
+      done: done.promise
+    })
+    const sendBinary = vi.fn(() => true)
+
+    const commands = new RuntimeBrowserCommands(createHost())
+    const started = await commands.browserScreencast(
+      { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' },
+      { sendBinary }
+    )
+    const { onFrame } = startBrowserScreencastMock.mock.calls[0][1]
+
+    expect(onFrame(new Uint8Array(REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES + 1))).toBe(true)
+    expect(sendBinary).not.toHaveBeenCalled()
+    expect(onFrame(new Uint8Array(64))).toBe(true)
+    expect(sendBinary).toHaveBeenCalledTimes(1)
+
+    started.session.stop()
+    await started.session.done
+  })
 })
 
 describe('RuntimeBrowserCommands headless offscreen routing', () => {

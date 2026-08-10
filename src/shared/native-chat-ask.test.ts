@@ -4,7 +4,12 @@ import {
   type NativeChatBlock,
   type NativeChatMessage
 } from './native-chat-types'
-import { extractPendingAsk, parseAskFromStatus } from './native-chat-ask'
+import {
+  extractPendingAsk,
+  nativeChatAskDismissKey,
+  parseAskFromStatus,
+  resolveNativeChatAsk
+} from './native-chat-ask'
 
 function message(id: string, blocks: NativeChatBlock[]): NativeChatMessage {
   return { id, role: 'assistant', blocks, timestamp: 1, source: 'transcript' }
@@ -41,6 +46,20 @@ function toolTurn(id: string): NativeChatMessage {
 const QUESTIONS_INPUT = {
   questions: [{ question: 'Deploy?', options: [{ label: 'Yes' }, { label: 'No' }] }]
 }
+
+describe('nativeChatAskDismissKey', () => {
+  it('uses the full canonical prompt and stays stable across object instances', () => {
+    const first = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))
+    const same = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))
+    const changed = parseAskFromStatus(
+      JSON.stringify({ questions: [{ question: 'Deploy?', options: [{ label: 'Later' }] }] })
+    )
+
+    expect(nativeChatAskDismissKey(first)).toBe(nativeChatAskDismissKey(same))
+    expect(nativeChatAskDismissKey(first)).not.toBe(nativeChatAskDismissKey(changed))
+    expect(nativeChatAskDismissKey(null)).toBeNull()
+  })
+})
 
 describe('extractPendingAsk', () => {
   it('recognizes an unregistered tool whose input matches the canonical questions shape', () => {
@@ -162,5 +181,25 @@ describe('parseAskFromStatus', () => {
       JSON.stringify({ questions: [{ question: 'Pick', options: ['a', 'b'] }] })
     )
     expect(prompt?.questions[0]?.options.map((o) => o.label)).toEqual(['a', 'b'])
+  })
+})
+
+describe('resolveNativeChatAsk', () => {
+  const transcript = [message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)])]
+
+  it('withholds transcript state until the read settles', () => {
+    expect(
+      resolveNativeChatAsk({ liveAsk: null, messages: transcript, transcriptSettled: false })
+    ).toBeNull()
+    expect(
+      resolveNativeChatAsk({ liveAsk: null, messages: transcript, transcriptSettled: true })
+    )?.toMatchObject(QUESTIONS_INPUT)
+  })
+
+  it('keeps a live ask authoritative while transcript history is unsettled', () => {
+    const liveAsk = { questions: [{ question: 'Live?', options: [], multiSelect: false }] }
+    expect(resolveNativeChatAsk({ liveAsk, messages: transcript, transcriptSettled: false })).toBe(
+      liveAsk
+    )
   })
 })

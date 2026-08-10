@@ -168,16 +168,28 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         className="w-72 pb-2"
         data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
       >
-        {showHostScopeControls && (
-          <SidebarHostScopeMenuSection
-            hostOptionsCount={hostOptions.length}
-            hostVisibilityLabel={hostVisibilityLabel}
-            hostOptions={hostOptions}
-            preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
-            setWorkspaceHostScope={setWorkspaceHostScope}
-            visibleWorkspaceHostIds={visibleWorkspaceHostIds}
-            setVisibleWorkspaceHostIds={setVisibleWorkspaceHostIds}
-          />
+        {/* Why: host + project filters share one section and the same single-row
+            shell as Sort by (label left, value right) so the menu stays flat. */}
+        {(showHostScopeControls || repos.length > 1) && (
+          <>
+            <DropdownMenuLabel>
+              {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.showSection', 'Show')}
+            </DropdownMenuLabel>
+            {showHostScopeControls && (
+              <SidebarHostScopeMenuSection
+                hostVisibilityLabel={hostVisibilityLabel}
+                hostOptions={hostOptions}
+                preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+                setWorkspaceHostScope={setWorkspaceHostScope}
+                visibleWorkspaceHostIds={visibleWorkspaceHostIds}
+                setVisibleWorkspaceHostIds={setVisibleWorkspaceHostIds}
+              />
+            )}
+            <SidebarRepositoryFilterSection
+              preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+            />
+            <DropdownMenuSeparator />
+          </>
         )}
 
         <DropdownMenuLabel>
@@ -286,9 +298,6 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
 
         <DropdownMenuSeparator />
         <SidebarWorkspaceFilterSection />
-
-        <DropdownMenuSeparator />
-        <SidebarRepositoryFilterSection />
       </DropdownMenuContent>
     </DropdownMenu>
   )

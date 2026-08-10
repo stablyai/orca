@@ -6,6 +6,10 @@ import type {
   PRInfo
 } from '../../../src/shared/types'
 import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
+import {
+  normalizeGitHubPRForBranchOutcome,
+  type GitHubPRForBranchResponse
+} from '../../../src/shared/github-pr-for-branch-outcome'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'
@@ -162,7 +166,20 @@ export async function fetchPRForBranch(
       branch: args.branch,
       linkedPRNumber: args.linkedPRNumber ?? null
     }),
-    readPRForBranch
+    (value) => {
+      const outcome = normalizeGitHubPRForBranchOutcome(value as GitHubPRForBranchResponse)
+      if (outcome.kind === 'upstream-error') {
+        throw new Error(outcome.message)
+      }
+      if (outcome.kind === 'no-pr') {
+        return null
+      }
+      const pr = readPRForBranch(outcome.pr)
+      if (!pr) {
+        throw new Error('GitHub returned an invalid pull request response.')
+      }
+      return pr
+    }
   )
 }
 

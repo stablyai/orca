@@ -15,6 +15,7 @@ export const FIXTURE_COMMENTS: PRComment[] = [
     body: 'Please update this handler before merge.',
     createdAt: '2026-05-14T10:00:00.000Z',
     url: 'https://github.com/acme/orca/pull/73#discussion_r101',
+    reactionSubjectId: 'PRRC_101',
     threadId: 'thread-open',
     path: 'src/handler.ts',
     isResolved: false
@@ -25,7 +26,8 @@ export const FIXTURE_COMMENTS: PRComment[] = [
     authorAvatarUrl: '',
     body: 'LGTM on the overall approach.',
     createdAt: '2026-05-14T11:00:00.000Z',
-    url: 'https://github.com/acme/orca/pull/73#issuecomment-102'
+    url: 'https://github.com/acme/orca/pull/73#issuecomment-102',
+    reactionSubjectId: 'IC_102'
   },
   {
     id: 103,
@@ -72,7 +74,8 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
       url: `https://github.com/acme/orca/pull/${prNumber}`,
       checksStatus: 'pending',
       updatedAt: '2026-05-15T00:00:00.000Z',
-      mergeable: 'MERGEABLE'
+      mergeable: 'MERGEABLE',
+      prRepo: { owner: 'acme', repo: 'orca' }
     }
     const prCacheEntries = {
       [`${repo.id}::${branch}`]: {
@@ -131,6 +134,7 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
       },
       fetchPRChecks: async () => [],
       fetchPRComments: async () => comments,
+      setPRCommentReaction: async () => true,
       fetchUpstreamStatus: async () => undefined,
       setUpstreamStatus: () => undefined
     }))

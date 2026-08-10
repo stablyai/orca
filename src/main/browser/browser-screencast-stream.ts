@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: screencast setup, CDP lifecycle, metadata normalization, and stream teardown stay together so frame behavior cannot drift across files. */
 import { Buffer } from 'node:buffer'
-import type { WebContents } from 'electron'
+import type { NativeImage, WebContents } from 'electron'
 import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame,
@@ -84,6 +84,20 @@ function scaleToFit(
     width: Math.round(width * scale),
     height: Math.round(height * scale)
   }
+}
+
+// Why: capturePage returns device pixels, so a hi-DPI viewport yields a bitmap several times
+// larger than the live path is allowed to send. Apply the caller's cap here too.
+function scaleSnapshotToFit(image: NativeImage, options: BrowserScreencastOptions): NativeImage {
+  const size = image.getSize()
+  if (!size.width || !size.height) {
+    return image
+  }
+  const fitted = scaleToFit(size.width, size.height, options.maxWidth, options.maxHeight)
+  if (fitted.width === size.width && fitted.height === size.height) {
+    return image
+  }
+  return image.resize(fitted)
 }
 
 function isNearSize(
@@ -518,8 +532,9 @@ export async function startBrowserScreencast(
             width: viewportWidth,
             height: viewportHeight
           })
+          const capture = scaleSnapshotToFit(nativeImage, options)
           const buffer =
-            options.format === 'png' ? nativeImage.toPNG() : nativeImage.toJPEG(options.quality)
+            options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
           if (buffer.byteLength > 0) {
             image = new Uint8Array(buffer)
           }

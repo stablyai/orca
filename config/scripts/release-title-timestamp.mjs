@@ -1,7 +1,7 @@
 const RELEASE_NAME_TIME_ZONE = 'America/Los_Angeles'
 
 /**
- * `07-31 13:54` — the timestamp segment of a dev build's release title, shown
+ * `Jul 31, 8:10PM` — the timestamp segment of a dev build's release title, shown
  * verbatim in both the GitHub releases list and the in-app build picker.
  *
  * Why Pacific while the tag's own stamp stays UTC: that stamp is a sort key, and
@@ -16,15 +16,17 @@ export function formatReleaseTitleTimestamp(date) {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-US', {
       timeZone: RELEASE_NAME_TIME_ZONE,
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
       minute: '2-digit',
-      // Why h23 rather than hour12: false: some ICU builds render midnight as 24.
-      hourCycle: 'h23'
+      hour12: true
     })
       .formatToParts(date)
       .map((part) => [part.type, part.value])
   )
-  return `${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`
+  // Assembled from parts rather than by string-editing the formatted output:
+  // recent ICU separates the time from AM/PM with U+202F, not a plain space, so
+  // a naive replace(' ', '') leaves the gap on some runtimes and not others.
+  return `${parts.month} ${parts.day}, ${parts.hour}:${parts.minute}${parts.dayPeriod.toUpperCase()}`
 }

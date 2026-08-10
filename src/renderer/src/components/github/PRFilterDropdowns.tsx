@@ -177,8 +177,9 @@ export default function PRFilterDropdowns({
             variant="outline"
             size="sm"
             className={cn(
-              'h-7 gap-1.5 rounded-md border-border/50 px-2 text-xs font-normal',
-              'bg-transparent hover:bg-muted/50',
+              // Why: solid fill + full foreground text so the control stays
+              // readable on both page canvas and the muted toolbar band.
+              'h-8 gap-1.5 rounded-md border-border/60 bg-background px-2.5 text-xs font-medium text-foreground shadow-xs hover:bg-muted/60',
               activeCount > 0 && 'border-border'
             )}
           >

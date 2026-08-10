@@ -196,7 +196,12 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
-  it('resumes active worktree-sleep stable-pane records when the preserved tab is hidden during activation', () => {
+  // Why: keep-alive mounts every tab of the active worktree and pane connect is
+  // not visibility-gated, so a hidden restorable pane cold-restores in place.
+  // Appending a resume tab here (the pre-keep-alive contract from #6800) forked
+  // a second surface onto the same provider session and stranded the hidden
+  // pane as a bare shell.
+  it('leaves a hidden restorable stable-pane record for in-place cold restore during activation', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'worktree-sleep' })
     useAppStore.setState({
@@ -214,13 +219,9 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
 
     const state = useAppStore.getState()
-    const resumedTab = state.tabsByWorktree['wt-1']?.find(
-      (tab) => tab.id !== 'tab-1' && tab.id !== 'tab-2'
-    )
-    expect(launched).toBe(1)
-    expect(resumedTab?.launchAgent).toBe('claude')
-    expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
-    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+    expect(launched).toBe(0)
+    expect(state.tabsByWorktree['wt-1']).toHaveLength(2)
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
   it('rechecks pane ownership after an earlier fresh resume activates a new terminal', () => {
