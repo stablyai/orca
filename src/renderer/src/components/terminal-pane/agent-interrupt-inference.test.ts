@@ -126,13 +126,52 @@ describe('agent interrupt inference', () => {
     tracker.dispose()
   })
 
-  it('requires a second Escape while Claude is waiting on AskUserQuestion', () => {
+  it('reports Escape while Claude is waiting on AskUserQuestion', () => {
     vi.useFakeTimers()
-    const entry = makeEntry({
-      state: 'waiting',
-      agentType: 'claude',
-      toolName: 'AskUserQuestion'
+    const inferInterrupt = vi.fn()
+    const tracker = createAgentInterruptInference({
+      paneKey: PANE_KEY,
+      getStatusEntry: () =>
+        makeEntry({ state: 'waiting', agentType: 'claude', toolName: 'AskUserQuestion' }),
+      inferInterrupt,
+      now: () => 1_100
     })
+
+    tracker.observeInputIntent('plain-escape')
+    vi.advanceTimersByTime(500)
+
+    expect(inferInterrupt).toHaveBeenCalledWith({
+      paneKey: PANE_KEY,
+      baselineUpdatedAt: 1_000,
+      baselineStateStartedAt: 900,
+      baselinePrompt: 'write tests',
+      baselineAgentType: 'claude',
+      intent: 'plain-escape'
+    })
+    tracker.dispose()
+  })
+
+  it('does not treat a single Escape as interrupt while Claude is working', () => {
+    vi.useFakeTimers()
+    const entry = makeEntry({ agentType: 'claude' })
+    const inferInterrupt = vi.fn()
+    const tracker = createAgentInterruptInference({
+      paneKey: PANE_KEY,
+      getStatusEntry: () => entry,
+      inferInterrupt,
+      now: () => 1_100
+    })
+
+    tracker.observeInputIntent('plain-escape')
+    vi.advanceTimersByTime(500)
+
+    expect(inferInterrupt).not.toHaveBeenCalled()
+    tracker.dispose()
+  })
+
+  it('infers interrupt on double Escape while Claude is working', () => {
+    vi.useFakeTimers()
+    const entry = makeEntry({ agentType: 'claude' })
     const inferInterrupt = vi.fn()
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
@@ -154,24 +193,6 @@ describe('agent interrupt inference', () => {
       intent: 'plain-escape',
       inputCount: 2
     })
-    tracker.dispose()
-  })
-
-  it('does not treat a single Escape as interrupt while Claude is working', () => {
-    vi.useFakeTimers()
-    const entry = makeEntry({ agentType: 'claude' })
-    const inferInterrupt = vi.fn()
-    const tracker = createAgentInterruptInference({
-      paneKey: PANE_KEY,
-      getStatusEntry: () => entry,
-      inferInterrupt,
-      now: () => 1_100
-    })
-
-    tracker.observeInputIntent('plain-escape')
-    vi.advanceTimersByTime(500)
-
-    expect(inferInterrupt).not.toHaveBeenCalled()
     tracker.dispose()
   })
 
