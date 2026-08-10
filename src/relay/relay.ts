@@ -41,6 +41,7 @@ import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
 import { AiVaultHandler } from './ai-vault-handler'
+import { SkillDiscoveryHandler } from './skill-discovery-handler'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import { PluginOverlayManager } from './plugin-overlay'
 import {
@@ -725,6 +726,9 @@ async function main(): Promise<void> {
 
   const _aiVaultHandler = new AiVaultHandler(dispatcher)
   void _aiVaultHandler
+
+  const _skillDiscoveryHandler = new SkillDiscoveryHandler(dispatcher)
+  void _skillDiscoveryHandler
 
   // Why: relay-hosted plugin provisioning is a later phase. Register the
   // enforcement boundary now with no consented identities or runtime services.

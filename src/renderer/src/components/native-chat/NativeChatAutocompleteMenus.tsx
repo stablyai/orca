@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { SkillSourceKind } from '../../../../shared/skills'
 import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
+import type { NativeChatSkillDiscoveryErrorKind } from './native-chat-picker-items'
 
 export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   autocomplete,
@@ -72,28 +73,16 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
       ) : null}
       {autocomplete.skillStatus === 'error' ? (
         <PickerStatus>
-          <span className="min-w-0 flex-1">
-            {autocomplete.skillErrorKind === 'unavailable'
-              ? translate(
-                  'components.native-chat.composer.skillsUnavailableHost',
-                  'Skills are unavailable for this host'
-                )
-              : translate(
-                  'components.native-chat.composer.skillsLoadFailed',
-                  'Could not load skills from this host'
-                )}
-          </span>
-          {autocomplete.skillErrorKind !== 'unavailable' ? (
-            <button
-              type="button"
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={onRetry}
-              className="flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-foreground hover:bg-accent hover:text-accent-foreground"
-            >
-              <RotateCcw className="size-3" />
-              {translate('components.native-chat.composer.retrySkills', 'Retry')}
-            </button>
-          ) : null}
+          <span className="min-w-0 flex-1">{getSkillErrorText(autocomplete.skillErrorKind)}</span>
+          <button
+            type="button"
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={onRetry}
+            className="flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            <RotateCcw className="size-3" />
+            {translate('components.native-chat.composer.retrySkills', 'Retry')}
+          </button>
         </PickerStatus>
       ) : null}
       {skills.map((item) => {
@@ -116,10 +105,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
         {autocomplete.skillStatus === 'loading'
           ? translate('components.native-chat.composer.loadingSkills', 'Loading skills...')
           : autocomplete.skillStatus === 'error'
-            ? translate(
-                'components.native-chat.composer.skillsLoadFailed',
-                'Could not load skills from this host'
-              )
+            ? getSkillErrorText(autocomplete.skillErrorKind)
             : emptyText
               ? emptyText
               : autocomplete.skillsEnabled
@@ -138,6 +124,25 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
     </div>
   )
 })
+
+function getSkillErrorText(errorKind: NativeChatSkillDiscoveryErrorKind | undefined): string {
+  if (errorKind === 'relay-upgrade-required') {
+    return translate(
+      'components.native-chat.composer.skillsSshRelayUpgrade',
+      'Reconnect this SSH host to enable skills.'
+    )
+  }
+  if (errorKind === 'runtime-upgrade-required') {
+    return translate(
+      'components.native-chat.composer.skillsRuntimeUpgrade',
+      'Update the remote runtime to enable skills.'
+    )
+  }
+  return translate(
+    'components.native-chat.composer.skillsLoadFailed',
+    'Could not load skills from this host'
+  )
+}
 
 function getPickerEmptyText(
   autocomplete: Extract<ComposerAutocomplete, { mode: 'slash' | 'skill' }>

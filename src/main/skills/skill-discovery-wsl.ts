@@ -58,7 +58,11 @@ export function buildWslSkillDiscoveryCommand(roots: readonly SkillScanRoot[]): 
   return buildEncodedWslBashCommand(lines.join('\n'))
 }
 
-function executeWslSkillDiscovery(distro: string, command: string): Promise<string> {
+function executeWslSkillDiscovery(
+  distro: string,
+  command: string,
+  signal?: AbortSignal
+): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       'wsl.exe',
@@ -67,7 +71,8 @@ function executeWslSkillDiscovery(distro: string, command: string): Promise<stri
         encoding: 'utf8',
         maxBuffer: WSL_SCAN_MAX_BUFFER_BYTES,
         timeout: WSL_SCAN_TIMEOUT_MS,
-        windowsHide: true
+        windowsHide: true,
+        signal
       },
       (error, stdout) => {
         if (error) {
@@ -180,7 +185,9 @@ export async function discoverSkillsInWsl(args: {
   distro: string
   homeDir: string
   cwd: string
+  signal?: AbortSignal
 }): Promise<SkillDiscoveryResult> {
+  args.signal?.throwIfAborted()
   // Plugin roots are resolved (in JS) from metadata this first wsl.exe call
   // reads, then fed to the scan's own wsl.exe call below — two sequential
   // process boots. That is a deliberate one-time-per-pane cost (the renderer
@@ -194,6 +201,7 @@ export async function discoverSkillsInWsl(args: {
   try {
     pluginRoots = await discoverClaudePluginSkillSourcesInWsl(args)
   } catch {
+    args.signal?.throwIfAborted()
     pluginRoots = []
   }
   const roots = [
@@ -207,6 +215,12 @@ export async function discoverSkillsInWsl(args: {
   ]
   // Why: UNC traversal applies Windows casing and symlink rules. The distro
   // must own enumeration, metadata reads, and canonical path identity.
-  const output = await executeWslSkillDiscovery(args.distro, buildWslSkillDiscoveryCommand(roots))
+  args.signal?.throwIfAborted()
+  const output = await executeWslSkillDiscovery(
+    args.distro,
+    buildWslSkillDiscoveryCommand(roots),
+    args.signal
+  )
+  args.signal?.throwIfAborted()
   return parseWslSkillDiscoveryOutput(output, roots)
 }

@@ -56,7 +56,11 @@ export function parseWslClaudePluginMetadataOutput(
   return contents
 }
 
-function executeWslMetadataRead(distro: string, command: string): Promise<string> {
+function executeWslMetadataRead(
+  distro: string,
+  command: string,
+  signal?: AbortSignal
+): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       'wsl.exe',
@@ -65,7 +69,8 @@ function executeWslMetadataRead(distro: string, command: string): Promise<string
         encoding: 'utf8',
         maxBuffer: WSL_METADATA_MAX_BUFFER_BYTES,
         timeout: WSL_METADATA_TIMEOUT_MS,
-        windowsHide: true
+        windowsHide: true,
+        signal
       },
       (error, stdout) => {
         if (error) {
@@ -82,15 +87,19 @@ export async function discoverClaudePluginSkillSourcesInWsl(args: {
   distro: string
   homeDir: string
   cwd: string
+  signal?: AbortSignal
 }): Promise<SkillScanRoot[]> {
+  args.signal?.throwIfAborted()
   const paths = getClaudePluginMetadataPaths(args.homeDir, args.cwd, pathPosix)
   const orderedPaths = [paths.installedPlugins, ...paths.settings]
   // Why: plugin enablement and install paths belong to the distro just like
   // SKILL.md identity; reading them through UNC could apply Windows semantics.
   const output = await executeWslMetadataRead(
     args.distro,
-    buildWslClaudePluginMetadataCommand(orderedPaths)
+    buildWslClaudePluginMetadataCommand(orderedPaths),
+    args.signal
   )
+  args.signal?.throwIfAborted()
   const [installedPlugins, ...settings] = parseWslClaudePluginMetadataOutput(
     output,
     orderedPaths.length

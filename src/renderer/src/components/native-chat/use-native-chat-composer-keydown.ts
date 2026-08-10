@@ -63,7 +63,10 @@ export function useNativeChatComposerKeyDown({
           setActiveSuggestion((index) => (index - 1 + items.length) % items.length)
           return
         }
-        if ((event.key === 'Enter' || event.key === 'Tab') && items.length > 0) {
+        if (
+          (event.key === 'Enter' || (event.key === 'Tab' && !event.shiftKey)) &&
+          items.length > 0
+        ) {
           event.preventDefault()
           const item = items[activeSuggestion] ?? items[0]
           if (event.key === 'Enter' && item.kind === 'command') {

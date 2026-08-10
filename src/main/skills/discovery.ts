@@ -1,29 +1,32 @@
 import type { Dirent } from 'node:fs'
-import { open, readdir, realpath, stat } from 'node:fs/promises'
+import { readdir, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
-import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
+import { isAbsolute, join, relative, sep } from 'node:path'
 import type { Repo } from '../../shared/types'
-import type {
-  DiscoveredSkill,
-  SkillDiscoveryResult,
-  SkillDiscoverySource
-} from '../../shared/skills'
 import {
-  buildSkillDiscoverySources,
-  compareSkills,
-  sourceKindForSkill,
-  sourceLabelForSkill,
-  stablePathId,
-  type SkillScanRoot
-} from './skill-discovery-sources'
+  SKILL_DISCOVERY_LIMITS,
+  type DiscoveredSkill,
+  type SkillDiscoveryResult,
+  type SkillDiscoverySource
+} from '../../shared/skills'
+import { buildSkillDiscoverySources, compareSkills } from './skill-discovery-sources'
 import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
+import { runSkillCandidateTasks } from './skill-candidate-concurrency'
+import { scanSkillFile, type ScannedSkill } from './skill-file-scanner'
 
 export { buildSkillDiscoverySources } from './skill-discovery-sources'
 
 const SKILL_FILE_NAME = 'SKILL.md'
-const MAX_MARKDOWN_BYTES = 256 * 1024
-const MAX_SKILL_FILES = 200
+
+/** Node-version-safe alternative to signal.throwIfAborted(); an aborted scan
+ *  must reject rather than resolve with partial results. */
+function throwIfDiscoveryAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    const error = new Error('Skill discovery aborted')
+    error.name = 'AbortError'
+    throw error
+  }
+}
 
 async function pathExists(pathValue: string): Promise<boolean> {
   try {
@@ -46,10 +49,19 @@ function isWithinDepth(rootPath: string, childPath: string, maxDepth: number): b
   return rel.split(sep).length <= maxDepth
 }
 
-async function findSkillFiles(rootPath: string, maxDepth: number): Promise<string[]> {
+async function findSkillFiles(
+  rootPath: string,
+  maxDepth: number,
+  budget: { remaining: number },
+  signal?: AbortSignal
+): Promise<string[]> {
   const out: string[] = []
   const visitedDirectoryPaths = new Set<string>()
   async function visit(dirPath: string): Promise<void> {
+    throwIfDiscoveryAborted(signal)
+    if (budget.remaining <= 0) {
+      return
+    }
     if (!isWithinDepth(rootPath, dirPath, maxDepth)) {
       return
     }
@@ -70,16 +82,26 @@ async function findSkillFiles(rootPath: string, maxDepth: number): Promise<strin
     } catch {
       return
     }
+    entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0))
     for (const entry of entries) {
+      throwIfDiscoveryAborted(signal)
+      if (budget.remaining <= 0) {
+        return
+      }
       const entryPath = join(dirPath, entry.name)
       if (entry.name === SKILL_FILE_NAME) {
         if (entry.isFile()) {
+          budget.remaining -= 1
           out.push(entryPath)
           continue
         }
         if (entry.isSymbolicLink()) {
           try {
             if ((await stat(entryPath)).isFile()) {
+              if (budget.remaining <= 0) {
+                return
+              }
+              budget.remaining -= 1
               out.push(entryPath)
             }
           } catch {
@@ -109,123 +131,15 @@ async function findSkillFiles(rootPath: string, maxDepth: number): Promise<strin
   return out
 }
 
-async function countFiles(dirPath: string): Promise<number> {
-  let count = 0
-  const visitedDirectoryPaths = new Set<string>()
-  async function visit(currentPath: string): Promise<void> {
-    if (count >= MAX_SKILL_FILES) {
-      return
-    }
-    let resolvedPath: string
-    try {
-      resolvedPath = await realpath(currentPath)
-    } catch {
-      return
-    }
-    if (visitedDirectoryPaths.has(resolvedPath)) {
-      return
-    }
-    visitedDirectoryPaths.add(resolvedPath)
-
-    let entries: Dirent[]
-    try {
-      entries = await readdir(currentPath, { withFileTypes: true })
-    } catch {
-      return
-    }
-    for (const entry of entries) {
-      if (count >= MAX_SKILL_FILES) {
-        return
-      }
-      const entryPath = join(currentPath, entry.name)
-      if (entry.isFile()) {
-        count += 1
-      } else if (entry.isDirectory()) {
-        await visit(entryPath)
-      } else if (entry.isSymbolicLink()) {
-        try {
-          if ((await stat(entryPath)).isFile()) {
-            count += 1
-          }
-        } catch {
-          // Broken links do not contribute to the skill package file count.
-        }
-      }
-    }
-  }
-  await visit(dirPath)
-  return count
-}
-
-async function readSkillSummary(skillFilePath: string): Promise<{
-  name: string | null
-  description: string | null
-  updatedAt: number | null
-} | null> {
-  try {
-    const fileStat = await stat(skillFilePath)
-    const file = await open(skillFilePath, 'r')
-    let content = ''
-    try {
-      const buffer = Buffer.alloc(Math.min(fileStat.size, MAX_MARKDOWN_BYTES))
-      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
-      content = buffer.toString('utf8', 0, bytesRead)
-    } finally {
-      await file.close()
-    }
-    return {
-      ...summarizeSkillMarkdown(content),
-      updatedAt: fileStat.mtimeMs
-    }
-  } catch {
-    return null
-  }
-}
-
-type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
-
-async function scanRoot(root: SkillScanRoot): Promise<ScannedSkill[]> {
-  const maxDepth = root.sourceKind === 'plugin' ? 9 : 4
-  const skillFiles = await findSkillFiles(root.path, maxDepth)
-  const skills = await Promise.all(
-    skillFiles.map(async (skillFilePath): Promise<ScannedSkill | null> => {
-      // Why: path identity belongs to the scanning host; canonicalizing before
-      // returning prevents symlinked roots from becoming duplicate picker rows.
-      const canonicalSkillFilePath = await realpath(skillFilePath).catch(() => skillFilePath)
-      const directoryPath = dirname(skillFilePath)
-      const summary = await readSkillSummary(skillFilePath)
-      if (!summary) {
-        return null
-      }
-      const sourceKind = sourceKindForSkill(root, skillFilePath, { relative, sep })
-      return {
-        id: stablePathId(canonicalSkillFilePath),
-        name: summary.name ?? basename(directoryPath),
-        description: summary.description,
-        // Copy: `root.providers` is shared across every skill/source from this
-        // root, so the dedup merge below must not mutate the aliased array.
-        providers: [...root.providers],
-        sourceKind,
-        sourceLabel: sourceLabelForSkill(root, sourceKind),
-        rootPath: root.path,
-        directoryPath,
-        skillFilePath,
-        installed: true,
-        fileCount: await countFiles(directoryPath),
-        updatedAt: summary.updatedAt,
-        canonicalSkillFilePath
-      } satisfies ScannedSkill
-    })
-  )
-  return skills.filter((skill): skill is ScannedSkill => skill !== null)
-}
-
 export async function discoverSkills(args: {
   repos?: Repo[]
   homeDir?: string
   cwd?: string
   includeCwd?: boolean
+  signal?: AbortSignal
 }): Promise<SkillDiscoveryResult> {
+  const signal = args.signal
+  throwIfDiscoveryAborted(signal)
   const homeDir = args.homeDir ?? homedir()
   const roots = [
     ...buildSkillDiscoverySources({ ...args, homeDir }),
@@ -235,30 +149,45 @@ export async function discoverSkills(args: {
       ? await discoverClaudePluginSkillSources({ homeDir, cwd: args.cwd })
       : [])
   ]
-  const sources: SkillDiscoverySource[] = []
-  const skillGroups = await Promise.all(
-    roots.map(async (root) => {
+    .filter((root) => root.path.length <= SKILL_DISCOVERY_LIMITS.pathLength)
+    .slice(0, SKILL_DISCOVERY_LIMITS.sources)
+  const budget = { remaining: SKILL_DISCOVERY_LIMITS.skills }
+  const rootScans = await runSkillCandidateTasks(
+    roots.map((root) => async () => {
+      throwIfDiscoveryAborted(signal)
       const exists = await pathExists(root.path)
-      sources.push({
-        ...root,
-        providers: [...root.providers],
-        exists,
-        skippedReason: exists ? undefined : 'missing'
-      })
-      if (!exists) {
-        return []
-      }
-      return scanRoot(root)
+      const maxDepth = root.sourceKind === 'plugin' ? 9 : 4
+      const skillFiles = exists ? await findSkillFiles(root.path, maxDepth, budget, signal) : []
+      return { root, exists, skillFiles }
     })
   )
+  throwIfDiscoveryAborted(signal)
+  const sources: SkillDiscoverySource[] = rootScans.map(({ root, exists }) => ({
+    ...root,
+    providers: [...root.providers],
+    exists,
+    skippedReason: exists ? undefined : 'missing'
+  }))
+  const scannedSkills = (
+    await runSkillCandidateTasks(
+      rootScans.flatMap(({ root, skillFiles }) =>
+        skillFiles.map((skillFilePath) => () => scanSkillFile(root, skillFilePath, signal))
+      )
+    )
+  ).filter((skill): skill is ScannedSkill => skill !== null)
+  throwIfDiscoveryAborted(signal)
   const seen = new Map<string, DiscoveredSkill>()
-  for (const skill of skillGroups.flat()) {
+  for (const skill of scannedSkills) {
     // Why: overlapping repo/cwd roots and symlinked provider homes can reach
     // the same file. Keep the first source's higher-level scope identity, but
     // record every contributing root so per-agent visibility survives dedup.
     const existing = seen.get(skill.canonicalSkillFilePath)
     if (existing) {
-      if (existing.rootPaths && !existing.rootPaths.includes(skill.rootPath)) {
+      if (
+        existing.rootPaths &&
+        existing.rootPaths.length < SKILL_DISCOVERY_LIMITS.rootPaths &&
+        !existing.rootPaths.includes(skill.rootPath)
+      ) {
         existing.rootPaths.push(skill.rootPath)
       }
       // Why: providers is per-agent visibility just like rootPaths; keeping only
@@ -279,7 +208,7 @@ export async function discoverSkills(args: {
     seen.set(canonicalSkillFilePath, { ...publicSkill, rootPaths: [skill.rootPath] })
   }
   return {
-    skills: Array.from(seen.values()).sort(compareSkills),
+    skills: Array.from(seen.values()).sort(compareSkills).slice(0, SKILL_DISCOVERY_LIMITS.skills),
     sources: sources.sort((a, b) =>
       a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
     ),

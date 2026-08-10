@@ -685,6 +685,9 @@ import {
 } from '../project-runtime-git-options'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { SkillDiscoveryForPaneResponse } from '../../shared/skills'
+import { discoverPaneSkills } from '../skills/pane-skill-discovery'
+import { resolvePaneSkillDiscoveryWorkspace } from '../skills/pane-skill-discovery-workspace'
 import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
 import {
   scanLocalRepoWorktreesForResolution,
@@ -12386,6 +12389,37 @@ export class OrcaRuntimeService {
     return this.store && worktreeId
       ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), worktreeId)
       : undefined
+  }
+
+  // Why: the pane request carries identity only; this runtime derives the scan
+  // directory and execution host from its own state, so a renderer-claimed path
+  // can never reach a remote scan.
+  async discoverSkillsForPane(
+    args: { worktreeId: string; terminalTabId?: string },
+    signal?: AbortSignal
+  ): Promise<SkillDiscoveryForPaneResponse> {
+    const store = this.requireStore()
+    const scope = parseWorkspaceKey(args.worktreeId)
+    const metadataWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : args.worktreeId
+    const workspace = resolvePaneSkillDiscoveryWorkspace({
+      worktreeId: args.worktreeId,
+      terminalTabId: args.terminalTabId,
+      repos: store.getRepos(),
+      projectGroups: store.getProjectGroups?.() ?? [],
+      folderWorkspaces: store.getFolderWorkspaces?.() ?? [],
+      worktreeMeta:
+        scope?.type === 'folder' ? undefined : store.getWorktreeMeta(metadataWorktreeId),
+      sessions: (store.getWorkspaceSessionHostIds?.() ?? [LOCAL_EXECUTION_HOST_ID]).map(
+        (hostId) => ({ hostId, session: store.getWorkspaceSession(hostId) })
+      )
+    })
+    return discoverPaneSkills({
+      worktreeId: args.worktreeId,
+      cwd: workspace.cwd,
+      connectionId: workspace.connectionId,
+      repos: [],
+      signal
+    })
   }
 
   getTerminalOrchestrationCliCommand(handle: string): 'orca' | 'orca-ide' {

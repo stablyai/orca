@@ -55,16 +55,18 @@ export function resolveSkillDiscoveryTarget(
 
 export async function discoverSkillsOnTarget(
   target: ResolvedSkillDiscoveryTarget,
-  repos: readonly Repo[]
+  repos: readonly Repo[],
+  signal?: AbortSignal
 ): Promise<SkillDiscoveryResult> {
   if (target.kind === 'wsl') {
     return discoverSkillsInWsl({
       distro: target.distro,
       homeDir: target.homeDir,
-      cwd: target.cwd
+      cwd: target.cwd,
+      signal
     })
   }
   return target.cwd
-    ? discoverSkills({ repos: [], cwd: target.cwd })
-    : discoverSkills({ repos: [...repos] })
+    ? discoverSkills({ repos: [], cwd: target.cwd, signal })
+    : discoverSkills({ repos: [...repos], signal })
 }

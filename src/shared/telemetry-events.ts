@@ -531,7 +531,7 @@ const nativeChatSendClassifiedSchema = z
 const nativeChatSkillDiscoverySchema = z
   .object({
     agent_kind: agentKindSchema,
-    outcome: z.enum(['ready', 'error', 'timeout', 'unavailable']),
+    outcome: z.enum(['ready', 'error', 'timeout', 'upgrade-required']),
     execution_host_kind: z.enum(['local', 'runtime', 'ssh'])
   })
   .strict()

@@ -389,3 +389,55 @@ describe('skill discovery', () => {
     expect(result.skills.map((skill) => skill.name)).not.toContain('Too Deep')
   })
 })
+
+describe('skill discovery cancellation', () => {
+  async function makeScanFixture(): Promise<{ home: string; repo: string }> {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-abort-'))
+    const home = join(root, 'home')
+    const repo = join(root, 'repo')
+    const repoSkill = join(repo, '.agents', 'skills', 'docs')
+    await mkdir(join(home, '.codex', 'skills', 'review'), { recursive: true })
+    await mkdir(repoSkill, { recursive: true })
+    await writeFile(join(home, '.codex', 'skills', 'review', 'SKILL.md'), '# Review\n')
+    await writeFile(join(repoSkill, 'SKILL.md'), '# Docs\n')
+    return { home, repo }
+  }
+
+  it('rejects an already-aborted scan instead of resolving with empty results', async () => {
+    const { home, repo } = await makeScanFixture()
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      discoverSkills({ homeDir: home, cwd: repo, repos: [], signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('rejects when aborted mid-scan and never publishes partial data', async () => {
+    const { home, repo } = await makeScanFixture()
+    const controller = new AbortController()
+    const pending = discoverSkills({
+      homeDir: home,
+      cwd: repo,
+      repos: [],
+      signal: controller.signal
+    })
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('returns identical successful results when a live signal is provided', async () => {
+    const { home, repo } = await makeScanFixture()
+    const controller = new AbortController()
+    const withSignal = await discoverSkills({
+      homeDir: home,
+      cwd: repo,
+      repos: [],
+      signal: controller.signal
+    })
+    const withoutSignal = await discoverSkills({ homeDir: home, cwd: repo, repos: [] })
+    expect(withSignal.skills.map((skill) => skill.name).sort()).toEqual(
+      withoutSignal.skills.map((skill) => skill.name).sort()
+    )
+    expect(withSignal.skills.length).toBeGreaterThan(0)
+  })
+})

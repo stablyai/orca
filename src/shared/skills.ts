@@ -103,6 +103,92 @@ export const SkillDiscoveryTargetSchema: z.ZodType<SkillDiscoveryTarget> = z.obj
     .optional()
 })
 
+export type PaneSkillDiscoveryTarget = {
+  worktreeId: string
+  /** Pane whose runtime-persisted startup directory should be scanned. */
+  terminalTabId?: string
+}
+
+export const SKILL_DISCOVERY_LIMITS = {
+  descriptionLength: 8192,
+  nameLength: 512,
+  pathLength: 4096,
+  rootPaths: 64,
+  skills: 5000,
+  sources: 1000
+} as const
+
+/** Pane discovery carries workspace/pane identity only — never a path or SSH
+ *  connection id. The owning runtime derives the scan directory from its own
+ *  persisted state. */
+export const PaneSkillDiscoveryTargetSchema: z.ZodType<PaneSkillDiscoveryTarget> = z.object({
+  worktreeId: z
+    .string()
+    .min(1)
+    .max(SKILL_DISCOVERY_LIMITS.pathLength + 512),
+  terminalTabId: z.string().min(1).max(512).optional()
+})
+
+/** Relay upgrade is a typed payload, not an error: old runtimes strip unknown
+ *  request fields and old relays answer -32601, so clients must never have to
+ *  string-match error messages to detect version skew. */
+export type SkillDiscoveryForPaneResponse =
+  | { status: 'ok'; result: SkillDiscoveryResult }
+  | { status: 'relay-upgrade-required' }
+
+const SKILL_PROVIDER_VALUES = ['codex', 'claude', 'agent-skills'] as const
+const SKILL_SOURCE_KIND_VALUES = ['home', 'repo', 'bundled', 'plugin'] as const
+
+const boundedString = (max: number): z.ZodString => z.string().max(max)
+
+/** Validates untrusted skill metadata at the SSH relay boundary before it can
+ *  enter renderer state: bounded strings, known enums, finite numbers. */
+export const SkillDiscoveryResultSchema = z.object({
+  skills: z
+    .array(
+      z.object({
+        id: boundedString(512),
+        name: boundedString(SKILL_DISCOVERY_LIMITS.nameLength),
+        description: boundedString(SKILL_DISCOVERY_LIMITS.descriptionLength).nullable(),
+        providers: z.array(z.enum(SKILL_PROVIDER_VALUES)).max(8),
+        sourceKind: z.enum(SKILL_SOURCE_KIND_VALUES),
+        sourceLabel: boundedString(1024),
+        rootPath: boundedString(SKILL_DISCOVERY_LIMITS.pathLength),
+        rootPaths: z
+          .array(boundedString(SKILL_DISCOVERY_LIMITS.pathLength))
+          .max(SKILL_DISCOVERY_LIMITS.rootPaths)
+          .optional(),
+        directoryPath: boundedString(SKILL_DISCOVERY_LIMITS.pathLength),
+        skillFilePath: boundedString(SKILL_DISCOVERY_LIMITS.pathLength),
+        installed: z.boolean(),
+        fileCount: z.number().int().min(0).max(1_000_000),
+        updatedAt: z.number().finite().nullable()
+      })
+    )
+    .max(SKILL_DISCOVERY_LIMITS.skills),
+  sources: z
+    .array(
+      z.object({
+        id: boundedString(512),
+        label: boundedString(1024),
+        path: boundedString(SKILL_DISCOVERY_LIMITS.pathLength),
+        sourceKind: z.enum(SKILL_SOURCE_KIND_VALUES),
+        providers: z.array(z.enum(SKILL_PROVIDER_VALUES)).max(8),
+        owner: boundedString(64).nullable(),
+        exists: z.boolean(),
+        skippedReason: z.enum(['missing', 'remote-repo']).optional()
+      })
+    )
+    .max(SKILL_DISCOVERY_LIMITS.sources),
+  scannedAt: z.number().finite()
+})
+
+export function parseSkillDiscoveryResult(value: unknown): SkillDiscoveryResult {
+  // Why: an unrecognized source owner only fails provider filtering, so the
+  // schema keeps owner as a bounded string rather than pinning AgentType.
+  return SkillDiscoveryResultSchema.parse(value) as SkillDiscoveryResult
+}
+
 export type SkillFrontmatterSummary = {
   name: string | null
   description: string | null

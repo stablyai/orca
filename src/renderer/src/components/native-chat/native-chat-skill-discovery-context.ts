@@ -1,6 +1,6 @@
 import type { AppState } from '../../store/types'
-import type { SkillDiscoveryTarget } from '../../../../shared/skills'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import type { PaneSkillDiscoveryTarget, SkillDiscoveryTarget } from '../../../../shared/skills'
+import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
@@ -8,17 +8,24 @@ import {
 } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { resolveNativeChatFolderSshRoute } from './native-chat-folder-ssh-route'
+import { resolveNativeChatWorktreeSshTransport } from './native-chat-worktree-ssh-transport'
 
 export type NativeChatSkillStateInputs = Pick<
   AppState,
   | 'activeRepoId'
+  | 'activeWorkspaceExecutionHostId'
   | 'activeWorktreeId'
+  | 'detectedWorktreesByRepo'
   | 'folderWorkspaces'
   | 'projectGroups'
   | 'projects'
   | 'repos'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
+  | 'runtimeEnvironments'
   | 'settings'
+  | 'sshConnectionStates'
+  | 'sshStateByEnvironment'
   | 'tabsByWorktree'
   | 'worktreesByRepo'
 >
@@ -30,24 +37,39 @@ type NativeChatSkillWorktreeState = {
   worktreesByRepo: Record<string, readonly { id: string; path: string }[]>
 }
 
-export type NativeChatSkillDiscoveryContext = {
-  key: string
-  cwd: string
-  executionHostKind: 'local' | 'runtime' | 'ssh'
-  runtimeTarget: RuntimeClientTarget
-  discoveryTarget: SkillDiscoveryTarget
-}
+export type NativeChatSkillDiscoveryContext =
+  | {
+      key: string
+      cwd: string
+      executionHostKind: 'local' | 'runtime'
+      runtimeTarget: RuntimeClientTarget
+      discoveryTarget: SkillDiscoveryTarget
+    }
+  | {
+      key: string
+      executionHostKind: 'ssh'
+      runtimeTarget: RuntimeClientTarget
+      /** Identity only; the owning runtime derives the scanned directory. */
+      paneTarget: PaneSkillDiscoveryTarget
+      /** Known-disconnected host: skip the doomed RPC and show the host error. */
+      sshDisconnected: boolean
+    }
 
 export function selectNativeChatSkillStateInputs(state: AppState): NativeChatSkillStateInputs {
   return {
     activeRepoId: state.activeRepoId,
+    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
     activeWorktreeId: state.activeWorktreeId,
+    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
     folderWorkspaces: state.folderWorkspaces,
     projectGroups: state.projectGroups,
     projects: state.projects,
     repos: state.repos,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
+    runtimeEnvironments: state.runtimeEnvironments,
     settings: state.settings,
+    sshConnectionStates: state.sshConnectionStates,
+    sshStateByEnvironment: state.sshStateByEnvironment,
     tabsByWorktree: state.tabsByWorktree,
     worktreesByRepo: state.worktreesByRepo
   }
@@ -84,7 +106,76 @@ export function resolveNativeChatSkillDiscoveryContext(
   if (!worktreeId) {
     return null
   }
+  const hostId = getExecutionHostIdForWorktree(state, worktreeId)
+  const parsedHost = parseExecutionHostId(hostId)
   const workspaceScope = parseWorkspaceKey(worktreeId)
+  const folderSshRoute =
+    workspaceScope?.type === 'folder'
+      ? resolveNativeChatFolderSshRoute(state, workspaceScope.folderWorkspaceId)
+      : { kind: 'missing' as const }
+  if (folderSshRoute.kind === 'ambiguous') {
+    return null
+  }
+  if (workspaceScope?.type === 'folder' && folderSshRoute.kind === 'missing') {
+    return null
+  }
+  const sshHost =
+    folderSshRoute.kind === 'resolved'
+      ? parseExecutionHostId(folderSshRoute.hostId)
+      : parsedHost?.kind === 'ssh'
+        ? parsedHost
+        : null
+  if (sshHost?.kind === 'ssh') {
+    const explicitRuntimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(
+      state,
+      worktreeId
+    )
+    const catalogTransport =
+      folderSshRoute.kind === 'resolved'
+        ? { kind: 'resolved' as const, environmentId: folderSshRoute.environmentId }
+        : resolveNativeChatWorktreeSshTransport(state, worktreeId, sshHost.id)
+    if (
+      catalogTransport.kind === 'ambiguous' ||
+      (explicitRuntimeEnvironmentId &&
+        catalogTransport.kind === 'resolved' &&
+        catalogTransport.environmentId !== explicitRuntimeEnvironmentId)
+    ) {
+      return null
+    }
+    const runtimeEnvironmentId =
+      explicitRuntimeEnvironmentId ??
+      (catalogTransport.kind === 'resolved' ? catalogTransport.environmentId : null)
+    // Why: unresolved paired-runtime transport can collide with a local target
+    // id; failing closed prevents the identity-only RPC reaching the wrong host.
+    if (!runtimeEnvironmentId && isRuntimeOwnedSshTargetId(sshHost.targetId)) {
+      return null
+    }
+    const connectionState = runtimeEnvironmentId
+      ? state.sshStateByEnvironment
+          .get(runtimeEnvironmentId)
+          ?.connectionStates.get(sshHost.targetId)
+      : state.sshConnectionStates.get(sshHost.targetId)
+    // Why: an unhydrated environment bucket is unknown, not disconnected — the
+    // owning runtime answers authoritatively. A missing local entry is offline.
+    const status = connectionState?.status ?? (runtimeEnvironmentId ? null : 'disconnected')
+    return {
+      key: JSON.stringify([
+        'ssh',
+        runtimeEnvironmentId ?? null,
+        sshHost.id,
+        connectionState?.connectionGeneration ?? 0,
+        worktreeId,
+        terminalTabId
+      ]),
+      executionHostKind: 'ssh',
+      runtimeTarget: runtimeEnvironmentId
+        ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+        : { kind: 'local' },
+      paneTarget: { worktreeId, terminalTabId },
+      sshDisconnected: status !== null && status !== 'connected'
+    }
+  }
+
   const cwd =
     resolveNativeChatSkillDiscoveryCwd(state, terminalTabId) ??
     (workspaceScope?.type === 'folder'
@@ -94,18 +185,6 @@ export function resolveNativeChatSkillDiscoveryContext(
       : null)
   if (!cwd) {
     return null
-  }
-
-  const hostId = getExecutionHostIdForWorktree(state, worktreeId)
-  const parsedHost = parseExecutionHostId(hostId)
-  if (parsedHost?.kind === 'ssh') {
-    return {
-      key: JSON.stringify(['ssh', hostId, cwd]),
-      cwd,
-      executionHostKind: 'ssh',
-      runtimeTarget: { kind: 'local' },
-      discoveryTarget: { cwd, worktreeId }
-    }
   }
 
   const runtimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
@@ -140,6 +219,48 @@ export function resolveNativeChatSkillDiscoveryContext(
     // owned panes resolve host semantics on the runtime, never here).
     discoveryTarget: { cwd, worktreeId, ...(projectRuntime ? { projectRuntime } : {}) }
   }
+}
+
+export function resolveNativeChatSkillDiscoverySubscriptionKey(
+  state: AppState,
+  terminalTabId: string,
+  enabled = true
+): string | null {
+  if (!enabled) {
+    return null
+  }
+  const context = resolveNativeChatSkillDiscoveryContext(
+    selectNativeChatSkillStateInputs(state),
+    terminalTabId
+  )
+  return getNativeChatSkillDiscoverySubscriptionKey(context)
+}
+
+export function getNativeChatSkillDiscoverySubscriptionKey(
+  context: NativeChatSkillDiscoveryContext | null
+): string | null {
+  if (!context) {
+    return null
+  }
+  return context.executionHostKind === 'ssh'
+    ? JSON.stringify([context.key, context.sshDisconnected])
+    : context.key
+}
+
+export function resolveSubscribedNativeChatSkillDiscoveryContext(
+  state: AppState,
+  terminalTabId: string,
+  enabled: boolean,
+  subscriptionKey: string | null
+): NativeChatSkillDiscoveryContext | null {
+  if (!enabled) {
+    return null
+  }
+  const context = resolveNativeChatSkillDiscoveryContext(
+    selectNativeChatSkillStateInputs(state),
+    terminalTabId
+  )
+  return getNativeChatSkillDiscoverySubscriptionKey(context) === subscriptionKey ? context : null
 }
 
 function findTerminalTab(

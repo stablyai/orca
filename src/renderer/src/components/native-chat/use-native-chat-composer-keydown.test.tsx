@@ -52,10 +52,10 @@ function setup(autocomplete: ComposerAutocomplete = picker(), composing = false)
   return { handler: hook.result.current, callbacks }
 }
 
-function keyEvent(key: string, isComposing = false) {
+function keyEvent(key: string, isComposing = false, shiftKey = false) {
   return {
     key,
-    shiftKey: false,
+    shiftKey,
     keyCode: isComposing ? 229 : 0,
     nativeEvent: { isComposing },
     preventDefault: vi.fn()
@@ -73,6 +73,17 @@ describe('useNativeChatComposerKeyDown', () => {
     tab.handler(keyEvent('Tab') as never)
     expect(tab.callbacks.completePickerItem).toHaveBeenCalledWith(COMMAND)
     expect(tab.callbacks.dispatchPickerCommand).not.toHaveBeenCalled()
+  })
+
+  it('leaves Shift+Tab available for keyboard focus navigation', () => {
+    const { handler, callbacks } = setup()
+    const event = keyEvent('Tab', false, true)
+
+    handler(event as never)
+
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(callbacks.completePickerItem).not.toHaveBeenCalled()
+    expect(callbacks.dispatchPickerCommand).not.toHaveBeenCalled()
   })
 
   it('falls through to composer send when the open picker has no options', () => {

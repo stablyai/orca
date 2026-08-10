@@ -7,7 +7,10 @@ vi.mock('../../../skills/skill-discovery-target', () => ({
 }))
 
 import { SKILL_METHODS } from './skills'
-import { resolveSkillDiscoveryTarget } from '../../../skills/skill-discovery-target'
+import {
+  discoverSkillsOnTarget,
+  resolveSkillDiscoveryTarget
+} from '../../../skills/skill-discovery-target'
 
 const WSL_RUNTIME = {
   status: 'resolved',
@@ -63,6 +66,20 @@ describe('skills.discover RPC', () => {
     expect(resolveProjectRuntimeForWorktree).not.toHaveBeenCalled()
     expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
       expect.objectContaining({ projectRuntime: WSL_RUNTIME })
+    )
+  })
+
+  it('propagates request cancellation to native and WSL discovery targets', async () => {
+    const signal = new AbortController().signal
+    const context = makeContext({})
+    context.signal = signal
+
+    await discoverMethod().handler({ cwd: '/repo' }, context)
+
+    expect(vi.mocked(discoverSkillsOnTarget)).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'native-host', cwd: '/repo' }),
+      [],
+      signal
     )
   })
 })

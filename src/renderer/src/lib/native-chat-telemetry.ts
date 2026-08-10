@@ -91,7 +91,7 @@ export function emitNativeChatSendClassified(args: {
 
 export function emitNativeChatSkillDiscovery(args: {
   agent: NativeChatTelemetryAgent
-  outcome: 'ready' | 'error' | 'timeout' | 'unavailable'
+  outcome: 'ready' | 'error' | 'timeout' | 'upgrade-required'
   executionHostKind: 'local' | 'runtime' | 'ssh'
 }): void {
   track('native_chat_skill_discovery', {

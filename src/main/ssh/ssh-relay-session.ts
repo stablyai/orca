@@ -16,6 +16,7 @@ import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { isMethodNotFoundError } from './ssh-filesystem-stream-reader'
 import { SshGitProvider } from '../providers/ssh-git-provider'
+import { SshSkillDiscoveryProvider } from '../providers/ssh-skill-discovery-provider'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import {
@@ -61,6 +62,10 @@ import {
   getSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import {
+  registerSshSkillDiscoveryProvider,
+  unregisterSshSkillDiscoveryProvider
+} from '../providers/ssh-skill-discovery-dispatch'
 import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
 import { PortScanner } from './ssh-port-scanner'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
@@ -1099,6 +1104,11 @@ export class SshRelaySession {
     )
     registerSshGitProvider(this.targetId, gitProvider)
 
+    registerSshSkillDiscoveryProvider(
+      this.targetId,
+      new SshSkillDiscoveryProvider(this.targetId, mux)
+    )
+
     this.wireUpPtyEvents(ptyProvider, mux, providerGeneration)
     this.wireUpAgentHookEvents(mux)
     this.wireUpRemoteWorkspaceEvents(mux)
@@ -1609,6 +1619,7 @@ export class SshRelaySession {
     unregisterSshPtyProvider(this.targetId)
     unregisterSshFilesystemProvider(this.targetId)
     unregisterSshGitProvider(this.targetId)
+    unregisterSshSkillDiscoveryProvider(this.targetId)
     this.sourceIdentityByRelayPtyId.clear()
     this.retiredSourceDeliveries.clear()
     this.rejectedPtyRecoveryAttempts.clear()

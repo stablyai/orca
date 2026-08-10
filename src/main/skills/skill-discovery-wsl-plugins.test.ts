@@ -22,6 +22,21 @@ function completeExecFileCall(callIndex: number, stdout: string): void {
 describe('WSL Claude plugin skill discovery', () => {
   beforeEach(() => execFileMock.mockReset())
 
+  it('does not start a distro process when discovery is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      discoverSkillsInWsl({
+        distro: 'Ubuntu',
+        homeDir: '/home/alice',
+        cwd: '/work/orca',
+        signal: controller.signal
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
   it('reads enabled plugin metadata and scans the selected install inside the distro', async () => {
     const homeDir = '/home/alice'
     const cwd = '/work/orca'
@@ -59,10 +74,13 @@ describe('WSL Claude plugin skill discovery', () => {
     execFileMock.mockImplementationOnce((..._args: unknown[]) => {
       queueMicrotask(() => completeExecFileCall(1, scanOutput))
     })
+    const signal = new AbortController().signal
 
-    const result = await discoverSkillsInWsl({ distro: 'Ubuntu', homeDir, cwd })
+    const result = await discoverSkillsInWsl({ distro: 'Ubuntu', homeDir, cwd, signal })
 
     expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(execFileMock.mock.calls[0]?.[2]).toEqual(expect.objectContaining({ signal }))
+    expect(execFileMock.mock.calls[1]?.[2]).toEqual(expect.objectContaining({ signal }))
     const scanArgs = execFileMock.mock.calls[1]?.[1] as string[]
     const encoded = /printf %s '([^']+)'/.exec(scanArgs[5] ?? '')?.[1]
     const scanScript = Buffer.from(encoded ?? '', 'base64').toString('utf8')
