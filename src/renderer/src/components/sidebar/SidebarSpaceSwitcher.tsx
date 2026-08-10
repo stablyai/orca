@@ -170,7 +170,14 @@ export const SidebarSpaceSwitcher = React.memo(
     // Why: Tab lands on indicators the strip has scrolled past, and a focus ring under
     // the edge fade reads as no focus at all.
     const handleFocus = React.useCallback(
-      (event: React.FocusEvent<HTMLDivElement>) => reveal(event.target),
+      (event: React.FocusEvent<HTMLDivElement>) => {
+        // Why: React replays portaled focus (context menu items) through this handler,
+        // and chasing a menu item's rect would scroll the strip off the clicked Space.
+        if (!scrollRef.current?.contains(event.target)) {
+          return
+        }
+        reveal(event.target)
+      },
       [reveal]
     )
 

@@ -2,6 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import type { Space } from '../../../../shared/types'
@@ -20,7 +21,9 @@ vi.mock('@/store', () => ({
 vi.mock('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
-  ContextMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  // Why: Radix portals menu content out of the strip while React still routes its events through it.
+  ContextMenuContent: ({ children }: { children: ReactNode }) =>
+    createPortal(<div>{children}</div>, document.body),
   ContextMenuSeparator: () => <hr />,
   ContextMenuItem: ({ children, onSelect }: { children: ReactNode; onSelect?: () => void }) => (
     <button type="button" onClick={onSelect}>
@@ -153,6 +156,20 @@ describe('SidebarSpaceSwitcher', () => {
       render(<SidebarSpaceSwitcher />)
       screen.getByRole('button', { name: 'S9' }).focus()
       expect(screen.getByRole('group', { name: 'Spaces' }).scrollLeft).toBe(196)
+    } finally {
+      restore()
+    }
+  })
+
+  it('holds its scroll position while a Space context menu takes focus', () => {
+    setSpaces(MANY_SPACES, 'space-0')
+    const restore = stubGeometry(600, (el) => el.textContent === 'Edit Space')
+    try {
+      render(<SidebarSpaceSwitcher />)
+      const strip = screen.getByRole('group', { name: 'Spaces' })
+
+      screen.getAllByRole('button', { name: 'Edit Space' })[0].focus()
+      expect(strip.scrollLeft).toBe(0)
     } finally {
       restore()
     }
