@@ -27,10 +27,10 @@ import type {
 } from './remote-terminal-source-range-consumer'
 import {
   createTerminalTitleTracker,
-  stripBrailleSpinnerGlyphs,
   type TerminalTitleFactMeta,
   type TerminalTitleTracker
 } from '../../shared/terminal-output-side-effects'
+import { getDecorativeAgentTitleSignature } from '../../shared/agent-decorative-title-signature'
 import { createCommandCodeOutputStatusDetector } from '../../shared/command-code-output-status'
 import type {
   TerminalSideEffectBatch,
@@ -10250,13 +10250,10 @@ export class OrcaRuntimeService {
     return { ...snapshot, lastTitle: tracked }
   }
 
-  /** Decorative comparison key: spinner frame glyphs stripped, derived agent
-   *  status kept so a working→idle flip with an otherwise-equal label still
-   *  counts as a change. */
+  /** Decorative comparison key: only recognized agent titles fold leading spinner frames. */
   private makeDecorativeTitleGateKey(rawTitle: string, normalizedTitle: string): string {
-    return `${detectAgentStatusFromTitle(rawTitle) ?? ''}\u0000${stripBrailleSpinnerGlyphs(
-      normalizedTitle
-    )}`
+    const signature = getDecorativeAgentTitleSignature(rawTitle)
+    return signature === null ? `literal\u0000${normalizedTitle}` : `agent\u0000${signature}`
   }
 
   private getOrCreatePtyTitleTrackerEntry(ptyId: string): RuntimePtyTitleTrackerEntry {
@@ -10303,7 +10300,7 @@ export class OrcaRuntimeService {
             // Why: synthetic spinner ticks change only the braille glyph
             // ~12.5x/sec; fanning out full mobile session snapshots per frame
             // is pure churn. Raw lastOscTitle updates above stay cheap.
-            if (!(live.applyingSyntheticFrame && decorativeOnly)) {
+            if (!decorativeOnly) {
               live.chunkTouchedSessionTabs = true
             }
           } else {
