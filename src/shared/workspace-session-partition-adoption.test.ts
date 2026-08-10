@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from './constants'
-import type { TerminalTab, WorkspaceSessionState } from './types'
-import {
-  adoptOrphanedWorkspaceSessionPartition,
-  pruneAdoptedWorkspaceSessionPartitionEntries
-} from './workspace-session-partition-adoption'
+import type { TerminalLayoutSnapshot, TerminalTab, WorkspaceSessionState } from './types'
+import { folderWorkspaceKey } from './workspace-scope'
+import { adoptOrphanedWorkspaceSessionPartition } from './workspace-session-partition-adoption'
 
 const WORKTREE_ID = 'repo-1::/srv/wt'
-const OTHER_WORKTREE_ID = 'repo-1::/srv/other-wt'
+const FOLDER_KEY = folderWorkspaceKey('folder-1')
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const PANE_KEY = `tab-1:${LEAF_ID}`
 
-function tab(id: string, worktreeId = WORKTREE_ID): TerminalTab {
+function tab(id: string, worktreeId = WORKTREE_ID, ptyId: string | null = null): TerminalTab {
   return {
     id,
-    ptyId: null,
+    ptyId,
     worktreeId,
     title: id,
     customTitle: null,
@@ -26,199 +26,235 @@ function session(overrides: Partial<WorkspaceSessionState>): WorkspaceSessionSta
   return { ...getDefaultWorkspaceSession(), ...overrides }
 }
 
+function layout(ptyId: string | null): TerminalLayoutSnapshot {
+  return {
+    root: { type: 'leaf' as const, leafId: LEAF_ID },
+    activeLeafId: LEAF_ID,
+    expandedLeafId: null,
+    ptyIdsByLeafId: ptyId ? { [LEAF_ID]: ptyId } : undefined
+  }
+}
+
 describe('adoptOrphanedWorkspaceSessionPartition', () => {
-  it('adopts a populated partition entry when the base holds no tabs for the worktree', () => {
-    const base = session({ tabsByWorktree: { [WORKTREE_ID]: [] } })
-    const partition = session({
-      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1')] },
-      terminalLayoutsByTabId: { 'tab-1': { root: null } as never },
-      activeTabIdByWorktree: { [WORKTREE_ID]: 'tab-1' },
-      lastVisitedAtByWorktreeId: { [WORKTREE_ID]: 42 },
-      defaultTerminalTabsAppliedByWorktreeId: { [WORKTREE_ID]: true }
+  it('adopts complete folder-only state without a repository entry', () => {
+    const source = session({
+      activeWorkspaceKey: FOLDER_KEY,
+      activeWorktreeId: FOLDER_KEY,
+      activeTabId: 'tab-1',
+      tabsByWorktree: { [FOLDER_KEY]: [tab('tab-1', FOLDER_KEY, 'ssh:one@@pty-1')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@pty-1') },
+      openFilesByWorktree: {
+        [FOLDER_KEY]: [
+          {
+            filePath: '/srv/folder/a.ts',
+            relativePath: 'a.ts',
+            worktreeId: FOLDER_KEY,
+            language: 'typescript'
+          }
+        ]
+      },
+      activeFileIdByWorktree: { [FOLDER_KEY]: '/srv/folder/a.ts' },
+      tabGroups: {
+        [FOLDER_KEY]: [
+          { id: 'group-1', worktreeId: FOLDER_KEY, activeTabId: 'tab-1', tabOrder: ['tab-1'] }
+        ]
+      },
+      tabGroupLayouts: { [FOLDER_KEY]: { type: 'leaf', groupId: 'group-1' } },
+      activeGroupIdByWorktree: { [FOLDER_KEY]: 'group-1' },
+      activeTabIdByWorktree: { [FOLDER_KEY]: 'tab-1' },
+      lastVisitedAtByWorktreeId: { [FOLDER_KEY]: 42 },
+      defaultTerminalTabsAppliedByWorktreeId: { [FOLDER_KEY]: true }
     })
 
-    const adoption = adoptOrphanedWorkspaceSessionPartition(base, partition)
+    const adoption = adoptOrphanedWorkspaceSessionPartition(session({}), source)
 
-    expect(adoption.adoptedTabIdsByWorktreeId).toEqual({ [WORKTREE_ID]: ['tab-1'] })
-    expect(adoption.session.tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
-    expect(adoption.session.terminalLayoutsByTabId['tab-1']).toBeDefined()
-    expect(adoption.session.activeTabIdByWorktree?.[WORKTREE_ID]).toBe('tab-1')
-    expect(adoption.session.lastVisitedAtByWorktreeId?.[WORKTREE_ID]).toBe(42)
-    expect(adoption.session.defaultTerminalTabsAppliedByWorktreeId?.[WORKTREE_ID]).toBe(true)
-  })
-
-  it('adopts when the base has no entry at all for the worktree', () => {
-    const base = session({})
-    const partition = session({ tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1')] } })
-
-    const adoption = adoptOrphanedWorkspaceSessionPartition(base, partition)
-
-    expect(adoption.session.tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
-  })
-
-  it('keeps the base entry when it already holds tabs, even if the partition differs', () => {
-    const base = session({ tabsByWorktree: { [WORKTREE_ID]: [tab('live-tab')] } })
-    const partition = session({
-      tabsByWorktree: { [WORKTREE_ID]: [tab('stale-tab-1'), tab('stale-tab-2')] }
+    expect(adoption.reconciledWorktreeIds).toEqual([FOLDER_KEY])
+    expect(adoption.session.tabsByWorktree[FOLDER_KEY]?.[0]?.ptyId).toBe('ssh:one@@pty-1')
+    expect(adoption.session.activeWorkspaceKey).toBe(FOLDER_KEY)
+    expect(adoption.session.activeWorktreeId).toBe(FOLDER_KEY)
+    expect(adoption.session.openFilesByWorktree?.[FOLDER_KEY]?.[0]?.relativePath).toBe('a.ts')
+    expect(adoption.session.tabGroups?.[FOLDER_KEY]?.[0]?.id).toBe('group-1')
+    expect(adoption.session.tabGroupLayouts?.[FOLDER_KEY]).toEqual({
+      type: 'leaf',
+      groupId: 'group-1'
     })
-
-    const adoption = adoptOrphanedWorkspaceSessionPartition(base, partition)
-
-    expect(adoption.session).toBe(base)
-    expect(adoption.adoptedTabIdsByWorktreeId).toEqual({})
+    expect(adoption.session.lastVisitedAtByWorktreeId?.[FOLDER_KEY]).toBe(42)
   })
 
-  it('returns the base identically when there is nothing to adopt', () => {
-    const base = session({ tabsByWorktree: { [WORKTREE_ID]: [] } })
-
-    expect(adoptOrphanedWorkspaceSessionPartition(base, session({})).session).toBe(base)
-    expect(adoptOrphanedWorkspaceSessionPartition(base, null).session).toBe(base)
-  })
-
-  it('never removes base entries for worktrees the partition does not populate', () => {
+  it('uses a newer SSH topology revision as terminal membership authority', () => {
     const base = session({
-      tabsByWorktree: { [OTHER_WORKTREE_ID]: [tab('kept', OTHER_WORKTREE_ID)] }
+      tabsByWorktree: { [WORKTREE_ID]: [tab('local-tab', WORKTREE_ID, 'local-pty')] },
+      terminalLayoutsByTabId: { 'local-tab': layout('local-pty') },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 3 },
+      tabGroups: {
+        [WORKTREE_ID]: [
+          {
+            id: 'local-group',
+            worktreeId: WORKTREE_ID,
+            activeTabId: 'local-tab',
+            tabOrder: ['local-tab']
+          }
+        ]
+      }
     })
-    const partition = session({ tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1')] } })
-
-    const adoption = adoptOrphanedWorkspaceSessionPartition(base, partition)
-
-    expect(adoption.session.tabsByWorktree[OTHER_WORKTREE_ID]).toHaveLength(1)
-    expect(adoption.session.tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
-  })
-
-  it('skips tabs retired by a surface tombstone on either side', () => {
-    const tombstone = {
-      worktreeId: WORKTREE_ID,
-      parentTabId: 'retired-tab',
-      leafId: 'leaf-1',
-      ptyId: 'pty-1',
-      incarnationId: 'inc-1',
-      retiredAt: 5
-    }
-    const base = session({
-      terminalSurfaceTombstonesByPaneKey: { 'retired-tab:leaf-1': tombstone }
-    })
-    const partition = session({
-      tabsByWorktree: { [WORKTREE_ID]: [tab('retired-tab'), tab('live-tab')] }
-    })
-
-    const adoption = adoptOrphanedWorkspaceSessionPartition(base, partition)
-
-    expect(adoption.adoptedTabIdsByWorktreeId).toEqual({ [WORKTREE_ID]: ['live-tab'] })
-  })
-
-  it('only carries tab-scoped records of adopted tabs and never overwrites base records', () => {
-    const baseLayout = { root: null } as never
-    const base = session({
-      tabsByWorktree: { [OTHER_WORKTREE_ID]: [tab('base-tab', OTHER_WORKTREE_ID)] },
-      terminalLayoutsByTabId: { 'base-tab': baseLayout }
-    })
-    const partition = session({
-      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1')] },
-      terminalLayoutsByTabId: {
-        'tab-1': { root: null } as never,
-        'base-tab': { root: { stale: true } } as never,
-        'unrelated-tab': { root: null } as never
-      },
-      remoteSessionIdsByTabId: { 'tab-1': 'session-1', 'unrelated-tab': 'session-2' }
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@pty-1')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@pty-1') },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 4 },
+      tabGroups: {
+        [WORKTREE_ID]: [
+          {
+            id: 'ssh-group',
+            worktreeId: WORKTREE_ID,
+            activeTabId: 'tab-1',
+            tabOrder: ['tab-1']
+          }
+        ]
+      }
     })
 
-    const adoption = adoptOrphanedWorkspaceSessionPartition(base, partition)
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
 
-    expect(adoption.session.terminalLayoutsByTabId['base-tab']).toBe(baseLayout)
-    expect(adoption.session.terminalLayoutsByTabId['tab-1']).toBeDefined()
-    expect(adoption.session.terminalLayoutsByTabId['unrelated-tab']).toBeUndefined()
-    expect(adoption.session.remoteSessionIdsByTabId).toEqual({ 'tab-1': 'session-1' })
-  })
-})
-
-describe('pruneAdoptedWorkspaceSessionPartitionEntries', () => {
-  it('returns null when nothing was adopted', () => {
-    expect(pruneAdoptedWorkspaceSessionPartitionEntries(session({}), {})).toBeNull()
-  })
-
-  it('drops only the adopted worktree entries and adopted tab records', () => {
-    const partition = session({
-      tabsByWorktree: {
-        [WORKTREE_ID]: [tab('tab-1')],
-        [OTHER_WORKTREE_ID]: [tab('kept-tab', OTHER_WORKTREE_ID)]
-      },
-      terminalLayoutsByTabId: {
-        'tab-1': { root: null } as never,
-        'kept-tab': { root: null } as never
-      },
-      remoteSessionIdsByTabId: { 'tab-1': 'session-1', 'kept-tab': 'session-2' }
-    })
-
-    const patch = pruneAdoptedWorkspaceSessionPartitionEntries(partition, {
-      [WORKTREE_ID]: ['tab-1']
-    })
-
-    expect(patch).not.toBeNull()
-    expect(Object.keys(patch?.tabsByWorktree ?? {})).toEqual([OTHER_WORKTREE_ID])
-    expect(Object.keys(patch?.terminalLayoutsByTabId ?? {})).toEqual(['kept-tab'])
-    expect(patch?.remoteSessionIdsByTabId).toEqual({ 'kept-tab': 'session-2' })
-  })
-
-  it('retains a tab a concurrent write added to an adopted worktree', () => {
-    const partition = session({
-      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1'), tab('written-during-adoption')] },
-      terminalLayoutsByTabId: {
-        'tab-1': { root: null } as never,
-        'written-during-adoption': { root: null } as never
-      },
-      remoteSessionIdsByTabId: { 'tab-1': 'session-1', 'written-during-adoption': 'session-3' }
-    })
-
-    const patch = pruneAdoptedWorkspaceSessionPartitionEntries(partition, {
-      [WORKTREE_ID]: ['tab-1']
-    })
-
-    expect(patch?.tabsByWorktree?.[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
-      'written-during-adoption'
+    expect(adoption.sourceAuthoritativeWorktreeIds).toEqual([WORKTREE_ID])
+    expect(adoption.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'tab-1'
     ])
-    expect(Object.keys(patch?.terminalLayoutsByTabId ?? {})).toEqual(['written-during-adoption'])
-    expect(patch?.remoteSessionIdsByTabId).toEqual({ 'written-during-adoption': 'session-3' })
+    expect(adoption.session.terminalLayoutsByTabId['local-tab']).toBeUndefined()
+    expect(adoption.session.tabGroups?.[WORKTREE_ID]?.[0]?.id).toBe('ssh-group')
+    expect(adoption.session.terminalTopologyRevisionByRepoId?.['repo-1']).toBe(4)
   })
 
-  it('sheds retired tabs of an adopted worktree along with the adopted ones', () => {
-    const partition = session({
-      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1'), tab('retired-tab')] },
-      terminalLayoutsByTabId: {
-        'tab-1': { root: null } as never,
-        'retired-tab': { root: null } as never
-      },
-      remoteSessionIdsByTabId: { 'tab-1': 'session-1', 'retired-tab': 'session-2' }
+  it('keeps newer local membership when the SSH topology revision is stale', () => {
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('local-tab')] },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 8 }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('stale-tab')] },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 7 }
     })
 
-    const patch = pruneAdoptedWorkspaceSessionPartitionEntries(
-      partition,
-      { [WORKTREE_ID]: ['tab-1'] },
-      ['retired-tab']
-    )
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
 
-    expect(patch?.tabsByWorktree).toEqual({})
-    expect(patch?.terminalLayoutsByTabId).toEqual({})
-    expect(patch?.remoteSessionIdsByTabId).toEqual({})
+    expect(adoption.sourceAuthoritativeWorktreeIds).toEqual([])
+    expect(adoption.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'local-tab'
+    ])
   })
 
-  it('keeps a retired tab that belongs to a worktree the adoption did not touch', () => {
-    const partition = session({
-      tabsByWorktree: {
-        [WORKTREE_ID]: [tab('tab-1')],
-        [OTHER_WORKTREE_ID]: [tab('retired-tab', OTHER_WORKTREE_ID)]
-      },
-      terminalLayoutsByTabId: { 'retired-tab': { root: null } as never }
+  it('uses SSH incarnation provenance for a newer binding and provider session', () => {
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@old')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@old') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-old' },
+      remoteSessionIdsByTabId: { 'tab-1': 'ssh:one@@old' },
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY]: {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: WORKTREE_ID,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'provider-old' },
+          prompt: 'old',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@new')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@new') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-new' },
+      remoteSessionIdsByTabId: { 'tab-1': 'ssh:one@@new' },
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY]: {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: WORKTREE_ID,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'provider-new' },
+          prompt: 'new',
+          state: 'working',
+          capturedAt: 2,
+          updatedAt: 2
+        }
+      }
     })
 
-    const patch = pruneAdoptedWorkspaceSessionPartitionEntries(
-      partition,
-      { [WORKTREE_ID]: ['tab-1'] },
-      ['retired-tab']
-    )
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
 
-    expect(patch?.tabsByWorktree?.[OTHER_WORKTREE_ID]).toHaveLength(1)
-    expect(Object.keys(patch?.terminalLayoutsByTabId ?? {})).toEqual(['retired-tab'])
+    expect(adoption.sourceAuthoritativePaneKeys).toEqual([PANE_KEY])
+    expect(adoption.session.tabsByWorktree[WORKTREE_ID]?.[0]?.ptyId).toBe('ssh:one@@new')
+    expect(adoption.session.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId?.[LEAF_ID]).toBe(
+      'ssh:one@@new'
+    )
+    expect(adoption.session.terminalPtyIncarnationsByPaneKey?.[PANE_KEY]).toBe('inc-new')
+    expect(adoption.session.remoteSessionIdsByTabId?.['tab-1']).toBe('ssh:one@@new')
+    expect(adoption.session.sleepingAgentSessionsByPaneKey?.[PANE_KEY]?.providerSession.id).toBe(
+      'provider-new'
+    )
+  })
+
+  it('keeps a local incarnation when the SSH binding revision is older', () => {
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@local')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@local') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-local' },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 5 }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@stale')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@stale') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-stale' },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 4 }
+    })
+
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
+
+    expect(adoption.sourceAuthoritativePaneKeys).toEqual([])
+    expect(adoption.session.tabsByWorktree[WORKTREE_ID]?.[0]?.ptyId).toBe('ssh:one@@local')
+    expect(adoption.session.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId?.[LEAF_ID]).toBe(
+      'ssh:one@@local'
+    )
+    expect(adoption.session.terminalPtyIncarnationsByPaneKey?.[PANE_KEY]).toBe('inc-local')
+  })
+
+  it('does not let an old tombstone retire a newer SSH incarnation', () => {
+    const base = session({
+      terminalSurfaceTombstonesByPaneKey: {
+        [PANE_KEY]: {
+          worktreeId: WORKTREE_ID,
+          parentTabId: 'tab-1',
+          leafId: LEAF_ID,
+          ptyId: 'ssh:one@@old',
+          incarnationId: 'inc-old',
+          retiredAt: 1
+        }
+      }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@new')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@new') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-new' }
+    })
+
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
+
+    expect(adoption.session.tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
+    expect(adoption.session.terminalSurfaceTombstonesByPaneKey?.[PANE_KEY]).toBeUndefined()
+  })
+
+  it('is idempotent after provenance reconciliation', () => {
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@new')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@new') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-new' },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 2 }
+    })
+    const first = adoptOrphanedWorkspaceSessionPartition(session({}), source).session
+    const second = adoptOrphanedWorkspaceSessionPartition(first, source).session
+
+    expect(second).toEqual(first)
   })
 })

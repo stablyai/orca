@@ -18,7 +18,7 @@ export function registerSessionHandlers(store: Store): void {
     store.patchWorkspaceSession(args, hostId)
   })
 
-  ipcMain.handle('session:adopt-ssh-partition', (_event, hostId: string) => {
+  ipcMain.handle('session:adopt-ssh-partition', (_event, hostId?: string) => {
     return store.adoptSshWorkspaceSessionPartition(hostId)
   })
 

@@ -11904,6 +11904,214 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree).toEqual({})
   })
 
+  it('enumerates every persisted SSH partition including folder-only projects', async () => {
+    const store = await createStore()
+    const folderKey = folderWorkspaceKey('ssh-folder')
+    const folderSession = makeBoundHostSession('ssh:ssh-folder@@folder-pty')
+    folderSession.tabsByWorktree = {
+      [folderKey]: [
+        {
+          ...folderSession.tabsByWorktree['repo-1::/worktree'][0],
+          worktreeId: folderKey
+        }
+      ]
+    }
+    folderSession.openFilesByWorktree = {
+      [folderKey]: [
+        {
+          filePath: '/srv/folder/a.ts',
+          relativePath: 'a.ts',
+          worktreeId: folderKey,
+          language: 'typescript'
+        }
+      ]
+    }
+    store.setWorkspaceSession(folderSession, 'ssh:ssh-folder')
+    store.setWorkspaceSession(makeBoundHostSession('ssh:ssh-repo@@repo-pty'), 'ssh:ssh-repo')
+    store.setWorkspaceSession(makeHostSession('runtime-repo'), 'runtime:env-a')
+    const flush = vi.spyOn(store, 'flushOrThrow')
+
+    const adopted = store.adoptSshWorkspaceSessionPartition()
+
+    expect(flush).toHaveBeenCalledTimes(2)
+    expect(adopted.tabsByWorktree[folderKey]).toHaveLength(1)
+    expect(adopted.openFilesByWorktree?.[folderKey]?.[0]?.relativePath).toBe('a.ts')
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local', 'runtime:env-a'])
+    expect(store.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('runtime-repo')
+  })
+
+  it('rolls back owner and sources when the durable owner flush fails', async () => {
+    const store = await createStore()
+    const source = makeBoundHostSession('ssh:ssh-1@@remote-pty')
+    store.setWorkspaceSession(getDefaultWorkspaceSession())
+    store.setWorkspaceSession(source, 'ssh:ssh-1')
+    const flush = vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+      throw new Error('owner flush failed')
+    })
+
+    expect(() => store.adoptSshWorkspaceSessionPartition()).toThrow('owner flush failed')
+    flush.mockRestore()
+
+    expect(store.getWorkspaceSession().tabsByWorktree).toEqual({})
+    expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree).toEqual(source.tabsByWorktree)
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local', 'ssh:ssh-1'])
+  })
+
+  it('keeps the durable owner and retryable sources when source pruning fails', async () => {
+    const store = await createStore()
+    const source = makeBoundHostSession('ssh:ssh-1@@remote-pty')
+    store.setWorkspaceSession(getDefaultWorkspaceSession())
+    store.setWorkspaceSession(source, 'ssh:ssh-1')
+    const durableFlush = store.flushOrThrow.bind(store)
+    const flush = vi
+      .spyOn(store, 'flushOrThrow')
+      .mockImplementationOnce(durableFlush)
+      .mockImplementationOnce(() => {
+        throw new Error('source prune failed')
+      })
+
+    expect(() => store.adoptSshWorkspaceSessionPartition()).toThrow('source prune failed')
+    flush.mockRestore()
+
+    expect(store.getWorkspaceSession().tabsByWorktree['repo-1::/worktree']).toHaveLength(1)
+    expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree).toEqual(source.tabsByWorktree)
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.workspaceSession.tabsByWorktree['repo-1::/worktree']).toHaveLength(1)
+    expect(persisted.workspaceSessionsByHostId?.['ssh:ssh-1']?.tabsByWorktree).toEqual(
+      source.tabsByWorktree
+    )
+  })
+
+  it('converges idempotently when retrying after a source-prune failure', async () => {
+    const store = await createStore()
+    const source = makeBoundHostSession('ssh:ssh-1@@remote-pty')
+    store.setWorkspaceSession(getDefaultWorkspaceSession())
+    store.setWorkspaceSession(source, 'ssh:ssh-1')
+    const durableFlush = store.flushOrThrow.bind(store)
+    const flush = vi
+      .spyOn(store, 'flushOrThrow')
+      .mockImplementationOnce(durableFlush)
+      .mockImplementationOnce(() => {
+        throw new Error('source prune failed')
+      })
+    expect(() => store.adoptSshWorkspaceSessionPartition()).toThrow('source prune failed')
+    flush.mockRestore()
+    const beforeRetry = structuredClone(store.getWorkspaceSession())
+
+    const afterRetry = store.adoptSshWorkspaceSessionPartition()
+
+    expect(afterRetry).toEqual(beforeRetry)
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession().tabsByWorktree).toEqual(beforeRetry.tabsByWorktree)
+    expect(reloaded.getWorkspaceSession().terminalLayoutsByTabId).toEqual(
+      beforeRetry.terminalLayoutsByTabId
+    )
+    expect(reloaded.getWorkspaceSessionHostIds()).toEqual(['local'])
+  })
+
+  it('reconciles a newer SSH binding, incarnation, and sleeping provider identity', async () => {
+    const store = await createStore()
+    const local = makeBoundHostSession('ssh:ssh-1@@old-pty')
+    local.terminalPtyIncarnationsByPaneKey = { [`tab-1:${TEST_LEAF_1}`]: 'inc-old' }
+    local.sleepingAgentSessionsByPaneKey = {
+      [`tab-1:${TEST_LEAF_1}`]: {
+        paneKey: `tab-1:${TEST_LEAF_1}`,
+        tabId: 'tab-1',
+        worktreeId: 'repo-1::/worktree',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-old' },
+        prompt: 'old',
+        state: 'working',
+        capturedAt: 1,
+        updatedAt: 1
+      }
+    }
+    const source = makeBoundHostSession('ssh:ssh-1@@new-pty')
+    source.terminalPtyIncarnationsByPaneKey = { [`tab-1:${TEST_LEAF_1}`]: 'inc-new' }
+    source.sleepingAgentSessionsByPaneKey = {
+      [`tab-1:${TEST_LEAF_1}`]: {
+        ...local.sleepingAgentSessionsByPaneKey[`tab-1:${TEST_LEAF_1}`],
+        providerSession: { key: 'session_id', id: 'provider-new' },
+        prompt: 'new',
+        capturedAt: 2,
+        updatedAt: 2
+      }
+    }
+    store.setWorkspaceSession(local)
+    store.setWorkspaceSession(source, 'ssh:ssh-1')
+
+    const adopted = store.adoptSshWorkspaceSessionPartition()
+
+    expect(adopted.tabsByWorktree['repo-1::/worktree']?.[0]?.ptyId).toBe('ssh:ssh-1@@new-pty')
+    expect(adopted.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId?.[TEST_LEAF_1]).toBe(
+      'ssh:ssh-1@@new-pty'
+    )
+    expect(adopted.terminalPtyIncarnationsByPaneKey?.[`tab-1:${TEST_LEAF_1}`]).toBe('inc-new')
+    expect(
+      adopted.sleepingAgentSessionsByPaneKey?.[`tab-1:${TEST_LEAF_1}`]?.providerSession.id
+    ).toBe('provider-new')
+  })
+
+  it('preserves a sync-flushed SSH incarnation across the adoption crash window', async () => {
+    const store = await createStore()
+    const local = makeBoundHostSession('ssh:ssh-1@@old-pty')
+    local.terminalPtyIncarnationsByPaneKey = { [`tab-1:${TEST_LEAF_1}`]: 'inc-old' }
+    const source = structuredClone(local)
+    store.setWorkspaceSession(local)
+    store.setWorkspaceSession(source, 'ssh:ssh-1')
+    expect(
+      store.persistPtyBinding(
+        {
+          worktreeId: 'repo-1::/worktree',
+          tabId: 'tab-1',
+          leafId: TEST_LEAF_1,
+          ptyId: 'ssh:ssh-1@@new-pty',
+          incarnationId: 'inc-new',
+          expectedBinding: { ptyId: 'ssh:ssh-1@@old-pty', incarnationId: 'inc-old' }
+        },
+        'ssh:ssh-1'
+      )
+    ).toBe(true)
+
+    const adopted = store.adoptSshWorkspaceSessionPartition()
+
+    expect(adopted.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId?.[TEST_LEAF_1]).toBe(
+      'ssh:ssh-1@@new-pty'
+    )
+    expect(adopted.terminalPtyIncarnationsByPaneKey?.[`tab-1:${TEST_LEAF_1}`]).toBe('inc-new')
+    expect(adopted.terminalTopologyRevisionByRepoId?.['repo-1']).toBe(1)
+  })
+
+  it('removes all SSH source metadata only after the owner is durable', async () => {
+    const store = await createStore()
+    const source = makeBoundHostSession('ssh:ssh-1@@remote-pty')
+    source.terminalPtyIncarnationsByPaneKey = { [`tab-1:${TEST_LEAF_1}`]: 'inc-1' }
+    source.terminalTopologyRevisionByRepoId = { 'repo-1': 3 }
+    source.tabGroups = {
+      'repo-1::/worktree': [
+        {
+          id: 'group-1',
+          worktreeId: 'repo-1::/worktree',
+          activeTabId: 'tab-1',
+          tabOrder: ['tab-1']
+        }
+      ]
+    }
+    store.setWorkspaceSession(source, 'ssh:ssh-1')
+
+    store.adoptSshWorkspaceSessionPartition()
+
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.workspaceSessionsByHostId?.['ssh:ssh-1']).toBeUndefined()
+    expect(persisted.workspaceSession.terminalPtyIncarnationsByPaneKey).toEqual({
+      [`tab-1:${TEST_LEAF_1}`]: 'inc-1'
+    })
+    expect(persisted.workspaceSession.terminalTopologyRevisionByRepoId).toEqual({ 'repo-1': 3 })
+    expect(persisted.workspaceSession.tabGroups?.['repo-1::/worktree']?.[0]?.id).toBe('group-1')
+  })
+
   it('preserves and enforces equal repo-id topology authority independently per host', async () => {
     const store = await createStore()
     const worktreeId = 'duplicate::/worktree'

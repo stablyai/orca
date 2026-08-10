@@ -17,7 +17,7 @@ describe('registerSessionHandlers', () => {
     onMock.mockClear()
   })
 
-  it('routes atomic ssh partition adoption through the store', () => {
+  it('routes authoritative SSH partition enumeration through the store', () => {
     const expected = { tabsByWorktree: {} }
     const store = {
       adoptSshWorkspaceSessionPartition: vi.fn(() => expected)
@@ -25,10 +25,10 @@ describe('registerSessionHandlers', () => {
     registerSessionHandlers(store as never)
     const handler = handleMock.mock.calls.find(
       ([channel]) => channel === 'session:adopt-ssh-partition'
-    )?.[1] as (event: unknown, hostId: string) => unknown
+    )?.[1] as (event: unknown, hostId?: string) => unknown
 
-    expect(handler({}, 'ssh:target-1')).toBe(expected)
+    expect(handler({})).toBe(expected)
     expect(store.adoptSshWorkspaceSessionPartition).toHaveBeenCalledOnce()
-    expect(store.adoptSshWorkspaceSessionPartition).toHaveBeenCalledWith('ssh:target-1')
+    expect(store.adoptSshWorkspaceSessionPartition).toHaveBeenCalledWith(undefined)
   })
 })

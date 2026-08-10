@@ -135,10 +135,7 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSessionSalvaging } from '../shared/workspace-session-salvage'
-import {
-  adoptOrphanedWorkspaceSessionPartition,
-  pruneAdoptedWorkspaceSessionPartitionEntries
-} from '../shared/workspace-session-partition-adoption'
+import { adoptOrphanedWorkspaceSessionPartition } from '../shared/workspace-session-partition-adoption'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
@@ -6282,41 +6279,48 @@ export class Store {
     return this.state.workspaceSessionsByHostId?.[resolved] ?? getDefaultWorkspaceSession()
   }
 
-  adoptSshWorkspaceSessionPartition(hostId: string): WorkspaceSessionState {
-    const parsed = parseExecutionHostId(hostId)
-    if (parsed?.kind !== 'ssh' || !this.state.workspaceSessionsByHostId?.[hostId]) {
+  adoptSshWorkspaceSessionPartition(hostId?: string): WorkspaceSessionState {
+    if (hostId && parseExecutionHostId(hostId)?.kind !== 'ssh') {
       return this.getWorkspaceSession()
     }
-    const owner = this.getWorkspaceSession()
-    const source = this.getWorkspaceSession(hostId)
-    const adoption = adoptOrphanedWorkspaceSessionPartition(owner, source)
-    const movedTabIdsByWorktreeId: Record<string, string[]> = {}
-    for (const [worktreeId, sourceTabs] of Object.entries(source.tabsByWorktree ?? {})) {
-      if (sourceTabs.length > 0) {
-        // Local is authoritative once it either accepts or rejects this stale fork.
-        movedTabIdsByWorktreeId[worktreeId] = sourceTabs.map((tab) => tab.id)
-      }
-    }
-    const sourcePatch = pruneAdoptedWorkspaceSessionPartitionEntries(
-      source,
-      movedTabIdsByWorktreeId,
-      adoption.retiredTabIds
-    )
-    if (adoption.session === owner && !sourcePatch) {
-      return owner
+    const originalOwner = this.getWorkspaceSession()
+    const originalPartitions = this.state.workspaceSessionsByHostId
+    const sshPartitions = Object.entries(originalPartitions ?? {})
+      .filter(([partitionHostId, session]) =>
+        Boolean(session && parseExecutionHostId(partitionHostId)?.kind === 'ssh')
+      )
+      .sort(([left], [right]) => left.localeCompare(right)) as [string, WorkspaceSessionState][]
+    if (sshPartitions.length === 0) {
+      return originalOwner
     }
 
-    if (adoption.session !== owner) {
-      this.setLocalWorkspaceSession(adoption.session)
+    let owner = originalOwner
+    for (const [, source] of sshPartitions) {
+      owner = adoptOrphanedWorkspaceSessionPartition(owner, source).session
     }
-    if (sourcePatch) {
-      this.state.workspaceSessionsByHostId = {
-        ...this.state.workspaceSessionsByHostId,
-        [hostId]: { ...source, ...sourcePatch }
-      }
-      this.scheduleSave()
+    this.state.workspaceSession = owner
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      this.state.workspaceSession = originalOwner
+      this.state.workspaceSessionsByHostId = originalPartitions
+      throw error
     }
-    return this.getWorkspaceSession()
+
+    this.state.workspaceSessionsByHostId = Object.fromEntries(
+      Object.entries(originalPartitions ?? {}).filter(
+        ([partitionHostId]) => parseExecutionHostId(partitionHostId)?.kind !== 'ssh'
+      )
+    )
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      // Why: phase one is already durable; keep its owner plus retryable sources.
+      this.state.workspaceSession = owner
+      this.state.workspaceSessionsByHostId = originalPartitions
+      throw error
+    }
+    return owner
   }
 
   /** Whether a partition was ever written; `getWorkspaceSession` defaults absent ones and cannot tell them apart. */

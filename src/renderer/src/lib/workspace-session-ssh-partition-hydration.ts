@@ -8,7 +8,7 @@ import { adoptOrphanedWorkspaceSessionPartition } from '../../../shared/workspac
 
 type SshPartitionHydrationApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
-  adoptSshPartition?: (hostId: `ssh:${string}`) => Promise<WorkspaceSessionState>
+  adoptSshPartition?: (hostId?: `ssh:${string}`) => Promise<WorkspaceSessionState>
 }
 
 /** Collect the distinct SSH hosts owning any persisted repo. */
@@ -31,12 +31,14 @@ export async function adoptStrandedSshHostPartitions(
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[],
   merged: WorkspaceSessionState
 ): Promise<WorkspaceSessionState> {
+  if (api.adoptSshPartition) {
+    // Main enumerates persisted partitions, including folder-only SSH projects.
+    return api.adoptSshPartition()
+  }
   let session = merged
   for (const hostId of listKnownSshHostIds(repos)) {
     try {
-      session = api.adoptSshPartition
-        ? await api.adoptSshPartition(hostId as `ssh:${string}`)
-        : adoptOrphanedWorkspaceSessionPartition(session, await api.get(hostId)).session
+      session = adoptOrphanedWorkspaceSessionPartition(session, await api.get(hostId)).session
     } catch (err) {
       console.warn(`[session] skipping unreadable host partition ${hostId}:`, err)
     }

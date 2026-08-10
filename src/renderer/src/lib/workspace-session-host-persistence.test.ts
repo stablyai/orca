@@ -214,7 +214,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
       sshRepo
     ])
 
-    expect(adoptSshPartition).toHaveBeenCalledWith('ssh:conn-1')
+    expect(adoptSshPartition).toHaveBeenCalledWith()
     expect(read.session.tabsByWorktree[worktreeId]).toEqual([strandedTab])
     expect(read.session.terminalLayoutsByTabId['stranded-tab']).toBeDefined()
     expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({})
@@ -252,7 +252,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     expect(read.session.tabsByWorktree[worktreeId]).toEqual([liveTab])
   })
 
-  it('moves known ssh partitions in stable host order', async () => {
+  it('delegates persisted SSH partition enumeration to one main transaction', async () => {
     const worktreeA = 'repo-a::/home/user/wt-a'
     const worktreeB = 'repo-b::/home/user/wt-b'
     const repos = [
@@ -262,21 +262,47 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     const tabA = sessionTab('tab-a', worktreeA)
     const tabB = sessionTab('tab-b', worktreeB)
     const get = vi.fn().mockResolvedValue(getDefaultWorkspaceSession())
-    const adoptSshPartition = vi.fn(async (hostId: string): Promise<WorkspaceSessionState> => {
-      return {
-        ...getDefaultWorkspaceSession(),
-        tabsByWorktree:
-          hostId === 'ssh:conn-1'
-            ? { [worktreeA]: [tabA] }
-            : { [worktreeA]: [tabA], [worktreeB]: [tabB] }
+    const adoptSshPartition = vi.fn(
+      async (hostId?: `ssh:${string}`): Promise<WorkspaceSessionState> => {
+        return {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree:
+            hostId === 'ssh:conn-1'
+              ? { [worktreeA]: [tabA] }
+              : { [worktreeA]: [tabA], [worktreeB]: [tabB] }
+        }
       }
-    })
+    )
 
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners({ get, adoptSshPartition }, repos)
 
     expect(read.session.tabsByWorktree[worktreeA]).toEqual([tabA])
     expect(read.session.tabsByWorktree[worktreeB]).toEqual([tabB])
-    expect(adoptSshPartition.mock.calls).toEqual([['ssh:conn-1'], ['ssh:conn-2']])
+    expect(adoptSshPartition.mock.calls).toEqual([[]])
+  })
+
+  it('runs main partition enumeration when no SSH repository is loaded', async () => {
+    const folderKey = folderWorkspaceKey('ssh-folder')
+    const folderTab = sessionTab('folder-tab', folderKey)
+    const get = vi.fn().mockResolvedValue(getDefaultWorkspaceSession())
+    const adoptSshPartition = vi.fn().mockResolvedValue({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [folderKey]: [folderTab] }
+    })
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners({ get, adoptSshPartition }, [])
+
+    expect(adoptSshPartition).toHaveBeenCalledWith()
+    expect(read.session.tabsByWorktree[folderKey]).toEqual([folderTab])
+  })
+
+  it('fails closed when the durable main adoption transaction rejects', async () => {
+    const get = vi.fn().mockResolvedValue(getDefaultWorkspaceSession())
+    const adoptSshPartition = vi.fn().mockRejectedValue(new Error('disk unavailable'))
+
+    await expect(
+      fetchWorkspaceSessionWithRuntimeHostOwners({ get, adoptSshPartition }, [])
+    ).rejects.toThrow('disk unavailable')
   })
 
   it('routes restored runtime folder workspace patches back to the runtime host', async () => {
