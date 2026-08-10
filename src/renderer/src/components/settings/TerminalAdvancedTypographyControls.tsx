@@ -12,15 +12,24 @@ import {
   fontFamilyHasKnownLigatures,
   resolveTerminalLigaturesEnabled
 } from '../../../../shared/terminal-ligatures'
-import { NumberField, SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
+import {
+  FontAutocomplete,
+  NumberField,
+  SettingsRow,
+  SettingsSegmentedControl
+} from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
 import { getTerminalAdvancedTypographySearchEntries } from './terminal-typography-search'
 
+const NO_FONT_SUGGESTIONS: string[] = []
+
 type TerminalAdvancedTypographyControlsProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  fontSuggestions?: string[]
+  onRequestFontSuggestions?: () => void
 }
 
 /** Low-frequency terminal typography knobs (weight, line height, ligatures).
@@ -28,7 +37,9 @@ type TerminalAdvancedTypographyControlsProps = {
  *  compact while these stay searchable inside the Advanced disclosure. */
 export function TerminalAdvancedTypographyControls({
   settings,
-  updateSettings
+  updateSettings,
+  fontSuggestions = NO_FONT_SUGGESTIONS,
+  onRequestFontSuggestions
 }: TerminalAdvancedTypographyControlsProps): React.JSX.Element {
   const searchEntries = getTerminalAdvancedTypographySearchEntries()
 
@@ -213,6 +224,31 @@ export function TerminalAdvancedTypographyControls({
               )}
           .
         </p>
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.TerminalAppearanceSection.9d8a37e2ae',
+          'CJK Font Family'
+        )}
+        description={searchEntries[3]?.description}
+        keywords={searchEntries[3]?.keywords ?? ['terminal', 'typography', 'cjk', 'korean']}
+      >
+        <SettingsRow
+          label={translate(
+            'auto.components.settings.TerminalAppearanceSection.9d8a37e2ae',
+            'CJK Font Family'
+          )}
+          description={searchEntries[3]?.description}
+          control={
+            <FontAutocomplete
+              value={settings.terminalCjkFontFamily ?? ''}
+              suggestions={fontSuggestions}
+              onRequestSuggestions={onRequestFontSuggestions}
+              onChange={(value) => updateSettings({ terminalCjkFontFamily: value })}
+            />
+          }
+        />
       </SearchableSetting>
     </div>
   )

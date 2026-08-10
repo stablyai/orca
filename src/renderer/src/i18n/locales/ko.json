@@ -7236,7 +7236,8 @@
           "e90afcc44f": "끔",
           "16c471ee03": "켜짐",
           "typographyAdvanced": "타이포그래피",
-          "dimUnfocusedPanes": "포커스되지 않은 창을 흐리게 표시합니다."
+          "dimUnfocusedPanes": "포커스되지 않은 창을 흐리게 표시합니다.",
+          "9d8a37e2ae": "CJK 글꼴군"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -9062,7 +9063,12 @@
               "title": "테마 모드",
               "keyword_target": "대상",
               "keyword_editing": "편집"
-            }
+            },
+            "90f1cfbd2f": "CJK 글꼴군",
+            "aa68dda11b": "중국어·일본어·한국어 글자에 쓰는 글꼴입니다. 코딩용 글꼴 대부분은 이 글자들을 담고 있지 않습니다. 비워두면 기본 목록을 씁니다.",
+            "d48d686fe5": "cjk",
+            "3e652f1627": "한국어",
+            "8511986b75": "중국어"
           },
           "windows": {
             "search": {

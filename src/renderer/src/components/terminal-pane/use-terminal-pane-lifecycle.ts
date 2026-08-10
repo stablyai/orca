@@ -1558,7 +1558,10 @@ export function useTerminalPaneLifecycle({
           ...windowsPtyCompatibilityOptions,
           ...keyboardProtocolOptions,
           fontSize: currentSettings?.terminalFontSize ?? 14,
-          fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
+          fontFamily: buildFontFamily(
+            currentSettings?.terminalFontFamily ?? '',
+            currentSettings?.terminalCjkFontFamily ?? ''
+          ),
           fontWeight: terminalFontWeights.fontWeight,
           fontWeightBold: terminalFontWeights.fontWeightBold,
           scrollback: normalizeDesktopTerminalScrollbackRows(

@@ -97,6 +97,26 @@ const getTerminalTypographySearchEntryCatalog = createLocalizedCatalog(() => [
         'font features'
       )
     ]
+  },
+  {
+    title: translate('auto.components.settings.terminal.search.90f1cfbd2f', 'CJK Font Family'),
+    description: translate(
+      'auto.components.settings.terminal.search.aa68dda11b',
+      'Font for Chinese, Japanese and Korean text, which most coding fonts lack. Empty uses the built-in fallback chain.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.103cdb862f',
+        'typography'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.b0bb76ae6b', 'font'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.d48d686fe5', 'cjk'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.3e652f1627', 'korean'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.84ae68de79', 'hangul'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.24f7977756', 'japanese'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.8511986b75', 'chinese')
+    ]
   }
 ])
 

@@ -104,6 +104,9 @@ export type GlobalSettings = {
   primarySelectionMiddleClickPasteDefaultedForTerminalDefaults?: boolean
   terminalFontSize: number
   terminalFontFamily: string
+  /** Font for CJK text, which `terminalFontFamily` almost never covers; empty
+   *  (the default) falls through to the built-in CJK chain. */
+  terminalCjkFontFamily?: string
   terminalFontWeight: number
   terminalFontWeightBold: number
   terminalLineHeight: number

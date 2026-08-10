@@ -1,6 +1,6 @@
 // Cross-platform monospace chain: browsers skip fonts absent on the current OS, so listing all is safe.
 // Nerd Fonts come last to cover PUA glyphs (U+E000–U+F8FF) from OMP/Powerline that standard monospace fonts lack.
-const FALLBACK_FONTS = [
+const LATIN_FALLBACK_FONTS = [
   'SF Mono', // macOS 10.12+
   'Menlo', // macOS (older)
   'Monaco', // macOS (legacy)
@@ -12,48 +12,64 @@ const FALLBACK_FONTS = [
   'Symbols Nerd Font Mono', // purpose-built Nerd Fonts symbols-only fallback
   'MesloLGS Nerd Font', // p10k's recommended font; very common on zsh setups
   'JetBrainsMono Nerd Font', // widely installed; Ghostty ships a JBM-derived font
-  'Hack Nerd Font', // common Nerd Font among Linux developers
-  // None of the Latin fonts above carry Hangul/Kana/Han. Without a CJK entry the
-  // browser substitutes a proportional system face whose advance is not two cells
-  // wide, so CJK text renders with gaps and drifts out of the grid.
-  //
-  // Coding faces first: their Hangul is exactly two Latin advances wide. Then
-  // platform defaults, native before foreign — none has exact dual-width metrics,
-  // so a font that merely happens to be installed (e.g. Malgun via Office on a
-  // Mac) must not outrank the one the OS ships, or two machines of the same
-  // platform render Hangul differently.
-  //
-  // Platform defaults are listed under their English and localized family names:
-  // a CJK-locale OS registers them under the localized name only, and an entry
-  // the platform does not know costs nothing in a CSS font stack.
-  'D2Coding', // Korean coding font; Hangul is exactly 2x the Latin advance
-  'NanumGothicCoding', // Korean coding font, common on Linux
+  'Hack Nerd Font' // common Nerd Font among Linux developers
+] as const
+
+// None of the fonts above carry Hangul/Kana/Han. Without an entry here the browser
+// substitutes a proportional system face whose advance is not two cells wide, so
+// CJK text renders with gaps and drifts out of the grid.
+const CJK_FALLBACK_FONTS = [
+  // Coding faces first: their Hangul is exactly two Latin advances wide.
+  'D2Coding',
+  'NanumGothicCoding',
   '나눔고딕코딩',
-  'Sarasa Mono K', // CJK monospace built for exact dual-width metrics
-  'Noto Sans Mono CJK KR', // Linux (common)
-  'Apple SD Gothic Neo', // macOS Korean default — always present on macOS
+  'Sarasa Mono K',
+  'Noto Sans Mono CJK KR',
+  // Then platform defaults, native before foreign — none has exact dual-width
+  // metrics, so a font that merely happens to be installed must not outrank the
+  // one the OS ships, or two Macs render Hangul differently.
+  //
+  // Each is listed under its English and its localized family name: a CJK-locale
+  // OS registers these under the localized name only, and an entry the platform
+  // does not know simply costs nothing.
+  'Apple SD Gothic Neo', // macOS Korean
   'Apple SD 산돌고딕 Neo',
-  'Malgun Gothic', // Windows Korean default
+  'Malgun Gothic', // Windows Korean
   '맑은 고딕',
   'MS Gothic', // Windows; dual-width, but Japanese-first
   'ＭＳ ゴシック',
-  'Hiragino Sans', // macOS Japanese default
-  'ヒラギノ角ゴシック',
-  'monospace' // ultimate generic fallback
+  'Hiragino Sans', // macOS Japanese
+  'ヒラギノ角ゴシック'
 ] as const
 
-export function buildFontFamily(fontFamily: string): string {
-  const trimmed = fontFamily.trim()
-  const parts = trimmed ? [`"${trimmed}"`] : []
-  const lowerParts = parts.map((p) => p.toLowerCase())
-  // Append each fallback unless already present (case-insensitive) to avoid duplicates.
-  for (const fallback of FALLBACK_FONTS) {
-    const lower = fallback.toLowerCase()
-    if (!lowerParts.some((p) => p.includes(lower))) {
-      // Generic keywords like "monospace" are unquoted; named fonts are quoted.
-      parts.push(fallback === 'monospace' ? fallback : `"${fallback}"`)
-    }
+const GENERIC_FALLBACK = 'monospace'
+
+function quote(fontFamily: string): string {
+  return `"${fontFamily}"`
+}
+
+/**
+ * The chain xterm renders with: the user's font, the cross-platform Latin
+ * fallbacks, then CJK. A chosen CJK font sits behind the Nerd Fonts rather than
+ * at the front, so it answers for Hangul without claiming the PUA glyphs
+ * Powerline prompts draw from.
+ */
+export function buildFontFamily(fontFamily: string, cjkFontFamily: string = ''): string {
+  const primary = fontFamily.trim()
+  const cjk = cjkFontFamily.trim()
+  const chosen = [primary, cjk].filter(Boolean).map((font) => font.toLowerCase())
+  // Skip a fallback the user already named, so it is not listed twice.
+  const isChosen = (font: string): boolean =>
+    chosen.some((entry) => entry.includes(font.toLowerCase()))
+
+  const parts = primary ? [quote(primary)] : []
+  parts.push(...LATIN_FALLBACK_FONTS.filter((font) => !isChosen(font)).map(quote))
+  if (cjk) {
+    parts.push(quote(cjk))
   }
+  parts.push(...CJK_FALLBACK_FONTS.filter((font) => !isChosen(font)).map(quote))
+  // Generic keywords are unquoted.
+  parts.push(GENERIC_FALLBACK)
   return parts.join(', ')
 }
 

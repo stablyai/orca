@@ -184,7 +184,10 @@ export function applyTerminalAppearance(
     const paneSize = paneFontSizes.get(pane.id)
     const metricOptions = {
       fontSize: paneSize ?? settings.terminalFontSize,
-      fontFamily: buildFontFamily(settings.terminalFontFamily),
+      fontFamily: buildFontFamily(
+        settings.terminalFontFamily,
+        settings.terminalCjkFontFamily ?? ''
+      ),
       fontWeight: terminalFontWeights.fontWeight,
       fontWeightBold: terminalFontWeights.fontWeightBold,
       lineHeight: normalizeTerminalLineHeight(settings.terminalLineHeight)
