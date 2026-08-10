@@ -4,11 +4,13 @@ export type PosixCommandPathLookupTarget =
 
 export type PosixCommandPathLookupOptions = {
   /**
-   * Skip PATH components under the WSL Windows-drive automount root (`/mnt/<n>`).
-   * drvfs stats cross the WSL↔Windows boundary and are far slower than native
-   * ext4 — especially when cold — so a Windows PATH tail can blow a probe's
-   * timeout. WSL-side probes opt in; never set for SSH remotes, where `/mnt`
-   * can be a real Linux mount.
+   * Skip PATH components under WSL's single-letter Windows drive mounts
+   * (`/mnt/<drive-letter>`, e.g. `/mnt/c`). drvfs stats cross the
+   * WSL↔Windows boundary and are far slower than native ext4 — especially
+   * when cold — so a Windows PATH tail can blow a probe's timeout.
+   * Multi-letter `/mnt` paths (custom Linux mounts like `/mnt/data`, WSL
+   * internals) stay searchable. WSL-side probes opt in; never set for SSH
+   * remotes, where `/mnt` can be a real Linux mount.
    */
   skipWindowsMountDirs?: boolean
 }
@@ -24,8 +26,8 @@ export function buildPosixCommandPathLookupScript(
     options.skipWindowsMountDirs === true
       ? [
           'case "$_orca_lookup_component" in',
-          '  /mnt|/mnt/*)',
-          // Why: continue past Windows-drive mounts; break on the final component.
+          '  /mnt/[A-Za-z]|/mnt/[A-Za-z]/*)',
+          // Why: continue past Windows drive mounts; break on the final component.
           '    [ -n "$_orca_lookup_has_more" ] || break',
           '    continue',
           '    ;;',

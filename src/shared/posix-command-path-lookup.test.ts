@@ -230,7 +230,7 @@ describe('buildPosixCommandPathLookupScript', () => {
     expect(script).toContain(`_orca_lookup_command='agent'\\''; echo injected; '\\'''`)
   })
 
-  it('emits the /mnt guard only when skipWindowsMountDirs is set', () => {
+  it('emits the drive-letter /mnt guard only when skipWindowsMountDirs is set', () => {
     const withSkip = buildPosixCommandPathLookupScript(
       { kind: 'literal', value: 'agent' },
       { skipWindowsMountDirs: true }
@@ -238,9 +238,41 @@ describe('buildPosixCommandPathLookupScript', () => {
     const withoutSkip = buildPosixCommandPathLookupScript({ kind: 'literal', value: 'agent' })
 
     expect(withSkip).toContain('case "$_orca_lookup_component" in')
-    expect(withSkip).toContain('/mnt|/mnt/*)')
-    expect(withoutSkip).not.toContain('/mnt|/mnt/*)')
+    expect(withSkip).toContain('/mnt/[A-Za-z]|/mnt/[A-Za-z]/*)')
+    expect(withSkip).not.toContain('/mnt|/mnt/*)')
+    expect(withoutSkip).not.toContain('/mnt/[A-Za-z]|/mnt/[A-Za-z]/*)')
   })
+
+  it.skipIf(executablePath(['/bin/sh']) === null)(
+    'the /mnt guard matches only single-letter drive mounts, not multi-letter /mnt paths',
+    () => {
+      const guard = [
+        'case "$_orca_lookup_component" in',
+        '  /mnt/[A-Za-z]|/mnt/[A-Za-z]/*)',
+        '    printf matched ;;',
+        '  *)',
+        '    printf searchable ;;',
+        'esac'
+      ].join('\n')
+      const execGuard = (component: string): string =>
+        execFileSync('/bin/sh', ['-c', `_orca_lookup_component='${component}'; ${guard}`], {
+          encoding: 'utf8'
+        })
+          .trim()
+          .split('\n')
+          .at(-1) ?? ''
+
+      expect(execGuard('/mnt/c')).toBe('matched')
+      expect(execGuard('/mnt/c/Windows/System32')).toBe('matched')
+      expect(execGuard('/mnt/w')).toBe('matched')
+      // Multi-letter /mnt mounts (custom Linux mounts, WSL internals like
+      // /mnt/wsl and /mnt/wslg) stay searchable.
+      expect(execGuard('/mnt/wsl')).toBe('searchable')
+      expect(execGuard('/mnt/data')).toBe('searchable')
+      expect(execGuard('/mnt/backup/bin')).toBe('searchable')
+      expect(execGuard('/mnt')).toBe('searchable')
+    }
+  )
 
   it.skipIf(executablePath(['/bin/sh']) === null || getWritableMntRoot() === null)(
     'skips Windows-drive /mnt PATH components when skipWindowsMountDirs is set',
