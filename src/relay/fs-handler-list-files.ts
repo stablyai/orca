@@ -23,6 +23,13 @@ import {
   shouldExcludeQuickOpenRelPath,
   shouldIncludeQuickOpenPath
 } from '../shared/quick-open-filter'
+import {
+  absorbPendingRipgrepSpawnError,
+  isRipgrepUnavailableAfterLaunchFailure,
+  isRipgrepUnavailableExit,
+  killSpawnedRipgrepProcess,
+  RipgrepUnavailableError
+} from '../shared/ripgrep-process-availability'
 
 export const LIST_FILES_TIMEOUT_MS = 25_000
 
@@ -78,6 +85,9 @@ export function listFilesWithRg(
         let passBuf = ''
         let passDone = false
         let passFileCount = 0
+        let processErrorObserved = false
+        let unavailableExitObserved = false
+        let launchFailureCheck: Promise<void> | null = null
         // --no-messages: permission-denied noise on the remote (e.g. .ssh,
         // root-owned mounts) would otherwise flood stderr.
         // cwd: rootPath — root-relative exclude globs like `!packages/app/**`
@@ -98,6 +108,10 @@ export function listFilesWithRg(
           child.stderr!.off('data', handleStderrData)
           child.off('error', handleError)
           child.off('close', handleClose)
+          absorbPendingRipgrepSpawnError(child, {
+            errorObserved: processErrorObserved,
+            unavailableExitObserved
+          })
         }
         const rejectPass = (error: Error): void => {
           if (passDone) {
@@ -116,6 +130,16 @@ export function listFilesWithRg(
           cleanup()
           passResolve()
         }
+        const rejectLaunchFailure = (error: Error): void => {
+          if (launchFailureCheck) {
+            return
+          }
+          launchFailureCheck = isRipgrepUnavailableAfterLaunchFailure(rootPath).then(
+            (unavailable) => {
+              rejectPass(unavailable ? new RipgrepUnavailableError() : error)
+            }
+          )
+        }
         children.push({
           child,
           isDone: () => passDone,
@@ -125,7 +149,7 @@ export function listFilesWithRg(
         timer = setTimeout(() => {
           // Discard residual buffer on abnormal exit — a truncated byte
           // sequence could look like a valid path.
-          child.kill()
+          killSpawnedRipgrepProcess(child)
           rejectPass(new Error('rg list timed out'))
         }, LIST_FILES_TIMEOUT_MS)
 
@@ -149,10 +173,26 @@ export function listFilesWithRg(
           /* drain to prevent backpressure stalls */
         }
         function handleError(err: Error): void {
+          processErrorObserved = true
+          if (isRipgrepUnavailableExit(child, null, null)) {
+            passBuf = ''
+            rejectLaunchFailure(err)
+            return
+          }
           rejectPass(err)
         }
         function handleClose(code: number | null, signal: NodeJS.Signals | null): void {
           if (passDone) {
+            return
+          }
+          if (
+            isRipgrepUnavailableExit(child, code, signal, {
+              classifyNativeLauncherExit: true
+            })
+          ) {
+            unavailableExitObserved = true
+            passBuf = ''
+            rejectLaunchFailure(new Error(`rg exited with code ${code}`))
             return
           }
           // Why signal != null is a failure: the only way spawn gets a signal
@@ -199,7 +239,7 @@ export function listFilesWithRg(
           continue
         }
         if (entry.child.exitCode === null && entry.child.signalCode === null) {
-          entry.child.kill()
+          killSpawnedRipgrepProcess(entry.child)
         }
         entry.reject(new Error(reason))
       }
