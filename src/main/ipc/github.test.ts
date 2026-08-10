@@ -40,6 +40,7 @@ const {
   mergePRMock,
   setPRAutoMergeMock,
   updatePRStateMock,
+  markPRReadyForReviewMock,
   rerunPRChecksMock,
   requestPRReviewersMock,
   removePRReviewersMock,
@@ -83,6 +84,7 @@ const {
   mergePRMock: vi.fn(),
   setPRAutoMergeMock: vi.fn(),
   updatePRStateMock: vi.fn(),
+  markPRReadyForReviewMock: vi.fn(),
   rerunPRChecksMock: vi.fn(),
   requestPRReviewersMock: vi.fn(),
   removePRReviewersMock: vi.fn(),
@@ -134,6 +136,7 @@ vi.mock('../github/client', () => ({
   mergePR: mergePRMock,
   setPRAutoMerge: setPRAutoMergeMock,
   updatePRState: updatePRStateMock,
+  markPRReadyForReview: markPRReadyForReviewMock,
   rerunPRChecks: rerunPRChecksMock,
   requestPRReviewers: requestPRReviewersMock,
   removePRReviewers: removePRReviewersMock,
@@ -233,6 +236,7 @@ describe('registerGitHubHandlers', () => {
     mergePRMock.mockReset()
     setPRAutoMergeMock.mockReset()
     updatePRStateMock.mockReset()
+    markPRReadyForReviewMock.mockReset()
     rerunPRChecksMock.mockReset()
     requestPRReviewersMock.mockReset()
     removePRReviewersMock.mockReset()
@@ -381,6 +385,52 @@ describe('registerGitHubHandlers', () => {
       },
       1
     )
+  })
+
+  it('marks PRs ready for review and broadcasts the work-item mutation', async () => {
+    markPRReadyForReviewMock.mockResolvedValue({ ok: true })
+    registerGitHubHandlers(store as never, stats as never)
+
+    const result = await handlers['gh:markPRReady'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        prNumber: 42,
+        prRepo: { owner: 'acme', repo: 'orca' }
+      }
+    )
+
+    expect(result).toEqual({ ok: true })
+    expect(markPRReadyForReviewMock).toHaveBeenCalledWith('/workspace/repo', 42, null, {
+      owner: 'acme',
+      repo: 'orca'
+    })
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledWith(
+      'gh:workItemMutated',
+      {
+        repoPath: '/workspace/repo',
+        repoId: 'repo-1',
+        type: 'pr',
+        number: 42
+      },
+      1
+    )
+  })
+
+  it('rejects invalid PR numbers for gh:markPRReady', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+
+    const result = await handlers['gh:markPRReady'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        prNumber: 0
+      }
+    )
+
+    expect(result).toEqual({ ok: false, error: 'Invalid pull request number' })
+    expect(markPRReadyForReviewMock).not.toHaveBeenCalled()
+    expect(sendToTrustedUIRendererMock).not.toHaveBeenCalled()
   })
 
   it('rejects unknown repository paths', async () => {

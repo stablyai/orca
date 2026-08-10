@@ -3748,6 +3748,7 @@ describe('web GitHub preload API', () => {
         'listLabelsBySlug',
         'listProjectViews',
         'listWorkItems',
+        'markPRReady',
         'mergePR',
         'notifyWorkItemMutated',
         'onPRRefreshEvent',
@@ -4003,6 +4004,12 @@ describe('web GitHub preload API', () => {
         args: { repoPath, prNumber: 7, updates: { state: 'closed' } },
         expectedMethod: 'github.updatePRState',
         expectedParams: withRepo({ repoPath, prNumber: 7, updates: { state: 'closed' } })
+      },
+      {
+        key: 'markPRReady',
+        args: { repoPath, prNumber: 7, prRepo: null },
+        expectedMethod: 'github.markPRReady',
+        expectedParams: withRepo({ repoPath, prNumber: 7, prRepo: null })
       },
       {
         key: 'requestPRReviewers',

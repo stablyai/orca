@@ -10300,7 +10300,8 @@
             "b25f63edd7": "打开",
             "d2ca293f3d": "处理中...",
             "ef064cb7c3": "默认",
-            "59b4dccf70": "destructive"
+            "59b4dccf70": "destructive",
+            "50e3f4f0e0": "标记为可审查"
           },
           "PortsPanel": {
             "3ea4a02a8f": "取消",

@@ -5040,6 +5040,35 @@ export async function updatePRState(
   }
 }
 
+export async function markPRReadyForReview(
+  repoPath: string,
+  prNumber: number,
+  connectionId?: string | null,
+  prRepo?: OwnerRepo | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId, localGitOptions))
+  await acquire()
+  try {
+    const args = ['pr', 'ready', String(prNumber)]
+    if (ownerRepo) {
+      args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
+    }
+    await ghExecFileAsync(args, {
+      ...ghOptions,
+      env: { ...process.env, GH_PROMPT_DISABLED: '1' }
+    })
+    return { ok: true }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
+    return { ok: false, error: classifyGhError(message).message }
+  } finally {
+    release()
+  }
+}
+
 export async function requestPRReviewers(
   repoPath: string,
   prNumber: number,

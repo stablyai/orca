@@ -176,6 +176,7 @@ import {
   getWorkItem,
   getWorkItemByOwnerRepo,
   getPullRequestPushTarget,
+  markPRReadyForReview,
   mergePR,
   resolveReviewThread,
   setPRCommentReaction,
@@ -3982,6 +3983,81 @@ describe('updatePRState', () => {
       ['pr', 'reopen', '3977', '--repo', 'stablyai/orca'],
       { host: 'github.com' }
     )
+  })
+})
+
+describe('markPRReadyForReview', () => {
+  beforeEach(() => {
+    ghExecFileAsyncMock.mockReset()
+    getOwnerRepoMock.mockReset()
+    ghRepoExecOptionsMock.mockClear()
+    githubRepoContextMock.mockClear()
+    acquireMock.mockReset()
+    releaseMock.mockReset()
+    acquireMock.mockResolvedValue(undefined)
+    _resetOwnerRepoCache()
+  })
+
+  it('marks a draft pull request ready through the gh PR command', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(markPRReadyForReview('/repo-root', 3977)).resolves.toEqual({ ok: true })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['pr', 'ready', '3977', '--repo', 'stablyai/orca'],
+      expect.objectContaining({
+        cwd: '/repo-root',
+        env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' })
+      })
+    )
+    expect(acquireMock).toHaveBeenCalledTimes(1)
+    expect(releaseMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('prefers the provided PR repo over origin resolution', async () => {
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(
+      markPRReadyForReview('/repo-root', 12, null, { owner: 'acme', repo: 'widgets' })
+    ).resolves.toEqual({ ok: true })
+
+    expect(getOwnerRepoMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['pr', 'ready', '12', '--repo', 'acme/widgets'],
+      expect.objectContaining({
+        cwd: '/repo-root',
+        env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' })
+      })
+    )
+  })
+
+  it('marks SSH-backed pull requests ready without local cwd options', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(markPRReadyForReview('/remote/repo-root', 3977, 'ssh-1')).resolves.toEqual({
+      ok: true
+    })
+
+    expect(ghExecFileAsyncMock.mock.calls[0][1]).not.toHaveProperty('cwd')
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['pr', 'ready', '3977', '--repo', 'stablyai/orca'],
+      expect.objectContaining({
+        env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' })
+      })
+    )
+  })
+
+  it('classifies gh failures into user-facing errors', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
+
+    await expect(markPRReadyForReview('/repo-root', 3977)).resolves.toEqual({
+      ok: false,
+      error: 'HTTP 404: Not Found'
+    })
+    expect(releaseMock).toHaveBeenCalledTimes(1)
   })
 })
 

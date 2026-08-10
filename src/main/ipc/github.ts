@@ -49,6 +49,7 @@ import {
   mergePR,
   setPRAutoMerge,
   updatePRState,
+  markPRReadyForReview,
   rerunPRChecks,
   requestPRReviewers,
   removePRReviewers,
@@ -1009,6 +1010,34 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.path,
         args.prNumber,
         args.updates,
+        repoConnectionId(repo),
+        args.prRepo ?? null,
+        ...localGitOptionArgs(store, repo)
+      )
+      if (result.ok) {
+        broadcastWorkItemMutated(
+          { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
+          event.sender.id
+        )
+      }
+      return result
+    }
+  )
+
+  ipcMain.handle(
+    'gh:markPRReady',
+    async (event, args: RepoScopedArgs & { prNumber: number; prRepo?: GitHubOwnerRepo | null }) => {
+      const repo = assertRegisteredRepo(args, store)
+      if (
+        typeof args.prNumber !== 'number' ||
+        !Number.isInteger(args.prNumber) ||
+        args.prNumber < 1
+      ) {
+        return { ok: false, error: 'Invalid pull request number' }
+      }
+      const result = await markPRReadyForReview(
+        repo.path,
+        args.prNumber,
         repoConnectionId(repo),
         args.prRepo ?? null,
         ...localGitOptionArgs(store, repo)

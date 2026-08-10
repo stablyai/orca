@@ -1939,6 +1939,12 @@ export type PreloadApi = {
         prRepo?: GitHubOwnerRepo | null
       }
     ) => Promise<{ ok: true } | { ok: false; error: string }>
+    markPRReady: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
     requestPRReviewers: (
       args: GitHubRepoSelectorArgs & {
         prNumber: number

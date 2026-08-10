@@ -5,11 +5,14 @@ import type { GitHubPRAutoMergeAction } from '@/components/github-pr-merge-state
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PRInfo, Repo, GitHubPRMergeMethod } from '../../../../shared/types'
 import {
+  markGitHubHostedReviewReady,
   mergeGitHubHostedReview,
   setGitHubHostedReviewAutoMerge,
   updateGitHubHostedReviewState
 } from './hosted-review-github-actions'
 import { translate } from '@/i18n/i18n'
+
+export type HostedReviewStateUpdating = 'open' | 'closed' | 'ready'
 
 export type HostedReviewActionInfo = Pick<
   HostedReviewInfo,
@@ -48,16 +51,17 @@ export function useHostedReviewActions({
   onRefreshReview: () => Promise<void>
 }): {
   merging: boolean
-  stateUpdating: 'open' | 'closed' | null
+  stateUpdating: HostedReviewStateUpdating | null
   actionError: string | null
   handleMerge: (method?: GitHubPRMergeMethod) => Promise<void>
   handleAutoMerge: () => Promise<void>
   handleCloseReview: () => Promise<void>
   handleReopenReview: () => Promise<void>
+  handleMarkReady: () => Promise<void>
 } {
   const confirm = useConfirmationDialog()
   const [merging, setMerging] = useState(false)
-  const [stateUpdating, setStateUpdating] = useState<'open' | 'closed' | null>(null)
+  const [stateUpdating, setStateUpdating] = useState<HostedReviewStateUpdating | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const handleMerge = useCallback(
@@ -223,6 +227,31 @@ export function useHostedReviewActions({
     await handleReviewStateChange('open')
   }, [handleReviewStateChange])
 
+  const handleMarkReady = useCallback(async () => {
+    // Why: `gh pr ready` is GitHub-only; other providers never offer this action.
+    if (review.provider !== 'github' || stateUpdating) {
+      return
+    }
+    setStateUpdating('ready')
+    setActionError(null)
+    try {
+      const result = await markGitHubHostedReviewReady({
+        repo,
+        prNumber: review.number,
+        prRepo: githubPR?.prRepo ?? null
+      })
+      if (!result.ok) {
+        setActionError(result.error)
+      } else {
+        await onRefreshReview()
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to mark ready for review')
+    } finally {
+      setStateUpdating(null)
+    }
+  }, [githubPR?.prRepo, onRefreshReview, repo, review.number, review.provider, stateUpdating])
+
   return {
     merging,
     stateUpdating,
@@ -230,6 +259,7 @@ export function useHostedReviewActions({
     handleMerge,
     handleAutoMerge,
     handleCloseReview,
-    handleReopenReview
+    handleReopenReview,
+    handleMarkReady
   }
 }

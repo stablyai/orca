@@ -74,6 +74,32 @@ export async function setGitHubHostedReviewAutoMerge(args: {
   })
 }
 
+export async function markGitHubHostedReviewReady(args: {
+  repo: Repo
+  prNumber: number
+  prRepo?: GitHubPRRepo | null
+}): Promise<Awaited<ReturnType<typeof window.api.gh.markPRReady>>> {
+  const target = getGitHubActionTarget(args.repo)
+  if (target.kind === 'environment') {
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.markPRReady>>>(
+      target,
+      'github.markPRReady',
+      {
+        repo: args.repo.id,
+        prNumber: args.prNumber,
+        prRepo: args.prRepo ?? null
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.markPRReady({
+    repoPath: args.repo.path,
+    repoId: args.repo.id,
+    prNumber: args.prNumber,
+    prRepo: args.prRepo ?? null
+  })
+}
+
 export async function updateGitHubHostedReviewState(args: {
   repo: Repo
   prNumber: number
