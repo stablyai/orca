@@ -40,7 +40,7 @@ export default function CsvViewer({ content, filePath }: CsvViewerProps): React.
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SpreadsheetGrid header={headerRow} rows={bodyRows} columnCount={parsed.maxColumns} />
-      <div className="flex items-center gap-4 border-t border-border/60 px-3 py-1 text-xs text-muted-foreground">
+      <div className="flex items-center gap-4 border-t border-spreadsheet-gridline-strong bg-spreadsheet-header px-3 py-1 text-xs text-spreadsheet-header-foreground">
         <span>
           {bodyRows.length.toLocaleString()}{' '}
           {translate('auto.components.editor.CsvViewer.ac31d2cd60', 'rows')}

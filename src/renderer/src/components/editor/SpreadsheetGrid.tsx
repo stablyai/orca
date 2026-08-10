@@ -105,7 +105,7 @@ export function SpreadsheetGrid({
   return (
     <div
       ref={scrollRef}
-      className="relative min-h-0 flex-1 overflow-auto scrollbar-editor bg-editor-surface font-mono text-xs"
+      className="relative min-h-0 flex-1 overflow-auto scrollbar-editor bg-spreadsheet-surface text-[13px] text-spreadsheet-foreground tabular-nums"
     >
       <div
         role="table"
@@ -117,16 +117,16 @@ export function SpreadsheetGrid({
         <div
           role="row"
           aria-rowindex={1}
-          className="sticky top-0 z-10 grid bg-muted/90 backdrop-blur"
+          className="sticky top-0 z-10 grid bg-spreadsheet-header"
           style={{ gridTemplateColumns: gridTemplate, height: SPREADSHEET_GRID_ROW_HEIGHT }}
         >
           <div
             role="columnheader"
-            className="sticky left-0 z-20 flex items-center justify-end border-b border-r border-border bg-muted/90 px-2 text-[10px] font-normal text-muted-foreground"
+            className="sticky left-0 z-20 flex items-center justify-center border-b border-r border-spreadsheet-gridline-strong bg-spreadsheet-header text-[11px] font-normal text-spreadsheet-header-foreground"
           >
             #
           </div>
-          <div aria-hidden className="border-b border-border" />
+          <div aria-hidden className="border-b border-spreadsheet-gridline-strong" />
           {virtualColumns.map((virtualColumn) => {
             const cell = paddedHeader[virtualColumn.index] ?? ''
             return (
@@ -135,7 +135,7 @@ export function SpreadsheetGrid({
                 aria-colindex={virtualColumn.index + 2}
                 key={virtualColumn.key}
                 className={cn(
-                  'flex items-center overflow-hidden border-b border-r border-border px-2 font-medium text-foreground',
+                  'flex items-center overflow-hidden border-b border-r border-spreadsheet-gridline-strong px-2 text-[11px] font-medium text-spreadsheet-header-foreground',
                   headerAlignment === 'center' ? 'justify-center' : 'justify-start'
                 )}
               >
@@ -145,7 +145,7 @@ export function SpreadsheetGrid({
               </div>
             )
           })}
-          <div aria-hidden className="border-b border-border" />
+          <div aria-hidden className="border-b border-spreadsheet-gridline-strong" />
         </div>
         {/* Why: role="rowgroup" keeps the table's owned-row relationship intact —
         a generic element between role="table" and the data rows can stop
@@ -162,7 +162,7 @@ export function SpreadsheetGrid({
                 aria-rowindex={virtualRow.index + 2}
                 key={virtualRow.key}
                 data-index={virtualRow.index}
-                className="group grid hover:bg-accent/40"
+                className="group grid hover:bg-spreadsheet-row-hover"
                 style={{
                   gridTemplateColumns: gridTemplate,
                   position: 'absolute',
@@ -175,11 +175,11 @@ export function SpreadsheetGrid({
               >
                 <div
                   role="rowheader"
-                  className="sticky left-0 z-[5] flex items-center justify-end border-b border-r border-border bg-muted/90 px-2 text-[10px] text-muted-foreground backdrop-blur group-hover:bg-accent/40"
+                  className="sticky left-0 z-[5] flex items-center justify-center border-b border-r border-spreadsheet-gridline bg-spreadsheet-header px-2 text-[11px] text-spreadsheet-header-foreground group-hover:bg-spreadsheet-gridline"
                 >
                   {virtualRow.index + 1}
                 </div>
-                <div aria-hidden className="border-b border-border" />
+                <div aria-hidden className="border-b border-spreadsheet-gridline" />
                 {virtualColumns.map((virtualColumn) => {
                   const columnIndex = virtualColumn.index
                   const cell = row[columnIndex] ?? ''
@@ -190,10 +190,9 @@ export function SpreadsheetGrid({
                       aria-colindex={columnIndex + 2}
                       key={virtualColumn.key}
                       className={cn(
-                        'flex items-center overflow-hidden border-b border-r border-border px-2',
+                        'flex items-center overflow-hidden border-b border-r border-spreadsheet-gridline px-2',
                         getSpreadsheetCellAlignmentClass(cell),
-                        cellStyle?.bold === true && 'font-semibold',
-                        cellStyle?.textColor === undefined && 'text-foreground'
+                        cellStyle?.bold === true && 'font-semibold'
                       )}
                       // Why: these colours come from the opened file, not from the
                       // design system, so no token can express them. A cell that
@@ -212,7 +211,7 @@ export function SpreadsheetGrid({
                     </div>
                   )
                 })}
-                <div aria-hidden className="border-b border-border" />
+                <div aria-hidden className="border-b border-spreadsheet-gridline" />
               </div>
             )
           })}

@@ -58,6 +58,13 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
+  --color-spreadsheet-surface: var(--spreadsheet-surface);
+  --color-spreadsheet-foreground: var(--spreadsheet-foreground);
+  --color-spreadsheet-header: var(--spreadsheet-header);
+  --color-spreadsheet-header-foreground: var(--spreadsheet-header-foreground);
+  --color-spreadsheet-gridline: var(--spreadsheet-gridline);
+  --color-spreadsheet-gridline-strong: var(--spreadsheet-gridline-strong);
+  --color-spreadsheet-row-hover: var(--spreadsheet-row-hover);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-chart-1: var(--chart-1);
@@ -149,6 +156,19 @@
   --orca-security-ring: #a1a1a1;
   --background: #fff;
   --editor-surface: #ffffff;
+  /* Sheet surface for the CSV and workbook viewers. Deliberately the same in
+     light and dark: a spreadsheet's own cell fills are authored by their author
+     against a white sheet, so rendering them on a dark canvas misrepresents the
+     file and frequently leaves the fills unreadable. Excel and Google Sheets do
+     the same thing inside a dark application chrome. */
+  --spreadsheet-surface: #ffffff;
+  --spreadsheet-foreground: #1f1f1f;
+  --spreadsheet-header: #f8f9fa;
+  --spreadsheet-header-foreground: #444746;
+  --spreadsheet-gridline: #e1e3e1;
+  --spreadsheet-gridline-strong: #c0c3c6;
+  --spreadsheet-row-hover: #f1f3f4;
+
   --foreground: #0a0a0a;
   --card: #fff;
   --card-foreground: #0a0a0a;
@@ -252,6 +272,14 @@
   --orca-security-ring: #737373;
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
+  /* Same sheet surface as the light theme — see the note on these tokens above. */
+  --spreadsheet-surface: #ffffff;
+  --spreadsheet-foreground: #1f1f1f;
+  --spreadsheet-header: #f8f9fa;
+  --spreadsheet-header-foreground: #444746;
+  --spreadsheet-gridline: #e1e3e1;
+  --spreadsheet-gridline-strong: #c0c3c6;
+  --spreadsheet-row-hover: #f1f3f4;
   --foreground: #fafafa;
   --card: #171717;
   --card-foreground: #fafafa;

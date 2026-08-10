@@ -104,7 +104,7 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
           {translate('auto.components.editor.XlsxViewer.2952ec35f8', 'Empty sheet')}
         </div>
       )}
-      <div className="flex items-center gap-3 border-t border-border/60 px-3 py-1 text-xs text-muted-foreground">
+      <div className="flex items-center gap-3 border-t border-spreadsheet-gridline-strong bg-spreadsheet-header px-3 py-1 text-xs text-spreadsheet-header-foreground">
         <div role="tablist" className="flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-editor">
           {sheets.map((sheet, index) => (
             <button
@@ -113,8 +113,9 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
               role="tab"
               aria-selected={index === activeSheetIndex}
               className={cn(
-                'flex-shrink-0 rounded px-2 py-0.5 hover:bg-accent hover:text-foreground',
-                index === activeSheetIndex && 'bg-accent text-foreground',
+                'flex-shrink-0 rounded-t px-3 py-0.5 hover:bg-spreadsheet-row-hover',
+                index === activeSheetIndex &&
+                  'bg-spreadsheet-surface font-medium text-spreadsheet-foreground shadow-xs',
                 sheet.hidden && 'italic opacity-70'
               )}
               onClick={() => setSheetSelection({ filePath, index })}
