@@ -4971,7 +4971,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', {
-      executionHostId: 'runtime:env-1'
+      executionHostId: 'runtime:env-1',
+      suppressRemoteLineageRefresh: true
     })
     expect(fetchWorktreeLineage).toHaveBeenCalledWith({
       executionHostId: 'runtime:env-1'

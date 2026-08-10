@@ -3447,7 +3447,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           : false
       }
       // Direct SSH lineage requires its own qualified authority result.
-      if (!directSshAuthority) {
+      // Bulk runtime callers apply one final host-wide snapshot after all repo merges.
+      if (!directSshAuthority && !options?.suppressRemoteLineageRefresh) {
         await refreshRemoteWorktreeLineageBestEffort(settings, set)
       }
       return directCallerAuthority ? refresh.providerResult! : refresh.result.authoritative
