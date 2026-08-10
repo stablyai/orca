@@ -211,11 +211,11 @@ import { cn } from '@/lib/utils'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
-  getTaskPresetQuery,
   PER_REPO_FETCH_LIMIT,
   CROSS_REPO_DISPLAY_LIMIT
 } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import { getTaskPresetQuery } from '../../../shared/task-preset-query'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import {
   readLinearBoardIssueDragData,
@@ -293,11 +293,11 @@ import {
   DEFAULT_LINEAR_ORDER_BY,
   DEFAULT_LINEAR_VIEW_MODE,
   LINEAR_DISPLAY_PROPERTIES,
-  resolveLinearIssueViewResumeState,
   selectLinearWorkspaceIssueFilter,
   serializeLinearIssueViewResumeState,
   setLinearWorkspaceIssueFilter
 } from '../../../shared/linear-issue-view-resume-state'
+import { loadLinearIssueView, saveLinearIssueView } from './linear-issue-view-storage'
 import {
   isNewIssueDraftContentful,
   resolveNewIssueOpenSeed,
@@ -346,7 +346,6 @@ import {
 } from '@/components/task-page-jira-load-state'
 import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-summary'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
-import { buildJiraCreateTextAdf } from '@/components/jira-create-adf'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
@@ -451,6 +450,25 @@ import {
   type LinearViewMode
 } from '@/components/task-page-localized-options'
 import { useGitHubTaskSearchCommit } from '@/components/use-github-task-search-commit'
+import {
+  getDefaultPresetForGitHubTaskKind,
+  getGitHubTaskKind,
+  normalizeGitHubTaskPreset,
+  scopeGitHubTaskSearch
+} from '@/components/task-page-github-task-kind'
+import { areStringSetsEqual } from '@/components/task-page-string-set-equality'
+import { getJiraStatusTone } from '@/components/task-page-jira-status-tone'
+import {
+  compareJiraProjectsByDisplayLabel,
+  getJiraProjectSelectionKey
+} from '@/components/task-page-jira-project-selection'
+import {
+  buildJiraCreateCustomFields,
+  getJiraCreateAllowedValueLabel,
+  isVisibleJiraCreateField
+} from '@/components/task-page-jira-create-fields'
+import { formatPRDelta } from '@/components/task-page-pr-delta-summary'
+import { getPageNumbers } from '@/components/task-page-pagination-page-numbers'
 
 function isGitLabMRFilter(value: GitLabTaskFilter | GitLabIssueFilter): value is GitLabTaskFilter {
   return value === 'opened' || value === 'merged' || value === 'closed' || value === 'all'
@@ -614,46 +632,6 @@ const GITHUB_TASK_STICKY_TITLE_CELL_CLASS = cn(
   GITHUB_TASK_ROW_SURFACE_CLASS,
   GITHUB_TASK_ROW_HOVER_SURFACE_CLASS
 )
-
-function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: string): boolean {
-  if (preset === 'prs' || preset === 'my-prs' || preset === 'review') {
-    return true
-  }
-  const parsed = parseTaskQuery(query)
-  return (
-    parsed.scope === 'pr' ||
-    parsed.state === 'merged' ||
-    parsed.draft ||
-    parsed.reviewRequested !== null ||
-    parsed.reviewedBy !== null
-  )
-}
-
-function normalizeGitHubTaskPreset(preset: TaskViewPresetId | null | undefined): TaskViewPresetId {
-  // Why: the split Issues/PRs tabs dropped the mixed "All" view, so legacy saved defaults land on the first tab instead of mixing rows.
-  return !preset || preset === 'all' ? 'issues' : preset
-}
-
-function getGitHubTaskKind(preset: TaskViewPresetId | null, query: string): GitHubTaskKind {
-  return isPRFocusedTaskView(preset, query) ? 'prs' : 'issues'
-}
-
-function getDefaultPresetForGitHubTaskKind(kind: GitHubTaskKind): TaskViewPresetId {
-  return kind === 'prs' ? 'prs' : 'issues'
-}
-
-function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
-  const trimmed = query.trim()
-  if (!trimmed) {
-    return getTaskPresetQuery(getDefaultPresetForGitHubTaskKind(kind))
-  }
-  if (/\bis:(?:issue|pr|pull-request)\b/i.test(trimmed)) {
-    return trimmed
-  }
-  const parsed = parseTaskQuery(trimmed)
-  const inferredKind = parsed.scope === 'pr' ? 'prs' : parsed.scope === 'issue' ? 'issues' : kind
-  return `${inferredKind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
-}
 
 function formatRelativeTime(input: string): string {
   return formatUiRelativeTimeFromDate(input)
@@ -999,125 +977,6 @@ function getLinearIssueGridTemplate(visibleProperties: ReadonlySet<LinearDisplay
   // Why: Worktrees is icon-only (open vs start); keep it narrow so issue title keeps the room.
   columns.push('64px')
   return columns.join(' ')
-}
-
-function areStringSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
-  return a.size === b.size && [...a].every((value) => b.has(value))
-}
-
-function getJiraStatusTone(categoryKey: string): string {
-  if (categoryKey === 'done') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-  }
-  if (categoryKey === 'indeterminate') {
-    return 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-200'
-  }
-  return 'border-border/50 bg-muted/40 text-muted-foreground'
-}
-
-function getJiraProjectSelectionKey(project: JiraProject): string {
-  return `${project.siteId ?? 'selected'}:${project.id}`
-}
-
-const jiraProjectLabelCollator = new Intl.Collator(undefined, {
-  numeric: true,
-  sensitivity: 'base'
-})
-
-function compareJiraProjectsByDisplayLabel(
-  a: JiraProject,
-  b: JiraProject,
-  includeSiteName: boolean
-): number {
-  const siteComparison = includeSiteName
-    ? jiraProjectLabelCollator.compare(a.siteName ?? '', b.siteName ?? '')
-    : 0
-  if (siteComparison !== 0) {
-    return siteComparison
-  }
-  const nameComparison = jiraProjectLabelCollator.compare(a.name, b.name)
-  if (nameComparison !== 0) {
-    return nameComparison
-  }
-  return jiraProjectLabelCollator.compare(a.key, b.key)
-}
-
-const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set(['project', 'issuetype', 'summary', 'description'])
-
-function isVisibleJiraCreateField(field: JiraCreateField): boolean {
-  return field.required && !JIRA_CREATE_SYSTEM_FIELD_KEYS.has(field.key)
-}
-
-function getJiraCreateAllowedValueLabel(
-  value: NonNullable<JiraCreateField['allowedValues']>[number]
-): string {
-  return value.name ?? value.value ?? value.id ?? 'Option'
-}
-
-function findJiraCreateAllowedValue(field: JiraCreateField, draftValue: string) {
-  return field.allowedValues?.find((value) => {
-    return value.id === draftValue || value.value === draftValue || value.name === draftValue
-  })
-}
-
-function getJiraCreateOptionPayload(
-  value: NonNullable<JiraCreateField['allowedValues']>[number] | undefined,
-  fallback: string
-): Record<string, string> | string {
-  if (value?.id) {
-    return { id: value.id }
-  }
-  if (value?.value) {
-    return { value: value.value }
-  }
-  if (value?.name) {
-    return { name: value.name }
-  }
-  return fallback
-}
-
-function buildJiraCreateFieldValue(field: JiraCreateField, draftValue: string): unknown {
-  const trimmed = draftValue.trim()
-  if (!trimmed) {
-    return undefined
-  }
-  if (field.schema?.type === 'array') {
-    const parts = trimmed
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean)
-    if (field.allowedValues?.length) {
-      return parts.map((part) =>
-        getJiraCreateOptionPayload(findJiraCreateAllowedValue(field, part), part)
-      )
-    }
-    return parts
-  }
-  if (field.allowedValues?.length) {
-    return getJiraCreateOptionPayload(findJiraCreateAllowedValue(field, trimmed), trimmed)
-  }
-  if (field.schema?.type === 'number') {
-    const numberValue = Number(trimmed)
-    return Number.isFinite(numberValue) ? numberValue : trimmed
-  }
-  if (field.schema?.custom?.includes(':textarea') || field.schema?.type === 'textarea') {
-    return buildJiraCreateTextAdf(trimmed)
-  }
-  return trimmed
-}
-
-function buildJiraCreateCustomFields(
-  fields: readonly JiraCreateField[],
-  values: Record<string, string>
-): Record<string, unknown> | undefined {
-  const customFields: Record<string, unknown> = {}
-  for (const field of fields) {
-    const value = buildJiraCreateFieldValue(field, values[field.key] ?? '')
-    if (value !== undefined) {
-      customFields[field.key] = value
-    }
-  }
-  return Object.keys(customFields).length > 0 ? customFields : undefined
 }
 
 type TaskPageGitHubWorkItemMutationRunner = {
@@ -1549,20 +1408,6 @@ function GHStatusCell({
       </PopoverContent>
     </Popover>
   )
-}
-
-function formatPRDelta(item: GitHubWorkItem): string | null {
-  const parts: string[] = []
-  if (typeof item.additions === 'number') {
-    parts.push(`+${item.additions}`)
-  }
-  if (typeof item.deletions === 'number') {
-    parts.push(`-${item.deletions}`)
-  }
-  if (typeof item.changedFiles === 'number') {
-    parts.push(`${item.changedFiles} ${item.changedFiles === 1 ? 'file' : 'files'}`)
-  }
-  return parts.length > 0 ? parts.join(' ') : null
 }
 
 function ReviewChipAvatar({
@@ -3010,28 +2855,6 @@ function PRMergeCell({
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
-
-// Builds the page-number array with ellipsis gaps: first, last, and a window around the current page.
-function getPageNumbers(current: number, total: number): (number | 'ellipsis')[] {
-  if (total <= 9) {
-    return Array.from({ length: total }, (_, i) => i)
-  }
-  const pages = new Set<number>()
-  pages.add(0)
-  pages.add(total - 1)
-  for (let i = Math.max(0, current - 2); i <= Math.min(total - 1, current + 2); i++) {
-    pages.add(i)
-  }
-  const sorted = [...pages].sort((a, b) => a - b)
-  const result: (number | 'ellipsis')[] = []
-  for (let i = 0; i < sorted.length; i++) {
-    if (i > 0 && sorted[i] - sorted[i - 1] > 1) {
-      result.push('ellipsis')
-    }
-    result.push(sorted[i])
-  }
-  return result
 }
 
 function PaginationBar({
@@ -4887,7 +4710,7 @@ export default function TaskPage(): React.JSX.Element {
     setLinearSearchInput(linearQuery)
     setAppliedLinearSearch(linearQuery)
 
-    const linearIssueView = resolveLinearIssueViewResumeState(taskResumeState?.linearIssueView)
+    const linearIssueView = loadLinearIssueView()
     setLinearViewMode(linearIssueView.viewMode)
     setLinearGroupBy(linearIssueView.groupBy)
     setLinearOrderBy(linearIssueView.orderBy)
@@ -8173,8 +7996,8 @@ export default function TaskPage(): React.JSX.Element {
       linearViewPersistReadyRef.current = true
       return
     }
-    setTaskResumeState({
-      linearIssueView: serializeLinearIssueViewResumeState({
+    saveLinearIssueView(
+      serializeLinearIssueViewResumeState({
         viewMode: linearViewMode,
         groupBy: linearGroupBy,
         orderBy: linearOrderBy,
@@ -8182,7 +8005,7 @@ export default function TaskPage(): React.JSX.Element {
         teamPropertyTouched: linearTeamPropertyTouched,
         filtersByWorkspaceId: linearIssueFiltersByWorkspaceId
       })
-    })
+    )
   }, [
     linearDisplayProperties,
     linearGroupBy,
@@ -8190,7 +8013,6 @@ export default function TaskPage(): React.JSX.Element {
     linearOrderBy,
     linearTeamPropertyTouched,
     linearViewMode,
-    setTaskResumeState,
     taskResumeApplied
   ])
 
@@ -10463,6 +10285,7 @@ export default function TaskPage(): React.JSX.Element {
                       const attachedWorkspaceLabel = attachedWorkspace
                         ? getGithubWorkItemWorkspaceAttachmentLabel(attachedWorkspace)
                         : null
+                      const prDelta = item.type === 'pr' ? formatPRDelta(item) : null
                       const githubTaskIdPill = (
                         <span
                           // Why: no fill — a muted wash on the pill stacks on the
@@ -10569,10 +10392,10 @@ export default function TaskPage(): React.JSX.Element {
                                   </span>
                                 </>
                               ) : null}
-                              {item.type === 'pr' && formatPRDelta(item) ? (
+                              {prDelta ? (
                                 <span className="inline-flex items-center gap-1">
                                   <Files className="size-3" />
-                                  {formatPRDelta(item)}
+                                  {prDelta}
                                 </span>
                               ) : null}
                               {attachedWorkspaceLabel ? (

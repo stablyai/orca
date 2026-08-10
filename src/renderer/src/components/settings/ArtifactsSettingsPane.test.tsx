@@ -61,13 +61,15 @@ describe('ArtifactsSettingsPane', () => {
     )
 
     expect(screen.getByText('How to use Artifacts')).toBeInTheDocument()
-    expect(screen.getByText('Ask your agent to share it')).toBeInTheDocument()
+    expect(screen.getByText('Choose a file to share')).toBeInTheDocument()
     expect(
-      screen.getByText('For example: “Share this HTML mock as an artifact.”')
+      screen.getByText(
+        'Open an HTML or Markdown file and select Share as artifact, or ask an agent to share it.'
+      )
     ).toBeInTheDocument()
-    expect(screen.getByText('Share the public link')).toBeInTheDocument()
+    expect(screen.getByText('Copy the public link')).toBeInTheDocument()
     expect(
-      screen.getByText('Your agent returns a link that anyone with the URL can view.')
+      screen.getByText('After publishing, copy the link and send it to your team.')
     ).toBeInTheDocument()
     expect(screen.getByText('Manage it in Orca')).toBeInTheDocument()
     expect(
@@ -137,15 +139,15 @@ describe('ArtifactsSettingsPane', () => {
     expect(mocks.openArtifactsPage).toHaveBeenCalledOnce()
   })
 
-  it('shows the publish capability off by default and describes it as device-wide', () => {
+  it('describes public publishing and existing-link retention', () => {
     render(<ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />)
 
     expect(
       screen.getByRole('switch', { name: 'Allow publishing public artifact links' })
     ).toHaveAttribute('aria-checked', 'false')
-    expect(screen.getByText(/your agents and the orca CLI/)).toBeInTheDocument()
-    expect(screen.getByText(/mint links anyone with the URL can open/)).toBeInTheDocument()
-    expect(screen.getByText(/does not delete existing links/)).toBeInTheDocument()
+    expect(screen.getByText(/Publish HTML and Markdown files as links/)).toBeInTheDocument()
+    expect(screen.getByText(/Existing links remain until you delete them/)).toBeInTheDocument()
+    expect(screen.queryByText(/Off by default/)).not.toBeInTheDocument()
   })
 
   it('grants and revokes the publish capability through the toggle', async () => {
@@ -198,9 +200,11 @@ describe('ArtifactsSettingsPane', () => {
       <ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
     )
 
-    expect(screen.getByText('Allow publishing first')).toBeInTheDocument()
-    expect(screen.getByText(/artifact_sharing_disabled/)).toBeInTheDocument()
-    expect(screen.getByText(/Publishing is off, so nothing on this device/)).toBeInTheDocument()
+    expect(screen.getByText('Enable artifact sharing')).toBeInTheDocument()
+    expect(
+      screen.getByText('Turn on “Allow publishing public artifact links” above.')
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Enable artifact sharing above/)).toBeInTheDocument()
 
     rerender(
       <ArtifactsSettingsPane
@@ -208,8 +212,8 @@ describe('ArtifactsSettingsPane', () => {
         updateSettings={vi.fn()}
       />
     )
-    expect(screen.queryByText('Allow publishing first')).not.toBeInTheDocument()
-    expect(screen.getByText('Ask your agent to share it')).toBeInTheDocument()
+    expect(screen.queryByText('Enable artifact sharing')).not.toBeInTheDocument()
+    expect(screen.getByText('Choose a file to share')).toBeInTheDocument()
   })
 
   it('points web clients at the desktop app for the opt-in step', () => {

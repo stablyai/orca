@@ -143,6 +143,165 @@ describe('ArtifactCloudService record authorization', () => {
     expect(firstKey).not.toBe(secondKey)
   })
 
+  it('creates once and updates on repeated publish', async () => {
+    const { service } = await setup()
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createResponse())
+      .mockResolvedValueOnce(createResponse())
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(service.publish(writeRequest)).resolves.toMatchObject({
+      status: 'ok',
+      value: { change: 'created', item: { shareUrl: 'https://share.onorca.dev/a/artifact-a' } }
+    })
+    await expect(service.publish(writeRequest)).resolves.toMatchObject({
+      status: 'ok',
+      value: { change: 'updated', item: { shareUrl: 'https://share.onorca.dev/a/artifact-a' } }
+    })
+
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' })
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`${apiUrl}/v1/artifacts/artifact-a`)
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'PUT' })
+  })
+
+  it('resolves a persisted public link only for its source and cloud scope', async () => {
+    const { service } = await setup()
+    const fetchMock = vi.fn().mockResolvedValueOnce(createResponse())
+    vi.stubGlobal('fetch', fetchMock)
+
+    await service.publish(writeRequest)
+
+    await expect(
+      service.getPublishedLink({ sourceKey: writeRequest.sourceKey, apiUrl, authToken: 'token-a' })
+    ).resolves.toEqual({
+      status: 'ok',
+      value: { shareUrl: 'https://share.onorca.dev/a/artifact-a' }
+    })
+    await expect(
+      service.getPublishedLink({ sourceKey: '/repo/other.html', apiUrl, authToken: 'token-a' })
+    ).resolves.toEqual({ status: 'ok', value: null })
+    await expect(
+      service.getPublishedLink({ sourceKey: writeRequest.sourceKey, apiUrl, authToken: 'token-b' })
+    ).resolves.toEqual({ status: 'ok', value: null })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('serializes concurrent publishes for the same source', async () => {
+    const { service } = await setup()
+    let resolveCreate: ((response: Response) => void) | undefined
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveCreate = resolve
+          })
+      )
+      .mockResolvedValueOnce(createResponse())
+    vi.stubGlobal('fetch', fetchMock)
+
+    const first = service.publish(writeRequest)
+    const second = service.publish(writeRequest)
+    await vi.waitFor(() => expect(resolveCreate).toBeTypeOf('function'))
+    expect(fetchMock).toHaveBeenCalledOnce()
+    resolveCreate?.(createResponse())
+
+    await expect(Promise.all([first, second])).resolves.toMatchObject([
+      { status: 'ok', value: { change: 'created' } },
+      { status: 'ok', value: { change: 'updated' } }
+    ])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'PUT' })
+  })
+
+  it('serializes manual publish with CLI share for the same source', async () => {
+    const { service } = await setup()
+    let resolvePublish: ((response: Response) => void) | undefined
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolvePublish = resolve
+          })
+      )
+      .mockResolvedValueOnce(createResponse('artifact-b'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const publish = service.publish(writeRequest)
+    const share = service.share(writeRequest)
+    await vi.waitFor(() => expect(resolvePublish).toBeTypeOf('function'))
+    expect(fetchMock).toHaveBeenCalledOnce()
+    resolvePublish?.(createResponse('artifact-a'))
+
+    await expect(Promise.all([publish, share])).resolves.toMatchObject([
+      { status: 'ok', value: { change: 'created' } },
+      { status: 'ok', value: { shareUrl: 'https://share.onorca.dev/a/artifact-b' } }
+    ])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('serializes account deletion with a mapped source update', async () => {
+    const { service } = await setup()
+    let resolveUpdate: ((response: Response) => void) | undefined
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createResponse())
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveUpdate = resolve
+          })
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await service.share(writeRequest)
+
+    const update = service.update(writeRequest)
+    await vi.waitFor(() => expect(resolveUpdate).toBeTypeOf('function'))
+    const deletion = service.delete('artifact-a', { apiUrl, authToken: 'token-a' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    resolveUpdate?.(createResponse())
+
+    await expect(Promise.all([update, deletion])).resolves.toMatchObject([
+      { status: 'ok' },
+      { status: 'ok' }
+    ])
+    await expect(
+      service.getPublishedLink({ sourceKey: writeRequest.sourceKey, apiUrl, authToken: 'token-a' })
+    ).resolves.toEqual({ status: 'ok', value: null })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('recreates an artifact when its stored public link was deleted elsewhere', async () => {
+    const { service } = await setup()
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createResponse('artifact-a'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'not_found' }), { status: 404 }))
+      .mockResolvedValueOnce(createResponse('artifact-b'))
+      .mockResolvedValueOnce(createResponse('artifact-b'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await service.publish(writeRequest)
+    await expect(service.publish(writeRequest)).resolves.toMatchObject({
+      status: 'ok',
+      value: { change: 'created', item: { shareUrl: 'https://share.onorca.dev/a/artifact-b' } }
+    })
+    await expect(service.publish(writeRequest)).resolves.toMatchObject({
+      status: 'ok',
+      value: { change: 'updated', item: { shareUrl: 'https://share.onorca.dev/a/artifact-b' } }
+    })
+
+    expect(fetchMock.mock.calls.map(([, options]) => options?.method)).toEqual([
+      'POST',
+      'PUT',
+      'POST',
+      'PUT'
+    ])
+  })
+
   it('keeps the idempotency key stable across an auth-refresh retry', async () => {
     const { service, profileId, userDataPath } = await setup()
     vi.stubEnv('ORCA_CLOUD_API_URL', 'http://localhost:4100')
@@ -327,6 +486,7 @@ describe('ArtifactCloudService publish capability gate', () => {
 
   it.each([
     ['share', (service: ArtifactCloudService) => service.share(writeRequest)],
+    ['publish', (service: ArtifactCloudService) => service.publish(writeRequest)],
     ['update', (service: ArtifactCloudService) => service.update(writeRequest)]
   ])('rejects %s without reaching the network when the capability is off', async (_name, call) => {
     const { service } = await setup({ value: false })
@@ -380,6 +540,12 @@ describe('ArtifactCloudService publish capability gate', () => {
     sharing.value = false
     await expect(service.list({ apiUrl, authToken: 'token-a' })).resolves.toMatchObject({
       status: 'ok'
+    })
+    await expect(
+      service.getPublishedLink({ sourceKey: writeRequest.sourceKey, apiUrl, authToken: 'token-a' })
+    ).resolves.toEqual({
+      status: 'ok',
+      value: { shareUrl: 'https://share.onorca.dev/a/artifact-a' }
     })
     await expect(
       service.unshare({ sourceKey: writeRequest.sourceKey, apiUrl, authToken: 'token-a' })

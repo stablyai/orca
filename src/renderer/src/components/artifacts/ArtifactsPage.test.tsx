@@ -198,7 +198,9 @@ describe('ArtifactsPage', () => {
     const heading = await screen.findByText('No shared artifacts')
     expect(heading.parentElement).toHaveClass('flex-1', 'justify-center')
     expect(
-      screen.getByText('Ask your agent to share an HTML or Markdown file, and it will appear here.')
+      screen.getByText(
+        'Open an HTML or Markdown file and select Share as artifact, or ask your agent to share it.'
+      )
     ).toBeInTheDocument()
     expect(screen.queryByText(/orca artifacts share/)).not.toBeInTheDocument()
     expect(

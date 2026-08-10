@@ -102,6 +102,7 @@ import {
   usePrimarySelectionPaste
 } from './hooks/usePrimarySelectionPaste'
 import { useAppMenuPaste } from './hooks/useAppMenuPaste'
+import { useAppMenuSelectionActions } from './hooks/useAppMenuSelectionActions'
 import { useLargeTextControlPaste } from './hooks/useLargeTextControlPaste'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
@@ -720,6 +721,7 @@ function App(): React.JSX.Element {
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
 
   useAppMenuPaste()
+  useAppMenuSelectionActions()
   useLargeTextControlPaste()
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const petVisible = useAppStore((s) => s.petVisible)

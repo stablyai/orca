@@ -183,8 +183,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install zsh
-        run: sudo apt-get update && sudo apt-get install -y zsh
+      # Why fish: shell-ready.test.ts gates its live fish test on the binary being
+      # present, so without this the fish barrier is only covered by config-shape
+      # assertions and never actually exercised.
+      - name: Install zsh and fish
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
 
       - uses: ./.github/actions/install-node-dependencies
         with:

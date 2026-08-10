@@ -138,6 +138,12 @@ import {
   readPrimarySelectionText
 } from '@/lib/primary-selection'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import {
+  APP_MENU_SELECTION_ACTION_EVENT,
+  type AppMenuSelectionAction
+} from '@/lib/app-menu-selection-actions'
+import { isEditableTarget } from '@/lib/editable-target'
+import { copyTerminalSelection } from './terminal-selection-copy'
 import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
@@ -2159,9 +2165,44 @@ function TerminalPane(
       })
     }
 
+    const onAppMenuSelectionAction = (event: Event): void => {
+      const activeElement = document.activeElement
+      if (
+        !(activeElement instanceof Element) ||
+        !container.contains(activeElement) ||
+        isEditableTarget(activeElement) ||
+        activeElement.closest('[data-terminal-search-root]') ||
+        isInsideNativeChatRoot(activeElement)
+      ) {
+        return
+      }
+      const manager = managerRef.current
+      const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      if (!pane) {
+        return
+      }
+      const action = (event as CustomEvent<AppMenuSelectionAction>).detail
+      if (action === 'copy') {
+        if (!pane.terminal.getSelection()) {
+          return
+        }
+        event.preventDefault()
+        void copyTerminalSelection({
+          terminal: pane.terminal,
+          writeClipboardText: window.api.ui.writeTerminalClipboardText
+        }).catch(() => undefined)
+        return
+      }
+      if (action === 'select-all') {
+        event.preventDefault()
+        pane.terminal.selectAll()
+      }
+    }
+
     container.addEventListener('keydown', onKeyPaste, { capture: true })
     container.addEventListener('paste', onPaste, { capture: true })
     window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
+    window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
     return () => {
       if (pasteSuppressionTimerId !== null) {
         window.clearTimeout(pasteSuppressionTimerId)
@@ -2169,6 +2210,7 @@ function TerminalPane(
       container.removeEventListener('keydown', onKeyPaste, { capture: true })
       container.removeEventListener('paste', onPaste, { capture: true })
       window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
+      window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
     }
   }, [isActive, worktreeId, keybindings, forceBracketedMultilineTextPaste, tabId])
 
@@ -3038,6 +3080,7 @@ function TerminalPane(
           contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
         }
         onCopy={() => void contextMenu.onCopy()}
+        onSelectAll={contextMenu.onSelectAll}
         onPaste={() => void contextMenu.onPaste()}
         onSplitRight={contextMenu.onSplitRight}
         onSplitDown={contextMenu.onSplitDown}
