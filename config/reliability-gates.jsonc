@@ -2710,13 +2710,14 @@
       "invariant": "A direct SSH snapshot may change acknowledged terminal-tab presence, but it cannot erase an unacknowledged target-local creation or resurrect an unacknowledged target-local deletion. A relevant session write suppressed by snapshot application must persist after the trailing idle window or at one fixed 60-second ceiling that later mutations cannot postpone.",
       "oracle": "Hold a requested snapshot, close one of its tabs, release it, and require the close to remain absent. Create a local tab before unsolicited-event delivery, apply a snapshot that omits it, and require the tab to survive until a returned or incoming snapshot acknowledges its presence. Also hold a real remoteWorkspace:get, create a terminal through the visible UI, require its exact tab and PTY identity in the next remote snapshot, and write a proof file through that PTY on a real SSH target.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-remote-workspace-snapshot-race.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-remote-workspace-snapshot-race.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts",
+        "src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts",
         "src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts",
         "src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts",
         "src/renderer/src/hooks/remote-workspace-target-sync.test.ts",
@@ -2743,7 +2744,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/hooks/remote-workspace-target-sync.test.ts",
+          "file": "src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts",
           "assertions": [
             "a stale requested snapshot cannot resurrect a tab closed after request start",
             "an unsolicited snapshot cannot erase an unacknowledged local tab created before delivery"
@@ -2770,10 +2771,10 @@
           "date": "2026-08-10",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 2,
-          "summary": "Eight focused files passed 73 mutation-ledger, snapshot, target-sync, persistence, patch-queue, and relay-handler tests."
+          "summary": "Nine focused files passed 73 mutation-ledger, race-oracle, snapshot, target-sync, persistence, patch-queue, and relay-handler tests."
         },
         {
           "date": "2026-08-10",
