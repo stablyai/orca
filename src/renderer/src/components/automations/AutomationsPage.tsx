@@ -46,12 +46,12 @@ import {
   waitForAutomationRerunPendingVisibility
 } from './automation-run-view-state'
 import {
-  automationRunMatchesPaneKey,
   buildAutomationRunOpenLayout,
   canOpenAutomationRunOpenTarget,
   getAutomationRunOpenTabId,
   resolveAutomationRunOpenTarget
 } from './automation-run-open-target'
+import { hasAutomationRunCompletionEvidence } from './automation-run-completion-evidence'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import {
   AutomationEditorDialog,
@@ -74,10 +74,7 @@ import {
   type RuntimeProviderPreflightStatus
 } from '../task-source-provider-availability'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
-import {
-  getExternalAutomationSourceAvailability,
-  isSshConnectionBusy
-} from './external-automation-source-availability'
+
 import {
   createAutomationForTarget,
   deleteAutomationForTarget,
@@ -108,9 +105,6 @@ import {
 import type { AutomationPaneTab, SelectedExternalRunPage } from './automation-page-state'
 import {
   getExternalAutomationKey,
-  getExternalAutomationSourceKey,
-  getExternalProviderLabel,
-  getExternalTargetKindLabel,
   isMissingExternalRunsApiError
 } from './external-automation-display'
 import { buildExternalAutomationListEntries } from './external-automation-list-entries'
@@ -208,9 +202,6 @@ export default function AutomationsPage(): React.JSX.Element {
     setSelectedExternalRunPage(null)
     setSelectedExternalKey(externalKey)
   }, [])
-  const [connectingExternalSourceKey, setConnectingExternalSourceKey] = useState<string | null>(
-    null
-  )
   const [draftAtOpen, setDraftAtOpen] = useState<AutomationDraft | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Automation | null>(null)
   const [externalDeleteTarget, setExternalDeleteTarget] = useState<{
@@ -680,33 +671,6 @@ export default function AutomationsPage(): React.JSX.Element {
     editingAutomationId === null ||
     !draftAtOpen ||
     JSON.stringify(draft) !== JSON.stringify(draftAtOpen)
-  const selectedExternalSshSource =
-    selectedExternal?.kind === 'source' && selectedExternal.manager.target.type === 'ssh'
-      ? {
-          manager: selectedExternal.manager,
-          connectionId: selectedExternal.manager.target.connectionId,
-          sourceKey: getExternalAutomationSourceKey(selectedExternal.manager)
-        }
-      : null
-  const selectedExternalSshStatus = selectedExternalSshSource
-    ? sshConnectionStates.get(selectedExternalSshSource.connectionId)?.status
-    : undefined
-  const selectedExternalSshConnected = selectedExternalSshStatus === 'connected'
-  const isSelectedExternalSshConnecting =
-    selectedExternalSshSource !== null &&
-    (connectingExternalSourceKey === selectedExternalSshSource.sourceKey ||
-      isSshConnectionBusy(selectedExternalSshStatus))
-  const selectedExternalSourceAvailability =
-    selectedExternal?.kind === 'source'
-      ? getExternalAutomationSourceAvailability({
-          manager: selectedExternal.manager,
-          providerLabel: getExternalProviderLabel(selectedExternal.manager),
-          targetKindLabel: getExternalTargetKindLabel(selectedExternal.manager),
-          sshStatus: selectedExternalSshStatus,
-          isConnectingOverride: isSelectedExternalSshConnecting
-        })
-      : null
-
   const getAutomationRepoHostLabel = useCallback(
     (repo: Repo): string => {
       const hostId = getRepoExecutionHostId(repo)
@@ -903,21 +867,12 @@ export default function AutomationsPage(): React.JSX.Element {
       if (dispatchedAt === null) {
         return false
       }
-      const liveDone = Object.entries(agentStatusByPaneKey).some(
-        ([paneKey, entry]) =>
-          automationRunMatchesPaneKey(run, paneKey) &&
-          entry.state === 'done' &&
-          entry.updatedAt >= dispatchedAt
-      )
-      if (liveDone) {
-        return true
-      }
-      return Object.entries(retainedAgentsByPaneKey).some(
-        ([paneKey, retained]) =>
-          automationRunMatchesPaneKey(run, paneKey) &&
-          retained.entry.state === 'done' &&
-          retained.entry.updatedAt >= dispatchedAt
-      )
+      return hasAutomationRunCompletionEvidence({
+        run,
+        dispatchedAt,
+        agentStatusByPaneKey,
+        retainedAgentsByPaneKey
+      })
     })
     if (completedRuns.length === 0) {
       return
@@ -1757,56 +1712,6 @@ export default function AutomationsPage(): React.JSX.Element {
     await runExternalAction(target.manager, target.job, 'delete')
   }
 
-  const connectExternalAutomationSource = async (
-    manager: ExternalAutomationManager
-  ): Promise<void> => {
-    if (manager.target.type !== 'ssh') {
-      return
-    }
-    const sourceKey = getExternalAutomationSourceKey(manager)
-    setConnectingExternalSourceKey(sourceKey)
-    try {
-      if (sshConnectionStates.get(manager.target.connectionId)?.status === 'connected') {
-        await refresh()
-        toast.success(
-          translate(
-            'auto.components.automations.AutomationsPage.a21f6c33ad',
-            'Automation source refreshed.'
-          )
-        )
-        return
-      }
-      const state = await window.api.ssh.connect({
-        targetId: manager.target.connectionId
-      })
-      if (!state || state.status !== 'connected') {
-        toast.error(
-          state?.error ??
-            translate(
-              'auto.components.automations.AutomationsPage.7b2e285552',
-              'SSH connections are unavailable in this client.'
-            )
-        )
-        return
-      }
-      await refresh()
-      toast.success(
-        translate('auto.components.automations.AutomationsPage.9f2855677c', 'SSH connected.')
-      )
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : translate(
-              'auto.components.automations.AutomationsPage.3e42a5cc1b',
-              'SSH connection failed.'
-            )
-      )
-    } finally {
-      setConnectingExternalSourceKey(null)
-    }
-  }
-
   const openRunWorkspace = (run: AutomationRun): void => {
     const runWorktree = run.workspaceId ? (worktreeMap.get(run.workspaceId) ?? null) : null
     const store = useAppStore.getState()
@@ -2100,11 +2005,6 @@ export default function AutomationsPage(): React.JSX.Element {
           }
           hostLabelById={hostLabelById}
           selectedRunNowAvailability={selectedRunNowAvailability}
-          selectedExternalSourceAvailability={selectedExternalSourceAvailability}
-          selectedExternalSshSource={
-            selectedExternalSshSource ? { manager: selectedExternalSshSource.manager } : null
-          }
-          selectedExternalSshConnected={selectedExternalSshConnected}
           selectedAutomationRunPageWorkspaceDisplay={selectedAutomationRunPageWorkspaceDisplay}
           selectedAutomationRunPageViewState={selectedAutomationRunPageViewState}
           canRerunSelectedAutomationRunPage={canRerunSelectedAutomationRunPage}
@@ -2117,9 +2017,6 @@ export default function AutomationsPage(): React.JSX.Element {
           requestExternalAction={requestExternalAction}
           openExternalRunPage={openExternalRunPage}
           openEditExternalDialog={openEditExternalDialog}
-          connectExternalAutomationSource={(manager) =>
-            void connectExternalAutomationSource(manager)
-          }
           runNow={(automation) => void runNow(automation)}
           openEditDialog={(automation) => void openEditDialog(automation)}
           toggleAutomation={(automation) => void toggleAutomation(automation)}

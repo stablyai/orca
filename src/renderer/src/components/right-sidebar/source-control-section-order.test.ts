@@ -4,8 +4,7 @@ import {
   buildSourceControlDisplaySections,
   getConflictReviewEntries,
   getSourceControlSectionViewAction,
-  mergeUntrackedIntoChanges,
-  SOURCE_CONTROL_GROUP_ORDER,
+  resolveSourceControlGroupOrder,
   splitPinnedSourceControlConflicts,
   type SourceControlEntryGroups
 } from './source-control-section-order'
@@ -27,38 +26,37 @@ function groups(partial: Partial<SourceControlEntryGroups>): SourceControlEntryG
   }
 }
 
-describe('SOURCE_CONTROL_GROUP_ORDER', () => {
-  it('follows the edit, stage, commit workflow', () => {
-    expect(SOURCE_CONTROL_GROUP_ORDER).toEqual(['unstaged', 'staged', 'untracked'])
+describe('resolveSourceControlGroupOrder', () => {
+  it('keeps Changes first by default', () => {
+    expect(resolveSourceControlGroupOrder(undefined)).toEqual(['unstaged', 'staged', 'untracked'])
   })
-})
 
-describe('mergeUntrackedIntoChanges', () => {
-  it('folds untracked entries into Changes without changing their Git area', () => {
-    const unstaged = entry({ area: 'unstaged', path: 'changed.ts' })
-    const untracked = entry({ area: 'untracked', path: 'new.ts', status: 'untracked' })
-    const merged = mergeUntrackedIntoChanges(
-      groups({ unstaged: [unstaged], untracked: [untracked] })
-    )
-
-    expect(merged.unstaged).toEqual([unstaged, untracked])
-    expect(merged.untracked).toEqual([])
-    expect(merged.unstaged[1]?.area).toBe('untracked')
+  it('supports staged-first and untracked-first presets', () => {
+    expect(resolveSourceControlGroupOrder('staged-first')).toEqual([
+      'staged',
+      'unstaged',
+      'untracked'
+    ])
+    expect(resolveSourceControlGroupOrder('untracked-first')).toEqual([
+      'untracked',
+      'unstaged',
+      'staged'
+    ])
   })
 })
 
 describe('buildSourceControlDisplaySections', () => {
-  it('uses the fixed workflow order for normal sections', () => {
+  it('uses the configured order for normal sections', () => {
     const sections = buildSourceControlDisplaySections(
       groups({
         staged: [entry({ area: 'staged', path: 'staged.ts' })],
         unstaged: [entry({ area: 'unstaged', path: 'changed.ts' })],
         untracked: [entry({ area: 'untracked', path: 'new.ts', status: 'untracked' })]
       }),
-      SOURCE_CONTROL_GROUP_ORDER
+      resolveSourceControlGroupOrder('staged-first')
     )
 
-    expect(sections.map((section) => section.id)).toEqual(['unstaged', 'staged', 'untracked'])
+    expect(sections.map((section) => section.id)).toEqual(['staged', 'unstaged', 'untracked'])
   })
 
   it('keeps conflicts pinned before the configured normal order', () => {
@@ -76,13 +74,13 @@ describe('buildSourceControlDisplaySections', () => {
         ],
         untracked: [entry({ area: 'untracked', path: 'new.ts', status: 'untracked' })]
       }),
-      SOURCE_CONTROL_GROUP_ORDER
+      resolveSourceControlGroupOrder('staged-first')
     )
 
     expect(sections.map((section) => section.id)).toEqual([
       'conflicts',
-      'unstaged',
       'staged',
+      'unstaged',
       'untracked'
     ])
   })
@@ -102,7 +100,10 @@ describe('buildSourceControlDisplaySections', () => {
     const input = groups({ unstaged: [unresolved, resolved, normal] })
 
     const split = splitPinnedSourceControlConflicts(input)
-    const sections = buildSourceControlDisplaySections(input, SOURCE_CONTROL_GROUP_ORDER)
+    const sections = buildSourceControlDisplaySections(
+      input,
+      resolveSourceControlGroupOrder('changes-first')
+    )
 
     expect(split.pinnedConflicts.map((item) => item.path)).toEqual(['conflict.ts', 'resolved.ts'])
     expect(split.normalGroups.unstaged.map((item) => item.path)).toEqual(['normal.ts'])
@@ -122,7 +123,10 @@ describe('buildSourceControlDisplaySections', () => {
     const input = groups({ staged: [resolvedStaged, staged] })
 
     const split = splitPinnedSourceControlConflicts(input)
-    const sections = buildSourceControlDisplaySections(input, SOURCE_CONTROL_GROUP_ORDER)
+    const sections = buildSourceControlDisplaySections(
+      input,
+      resolveSourceControlGroupOrder('staged-first')
+    )
 
     expect(split.pinnedConflicts).toEqual([resolvedStaged])
     expect(split.normalGroups.staged).toEqual([staged])
@@ -163,7 +167,7 @@ describe('buildSourceControlDisplaySections', () => {
           entry({ area: 'unstaged', path: 'normal.ts' })
         ]
       }),
-      SOURCE_CONTROL_GROUP_ORDER
+      resolveSourceControlGroupOrder('changes-first')
     )
 
     expect(getSourceControlSectionViewAction(sections[0]!)).toEqual({
@@ -187,7 +191,7 @@ describe('buildSourceControlDisplaySections', () => {
     const normal = entry({ area: 'unstaged', path: 'normal.ts' })
     const sections = buildSourceControlDisplaySections(
       groups({ unstaged: [pinned, normal] }),
-      SOURCE_CONTROL_GROUP_ORDER
+      resolveSourceControlGroupOrder('changes-first')
     )
 
     expect(getSourceControlSectionViewAction(sections[1]!)).toEqual({
@@ -208,7 +212,7 @@ describe('buildSourceControlDisplaySections', () => {
       groups({
         unstaged: [resolved]
       }),
-      SOURCE_CONTROL_GROUP_ORDER
+      resolveSourceControlGroupOrder('changes-first')
     )
 
     expect(getSourceControlSectionViewAction(sections[0]!)).toEqual({
@@ -236,7 +240,7 @@ describe('buildSourceControlDisplaySections', () => {
         staged: [staged],
         unstaged: [unstaged]
       }),
-      SOURCE_CONTROL_GROUP_ORDER
+      resolveSourceControlGroupOrder('staged-first')
     )
 
     expect(getSourceControlSectionViewAction(sections[0]!)).toEqual({

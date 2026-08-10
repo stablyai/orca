@@ -937,7 +937,7 @@ export default function NewWorkspaceComposerCard({
             variant="ghost"
             size="sm"
             onClick={onToggleAdvanced}
-            className="-ml-2 text-xs"
+            className="-ml-2 text-xs focus-visible:ring-inset"
           >
             {translate('auto.components.NewWorkspaceComposerCard.f0470c7383', 'Advanced')}
             <ChevronDown
@@ -953,6 +953,7 @@ export default function NewWorkspaceComposerCard({
             advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
           )}
           aria-hidden={!advancedOpen}
+          inert={!advancedOpen}
         >
           <div className="min-h-0">
             {/* Why: px-1 gives the Note textarea's 3px outset focus ring breathing room so the overflow-hidden drawer doesn't clip it. */}
@@ -1019,18 +1020,15 @@ export default function NewWorkspaceComposerCard({
                   value={note}
                   onChange={(event) => onNoteChange(event.target.value)}
                   onPaste={handleNotePaste}
-                  onInput={(event) => {
-                    // Why: reset then size to content so short notes stay compact and long ones grow without a scrollbar until max-h clamps.
-                    const ta = event.currentTarget
-                    ta.style.height = 'auto'
-                    ta.style.height = `${ta.scrollHeight}px`
-                  }}
                   placeholder={translate(
                     'auto.components.NewWorkspaceComposerCard.090cfedeb4',
                     'Write a note'
                   )}
                   rows={1}
-                  className="w-full min-w-0 resize-none overflow-hidden rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 max-h-40"
+                  // Why (#10575): field-sizing:content grows the note with its value, so a PR/MR
+                  // prefill written straight to state sizes like typed text — an onInput measure
+                  // pass never saw it. Past the max-h clamp the sleek scrollbar keeps it readable.
+                  className="w-full min-w-0 resize-none overflow-y-auto scrollbar-sleek rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [field-sizing:content] max-h-40"
                 />
               </div>
 

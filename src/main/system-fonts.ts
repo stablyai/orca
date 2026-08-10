@@ -77,7 +77,10 @@ function listLinuxFonts(): Promise<string[]> {
 }
 
 function listWindowsFonts(): Promise<string[]> {
+  // Why: PowerShell 5.1 emits redirected stdout in the OEM code page; pin UTF-8
+  // before the first name is written or localized families arrive as mojibake (#12590).
   const script = `
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 Add-Type -AssemblyName System.Drawing
 $fonts = New-Object System.Drawing.Text.InstalledFontCollection
 $fonts.Families | ForEach-Object { $_.Name }

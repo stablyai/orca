@@ -2257,6 +2257,36 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('accepts a resumed-session SessionStart after launch authority retires in a reusable pane', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify(buildBody(payload, { launchToken: 'retired-launch-token' }))
+        })
+
+      await postHook({ hook_event_name: 'UserPromptSubmit', prompt: 'first launch' })
+      server.retirePaneAuthority(PANE)
+
+      // Why: `claude --resume` in the reused shell pane emits only SessionStart while idle;
+      // without the un-retire the resumed session stays rowless until a prompt (STA-3386).
+      await postHook({ hook_event_name: 'SessionStart', source: 'resume' })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE, state: 'done', sessionBoundary: true })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
   it('accepts a live remote prompt but not replay after launch authority retires', () => {
     const server = new AgentHookServer()
     server.ingestRemote(

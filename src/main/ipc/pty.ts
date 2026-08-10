@@ -58,14 +58,17 @@ import {
 } from '../../shared/command-token-scanner'
 import { agentHookServer } from '../agent-hooks/server'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import { ensureWslHookRelayForReattach } from '../agent-hooks/wsl-hook-relay-reattach'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType,
+  PRIMARY_AGENT_DIR_ENV_BY_KIND,
+  SOURCE_AGENT_DIR_ENV_BY_KIND,
   type PiAgentKind
 } from '../../shared/pi-agent-kind'
-import { isPwshAvailable } from '../pwsh'
+import { isPwshAvailableAsync } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { isPtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
@@ -93,6 +96,7 @@ import {
 import { resolveWslSessionContext } from '../daemon/wsl-session-context'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import { recordDaemonStreamBacklogEvent } from '../daemon/daemon-stream-backlog-probe'
+import { TerminalSessionOwnerUnverifiedError } from '../daemon/daemon-errors'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { CLAUDE_AUTH_ENV_VARS, hasClaudeAuthEnvConflict } from '../claude-accounts/environment'
@@ -198,6 +202,7 @@ import {
 } from '../codex/codex-pane-account-registry'
 import { resolveCodexPaneLaunchAccount } from '../codex/codex-pane-launch-account'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { ensureCodexStateDbBackfillRecoveryStarted } from '../codex/codex-state-db-backfill-recovery'
 import {
   environmentCodexHomeOverrideContextsEqual,
   getCustomCodexHomeOverrideForLaunch,
@@ -454,6 +459,33 @@ function isValidPaneKey(paneKey: unknown): paneKey is string {
   return parseValidPaneKey(paneKey) !== null
 }
 
+const AGENT_LAUNCH_TOKEN_MAX_LENGTH = 128
+
+function admitRendererAgentLaunchAuthority(args: {
+  launchToken: unknown
+  spawnEnv: Record<string, string> | undefined
+  launchAgent: unknown
+  launchConfig: SleepingAgentLaunchConfig | undefined
+  isReattach: boolean
+  hasStablePaneOwner: boolean
+  incarnationId: unknown
+}): { launchToken: string; launchAgent: TuiAgent } | null {
+  if (
+    args.isReattach ||
+    args.hasStablePaneOwner ||
+    !args.launchConfig ||
+    !isTuiAgent(args.launchAgent) ||
+    !isPtyIncarnationId(args.incarnationId) ||
+    typeof args.launchToken !== 'string' ||
+    args.launchToken.length === 0 ||
+    args.launchToken.length > AGENT_LAUNCH_TOKEN_MAX_LENGTH ||
+    args.spawnEnv?.ORCA_AGENT_LAUNCH_TOKEN !== args.launchToken
+  ) {
+    return null
+  }
+  return { launchToken: args.launchToken, launchAgent: args.launchAgent }
+}
+
 function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
@@ -599,6 +631,9 @@ type StablePaneOwner = {
   leafId: string
   ptyId: string
   incarnationId?: string
+  hasPersistedBinding?: true
+  persistedIncarnationId?: string
+  runtimeIncarnationId?: string
 }
 type StablePaneAdoption = {
   result: PtySpawnResult
@@ -677,13 +712,6 @@ function resolveStablePaneOwner(
     throw new Error('terminal_pane_owner_host_mismatch')
   }
   const runtimeIncarnationId = ptyIncarnationById.get(ptyId)
-  if (
-    runtimeIncarnationId &&
-    persisted?.incarnationId &&
-    runtimeIncarnationId !== persisted.incarnationId
-  ) {
-    throw new Error('terminal_pane_owner_conflict')
-  }
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
     return null
@@ -695,7 +723,10 @@ function resolveStablePaneOwner(
     ptyId,
     ...(runtimeIncarnationId || persisted?.incarnationId
       ? { incarnationId: runtimeIncarnationId ?? persisted?.incarnationId }
-      : {})
+      : {}),
+    ...(persisted ? { hasPersistedBinding: true as const } : {}),
+    ...(persisted?.incarnationId ? { persistedIncarnationId: persisted.incarnationId } : {}),
+    ...(runtimeIncarnationId ? { runtimeIncarnationId } : {})
   }
 }
 
@@ -717,7 +748,7 @@ function retirePersistedStablePaneOwner(
     // not a competing owner. Reporting failure here strands the pane after its PTY is proven dead.
     return true
   }
-  if (current.ptyId !== owner.ptyId || current.incarnationId !== owner.incarnationId) {
+  if (current.ptyId !== owner.ptyId || current.incarnationId !== owner.persistedIncarnationId) {
     return false
   }
   const session = store.getWorkspaceSession(hostId)
@@ -726,7 +757,7 @@ function retirePersistedStablePaneOwner(
     parentTabId: owner.tabId,
     leafId: owner.leafId,
     ptyId: owner.ptyId,
-    ...(owner.incarnationId ? { incarnationId: owner.incarnationId } : {})
+    ...(current.incarnationId ? { incarnationId: current.incarnationId } : {})
   })
   if (retired === session) {
     return false
@@ -748,6 +779,47 @@ type StablePaneSpawnContext = {
   onFreshSpawn?: (result: PtySpawnResult) => void
 }
 
+function stablePanePersistenceFence(
+  owner: StablePaneOwner | null
+): { ptyId: string; incarnationId?: string } | undefined {
+  return owner?.hasPersistedBinding
+    ? {
+        ptyId: owner.ptyId,
+        ...(owner.persistedIncarnationId ? { incarnationId: owner.persistedIncarnationId } : {})
+      }
+    : undefined
+}
+
+function persistAdmittedStablePaneBinding(args: {
+  store: Store | undefined
+  owner: StablePaneOwner | null
+  result: PtySpawnResult
+  worktreeId: string | undefined
+  startupCwd: string | undefined
+  connectionId: string | null | undefined
+}): boolean {
+  const expectedBinding = stablePanePersistenceFence(args.owner)
+  if (!args.store || !args.owner || !args.worktreeId || !expectedBinding) {
+    return false
+  }
+  const persisted = args.store.persistPtyBinding(
+    {
+      worktreeId: args.worktreeId,
+      tabId: args.owner.tabId,
+      leafId: args.owner.leafId,
+      ptyId: args.result.id,
+      ...(args.result.incarnationId ? { incarnationId: args.result.incarnationId } : {}),
+      ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
+      expectedBinding
+    },
+    args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
+  )
+  if (persisted === false) {
+    throw new Error('terminal_pane_owner_changed')
+  }
+  return true
+}
+
 async function attachStablePaneOwner(
   args: StablePaneSpawnContext & { owner: StablePaneOwner }
 ): Promise<{ result: PtySpawnResult; owner: StablePaneOwner } | null> {
@@ -758,6 +830,8 @@ async function attachStablePaneOwner(
       ...spawnOptions,
       sessionId: owner.ptyId,
       attachOnly: true,
+      expectedIncarnationId: owner.runtimeIncarnationId ?? owner.persistedIncarnationId,
+      expectedIncarnationIsAuthoritative: owner.runtimeIncarnationId !== undefined,
       isNewSession: undefined,
       command: undefined,
       commandDelivery: undefined,
@@ -769,25 +843,19 @@ async function attachStablePaneOwner(
       onPtySpawnCommitted: undefined
     })
   } catch (error) {
+    if (error instanceof TerminalSessionOwnerUnverifiedError) {
+      throw new Error('terminal_pane_owner_unverified')
+    }
     if (!isPtyAlreadyGoneError(error)) {
       throw error
-    }
-    // Why: "Session not found" only proves the provider we asked has no such PTY — and a
-    // degraded router answers unmapped ids from the local fallback, which never owned a
-    // daemon session. Retiring on that would signal exit and delete a live agent's pane
-    // binding. Absence must be proven across every possible owner first; `null` (nobody
-    // could answer) is not absence. Providers without a probe are their own sole owner,
-    // so their refusal stays authoritative.
-    if (provider.probePtyLiveness && (await provider.probePtyLiveness(owner.ptyId)) !== false) {
-      throw new Error('terminal_pane_owner_unverified')
     }
     const ownerBeforeRetire = args.resolveOwner?.()
     if (
       ownerBeforeRetire &&
       (ownerBeforeRetire.ptyId !== owner.ptyId ||
-        (ownerBeforeRetire.incarnationId !== undefined &&
-          owner.incarnationId !== undefined &&
-          ownerBeforeRetire.incarnationId !== owner.incarnationId))
+        ownerBeforeRetire.runtimeIncarnationId !== owner.runtimeIncarnationId ||
+        ownerBeforeRetire.hasPersistedBinding !== owner.hasPersistedBinding ||
+        ownerBeforeRetire.persistedIncarnationId !== owner.persistedIncarnationId)
     ) {
       throw new Error('terminal_pane_owner_changed')
     }
@@ -808,7 +876,9 @@ async function attachStablePaneOwner(
   if (
     result.id !== owner.ptyId ||
     result.isReattach !== true ||
-    (owner.incarnationId !== undefined && result.incarnationId !== owner.incarnationId)
+    (owner.runtimeIncarnationId !== undefined &&
+      result.incarnationId !== owner.runtimeIncarnationId) ||
+    (result.incarnationId === undefined && owner.incarnationId !== undefined)
   ) {
     throw new Error('terminal_pane_owner_changed')
   }
@@ -1033,6 +1103,7 @@ function finishPtyShutdown(
 
 export type BuildPtyHostEnvOptions = {
   isPackaged: boolean
+  resourcesPath?: string
   userDataPath: string
   selectedCodexHomePath: string | null
   skipCodexHomeEnv?: boolean
@@ -1162,6 +1233,18 @@ export type PrepareCodexSessionResume = (args: {
   launchEnv?: NodeJS.ProcessEnv
   workspacePath?: string
 }) => Promise<CodexSessionResumePreparation | null>
+
+export type CodexHomePtySpawnedLifecycleArgs = {
+  id: string
+  codexHomePath: string | null
+  reattached?: boolean
+  launchEnv?: NodeJS.ProcessEnv
+  startedAt?: Date
+  startedSequence?: number
+}
+
+let ptyLifecycleSequence = 0
+
 type PrepareClaudeAuth = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -1377,16 +1460,29 @@ function resolvePiAgentSourceDir(
   baseEnv: Record<string, string>,
   kind: PiAgentKind
 ): string | undefined {
-  const sourceKey = kind === 'omp' ? 'ORCA_OMP_SOURCE_AGENT_DIR' : 'ORCA_PI_SOURCE_AGENT_DIR'
-  const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
-  const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
+  const sourceKey = SOURCE_AGENT_DIR_ENV_BY_KIND[kind]
+  const primaryKey = PRIMARY_AGENT_DIR_ENV_BY_KIND[kind]
 
   const sourceDir = readEnvWithProcessFallback(baseEnv, sourceKey)
   if (sourceDir) {
     return sourceDir
   }
 
-  const publicDir = readEnvWithProcessFallback(baseEnv, 'PI_CODING_AGENT_DIR')
+  if (kind === 'prime-agent') {
+    return (
+      readEnvWithProcessFallback(baseEnv, primaryKey) ??
+      readShellStartupEnvVar(
+        primaryKey,
+        baseEnv.HOME ?? process.env.HOME,
+        baseEnv.SHELL ?? process.env.SHELL
+      )
+    )
+  }
+
+  const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
+  const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
+
+  const publicDir = readEnvWithProcessFallback(baseEnv, primaryKey)
   const ownOverlayDir = readEnvWithProcessFallback(baseEnv, overlayKey)
   const otherOverlayDir = readEnvWithProcessFallback(baseEnv, otherOverlayKey)
   // Why: if PI_CODING_AGENT_DIR is a restored Orca overlay with no source shadow, remirroring leaks another agent's overlay tree; fall through to defaults.
@@ -1395,7 +1491,7 @@ function resolvePiAgentSourceDir(
   }
 
   return readShellStartupEnvVar(
-    'PI_CODING_AGENT_DIR',
+    primaryKey,
     baseEnv.HOME ?? process.env.HOME,
     baseEnv.SHELL ?? process.env.SHELL
   )
@@ -1405,8 +1501,7 @@ function resolveScopedPiAgentSourceDir(
   baseEnv: Record<string, string>,
   kind: PiAgentKind
 ): string | undefined {
-  const sourceKey = kind === 'omp' ? 'ORCA_OMP_SOURCE_AGENT_DIR' : 'ORCA_PI_SOURCE_AGENT_DIR'
-  return readEnvWithProcessFallback(baseEnv, sourceKey)
+  return readEnvWithProcessFallback(baseEnv, SOURCE_AGENT_DIR_ENV_BY_KIND[kind])
 }
 
 function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKind): void {
@@ -1414,6 +1509,10 @@ function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKin
     delete baseEnv.ORCA_OMP_CODING_AGENT_DIR
     delete baseEnv.ORCA_OMP_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    return
+  }
+  if (kind === 'prime-agent') {
+    delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     return
   }
   delete baseEnv.ORCA_PI_CODING_AGENT_DIR
@@ -1436,6 +1535,14 @@ function exposePiManagedExtensionEnv(
       baseEnv.ORCA_OMP_STATUS_EXTENSION = managedEnv.ORCA_OMP_STATUS_EXTENSION
     } else {
       delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    }
+    return
+  }
+  if (kind === 'prime-agent') {
+    if (managedEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR) {
+      baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = managedEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
+    } else {
+      delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     }
     return
   }
@@ -1585,6 +1692,10 @@ export function buildPtyHostEnv(
     piAgentKind === 'omp'
       ? resolvePiAgentSourceDir(baseEnv, 'omp')
       : resolveScopedPiAgentSourceDir(baseEnv, 'omp')
+  const preexistingPrimeAgentDir =
+    piAgentKind === 'prime-agent'
+      ? resolvePiAgentSourceDir(baseEnv, 'prime-agent')
+      : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
 
   if (opts.agentStatusHooksEnabled) {
     // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
@@ -1657,6 +1768,7 @@ export function buildPtyHostEnv(
   if (opts.agentStatusHooksEnabled) {
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
+    clearPiAgentShadowEnv(baseEnv, 'prime-agent')
     // Why: bare shells historically defaulted to Pi + OMP shadow prep and
     // created ~/.<agent>/agent even when the user never launches those agents
     // (#10196). Only create default homes on an explicit Pi/OMP launch;
@@ -1677,8 +1789,19 @@ export function buildPtyHostEnv(
       Object.assign(baseEnv, ompEnv)
       exposePiManagedExtensionEnv(baseEnv, 'omp', ompEnv)
     }
+
+    if (piAgentKind === 'prime-agent' && !opts.isWsl) {
+      const primeEnv = piTitlebarExtensionService.buildPtyEnv(
+        id,
+        preexistingPrimeAgentDir,
+        'prime-agent',
+        { materializeDefaultHome: explicitPiAgentKind === 'prime-agent' }
+      )
+      Object.assign(baseEnv, primeEnv)
+      exposePiManagedExtensionEnv(baseEnv, 'prime-agent', primeEnv)
+    }
   } else {
-    // Why: strip BOTH kinds' shadow vars so a nested PTY can't inherit a stale overlay from either agent.
+    // Why: nested PTYs must not inherit stale source or overlay state from another agent.
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'PI_CODING_AGENT_DIR',
       overlay: 'ORCA_PI_CODING_AGENT_DIR',
@@ -1690,6 +1813,7 @@ export function buildPtyHostEnv(
       source: 'ORCA_OMP_SOURCE_AGENT_DIR'
     })
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
   }
 
   // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.
@@ -1732,6 +1856,16 @@ export function buildPtyHostEnv(
         .filter((entry) => entry.length > 0 && entry !== shimDir)
       baseEnv.PATH = [shimDir, ...inheritedEntries].join(delimiter)
     }
+  } else if (
+    opts.resourcesPath &&
+    (process.platform === 'darwin' || process.platform === 'win32')
+  ) {
+    // Why: global CLI registration is optional, but agents in Orca-managed PTYs must always reach this app's bundled CLI.
+    const bundledCliBin = join(opts.resourcesPath, 'bin')
+    const inheritedPath = readInheritedPath(baseEnv)
+    baseEnv[resolvePathEnvKey(baseEnv, process.platform)] = inheritedPath
+      ? `${bundledCliBin}${delimiter}${inheritedPath}`
+      : bundledCliBin
   }
 
   // Why: PATH shims keep GitHub attribution scoped to Orca's own PTYs without rewriting user git config.
@@ -2203,6 +2337,8 @@ export function registerPtyHandlers(
     awaitLocalPtyProviderStartup?: () => Promise<void>
     // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
+    onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
+    onPtyExit?: (id: string, exitSequence: number) => void
   }
 ): void {
   // Why: a re-registration means a new window owns delivery — cancel the prior closure's watchdog and neutralize its bridged reset so mark-hidden below can't arm a timer against the dead closure.
@@ -2266,7 +2402,7 @@ export function registerPtyHandlers(
         getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined,
-      pwshAvailable: () => isPwshAvailable(),
+      pwshAvailable: () => isPwshAvailableAsync(),
       buildSpawnEnv: (id, baseEnv, ctx) => {
         const codexSelectionTarget: CodexAccountSelectionTarget =
           ctx?.isWsl === true
@@ -2284,6 +2420,7 @@ export function registerPtyHandlers(
         const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
         const env = buildPtyHostEnv(id, baseEnv, {
           isPackaged: app.isPackaged,
+          resourcesPath: process.resourcesPath,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
           skipCodexHomeEnv,
@@ -2477,7 +2614,7 @@ export function registerPtyHandlers(
   function syncPtyBackgroundedDelivery(id: string, caller: string): void {
     const background =
       rendererPtyIsKnownHidden(id) && !(runtime?.hasRawTerminalViewSubscriber?.(id) ?? false)
-    if ((backgroundedDeliverySyncByPty.get(id) ?? false) === background) {
+    if (backgroundedDeliverySyncByPty.get(id) === background) {
       return
     }
     const provider = tryGetProviderForPty(id)
@@ -3523,6 +3660,7 @@ export function registerPtyHandlers(
   }
 
   function sendPtyExitToRenderer(payload: { id: string; code: number }): void {
+    options?.onPtyExit?.(payload.id, ++ptyLifecycleSequence)
     const release = preparePtyExitForRenderer(payload)
     if (!release) {
       return
@@ -4250,6 +4388,8 @@ export function registerPtyHandlers(
     },
     adoptStablePane,
     spawn: async (args) => {
+      const codexHomeLaunchStartedAt = !args.connectionId ? new Date() : undefined
+      const codexHomeLaunchStartedSequence = !args.connectionId ? ++ptyLifecycleSequence : undefined
       const preAdoptedStablePane = args.adoptedStablePane ?? null
       const startupPromise = getLocalPtyStartupPromise(args.connectionId)
       if (startupPromise) {
@@ -4260,7 +4400,7 @@ export function registerPtyHandlers(
         if (!handle) {
           throw new Error('terminal_pane_owner_unknown')
         }
-        return {
+        const result = {
           id: preAdoptedStablePane.result.id,
           ...(preAdoptedStablePane.result.incarnationId
             ? { incarnationId: preAdoptedStablePane.result.incarnationId }
@@ -4274,6 +4414,20 @@ export function registerPtyHandlers(
             leafId: preAdoptedStablePane.owner.leafId
           }
         }
+        ensureWslHookRelayForReattach(
+          { isReattach: true, wslDistro: preAdoptedStablePane.result.wslDistro },
+          args.connectionId
+        )
+        if (!args.connectionId) {
+          options?.onCodexHomePtySpawned?.({
+            id: result.id,
+            codexHomePath: null,
+            reattached: true,
+            startedAt: codexHomeLaunchStartedAt,
+            startedSequence: codexHomeLaunchStartedSequence
+          })
+        }
+        return result
       }
       if (!preAdoptedStablePane) {
         await assertFolderWorkspacePtyPathUsable(args.worktreeId)
@@ -4456,6 +4610,9 @@ export function registerPtyHandlers(
         })
         selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
       }
+      if (args.launchAgent === 'codex' && selectedCodexHomePath) {
+        await ensureCodexStateDbBackfillRecoveryStarted(selectedCodexHomePath)
+      }
       const codexResumeHomeSelected = Boolean(
         codexResumeHome && codexHomePathsEqual(selectedCodexHomePath, codexResumeHome.codexHomePath)
       )
@@ -4477,6 +4634,7 @@ export function registerPtyHandlers(
         }
         env = buildPtyHostEnv(sessionId, env ?? {}, {
           isPackaged: app.isPackaged,
+          resourcesPath: process.resourcesPath,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
           skipCodexHomeEnv,
@@ -4680,6 +4838,7 @@ export function registerPtyHandlers(
         : null
       let result: PtySpawnResult
       let stablePaneOwner: StablePaneOwner | null = null
+      let stablePaneBindingPersisted = false
       let rejectedRegistrationCandidate: PtySpawnResult | null = null
       let pendingRegistrationPtyId: string | null = null
       let preparedProvisionalExecutionContext = false
@@ -4838,6 +4997,7 @@ export function registerPtyHandlers(
               sequenceBeforeProviderSpawn
             )
           }
+          ensureWslHookRelayForReattach(result, args.connectionId)
           runtime?.preparePtyExecutionContext?.(
             result.id,
             args.connectionId
@@ -4902,6 +5062,24 @@ export function registerPtyHandlers(
             trustedTerminalHandleEnv.delete(args.preAllocatedHandle)
           }
         }
+        try {
+          stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
+            store: hostSessionBinding?.store,
+            owner: stablePaneOwner,
+            result,
+            worktreeId: hostSessionBinding?.worktreeId,
+            startupCwd: cwd,
+            connectionId: args.connectionId
+          })
+        } catch (error) {
+          if (error instanceof Error && error.message === 'terminal_pane_owner_changed') {
+            throw error
+          }
+          console.error('[pty] failed to persist runtime PTY binding after attach:', error)
+          throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+            agentSessionOperationOutcome: 'unknown' as const
+          })
+        }
         if (result.agentSessionEnsure?.disposition === 'adopted') {
           const owner = result.agentSessionEnsure.owner
           ptyOwnership.set(result.id, args.connectionId ?? ptyOwnership.get(result.id) ?? null)
@@ -4914,6 +5092,16 @@ export function registerPtyHandlers(
             leafId: owner.surface.leafId,
             ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
           })
+          if (!args.connectionId) {
+            options?.onCodexHomePtySpawned?.({
+              id: result.id,
+              codexHomePath: selectedCodexHomePath,
+              reattached: true,
+              startedAt: codexHomeLaunchStartedAt,
+              startedSequence: codexHomeLaunchStartedSequence,
+              ...(env ? { launchEnv: env } : {})
+            })
+          }
           return {
             id: result.id,
             ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
@@ -4969,7 +5157,7 @@ export function registerPtyHandlers(
           target: codexSelectionTarget,
           settings: getSettings?.()
         })
-        if (hostSessionBinding) {
+        if (hostSessionBinding && !stablePaneBindingPersisted) {
           try {
             const binding = {
               worktreeId: hostSessionBinding.worktreeId,
@@ -5078,6 +5266,15 @@ export function registerPtyHandlers(
         }
         // Why: runtime-owned/background spawns bypass mounted-pane state, so inventory consumers need an explicit signal.
         sendPtySpawnedToRenderer(result.id)
+        if (!args.connectionId) {
+          options?.onCodexHomePtySpawned?.({
+            id: result.id,
+            codexHomePath: selectedCodexHomePath,
+            startedAt: codexHomeLaunchStartedAt,
+            startedSequence: codexHomeLaunchStartedSequence,
+            ...(result.isReattach === true ? { reattached: true } : env ? { launchEnv: env } : {})
+          })
+        }
         const response = {
           id: result.id,
           ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
@@ -5172,7 +5369,15 @@ export function registerPtyHandlers(
         return false
       }
       try {
-        await provider.attach(ptyId)
+        const sequenceBeforeProviderAttach = runtime?.getPtyOutputSequence?.(ptyId) ?? 0
+        const attachResult = await provider.attach(ptyId)
+        if (attachResult?.providerSequence) {
+          runtime?.synchronizePtyOutputSequenceFromProvider?.(
+            ptyId,
+            attachResult.providerSequence,
+            sequenceBeforeProviderAttach
+          )
+        }
         return true
       } catch {
         return false
@@ -5537,6 +5742,7 @@ export function registerPtyHandlers(
         commandDelivery?: 'renderer' | 'provider'
         launchConfig?: SleepingAgentLaunchConfig
         resumeProviderSession?: AgentProviderSessionMetadata
+        launchToken?: unknown
         launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
         connectionId?: string | null
@@ -5561,6 +5767,8 @@ export function registerPtyHandlers(
         }
       }
     ) => {
+      const codexHomeLaunchStartedAt = !args.connectionId ? new Date() : undefined
+      const codexHomeLaunchStartedSequence = !args.connectionId ? ++ptyLifecycleSequence : undefined
       const spawnTiming = createPtySpawnTiming()
       const startupPromise = getLocalPtyStartupPromise(args.connectionId)
       if (startupPromise) {
@@ -5625,6 +5833,7 @@ export function registerPtyHandlers(
       let finishTerminalInstall = (): void => {}
       let result: PtySpawnResult
       let stablePaneOwner: StablePaneOwner | null = null
+      let stablePaneBindingPersisted = false
       let rejectedRegistrationCandidate: PtySpawnResult | null = null
       let pendingRegistrationPtyId: string | null = null
       let preparedProvisionalExecutionContext = false
@@ -5897,6 +6106,9 @@ export function registerPtyHandlers(
           })
           selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
         }
+        if (args.launchAgent === 'codex' && selectedCodexHomePath) {
+          await ensureCodexStateDbBackfillRecoveryStarted(selectedCodexHomePath)
+        }
         const codexResumeHomeSelected = Boolean(
           codexResumeHome &&
           codexHomePathsEqual(selectedCodexHomePath, codexResumeHome.codexHomePath)
@@ -5928,6 +6140,7 @@ export function registerPtyHandlers(
           try {
             buildPtyHostEnv(sessionIdForEnv, env, {
               isPackaged: app.isPackaged,
+              resourcesPath: process.resourcesPath,
               userDataPath: app.getPath('userData'),
               selectedCodexHomePath,
               skipCodexHomeEnv,
@@ -6159,6 +6372,7 @@ export function registerPtyHandlers(
               sequenceBeforeProviderSpawn
             )
           }
+          ensureWslHookRelayForReattach(result, args.connectionId)
           runtime?.preparePtyExecutionContext?.(
             result.id,
             args.connectionId
@@ -6245,6 +6459,24 @@ export function registerPtyHandlers(
             trustedTerminalHandleEnv.delete(preAllocatedHandle)
           }
         }
+        try {
+          stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
+            store,
+            owner: stablePaneOwner,
+            result,
+            worktreeId: args.worktreeId,
+            startupCwd: cwd,
+            connectionId: args.connectionId
+          })
+        } catch (error) {
+          if (error instanceof Error && error.message === 'terminal_pane_owner_changed') {
+            throw error
+          }
+          console.error('[pty] failed to persist PTY binding after attach:', error)
+          throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+            agentSessionOperationOutcome: 'unknown' as const
+          })
+        }
         spawnTiming.log(result.id, {
           daemon: isDaemonHostSpawn,
           reattach: result.isReattach ?? false
@@ -6303,7 +6535,8 @@ export function registerPtyHandlers(
           store &&
           typeof args.worktreeId === 'string' &&
           typeof args.tabId === 'string' &&
-          validatedLeafId !== null
+          validatedLeafId !== null &&
+          !stablePaneBindingPersisted
         ) {
           try {
             const binding = {
@@ -6404,6 +6637,15 @@ export function registerPtyHandlers(
           args.worktreeId.length > 0 &&
           args.worktreeId.length <= 512
         ) {
+          const agentLaunchAuthority = admitRendererAgentLaunchAuthority({
+            launchToken: args.launchToken,
+            spawnEnv,
+            launchAgent: args.launchAgent,
+            launchConfig: effectiveLaunchConfig,
+            isReattach: result.isReattach === true,
+            hasStablePaneOwner: stablePaneOwner !== null,
+            incarnationId: result.incarnationId
+          })
           runtime?.registerPty(
             result.id,
             args.worktreeId,
@@ -6416,7 +6658,8 @@ export function registerPtyHandlers(
               ? {
                   tabId: args.tabId,
                   leafId: metadataLeafId,
-                  ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
+                  ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
+                  ...(agentLaunchAuthority ? { agentLaunchAuthority } : {})
                 }
               : undefined,
             !args.connectionId
@@ -6516,6 +6759,19 @@ export function registerPtyHandlers(
         }
         // Why: renderer tab state cannot reliably infer background and reattached PTYs in the daemon inventory.
         sendPtySpawnedToRenderer(result.id)
+        if (!args.connectionId) {
+          options?.onCodexHomePtySpawned?.({
+            id: result.id,
+            codexHomePath: selectedCodexHomePath,
+            startedAt: codexHomeLaunchStartedAt,
+            startedSequence: codexHomeLaunchStartedSequence,
+            ...(result.isReattach === true
+              ? { reattached: true }
+              : baseEnv
+                ? { launchEnv: baseEnv }
+                : {})
+          })
+        }
         return resolvePaneSpawnReservation(paneSpawnReservationKey, paneSpawnReservation, response)
       } catch (err) {
         if (pendingRegistrationPtyId) {
@@ -7302,7 +7558,11 @@ export function registerHeadlessPtyRuntime(
   getSettings?: () => GlobalSettings,
   prepareClaudeAuth?: PrepareClaudeAuth,
   store?: Store,
-  prepareCodexSessionResume?: PrepareCodexSessionResume
+  prepareCodexSessionResume?: PrepareCodexSessionResume,
+  lifecycle?: {
+    onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
+    onPtyExit?: (id: string, exitSequence: number) => void
+  }
 ): void {
   // Why: headless `orca serve` has no renderer window but still needs the same PTY handlers so remote clients can drive terminals.
   const headlessWindow = {
@@ -7320,7 +7580,7 @@ export function registerHeadlessPtyRuntime(
     getSettings,
     prepareClaudeAuth,
     store,
-    { prepareCodexSessionResume }
+    { prepareCodexSessionResume, ...lifecycle }
   )
 }
 

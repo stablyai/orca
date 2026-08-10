@@ -14,6 +14,16 @@ export type AssertNoMissingKeys<TType, TSchema extends Record<string, unknown>> 
     : { missingFromSchema: Exclude<keyof TType, keyof TSchema> }
 
 /**
+ * The mirror of `AssertNoMissingKeys`: a key the schema accepts but the shared
+ * type does not model. `.strict()` cannot catch this one — it lets the payload
+ * through, and the renderer then receives a field it has no type for.
+ */
+export type AssertNoExtraKeys<TType, TSchema extends Record<string, unknown>> =
+  Exclude<keyof TSchema, keyof TType> extends never
+    ? true
+    : { absentFromType: Exclude<keyof TSchema, keyof TType> }
+
+/**
  * Key parity alone is blind to VALUE drift: a schema can list `rightSidebarTab`
  * yet omit half its union members, which the strict schema then rejects. This
  * asserts the schema's accepted value domain still covers the shared type for

@@ -1,15 +1,12 @@
 import { app, ipcMain } from 'electron'
-import { resolve } from 'node:path'
 import {
   configureAiVaultSessionSources,
-  getAiVaultWslHomeDirs,
   listAiVaultSessions as listCachedLocalAiVaultSessions,
   resetAiVaultSessionListCacheForTests,
   type AiVaultSessionSources
 } from '../ai-vault/cached-session-list'
-import { listClaudeSubagentSessions } from '../ai-vault/session-scanner-claude-subagents'
-import { claudeProjectsRootDirs } from '../ai-vault/session-scanner-source-discovery'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { deleteAiVaultSession, registerAiVaultDeleteHandler } from './ai-vault-delete'
+import { listAiVaultSubagentSessions } from './ai-vault-subagent-list'
 import {
   aiVaultScanIssueResult,
   cancelledAiVaultListResult,
@@ -17,6 +14,7 @@ import {
 } from '../ai-vault/session-list-results'
 import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
+import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   isAiVaultScanCancelledError,
@@ -44,8 +42,20 @@ import {
   type RuntimeAiVaultHostInfo,
   type RuntimeAiVaultScanner
 } from './ai-vault-runtime-scan'
-import { resetAiVaultHostLegCacheForTests, scanHostLegWithCache } from './ai-vault-host-leg-cache'
+import {
+  invalidateAiVaultHostLegCache,
+  resetAiVaultHostLegCacheForTests,
+  scanHostLegWithCache
+} from './ai-vault-host-leg-cache'
 import { requestedAiVaultSessionDepth } from '../../shared/ai-vault-session-depth'
+import type {
+  AiVaultSessionTitlesArgs,
+  AiVaultSessionTitlesResult
+} from '../../shared/ai-vault-session-title'
+import {
+  resolveAiVaultSessionTitlesByHost,
+  type RuntimeAiVaultSessionTitleResolver
+} from './ai-vault-session-title-routing'
 
 const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
 // Why: a remote home with many agent roots routinely needs seconds to walk,
@@ -60,11 +70,26 @@ type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
     getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
     scanRuntimeAiVaultSessions?: RuntimeAiVaultScanner
+    resolveRuntimeAiVaultSessionTitles?: RuntimeAiVaultSessionTitleResolver
+    getSessionLiveness?: Parameters<typeof deleteAiVaultSession>[1]['getSessionLiveness']
   }
 
 let scanCoordinator = new AiVaultScanCoordinator()
 let handlerOptions: AiVaultHandlerOptions = {}
 const listCancellations = createSenderScopedRequestCancellations()
+// Shared by the IPC registration and the test internals: a delete must drop
+// the multi-host leg cache, which this module owns the only caller of.
+const aiVaultDeleteDeps = {
+  invalidateMultiHostListCache: invalidateAiVaultHostLegCache,
+  getSessionLiveness: (
+    target: Parameters<NonNullable<AiVaultHandlerOptions['getSessionLiveness']>>[0]
+  ) => handlerOptions.getSessionLiveness?.(target) ?? Promise.resolve('unknown' as const)
+}
+
+const resolveAiVaultSessionTitles = (
+  args: AiVaultSessionTitlesArgs
+): Promise<AiVaultSessionTitlesResult> =>
+  resolveAiVaultSessionTitlesByHost(args, handlerOptions.resolveRuntimeAiVaultSessionTitles)
 
 async function listAiVaultSessions(
   args?: AiVaultListArgs,
@@ -269,6 +294,11 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     }
   })
   ipcMain.handle(
+    'aiVault:resolveSessionTitles',
+    (_event, args: AiVaultSessionTitlesArgs): Promise<AiVaultSessionTitlesResult> =>
+      resolveAiVaultSessionTitles(args)
+  )
+  ipcMain.handle(
     'aiVault:cancelListSessions',
     (event, args: { requestToken?: string } | undefined): void => {
       if (typeof args?.requestToken === 'string' && args.requestToken.length <= 128) {
@@ -285,6 +315,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
   ipcMain.handle('aiVault:getFirstUserPrompt', (_event, args?: AiVaultFirstUserPromptArgs) =>
     handleAiVaultGetFirstUserPrompt(args)
   )
+  registerAiVaultDeleteHandler(aiVaultDeleteDeps)
   // DOM focus/visibility events don't fire in the renderer on macOS app
   // activation, so refresh-on-refocus needs this main-process signal.
   app.on('browser-window-focus', (_event, window) => {
@@ -294,51 +325,19 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
   })
 }
 
-// Provider-gated: only Claude materializes Task subagent transcripts as
-// sibling files today; other agents resolve to an empty list.
-async function listAiVaultSubagentSessions(
-  args?: AiVaultSubagentListArgs
-): Promise<AiVaultSubagentListResult> {
-  // IPC payloads are untyped at runtime; malformed input resolves empty like
-  // every other rejected input instead of throwing.
-  if (
-    !args ||
-    args.agent !== 'claude' ||
-    typeof args.parentFilePath !== 'string' ||
-    !args.parentFilePath.trim()
-  ) {
-    return { sessions: [], issues: [] }
-  }
-  // Why: subagent transcripts are read from the local filesystem. The UI
-  // skips remote sessions (their transcripts live on the remote host); return
-  // empty defensively rather than reading local paths for a remote session.
-  const executionHostId = args.executionHostId ?? LOCAL_EXECUTION_HOST_ID
-  if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
-    return { sessions: [], issues: [] }
-  }
-  // Why: the path is renderer-supplied; only list files under a known Claude
-  // projects root so a crafted path can't readdir/preview arbitrary dirs.
-  // resolve() collapses `..` segments first — isPathInsideOrEqual compares
-  // textually and would otherwise pass `<root>/../../etc/x.jsonl`.
-  const parentFilePath = resolve(args.parentFilePath)
-  const roots = claudeProjectsRootDirs({ wslHomeDirs: await getAiVaultWslHomeDirs() })
-  if (!roots.some((root) => isPathInsideOrEqual(resolve(root), parentFilePath))) {
-    return { sessions: [], issues: [] }
-  }
-  return listClaudeSubagentSessions({ parentFilePath })
-}
-
 function resetAiVaultCacheForTests(): void {
   resetAiVaultHostLegCacheForTests()
   scanCoordinator = new AiVaultScanCoordinator()
   handlerOptions = {}
-  // The local leg delegates to the shared cache module; reset it too so tests
-  // never see a scan cached by an earlier case.
+  // Keep tests isolated from the shared local-leg cache.
   resetAiVaultSessionListCacheForTests()
 }
 
 export const _internals = {
   listAiVaultSessions,
+  resolveAiVaultSessionTitles,
   listAiVaultSubagentSessions,
+  deleteAiVaultSession: (args?: AiVaultDeleteSessionArgs) =>
+    deleteAiVaultSession(args, aiVaultDeleteDeps),
   resetAiVaultCacheForTests
 }

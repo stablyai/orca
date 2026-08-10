@@ -219,6 +219,20 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
     params: WorkerDispatchParams,
     handler: (params, { runtime }) => {
       const abandoned = runtime.getOrchestrationDb().abandonWorkerDispatch(params.dispatch)
+      if (abandoned.disposition === 'context_only') {
+        if (!abandoned.alreadySettled) {
+          runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
+        }
+        return {
+          dispatchId: params.dispatch,
+          state: abandoned.state,
+          alreadySettled: abandoned.alreadySettled,
+          stale: !abandoned.releasedCurrentTask,
+          processAction: 'none',
+          warning: contextOnlyAbandonWarning(abandoned),
+          residualResources: []
+        }
+      }
       const worker = abandoned.worker
       if (abandoned.disposition === 'abandoned') {
         runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
@@ -238,3 +252,16 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
     }
   })
 ]
+
+function contextOnlyAbandonWarning(result: {
+  state: string
+  alreadySettled: boolean
+  releasedCurrentTask: boolean
+}): string {
+  if (result.alreadySettled) {
+    return `Dispatch was already ${result.state}; no state or process changed.`
+  }
+  return result.releasedCurrentTask
+    ? 'The assignment was abandoned; its unsupervised terminal process was retained.'
+    : 'The superseded assignment was abandoned without changing the current Task or terminal process.'
+}

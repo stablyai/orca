@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import dgram from 'node:dgram'
 import { ipcMain, shell, systemPreferences } from 'electron'
 import { getMacosFullDiskAccessStatus } from '../macos-full-disk-access-status'
+import { testLocalNetworkConnection } from './local-network-connection-test'
 import type {
   DeveloperPermissionId,
   DeveloperPermissionRequestResult,
@@ -16,6 +17,8 @@ const PRIVACY_PANE_URLS: Partial<Record<DeveloperPermissionId, string>> = {
   accessibility: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
   'full-disk-access': 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
   automation: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation',
+  'local-network':
+    'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_LocalNetwork',
   bluetooth: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth'
 }
 
@@ -234,5 +237,11 @@ export function registerDeveloperPermissionHandlers(): void {
     async (_event, args: { id: DeveloperPermissionId }): Promise<void> => {
       await openPrivacyPane(args.id)
     }
+  )
+
+  ipcMain.handle('developerPermissions:testLocalNetworkConnection', async (_event, args: unknown) =>
+    testLocalNetworkConnection(
+      args && typeof args === 'object' ? (args as { host?: unknown; port?: unknown }) : {}
+    )
   )
 }

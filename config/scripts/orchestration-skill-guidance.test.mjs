@@ -275,6 +275,16 @@ describe('orchestration skill guidance', () => {
     )
   })
 
+  it('documents per-invocation model and effort for supervised workers', () => {
+    const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+
+    expect(workerLoop).toContain('opaque provider model id with `--model`')
+    expect(workerLoop).toContain('`--effort` requires `--model`')
+    expect(workerLoop).toContain('neither option can combine with `--terminal`')
+    expect(workerLoop).toContain('--agent claude --model aws-bedrock-opus-5 --effort high --json')
+    expect(workerLoop).toContain('`launch.requested` and `launch.effective`')
+  })
+
   it('never authorizes release from idle, timeout, or worker-side triggers', () => {
     const skill = readSkill()
     const workerLoop = getSection(skill, 'Preferred Supervised Worker Loop')

@@ -10,6 +10,10 @@ import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions
 import { ManageSessionKillDialog } from './ManageSessionKillDialog'
 import { ManageSessionsTable } from './ManageSessionsTable'
 import { notifyDaemonSessionInventoryInvalidated } from '../status-bar/daemon-session-inventory-invalidation'
+import {
+  MANAGE_SESSIONS_SECTION_ID,
+  TerminalTccAttributionNotice
+} from './TerminalTccAttributionNotice'
 import { translate } from '@/i18n/i18n'
 
 type ConfirmKind = 'killOne'
@@ -20,6 +24,7 @@ export function ManageSessionsSection(): React.JSX.Element {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const [pendingKillSession, setPendingKillSession] = useState<PtyManagementSession | null>(null)
   const [busyKind, setBusyKind] = useState<ConfirmKind | null>(null)
+  const [attributionRefreshRevision, setAttributionRefreshRevision] = useState(0)
   const optimisticRollback = useRef<PtyManagementSession[] | null>(null)
   const isMounted = useRef(true)
   const mutationInFlight = useRef(false)
@@ -124,6 +129,7 @@ export function ManageSessionsSection(): React.JSX.Element {
     },
     onRestartSettled: () => {
       notifyDaemonSessionInventoryInvalidated()
+      setAttributionRefreshRevision((revision) => revision + 1)
       void refresh()
     }
   })
@@ -206,7 +212,12 @@ export function ManageSessionsSection(): React.JSX.Element {
         description={getManageSessionsSearchEntries()[0].description}
         keywords={getManageSessionsSearchEntries()[0].keywords}
         className="space-y-3"
+        id={MANAGE_SESSIONS_SECTION_ID}
       >
+        <TerminalTccAttributionNotice
+          showManageSessionsButton={false}
+          refreshRevision={attributionRefreshRevision}
+        />
         <ManageSessionsTable
           sessions={sessions}
           hasLoadedOnce={hasLoadedOnce}

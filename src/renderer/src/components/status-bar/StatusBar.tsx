@@ -2369,7 +2369,11 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                   className="relative inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border bg-secondary text-secondary-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
                   aria-label={
                     showFloatingWorkspaceAttentionDot
-                      ? `${floatingTerminalActionLabel}, new activity`
+                      ? translate(
+                          'auto.components.status.bar.StatusBar.floatingTerminalNewActivity',
+                          '{{label}}, new activity',
+                          { label: floatingTerminalActionLabel }
+                        )
                       : floatingTerminalActionLabel
                   }
                   onClick={() => {

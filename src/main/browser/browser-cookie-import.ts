@@ -74,7 +74,6 @@ import type {
   BrowserSessionProfileSource
 } from '../../shared/types'
 import { browserSessionRegistry } from './browser-session-registry'
-import { setupClientHintsOverride } from './browser-session-ua'
 import {
   isGoogleSourceBoundCookie,
   normalizeCookieDomain,
@@ -769,72 +768,6 @@ export async function importCookiesFromFile(
     targetPartition,
     'replace-imported-domains'
   )
-}
-
-// ---------------------------------------------------------------------------
-// Direct import from installed Chromium browser
-// ---------------------------------------------------------------------------
-
-// Why: services bind auth cookies to the creating User-Agent, so build a UA matching the source browser's real version.
-export function getUserAgentForBrowser(
-  family: BrowserSessionProfileSource['browserFamily']
-): string | null {
-  // Why: UA version comes from macOS-only plist reading; elsewhere the default Electron UA is acceptable.
-  if (process.platform !== 'darwin') {
-    return null
-  }
-
-  const platform = 'Macintosh; Intel Mac OS X 10_15_7'
-  const chromeBase = 'AppleWebKit/537.36 (KHTML, like Gecko)'
-
-  function readBrowserVersion(
-    appPath: string,
-    plistKey = 'CFBundleShortVersionString'
-  ): string | null {
-    try {
-      return (
-        execFileSync('defaults', ['read', `${appPath}/Contents/Info`, plistKey], {
-          encoding: 'utf-8',
-          timeout: 5_000
-        }).trim() || null
-      )
-    } catch {
-      return null
-    }
-  }
-
-  switch (family) {
-    case 'chrome': {
-      const v = readBrowserVersion('/Applications/Google Chrome.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'edge': {
-      const v = readBrowserVersion('/Applications/Microsoft Edge.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36 Edg/${v}` : null
-    }
-    case 'arc': {
-      const v = readBrowserVersion('/Applications/Arc.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'chromium': {
-      const v = readBrowserVersion('/Applications/Brave Browser.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'comet': {
-      // Why: Comet is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
-      const v = readBrowserVersion('/Applications/Comet.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'helium': {
-      // Why: Helium is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
-      const v = readBrowserVersion('/Applications/Helium.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
-    case 'firefox':
-    case 'safari':
-    case 'manual':
-      return null
-  }
 }
 
 const PBKDF2_ITERATIONS = 1003
@@ -1873,13 +1806,12 @@ export async function importCookiesFromBrowser(
       diag(`  all cookies loaded in-memory — no restart needed`)
     }
 
-    const ua = getUserAgentForBrowser(browser.family)
-    if (ua) {
-      targetSession.setUserAgent(ua)
-      setupClientHintsOverride(targetSession, ua)
-      browserSessionRegistry.persistUserAgent(targetPartition, ua)
-      diag(`  set UA for partition: ${ua.substring(0, 80)}...`)
-    }
+    // Why: the session keeps the UA the registry set at startup (clean or native).
+    // Imports must not impersonate the source browser — the synthesized UA read a
+    // fork's marketing version as a Chromium version (STA-3514), and Google binds
+    // sessions to the re-import, not the UA (#12884), so it bought nothing.
+    // Google-bound integrity cookies are already excluded by
+    // isGoogleSourceBoundCookie, which is what actually prevents CookieMismatch.
 
     const summary: BrowserCookieImportSummary = {
       totalCookies: sourceRows.length,

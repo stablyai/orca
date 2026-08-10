@@ -2682,6 +2682,117 @@ describe('registerWorktreeHandlers', () => {
     expect(getSshGitProviderMock).not.toHaveBeenCalled()
   })
 
+  it('stops listing SSH worktrees once an authoritative scan retires their metadata', async () => {
+    const sshHostId = toSshExecutionHostId('target-a')
+    const sshRepo = {
+      id: 'repo-1',
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'target-a'
+    }
+    const metaById: Record<string, Record<string, unknown>> = {
+      'repo-1::/remote/repo': makeWorktreeMeta({ displayName: 'main', hostId: sshHostId }),
+      'repo-1::/remote/deleted': makeWorktreeMeta({ displayName: 'deleted', hostId: sshHostId }),
+      'repo-1::/remote/other-host': makeWorktreeMeta({
+        displayName: 'other host',
+        hostId: toSshExecutionHostId('target-b')
+      }),
+      'repo-2::/remote/other-repo': makeWorktreeMeta({ displayName: 'other repo' })
+    }
+    store.getRepos.mockReturnValue([sshRepo])
+    store.getProjectHostSetups.mockReturnValue([])
+    store.getAllWorktreeMeta.mockReturnValue(metaById)
+    store.getWorktreeMeta.mockImplementation((worktreeId: string) => metaById[worktreeId])
+    store.removeWorktreeMeta.mockImplementation((worktreeId: string) => {
+      delete metaById[worktreeId]
+    })
+
+    const forgotten = await handlers['worktrees:forgetRemovedForExecutionHost'](null, {
+      repoId: sshRepo.id,
+      executionHostId: sshHostId,
+      // Only the first is this host's row; the rest must survive an over-broad request.
+      worktreeIds: [
+        'repo-1::/remote/deleted',
+        'repo-1::/remote/other-host',
+        'repo-2::/remote/other-repo',
+        'repo-1::/remote/never-persisted'
+      ]
+    })
+
+    expect(forgotten).toEqual({ forgottenWorktreeIds: ['repo-1::/remote/deleted'] })
+    expect(store.removeWorktreeMeta).toHaveBeenCalledTimes(1)
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-1::/remote/deleted', sshHostId)
+
+    // Why: the renderer's suppression memory is session-scoped, so the next launch must not re-list the row.
+    const relisted = (await handlers['worktrees:listKnownForExecutionHost'](null, {
+      repoId: sshRepo.id,
+      executionHostId: sshHostId
+    })) as { result: { worktrees: { path: string }[] } }
+
+    expect(relisted.result.worktrees.map((worktree) => worktree.path)).toEqual(['/remote/repo'])
+  })
+
+  it('never retires folder workspace metadata, which is the workspace record itself', async () => {
+    const sshHostId = toSshExecutionHostId('target-a')
+    const folderRepo = {
+      id: 'repo-1',
+      path: '/remote/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'target-a',
+      kind: 'folder' as const
+    }
+    const instanceId = `${folderRepo.id}::${folderRepo.path}::workspace:11111111-2222-3333-4444-555555555555`
+    store.getRepos.mockReturnValue([folderRepo])
+    store.getAllWorktreeMeta.mockReturnValue({
+      [instanceId]: makeWorktreeMeta({ displayName: 'second workspace', hostId: sshHostId })
+    })
+
+    const forgotten = await handlers['worktrees:forgetRemovedForExecutionHost'](null, {
+      repoId: folderRepo.id,
+      executionHostId: sshHostId,
+      worktreeIds: [instanceId]
+    })
+
+    expect(forgotten).toEqual({ forgottenWorktreeIds: [] })
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('refuses to retire metadata for non-SSH hosts and unowned repos', async () => {
+    const sshRepo = {
+      id: 'repo-1',
+      path: '/remote/repo-a',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'target-a'
+    }
+    store.getRepos.mockReturnValue([sshRepo, { ...sshRepo, path: '/remote/repo-b' }])
+    store.getAllWorktreeMeta.mockReturnValue({
+      'repo-1::/remote/deleted': makeWorktreeMeta({})
+    })
+
+    expect(
+      await handlers['worktrees:forgetRemovedForExecutionHost'](null, {
+        repoId: sshRepo.id,
+        executionHostId: LOCAL_EXECUTION_HOST_ID,
+        worktreeIds: ['repo-1::/remote/deleted']
+      })
+    ).toEqual({ forgottenWorktreeIds: [] })
+    // Ambiguous SSH ownership fails closed the same way the metadata read does.
+    expect(
+      await handlers['worktrees:forgetRemovedForExecutionHost'](null, {
+        repoId: sshRepo.id,
+        executionHostId: toSshExecutionHostId('target-a'),
+        worktreeIds: ['repo-1::/remote/deleted']
+      })
+    ).toEqual({ forgottenWorktreeIds: [] })
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
   it('rejects metadata-only reads for non-SSH execution hosts', async () => {
     const result = await handlers['worktrees:listKnownForExecutionHost'](null, {
       repoId: 'repo-1',

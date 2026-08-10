@@ -9,12 +9,12 @@ import {
   View
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useFocusEffect, useRouter } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
-import { useAllHostClients } from '../src/transport/use-all-host-clients'
+import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { BottomDrawer } from '../src/components/BottomDrawer'
 import { VoiceModelList } from '../src/components/VoiceModelList'
@@ -47,7 +47,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
     void loadHosts().then(setHosts)
   }, [])
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
-  const hostClients = useAllHostClients(hostIds)
+  const { clients: hostClients, focused: routeFocused } = useFocusedSettingsHostClients(hostIds)
   // Voice dictation runs on the paired desktop, so pick the first connected host.
   const client: RpcClient | null = useMemo(
     () => hostClients.find((entry) => entry.state === 'connected')?.client ?? null,
@@ -59,15 +59,6 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<ModelBusyAction | null>(null)
   const [modelDrawerOpen, setModelDrawerOpen] = useState(false)
-  const [routeFocused, setRouteFocused] = useState(false)
-
-  useFocusEffect(
-    useCallback(() => {
-      setRouteFocused(true)
-      return () => setRouteFocused(false)
-    }, [])
-  )
-
   const refresh = useCallback(async (): Promise<boolean | undefined> => {
     if (!client) {
       return false

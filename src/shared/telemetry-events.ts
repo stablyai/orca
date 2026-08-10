@@ -77,6 +77,7 @@ export const AGENT_KIND_VALUES = [
   'mimo-code',
   'pi',
   'omp',
+  'prime-agent',
   'gemini',
   'antigravity',
   'aider',

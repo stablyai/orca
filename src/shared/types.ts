@@ -52,6 +52,7 @@ import type { PersistedNativeChatSessionOptions } from './native-chat-session-op
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
 import type { TaskSourceContext } from './task-source-context'
 import type { SetupRunnerShell } from './setup-runner-command'
+import type { AiVaultSessionTitle } from './ai-vault-session-title'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -845,6 +846,8 @@ export type Tab = {
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
   generatedLabel?: string | null
+  /** Stable AI Vault conversation name, bound to its provider session identity. */
+  aiVaultTitle?: AiVaultSessionTitle | null
   quickCommandLabel?: string | null
   customLabel: string | null
   color: string | null
@@ -885,6 +888,8 @@ export type TerminalTab = {
   defaultTitle?: string
   /** Stable opt-in label derived from the first known agent prompt. */
   generatedTitle?: string | null
+  /** Stable AI Vault conversation name, bound to its provider session identity. */
+  aiVaultTitle?: AiVaultSessionTitle | null
   /** Stable label from the tab-bar Quick Command that created this terminal. */
   quickCommandLabel?: string | null
   customTitle: string | null
@@ -2629,6 +2634,7 @@ export type TuiAgent =
   | 'devin' // Devin CLI
   | 'ante' // Ante (Antigma Labs)
   | 'trae' // Trae CLI
+  | 'prime-agent' // Prime Agent (Prime Intellect)
 
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 
@@ -2708,6 +2714,7 @@ export type OpenInApplication = {
 }
 
 export type SourceControlViewMode = 'list' | 'tree'
+export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untracked-first'
 
 export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 
@@ -2893,6 +2900,8 @@ export type GlobalSettings = {
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode
+  /** Preferred Source Control group order. Per-user, not per-workspace. */
+  sourceControlGroupOrder: SourceControlGroupOrder
   /** Compare base defaults to the branch upstream instead of the repo default; affects only the compare/diff view, not the PR/rebase target. Per-user. */
   sourceControlCompareAgainstUpstream: boolean
   /** Whether to show the Orca app name in the titlebar. */
@@ -2901,6 +2910,12 @@ export type GlobalSettings = {
   showTasksButton: boolean
   /** Only toggles the sidebar shortcut; Automations stay reachable from Settings/View menu. */
   showAutomationsButton?: boolean
+  /** Deprecated: Artifacts are always available. Use showArtifactsButton for sidebar visibility. */
+  artifactsEnabled?: boolean
+  /** Capability gate for agent-driven publishing; off until granted, enforced in main, not just the UI. */
+  artifactSharingEnabled?: boolean
+  /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
+  showArtifactsButton?: boolean
   /** Only toggles the sidebar shortcut; Orca Mobile stays reachable from Settings. */
   showMobileButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
@@ -2985,6 +3000,8 @@ export type GlobalSettings = {
   skipCloseTerminalWithRunningProcessConfirm: boolean
   /** Why: deleting an automation also deletes its run history; keep this skip separate from worktree deletion. */
   skipDeleteAutomationConfirm: boolean
+  /** Why: deleting an artifact breaks a public link others may already hold; keep this skip separate from local deletions. */
+  skipDeleteArtifactConfirm: boolean
   /** Why: a Codex rate-limit reset spends a scarce credit on the live account; keep this skip separate from local confirmations. */
   skipCodexRateLimitResetConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
@@ -3369,6 +3386,7 @@ export type TopLevelView =
   | 'automations'
   | 'space'
   | 'skills'
+  | 'artifacts'
   | 'mobile'
 
 export type PersistedUIState = {

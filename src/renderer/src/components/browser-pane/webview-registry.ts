@@ -27,6 +27,7 @@ const webviewLifecycleListeners = new Map<
     webview: Electron.WebviewTag
     onRendererGone: EventListener
     onRendererReady: EventListener
+    onGuestDestroyed: EventListener
   }
 >()
 
@@ -163,6 +164,7 @@ export function registerPersistentWebview(
       previousListeners.onRendererGone
     )
     previousListeners.webview.removeEventListener('dom-ready', previousListeners.onRendererReady)
+    previousListeners.webview.removeEventListener('destroyed', previousListeners.onGuestDestroyed)
   }
   const onRendererGone = (): void => {
     rendererRecoveryPendingPageIds.add(browserTabId)
@@ -170,9 +172,22 @@ export function registerPersistentWebview(
   const onRendererReady = (): void => {
     rendererRecoveryPendingPageIds.delete(browserTabId)
   }
+  const onGuestDestroyed = (): void => {
+    // Why: 'destroyed' also fires after an intentional webview.remove(); only a
+    // still-attached element means the guest died under a live tab (STA-3448).
+    if (webview.isConnected) {
+      rendererRecoveryPendingPageIds.add(browserTabId)
+    }
+  }
   webview.addEventListener('render-process-gone', onRendererGone)
   webview.addEventListener('dom-ready', onRendererReady)
-  webviewLifecycleListeners.set(browserTabId, { webview, onRendererGone, onRendererReady })
+  webview.addEventListener('destroyed', onGuestDestroyed)
+  webviewLifecycleListeners.set(browserTabId, {
+    webview,
+    onRendererGone,
+    onRendererReady,
+    onGuestDestroyed
+  })
   webviewRegistry.set(browserTabId, webview)
   applyCurrentDragPassthroughToWebview(webview)
   ensureDragListeners()
@@ -187,6 +202,7 @@ export function unregisterPersistentWebview(browserTabId: string): void {
       lifecycleListeners.onRendererGone
     )
     lifecycleListeners.webview.removeEventListener('dom-ready', lifecycleListeners.onRendererReady)
+    lifecycleListeners.webview.removeEventListener('destroyed', lifecycleListeners.onGuestDestroyed)
     webviewLifecycleListeners.delete(browserTabId)
   }
   rendererRecoveryPendingPageIds.delete(browserTabId)
