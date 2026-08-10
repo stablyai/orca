@@ -30489,9 +30489,10 @@ export class OrcaRuntimeService {
               ownerAgent
             )
           : null,
-        statusPty
+        statusPty,
+        { preserveQuestionUnderShellTitle: true }
       )
-      // Why: keep rich hook status on a live prompt/tool (authoritative even under a non-agent title), else interactivePrompt is lost.
+      // Why: keep rich status on a live prompt/tool, or interactivePrompt is lost under a non-agent title.
       const hasLiveAgentSignal =
         normalizedTabAgentStatus?.interactivePrompt != null ||
         normalizedTabAgentStatus?.toolName != null
@@ -30609,9 +30610,17 @@ export class OrcaRuntimeService {
 
   private renewMobileAgentStatusFromPtyTitle(
     status: AgentStatusEntry | null,
-    pty: RuntimePtyWorktreeRecord | null
+    pty: RuntimePtyWorktreeRecord | null,
+    options: { preserveQuestionUnderShellTitle?: boolean } = {}
   ): AgentStatusEntry | null {
     if (!status || !pty) {
+      return status
+    }
+    if (
+      options.preserveQuestionUnderShellTitle &&
+      status.interactivePrompt != null &&
+      terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle)
+    ) {
       return status
     }
     const richStatusCanOwnTitleInterval =
@@ -30775,13 +30784,10 @@ export class OrcaRuntimeService {
         },
         ownerAgent
       )
-      // A live hook question outranks only the shell title that currently obscures it.
-      const renewedStatus =
-        liveRow === hookRow.live &&
-        liveRow.payload.interactivePrompt != null &&
-        terminalTitleBlocksExplicitAgentStatus(pty?.lastOscTitle ?? null)
-          ? liveStatus
-          : this.renewMobileAgentStatusFromPtyTitle(liveStatus, pty)
+      // A live question outranks only the shell title that currently obscures it.
+      const renewedStatus = this.renewMobileAgentStatusFromPtyTitle(liveStatus, pty, {
+        preserveQuestionUnderShellTitle: true
+      })
       if (renewedStatus) {
         return { agentStatus: renewedStatus }
       }

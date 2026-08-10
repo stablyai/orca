@@ -187,6 +187,60 @@ describe('session-tabs rich-status boundaries', () => {
     harness.unsubscribe()
   })
 
+  it('keeps a renderer question visible under a shell title until the next agent interval', () => {
+    const harness = createHarness()
+    const questionAt = Date.now()
+    harness.tab.agentStatus = {
+      state: 'waiting',
+      prompt: 'current question',
+      interactivePrompt: '{"question":"current question"}',
+      updatedAt: questionAt,
+      stateStartedAt: questionAt,
+      agentType: 'cursor',
+      paneKey: harness.tab.id,
+      stateHistory: []
+    }
+
+    emitTitle(harness, 'bash')
+    expect(latestStatus(harness)).toMatchObject({
+      state: 'waiting',
+      interactivePrompt: '{"question":"current question"}'
+    })
+
+    harness.publications.length = 0
+    vi.advanceTimersByTime(1)
+    emitTitle(harness, '⠋ Cursor Agent')
+    expect(latestStatus(harness)).toMatchObject({ state: 'working', prompt: '' })
+    expect(latestStatus(harness)).not.toHaveProperty('interactivePrompt')
+    harness.unsubscribe()
+  })
+
+  it('keeps a retained OSC question visible under a shell title until the next agent interval', () => {
+    const harness = createHarness()
+    harness.runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+      tabId: harness.tab.parentTabId,
+      leafId: harness.tab.leafId
+    })
+    harness.runtime.onPtyData(
+      PTY_ID,
+      '\x1b]9999;{"state":"waiting","prompt":"current question","interactivePrompt":"question-payload","agentType":"cursor"}\x07',
+      Date.now()
+    )
+
+    emitTitle(harness, 'bash')
+    expect(latestStatus(harness)).toMatchObject({
+      state: 'waiting',
+      interactivePrompt: 'question-payload'
+    })
+
+    harness.publications.length = 0
+    vi.advanceTimersByTime(1)
+    emitTitle(harness, '⠋ Cursor Agent')
+    expect(latestStatus(harness)).toMatchObject({ state: 'working', prompt: '' })
+    expect(latestStatus(harness)).not.toHaveProperty('interactivePrompt')
+    harness.unsubscribe()
+  })
+
   it('does not resurrect retained status after an identity-only owner change', () => {
     const harness = createHarness()
     harness.runtime.registerPty(PTY_ID, WORKTREE_ID, null, {

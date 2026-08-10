@@ -4429,6 +4429,13 @@
           ]
         },
         {
+          "file": "tests/e2e/session-tabs-rich-status-boundaries.unit.test.ts",
+          "assertions": [
+            "pending renderer, retained OSC, and live-hook questions survive the shell title that currently obscures them",
+            "a new working interval, provider generation, or identity owner strips the prior question"
+          ]
+        },
+        {
           "file": "src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
           "assertions": ["retries an existing subscriber when provider inventory becomes ready"]
         },
@@ -4619,8 +4626,8 @@
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/mobile-session-tabs-agent-status-heartbeat.test.ts src/main/runtime/orca-runtime-hook-agent-status-projection.test.ts tests/e2e/session-tabs-decorative-title-fanout.unit.test.ts tests/e2e/session-tabs-rich-status-boundaries.unit.test.ts --maxWorkers=1",
           "result": "passed",
-          "durationSeconds": 5.53,
-          "summary": "Forty deterministic contracts passed. The real-PTY cross-boundary contract delivered all 2,880 decorative spinner and bare-native redraw chunks with zero hot-path host publications, serialized bytes, renderer applies, or store mutations; continued past 30 minutes with one globally spaced freshness refresh per worktree every 15 minutes; kept all 24 mirrored statuses working; and preserved stable stateStartedAt. Exact-identical Pi and rotating normalized Pi/Grok frames renewed renderer-authored and retained-hook status without changing acknowledgement semantics. Rich status could not cross task completion, permission, provider-generation, or identity-owner boundaries, while neutral titles preserved same-task prompt and acknowledgement identity until authoritative shell evidence. A fresh hook question remained visible under the current live shell title, but a later working interval, identity-only owner title, or provider generation stripped it even when a persisted shell-like title remained; inherited tools and stale, resume-only, restored, or prior-interval questions stayed suppressed. After each rich source's original lease expired, title evidence kept only coarse working state and provider identity fresh while dropping unverifiable prompts. Unknown foreground ownership held publications at zero until resolution, then resumed the bounded heartbeat; tracked terminal state reset removed its delayed marker. The focused heartbeat contracts proved worktree deduplication, FIFO fairness, semantic bypass, PTY-source teardown, and timer cleanup. Causal-disable controls made ownership, teardown, retained source-switch, renderer rich-TTL, completion-transition, boundary-ordering, and live-question oracles fail; restoring the production corrections returned green."
+          "durationSeconds": 5.62,
+          "summary": "Forty-two deterministic contracts passed. The real-PTY cross-boundary contract delivered all 2,880 decorative spinner and bare-native redraw chunks with zero hot-path host publications, serialized bytes, renderer applies, or store mutations; continued past 30 minutes with one globally spaced freshness refresh per worktree every 15 minutes; kept all 24 mirrored statuses working; and preserved stable stateStartedAt. Exact-identical Pi and rotating normalized Pi/Grok frames renewed renderer-authored and retained-hook status without changing acknowledgement semantics. Rich status could not cross task completion, permission, provider-generation, or identity-owner boundaries, while neutral titles preserved same-task prompt and acknowledgement identity until authoritative shell evidence. Fresh renderer, retained OSC, and live-hook questions remained visible under the current shell title, but a later working interval, identity-only owner title, or provider generation stripped them; inherited tools and stale, resume-only, restored, or prior-interval questions stayed suppressed. After each rich source's original lease expired, title evidence kept only coarse working state and provider identity fresh while dropping unverifiable prompts. Unknown foreground ownership held publications at zero until resolution, then resumed the bounded heartbeat; tracked terminal state reset removed its delayed marker. The focused heartbeat contracts proved worktree deduplication, FIFO fairness, semantic bypass, PTY-source teardown, and timer cleanup. Causal-disable controls made ownership, teardown, retained source-switch, renderer rich-TTL, completion-transition, boundary-ordering, and live-question oracles fail; restoring the production corrections returned green."
         },
         {
           "date": "2026-08-07",
