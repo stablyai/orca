@@ -171,6 +171,9 @@ describe('AgentSkillSetupPanel', () => {
         },
         ui: {
           writeClipboardText: mocks.clipboardWrite
+        },
+        platform: {
+          get: () => ({ platform: 'win32' })
         }
       }
     })
@@ -358,6 +361,25 @@ describe('AgentSkillSetupPanel', () => {
 
     expect(mocks.clipboardWrite).toHaveBeenCalledWith(INSTALL_COMMAND)
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Copied command.')
+  })
+
+  it('copies the POSIX WSL command while the setup pane runs the PowerShell wrapper', async () => {
+    await renderInteractivePanel({
+      terminalShellOverride: 'powershell.exe',
+      terminalRuntime: { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' }
+    })
+
+    await clickButton('Install')
+
+    expect(mocks.terminalProps.at(-1)?.command).toMatch(
+      /^& \{ \$PSNativeCommandArgumentPassing = 'Legacy'; wsl\.exe -d 'Ubuntu'/
+    )
+    await act(async () => {
+      container
+        ?.querySelector<HTMLButtonElement>('button[aria-label="Copy command"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(mocks.clipboardWrite).toHaveBeenCalledWith(INSTALL_COMMAND)
   })
 
   it('shows a visible pending state while CLI setup preflight is running', async () => {

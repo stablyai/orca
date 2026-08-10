@@ -383,6 +383,7 @@ export function CliSection({
               terminalAriaLabel="CLI skill install terminal"
               terminalWorktreeId={`settings-cli-skill-terminal-${agentRuntime.runtime}`}
               terminalShellOverride={cliSkillTerminalShellOverride}
+              terminalRuntime={agentRuntime}
               installed={cliSkillDetected}
               loading={cliSkillLoading}
               error={cliSkillError}

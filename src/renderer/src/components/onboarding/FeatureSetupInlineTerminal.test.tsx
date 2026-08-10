@@ -13,6 +13,10 @@ const mocks = vi.hoisted(() => ({
     (command: string, runtime?: { runtime: 'host' | 'wsl' }) =>
       `${runtime?.runtime ?? 'host'}:${command}`
   ),
+  buildSetupCommand: vi.fn(
+    (command: string, _shellOverride: string | undefined, runtime?: { runtime: 'host' | 'wsl' }) =>
+      `${runtime?.runtime ?? 'host'}-setup:${command}`
+  ),
   terminalProps: null as { command: string; shellOverride?: string } | null
 }))
 
@@ -21,7 +25,8 @@ vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
 }))
 
 vi.mock('../settings/CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: mocks.buildCommand
+  buildSkillCommandForRuntime: mocks.buildCommand,
+  buildSkillSetupTerminalCommand: mocks.buildSetupCommand
 }))
 
 vi.mock('./OnboardingInlineCommandTerminal', () => ({
@@ -43,6 +48,7 @@ describe('FeatureSetupInlineTerminal', () => {
     mocks.runtime.installDisabledReason = null
     mocks.terminalProps = null
     mocks.buildCommand.mockClear()
+    mocks.buildSetupCommand.mockClear()
   })
 
   it('runs the command through the resolved WSL runtime', () => {
@@ -56,7 +62,7 @@ describe('FeatureSetupInlineTerminal', () => {
       label: 'WSL Ubuntu'
     })
     expect(mocks.terminalProps).toMatchObject({
-      command: 'wsl:npx skills add orchestration',
+      command: 'wsl-setup:wsl:npx skills add orchestration',
       shellOverride: 'powershell.exe'
     })
   })
@@ -70,7 +76,7 @@ describe('FeatureSetupInlineTerminal', () => {
 
     expect(mocks.buildCommand).toHaveBeenCalledWith('npx skills add orchestration', undefined)
     expect(mocks.terminalProps).toMatchObject({
-      command: 'host:npx skills add orchestration',
+      command: 'host-setup:host:npx skills add orchestration',
       shellOverride: 'powershell.exe'
     })
   })
@@ -93,7 +99,7 @@ describe('FeatureSetupInlineTerminal', () => {
       label: 'Windows'
     })
     expect(mocks.terminalProps).toMatchObject({
-      command: 'host:npx skills add orchestration',
+      command: 'host-setup:host:npx skills add orchestration',
       shellOverride: 'cmd.exe'
     })
   })

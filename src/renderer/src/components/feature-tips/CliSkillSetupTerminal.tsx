@@ -24,7 +24,8 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
   // The copied string stays as built; only what we execute is adapted.
   const setupTerminalCommand = buildSkillSetupTerminalCommand(
     skillCommand,
-    activeSkillRuntime.terminalShellOverride
+    activeSkillRuntime.terminalShellOverride,
+    activeSkillRuntime.agentRuntime
   )
 
   const handleCopySkillCommand = async (): Promise<void> => {
