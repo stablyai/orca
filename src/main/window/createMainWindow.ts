@@ -670,9 +670,7 @@ export function createMainWindow(
   const doubleTapDetector = new ModifierDoubleTapDetector()
 
   // Why: one mapping of action → IPC/side effect, shared by the keydown and double-tap paths so they can't drift.
-  const sendResolvedWindowShortcutAction = (
-    action: Exclude<WindowShortcutAction, { type: 'toggleWorktreePalette' }>
-  ): void => {
+  const sendResolvedWindowShortcutAction = (action: WindowShortcutAction): void => {
     switch (action.type) {
       // The renderer's DictationController re-checks enabled/sttModel and ignores hold mode, so this path needs no voice guards.
       case 'dictationKeyDown':
@@ -693,6 +691,9 @@ export function createMainWindow(
         return
       case 'toggleRightSidebar':
         mainWindow.webContents.send('ui:toggleRightSidebar')
+        return
+      case 'toggleWorktreePalette':
+        mainWindow.webContents.send('ui:toggleWorktreePalette')
         return
       case 'toggleFloatingTerminal':
         mainWindow.webContents.send('ui:toggleFloatingTerminal')
@@ -738,9 +739,6 @@ export function createMainWindow(
     }
   ): boolean => {
     const { focusedShortcutContext, isAutoRepeat } = options
-    if (action.type === 'toggleWorktreePalette') {
-      return false
-    }
     if (
       floatingTerminalInputFocused &&
       (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')

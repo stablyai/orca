@@ -108,7 +108,7 @@ function takeRecoveryFreeze(
   historyRecovery.freeze = null
   return freeze
 }
-function providerSequenceForSpawn(
+function providerSequenceFromCreateOrAttach(
   result: CreateOrAttachResult
 ): PtySpawnResult['providerSequence'] {
   if (result.isNew) {
@@ -731,7 +731,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     const wasAlreadyManaged = this.activeSessionIds.has(sessionId)
     this.activeSessionIds.add(sessionId)
-    const providerSequence = providerSequenceForSpawn(result)
+    const providerSequence = providerSequenceFromCreateOrAttach(result)
 
     // Cold restore: daemon made a new session but disk history shows an unclean shutdown → return saved scrollback.
     if (restoreInfo && (result.isNew || result.historySeeded === false)) {
@@ -892,7 +892,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return result.exitedBeforeSpawnReply === true
   }
 
-  async attach(id: string): Promise<void> {
+  async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void> {
     await this.ensureConnected()
     if (!this.canDelegateBackgroundToDaemon) {
       this.setPtyBackgrounded(id, false)
@@ -924,6 +924,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       throw new SessionNotFoundError(id)
     }
     this.clearSessionAwaitingDaemonRecovery(id)
+    const providerSequence = providerSequenceFromCreateOrAttach(result)
+    return providerSequence ? { providerSequence } : undefined
   }
 
   hasPty(id: string): boolean {

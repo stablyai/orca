@@ -1,5 +1,9 @@
 export const REMOTE_ARTIFACT_INPUT_ENV = 'ORCA_REMOTE_ARTIFACT_INPUT'
 
+export function sshArtifactSourceKey(targetId: string, sourceKey: string): string {
+  return JSON.stringify(['ssh', targetId, sourceKey])
+}
+
 export type RemoteArtifactInput = {
   sourceKey: string
   fileName: string

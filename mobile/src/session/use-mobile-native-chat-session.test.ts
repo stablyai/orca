@@ -24,7 +24,6 @@ describe('useMobileNativeChatSession', () => {
   let emit: (frame: unknown) => void = () => {}
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     state = null
   })
 
@@ -45,20 +44,9 @@ describe('useMobileNativeChatSession', () => {
   }
 
   async function mount(client: RpcClient): Promise<void> {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, { client }))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, { client }))
-      })
-    } finally {
-      consoleSpy.mockRestore()
-    }
   }
 
   it('drops an older-page response captured before transcript replacement', async () => {
@@ -445,7 +433,6 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
   }[] = []
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     renders.length = 0
   })
 
@@ -482,20 +469,9 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
   }
 
   async function mountAt(client: RpcClient | null, sessionId: string | null): Promise<void> {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, { client, sessionId }))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, { client, sessionId }))
-      })
-    } finally {
-      consoleSpy.mockRestore()
-    }
   }
 
   it('reports loading on the very first render, before the subscription effect runs', async () => {

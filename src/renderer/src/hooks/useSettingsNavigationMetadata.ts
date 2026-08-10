@@ -165,7 +165,10 @@ export function buildSettingsNavigationMetadata({
         'Manage AI agents, set a default, and customize commands.'
       ),
       icon: Bot,
-      searchEntries: getAgentsPaneSearchEntries({ includeAgentRuntime: isLocalWindowsHost }),
+      searchEntries: getAgentsPaneSearchEntries({
+        includeAgentAwake: !isWebClient,
+        includeAgentRuntime: isLocalWindowsHost
+      }),
       group: 'capabilities'
     },
     {

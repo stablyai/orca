@@ -4,19 +4,23 @@ import type { IFilesystemProvider } from '../providers/types'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 
 const mocks = vi.hoisted(() => ({
-  scanAiVaultSessions: vi.fn(),
+  scanAiVaultSessionsInWorker: vi.fn(),
+  resolveAiVaultSessionTitlesInWorker: vi.fn(),
   scanRemoteAiVaultSessions: vi.fn(),
   scanRuntimeAiVaultSessions: vi.fn(),
   getSshFilesystemProvider: vi.fn(),
   getActiveSshAiVaultHostInfo: vi.fn(),
   getActiveSshAiVaultHostInfos: vi.fn(),
   requestActiveSshAiVaultSessionList: vi.fn(),
+  requestActiveSshAiVaultSessionTitles: vi.fn(),
   ipcHandle: vi.fn()
 }))
 
 vi.mock('electron', () => ({ app: { on: vi.fn() }, ipcMain: { handle: mocks.ipcHandle } }))
-vi.mock('../ai-vault/session-scanner', () => ({
-  scanAiVaultSessions: mocks.scanAiVaultSessions
+vi.mock('../ai-vault/session-scanner-worker-spawn', () => ({
+  scanAiVaultSessionsInWorker: mocks.scanAiVaultSessionsInWorker,
+  resolveAiVaultSessionTitlesInWorker: mocks.resolveAiVaultSessionTitlesInWorker,
+  resetAiVaultScannerWorkerForTests: vi.fn()
 }))
 vi.mock('../ai-vault/remote-session-scanner', () => ({
   scanRemoteAiVaultSessions: mocks.scanRemoteAiVaultSessions
@@ -32,7 +36,8 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 vi.mock('./ssh', () => ({
   getActiveSshAiVaultHostInfo: mocks.getActiveSshAiVaultHostInfo,
   getActiveSshAiVaultHostInfos: mocks.getActiveSshAiVaultHostInfos,
-  requestActiveSshAiVaultSessionList: mocks.requestActiveSshAiVaultSessionList
+  requestActiveSshAiVaultSessionList: mocks.requestActiveSshAiVaultSessionList,
+  requestActiveSshAiVaultSessionTitles: mocks.requestActiveSshAiVaultSessionTitles
 }))
 
 const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
@@ -45,18 +50,20 @@ const EMPTY_RESULT: AiVaultListResult = {
 beforeEach(() => {
   vi.clearAllMocks()
   _internals.resetAiVaultCacheForTests()
-  mocks.scanAiVaultSessions.mockResolvedValue(EMPTY_RESULT)
+  mocks.scanAiVaultSessionsInWorker.mockResolvedValue(EMPTY_RESULT)
+  mocks.resolveAiVaultSessionTitlesInWorker.mockResolvedValue({ titles: [] })
   mocks.scanRemoteAiVaultSessions.mockResolvedValue(EMPTY_RESULT)
   mocks.scanRuntimeAiVaultSessions.mockResolvedValue(EMPTY_RESULT)
   mocks.getSshFilesystemProvider.mockReturnValue({} as IFilesystemProvider)
   mocks.getActiveSshAiVaultHostInfo.mockReturnValue(hostInfo())
   mocks.getActiveSshAiVaultHostInfos.mockReturnValue([hostInfo()])
   mocks.requestActiveSshAiVaultSessionList.mockResolvedValue(null)
+  mocks.requestActiveSshAiVaultSessionTitles.mockResolvedValue(null)
 })
 
 describe('Agent Session History scan coalescing', () => {
   it.each([
-    ['local', mocks.scanAiVaultSessions],
+    ['local', mocks.scanAiVaultSessionsInWorker],
     ['runtime:remote-server', mocks.scanRuntimeAiVaultSessions]
   ] as const)('coalesces %s scans while isolating caller cancellation', async (scope, scan) => {
     let resolveScan: ((result: AiVaultListResult) => void) | undefined
@@ -102,7 +109,7 @@ describe('Agent Session History scan coalescing', () => {
     const second = _internals.listAiVaultSessions({ executionHostScope: 'all' })
     await vi.waitFor(() => expect(resolveRuntime).toBeDefined())
 
-    expect(mocks.scanAiVaultSessions).toHaveBeenCalledTimes(1)
+    expect(mocks.scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
     expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
     expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledTimes(1)
     controller.abort()
@@ -163,7 +170,7 @@ describe('Agent Session History scan coalescing', () => {
   })
 
   it('still rejects the handler when a scan fails for a non-cancellation reason', async () => {
-    mocks.scanAiVaultSessions.mockRejectedValue(new Error('transcript root is unreadable'))
+    mocks.scanAiVaultSessionsInWorker.mockRejectedValue(new Error('transcript root is unreadable'))
     registerAiVaultHandlers()
     const list = ipcHandler('aiVault:listSessions')
 

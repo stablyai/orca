@@ -843,6 +843,15 @@ async function main(): Promise<void> {
           env.ORCA_OMP_SOURCE_AGENT_DIR = result.sourceAgentDir
         }
       }
+      if (kind === 'prime-agent') {
+        const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'prime-agent')
+        const result = pluginOverlay.materializePi(overlayId, sourceDir, 'prime-agent', {
+          materializeDefaultHome: explicitKind === 'prime-agent'
+        })
+        if (result?.sourceAgentDir) {
+          env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = result.sourceAgentDir
+        }
+      }
     }
     return env
   })
@@ -870,19 +879,23 @@ async function main(): Promise<void> {
     const opencode = params.opencodePluginSource
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
+    const primeAgent = params.primeAgentExtensionSource
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
+    assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
-      ompExtensionSource: typeof omp === 'string' ? omp : undefined
+      ompExtensionSource: typeof omp === 'string' ? omp : undefined,
+      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
     })
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
         pi: pluginOverlay.hasPiSource('pi'),
-        omp: pluginOverlay.hasPiSource('omp')
+        omp: pluginOverlay.hasPiSource('omp'),
+        primeAgent: pluginOverlay.hasPiSource('prime-agent')
       }
     }
   })

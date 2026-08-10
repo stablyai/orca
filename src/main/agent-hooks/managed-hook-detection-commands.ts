@@ -9,7 +9,7 @@ import type { GlobalSettings } from '../../shared/types'
 import type { TuiAgentDetectionCommand } from '../ipc/tui-agent-detection-commands'
 
 export type ManagedHookDetectionSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+  Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents' | 'agentStatusHooksEnabled'>
 > | null
 
 export function buildManagedHookDetectionCommands(

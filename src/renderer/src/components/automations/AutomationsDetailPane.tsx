@@ -36,7 +36,6 @@ import { getAutomationRunContent } from './automation-run-content'
 import type { AutomationTargetAvailability } from './automation-target-availability'
 import type { AutomationRunViewState } from './automation-run-view-state'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
-import type { ExternalAutomationSourceAvailability } from './external-automation-source-availability'
 import type { AutomationPaneTab, SelectedExternalRunPage } from './automation-page-state'
 import { translate } from '@/i18n/i18n'
 
@@ -54,11 +53,6 @@ type AutomationsDetailPaneProps = {
   selectedWorkspaceName: string
   hostLabelById: ReadonlyMap<string, string>
   selectedRunNowAvailability: AutomationTargetAvailability | null
-  selectedExternalSourceAvailability: ExternalAutomationSourceAvailability | null
-  selectedExternalSshSource: {
-    manager: ExternalAutomationManager
-  } | null
-  selectedExternalSshConnected: boolean
   selectedAutomationRunPageWorkspaceDisplay: AutomationRunWorkspaceDisplay | null
   selectedAutomationRunPageViewState: AutomationRunViewState | null
   canRerunSelectedAutomationRunPage: boolean
@@ -79,7 +73,6 @@ type AutomationsDetailPaneProps = {
     run: ExternalAutomationRun
   ) => void
   openEditExternalDialog: (manager: ExternalAutomationManager, job: ExternalAutomationJob) => void
-  connectExternalAutomationSource: (manager: ExternalAutomationManager) => void
   runNow: (automation: Automation) => void
   openEditDialog: (automation: Automation) => void
   toggleAutomation: (automation: Automation) => void
@@ -103,9 +96,6 @@ export function AutomationsDetailPane({
   selectedWorkspaceName,
   hostLabelById,
   selectedRunNowAvailability,
-  selectedExternalSourceAvailability,
-  selectedExternalSshSource,
-  selectedExternalSshConnected,
   selectedAutomationRunPageWorkspaceDisplay,
   selectedAutomationRunPageViewState,
   canRerunSelectedAutomationRunPage,
@@ -118,7 +108,6 @@ export function AutomationsDetailPane({
   requestExternalAction,
   openExternalRunPage,
   openEditExternalDialog,
-  connectExternalAutomationSource,
   runNow,
   openEditDialog,
   toggleAutomation,
@@ -146,7 +135,7 @@ export function AutomationsDetailPane({
             >
               <HermesCronOutputView content={getExternalRunContent(selectedExternalRunPage.run)} />
             </AutomationRunPageFrame>
-          ) : selectedExternal.kind === 'job' ? (
+          ) : (
             <ExternalAutomationManagers
               managers={[
                 {
@@ -161,51 +150,6 @@ export function AutomationsDetailPane({
               onOpenRun={openExternalRunPage}
               onEdit={openEditExternalDialog}
             />
-          ) : (
-            <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
-              <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">
-                    {selectedExternal.manager.targetLabel}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {selectedExternalSourceAvailability?.summary}
-                  </div>
-                </div>
-                {selectedExternalSshSource ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={selectedExternalSourceAvailability?.isConnecting ?? false}
-                    onClick={() =>
-                      void connectExternalAutomationSource(selectedExternalSshSource.manager)
-                    }
-                  >
-                    {selectedExternalSourceAvailability?.isConnecting ? (
-                      <RefreshCw className="size-3.5 animate-spin" />
-                    ) : null}
-                    {selectedExternalSourceAvailability?.isConnecting
-                      ? translate(
-                          'auto.components.automations.AutomationsPage.f93ed7a6f8',
-                          'Connecting...'
-                        )
-                      : selectedExternalSshConnected
-                        ? translate(
-                            'auto.components.automations.AutomationsPage.53f06f0ad5',
-                            'Retry source'
-                          )
-                        : translate(
-                            'auto.components.automations.AutomationsPage.7934ee0d81',
-                            'Connect SSH'
-                          )}
-                  </Button>
-                ) : null}
-              </div>
-              <div className="px-3 py-6 text-sm text-muted-foreground">
-                {selectedExternalSourceAvailability?.detail}
-              </div>
-            </div>
           )}
         </div>
       ) : (

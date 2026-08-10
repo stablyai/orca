@@ -10,6 +10,7 @@ import {
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
@@ -27,6 +28,7 @@ import type {
 import {
   createTerminalTitleTracker,
   stripBrailleSpinnerGlyphs,
+  type TerminalTitleFactMeta,
   type TerminalTitleTracker
 } from '../../shared/terminal-output-side-effects'
 import { createCommandCodeOutputStatusDetector } from '../../shared/command-code-output-status'
@@ -125,6 +127,8 @@ import type {
   ArtifactListOptions,
   ArtifactListPage,
   ArtifactListItem,
+  ArtifactPublishedLink,
+  ArtifactPublishResult,
   ArtifactWriteRequest
 } from '../../shared/artifacts'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
@@ -224,6 +228,7 @@ import type {
   GitHubPullRequestStateUpdate,
   GitHubPRFile,
   GitHubPRReviewCommentInput,
+  GitHubReactionContent,
   GitLabIssueUpdate,
   GitLabMRInlineCommentInput,
   GitLabProjectRef,
@@ -446,7 +451,6 @@ import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
 import {
   folderWorkspaceKey,
-  isWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../shared/workspace-scope'
@@ -486,12 +490,12 @@ import {
   configureAiVaultSessionSources,
   listAiVaultSessions
 } from '../ai-vault/cached-session-list'
-import {
-  readAiVaultSessionIdentity,
-  resolveAiVaultSessionLiveness
-} from '../ai-vault/session-liveness'
-import type { AiVaultAgent, AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
-import type { AiVaultSessionLiveness } from '../../shared/ai-vault-session-deletion'
+import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
+import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
+import type {
+  AiVaultSessionTitleRequest,
+  AiVaultSessionTitlesResult
+} from '../../shared/ai-vault-session-title'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
@@ -588,6 +592,7 @@ import {
   getPRCheckDetails,
   rerunPRChecks,
   getPRComments,
+  setPRCommentReaction,
   getIssue,
   resolveReviewThread,
   setPRFileViewed,
@@ -667,7 +672,6 @@ import type {
   HostedReviewInfo
 } from '../../shared/hosted-review'
 import { getHostedReviewForBranch as getHostedReviewForBranchFromRepo } from '../source-control/hosted-review'
-import type { ForgeProviderId } from '../source-control/forge-provider'
 import {
   createHostedReview as createHostedReviewFromRepo,
   getHostedReviewCreationEligibility as getHostedReviewCreationEligibilityFromRepo
@@ -682,6 +686,10 @@ import {
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
+import {
+  scanLocalRepoWorktreesForResolution,
+  type RuntimeWorktreeScanResult
+} from './repo-worktree-resolution-scan'
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
@@ -874,7 +882,7 @@ import {
   FLOATING_TERMINAL_WORKTREE_ID,
   getDefaultVoiceSettings
 } from '../../shared/constants'
-import { listRepoWorktrees } from '../repo-worktrees'
+import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
@@ -974,6 +982,24 @@ import {
   type MobileSessionTabsNotifyCoalescer
 } from './mobile-session-tabs-notify-coalescer'
 import { TerminalFocusNavigationCoalescer } from './terminal-focus-navigation-coalescer'
+import {
+  appendRecentPtyPathCandidates,
+  recentTerminalOutputIncludesPath,
+  recentTerminalPathCandidatesIncludePath
+} from './terminal-output-path-candidates'
+import {
+  getSelectedReviewBranch,
+  getSelectedReviewLookupHints,
+  isAllowedPushTargetRemoteConflict,
+  isMatchingSelectedGitHubPr,
+  type SelectedReviewBranchInput
+} from './selected-review-branch'
+import {
+  getRuntimeFolderWorkspaceInstanceId,
+  getRuntimeFolderWorkspaceRootId,
+  isRuntimeFolderWorkspaceIdForRepo,
+  mergeRuntimeFolderWorkspace
+} from './runtime-folder-workspace'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   assertFolderWorkspacePathUsable,
@@ -986,9 +1012,8 @@ import {
   getSshGitProviderGeneration,
   requireSshGitProvider
 } from '../providers/ssh-git-dispatch'
-import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
+import { detectGitHubAvatarIcon, detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
-import { githubAvatarIcon } from '../../shared/repo-icon'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type {
   CodexAccountService,
@@ -1131,6 +1156,7 @@ type RuntimeStore = {
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
+    artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     mobileAutoRestoreFitMs?: number | null
@@ -1762,9 +1788,6 @@ const BRACKETED_PASTE_QUIET_MS = 1500
 const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
 const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
-const RECENT_PTY_PATH_CANDIDATE_LIMIT = 1024
-const RECENT_PTY_PATH_CANDIDATE_MAX_BYTES = 4 * 1024
-const RECENT_PTY_PATH_CANDIDATE_TOTAL_BYTES = 64 * 1024
 const SSH_PANE_RECOVERY_GRACE_MS = 30_000
 // Why: long enough that a keystroke burst to a proven-dead leaf probes once,
 // short enough that a recreated session id regains writability quickly even if
@@ -2101,10 +2124,6 @@ function getRuntimeWorktreeRemovalOptionsKey(
   return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}:${ptyKey}`
 }
 
-function getRuntimeFolderWorkspaceRootId(repo: Repo): string {
-  return `${repo.id}::${repo.path}`
-}
-
 // Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime
 // host can adopt a legacy (unstamped) repo. But an unstamped repo with a connectionId is an SSH repo
 // (resolves to ssh:<id>), so it must not be adopted/matched by a runtime host at the same path.
@@ -2134,69 +2153,9 @@ function assertProjectHostSetupHostIsSupported(hostId: ExecutionHostId | null | 
   )
 }
 
-function getRuntimeFolderWorkspaceInstanceId(repo: Repo, instanceId: string): string {
-  return `${getRuntimeFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}${instanceId}`
-}
-
 function getRuntimeFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {
   const prefix = `${getRuntimeFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
   return worktreeId.startsWith(prefix) ? worktreeId.slice(prefix.length) : randomUUID()
-}
-
-function isRuntimeFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): boolean {
-  const rootId = getRuntimeFolderWorkspaceRootId(repo)
-  return (
-    worktreeId === rootId ||
-    worktreeId.startsWith(`${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`)
-  )
-}
-
-function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta): Worktree {
-  return {
-    id: worktreeId,
-    ...(meta.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
-    repoId: repo.id,
-    ...(meta.projectId !== undefined ? { projectId: meta.projectId } : {}),
-    ...(meta.hostId !== undefined ? { hostId: meta.hostId } : {}),
-    ...(meta.projectHostSetupId !== undefined
-      ? { projectHostSetupId: meta.projectHostSetupId }
-      : {}),
-    path: repo.path,
-    head: '',
-    branch: '',
-    isBare: false,
-    isMainWorktree: worktreeId === getRuntimeFolderWorkspaceRootId(repo),
-    displayName: meta.displayName || repo.displayName,
-    comment: meta.comment || '',
-    linkedIssue: meta.linkedIssue ?? null,
-    linkedPR: meta.linkedPR ?? null,
-    linkedLinearIssue: meta.linkedLinearIssue ?? null,
-    linkedLinearIssueWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? null,
-    linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
-    linkedGitLabMR: meta.linkedGitLabMR ?? null,
-    linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
-    linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
-    linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: meta.linkedGiteaPR ?? null,
-    linkedWorkItem: meta.linkedWorkItem ?? null,
-    linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
-    isArchived: meta.isArchived ?? false,
-    isUnread: meta.isUnread ?? false,
-    isPinned: meta.isPinned ?? false,
-    sortOrder: meta.sortOrder ?? 0,
-    ...(meta.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
-    lastActivityAt: meta.lastActivityAt ?? 0,
-    ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
-    ...(meta.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
-    ...(meta.automationProvenance !== undefined
-      ? { automationProvenance: meta.automationProvenance }
-      : {}),
-    ...(meta.cliProvenance !== undefined ? { cliProvenance: meta.cliProvenance } : {}),
-    ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
-    workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-    diffComments: meta.diffComments,
-    mobileDiffReview: meta.mobileDiffReview
-  }
 }
 
 function listRuntimeFolderWorkspaces(
@@ -2357,94 +2316,6 @@ function getLocalGitHubPrForBranch(
         localGitExecOptions: gitOptions
       })
     : getPRForBranch(repoPath, branchName)
-}
-
-type SelectedReviewBranchInput = {
-  branchNameOverride?: string
-  linkedPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
-  pushTarget?: GitPushTarget
-}
-
-type SelectedReviewBranch = {
-  provider: ForgeProviderId
-  number: number
-}
-
-function getSelectedReviewBranch(args: SelectedReviewBranchInput): SelectedReviewBranch | null {
-  if (typeof args.linkedPR === 'number') {
-    return { provider: 'github', number: args.linkedPR }
-  }
-  if (typeof args.linkedGitLabMR === 'number') {
-    return { provider: 'gitlab', number: args.linkedGitLabMR }
-  }
-  if (typeof args.linkedBitbucketPR === 'number') {
-    return { provider: 'bitbucket', number: args.linkedBitbucketPR }
-  }
-  if (typeof args.linkedAzureDevOpsPR === 'number') {
-    return { provider: 'azure-devops', number: args.linkedAzureDevOpsPR }
-  }
-  if (typeof args.linkedGiteaPR === 'number') {
-    return { provider: 'gitea', number: args.linkedGiteaPR }
-  }
-  return null
-}
-
-function isSelectedGitHubPrBranchOverride(
-  args: SelectedReviewBranchInput,
-  branchName: string
-): boolean {
-  return typeof args.linkedPR === 'number' && args.branchNameOverride === branchName
-}
-
-function isSelectedReviewBranchOverride(
-  args: SelectedReviewBranchInput,
-  branchName: string
-): boolean {
-  return getSelectedReviewBranch(args) !== null && args.branchNameOverride === branchName
-}
-
-function isMatchingSelectedGitHubPr(
-  existingPR: Awaited<ReturnType<typeof getPRForBranch>>,
-  args: SelectedReviewBranchInput,
-  branchName: string
-): boolean {
-  return Boolean(
-    existingPR &&
-    isSelectedGitHubPrBranchOverride(args, branchName) &&
-    existingPR.number === args.linkedPR
-  )
-}
-
-function isAllowedPushTargetRemoteConflict(
-  conflictKind: 'local' | 'remote' | null,
-  branchName: string,
-  args: SelectedReviewBranchInput
-): boolean {
-  return (
-    conflictKind === 'remote' &&
-    isSelectedReviewBranchOverride(args, branchName) &&
-    args.pushTarget?.branchName === branchName
-  )
-}
-
-function getSelectedReviewLookupHints(args: SelectedReviewBranchInput): {
-  linkedGitHubPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
-} {
-  return {
-    linkedGitHubPR: args.linkedPR ?? null,
-    linkedGitLabMR: args.linkedGitLabMR ?? null,
-    linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-    linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: args.linkedGiteaPR ?? null
-  }
 }
 
 async function getSelectedHostedReviewForBranch(
@@ -2611,14 +2482,10 @@ type WorktreeLineageResolution =
       warnings: WorktreeLineageWarning[]
     }
 
-type RuntimeWorktreeScanResult =
-  | { ok: true; worktrees: GitWorktreeInfo[] }
-  | { ok: false; worktrees: GitWorktreeInfo[] }
-
 type RuntimeWorktreeScanCache = {
   generation: number
   runtimeKey: string
-  result: Extract<RuntimeWorktreeScanResult, { ok: true }>
+  result: RuntimeWorktreeScanResult
   expiresAt: number
 }
 
@@ -3562,6 +3429,9 @@ export class OrcaRuntimeService {
     | 'minimaxGroupId'
     | 'minimaxUsageModels'
     | 'prBotAuthorOverrides'
+    // Read-only on purpose: clients preflight the publish capability here, but SettingsUpdate
+    // still omits the key so no RPC caller can grant it to itself.
+    | 'artifactSharingEnabled'
   > {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
@@ -3584,7 +3454,8 @@ export class OrcaRuntimeService {
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
-      prBotAuthorOverrides: settings.prBotAuthorOverrides ?? []
+      prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
+      artifactSharingEnabled: isArtifactSharingEnabled(settings)
     }
   }
 
@@ -3599,7 +3470,7 @@ export class OrcaRuntimeService {
         return
       }
       await applyAgentStatusHooksEnabled(settings.agentStatusHooksEnabled !== false, settings, {
-        shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
+        shouldHydrateShellPath: app.isPackaged,
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
           const current = this.store?.getSettings()
@@ -4633,8 +4504,20 @@ export class OrcaRuntimeService {
     return this.requireArtifactService().list(options)
   }
 
+  getPublishedArtifactLink(
+    request: ArtifactCloudOptions & { sourceKey: string }
+  ): Promise<ArtifactCloudOperation<ArtifactPublishedLink | null>> {
+    return this.requireArtifactService().getPublishedLink(request)
+  }
+
   shareArtifact(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
     return this.requireArtifactService().share(request)
+  }
+
+  publishArtifact(
+    request: ArtifactWriteRequest
+  ): Promise<ArtifactCloudOperation<ArtifactPublishResult>> {
+    return this.requireArtifactService().publish(request)
   }
 
   updateArtifact(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
@@ -4958,72 +4841,11 @@ export class OrcaRuntimeService {
     return listAiVaultSessions(args)
   }
 
-  async getAiVaultSessionLiveness(target: {
-    agent: AiVaultAgent
-    sessionId: string | undefined
-    filePath: string
-  }): Promise<AiVaultSessionLiveness> {
-    const provider = this.getLocalProviderFn?.()
-    if (!provider || !this.getAgentProviderSessionSnapshotFn) {
-      return 'unknown'
-    }
-    const identity = await readAiVaultSessionIdentity(target)
-    if (identity.outcome !== 'found') {
-      return 'unknown'
-    }
-    const deadlineMs = Date.now() + 3_000
-    return await resolveAiVaultSessionLiveness(
-      {
-        agent: target.agent,
-        sessionId: identity.sessionId
-      },
-      {
-        deadlineMs,
-        listProcesses: async () => {
-          const result = await withTimeoutResult(
-            provider.listProcesses({ deadlineMs }),
-            Math.max(1, deadlineMs - Date.now())
-          )
-          if (!result.ok) {
-            throw new Error('agent_session_ownership_unknown')
-          }
-          return result.value
-        },
-        getStatusSnapshot: this.getAgentProviderSessionSnapshotFn,
-        inspectForegroundProcess: async (ptyId) => {
-          const result = await withTimeoutResult(
-            provider.getForegroundProcess(ptyId),
-            Math.max(1, deadlineMs - Date.now())
-          )
-          return result.ok
-            ? { available: true, process: result.value }
-            : { available: false, process: null }
-        },
-        getStatusPtyId: (status) => {
-          if (status.terminalHandle) {
-            const live = this.getLivePtyForHandle(status.terminalHandle)
-            if (live) {
-              return live.pty.ptyId
-            }
-            for (const [ptyId, handle] of this.handleByPtyId) {
-              if (handle === status.terminalHandle) {
-                return ptyId
-              }
-            }
-          }
-          return this.getPtyRecordForPaneKey(status.paneKey)?.ptyId ?? null
-        },
-        getAgentHint: (process) => {
-          const pty = this.ptysById.get(process.id)
-          const runtimeHint = pty?.foregroundAgent ?? pty?.launchAgent
-          if (runtimeHint) {
-            return runtimeHint
-          }
-          const ownerAgents = new Set(process.agentSessionOwners?.map((owner) => owner.claim.agent))
-          return ownerAgents.size === 1 ? ([...ownerAgents][0] ?? null) : null
-        }
-      }
-    )
+  resolveAiVaultSessionTitles(
+    requests: AiVaultSessionTitleRequest[],
+    signal?: AbortSignal
+  ): Promise<AiVaultSessionTitlesResult> {
+    return resolveLocalAiVaultSessionTitles(requests, signal)
   }
 
   prepareAiVaultSessionResume(
@@ -10211,11 +10033,14 @@ export class OrcaRuntimeService {
   getTerminalSideEffectSnapshot(ptyId: string): TerminalSideEffectBatch | null {
     const tracker = this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker
     const recordTitle = this.ptysById.get(ptyId)?.lastOscTitle
-    // Why: the cursor-agent literal drop applies to every title surface; a
-    // record-fallback snapshot must not replay the bare native title the
-    // tracker would have refused to emit live.
-    const rawTitle = recordTitle && !isCursorNativeAgentTitle(recordTitle) ? recordTitle : null
     const normalizedTitle = tracker?.getLastNormalizedTitle() ?? null
+    // Why: a record-fallback snapshot must not replay the bare cursor-agent literal over a
+    // tracker title Orca synthesized from hooks — but with no tracker title it is the pane's
+    // only Cursor identity, so restored/mobile tabs keep it (#10258).
+    const rawTitle =
+      recordTitle && (normalizedTitle === null || !isCursorNativeAgentTitle(recordTitle))
+        ? recordTitle
+        : null
     if (normalizedTitle === null && !rawTitle) {
       return null
     }
@@ -10249,12 +10074,37 @@ export class OrcaRuntimeService {
     return null
   }
 
+  private isLiveCursorNativeTitle(rawTitle: string, meta?: TerminalTitleFactMeta): boolean {
+    return isCursorNativeAgentTitle(rawTitle) && meta?.staleWorkingTitleClear !== true
+  }
+
+  /** Display fallback for identities intentionally omitted from liveness records. */
+  private getTrackedDisplayTitleForPty(ptyId: string): string | null {
+    return (
+      this.getTrackedRawTitleForPty(ptyId) ??
+      this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.getLastNormalizedTitle() ??
+      null
+    )
+  }
+
+  private getUnpersistedTrackedTitleForPty(ptyId: string | null): string | null {
+    if (!ptyId || this.getTrackedRawTitleForPty(ptyId) !== null) {
+      return null
+    }
+    // Why: a manual title is authoritative until explicitly cleared with null.
+    const pty = this.ptysById.get(ptyId)
+    if (pty && pty.title !== null) {
+      return null
+    }
+    return this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.getLastNormalizedTitle() ?? null
+  }
+
   /** Why: synthetic agent title frames no longer ride pty:data, so neither
    *  renderer xterm nor the headless emulator observes them. Mobile-parity
    *  snapshot titles must prefer main's tracker over snapshot lastTitle, or
    *  hook-driven spinner/idle titles vanish from mobile tabs. */
   private preferTrackedLastTitle<T extends { lastTitle?: string }>(ptyId: string, snapshot: T): T {
-    const tracked = this.getTrackedRawTitleForPty(ptyId)
+    const tracked = this.getTrackedDisplayTitleForPty(ptyId)
     if (!tracked) {
       return snapshot
     }
@@ -10297,8 +10147,11 @@ export class OrcaRuntimeService {
             rawTitle,
             ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
           })
-          const changed = this.applyTrackedPtyTitle(ptyId, rawTitle, normalizedTitle)
-          if (!changed) {
+          const changed = this.applyTrackedPtyTitle(ptyId, rawTitle, normalizedTitle, meta)
+          // Why: an identity-only cursor title records nothing, so on a fresh pane `changed` is
+          // false — but the tracker title is that pane's only Cursor identity and still has to
+          // fan out to the sidebar and mobile (#10258).
+          if (!changed && !this.isLiveCursorNativeTitle(rawTitle, meta)) {
             return
           }
           const live = this.ptyTitleTrackersByPtyId.get(ptyId)
@@ -10378,25 +10231,42 @@ export class OrcaRuntimeService {
 
   /** Apply one observed OSC title (raw form) to the PTY and leaf records.
    *  Returns true when the PTY record's title or status changed. */
-  private applyTrackedPtyTitle(ptyId: string, rawTitle: string, normalizedTitle: string): boolean {
+  private applyTrackedPtyTitle(
+    ptyId: string,
+    rawTitle: string,
+    normalizedTitle: string,
+    meta?: TerminalTitleFactMeta
+  ): boolean {
     // Why: status is detected from the RAW title (mirrors the renderer tracker),
     // so working/idle transitions are unaffected by normalization; the records
     // store the NORMALIZED title so rotating Grok/Pi/Gemini frames collapse to
     // one stable stored label (#7880) instead of churning `ps`/mobile tabs.
-    const agentStatus = detectAgentStatusFromTitle(rawTitle)
+    //
+    // Why the identity-only case: the bare cursor-agent literal identifies the pane without
+    // asserting activity, so it records NO title/status evidence — only the tracker keeps it,
+    // for display (#10258). Nulling the status here rather than trusting the detector keeps
+    // that contract local, since every activity-gated effect below is keyed on status.
+    const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
+    const recordedTitle = identityOnlyTitle ? null : normalizedTitle
+    const agentStatus = identityOnlyTitle ? null : detectAgentStatusFromTitle(rawTitle)
     let ptyRecordChanged = false
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       const prevStatus = pty.lastAgentStatus
       const prevTitle = pty.lastOscTitle
       const observedAt = this.nextTitleObservationSequence()
-      pty.lastOscTitle = normalizedTitle
-      pty.lastOscTitleAt = observedAt
-      pty.lastOscTitleEpochMs = Date.now()
+      pty.lastOscTitle = recordedTitle
+      pty.lastOscTitleAt = identityOnlyTitle ? null : observedAt
+      pty.lastOscTitleEpochMs = identityOnlyTitle ? null : Date.now()
       pty.lastAgentStatus = agentStatus
       pty.lastAgentStatusObservedLive = true
-      this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
-      ptyRecordChanged = prevTitle !== normalizedTitle || prevStatus !== agentStatus
+      if (identityOnlyTitle) {
+        pty.managementTitle = null
+        pty.managementTitleAt = null
+      } else {
+        this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
+      }
+      ptyRecordChanged = prevTitle !== recordedTitle || prevStatus !== agentStatus
       if (agentStatus === 'idle' && prevStatus !== 'idle') {
         this.resolvePtyTuiIdleWaiters(pty, ptyId)
       }
@@ -10429,10 +10299,10 @@ export class OrcaRuntimeService {
       // daemon-hosted terminals (no renderer pushing pane titles) had no
       // way to clear a stale 'working' status after the agent exited and
       // the shell took over the title — the stuck-spinner bug in #1437.
-      leaf.lastOscTitle = normalizedTitle
-      leaf.lastOscTitleAt = this.nextTitleObservationSequence()
       const prevStatus = leaf.lastAgentStatus
       const prevObservedLive = leaf.lastAgentStatusObservedLive
+      leaf.lastOscTitle = recordedTitle
+      leaf.lastOscTitleAt = identityOnlyTitle ? null : this.nextTitleObservationSequence()
       // Why: when a new OSC title doesn't classify as an agent state (e.g.
       // bare shell title after the agent exits), clear lastAgentStatus so
       // it is no longer sticky. Tui-idle waiters that needed the previous
@@ -19401,10 +19271,25 @@ export class OrcaRuntimeService {
         } catch {
           continue
         }
+        const repoIcon =
+          upstream && repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github'
+            ? await detectGitHubAvatarIcon(repo.path, null, upstream)
+            : null
+        // Why: settings can change the repo while the probes above are pending, so
+        // re-read it — a stale snapshot must not clobber a user-chosen icon or an
+        // upstream another path already resolved.
+        const current = store.getRepos().find((candidate) => candidate.id === repo.id)
+        if (!current || current.upstream !== undefined) {
+          continue
+        }
         const updates: Partial<Repo> = { upstream: upstream ?? null }
         // Only migrate the auto-detected origin avatar; never touch a chosen icon.
-        if (upstream && repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github') {
-          updates.repoIcon = githubAvatarIcon(upstream)
+        if (
+          repoIcon &&
+          current.repoIcon?.type === 'image' &&
+          current.repoIcon.source === 'github'
+        ) {
+          updates.repoIcon = repoIcon
         }
         store.updateRepo(repo.id, updates)
         changed = true
@@ -20136,6 +20021,25 @@ export class OrcaRuntimeService {
       prNumber,
       { ...options, prRepo: prRepo ?? null },
       repo.connectionId ?? null,
+      ...this.getLocalGitExecutionOptionArgs(repo)
+    )
+  }
+
+  async setRepoPRCommentReaction(
+    repoSelector: string,
+    reactionSubjectId: string,
+    content: GitHubReactionContent,
+    reacted: boolean,
+    prRepo?: GitHubOwnerRepo | null
+  ): Promise<Awaited<ReturnType<typeof setPRCommentReaction>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return setPRCommentReaction(
+      repo.path,
+      reactionSubjectId,
+      content,
+      reacted,
+      repo.connectionId ?? null,
+      prRepo ?? null,
       ...this.getLocalGitExecutionOptionArgs(repo)
     )
   }
@@ -20875,7 +20779,7 @@ export class OrcaRuntimeService {
       scan = { ok: false, worktrees: [] }
     }
     if (scan.ok) {
-      this.pruneLineageForMissingRepoWorktrees(repo, scan.worktrees)
+      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
     }
     const agentScratchWorktreePathMatcher = createAgentScratchWorktreePathMatcher([
       repo.path,
@@ -23554,17 +23458,21 @@ export class OrcaRuntimeService {
     // Why: fetch failures are non-fatal; we proceed with whatever the
     // last-known remote ref points at. `fetchRemoteWithCache` never throws.
     await this.fetchRemoteWithCache(repo.path, remote, localWorktreeGitOptions)
-    const drift = getRemoteDrift(wt.path, 'HEAD', base, localGitExecOptions)
+    const drift = await getRemoteDrift(wt.path, 'HEAD', base, localGitExecOptions)
     if (!drift) {
       return null
     }
-    const recentSubjects = getRecentDriftSubjects(
-      wt.path,
-      'HEAD',
-      base,
-      DRIFT_PROBE_SUBJECT_LIMIT,
-      localGitExecOptions
-    )
+    // Why: behind=0 proves HEAD..base is empty, so git log cannot add subjects.
+    const recentSubjects =
+      drift.behind > 0
+        ? await getRecentDriftSubjects(
+            wt.path,
+            'HEAD',
+            base,
+            DRIFT_PROBE_SUBJECT_LIMIT,
+            localGitExecOptions
+          )
+        : []
     return { base, behind: drift.behind, recentSubjects }
   }
 
@@ -28842,7 +28750,7 @@ export class OrcaRuntimeService {
           )) ?? { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
         const gitWorktrees = scan.worktrees
         if (scan.ok) {
-          this.pruneLineageForMissingRepoWorktrees(repo, gitWorktrees)
+          pruneLineageForMissingRepoWorktrees(this.requireStore(), repo, gitWorktrees)
         }
         return gitWorktrees.map((gitWorktree) => {
           const worktreeId = `${repo.id}::${gitWorktree.path}`
@@ -28889,48 +28797,6 @@ export class OrcaRuntimeService {
     return { worktrees, platformByRepoId }
   }
 
-  private pruneLineageForMissingRepoWorktrees(repo: Repo, gitWorktrees: GitWorktreeInfo[]): void {
-    const store = this.store
-    if (
-      !store ||
-      typeof store.getAllWorktreeLineage !== 'function' ||
-      typeof store.removeWorktreeLineage !== 'function'
-    ) {
-      return
-    }
-    const liveIds = new Set(gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`))
-    const repoPrefix = `${repo.id}::`
-    for (const childWorkspaceKey of Object.keys(store.getAllWorkspaceLineage?.() ?? {})) {
-      const childScope = parseWorkspaceKey(childWorkspaceKey)
-      if (
-        childScope?.type === 'worktree' &&
-        childScope.worktreeId.startsWith(repoPrefix) &&
-        !liveIds.has(childScope.worktreeId)
-      ) {
-        if (isWorkspaceKey(childWorkspaceKey)) {
-          store.removeWorkspaceLineage?.(childWorkspaceKey)
-        }
-      }
-    }
-    for (const [childId, lineage] of Object.entries(store.getAllWorktreeLineage())) {
-      if (childId.startsWith(repoPrefix) && !liveIds.has(childId)) {
-        // Why: once a scan proves the child gone, purge stale lineage so it can't survive into a same-path replacement checkout.
-        store.removeWorktreeLineage(childId)
-        store.removeWorkspaceLineage?.(worktreeWorkspaceKey(childId))
-      }
-      if (
-        lineage.parentWorktreeId.startsWith(repoPrefix) &&
-        !liveIds.has(lineage.parentWorktreeId)
-      ) {
-        const parentMeta = store.getWorktreeMeta(lineage.parentWorktreeId)
-        if (!parentMeta || parentMeta.instanceId === lineage.parentWorktreeInstanceId) {
-          // Why: a missing parent path needs one fresh identity so same-path replacement checkouts can't validate old lineage.
-          store.setWorktreeMeta(lineage.parentWorktreeId, { instanceId: randomUUID() })
-        }
-      }
-    }
-  }
-
   private async listRepoWorktreesForResolution(
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
@@ -28965,8 +28831,9 @@ export class OrcaRuntimeService {
     this.worktreeScanInFlight.set(repo.id, { generation, runtimeKey, promise })
     try {
       const result = await promise
+      // Why: back off local spawn failures under resource pressure while disconnected SSH can recover on the next poll.
       if (
-        result.ok &&
+        (result.ok || !repo.connectionId) &&
         generation === (this.worktreeScanGenerations.get(repo.id) ?? 0) &&
         this.worktreeScanInFlight.get(repo.id)?.promise === promise
       ) {
@@ -28990,13 +28857,10 @@ export class OrcaRuntimeService {
     projectRuntime: ProjectExecutionRuntimeResolution | undefined
   ): Promise<RuntimeWorktreeScanResult> {
     if (!repo.connectionId) {
-      return {
-        ok: true,
-        worktrees: await listRepoWorktrees(
-          repo,
-          getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
-        )
-      }
+      return await scanLocalRepoWorktreesForResolution(
+        repo.path,
+        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
+      )
     }
     const provider = getSshGitProvider(repo.connectionId)
     if (!provider) {
@@ -30380,6 +30244,12 @@ export class OrcaRuntimeService {
       const hookAgentStatus = tab.agentStatus
         ? this.getHookAgentRowForPane(getHookRowsForPane(paneKey))
         : null
+      // Why not tab.ptyId: findPtyForMobileTerminalTab already rejected it when it returned
+      // null, because persisted ids can collide with an unrelated pane after restart — reading
+      // that pane's tracker would publish its title here, ahead of every other source.
+      const trackerOnlyTitle = this.getUnpersistedTrackedTitleForPty(
+        liveLeafPtyId ?? pty?.ptyId ?? null
+      )
       const leafTitle = leaf
         ? getLatestAgentCandidateTitle(
             { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
@@ -30407,7 +30277,7 @@ export class OrcaRuntimeService {
         pty?.foregroundAgent ??
         null
       const title = normalizeCompatibleAgentTitleForOwner(
-        leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
+        trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
         ownerAgent
       )
       const liveTitleEvidence = leafTitle ?? ptyTitle
@@ -30577,6 +30447,9 @@ export class OrcaRuntimeService {
       ? { providerSession: hookRow.providerSession }
       : {}
     const leaf = this.leaves.get(this.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
+    const trackerOnlyTitle = this.getUnpersistedTrackedTitleForPty(
+      pty?.ptyId ?? leaf?.ptyId ?? null
+    )
     const ptyTitle = pty
       ? getLatestAgentCandidateTitle(
           { title: pty.title, updatedAt: pty.titleUpdatedAt },
@@ -30617,7 +30490,7 @@ export class OrcaRuntimeService {
       pty?.foregroundAgent ??
       null
     const terminalTitle = normalizeCompatibleAgentTitleForOwner(
-      (pty ? getLatestPtyTitle(pty) : null) ?? tab.title,
+      trackerOnlyTitle ?? (pty ? getLatestPtyTitle(pty) : null) ?? tab.title,
       ownerAgent
     )
     // Why: OSC 9999 hook payload carries real state/prompt/agent; without preferring it, hook-only transitions never surfaced (#7970).
@@ -35299,269 +35172,6 @@ function withTimeoutResult<T>(
       ok: false
     }
   )
-}
-
-export function appendRecentPtyPathCandidates(
-  previous: string[] | undefined,
-  data: string
-): string[] {
-  const extractedCandidates = extractTerminalOutputPathCandidates(data)
-  if (extractedCandidates.length === 0) {
-    // Why: pathless output is the hot path; reuse immutable history so each chunk doesn't clone and byte-scan up to 1,024 old candidates.
-    return previous ?? []
-  }
-  const next = previous ? previous.slice() : []
-  for (const candidate of extractedCandidates) {
-    if (Buffer.byteLength(candidate, 'utf8') > RECENT_PTY_PATH_CANDIDATE_MAX_BYTES) {
-      continue
-    }
-    next.push(candidate)
-  }
-  return pruneRecentPtyPathCandidates(next)
-}
-
-export function recentTerminalPathCandidatesIncludePath(
-  recentCandidates: readonly string[],
-  pathText: string,
-  absolutePath: string
-): boolean {
-  const candidates = new Set(
-    [
-      pathText,
-      absolutePath,
-      ...wslTerminalOutputAliases(pathText),
-      ...wslTerminalOutputAliases(absolutePath)
-    ]
-      .map((candidate) => candidate.trim())
-      .filter((candidate) => candidate.length > 0)
-  )
-  for (const recent of recentCandidates) {
-    if (candidates.has(recent)) {
-      return true
-    }
-  }
-  return false
-}
-
-function pruneRecentPtyPathCandidates(candidates: string[]): string[] {
-  const countBounded =
-    candidates.length > RECENT_PTY_PATH_CANDIDATE_LIMIT
-      ? candidates.slice(-RECENT_PTY_PATH_CANDIDATE_LIMIT)
-      : candidates
-  let totalBytes = 0
-  let startIndex = countBounded.length
-  for (let index = countBounded.length - 1; index >= 0; index -= 1) {
-    const nextTotal = totalBytes + Buffer.byteLength(countBounded[index]!, 'utf8')
-    if (nextTotal > RECENT_PTY_PATH_CANDIDATE_TOTAL_BYTES) {
-      break
-    }
-    totalBytes = nextTotal
-    startIndex = index
-  }
-  return startIndex === 0 ? countBounded : countBounded.slice(startIndex)
-}
-
-export function recentTerminalOutputIncludesPath(
-  recentOutput: string,
-  pathText: string,
-  absolutePath: string
-): boolean {
-  const candidates = new Set(
-    [pathText, absolutePath]
-      .map((candidate) => candidate.trim())
-      .filter((candidate) => candidate.length > 0)
-  )
-  if (candidates.size === 0) {
-    return false
-  }
-  for (const candidate of candidates) {
-    if (outputContainsPathCandidate(recentOutput, candidate)) {
-      return true
-    }
-  }
-  const decodedOutput = decodeTerminalOutputPercentEscapes(recentOutput)
-  if (decodedOutput !== recentOutput) {
-    for (const candidate of candidates) {
-      if (outputContainsPathCandidate(decodedOutput, candidate)) {
-        return true
-      }
-    }
-  }
-  return false
-}
-
-function outputContainsPathCandidate(output: string, candidate: string): boolean {
-  let start = output.indexOf(candidate)
-  while (start !== -1) {
-    const end = start + candidate.length
-    if (isPathCandidateStartBoundary(output, start) && isPathCandidateEndBoundary(output, end)) {
-      return true
-    }
-    start = output.indexOf(candidate, start + 1)
-  }
-  return false
-}
-
-function isPathCandidateStartBoundary(output: string, start: number): boolean {
-  if (start === 0) {
-    return true
-  }
-  if (output.slice(0, start).endsWith('file://')) {
-    return true
-  }
-  if (
-    /^[A-Za-z]:[\\/]/.test(output.slice(start)) &&
-    /file:\/\/(?:localhost|127\.0\.0\.1|\[?::1\]?)?\/$/i.test(output.slice(0, start))
-  ) {
-    return true
-  }
-  if (/file:\/\/(?:localhost|127\.0\.0\.1|\[?::1\]?)$/i.test(output.slice(0, start))) {
-    return true
-  }
-  return !isPathCandidateContinuationChar(output[start - 1]!)
-}
-
-function isPathCandidateEndBoundary(output: string, end: number): boolean {
-  const next = output[end]
-  if (!next) {
-    return true
-  }
-  if (next === ':' && /^\d+(?::\d+)?(?:\D|$)/.test(output.slice(end + 1))) {
-    return true
-  }
-  return !isPathCandidateContinuationChar(next)
-}
-
-function isPathCandidateContinuationChar(char: string): boolean {
-  return /[A-Za-z0-9._~/%+@\\()[\]-]/.test(char)
-}
-
-function decodeTerminalOutputPercentEscapes(value: string): string {
-  return value.replace(/(?:%[0-9a-f]{2})+/gi, (match) => {
-    try {
-      return decodeURIComponent(match)
-    } catch {
-      return match
-    }
-  })
-}
-
-// Why: the extension regex backtracks quadratically on the PTY hot path; candidates can't cross a newline, so scan per line and skip over-long lines (dropped anyway).
-function extractTerminalOutputPathCandidates(data: string): string[] {
-  const candidates: string[] = []
-  const add = (value: string): void => {
-    const candidate = trimTerminalOutputPathCandidate(value)
-    if (candidate.length > 0) {
-      candidates.push(candidate)
-      const drivePath = normalizeTerminalOutputFileUriDrivePath(candidate)
-      if (drivePath) {
-        candidates.push(drivePath)
-      }
-    }
-  }
-  for (const line of data.split(/[\r\n]+/)) {
-    if (line.length === 0 || line.length > RECENT_PTY_PATH_CANDIDATE_MAX_BYTES) {
-      continue
-    }
-    collectTerminalOutputLinePathCandidates(line, add)
-  }
-  return candidates
-}
-
-function collectTerminalOutputLinePathCandidates(line: string, add: (value: string) => void): void {
-  for (const match of line.matchAll(/file:\/\/([^/\s]*)(\/[^\s\x1b"'<>)]*)/gi)) {
-    const authority = match[1] ?? ''
-    const uriPath = match[2]
-    if (uriPath) {
-      const decoded = decodeTerminalOutputPercentEscapes(uriPath)
-      add(isTerminalOutputLoopbackAuthority(authority) ? decoded : `//${authority}${decoded}`)
-    }
-  }
-  for (const match of line.matchAll(
-    /(?:\/(?:tmp|private\/tmp)\/|[A-Za-z]:[\\/])[^\r\n\x1b"'<>]+/g
-  )) {
-    if (isInsideNonLocalFileUri(line, match.index)) {
-      continue
-    }
-    add(match[0])
-  }
-  for (const match of line.matchAll(
-    /\/[^\r\n\x1b"'<>]*\.[A-Za-z0-9_+-]+(?:[#:\s][^\r\n\x1b"'<>]*)?/g
-  )) {
-    if (isInsideNonLocalFileUri(line, match.index)) {
-      continue
-    }
-    add(match[0])
-  }
-}
-
-function normalizeTerminalOutputFileUriDrivePath(candidate: string): string | null {
-  return /^\/[A-Za-z]:[\\/]/.test(candidate) ? candidate.slice(1) : null
-}
-
-function trimTerminalOutputPathCandidate(value: string): string {
-  let candidate = value.trim().replace(/[),;.]+$/g, '')
-  if (Buffer.byteLength(candidate, 'utf8') > RECENT_PTY_PATH_CANDIDATE_MAX_BYTES) {
-    return ''
-  }
-  let selected: string | null = null
-  for (const match of candidate.matchAll(
-    /.+?\.[A-Za-z0-9_+-]+(?:#L\d+(?:C\d+)?|(?::\d+)?(?::\d+)?)?(?=\s+|$)/gi
-  )) {
-    const end = match.index + match[0].length
-    const text = candidate.slice(0, end)
-    if (countTerminalOutputPathStarts(text) > 1) {
-      continue
-    }
-    // Same as the tap parsers: a line-end token extends the candidate only when the added segment is path-like, so trailing prose isn't swallowed.
-    if (
-      end < candidate.length ||
-      selected === null ||
-      /[\\/]/.test(candidate.slice(selected.length, end))
-    ) {
-      selected = text
-    }
-  }
-  return trimTerminalOutputPathLocator(selected ?? candidate)
-}
-
-function isTerminalOutputLoopbackAuthority(authority: string): boolean {
-  const normalized = authority.toLowerCase()
-  return (
-    normalized === '' ||
-    normalized === 'localhost' ||
-    normalized === '127.0.0.1' ||
-    normalized === '::1' ||
-    normalized === '[::1]'
-  )
-}
-
-function isInsideNonLocalFileUri(output: string, pathStart: number): boolean {
-  const prefix = output.slice(0, pathStart)
-  const match = /file:\/\/([^/\s]*)$/i.exec(prefix)
-  return !!match && !isTerminalOutputLoopbackAuthority(match[1] ?? '')
-}
-
-function countTerminalOutputPathStarts(value: string): number {
-  let count = 0
-  for (const match of value.matchAll(/(?:^|\s)(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/])/g)) {
-    void match
-    count += 1
-  }
-  return count
-}
-
-function trimTerminalOutputPathLocator(value: string): string {
-  return value.replace(/#L\d+(?:C\d+)?$/i, '').replace(/:\d+(?::\d+)?$/, '')
-}
-
-function wslTerminalOutputAliases(value: string): string[] {
-  const match = /^\\\\wsl(?:\.localhost|\$)\\[^\\]+(\\.*)$/i.exec(value)
-  if (!match) {
-    return []
-  }
-  const linuxPath = match[1]!.replace(/\\/g, '/')
-  return linuxPath.startsWith('/') ? [linuxPath] : [`/${linuxPath}`]
 }
 
 export function buildPreview(lines: string[], partialLine: string): string {

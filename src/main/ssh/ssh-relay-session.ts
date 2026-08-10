@@ -98,7 +98,10 @@ import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/executi
 import {
   SSH_AI_VAULT_LIST_SESSIONS_METHOD,
   SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS,
-  type SshAiVaultRelayListParams
+  SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD,
+  SSH_AI_VAULT_RESOLVE_SESSION_TITLES_TIMEOUT_MS,
+  type SshAiVaultRelayListParams,
+  type SshAiVaultRelayTitleParams
 } from '../../shared/ssh-ai-vault-relay'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
@@ -312,6 +315,7 @@ export class SshRelaySession {
   private hostPlatform: RemoteHostPlatform | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
   private aiVaultListMethodSupported: boolean | null = null
+  private aiVaultTitleMethodSupported: boolean | null = null
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
   private readonly ptyRecoveryRetention = new SshPtyRecoveryRetentionBudget()
   private activePtyProviderGeneration: number | null = null
@@ -458,6 +462,33 @@ export class SshRelaySession {
     }
   }
 
+  async requestAiVaultSessionTitles(
+    params: SshAiVaultRelayTitleParams,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<unknown | null> {
+    if (this.aiVaultTitleMethodSupported === false) {
+      return null
+    }
+    const mux = this.mux
+    if (!mux || mux.isDisposed() || this._state !== 'ready') {
+      throw new Error('SSH relay is not ready')
+    }
+    try {
+      const result = await mux.request(SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD, params, {
+        signal: options.signal,
+        timeoutMs: options.timeoutMs ?? SSH_AI_VAULT_RESOLVE_SESSION_TITLES_TIMEOUT_MS
+      })
+      this.aiVaultTitleMethodSupported = true
+      return result
+    } catch (error) {
+      if (isMethodNotFoundError(error)) {
+        this.aiVaultTitleMethodSupported = false
+        return null
+      }
+      throw error
+    }
+  }
+
   getPortScanner(): PortScanner | null {
     return this.portScanner
   }
@@ -477,6 +508,7 @@ export class SshRelaySession {
     }
     this._state = 'deploying'
     this.aiVaultListMethodSupported = null
+    this.aiVaultTitleMethodSupported = null
     this.currentConnection = conn
 
     try {
@@ -615,6 +647,7 @@ export class SshRelaySession {
 
     this._state = 'reconnecting'
     this.aiVaultListMethodSupported = null
+    this.aiVaultTitleMethodSupported = null
     this.currentConnection = conn
 
     // Why: stop scanning before teardownProviders so the poll timer can't fire against a disposed multiplexer.
@@ -1396,7 +1429,8 @@ export class SshRelaySession {
       await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
         opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
         piExtensionSource: getPiAgentStatusExtensionSource('pi'),
-        ompExtensionSource: getPiAgentStatusExtensionSource('omp')
+        ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
+        primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent')
       })
     } catch (err) {
       // Why: -32601 = older relay without the handler; CONNECTION_LOST/DISPOSED = routine mid-flight teardown — swallow both.

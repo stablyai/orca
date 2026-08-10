@@ -91,7 +91,9 @@
     "openWorktreePalette": "Open Worktree Palette",
     "window": "Window",
     "help": "Help",
-    "paste": "Paste"
+    "paste": "Paste",
+    "copy": "Copy",
+    "selectAll": "Select All"
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -110,7 +112,7 @@
       "port": "Port",
       "pr": "PR"
     },
-    "renderCapOverflow": "{{value0}} more - keep typing or add a filter to narrow",
+    "renderCapOverflow": "{{value0}} more — scroll or keep typing to narrow",
     "filter": {
       "emptyTitle": "No results match the active filter",
       "emptySubtitle": "Clear the filter above, or widen it to more hosts and projects.",
@@ -371,6 +373,15 @@
             "runtimeHostUnreachable": "Can't reach Orca server",
             "tryAgain": "Try again"
           }
+        },
+        "terminal": {
+          "quick": {
+            "command": {
+              "hosts": {
+                "5b7d781d67": "Failed to save quick command"
+              }
+            }
+          }
         }
       }
     },
@@ -411,6 +422,7 @@
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
+          "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code"
         },
         "skill": {
@@ -2401,6 +2413,11 @@
             "label": "Close as duplicate",
             "description": "Duplicate of another issue"
           }
+        },
+        "CommentReactions": {
+          "addReaction": "Add reaction",
+          "removeNamedReaction": "Remove {{value0}} reaction",
+          "addNamedReaction": "Add {{value0}} reaction"
         }
       },
       "linear": {
@@ -2808,10 +2825,12 @@
             "ec85df5914": "Quick Commands",
             "0a917b591a": "Paste",
             "f3eeb1de13": "Copy",
+            "selectAll": "Select All",
             "c2f0b72b8d": "Insert",
             "925f49f210": "Expand Pane",
             "df766809e0": "Collapse Pane",
-            "cff67afad1": "Copy Context"
+            "cff67afad1": "Copy Context",
+            "15dd899676": "Add to {{value0}}…"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
@@ -2825,6 +2844,19 @@
             "f984ab2a30": "Remove pane title: {{value0}}",
             "cc5a2dc706": "Edit pane title: {{value0}}",
             "7dbbfcbecc": "Pane title"
+          },
+          "TerminalLinkActionPopover": {
+            "openLink": "Open link",
+            "openFile": "Open file",
+            "switchWorkspace": "Switch workspace",
+            "openInFinder": "Open in Finder",
+            "openFolder": "Open folder",
+            "openWithDefaultApp": "Open with default app",
+            "switchTerminal": "Switch terminal",
+            "openTaskTerminal": "Open task terminal",
+            "systemBrowser": "System Browser",
+            "orcaBrowser": "Orca Browser",
+            "terminalLinkSettings": "Terminal link settings"
           },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Open Disk Space Analyzer",
@@ -2952,6 +2984,10 @@
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
             "reconnectButton": "Reconnect"
+          },
+          "TerminalQuickCommandsSubmenu": {
+            "3ccc7981bb": "Host unavailable",
+            "54f29b7c0d": "Loading host…"
           }
         }
       },
@@ -3171,6 +3207,14 @@
           },
           "TerminalTabLeadingIcon": {
             "7ab2964bea": "Unread agent completion"
+          },
+          "TabBarQuickCommandAddActions": {
+            "45a2f36d51": "Command",
+            "b856c833ae": "Command on {{value0}}"
+          },
+          "TabBarQuickCommandHostLoadStatus": {
+            "82e294f3ca": "Host unavailable",
+            "7c129b08ff": "Loading host…"
           }
         }
       },
@@ -3592,6 +3636,18 @@
                 }
               }
             }
+          },
+          "CaffeinateStatusSegment": {
+            "on": "On",
+            "auto": "Auto",
+            "off": "Off",
+            "active": "Active",
+            "inactive": "Inactive",
+            "ariaLabel": "Caffeinate, {{status}}",
+            "title": "Caffeinate",
+            "onDescription": "Keep this computer awake continuously",
+            "autoDescription": "Stay awake while an agent is working",
+            "offDescription": "Allow normal system sleep behavior"
           }
         }
       },
@@ -5278,19 +5334,6 @@
           "connectName": "Connect to SSH host {{value0}}",
           "authFailedTooltip": "{{value0}} · authentication failed",
           "failedTooltip": "{{value0}} · connection failed"
-        },
-        "SshDisconnectedDialog": {
-          "disconnected": "This SSH host is not connected.",
-          "reconnecting": "Reconnecting to the remote host...",
-          "reconnectionFailed": "Reconnection to the remote host failed.",
-          "376bed88e5": "The connection to the remote host encountered an error.",
-          "authFailed": "Authentication to the remote host failed.",
-          "656368f3a2": "Reconnection failed",
-          "cb5938ae79": "Reconnecting...",
-          "11552bf786": "SSH Disconnected",
-          "89385db176": "Dismiss",
-          "ca4a7892af": "Connecting...",
-          "4afcca1d24": "Reconnect"
         }
       },
       "shared": {
@@ -6166,7 +6209,10 @@
           "5567191a6e": "Browse",
           "0e9fc0eadc": "Workspace Directory",
           "e2955d9ccb": "Configure where new workspaces are created.",
-          "7511097c5d": "Workspace"
+          "7511097c5d": "Workspace",
+          "31e300af1c": "Ask Before Deleting Artifacts",
+          "fb29a73a17": "Show a confirmation dialog before deleting a shared artifact and breaking its public link.",
+          "bf46474e33": "Show a confirmation before deleting a shared artifact. Anyone holding its public link loses access."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Apply Changes",
@@ -6689,7 +6735,13 @@
           "38d61927e6": "No quick commands saved.",
           "44923dd982": "destructive",
           "ec1ed99e70": "Delete",
-          "d1d0976320": "None"
+          "d1d0976320": "None",
+          "89f7e57fcc": "Saved on",
+          "d59bd333c3": "Update this Orca server to manage its quick commands.",
+          "f2bf411640": "Could not load commands from this host.",
+          "7ecfee5b8e": "Retry",
+          "601d6af51f": "Loading commands…",
+          "923ba89646": "Could not refresh commands from this host. Showing the last loaded commands."
         },
         "RecentTabOrderControl": {
           "3b17c81ede": "Tab strip order",
@@ -8089,6 +8141,14 @@
               "invert": "invert",
               "opposite": "opposite"
             },
+            "terminalLinkActions": {
+              "terminal": "terminal",
+              "click": "click",
+              "actions": "actions",
+              "popover": "popover",
+              "menu": "menu",
+              "disable": "disable"
+            },
             "72c58f7792": "webview",
             "82ba1c80ea": "localhost",
             "bea27bac4b": "links",
@@ -9410,7 +9470,10 @@
         "agent-awake-copy": {
           "e5995ce268": "Keep computer awake while agents are working",
           "95d3031db2": "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings.",
-          "a42f6fbdd8": "Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy."
+          "a42f6fbdd8": "Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.",
+          "modeTitle": "Keep computer awake",
+          "modeDescriptionWindows": "Choose On, Auto while agents are working, or Off. Lid-close behavior follows this device's power settings.",
+          "modeDescriptionDefault": "Choose On, Auto while agents are working, or Off. Orca also asks this device to stay awake when the lid is closed, subject to its power policy."
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent status hooks",
@@ -9570,7 +9633,9 @@
           "hostOverride": "Host override",
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
-          "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
+          "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration.",
+          "hostCollectionProjectScopes": "Host collection + project scopes",
+          "terminalQuickCommandHostCollections": "Commands are saved on the selected Orca host, then scoped globally or to a project setup. Commands from this device also remain available in remote workspaces."
         },
         "RepositoryForkSyncSection": {
           "defaultBranch": "default branch",
@@ -10002,6 +10067,10 @@
           "descriptionSystem": "Links open in Orca, so {{chord}}+click sends one to your system browser instead.",
           "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
         },
+        "BrowserTerminalLinkActionsSetting": {
+          "title": "Show terminal link actions",
+          "description": "Show available actions when you click a terminal link. Turn this off to require {{modifier}}-click."
+        },
         "PluginConsentDialog": {
           "workerTrust": "Background worker — runs its own process",
           "instructionalTrust": "Instructional content — runs later under user or agent authority",
@@ -10368,6 +10437,7 @@
           "devOnly": "Dev only",
           "channelAriaLabel": "Update channel",
           "hourlyWarning": "Hourly builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.",
+          "dailyWarning": "Daily builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.",
           "adhocWarning": "Adhoc builds are macOS-only and come from a branch that has not landed. Whoever cut one may abandon it — keep a stable build handy.",
           "loadingBuilds": "Loading builds…",
           "noBuilds": "No builds found",
@@ -10403,13 +10473,13 @@
           "title": "Artifacts",
           "description": "Share HTML and Markdown files with your team and manage their public links.",
           "howToTitle": "How to use Artifacts",
-          "howToDescription": "Ask your agent to share an HTML or Markdown file. Orca handles the upload with your account.",
-          "shareStepTitle": "Ask your agent to share it",
-          "shareStepDescription": "For example: “Share this HTML mock as an artifact.”",
-          "linkStepTitle": "Share the public link",
-          "linkStepDescription": "Your agent returns a link that anyone with the URL can view.",
+          "howToDescription": "Publish HTML or Markdown files as public links, then share them with your team.",
+          "shareStepTitle": "Choose a file to share",
+          "shareStepDescription": "Open an HTML or Markdown file and select Share as artifact, or ask an agent to share it.",
+          "linkStepTitle": "Copy the public link",
+          "linkStepDescription": "After publishing, copy the link and send it to your team.",
           "manageStepTitle": "Manage it in Orca",
-          "manageStepDescription": "Open Artifacts from the sidebar to revisit or delete links owned by your account.",
+          "manageStepDescription": "Open Artifacts from the sidebar to preview or remove links.",
           "openArtifacts": "Open Artifacts",
           "openArtifactsDescription": "View and delete links shared through your account.",
           "showButton": "Show Artifacts Button",
@@ -10417,13 +10487,21 @@
           "openArtifactsDescriptionV2": "Preview, copy, and manage links shared through your account.",
           "signInTitle": "Sign in to share artifacts",
           "signInDescription": "Use your Orca account to upload artifacts and manage their public links.",
-          "signInAgain": "Sign in again"
+          "signInAgain": "Sign in again",
+          "enableStepTitle": "Enable artifact sharing",
+          "enableStepWebDescription": "Open Settings → Artifacts in the Orca desktop app on the host device and enable publishing.",
+          "enableStepDescription": "Turn on “Allow publishing public artifact links” above.",
+          "allowPublishing": "Allow publishing public artifact links",
+          "allowPublishingWebDescription": "Desktop only. Open Settings → Artifacts on the host device to change this setting.",
+          "allowPublishingDescription": "Publish HTML and Markdown files as links anyone with the URL can open. Existing links remain until you delete them from Artifacts.",
+          "howToDescriptionDisabled": "Enable artifact sharing above to publish HTML or Markdown files as public links.",
+          "allowPublishingSearchDescription": "Allow Orca to publish HTML and Markdown files as public links."
         },
         "orcaAccount": {
           "connected": "Connected",
           "reconnectRequired": "Your session expired. Sign in again to use cloud features.",
           "unavailable": "Orca sign-in is unavailable in this build.",
-          "signedOut": "Sign in to use Artifacts and Orca Relay.",
+          "signedOut": "Sign in to extend Orca with cloud features, including Artifacts and Orca Relay.",
           "checking": "Checking account status…",
           "account": "Orca account",
           "signOut": "Sign out",
@@ -10460,6 +10538,11 @@
           "description": "Choose the browser profile for new tabs opened in this project.",
           "longDescription": "New browser tabs opened in this project use this profile instead of the app-wide default. Per-tab switching still works from the ··· toolbar menu.",
           "inherit": "Use app default"
+        },
+        "AgentAwakeSetting": {
+          "on": "On",
+          "auto": "Auto",
+          "off": "Off"
         }
       },
       "right": {
@@ -10517,7 +10600,8 @@
               "pending": "Syncing…",
               "branch": "Sync Branch"
             },
-            "7e4b2a19c0": "Could not resolve the GitHub PR to reply on."
+            "7e4b2a19c0": "Could not resolve the GitHub PR to reply on.",
+            "updateReactionFailed": "Failed to update reaction."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancel",
@@ -11715,8 +11799,7 @@
             "delete": "Delete",
             "deleteReasonNonLocalHost": "Only sessions on this device can be deleted.",
             "deleteReasonSyntheticPath": "This session can't be deleted from Orca.",
-            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca.",
-            "deleteReasonSessionLive": "This session is still running — wait for it to finish before deleting."
+            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca."
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Delete this session?",
@@ -14450,7 +14533,16 @@
       "confirmation": {
         "dialog": {
           "8490e5d36a": "Confirm",
-          "56f5c60e0c": "Cancel"
+          "56f5c60e0c": "Cancel",
+          "92bac3217e": "Don't ask again"
+        },
+        "skip": {
+          "saved": "We'll skip this confirmation next time.",
+          "savedDescription": "You can change this in Settings.",
+          "openSettings": "Open Settings",
+          "preference": {
+            "0b0cb6e3f9": "Could not save the confirmation preference."
+          }
         }
       },
       "jira": {
@@ -14928,12 +15020,23 @@
           "signingIn": "Signing in…",
           "signIn": "Sign in to Orca",
           "empty": "No shared artifacts",
-          "emptyCopy": "Ask your agent to share an HTML or Markdown file, and it will appear here.",
+          "emptyCopy": "Open an HTML or Markdown file and select Share as artifact, or ask your agent to share it.",
           "openArtifact": "Open artifact",
           "deleteArtifact": "Delete artifact",
           "moreAvailable": "More artifacts are available",
           "moreAvailableCopy": "Load the next page to continue.",
-          "loadMoreFailed": "Could not load more artifacts."
+          "loadMoreFailed": "Could not load more artifacts.",
+          "publishingOff": "Publishing is turned off",
+          "publishingOffCopy": "Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then share from an open HTML or Markdown file or ask your agent.",
+          "openArtifactsSettings": "Open Settings → Artifacts",
+          "loadedCountMore": "{{count}} loaded · more available",
+          "loadedCount": "{{count}} shared",
+          "retry": "Retry",
+          "reconnectHeading": "Sign in to Orca again",
+          "reconnectCopy": "Sign in again to view and manage the artifacts shared through your account.",
+          "signInAgainAction": "Sign in again",
+          "unconfiguredCopy": "Orca account sign-in is not configured on this machine yet.",
+          "openAccountSettings": "Open account settings"
         },
         "copySuccess": "Artifact link copied",
         "copyFailed": "Could not copy artifact link",
@@ -14945,6 +15048,57 @@
         "actions": "Artifact actions",
         "ArtifactCollection": {
           "loadMore": "Load more"
+        },
+        "ArtifactDetailHeader": {
+          "publicLink": "Anyone with this link can view it"
+        },
+        "ArtifactListPane": {
+          "search": "Search artifacts",
+          "listLabel": "Shared artifacts",
+          "noMatches": "No matches"
+        },
+        "updatedAt": "Updated {{when}}",
+        "updatedRecently": "recently",
+        "expiryUnknown": "Expiry unknown",
+        "expired": "Link expired",
+        "expires": "Link expires {{when}}",
+        "ArtifactPublishButton": {
+          "a4a49da6af": "Share as artifact",
+          "confirmTitle": "Share as artifact",
+          "confirmDescription": "This publishes the current file at a link anyone with the URL can view.",
+          "accountTitle": "Orca account",
+          "accountDescription": "Sign in to create and manage this link.",
+          "signingIn": "Signing in…",
+          "signInAgain": "Sign in again",
+          "signIn": "Sign in",
+          "publishingOffTitle": "Artifact sharing is off",
+          "publishingOffDescription": "Learn about public links and enable sharing in Settings.",
+          "openSettings": "Open Artifacts settings",
+          "sharing": "Sharing…",
+          "sharePublicLink": "Share public link",
+          "publishedDescription": "Anyone with this link can view the shared file.",
+          "checkingLink": "Checking for an existing link…",
+          "checkFailed": "Could not check for an existing link.",
+          "tryAgain": "Try again"
+        },
+        "artifact-publish-flow": {
+          "9a078a0c65": "Artifact sharing is unavailable",
+          "bba20daa6d": "Sign in to Orca and try again.",
+          "54b1805328": "Could not share artifact",
+          "430019efd0": "Artifact shared",
+          "2fc727c831": "Artifact updated",
+          "5cb4f5ec36": "Copy link",
+          "fbb5018602": "This file is empty.",
+          "6112db5a1c": "Artifacts shared from Orca must be smaller than 800 KB.",
+          "e2ed5acd8c": "Orca couldn't read this file. Open it from a workspace and try again.",
+          "6d475e9b25": "Only local HTML and Markdown files can be shared as artifacts.",
+          "29a406be09": "Artifacts must contain text."
+        },
+        "ArtifactPublishedLinkPanel": {
+          "copyLink": "Copy link",
+          "openLink": "Open link",
+          "updating": "Updating…",
+          "update": "Update shared content"
         }
       }
     },

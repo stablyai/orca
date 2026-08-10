@@ -18,6 +18,13 @@ const mocks = vi.hoisted(() => ({
   confirm: vi.fn(),
   refreshAuth: vi.fn(),
   rpc: vi.fn(),
+  settings: {
+    artifactSharingEnabled: true,
+    skipDeleteArtifactConfirm: false
+  } as Record<string, unknown> | null,
+  updateSettings: vi.fn(),
+  openSettingsPage: vi.fn(),
+  openSettingsTarget: vi.fn(),
   resolvePartition: vi.fn(),
   writeClipboardText: vi.fn(),
   openUrl: vi.fn(),
@@ -56,7 +63,11 @@ function storeState(): Record<string, unknown> {
     connectCurrentOrcaProfile: mocks.connect,
     orcaProfileAuthStatus: mocks.authStatus,
     orcaProfileConnecting: false,
-    refreshCurrentOrcaProfileAuth: mocks.refreshAuth
+    refreshCurrentOrcaProfileAuth: mocks.refreshAuth,
+    settings: mocks.settings,
+    updateSettings: mocks.updateSettings,
+    openSettingsPage: mocks.openSettingsPage,
+    openSettingsTarget: mocks.openSettingsTarget
   }
 }
 
@@ -76,6 +87,10 @@ describe('ArtifactsPage', () => {
     mocks.confirm.mockReset()
     mocks.refreshAuth.mockReset()
     mocks.rpc.mockReset()
+    mocks.settings = { artifactSharingEnabled: true, skipDeleteArtifactConfirm: false }
+    mocks.updateSettings.mockReset().mockResolvedValue(undefined)
+    mocks.openSettingsPage.mockReset()
+    mocks.openSettingsTarget.mockReset()
     mocks.resolvePartition.mockReset().mockResolvedValue('persist:orca-default')
     mocks.writeClipboardText.mockReset().mockResolvedValue(undefined)
     mocks.openUrl.mockReset().mockResolvedValue(undefined)
@@ -118,7 +133,8 @@ describe('ArtifactsPage', () => {
   it('renders the selected artifact in-app with copy link as the primary action', async () => {
     render(<ArtifactsPage />)
 
-    expect(await screen.findAllByText('Quarterly report')).toHaveLength(2)
+    expect(await screen.findByRole('option', { name: /Quarterly report/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Quarterly report' })).toBeInTheDocument()
     const closeButton = screen.getByRole('button', { name: 'Close artifacts' })
     expect(closeButton).toHaveClass('size-7', 'rounded-full')
     expect(closeButton.closest('header')).toHaveClass('px-5', 'pb-3', 'pt-1.5', 'md:px-8')
@@ -182,9 +198,41 @@ describe('ArtifactsPage', () => {
     const heading = await screen.findByText('No shared artifacts')
     expect(heading.parentElement).toHaveClass('flex-1', 'justify-center')
     expect(
-      screen.getByText('Ask your agent to share an HTML or Markdown file, and it will appear here.')
+      screen.getByText(
+        'Open an HTML or Markdown file and select Share as artifact, or ask your agent to share it.'
+      )
     ).toBeInTheDocument()
     expect(screen.queryByText(/orca artifacts share/)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Open Settings → Artifacts' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('sends the user to Settings instead of an agent when publishing is off', async () => {
+    mocks.settings = { artifactSharingEnabled: false }
+    mocks.rpc.mockResolvedValue({ status: 'ok', value: { artifacts: [] } })
+    render(<ArtifactsPage />)
+
+    await screen.findByText('Publishing is turned off')
+    expect(screen.getByText(/Allow publishing in Settings → Artifacts/)).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'Ask your agent to share an HTML or Markdown file, and it will appear here.'
+      )
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Settings → Artifacts' }))
+    expect(mocks.openSettingsTarget).toHaveBeenCalledWith({ pane: 'artifacts', repoId: null })
+    expect(mocks.openSettingsPage).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the neutral empty state until settings have loaded', async () => {
+    mocks.settings = null
+    mocks.rpc.mockResolvedValue({ status: 'ok', value: { artifacts: [] } })
+    render(<ArtifactsPage />)
+
+    await screen.findByText('No shared artifacts')
+    expect(screen.queryByText('Publishing is turned off')).not.toBeInTheDocument()
   })
 
   it('loads each cursor once and appends the next artifact page', async () => {
@@ -218,8 +266,8 @@ describe('ArtifactsPage', () => {
       value: { artifacts: [artifactListItem('Second page', 'second-page')] }
     })
 
-    expect(await screen.findByText('Second page')).toBeInTheDocument()
-    expect(screen.getAllByText('First page')).toHaveLength(2)
+    expect(await screen.findByRole('option', { name: /Second page/ })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /First page/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
   })
 
@@ -239,7 +287,7 @@ describe('ArtifactsPage', () => {
     expect(screen.queryByText('No shared artifacts')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
 
-    expect(await screen.findAllByText('Older artifact')).toHaveLength(2)
+    expect(await screen.findByRole('option', { name: /Older artifact/ })).toBeInTheDocument()
   })
 
   it('keeps loaded artifacts when loading another page fails', async () => {
@@ -254,11 +302,11 @@ describe('ArtifactsPage', () => {
       .mockRejectedValueOnce(new Error('network down'))
     render(<ArtifactsPage />)
 
-    await screen.findAllByText('Still visible')
+    await screen.findByRole('option', { name: /Still visible/ })
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
 
     expect(await screen.findByText('Could not load more artifacts.')).toBeInTheDocument()
-    expect(screen.getAllByText('Still visible')).toHaveLength(2)
+    expect(screen.getByRole('option', { name: /Still visible/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Load more' })).toBeEnabled()
   })
 
@@ -283,7 +331,7 @@ describe('ArtifactsPage', () => {
       state: 'connected'
     }
     view.rerender(<ArtifactsPage />)
-    expect(await screen.findAllByText('Account B')).toHaveLength(2)
+    expect(await screen.findByRole('option', { name: /Account B/ })).toBeInTheDocument()
     resolveRefresh()
 
     await waitFor(() =>
@@ -323,7 +371,7 @@ describe('ArtifactsPage', () => {
       state: 'connected'
     }
     view.rerender(<ArtifactsPage />)
-    expect(await screen.findAllByText('Account B')).toHaveLength(2)
+    expect(await screen.findByRole('option', { name: /Account B/ })).toBeInTheDocument()
     resolveRefresh()
 
     await waitFor(() =>
@@ -407,7 +455,7 @@ describe('ArtifactsPage', () => {
     view.rerender(<ArtifactsPage />)
     resolveDelete({ status: 'ok', value: undefined })
 
-    expect(await screen.findAllByText('Shared slug B')).toHaveLength(2)
+    expect(await screen.findByRole('option', { name: /Shared slug B/ })).toBeInTheDocument()
   })
 
   it('does not resurrect a deletion from an older refresh', async () => {
@@ -436,6 +484,44 @@ describe('ArtifactsPage', () => {
     })
 
     await waitFor(() => expect(screen.queryByText('Delete me')).not.toBeInTheDocument())
+  })
+
+  it('skips the delete confirmation once the preference is saved', async () => {
+    mocks.settings = { skipDeleteArtifactConfirm: true }
+    mocks.rpc.mockResolvedValue({
+      status: 'ok',
+      value: { artifacts: [artifactListItem('Skip me', 'skip-me')] }
+    })
+    render(<ArtifactsPage />)
+    await screen.findByRole('option', { name: /Skip me/ })
+
+    mocks.rpc.mockResolvedValueOnce({ status: 'ok', value: undefined })
+    fireEvent.click(screen.getByRole('button', { name: 'Delete artifact' }))
+
+    await waitFor(() => expect(screen.queryByRole('option', { name: /Skip me/ })).toBeNull())
+    expect(mocks.confirm).not.toHaveBeenCalled()
+  })
+
+  it('persists the skip preference only when the confirmation is accepted', async () => {
+    mocks.confirm.mockResolvedValue(true)
+    mocks.rpc.mockResolvedValue({
+      status: 'ok',
+      value: { artifacts: [artifactListItem('Ask me', 'ask-me')] }
+    })
+    render(<ArtifactsPage />)
+    await screen.findByRole('option', { name: /Ask me/ })
+
+    mocks.rpc.mockResolvedValueOnce({ status: 'ok', value: undefined })
+    fireEvent.click(screen.getByRole('button', { name: 'Delete artifact' }))
+    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce())
+
+    // Why: the dialog owns the checkbox; the page only supplies what to persist when it is checked.
+    const options = mocks.confirm.mock.calls[0]?.[0] as {
+      dontAskAgain?: { onConfirmed: () => void }
+    }
+    expect(mocks.updateSettings).not.toHaveBeenCalled()
+    options.dontAskAgain?.onConfirmed()
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ skipDeleteArtifactConfirm: true })
   })
 
   it('treats an organization switch as an account identity change', () => {

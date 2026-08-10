@@ -5,12 +5,14 @@ export const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
 // Why: prefill-without-submit needs an env-var the bundled `orca-prefill.ts`
 // extension can read on session_start. Each kind owns its own variable so an
 // OMP PTY never honors a Pi draft (or vice versa).
-const PREFILL_ENV_VAR_BY_KIND: Record<PiAgentKind, string> = {
+type PrefillAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+
+const PREFILL_ENV_VAR_BY_KIND: Record<PrefillAgentKind, string> = {
   pi: 'ORCA_PI_PREFILL',
   omp: 'ORCA_OMP_PREFILL'
 }
 
-export function getPiPrefillExtensionSource(kind: PiAgentKind): string {
+export function getPiPrefillExtensionSource(kind: PrefillAgentKind): string {
   const envVar = PREFILL_ENV_VAR_BY_KIND[kind]
   return [
     'export default function (pi) {',

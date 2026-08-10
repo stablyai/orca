@@ -63,6 +63,10 @@ export type WorktreeBasePollerOptions = {
   onWatchError?: (error: Error) => void
   /** Test hook: called whenever a full snapshot scan runs (vs. a gated skip). */
   onFullScan?: () => void
+  /** Test hook: called before a pending `.git` marker stat. */
+  onPendingMarkerProbe?: (path: string) => void
+  /** Test hook: overrides the fast-probe window. */
+  pendingMarkerMaxTicks?: number
 }
 
 // Why: these targets used to be recursive FSEvents subscriptions spanning the
@@ -193,7 +197,7 @@ async function startBasePoller(
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
   visibility: WorktreePollerWindowVisibility,
-  onFullScan?: () => void
+  options: WorktreeBasePollerOptions
 ): Promise<WorktreeBaseSubscription> {
   let disposed = false
   let ticking = false
@@ -202,16 +206,17 @@ async function startBasePoller(
   let gateSignatures = await Promise.all(snapshot.gateDirs.map(dirSignature))
   let timer: ReturnType<typeof setTimeout> | null = null
   let parkedWhileHidden = false
-  // dir → tick when first seen without a `.git` marker
-  const pendingMarkers = new Map<string, number>()
+  const pendingMarkerMaxTicks = options.pendingMarkerMaxTicks ?? PENDING_MARKER_MAX_TICKS
+  // dir → first probe tick; null means backstop scans only
+  const markerProbeStartedAt = new Map<string, number | null>()
   for (const [dir, marker] of snapshot.markers) {
     if (!marker) {
-      pendingMarkers.set(dir, 0)
+      markerProbeStartedAt.set(dir, 0)
     }
   }
 
   const fullScan = async (): Promise<void> => {
-    onFullScan?.()
+    options.onFullScan?.()
     const next = await snapshotBase(target.path, getRepos())
     const nextSignatures = await Promise.all(next.gateDirs.map(dirSignature))
     if (disposed) {
@@ -220,14 +225,14 @@ async function startBasePoller(
     const events = diffBase(snapshot, next)
     for (const [dir, marker] of next.markers) {
       if (marker) {
-        pendingMarkers.delete(dir)
-      } else if (!pendingMarkers.has(dir)) {
-        pendingMarkers.set(dir, tickCount)
+        markerProbeStartedAt.delete(dir)
+      } else if (!markerProbeStartedAt.has(dir)) {
+        markerProbeStartedAt.set(dir, tickCount)
       }
     }
-    for (const [dir, firstSeenTick] of pendingMarkers) {
-      if (!next.markers.has(dir) || tickCount - firstSeenTick > PENDING_MARKER_MAX_TICKS) {
-        pendingMarkers.delete(dir)
+    for (const dir of markerProbeStartedAt.keys()) {
+      if (!next.markers.has(dir)) {
+        markerProbeStartedAt.delete(dir)
       }
     }
     snapshot = next
@@ -239,9 +244,17 @@ async function startBasePoller(
 
   const checkPendingMarkers = async (): Promise<void> => {
     const events: WorktreeBasePollEvent[] = []
-    for (const dir of pendingMarkers.keys()) {
+    for (const [dir, firstSeenTick] of markerProbeStartedAt) {
+      if (firstSeenTick === null) {
+        continue
+      }
+      if (tickCount - firstSeenTick > pendingMarkerMaxTicks) {
+        markerProbeStartedAt.set(dir, null)
+        continue
+      }
+      options.onPendingMarkerProbe?.(join(dir, '.git'))
       if (await hasGitMarker(dir)) {
-        pendingMarkers.delete(dir)
+        markerProbeStartedAt.delete(dir)
         snapshot.markers.set(dir, true)
         events.push({ type: 'create', path: join(dir, '.git') })
       }
@@ -267,7 +280,7 @@ async function startBasePoller(
       await fullScan()
       return
     }
-    if (pendingMarkers.size > 0) {
+    if (markerProbeStartedAt.size > 0) {
       await checkPendingMarkers()
     }
   }
@@ -356,5 +369,5 @@ export async function startWorktreeBaseDirectoryPoller(
       options.onWatchError
     )
   }
-  return startBasePoller(target, getRepos, onEvents, pollIntervalMs, visibility, options.onFullScan)
+  return startBasePoller(target, getRepos, onEvents, pollIntervalMs, visibility, options)
 }

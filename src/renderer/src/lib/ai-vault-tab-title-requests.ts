@@ -13,7 +13,6 @@ export type AiVaultTitleRequest = {
   executionHostId: ExecutionHostId
   providerSession: AgentProviderSessionMetadata
   refresh: boolean
-  scopePath: string | null
   tabId: string
   worktreeId: string
 }
@@ -57,13 +56,11 @@ function registerCandidate(
     return
   }
   const executionHostId = getExecutionHostIdForWorktree(state, worktreeId)
-  const scopePath = state.getKnownWorktreeById(worktreeId, executionHostId)?.path?.trim() || null
   candidates.set(tabId, {
     agent: args.agent,
     executionHostId,
     providerSession: args.providerSession,
     refresh: args.refresh,
-    scopePath,
     tabId,
     worktreeId,
     priority

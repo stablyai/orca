@@ -170,29 +170,26 @@ describe('daemon health', () => {
     }
   })
 
-  it.skipIf(process.platform === 'win32')(
-    'does not unlink a live socket when the pid file does not match this daemon',
-    async () => {
-      const server = createServer((socket) => socket.end())
-      await new Promise<void>((resolve, reject) => {
-        server.once('error', reject)
-        server.listen(socketPath, () => {
-          server.off('error', reject)
-          resolve()
-        })
+  it('does not unlink a live socket when the pid file does not match this daemon', async () => {
+    const server = createServer((socket) => socket.end())
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(socketPath, () => {
+        server.off('error', reject)
+        resolve()
       })
-      writeFileSync(getDaemonPidPath(dir), String(process.pid), { mode: 0o600 })
+    })
+    writeFileSync(getDaemonPidPath(dir), String(process.pid), { mode: 0o600 })
 
-      try {
-        await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toMatchObject({
-          killed: false
-        })
-        await expect(canConnect(socketPath)).resolves.toBe(true)
-      } finally {
-        await closeServer(server)
-      }
+    try {
+      await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toMatchObject({
+        killed: false
+      })
+      await expect(canConnect(socketPath)).resolves.toBe(true)
+    } finally {
+      await closeServer(server)
     }
-  )
+  })
 })
 
 describe('parseDaemonPidFile', () => {
@@ -354,7 +351,7 @@ describe('startTimeMatches', () => {
     expect(startTimeMatches(process.pid, actual + 500)).toBe(true)
   })
 
-  it.skipIf(process.platform === 'win32')('returns false for start times outside tolerance', () => {
+  it('returns false for start times outside tolerance', () => {
     const actual = getProcessStartedAtMs(process.pid)
     if (actual === null) {
       return
@@ -415,37 +412,34 @@ describe('killStaleDaemon pid identity guards', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it.skipIf(process.platform === 'win32')(
-    'does not SIGTERM when the saved startedAtMs mismatches the current process',
-    async () => {
-      // Why: seed a pid file that claims the daemon is `process.pid` (us) but
-      // was started 1 hour ago. Our real start time is "now," so startTimeMatches
-      // returns false and isDaemonProcess rejects. killStaleDaemon must not call
-      // process.kill in that case.
-      const bogusStartedAtMs = Date.now() - 60 * 60 * 1000
-      writeFileSync(
-        getDaemonPidPath(dir),
-        serializeDaemonPidFile({ pid: process.pid, startedAtMs: bogusStartedAtMs }),
-        { mode: 0o600 }
-      )
+  it('does not SIGTERM when the saved startedAtMs mismatches the current process', async () => {
+    // Why: seed a pid file that claims the daemon is `process.pid` (us) but
+    // was started 1 hour ago. Our real start time is "now," so startTimeMatches
+    // returns false and isDaemonProcess rejects. killStaleDaemon must not call
+    // process.kill in that case.
+    const bogusStartedAtMs = Date.now() - 60 * 60 * 1000
+    writeFileSync(
+      getDaemonPidPath(dir),
+      serializeDaemonPidFile({ pid: process.pid, startedAtMs: bogusStartedAtMs }),
+      { mode: 0o600 }
+    )
 
-      // isDaemonProcess uses process.kill(pid, 0) as a liveness probe; that's
-      // expected and not a real kill. We only care that no actual termination
-      // signal is sent.
-      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-      try {
-        await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toMatchObject({
-          killed: false
-        })
-        const terminationSignals = killSpy.mock.calls.filter(
-          ([, sig]) => sig === 'SIGTERM' || sig === 'SIGKILL'
-        )
-        expect(terminationSignals).toEqual([])
-      } finally {
-        killSpy.mockRestore()
-      }
+    // isDaemonProcess uses process.kill(pid, 0) as a liveness probe; that's
+    // expected and not a real kill. We only care that no actual termination
+    // signal is sent.
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toMatchObject({
+        killed: false
+      })
+      const terminationSignals = killSpy.mock.calls.filter(
+        ([, sig]) => sig === 'SIGTERM' || sig === 'SIGKILL'
+      )
+      expect(terminationSignals).toEqual([])
+    } finally {
+      killSpy.mockRestore()
     }
-  )
+  })
 })
 
 describe('killStaleDaemon ownership decisions', () => {

@@ -140,6 +140,10 @@ async function executeWorktreeCreation(
             : {}),
           ...(preparedRequest.linkedTaskSourceContext !== undefined
             ? { linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext }
+            : {}),
+          // Why: the remote host must own task-draft startup so its initial terminal is the agent, not an idle fallback shell.
+          ...(!backendStartup && preparedRequest.agent && preparedRequest.launchDraftPrompt
+            ? { startupDraft: preparedRequest.launchDraftPrompt }
             : {})
         }
       )
@@ -167,7 +171,6 @@ async function executeWorktreeCreation(
   }
 
   const worktree = result.worktree
-
   // Why: if the user dismissed/cancelled while the create was in flight, the entry
   // is gone. Git already made the worktree on disk, but don't auto-provision (trust
   // write, terminal, agent, note) work they abandoned — it surfaces as a plain row
@@ -210,7 +213,8 @@ async function executeWorktreeCreation(
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
       ...(startupOpt ? { startup: startupOpt } : {}),
-      ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {})
+      ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
+      ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
     })
     primaryTabId = activation === false ? null : activation.primaryTabId
   } else {
@@ -224,7 +228,10 @@ async function executeWorktreeCreation(
       result.setup,
       preparedRequest.issueCommand,
       result.defaultTabs,
-      { activateCreatedTabs: false }
+      {
+        activateCreatedTabs: false,
+        ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+      }
     )
   }
 

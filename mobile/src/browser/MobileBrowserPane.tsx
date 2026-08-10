@@ -19,7 +19,6 @@ import {
   type PanResponderGestureState
 } from 'react-native'
 import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
-import { imeGuardedSubmitProps } from '../ime/ime-submit-carry'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 import type {
@@ -1284,7 +1283,7 @@ export function MobileBrowserPane({
             autoCapitalize="none"
             autoCorrect={false}
             editable={!controlsDisabled}
-            {...imeGuardedSubmitProps(Platform.OS, () => void sendKeyboardText())}
+            onSubmitEditing={() => void sendKeyboardText()}
           />
           <Pressable
             style={[styles.sendButton, (controlsDisabled || !keyboardValue) && styles.disabled]}

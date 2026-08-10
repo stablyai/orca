@@ -44,6 +44,7 @@ function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneIntern
     serializeAddon: {} as never,
     unicode11Addon: {} as never,
     webLinksAddon: {} as never,
+    compositionHandler: null,
     pendingSplitScrollState: null,
     debugLabel: null
   }

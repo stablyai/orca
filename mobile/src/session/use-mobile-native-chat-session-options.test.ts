@@ -44,7 +44,6 @@ describe('useMobileNativeChatSessionOptions', () => {
   }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     clearMobileSessionOptionRecordsForTests()
     dispatchCommand.mockReset()
     dispatchCommand.mockResolvedValue('accepted')

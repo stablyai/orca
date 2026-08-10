@@ -64,7 +64,9 @@
     "openWorktreePalette": "打开工作树面板",
     "window": "窗口",
     "help": "帮助",
-    "paste": "粘贴"
+    "paste": "粘贴",
+    "copy": "复制",
+    "selectAll": "全选"
   },
   "tray": {
     "openOrca": "打开 Orca",
@@ -344,6 +346,7 @@
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
+          "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code"
         },
         "skill": {
@@ -2728,6 +2731,7 @@
             "ec85df5914": "快捷命令",
             "0a917b591a": "粘贴",
             "f3eeb1de13": "复制",
+            "selectAll": "全选",
             "c2f0b72b8d": "插入",
             "925f49f210": "展开窗格",
             "df766809e0": "折叠窗格",
@@ -2782,7 +2786,7 @@
             "agent": {
               "row": {
                 "ad991ece5c": "智能体的窗格不再可用。",
-                "090d607412": "陈旧智能体行-{{value0}}"
+                "090d607412": "stale-agent-row-{{value0}}"
               }
             }
           },
@@ -2999,7 +3003,13 @@
             "d62d63b807": "创建文件",
             "25dc1cd653": "打开文件",
             "7cdf8ee0c8": "打开网址",
-            "b27864279e": "启动智能体"
+            "b27864279e": "启动智能体",
+            "0e5b7a3f16": "搜索打开的标签页、文件、URL 和智能体…",
+            "8f0a1c4d92": "切换到标签页",
+            "2c38630a01": "工作区已不存在",
+            "4f0d9a71c2": "标签页已不存在",
+            "d7d496a451": "浏览器页面已不存在",
+            "7726ce9970": "移动模拟器标签页已不存在"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "命令",
@@ -3033,6 +3043,7 @@
                 "classifier": {
                   "42e6262ae9": "没有可用的操作。",
                   "097a982ee0": "正在加载文件...",
+                  "c41f8d20b7": "搜索打开的标签页、文件、URL 和智能体…",
                   "90eb94dc48": "输入 http:// 或 https:// URL。",
                   "5553b283ce": "输入 URL 或文件路径。",
                   "queryTooLarge": "搜索文本过长。",
@@ -11327,8 +11338,7 @@
             "delete": "删除",
             "deleteReasonNonLocalHost": "只能删除此设备上的会话。",
             "deleteReasonSyntheticPath": "此会话无法在 Orca 中删除。",
-            "deleteReasonUnsupportedAgent": "{{value0}} 会话无法在 Orca 中删除。",
-            "deleteReasonSessionLive": "此会话仍在运行 — 请等待其完成后再删除。"
+            "deleteReasonUnsupportedAgent": "{{value0}} 会话无法在 Orca 中删除。"
           },
           "AiVaultSessionDeleteDialog": {
             "title": "要删除此会话吗？",

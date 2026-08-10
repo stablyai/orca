@@ -45,6 +45,25 @@ describe('listReleaseBuilds', () => {
     ])
   })
 
+  it('lists daily builds from the dedicated repo, newest first', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        release('v1.4.160-daily.202607271300'),
+        release('v1.4.160-daily.202607291300'),
+        release('v1.4.160-daily.202607281300')
+      ])
+    )
+
+    const builds = await listReleaseBuilds('daily')
+
+    expect(fetchMock.mock.calls[0][0]).toContain('stablyai/orca-daily')
+    expect(builds.map((build) => build.version)).toEqual([
+      '1.4.160-daily.202607291300',
+      '1.4.160-daily.202607281300',
+      '1.4.160-daily.202607271300'
+    ])
+  })
+
   // Why: the main repo serves stable and rc from one endpoint, so an unfiltered
   // list would offer RC tags under the Stable channel.
   it('separates stable from rc in the shared main repo', async () => {
@@ -121,6 +140,15 @@ describe('resolveTargetBuild', () => {
       version: '1.4.160-hourly.202607281400',
       feedUrl:
         'https://github.com/stablyai/orca-hourly/releases/download/v1.4.160-hourly.202607281400'
+    })
+  })
+
+  it('pins a daily tag at the daily repo download path', () => {
+    expect(resolveTargetBuild('daily', 'v1.4.160-daily.202607281300')).toEqual({
+      tag: 'v1.4.160-daily.202607281300',
+      version: '1.4.160-daily.202607281300',
+      feedUrl:
+        'https://github.com/stablyai/orca-daily/releases/download/v1.4.160-daily.202607281300'
     })
   })
 

@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 
 export type PendingText = { x: number; y: number; initial: string }
 
@@ -38,7 +37,7 @@ export function useMarkupKeyboardShortcuts(params: MarkupKeyboardParams): void {
         return
       }
       const mod = isMac ? event.metaKey : event.ctrlKey
-      if (mod && isLatinShortcutKey(event, 'z')) {
+      if (mod && event.key.toLowerCase() === 'z') {
         event.preventDefault()
         if (event.shiftKey) {
           redo()

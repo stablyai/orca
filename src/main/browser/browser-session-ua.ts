@@ -21,11 +21,11 @@ export function cleanElectronUserAgent(ua: string): string {
   )
 }
 
-// Why: Electron's actual Chromium version (e.g. 134) differs from the source
-// browser's version (e.g. Edge 147). The sec-ch-ua Client Hints headers
-// reveal the real version, creating a mismatch that Google's anti-fraud
-// detection flags as CookieMismatch on accounts.google.com. Override Client
-// Hints on outgoing requests to match the source browser's UA.
+// Why: Electron emits sec-ch-ua brands like "Not A(Brand" without a
+// "Google Chrome" entry, which disagrees with the Chrome-shaped UA the session
+// presents. Rewrite the hint headers to the brand set Chrome ships for the same
+// engine version so the two surfaces tell one story. Also owns the Google
+// auth-host Firefox switch, which must install even for a non-Chrome-shaped UA.
 export function setupClientHintsOverride(
   sess: Session,
   ua: string,

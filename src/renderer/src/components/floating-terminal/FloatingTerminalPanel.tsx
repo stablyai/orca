@@ -15,6 +15,7 @@ import TerminalPane, { type TerminalPaneHandle } from '@/components/terminal-pan
 import { shouldDeferParkedPtyExitTabClose } from '@/components/terminal-pane/terminal-parked-tab-watchers'
 import { useTerminalTabColdParking } from '@/components/terminal-pane/use-terminal-tab-cold-parking'
 import { isTerminalPaneCloseChord } from '@/components/terminal-pane/terminal-shortcut-policy'
+import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
@@ -94,18 +95,24 @@ export { FloatingTerminalToggleButton } from './FloatingTerminalToggleButton'
 import {
   anchorFloatingTerminalPanelBounds,
   clampFloatingTerminalBounds,
-  getDefaultFloatingTerminalCommittedBounds,
   getDefaultFloatingTerminalBounds,
+  getDefaultFloatingTerminalCommittedBounds,
   getMaximizedFloatingTerminalBounds,
   persistFloatingTerminalPanelBounds,
   readPersistedFloatingTerminalPanelBounds,
-  resolveFloatingTerminalPanelCommittedBounds,
   resolveFloatingTerminalPanelBounds,
+  resolveFloatingTerminalPanelCommittedBounds,
   shouldReconcileFloatingTerminalPanelBounds,
   type FloatingTerminalPanelBounds,
-  type FloatingTerminalPanelCommittedBounds,
-  type FloatingTerminalPanelBoundsSource
+  type FloatingTerminalPanelBoundsSource,
+  type FloatingTerminalPanelCommittedBounds
 } from './floating-terminal-panel-bounds'
+import {
+  persistFloatingTerminalPanelMaximized,
+  readPersistedFloatingTerminalPanelViewState
+} from './floating-terminal-panel-view-state'
+import { useSettledPanelViewport } from './use-settled-panel-viewport'
+import { shouldRestoreMaximizedPanelBounds } from './floating-terminal-panel-restore-geometry'
 import { translate } from '@/i18n/i18n'
 import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inputs'
@@ -161,6 +168,17 @@ function readInitialPanelBounds(): FloatingTerminalPanelBoundsState {
   const defaultCommittedBounds = getDefaultFloatingTerminalCommittedBounds()
   const defaultRenderedBounds = getDefaultFloatingTerminalBounds()
   const persistedBounds = readPersistedFloatingTerminalPanelBounds()
+  if (shouldRestoreMaximizedPanelBounds(readPersistedFloatingTerminalPanelViewState())) {
+    // Why maximized wins the RENDERED rect while the committed rect stays the restore
+    // target: the first paint must already be final geometry, or the panes fit at the
+    // smaller size and the later maximize reflows them. Un-maximizing still returns to
+    // the user's own bounds because those remain committed.
+    return {
+      committedBounds: persistedBounds ?? defaultCommittedBounds,
+      renderedBounds: getMaximizedFloatingTerminalBounds(),
+      source: persistedBounds ? 'user' : 'default'
+    }
+  }
   return persistedBounds
     ? {
         committedBounds: persistedBounds,
@@ -267,7 +285,10 @@ export function FloatingTerminalPanel({
     initialBoundsStateRef.current.committedBounds
   )
   const [bounds, setBounds] = useState(initialBoundsStateRef.current.renderedBounds)
-  const [maximized, setMaximized] = useState(false)
+  const [maximized, setMaximized] = useState(
+    () => readPersistedFloatingTerminalPanelViewState()?.maximized === true
+  )
+  const panelViewportSettled = useSettledPanelViewport()
   const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
   const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
     () => !hasOrchestrationSetupMarker() && !isOrchestrationSetupDismissed()
@@ -684,7 +705,8 @@ export function FloatingTerminalPanel({
       return
     }
     focusTerminalTabSurface(activeTerminalId, null, {
-      onlyIfFocusUnclaimed: true
+      onImeRefocusSkipped: (active) => reportFloatingFocus(active),
+      refreshImeContext: true
     })
   }, [activeTerminalId, open])
 
@@ -1113,9 +1135,9 @@ export function FloatingTerminalPanel({
   const toggleMaximized = useCallback(() => {
     if (maximized) {
       const restoredState = restoreBoundsRef.current ?? {
-        committedBounds: getDefaultFloatingTerminalCommittedBounds(),
-        renderedBounds: getDefaultFloatingTerminalBounds(),
-        source: 'default' as const
+        committedBounds: committedBoundsRef.current,
+        renderedBounds: resolveFloatingTerminalPanelCommittedBounds(committedBoundsRef.current),
+        source: boundsSourceRef.current
       }
       restoreBoundsRef.current = null
       boundsSourceRef.current = restoredState.source
@@ -1126,6 +1148,7 @@ export function FloatingTerminalPanel({
       stagedBoundsRef.current = null
       setBounds(restoredBounds)
       setMaximized(false)
+      persistFloatingTerminalPanelMaximized(false)
       return
     }
     restoreBoundsRef.current = {
@@ -1136,6 +1159,7 @@ export function FloatingTerminalPanel({
     stagedBoundsRef.current = null
     setBounds(getMaximizedFloatingTerminalBounds())
     setMaximized(true)
+    persistFloatingTerminalPanelMaximized(true)
   }, [bounds, maximized])
 
   const maximizePanel = useCallback(() => {
@@ -1153,6 +1177,7 @@ export function FloatingTerminalPanel({
     stagedBoundsRef.current = null
     setBounds(getMaximizedFloatingTerminalBounds())
     setMaximized(true)
+    persistFloatingTerminalPanelMaximized(true)
   }, [bounds, maximized])
 
   useEffect(() => {
@@ -1637,14 +1662,16 @@ export function FloatingTerminalPanel({
       }
       if ((active === null || active === document.body) && activeTerminalId) {
         if (reclaim.helper.isConnected && panel?.contains(reclaim.helper)) {
-          // Why: TerminalPane owns exact-helper reclaim. Avoid racing it with
-          // a second floating-layer focus cycle.
+          // Why: TerminalPane owns exact-helper reclaim and IME refresh. Avoid
+          // racing it with a second floating-layer blur/refocus cycle.
           return
         }
         // Why: only a helper that genuinely remounted while backgrounded needs
         // tab/leaf recovery; the shared TerminalPane owner cannot reclaim it.
         focusTerminalTabSurface(activeTerminalId, reclaim.leafId, {
-          onlyIfFocusUnclaimed: true
+          onlyIfFocusUnclaimed: true,
+          onImeRefocusSkipped: (active) => reportFloatingFocus(active),
+          refreshImeContext: true
         })
       }
     }
@@ -1754,7 +1781,13 @@ export function FloatingTerminalPanel({
         commitUserBounds({ ...stagedBoundsRef.current, width: rect.width, height: rect.height })
       }}
       onFocusCapture={(event) => reportFloatingFocusFromTarget(event.target)}
-      onBlurCapture={(event) => reportFloatingFocusFromTarget(event.relatedTarget)}
+      onBlurCapture={(event) => {
+        // Why: keep terminal-first shortcut ownership latched during the
+        // synchronous macOS IME refresh blur; refocus or its skip callback settles it.
+        if (!isTerminalImeInputContextRefreshing(event.target)) {
+          reportFloatingFocusFromTarget(event.relatedTarget)
+        }
+      }}
       onKeyDownCapture={handleShortcutSurfaceKeyDown}
     >
       <div className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-black/14 bg-card dark:border-white/14">
@@ -1830,7 +1863,11 @@ export function FloatingTerminalPanel({
             hasVisibleFloatingTabs ? 'floating-workspace-surface' : undefined
           }
         >
-          {cwd
+          {/* Why also gated on a settled viewport: a restored-maximized panel derives its
+              rect from the live viewport, so mounting terminals before the window finishes
+              maximizing fits them to a grid it is about to leave, and the correcting fit
+              reflows the buffer under a live TUI. */}
+          {cwd && panelViewportSettled
             ? tabs
                 .filter((tab) => !parkedTerminalTabIds.has(tab.id))
                 .map((tab) => {
