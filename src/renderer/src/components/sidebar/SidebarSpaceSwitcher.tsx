@@ -40,6 +40,7 @@ type SpaceIndicatorProps = {
   space: Space
   active: boolean
   onActivate: (spaceId: string) => void
+  onCreate: () => void
   onEdit: (spaceId: string) => void
   onDelete: (spaceId: string) => void
 }
@@ -48,6 +49,7 @@ function SpaceIndicator({
   space,
   active,
   onActivate,
+  onCreate,
   onEdit,
   onDelete
 }: SpaceIndicatorProps): React.JSX.Element {
@@ -90,6 +92,10 @@ function SpaceIndicator({
         <ContextMenuItem onSelect={() => onEdit(space.id)}>
           <Pencil />
           {translate('auto.components.sidebar.SidebarSpaceSwitcher.b025470e9f', 'Edit Space')}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={onCreate}>
+          <Plus />
+          {translate('auto.components.sidebar.SidebarSpaceSwitcher.bc5c35ca79', 'New Space')}
         </ContextMenuItem>
         {!isDefaultSpaceId(space.id) ? (
           <>
@@ -215,6 +221,7 @@ export const SidebarSpaceSwitcher = React.memo(
               space={space}
               active={space.id === activeSpaceId}
               onActivate={handleActivate}
+              onCreate={handleCreate}
               onEdit={handleEdit}
               onDelete={handleDelete}
             />

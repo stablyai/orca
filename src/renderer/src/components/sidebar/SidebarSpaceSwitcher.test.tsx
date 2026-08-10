@@ -74,7 +74,7 @@ describe('SidebarSpaceSwitcher', () => {
       'true'
     )
 
-    await user.click(screen.getByRole('button', { name: 'New Space' }))
+    await user.click(screen.getByLabelText('New Space'))
     expect(mocks.openModal).toHaveBeenCalledWith('space-editor')
   })
 
@@ -99,6 +99,19 @@ describe('SidebarSpaceSwitcher', () => {
     expect(mocks.openModal).toHaveBeenCalledWith('space-editor', { spaceId: 'space-work' })
     await user.click(deleteButtons[0])
     expect(mocks.openModal).toHaveBeenCalledWith('delete-space', { spaceId: 'space-work' })
+  })
+
+  it('offers New Space directly below Edit Space in each Space menu', async () => {
+    const user = userEvent.setup()
+    render(<SidebarSpaceSwitcher />)
+    const edit = screen.getByRole('button', { name: 'Edit Space' })
+    const create = screen
+      .getAllByRole('button', { name: 'New Space' })
+      .find((button) => !button.hasAttribute('aria-label'))
+
+    expect(create?.previousElementSibling).toBe(edit)
+    await user.click(create!)
+    expect(mocks.openModal).toHaveBeenCalledWith('space-editor')
   })
 
   // Why: happy-dom reports zero-sized rects, so the strip geometry has to be simulated.
@@ -181,7 +194,7 @@ describe('SidebarSpaceSwitcher', () => {
     try {
       render(<SidebarSpaceSwitcher />)
       const strip = screen.getByRole('group', { name: 'Spaces' })
-      const newSpace = screen.getByRole('button', { name: 'New Space' })
+      const newSpace = screen.getByLabelText('New Space')
       expect(strip.contains(newSpace)).toBe(true)
 
       newSpace.focus()
