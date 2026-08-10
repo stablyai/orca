@@ -241,7 +241,7 @@ export function CrashReportDialogSurface({
           <DialogDescription className="text-xs">{getDialogDescription(report)}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           {report ? (
             <>
               <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs">
@@ -252,14 +252,14 @@ export function CrashReportDialogSurface({
                   {report.appVersion}
                 </div>
               </div>
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <div className="text-[11px] font-medium text-muted-foreground">
                   {translate(
                     'auto.components.crash.report.CrashReportDialog.6d3ebe216a',
                     'Diagnostic text'
                   )}
                 </div>
-                <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/20 p-3 font-mono text-[11px] leading-5 text-muted-foreground scrollbar-sleek">
+                <pre className="max-h-44 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-md border border-border bg-muted/20 p-3 font-mono text-[11px] leading-5 text-muted-foreground scrollbar-sleek">
                   {diagnosticText}
                 </pre>
               </div>

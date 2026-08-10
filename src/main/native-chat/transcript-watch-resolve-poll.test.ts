@@ -68,7 +68,7 @@ describe('native chat transcript resolve polling', () => {
   })
 
   it('retries the WSL translation on the slow cadence, never installing the raw guest path', async () => {
-    // Why: each translation sync-stats the UNC twin per distro over the 9P
+    // Why: each translation probes the UNC twin per distro over the 9P
     // share; doing it every fast tick would hammer the main process (#10326).
     setPlatform('win32')
     const subscription = await subscribeNativeChatTranscript({
@@ -123,5 +123,84 @@ describe('native chat transcript resolve polling', () => {
     await vi.advanceTimersByTimeAsync(35)
     expect(mocks.resolve.mock.calls.length).toBeGreaterThan(1)
     subscription.unsubscribe()
+  })
+
+  it('cancels queued WSL resolution when the subscription closes', async () => {
+    setPlatform('win32')
+    let receivedSignal: AbortSignal | undefined
+    mocks.toHostReadable.mockImplementation(
+      (_path: string, deps: { signal?: AbortSignal }) =>
+        new Promise<null>((_resolve, reject) => {
+          receivedSignal = deps.signal
+          deps.signal?.addEventListener('abort', () => reject(deps.signal?.reason), { once: true })
+        })
+    )
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'codex',
+      sessionId: 'session-id',
+      transcriptPath: '/home/ada/.codex/sessions/rollout-session-id.jsonl',
+      resolvePollIntervalMs: 10,
+      onAppend: () => {}
+    })
+
+    await vi.advanceTimersByTimeAsync(10)
+    expect(receivedSignal?.aborted).toBe(false)
+    subscription.unsubscribe()
+    expect(receivedSignal?.aborted).toBe(true)
+  })
+
+  it('does not install after initial resolution is cancelled', async () => {
+    let finishResolve: ((path: string) => void) | undefined
+    mocks.resolve.mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          finishResolve = resolve
+        })
+    )
+    const controller = new AbortController()
+    const cancelled = new Error('setup cancelled')
+    const setup = subscribeNativeChatTranscript(
+      {
+        agent: 'codex',
+        sessionId: 'session-id',
+        onAppend: () => {}
+      },
+      controller.signal
+    )
+
+    controller.abort(cancelled)
+    finishResolve?.('/transcript.jsonl')
+    await expect(setup).rejects.toBe(cancelled)
+    expect(mocks.install).not.toHaveBeenCalled()
+  })
+
+  it('tears down a watcher returned after initial setup is cancelled', async () => {
+    mocks.resolve.mockResolvedValue('/transcript.jsonl')
+    const installControl: {
+      finish?: (subscription: { unsubscribe: () => void; watching: boolean }) => void
+    } = {}
+    const unsubscribe = vi.fn()
+    mocks.install.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          installControl.finish = resolve
+        })
+    )
+    const controller = new AbortController()
+    const cancelled = new Error('setup cancelled')
+    const setup = subscribeNativeChatTranscript(
+      {
+        agent: 'codex',
+        sessionId: 'session-id',
+        onAppend: () => {}
+      },
+      controller.signal
+    )
+    await vi.waitFor(() => expect(mocks.install).toHaveBeenCalledOnce())
+
+    controller.abort(cancelled)
+    installControl.finish?.({ unsubscribe, watching: true })
+    await expect(setup).rejects.toBe(cancelled)
+    expect(unsubscribe).toHaveBeenCalledOnce()
   })
 })

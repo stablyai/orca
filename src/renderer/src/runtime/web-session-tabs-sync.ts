@@ -35,7 +35,6 @@ import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { normalizeTerminalLayoutPtyOwnership } from '@/components/terminal-pane/terminal-layout-pty-ownership'
 import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { getReachableRuntimeSessionMirrorTargets } from '@/lib/runtime-session-mirror-targets'
 import {
   createWebRuntimeSessionTerminal,
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -84,6 +83,7 @@ import {
   resolveWebAgentSessionHandoff
 } from './web-agent-session-handoff'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import { useRuntimeSessionMirrorEnvironmentKey } from './use-runtime-session-mirror-environment-key'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -2704,14 +2704,7 @@ export function applyWebSessionTabsStorePatch(
 
 export function useWebSessionTabsSync(): void {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
-  const runtimeSessionMirrorEnvironmentKey = useAppStore((state) =>
-    getReachableRuntimeSessionMirrorTargets(state)
-      .map(
-        ({ environmentId, runtimeId, connectionGeneration, pairingRevision }) =>
-          `${environmentId}\u0001${runtimeId}\u0001${connectionGeneration}\u0001${pairingRevision}`
-      )
-      .join('\u0000')
-  )
+  const runtimeSessionMirrorEnvironmentKey = useRuntimeSessionMirrorEnvironmentKey()
   const activeWorktreeRuntimeEnvironmentId = useAppStore((state) =>
     getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
   )

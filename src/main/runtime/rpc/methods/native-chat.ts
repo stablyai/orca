@@ -6,7 +6,9 @@ import type {
 } from '../../../../shared/native-chat-types'
 import {
   readNativeChatTranscriptTail,
-  subscribeNativeChatTranscript
+  subscribeNativeChatTranscript,
+  type NativeChatTranscriptSubscription,
+  type SubscribeNativeChatTranscriptArgs
 } from '../../../native-chat/transcript-watch'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 
@@ -190,15 +192,18 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'nativeChat.readSession',
     params: NativeChatSession,
-    handler: async (params, { clientKind }) => {
+    handler: async (params, { clientKind, signal }) => {
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-      const result = await readNativeChatTranscriptTail({
-        agent: params.agent,
-        sessionId: params.sessionId,
-        transcriptPath: params.transcriptPath,
-        limit,
-        beforeOffset: params.beforeOffset
-      })
+      const result = await readNativeChatTranscriptTail(
+        {
+          agent: params.agent,
+          sessionId: params.sessionId,
+          transcriptPath: params.transcriptPath,
+          limit,
+          beforeOffset: params.beforeOffset
+        },
+        signal
+      )
       return 'messages' in result
         ? {
             messages: windowForClient(result.messages, clientKind, limit),
@@ -212,9 +217,13 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'nativeChat.subscribe',
     params: NativeChatSession,
-    handler: async (params, { runtime, connectionId, clientKind }, emit) => {
+    handler: async (params, { runtime, connectionId, clientKind, signal }, emit) => {
+      if (signal?.aborted) {
+        return
+      }
       let closed = false
       let unsubscribe = (): void => {}
+      const setupController = new AbortController()
       // Why: the first drain is a bounded tail snapshot; later drains emit only
       // appended turns. This avoids parsing or shipping full long transcripts.
       // Clients merge by message id, so the initial windowed batch doubles as the
@@ -225,19 +234,29 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       const cleanupToken = params.subscriptionId ?? `${params.agent}:${params.sessionId}`
       const subscriptionId = `nativeChat:${connectionId ?? 'local'}:${cleanupToken}`
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-      runtime.registerSubscriptionCleanup(
-        subscriptionId,
-        () => {
-          closed = true
-          unsubscribe()
-          emit({ type: 'end' })
-        },
-        connectionId
-      )
+      const cleanup = (): void => {
+        if (closed) {
+          return
+        }
+        closed = true
+        signal?.removeEventListener('abort', handleAbort)
+        setupController.abort()
+        unsubscribe()
+        emit({ type: 'end' })
+      }
+      function handleAbort(): void {
+        runtime.cleanupSubscription(subscriptionId)
+      }
+      signal?.addEventListener('abort', handleAbort, { once: true })
+      runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
+      if (signal?.aborted) {
+        runtime.cleanupSubscription(subscriptionId)
+        return
+      }
       if (closed) {
         return
       }
-      const subscription = await subscribeNativeChatTranscript({
+      const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
         agent: params.agent,
         sessionId: params.sessionId,
         transcriptPath: params.transcriptPath,
@@ -279,7 +298,16 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
             ...(lifecycle ? { lifecycle } : {})
           })
         }
-      })
+      }
+      let subscription: NativeChatTranscriptSubscription
+      try {
+        subscription = await subscribeNativeChatTranscript(subscribeArgs, setupController.signal)
+      } catch (error) {
+        if (closed || setupController.signal.aborted) {
+          return
+        }
+        throw error
+      }
       // The connection may have closed while the file was being resolved.
       if (closed) {
         subscription.unsubscribe()
