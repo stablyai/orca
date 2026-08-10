@@ -44,37 +44,29 @@ export function clearTerminalWebglAttachBackoff(pane: ManagedPaneInternal): void
   pane.webglAttachFailedSinceRecovery = false
 }
 
-// Why bounded: rendering resume fires on every worktree foreground and window
-// wake, and it used to clear webglDisabledAfterContextLoss unconditionally. On
-// a machine where Chromium keeps reclaiming terminal contexts, that cycled
-// every affected pane WebGL→loss→DOM→WebGL per switch (issue #12452's
-// oscillating managers and ~30s atlas-reset churn), and each cycle risks a
-// dropped presentation that leaves the canvas stale behind the model diff.
-// Reaching the threshold inside the window pins the pane to the DOM renderer;
-// the pin decays once the window passes without another loss.
+// Repeated losses pin only the affected pane to DOM until this rolling window decays.
 const CONTEXT_LOSS_PIN_THRESHOLD = 3
 const CONTEXT_LOSS_PIN_WINDOW_MS = 30 * 60_000
 
-/** Context-loss timestamps for this pane that are still inside the pin window. */
 function contextLossesInsideWindow(pane: ManagedPaneInternal, nowMs: number): number[] {
-  return (pane.webglContextLossAtMs ?? []).filter((at) => nowMs - at < CONTEXT_LOSS_PIN_WINDOW_MS)
+  return (pane.webglContextLossAtMs ?? []).filter((at) => {
+    const elapsedMs = nowMs - at
+    return elapsedMs >= 0 && elapsedMs < CONTEXT_LOSS_PIN_WINDOW_MS
+  })
 }
 
-/** Record one WebGL context loss for this pane. Emits the one-shot
- *  `webgl-context-loss-pinned-dom` diagnostic when the loss budget is first
- *  exhausted. Bounded by construction: a pinned pane never re-attaches WebGL,
- *  so no further losses can be recorded while the pin holds. */
+/** Record a loss and diagnose the threshold transition. */
 export function recordTerminalWebglContextLoss(
   pane: ManagedPaneInternal,
   nowMs: number = Date.now()
 ): void {
   const losses = contextLossesInsideWindow(pane, nowMs)
-  losses.push(nowMs)
+  const wasPinned = losses.length >= CONTEXT_LOSS_PIN_THRESHOLD
+  if (losses.length < CONTEXT_LOSS_PIN_THRESHOLD) {
+    losses.push(nowMs)
+  }
   pane.webglContextLossAtMs = losses
-  if (losses.length === CONTEXT_LOSS_PIN_THRESHOLD) {
-    // Why only at the transition: the pin holds across resumes, so recording
-    // once per pinning keeps the diagnostic stream proportional to state
-    // changes rather than to worktree switches.
+  if (!wasPinned && losses.length === CONTEXT_LOSS_PIN_THRESHOLD) {
     recordTerminalWebglDiagnostic('webgl-context-loss-pinned-dom', {
       paneId: pane.id,
       lossesInWindow: losses.length,
@@ -83,8 +75,7 @@ export function recordTerminalWebglContextLoss(
   }
 }
 
-/** Whether resume boundaries must keep this pane on the DOM renderer because
- *  it exhausted its context-loss budget inside the pin window. */
+/** Whether resume must retain this pane's DOM fallback. */
 export function isTerminalWebglRetryPinnedAfterContextLosses(
   pane: ManagedPaneInternal,
   nowMs: number = Date.now()

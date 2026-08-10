@@ -85,7 +85,7 @@ type RecoveryBudget =
 
 function recoveryBudget(tabId: string, now: number): RecoveryBudget {
   const timestamps = recoveryTimestampsByTabId.get(tabId) ?? []
-  const recent = timestamps.filter((t) => now - t < RECOVERY_WINDOW_MS)
+  const recent = timestamps.filter((t) => now >= t && now - t < RECOVERY_WINDOW_MS)
   if (recent.length !== timestamps.length) {
     recoveryTimestampsByTabId.set(tabId, recent)
   }
@@ -196,13 +196,7 @@ function cancelPendingRecoveryRetry(tabId: string): void {
  * that probe — see the reason's declaration. Nothing here destroys a session
  * either way: a remount rebuilds the renderer over the PTY it already had.
  */
-/** Record the `terminal_pane_recovery_stale_request` breadcrumb for a request
- *  that no live pane will act on, with which staleness check failed.
- *
- *  Why traced: stale exits were silent, so a certified-dead pane with a stale
- *  request read as "no detector fired" in the field (#12452). The crash-report
- *  ring coalesces repeats, so a burst of releases from one incident stays one
- *  entry. */
+/** Record why no live pane can act on this recovery request. */
 function recordStaleRecoveryRequest(request: RecoveryRequest): void {
   recordRendererCrashBreadcrumb('terminal_pane_recovery_stale_request', {
     tabId: request.tabId,
@@ -223,8 +217,6 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   }
   const budget = recoveryBudget(request.tabId, Date.now())
   if (!budget.allowed) {
-    // Why traced: same field gap as the stale exit — a declined budget left
-    // no evidence that recovery was requested at all.
     recordRendererCrashBreadcrumb('terminal_pane_recovery_declined', {
       tabId: request.tabId,
       reason: request.reason,
@@ -264,9 +256,6 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     // Re-check the budget across the await: a concurrent detector may have
     // already consumed it for this tab.
     if (!isCurrentTerminalRecoveryRequest(request)) {
-      // Why also here: a remount or instance disposal during the liveness
-      // probe invalidates the request mid-flight; that exit must leave the
-      // same trace as a request that arrived stale.
       recordStaleRecoveryRequest(request)
       return false
     }

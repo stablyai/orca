@@ -50,9 +50,6 @@ export function suspendPaneRendering(panes: Iterable<ManagedPaneInternal>): void
   }
 }
 
-/** Re-enable WebGL rendering at a resume boundary (worktree foreground,
- *  window wake), except for panes pinned to the DOM renderer by their
- *  context-loss budget. */
 export function resumePaneRendering(panes: Iterable<ManagedPaneInternal>): void {
   for (const pane of panes) {
     // Why: resume (worktree foreground, window wake) is the WebGL retry
@@ -60,11 +57,7 @@ export function resumePaneRendering(panes: Iterable<ManagedPaneInternal>): void 
     // loss, and bounding retries to resume events cannot loop on live loss.
     clearTerminalWebglAttachBackoff(pane)
     pane.webglAttachmentDeferred = false
-    // Why the pin check: resumes fire on every worktree switch, so an
-    // unconditional clear re-attached WebGL to panes whose contexts Chromium
-    // keeps reclaiming — churning WebGL↔DOM per switch and re-arming the
-    // stale-canvas desync behind issue #12452. A pane over its loss budget
-    // stays on the DOM renderer until the loss window decays.
+    // Frequent resumes must not re-arm a pane whose context remains unstable.
     if (!isTerminalWebglRetryPinnedAfterContextLosses(pane)) {
       pane.webglDisabledAfterContextLoss = false
     }

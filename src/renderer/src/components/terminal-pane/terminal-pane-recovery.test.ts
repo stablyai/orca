@@ -173,6 +173,18 @@ describe('requestTerminalPaneRecovery', () => {
     )
   })
 
+  it('does not let a backward clock step extend a recovery cooldown', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(20_000)
+    await requestTerminalPaneRecovery({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'write-stalled' })
+
+    vi.setSystemTime(10_000)
+    expect(
+      await requestTerminalPaneRecovery({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'replay-wedged' })
+    ).toBe(true)
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
+  })
+
   it('caps recoveries per window to prevent remount storms', async () => {
     vi.useFakeTimers()
     for (let attempt = 0; attempt < 5; attempt += 1) {

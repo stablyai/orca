@@ -3623,7 +3623,8 @@
       "invariant": "Search, link, WebGL, decoration, input-protocol, or keyboard-navigation errors must not unmount the terminal surface, crash React/window, break focus, or stop PTY input/output.",
       "oracle": "The current executable slice injects a core addon load throw and asserts pane opening continues through later addons, covers link provider throws as pane-scoped no-link results, covers search decoration positive-integer failures as false results instead of renderer crashes, and covers WebGL attach/refresh/recovery containment. Focused typed input echo after addon failure still needs a live/component follow-up.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/pane-webgl-context-loss-churn.oracle.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts",
@@ -3631,6 +3632,7 @@
         "src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-webgl-context-loss-churn.oracle.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
         "src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
@@ -3664,6 +3666,12 @@
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
           "assertions": [
             "failed attach backs off and context-lost panes recover on the next rendering resume"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-webgl-context-loss-churn.oracle.test.ts",
+          "assertions": [
+            "three losses inside the rolling window retain the pane-scoped DOM fallback across resume"
           ]
         },
         {

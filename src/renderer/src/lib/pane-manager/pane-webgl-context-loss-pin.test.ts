@@ -84,7 +84,20 @@ describe('WebGL context-loss retry pinning', () => {
     recordTerminalWebglContextLoss(pane)
     recordTerminalWebglContextLoss(pane)
 
-    vi.advanceTimersByTime(31 * 60_000)
+    vi.advanceTimersByTime(30 * 60_000)
+
+    expect(isTerminalWebglRetryPinnedAfterContextLosses(pane)).toBe(false)
+    resumePaneRendering([pane])
+    expect(pane.webglDisabledAfterContextLoss).toBe(false)
+  })
+
+  it('does not retain future-relative losses after a backward clock step', () => {
+    const pane = createPane()
+    recordTerminalWebglContextLoss(pane)
+    recordTerminalWebglContextLoss(pane)
+    recordTerminalWebglContextLoss(pane)
+
+    vi.setSystemTime(500_000)
 
     expect(isTerminalWebglRetryPinnedAfterContextLosses(pane)).toBe(false)
     resumePaneRendering([pane])
@@ -103,5 +116,26 @@ describe('WebGL context-loss retry pinning', () => {
     recordTerminalWebglContextLoss(pane)
 
     expect(recorded.filter((kind) => kind === 'webgl-context-loss-pinned-dom')).toHaveLength(1)
+  })
+
+  it('bounds loss history even if teardown delivers duplicate callbacks', () => {
+    const pane = createPane()
+    for (let loss = 0; loss < 100; loss += 1) {
+      recordTerminalWebglContextLoss(pane)
+    }
+
+    expect(pane.webglContextLossAtMs).toHaveLength(3)
+  })
+
+  it('lets a remounted pane establish a fresh renderer owner', () => {
+    const oldPane = createPane()
+    recordTerminalWebglContextLoss(oldPane)
+    recordTerminalWebglContextLoss(oldPane)
+    recordTerminalWebglContextLoss(oldPane)
+
+    const remountedPane = createPane()
+
+    expect(isTerminalWebglRetryPinnedAfterContextLosses(oldPane)).toBe(true)
+    expect(isTerminalWebglRetryPinnedAfterContextLosses(remountedPane)).toBe(false)
   })
 })

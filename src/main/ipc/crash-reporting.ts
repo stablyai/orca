@@ -328,12 +328,16 @@ function buildUncapturedCrashReportText(
 // suppressed count instead.
 const DUPLICATE_TAB_OWNER_BREADCRUMB = 'terminal_tab_id_owned_by_multiple_worktrees'
 const PARK_VERDICT_CHURN_BREADCRUMB = 'terminal_park_verdict_churn'
+const PANE_RECOVERY_STALE_BREADCRUMB = 'terminal_pane_recovery_stale_request'
+const PANE_RECOVERY_DECLINED_BREADCRUMB = 'terminal_pane_recovery_declined'
 const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   'renderer_error',
   'renderer_unhandled_rejection',
   'terminal_safe_fit_retry_exhausted',
   DUPLICATE_TAB_OWNER_BREADCRUMB,
   PARK_VERDICT_CHURN_BREADCRUMB,
+  PANE_RECOVERY_STALE_BREADCRUMB,
+  PANE_RECOVERY_DECLINED_BREADCRUMB,
   TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB
 ])
 const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
@@ -372,6 +376,12 @@ function rendererBreadcrumbCoalesceKey(
   // last-write coalescing cannot erase the other signal while remaining bounded.
   if (name === DUPLICATE_TAB_OWNER_BREADCRUMB) {
     return `${name}:${String(data?.resolvedToActiveWorktree ?? '')}`
+  }
+  if (name === PANE_RECOVERY_STALE_BREADCRUMB) {
+    return `${name}:${String(data?.reason ?? '')}:${String(data?.staleGeneration ?? '')}:${String(data?.staleInstance ?? '')}`
+  }
+  if (name === PANE_RECOVERY_DECLINED_BREADCRUMB) {
+    return `${name}:${String(data?.reason ?? '')}:${String(data?.declinedBy ?? '')}`
   }
   const primaryMessage = name === 'renderer_error' ? data?.message : data?.reasonMessage
   const fallbackMessage = name === 'renderer_error' ? data?.errorMessage : undefined
