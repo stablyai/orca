@@ -23,7 +23,7 @@ export function validateShortcutBindingsToSave(args: {
   definitionsByAction: ReadonlyMap<string, KeybindingDefinition>
   keybindings: KeybindingOverrides
   platform: NodeJS.Platform
-  ignoredConflictActionIds: ReadonlySet<KeybindingActionId>
+  ignoredConflictActionIds: Iterable<KeybindingActionId>
 }): { ok: true; bindings: string[]; defaults: string[] } | { ok: false; error: string } {
   const normalizedResult = normalizeKeybindingListForAction(
     args.actionId,

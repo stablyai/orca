@@ -99,8 +99,8 @@ export function ShortcutsPane(): React.JSX.Element {
         }),
       [disabledTuiAgents, keybindings, pluginCommands]
     )
-  const definitionForAction = (actionId: KeybindingActionId): KeybindingDefinition | null =>
-    definitionsByAction.get(actionId) ?? getKeybindingDefinition(actionId)
+  const definitionForAction = (actionId: KeybindingActionId): KeybindingDefinition | undefined =>
+    definitionsByAction.get(actionId) ?? getKeybindingDefinition(actionId) ?? undefined
   const effectiveBindingsForAction = (
     actionId: KeybindingActionId,
     overrides = keybindings
