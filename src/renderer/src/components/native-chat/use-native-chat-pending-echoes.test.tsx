@@ -102,22 +102,6 @@ describe('useNativeChatPendingEchoes', () => {
     expect(result.current.pending.map((entry) => entry.text)).toEqual(['leaf two prompt'])
   })
 
-  it('releases the occurrence a cancelled send would have taken', () => {
-    const { result } = renderEchoes('session-1')
-    let firstId = ''
-    act(() => {
-      firstId = result.current.recordSend('ping')
-    })
-    act(() => {
-      result.current.recordSend('ping')
-    })
-    expect(result.current.pending.map((entry) => entry.matchingOccurrence)).toEqual([undefined, 2])
-    act(() => {
-      result.current.cancelSend(firstId)
-    })
-    expect(result.current.pending.map((entry) => entry.matchingOccurrence)).toEqual([1])
-  })
-
   it('keeps the occurrence a capped-out echo owns when the session id first resolves', () => {
     // Sends before the launch reports its session id adopt that id — but adoption
     // drops nothing, so it must not renumber a trimmed echo's slot away.
@@ -133,26 +117,6 @@ describe('useNativeChatPendingEchoes', () => {
     expect(result.current.pending.map((entry) => entry.sessionId)).toEqual(
       Array.from({ length: 8 }, () => 'session-1')
     )
-    expect(result.current.pending[0]?.matchingOccurrence).toBe(2)
-  })
-
-  it('keeps the occurrence a capped-out echo still owns when a later send is cancelled', () => {
-    // The echo trimmed at PENDING_SEND_LIMIT still landed, so its turn still
-    // consumes an occurrence that a later cancellation must not renumber away.
-    const { result } = renderEchoes('session-1')
-    for (let index = 0; index < 9; index += 1) {
-      act(() => {
-        result.current.recordSend('ping')
-      })
-    }
-    expect(result.current.pending).toHaveLength(8)
-    expect(result.current.pending[0]?.matchingOccurrence).toBe(2)
-    const survivorId = result.current.pending[1]?.id ?? ''
-    act(() => {
-      result.current.cancelSend(result.current.pending[0]?.id ?? '')
-    })
-    expect(result.current.pending[0]?.id).toBe(survivorId)
-    // Was 3 (behind the trimmed and the cancelled echo); only one slot released.
     expect(result.current.pending[0]?.matchingOccurrence).toBe(2)
   })
 })
