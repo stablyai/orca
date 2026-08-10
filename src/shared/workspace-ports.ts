@@ -24,6 +24,11 @@ type WorkspacePortBase = {
   port: number
   pid?: number
   processName?: string
+  /** Working directory of the listening process, when readable. Root-owned and
+   *  other-user processes do not surrender it, and Windows has no equivalent. */
+  cwd?: string
+  /** Full command line of the listening process, when readable. */
+  commandLine?: string
   protocol: 'http' | 'https' | 'unknown'
 }
 

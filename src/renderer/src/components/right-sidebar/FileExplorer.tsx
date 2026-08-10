@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: FileExplorer coordinates tree data, selection, drag/drop, and virtual rows; splitting it during this merge would obscure the interaction invariants. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { basename, dirname } from '@/lib/path'
@@ -17,6 +18,13 @@ import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
+import { OrphanServicesDialog } from './OrphanServicesDialog'
+import { ServicesSection } from './ServicesSection'
+import { useWorkspaceServices } from './use-workspace-services'
+import {
+  selectOrphanServices,
+  type WorkspaceServiceStopRequest
+} from '../../../../shared/workspace-services'
 import { SearchFilters } from './SearchFilters'
 import { SearchQueryRow } from './SearchQueryRow'
 import { SearchResultsPane } from './SearchResultsPane'
@@ -246,6 +254,40 @@ function FileExplorerFiles(): React.JSX.Element {
   )
 
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
+  const [orphanServicesOpen, setOrphanServicesOpen] = useState(false)
+  const showServicesPanel = useAppStore((s) => s.settings?.showServicesPanel !== false)
+  // Why: service detection inspects local processes and the local docker
+  // daemon, neither of which describes an SSH-hosted workspace. Turning the
+  // setting off also stops the scan, not just the rendering.
+  const servicesEnabled = Boolean(showServicesPanel && activeRepo && !activeRepo.connectionId)
+  const services = useWorkspaceServices(activeRepo?.id ?? null, servicesEnabled)
+  const orphanServices = useMemo(
+    () => selectOrphanServices(services.scan?.services ?? []),
+    [services.scan]
+  )
+
+  const handleStopService = useCallback(
+    async (request: WorkspaceServiceStopRequest, notifyAgent: boolean) => {
+      // Why the request is passed in rather than re-resolved: the row already
+      // resolved it with the scoping its own section used. Re-resolving here
+      // against the active repo would send the wrong repoId for an orphan
+      // owned by another project, and the ownership check could never match.
+      try {
+        const result = await window.api.workspacePorts.stopService(
+          request.kind === 'process' ? { ...request, notifyAgent } : request
+        )
+        if (!result.ok) {
+          toast.error(result.reason)
+          return
+        }
+        await services.refresh()
+      } catch (cause) {
+        toast.error(cause instanceof Error ? cause.message : String(cause))
+      }
+    },
+    [services]
+  )
+
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
   const [bgMenuPoint, setBgMenuPoint] = useState({ x: 0, y: 0 })
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -824,7 +866,27 @@ function FileExplorerFiles(): React.JSX.Element {
             )}
           </div>
         </div>
+        {servicesEnabled && (
+          <ServicesSection
+            scan={services.scan}
+            isRefreshing={services.isRefreshing}
+            error={services.error}
+            repoId={activeRepo?.id ?? null}
+            worktreeId={activeWorktree?.id ?? null}
+            orphanCount={orphanServices.length}
+            onShowOrphans={() => setOrphanServicesOpen(true)}
+            onRefresh={() => void services.refresh()}
+            onStop={(request, notifyAgent) => void handleStopService(request, notifyAgent)}
+          />
+        )}
       </div>
+
+      <OrphanServicesDialog
+        open={orphanServicesOpen}
+        orphans={orphanServices}
+        onOpenChange={setOrphanServicesOpen}
+        onStop={(request, notifyAgent) => void handleStopService(request, notifyAgent)}
+      />
 
       <FileExplorerBackgroundMenu
         open={bgMenuOpen}

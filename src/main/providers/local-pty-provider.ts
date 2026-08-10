@@ -1485,6 +1485,30 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 }
 
+/**
+ * Find the local PTY hosting one of `pids`.
+ *
+ * Used to route a message back to the agent that started a service: the
+ * service's ancestor chain is matched against live PTY processes, since Orca
+ * spawns the agent (or the shell that launched it) as the PTY's own process.
+ */
+export function findLocalPtyIdByProcessId(pids: ReadonlySet<number>): string | null {
+  if (pids.size === 0) {
+    return null
+  }
+  for (const [id, proc] of ptyProcesses) {
+    if (pids.has(proc.pid)) {
+      return id
+    }
+  }
+  return null
+}
+
+/** Write to a local PTY by id. No-op when the terminal is already gone. */
+export function writeToLocalPty(id: string, data: string): void {
+  ptyProcesses.get(id)?.write(data)
+}
+
 export function _resetLocalPtyProviderStateForTest(): void {
   cancelAllPendingLocalPtySpawns()
   pendingLocalPtySpawns.clear()

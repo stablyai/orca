@@ -6,7 +6,15 @@ import { describe, expect, it } from 'vitest'
 // so the port scan only stays off CrBrowserMain while these main-thread modules
 // spawn nothing themselves. Spawning belongs to port-scan-command-execution.ts,
 // which only the worker entry imports.
-const MAIN_THREAD_MODULES = ['local-workspace-port-scanner.ts', 'port-scan-command-client.ts']
+const MAIN_THREAD_MODULES = [
+  'local-workspace-port-scanner.ts',
+  'port-scan-command-client.ts',
+  // The services panel probes the same hot path on every scan tick, so they
+  // carry the same no-spawn rule. Stopping a service deliberately does not:
+  // service-stop-command-runner.ts owns that spawn and its per-command budget.
+  'docker-compose-services.ts',
+  'service-process-ancestry.ts'
+]
 
 describe('port scan main-thread spawn boundary', () => {
   it.each(MAIN_THREAD_MODULES)('keeps %s free of child_process', (fileName) => {

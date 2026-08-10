@@ -437,6 +437,15 @@
               "refreshCliRegistration": "Refresh CLI registration status and try again."
             }
           }
+        },
+        "background": {
+          "session": {
+            "test": {
+              "state": {
+                "d9fa6e0979": "Terminal 1"
+              }
+            }
+          }
         }
       },
       "remotePairingCopy": {
@@ -8087,7 +8096,16 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "3a0e3a9fdc": "Idioma",
+            "5f4779d525": "言語",
+            "0b03f507c2": "언어",
+            "ab96f8a4b9": "語言",
+            "b6035a3def": "语言",
+            "6f23d2dff1": "Show Services",
+            "83a5b5bed8": "List running dev servers and containers under the file tree.",
+            "2f7113a20b": "services",
+            "283e7032fa": "docker"
           }
         },
         "auto": {
@@ -9398,6 +9416,22 @@
               "713c4a2f92": "Choose the default shell for new terminal panes on Windows.",
               "13715f9d23": "Default Shell"
             }
+          },
+          "advanced": {
+            "platform": {
+              "search": {
+                "7d383cc610": "ghostty",
+                "77faf8be39": "Ghostty"
+              }
+            }
+          },
+          "pane": {
+            "appearance": {
+              "search": {
+                "1f4decdd74": "ghostty",
+                "e0cc1b7b47": "Ghostty"
+              }
+            }
           }
         },
         "voice": {
@@ -9921,7 +9955,9 @@
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
-          "usagePercentageDisplayRemaining": "Remaining"
+          "usagePercentageDisplayRemaining": "Remaining",
+          "2ac24b02ab": "Show Services",
+          "552c0ca722": "Listening ports for this workspace, under the file tree."
         },
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
@@ -11895,6 +11931,29 @@
             "mayBeSlower": "May be slower",
             "slowest": "Slowest",
             "unlimited": "Unlimited"
+          },
+          "OrphanServicesDialog": {
+            "67c7dc7c6f": "No orphaned services",
+            "3a780b6f13": "Still running after the directory they were started from was deleted. Listed across all projects.",
+            "fd6fc51253": "Orphaned services"
+          },
+          "ServiceRow": {
+            "d3775acb14": "Stop Service",
+            "39a29cea44": "Copy Address",
+            "74831c740a": "Copy {{value0}}",
+            "578fb812fd": "workspace deleted",
+            "7a16db1af7": "Started by {{value0}}",
+            "26b04179d6": "Stop service on port {{value0}}",
+            "650664d898": "Stop and tell {{value0}}"
+          },
+          "ServicesSection": {
+            "0e191f08a4": "Other Workspaces",
+            "7b483f5f0a": "Refresh Services",
+            "0dce278f78": "Services",
+            "cd70c78d76": "Scanning...",
+            "e187c588bf": "No services running for this workspace",
+            "d051e26f35": "1 orphaned, workspace deleted",
+            "29db55fd54": "{{value0}} orphaned, workspaces deleted"
           }
         }
       },

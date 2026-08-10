@@ -379,6 +379,35 @@ export function AppearanceWindowSidebarSection({
                       }
                     />
                   </SearchableSetting>
+                  <SearchableSetting
+                    title={
+                      layoutEntries[1]?.title ??
+                      translate(
+                        'auto.components.settings.AppearanceWindowSidebarSection.2ac24b02ab',
+                        'Show Services'
+                      )
+                    }
+                    description={layoutEntries[1]?.description}
+                    keywords={layoutEntries[1]?.keywords ?? ['services', 'ports', 'docker']}
+                  >
+                    <SettingsSwitchRow
+                      label={translate(
+                        'auto.components.settings.AppearanceWindowSidebarSection.2ac24b02ab',
+                        'Show Services'
+                      )}
+                      // Why: state the cost, since the scan runs while the panel is visible.
+                      description={translate(
+                        'auto.components.settings.AppearanceWindowSidebarSection.552c0ca722',
+                        'Listening ports for this workspace, under the file tree.'
+                      )}
+                      checked={settings.showServicesPanel !== false}
+                      onChange={() =>
+                        updateSettings({
+                          showServicesPanel: !(settings.showServicesPanel !== false)
+                        })
+                      }
+                    />
+                  </SearchableSetting>
                 </div>
               </div>
             ) : null}

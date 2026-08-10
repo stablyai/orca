@@ -615,6 +615,19 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           ports: [],
           unavailableReason: 'Workspace port scanning is unavailable for browser-local workspaces.'
         }),
+      scanServices: () =>
+        Promise.resolve({
+          platform: getBrowserPlatform(),
+          scannedAt: Date.now(),
+          services: [],
+          dockerAvailable: false,
+          unavailableReason: 'Service detection is unavailable for browser-local workspaces.'
+        }),
+      stopService: () =>
+        Promise.resolve({
+          ok: false as const,
+          reason: 'Service management is unavailable for browser-local workspaces.'
+        }),
       kill: () =>
         Promise.resolve({
           ok: false,

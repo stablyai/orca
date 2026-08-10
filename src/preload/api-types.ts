@@ -478,6 +478,10 @@ import type {
   WorkspacePortScanRequest,
   WorkspacePortScanResult
 } from '../shared/workspace-ports'
+import type {
+  WorkspaceServiceScanResult,
+  WorkspaceServiceStopRequest
+} from '../shared/workspace-services'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type {
   CodexUsageBreakdownKind,
@@ -1526,6 +1530,8 @@ export type PreloadApi = {
   }
   workspacePorts: {
     scan: (args: WorkspacePortScanRequest) => Promise<WorkspacePortScanResult>
+    scanServices: (args: WorkspacePortScanRequest) => Promise<WorkspaceServiceScanResult>
+    stopService: (args: WorkspaceServiceStopRequest) => Promise<WorkspacePortKillResult>
     kill: (args: WorkspacePortKillRequest) => Promise<WorkspacePortKillResult>
     onAdvertisedUrlChanged: (
       callback: (event: WorkspacePortAdvertisedUrlChangedEvent) => void

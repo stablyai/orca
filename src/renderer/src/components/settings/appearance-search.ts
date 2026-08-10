@@ -139,6 +139,22 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
       ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
       ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide')
     ]
+  },
+  {
+    title: translate('auto.components.settings.appearance.search.6f23d2dff1', 'Show Services'),
+    description: translate(
+      'auto.components.settings.appearance.search.83a5b5bed8',
+      'List running dev servers and containers under the file tree.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.2f7113a20b',
+        'services'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.006e67b279', 'ports'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.283e7032fa', 'docker'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar')
+    ]
   }
 ])
 

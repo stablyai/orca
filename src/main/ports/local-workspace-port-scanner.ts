@@ -542,6 +542,8 @@ function enrichPort(
     port: port.port,
     pid: port.pid,
     processName: port.processName,
+    ...(port.cwd ? { cwd: port.cwd } : {}),
+    ...(port.commandLine ? { commandLine: port.commandLine } : {}),
     protocol: inferProtocol(port.port)
   }
 
