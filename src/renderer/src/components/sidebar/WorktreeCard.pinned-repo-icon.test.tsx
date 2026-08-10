@@ -126,6 +126,54 @@ describe('WorktreeCard pinned repo icon', () => {
 
       expect(markup).toContain('🦊')
       expect(markup).toContain('Project orca')
+      // Why: pinned rows leave the project header; show a readable project name, not only aria-label (#13353).
+      expect(markup).toContain('data-worktree-card-pinned-project-name')
+      expect(markup).toMatch(/data-worktree-card-pinned-project-name=""[^>]*>orca</)
+      expect(markup).toContain('Pinned tree')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
+  it(
+    'does not duplicate the project name when the card title is already the project',
+    async () => {
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+
+      const markup = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree({ displayName: 'orca', branch: 'main' })}
+          repo={makeRepo()}
+          isActive={false}
+          inPinnedSection
+          hideRepoBadge
+        />
+      )
+
+      expect(markup).toContain('Project orca')
+      expect(markup).toContain('orca')
+      // Why: title already is the project; the disambiguation chip must stay off.
+      expect(markup).not.toContain('data-worktree-card-pinned-project-name')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
+  it(
+    'falls back an empty display name to the branch on pinned rows',
+    async () => {
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+
+      const markup = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree({ displayName: '', branch: 'feature/fallback' })}
+          repo={makeRepo()}
+          isActive={false}
+          inPinnedSection
+          hideRepoBadge
+        />
+      )
+
+      expect(markup).toContain('data-worktree-card-pinned-project-name')
+      expect(markup).toContain('feature/fallback')
     },
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )
