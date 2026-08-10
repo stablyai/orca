@@ -1,5 +1,7 @@
 import React, { useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { cn } from '@/lib/utils'
+import { getSpreadsheetCellAlignmentClass } from './spreadsheet-cell-alignment'
 import {
   SPREADSHEET_GRID_OVERSCAN,
   SPREADSHEET_GRID_ROW_HEIGHT,
@@ -14,6 +16,11 @@ type SpreadsheetGridProps = {
   /** Remaining rows, virtualized. */
   rows: readonly (readonly string[])[]
   columnCount: number
+  /**
+   * `center` for the generated column letters of a workbook; `left` for a CSV,
+   * whose heading row holds the file's own first row of text.
+   */
+  headerAlignment?: 'left' | 'center'
 }
 
 // Why: shared by CsvViewer and XlsxViewer — both render a read-only sheet of
@@ -29,7 +36,8 @@ type SpreadsheetGridProps = {
 export function SpreadsheetGrid({
   header,
   rows,
-  columnCount
+  columnCount,
+  headerAlignment = 'left'
 }: SpreadsheetGridProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   const paddedHeader = useMemo(
@@ -73,7 +81,7 @@ export function SpreadsheetGrid({
         >
           <div
             role="columnheader"
-            className="sticky left-0 z-20 flex items-center justify-end border-b border-r border-border/60 bg-muted/90 px-2 text-[10px] font-normal text-muted-foreground"
+            className="sticky left-0 z-20 flex items-center justify-end border-b border-r border-border bg-muted/90 px-2 text-[10px] font-normal text-muted-foreground"
           >
             #
           </div>
@@ -81,7 +89,10 @@ export function SpreadsheetGrid({
             <div
               role="columnheader"
               key={columnIndex}
-              className="flex items-center overflow-hidden border-b border-r border-border/60 px-2 font-medium text-foreground"
+              className={cn(
+                'flex items-center overflow-hidden border-b border-r border-border px-2 font-medium text-foreground',
+                headerAlignment === 'center' ? 'justify-center' : 'justify-start'
+              )}
             >
               <span className="truncate" title={cell}>
                 {cell}
@@ -113,20 +124,26 @@ export function SpreadsheetGrid({
               >
                 <div
                   role="rowheader"
-                  className="sticky left-0 z-[5] flex items-center justify-end border-b border-r border-border/40 bg-background/95 px-2 text-[10px] text-muted-foreground group-hover:bg-accent/40"
+                  className="sticky left-0 z-[5] flex items-center justify-end border-b border-r border-border bg-muted/90 px-2 text-[10px] text-muted-foreground backdrop-blur group-hover:bg-accent/40"
                 >
                   {virtualRow.index + 1}
                 </div>
-                {Array.from({ length: columnCount }).map((_, columnIndex) => (
-                  <div
-                    role="cell"
-                    key={columnIndex}
-                    className="flex items-center overflow-hidden border-b border-r border-border/40 px-2 text-foreground"
-                    title={row[columnIndex] ?? ''}
-                  >
-                    <span className="truncate">{row[columnIndex] ?? ''}</span>
-                  </div>
-                ))}
+                {Array.from({ length: columnCount }).map((_, columnIndex) => {
+                  const cell = row[columnIndex] ?? ''
+                  return (
+                    <div
+                      role="cell"
+                      key={columnIndex}
+                      className={cn(
+                        'flex items-center overflow-hidden border-b border-r border-border px-2 text-foreground',
+                        getSpreadsheetCellAlignmentClass(cell)
+                      )}
+                      title={cell}
+                    >
+                      <span className="truncate">{cell}</span>
+                    </div>
+                  )
+                })}
               </div>
             )
           })}

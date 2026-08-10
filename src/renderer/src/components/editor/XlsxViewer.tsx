@@ -96,6 +96,7 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
           header={columnHeader}
           rows={activeSheet.rows}
           columnCount={activeSheet.maxColumns}
+          headerAlignment="center"
         />
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
