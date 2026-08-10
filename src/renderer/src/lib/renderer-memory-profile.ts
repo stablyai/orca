@@ -1,26 +1,49 @@
 /**
- * Leak-diagnosis counts for renderer_memory_highwater breadcrumbs.
- *
- * Why a contributor registry: crash-diagnostics must stay a leaf module, so
- * subsystems (store, terminals) push their counters in instead of being
- * imported. Counts only — never raw buffers — per the diagnostics budget.
+ * Bounded subsystem hypotheses for renderer_memory_highwater breadcrumbs.
+ * Subsystems push aggregate counts in so crash-diagnostics stays a leaf.
  */
 
 export type RendererMemoryProfileCounts = Record<string, number>
 
-type RendererMemoryProfileContributor = () => RendererMemoryProfileCounts
+export type RendererMemoryProfileContribution = {
+  counts: RendererMemoryProfileCounts
+  heuristicOnHeapKB?: number
+  heuristicExternalKB?: number
+  soundOnHeapBoundKB?: number
+}
+
+export type RendererMemoryProfile = {
+  counts: RendererMemoryProfileCounts
+  onHeapHeuristicByCategoryKB: RendererMemoryProfileCounts
+  externalHeuristicByCategoryKB: RendererMemoryProfileCounts
+  onHeapHeuristicSumKB: number
+  soundOnHeapBoundContributorCount: number
+  soundOnHeapBoundSumKB: number
+}
+
+type RendererMemoryProfileContributor = () =>
+  | RendererMemoryProfileCounts
+  | RendererMemoryProfileContribution
+
+type ContributionEntries = {
+  name: string
+  metadata: [string, number][]
+  details: [string, number][]
+}
+
+type CollectionScanBudget = { remaining: number; hit: boolean }
 
 const contributors = new Map<string, RendererMemoryProfileContributor>()
+let nextContributorStart = 0
 
-// Why: breadcrumbs are retained per session; a misbehaving contributor must not
-// bloat every crash report. 32 counts is plenty to name a leaking subsystem.
 const MAX_COUNTS_PER_CONTRIBUTOR = 32
-// Why: individually bounded contributors can still create unbounded near-OOM work in aggregate.
 const MAX_PROFILE_COUNTS = 64
-// Why: empty contributors do not consume the count budget but must not make collection unbounded.
 const MAX_PROFILE_CONTRIBUTORS = 64
+export const MAX_PROFILE_CONTRIBUTOR_INVOCATIONS = 8
 const MAX_CONTRIBUTOR_NAME_LENGTH = 64
 const MAX_COUNT_KEY_LENGTH = 80
+const MAX_STATE_FIELDS_TO_SCAN = 256
+const MAX_COLLECTION_KEYS_TO_SCAN = 4096
 
 export function registerRendererMemoryProfileContributor(
   name: string,
@@ -37,54 +60,145 @@ export function registerRendererMemoryProfileContributor(
   return () => {
     if (contributors.get(name) === contributor) {
       contributors.delete(name)
+      if (contributors.size === 0) {
+        nextContributorStart = 0
+      }
     }
+  }
+}
+
+export function collectRendererMemoryProfile(): RendererMemoryProfile {
+  const registered = [...contributors]
+  const contributions: ContributionEntries[] = []
+  const onHeapHeuristicByCategoryKB: RendererMemoryProfileCounts = {}
+  const externalHeuristicByCategoryKB: RendererMemoryProfileCounts = {}
+  let onHeapHeuristicSumKB = 0
+  let soundOnHeapBoundContributorCount = 0
+  let soundOnHeapBoundSumKB = 0
+  let availableEntries = 0
+  let invoked = 0
+  while (
+    invoked < registered.length &&
+    invoked < MAX_PROFILE_CONTRIBUTOR_INVOCATIONS &&
+    availableEntries < MAX_PROFILE_COUNTS
+  ) {
+    const [name, contributor] = registered[(nextContributorStart + invoked) % registered.length]
+    try {
+      const contribution = normalizeContribution(contributor())
+      const entries = readFiniteEntries(contribution.counts)
+      contributions.push({ name, ...entries })
+      availableEntries += entries.metadata.length + entries.details.length
+
+      const onHeap = finiteNonnegative(contribution.heuristicOnHeapKB)
+      const external = finiteNonnegative(contribution.heuristicExternalKB)
+      const soundBound = finiteNonnegative(contribution.soundOnHeapBoundKB)
+      if (onHeap !== undefined) {
+        onHeapHeuristicByCategoryKB[`${name}.onHeapHeuristicKB`] = Math.round(onHeap)
+        onHeapHeuristicSumKB += onHeap
+      }
+      if (external !== undefined) {
+        externalHeuristicByCategoryKB[`${name}.externalHeuristicKB`] = Math.round(external)
+      }
+      if (soundBound !== undefined) {
+        soundOnHeapBoundContributorCount += 1
+        soundOnHeapBoundSumKB += soundBound
+      }
+    } catch {
+      contributions.push({ name, metadata: [], details: [['error', 1]] })
+      availableEntries += 1
+    }
+    invoked += 1
+  }
+  if (registered.length > 0) {
+    nextContributorStart = (nextContributorStart + invoked) % registered.length
+  }
+
+  const counts: RendererMemoryProfileCounts = {}
+  const metadataCount = collectRoundRobin(counts, contributions, 'metadata', MAX_PROFILE_COUNTS)
+  collectRoundRobin(counts, contributions, 'details', MAX_PROFILE_COUNTS - metadataCount)
+  return {
+    counts,
+    onHeapHeuristicByCategoryKB,
+    externalHeuristicByCategoryKB,
+    onHeapHeuristicSumKB: Math.round(onHeapHeuristicSumKB),
+    soundOnHeapBoundContributorCount,
+    soundOnHeapBoundSumKB: Math.round(soundOnHeapBoundSumKB)
   }
 }
 
 export function collectRendererMemoryProfileCounts(): RendererMemoryProfileCounts {
-  const counts: RendererMemoryProfileCounts = {}
-  let collected = 0
-  let visited = 0
-  for (const [name, contributor] of contributors) {
-    if (collected >= MAX_PROFILE_COUNTS || visited >= MAX_PROFILE_CONTRIBUTORS) {
-      break
-    }
-    visited += 1
-    // Why: a broken contributor must never take down memory reporting itself.
-    try {
-      const contribution = contributor()
-      let inspected = 0
-      for (const key in contribution) {
-        if (inspected >= MAX_COUNTS_PER_CONTRIBUTOR || collected >= MAX_PROFILE_COUNTS) {
-          break
-        }
-        inspected += 1
-        if (!Object.hasOwn(contribution, key)) {
-          continue
-        }
-        if (key.length === 0 || key.length > MAX_COUNT_KEY_LENGTH) {
-          continue
-        }
-        const value = contribution[key]
-        if (typeof value === 'number' && Number.isFinite(value)) {
-          counts[`${name}.${key}`] = value
-          collected += 1
-        }
-      }
-    } catch {
-      if (collected < MAX_PROFILE_COUNTS) {
-        counts[`${name}.error`] = 1
-        collected += 1
-      }
-    }
-  }
-  return counts
+  return collectRendererMemoryProfile().counts
 }
 
-/**
- * Sizes of the largest top-level collections in a state object, for spotting
- * which slice grew when the heap high-water mark trips.
- */
+function collectRoundRobin(
+  output: RendererMemoryProfileCounts,
+  contributions: ContributionEntries[],
+  kind: 'metadata' | 'details',
+  limit: number
+): number {
+  const positions = contributions.map(() => 0)
+  let collected = 0
+  let found = true
+  while (found && collected < limit) {
+    found = false
+    for (let index = 0; index < contributions.length && collected < limit; index += 1) {
+      const entry = contributions[index][kind][positions[index]]
+      if (!entry) {
+        continue
+      }
+      found = true
+      positions[index] += 1
+      output[`${contributions[index].name}.${entry[0]}`] = entry[1]
+      collected += 1
+    }
+  }
+  return collected
+}
+
+function normalizeContribution(
+  value: RendererMemoryProfileCounts | RendererMemoryProfileContribution
+): RendererMemoryProfileContribution {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    Object.hasOwn(value, 'counts') &&
+    typeof (value as RendererMemoryProfileContribution).counts === 'object'
+  ) {
+    return value as RendererMemoryProfileContribution
+  }
+  return { counts: value as RendererMemoryProfileCounts }
+}
+
+function readFiniteEntries(counts: RendererMemoryProfileCounts): {
+  metadata: [string, number][]
+  details: [string, number][]
+} {
+  const metadata: [string, number][] = []
+  const details: [string, number][] = []
+  let inspected = 0
+  for (const key in counts) {
+    if (inspected >= MAX_COUNTS_PER_CONTRIBUTOR) {
+      break
+    }
+    inspected += 1
+    if (!Object.hasOwn(counts, key) || key.length === 0 || key.length > MAX_COUNT_KEY_LENGTH) {
+      continue
+    }
+    const value = counts[key]
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      continue
+    }
+    const destination = key.startsWith('__') ? metadata : details
+    destination.push([key, value])
+  }
+  return { metadata, details }
+}
+
+function finiteNonnegative(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+/** Sizes of the largest top-level collections in a state object. */
 export function summarizeStateCollectionSizes(
   state: unknown,
   limit: number
@@ -93,32 +207,49 @@ export function summarizeStateCollectionSizes(
     return {}
   }
   const sizes: [string, number][] = []
-  for (const [key, value] of Object.entries(state)) {
-    const size = collectionSize(value)
-    if (size !== null && size > 0) {
+  const budget: CollectionScanBudget = { remaining: MAX_COLLECTION_KEYS_TO_SCAN, hit: false }
+  let stateFields = 0
+  for (const key in state) {
+    if (stateFields >= MAX_STATE_FIELDS_TO_SCAN) {
+      budget.hit = true
+      break
+    }
+    stateFields += 1
+    if (!Object.hasOwn(state, key)) {
+      continue
+    }
+    const size = collectionSize((state as Record<string, unknown>)[key], budget)
+    if (size > 0) {
       sizes.push([key, size])
     }
   }
-  sizes.sort((a, b) => b[1] - a[1])
-  return Object.fromEntries(sizes.slice(0, limit))
+  sizes.sort((left, right) => right[1] - left[1])
+  return {
+    ...(budget.hit ? { __scanBudgetHit: 1 } : {}),
+    ...Object.fromEntries(sizes.slice(0, limit))
+  }
 }
 
-function collectionSize(value: unknown): number | null {
+function collectionSize(value: unknown, budget: CollectionScanBudget): number {
   if (Array.isArray(value)) {
     return value.length
   }
   if (value instanceof Map || value instanceof Set) {
     return value.size
   }
-  if (typeof value === 'object' && value !== null) {
-    let size = 0
-    // Why: Object.keys allocates an array proportional to the leaking collection.
-    for (const key in value) {
-      if (Object.hasOwn(value, key)) {
-        size += 1
-      }
-    }
-    return size
+  if (typeof value !== 'object' || value === null) {
+    return 0
   }
-  return null
+  let size = 0
+  for (const key in value) {
+    if (budget.remaining <= 0) {
+      budget.hit = true
+      break
+    }
+    budget.remaining -= 1
+    if (Object.hasOwn(value, key)) {
+      size += 1
+    }
+  }
+  return size
 }

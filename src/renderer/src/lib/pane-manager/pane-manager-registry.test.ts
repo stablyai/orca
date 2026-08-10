@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { collectRendererMemoryProfileCounts } from '../renderer-memory-profile'
+import { collectRendererMemoryProfile } from '../renderer-memory-profile'
 import {
   forEachLivePaneForDesyncSentinel,
   getLivePaneCensus,
@@ -353,9 +353,12 @@ describe('pane manager registry', () => {
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
 
-    const counts = collectRendererMemoryProfileCounts()
-    expect(counts['terminals.managers']).toBe(1)
-    expect(counts['terminals.estPanes']).toBe(1)
-    expect(counts['terminals.estBufferKB']).toBe(100)
+    const profile = collectRendererMemoryProfile()
+    expect(profile.counts['terminals.managers']).toBe(1)
+    expect(profile.counts['terminals.estPanes']).toBe(1)
+    expect(profile.counts['terminals.estBufferKB']).toBe(100)
+    expect(profile.externalHeuristicByCategoryKB).toEqual({
+      'terminals.externalHeuristicKB': 100
+    })
   })
 })

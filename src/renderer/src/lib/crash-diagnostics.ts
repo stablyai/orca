@@ -7,7 +7,7 @@ import {
   type BrowserWebviewMemoryProfile
 } from '../components/browser-pane/webview-registry'
 import { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
-import { collectRendererMemoryProfileCounts } from './renderer-memory-profile'
+import { collectRendererMemoryProfile } from './renderer-memory-profile'
 
 const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
 const BYTES_PER_MEGABYTE = 1024 * 1024
@@ -158,6 +158,9 @@ function recordRendererMemoryHighwater(
     return
   }
   // Why: a single sample can cross both thresholds; profile the large heap once.
+  const memoryProfile = collectRendererMemoryProfile()
+  const usedHeapKB = Math.round(used / BYTES_PER_KILOBYTE)
+  const usedHeapHeuristicResidualKB = usedHeapKB - memoryProfile.soundOnHeapBoundSumKB
   const profile = compactBreadcrumbData({
     rendererSurface,
     usedHeapMB: toMegabytes(used),
@@ -166,11 +169,19 @@ function recordRendererMemoryHighwater(
     heapSource: memory.exact ? 'v8' : 'quantized',
     mallocedMB: toMegabytes(memory.mallocedBytes),
     blinkAllocatedMB: toMegabytes(memory.blinkAllocatedBytes),
+    usedHeapKB,
+    onHeapHeuristicSumKB: memoryProfile.onHeapHeuristicSumKB,
+    onHeapEstimateExceededHeap: Number(memoryProfile.onHeapHeuristicSumKB > usedHeapKB),
+    soundOnHeapBoundContributorCount: memoryProfile.soundOnHeapBoundContributorCount,
+    soundOnHeapBoundSumKB: memoryProfile.soundOnHeapBoundSumKB,
+    usedHeapHeuristicResidualKB,
+    ...memoryProfile.onHeapHeuristicByCategoryKB,
+    ...memoryProfile.externalHeuristicByCategoryKB,
     domNodes: document.getElementsByTagName('*').length,
     terminalElements: document.querySelectorAll('.xterm').length,
     browserWebviews: browserWebviews.browserWebviewCount,
     registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount,
-    ...collectRendererMemoryProfileCounts()
+    ...memoryProfile.counts
   })
   for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
     if (ratio < threshold || emittedHighwaterRatios.has(threshold)) {

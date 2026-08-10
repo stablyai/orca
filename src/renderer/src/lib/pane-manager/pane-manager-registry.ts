@@ -252,4 +252,10 @@ export function getLivePaneMemoryProfileCounts(): Record<string, number> {
 
 // Why here: contributors push in (crash-diagnostics stays a leaf); same-name
 // re-registration on dev HMR overwrites, so no disposal hook is needed.
-registerRendererMemoryProfileContributor('terminals', getLivePaneMemoryProfileCounts)
+registerRendererMemoryProfileContributor('terminals', () => {
+  const counts = getLivePaneMemoryProfileCounts()
+  return {
+    counts,
+    heuristicExternalKB: counts.estBufferKB
+  }
+})

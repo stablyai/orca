@@ -7,6 +7,7 @@ import {
 } from './pane-terminal-foreground-render-settle'
 import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { registerRendererMemoryProfileContributor } from '@/lib/renderer-memory-profile'
 import {
   discardInFlightTerminalOutputAckCredits,
   registerTerminalOutputAckCredits
@@ -243,6 +244,19 @@ function readQueueDebugSnapshot(): {
     queuedCharsByTerminal
   }
 }
+
+registerRendererMemoryProfileContributor('terminalOutputQueue', () => {
+  const snapshot = readQueueDebugSnapshot()
+  const heuristicOnHeapKB = Math.ceil((snapshot.queuedChars * 2) / 1024)
+  return {
+    counts: {
+      terminals: snapshot.queuedTerminalCount,
+      queuedChars: snapshot.queuedChars,
+      maxQueuedCharsPerTerminal: snapshot.queuedCharsByTerminal
+    },
+    heuristicOnHeapKB
+  }
+})
 
 function recordQueueDebugPressure(): void {
   if (!debugEnabled) {

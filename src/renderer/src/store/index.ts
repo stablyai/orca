@@ -50,7 +50,7 @@ import {
   registerRendererMemoryProfileContributor,
   summarizeStateCollectionSizes
 } from '@/lib/renderer-memory-profile'
-import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
+import { estimateStateCollectionMemoryKB } from '@/lib/state-collection-byte-estimate'
 
 export const useAppStore = create<AppState>()((...a) => {
   // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
@@ -111,9 +111,14 @@ registerRendererMemoryProfileContributor('store', () =>
 
 // Why bytes too: counts miss value-weight growth (97b9e86d leaked ~700MB while
 // its biggest slice grew by 4 entries); sampled KB names what got FAT.
-registerRendererMemoryProfileContributor('storeKB', () =>
-  estimateStateCollectionKB(useAppStore.getState(), 16)
-)
+registerRendererMemoryProfileContributor('storeKB', () => {
+  const estimate = estimateStateCollectionMemoryKB(useAppStore.getState(), 16)
+  return {
+    counts: estimate.counts,
+    heuristicOnHeapKB: estimate.heuristicOnHeapKB,
+    heuristicExternalKB: estimate.heuristicExternalKB
+  }
+})
 
 export type { AppState } from './types'
 

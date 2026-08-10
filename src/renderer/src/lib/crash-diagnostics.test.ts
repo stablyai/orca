@@ -175,7 +175,9 @@ describe('renderer crash diagnostics', () => {
     })
     const profile = await import('./renderer-memory-profile')
     const unregister = profile.registerRendererMemoryProfileContributor('store', () => ({
-      worktrees: 12
+      counts: { worktrees: 12 },
+      heuristicOnHeapKB: 400_000,
+      soundOnHeapBoundKB: 400_000
     }))
 
     diagnostics.installRendererCrashDiagnostics()
@@ -189,6 +191,13 @@ describe('renderer crash diagnostics', () => {
       data: expect.objectContaining({
         thresholdPct: 60,
         rendererSurface: 'main',
+        usedHeapKB: 367_002,
+        onHeapHeuristicSumKB: 400_000,
+        onHeapEstimateExceededHeap: 1,
+        soundOnHeapBoundContributorCount: 1,
+        soundOnHeapBoundSumKB: 400_000,
+        usedHeapHeuristicResidualKB: -32_998,
+        'store.onHeapHeuristicKB': 400_000,
         domNodes: 4321,
         terminalElements: 6,
         browserWebviews: 4,
