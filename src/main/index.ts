@@ -2126,8 +2126,7 @@ void app.whenReady().then(async () => {
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({
-    dataFile: activeOrcaProfile.dataFile,
-    dropNonLocalHostWorkspaceSessions: isServeMode
+    dataFile: activeOrcaProfile.dataFile
   })
   const windowsShellPathHydration = createWindowsShellPathHydration()
   if (process.platform === 'win32') {

@@ -173,6 +173,33 @@ export function getSubmodulePathsCacheCountForTests(): number {
   return submodulePathsCache.size
 }
 
+/**
+ * Test-only: prime the submodule, resolved-upstream-name, and effective-upstream-status caches
+ * with the given worktree-path keys. Returns the counts so callers can assert eviction behavior.
+ * Keys use the same `[path, wslDistro].join('\0')` shape as production writes.
+ */
+export function primeGitReadCachesForTests(
+  paths: readonly string[],
+  wslDistro: string | null = null
+): { submodule: number; upstreamName: number; effectiveStatus: number } {
+  for (const path of paths) {
+    const key = [path, wslDistro ?? null].join('\0')
+    const farFuture = Date.now() + 60 * 60 * 1000
+    submodulePathsCache.set(key, { paths: [], expiresAt: farFuture })
+    resolvedUpstreamNameCache.set(key, { upstreamName: 'origin', expiresAt: farFuture })
+    effectiveUpstreamStatusCache.set(key, {
+      status: { kind: 'unset' },
+      expiresAt: farFuture,
+      writeGeneration: 0
+    } as unknown as EffectiveUpstreamStatusCacheEntry)
+  }
+  return {
+    submodule: submodulePathsCache.size,
+    upstreamName: resolvedUpstreamNameCache.size,
+    effectiveStatus: effectiveUpstreamStatusCache.size
+  }
+}
+
 function gitRuntimeOptionsKey(options: GitRuntimeOptions): readonly unknown[] {
   return [options.wslDistro ?? null]
 }

@@ -3,7 +3,7 @@ import type {
   RuntimeMobileSessionTabsResult
 } from '../../shared/runtime-types'
 import type { PersistedMobileClientTabSelections } from '../../shared/types'
-import { BoundedMap } from '../memory/bounded-map'
+import { BoundedMap } from '../../shared/bounded-map'
 import { normalizePersistedMobileClientTabSelections } from './client-session-tab-selection-persistence'
 
 export type ClientSessionTabSelection = {
@@ -130,49 +130,27 @@ export function projectClientSessionTabSelection(
 }
 
 // Why: long-lived `orca serve` clients rotate (phone reconnects with a new navigation id) and a
-// buggy or crashed client can leave stale `statesByClient` entries forever. Cap the map with a
-// bounded LRU keyed by last-access time; `project()` / `activate()` refresh the stamp on every
-// read so the active set survives, while idle clients eventually drop.
+// buggy or crashed client can leave stale `statesByClient` entries forever. The shared BoundedMap
+// (src/shared/bounded-map.ts) caps the outer map; every `project()` / `activate()` call goes
+// through `getStatesByWorktree()` which calls BoundedMap.get() and refreshes LRU position, so the
+// active set survives while idle clients are evicted. Inner worktree state is a plain Map (bounded
+// by worktree count, much smaller than the client set).
 const CLIENT_SELECTION_LRU_CAP = 256
 
-type StoredClientSessionTabSelectionWithAccess = StoredClientSessionTabSelection & {
-  lastAccessedAt: number
-}
-
-function latestAccess(states: Map<string, StoredClientSessionTabSelectionWithAccess>): number {
-  let latest = 0
-  for (const state of states.values()) {
-    if (state.lastAccessedAt > latest) {
-      latest = state.lastAccessedAt
-    }
-  }
-  return latest
-}
-
 export class ClientSessionTabSelectionStore {
-  private statesByClient = new BoundedMap<
-    string,
-    Map<string, StoredClientSessionTabSelectionWithAccess>
-  >({
-    maxEntries: CLIENT_SELECTION_LRU_CAP,
-    evictionRank: (a, b) => latestAccess(a[1]) - latestAccess(b[1])
+  private statesByClient = new BoundedMap<string, Map<string, StoredClientSessionTabSelection>>({
+    maxEntries: CLIENT_SELECTION_LRU_CAP
   })
   private persistListener: ((state: PersistedMobileClientTabSelections) => void) | null = null
 
   // Why: selections previously died with the process, so a host restart snapped every phone back to the first tab (deterministic-topology fallback).
   hydrate(persisted: PersistedMobileClientTabSelections): void {
-    const stamp = Date.now()
     for (const [clientNavigationId, selectionsByWorktree] of Object.entries(
       normalizePersistedMobileClientTabSelections(persisted)
     )) {
       const statesByWorktree = this.getStatesByWorktree(clientNavigationId)
       for (const [worktreeId, selection] of Object.entries(selectionsByWorktree)) {
-        statesByWorktree.set(worktreeId, {
-          selection,
-          revision: 0,
-          shouldPersist: true,
-          lastAccessedAt: stamp
-        })
+        statesByWorktree.set(worktreeId, { selection, revision: 0, shouldPersist: true })
       }
     }
   }
@@ -183,7 +161,7 @@ export class ClientSessionTabSelectionStore {
 
   serialize(): PersistedMobileClientTabSelections {
     const persisted: PersistedMobileClientTabSelections = {}
-    for (const [clientNavigationId, statesByWorktree] of this.statesByClient) {
+    for (const [clientNavigationId, statesByWorktree] of this.statesByClient.entries()) {
       const entries: Record<string, ClientSessionTabSelection> = {}
       for (const [worktreeId, state] of statesByWorktree) {
         if (state.shouldPersist) {
@@ -203,7 +181,7 @@ export class ClientSessionTabSelectionStore {
 
   private getStatesByWorktree(
     clientNavigationId: string
-  ): Map<string, StoredClientSessionTabSelectionWithAccess> {
+  ): Map<string, StoredClientSessionTabSelection> {
     let statesByWorktree = this.statesByClient.get(clientNavigationId)
     if (!statesByWorktree) {
       statesByWorktree = new Map()
@@ -224,8 +202,7 @@ export class ClientSessionTabSelectionStore {
       // Why: host focus is private navigation; a new paired device starts from deterministic topology instead of inheriting it.
       selection: emptyClientSessionTabSelection(),
       revision: 0,
-      shouldPersist: false,
-      lastAccessedAt: Date.now()
+      shouldPersist: false
     }
     if (snapshot.tabs.length === 0) {
       // Why: an empty snapshot has no topology to project; writing it back would wipe a restart-hydrated selection before tabs arrive.
@@ -239,8 +216,7 @@ export class ClientSessionTabSelectionStore {
     statesByWorktree.set(snapshot.worktree, {
       selection: projected.selection,
       revision: state.revision,
-      shouldPersist: state.shouldPersist,
-      lastAccessedAt: Date.now()
+      shouldPersist: state.shouldPersist
     })
     return {
       ...projected.snapshot,
@@ -258,15 +234,13 @@ export class ClientSessionTabSelectionStore {
     const state = statesByWorktree.get(snapshot.worktree) ?? {
       selection: emptyClientSessionTabSelection(),
       revision: 0,
-      shouldPersist: false,
-      lastAccessedAt: Date.now()
+      shouldPersist: false
     }
     const nextSelection = activateClientSessionTabSelection(snapshot, state.selection, activeTabId)
     statesByWorktree.set(snapshot.worktree, {
       selection: nextSelection,
       revision: state.revision + 1,
-      shouldPersist: true,
-      lastAccessedAt: Date.now()
+      shouldPersist: true
     })
     this.persistNow()
     return this.project(snapshot, clientNavigationId)
@@ -303,7 +277,7 @@ export class ClientSessionTabSelectionStore {
 
   forgetWorktree(worktreeId: string): void {
     let changed = false
-    for (const [clientNavigationId, statesByWorktree] of this.statesByClient) {
+    for (const [clientNavigationId, statesByWorktree] of this.statesByClient.entries()) {
       const state = statesByWorktree.get(worktreeId)
       changed = Boolean(state?.shouldPersist) || changed
       statesByWorktree.delete(worktreeId)

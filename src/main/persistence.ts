@@ -95,7 +95,7 @@ import { isWorkspaceLinkedItemSourceContextMatch } from '../shared/workspace-lin
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import { normalizePersistedMobileClientTabSelections } from './runtime/client-session-tab-selection-persistence'
-import { BoundedMap } from './memory/bounded-map'
+import { BoundedMap } from '../shared/bounded-map'
 import { sanitizeWorkspaceSessionTerminalRetirements } from './runtime/mobile-session-terminal-persistence-retirement'
 import { clearGitReadCachesForPaths } from './git/status'
 import {
@@ -2783,14 +2783,6 @@ function deleteRemovedTerminalScrollbackSnapshots(
 
 export type StoreOptions = {
   dataFile?: string
-  /**
-   * When true, drop every entry of `workspaceSessionsByHostId` after the initial load. Only
-   * intended for `orca serve`, which never acts as a client to a remote/SSH host; the local
-   * `workspaceSession` partition is what serves the runtime. Saves the deserialized
-   * per-host session partitions on a long-lived headless host. Setting it on desktop would
-   * silently break host-classified workspace restores, so the field is gated.
-   */
-  dropNonLocalHostWorkspaceSessions?: boolean
 }
 
 export class Store {
@@ -2870,19 +2862,6 @@ export class Store {
     })
     if (normalized.changed || this.loadNeedsSave || adaptedProjectGroups) {
       // Why: rewrite legacy pane:1 leaves so older renderer writes can't revive them; other migrations also set loadNeedsSave.
-      this.scheduleSave()
-    }
-    // Why: headless `orca serve` only serves the local runtime; drop the deserialized per-host
-    // partitions so a multi-SSH-host desktop install doesn't drag every remote host's session
-    // into serve-mode memory. Schedule a save so the cleared shape becomes the new baseline.
-    if (options.dropNonLocalHostWorkspaceSessions && this.state.workspaceSessionsByHostId) {
-      const kept: Record<string, unknown> = {}
-      for (const [hostId, session] of Object.entries(this.state.workspaceSessionsByHostId)) {
-        if (typeof hostId === 'string' && hostId.startsWith('local:')) {
-          kept[hostId] = session
-        }
-      }
-      this.state.workspaceSessionsByHostId = kept as PersistedState['workspaceSessionsByHostId']
       this.scheduleSave()
     }
   }
@@ -4769,6 +4748,12 @@ export class Store {
 
   // Why: the same repo id can exist on multiple execution hosts; remove only this host's row and metadata, never another host's.
   removeProjectForHost(id: string, hostId: ExecutionHostId): void {
+    // Why: capture paths from the matching repo before the repos array shrinks so cache cleanup
+    // can run when the id is fully gone. If another host still holds the same repo id, the path
+    // is shared — leaving the cache keeps the surviving host's reads warm.
+    const removedRepoPaths = this.state.repos
+      .filter((r) => r.id === id && getRepoExecutionHostId(r) === hostId)
+      .flatMap((repo) => [repo.path, ...this.worktreeMetaPathsForRepo(repo.id)])
     this.state.repos = this.state.repos.filter(
       (r) => !(r.id === id && getRepoExecutionHostId(r) === hostId)
     )
@@ -4786,6 +4771,12 @@ export class Store {
         this.state.workspaceSessionsByHostId,
         id
       )
+      if (removedRepoPaths.length > 0) {
+        clearGitReadCachesForPaths(removedRepoPaths)
+        for (const path of removedRepoPaths) {
+          this.gitUsernameCache.delete(path)
+        }
+      }
     } else if (parseExecutionHostId(hostId)?.kind === 'runtime') {
       const session = this.state.workspaceSessionsByHostId?.[hostId]
       if (session) {

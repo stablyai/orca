@@ -2,17 +2,17 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   clearGitReadCachesForPaths,
   clearSubmodulePathsCacheForTests,
+  clearEffectiveUpstreamStatusCacheForTests,
+  primeGitReadCachesForTests,
   getSubmodulePathsCacheCountForTests
 } from './status'
 
-// Why: helper for repo-removal teardown; the actual sweep is exercised by the git-cached
-// integration tests once a path is registered. This file documents the no-op contract and
-// keeps the export reachable from a single test surface so a regression in the helper's
-// import path is caught fast.
-
+// Why: helper for repo-removal teardown; the matching logic is exercised here by priming the
+// module-level caches with predictable entries and asserting that only matching keys are removed.
 describe('clearGitReadCachesForPaths', () => {
   beforeEach(() => {
     clearSubmodulePathsCacheForTests()
+    clearEffectiveUpstreamStatusCacheForTests()
   })
 
   it('is a safe no-op for empty input', () => {
@@ -21,7 +21,34 @@ describe('clearGitReadCachesForPaths', () => {
   })
 
   it('tolerates paths with no matching cache entries', () => {
+    primeGitReadCachesForTests(['/worktrees/repo-a'])
     expect(() => clearGitReadCachesForPaths(['/no/such/path', '/another/missing'])).not.toThrow()
-    expect(getSubmodulePathsCacheCountForTests()).toBe(0)
+    expect(getSubmodulePathsCacheCountForTests()).toBe(1)
+  })
+
+  it('removes entries whose worktree path matches the prefix', () => {
+    primeGitReadCachesForTests(['/worktrees/repo-a', '/worktrees/repo-a/sub', '/worktrees/repo-b'])
+    expect(getSubmodulePathsCacheCountForTests()).toBe(3)
+
+    clearGitReadCachesForPaths(['/worktrees/repo-a'])
+
+    // repo-a and repo-a/sub are removed by the prefix match; repo-b is preserved.
+    expect(getSubmodulePathsCacheCountForTests()).toBe(1)
+  })
+
+  it('removes entries across all three git caches', () => {
+    primeGitReadCachesForTests(['/worktrees/repo-a', '/worktrees/repo-b'])
+
+    clearGitReadCachesForPaths(['/worktrees/repo-a'])
+
+    expect(getSubmodulePathsCacheCountForTests()).toBe(1)
+  })
+
+  it('handles multiple paths in one call', () => {
+    primeGitReadCachesForTests(['/worktrees/repo-a', '/worktrees/repo-b', '/worktrees/repo-c'])
+
+    clearGitReadCachesForPaths(['/worktrees/repo-a', '/worktrees/repo-c'])
+
+    expect(getSubmodulePathsCacheCountForTests()).toBe(1)
   })
 })

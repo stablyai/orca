@@ -28,17 +28,30 @@ describe('HeadlessEmulator', () => {
     it('honors defaultScrollback when explicit scrollback is omitted', () => {
       // Why: `orca serve` passes a smaller default to cut per-PTY memory; explicit scrollback
       // (used by snapshot/hydration paths) must still take precedence.
-      emulator = new HeadlessEmulator({ cols: 80, rows: 24, defaultScrollback: 250 })
-      const snapshot = emulator.getSnapshot({ scrollbackRows: 100 })
+      emulator = new HeadlessEmulator({ cols: 80, rows: 5, defaultScrollback: 3 })
+      // The terminal instance carries the effective scrollback via its options.
       expect(
-        snapshot.scrollbackAnsi.split('\n').filter((line) => line.length > 0).length
-      ).toBeLessThanOrEqual(100)
+        (emulator as unknown as { terminal: { options: { scrollback: number } } }).terminal.options
+          .scrollback
+      ).toBe(3)
     })
 
     it('prefers explicit scrollback over defaultScrollback', () => {
-      emulator = new HeadlessEmulator({ cols: 80, rows: 24, defaultScrollback: 10, scrollback: 50 })
-      // Just confirm construction succeeds without throwing; behavior is exercised above.
-      expect(emulator.getSnapshot().cols).toBe(80)
+      emulator = new HeadlessEmulator({ cols: 80, rows: 5, defaultScrollback: 1, scrollback: 10 })
+      // Why: explicit scrollback wins; the defaultScrollback value is ignored.
+      expect(
+        (emulator as unknown as { terminal: { options: { scrollback: number } } }).terminal.options
+          .scrollback
+      ).toBe(10)
+    })
+
+    it('falls back to the module default when neither option is set', () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 5 })
+      // Why: module default is 5000; without options we get the desktop-class buffer.
+      expect(
+        (emulator as unknown as { terminal: { options: { scrollback: number } } }).terminal.options
+          .scrollback
+      ).toBe(5000)
     })
   })
 
