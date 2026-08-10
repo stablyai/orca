@@ -126,7 +126,7 @@ orca orchestration dispatch-show --task <task_id> --json
 ## Messaging
 
 ```bash
-orca orchestration send --subject <text> [--to <run:id|dispatch:id|legacy_handle>] [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--delivery-class <interrupt|tool|turn>] [--thread-id <id>] [--payload <json>] [--json]
+orca orchestration send --subject <text> [--to run:<id>|dispatch:<id>|<legacy_handle>] [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--delivery-class <interrupt|tool|turn>] [--thread-id <id>] [--payload <json>] [--json]
 orca orchestration check [--terminal <handle>] [--ack <delivery_id>] [--peek|--all|--count] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--json]
 orca orchestration reply --id <msg_id> --body <text> [--from <handle>] [--json]
 orca orchestration ask (--question <text>|--resume <msg_id>) [--options <csv>] [--timeout-ms <n>] [--from <handle>] [--json]
