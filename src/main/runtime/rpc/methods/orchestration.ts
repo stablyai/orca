@@ -1091,8 +1091,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskCreateParams,
     handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
-      // Why: parseOrchestrationTaskDepsFlag keeps canonical JSON and recovers
-      // the WSL quote-stripped form so non-empty --deps stop failing as #12188.
+      // Recover the quote-stripped JSON array produced by the WSL PowerShell 5.1 bridge.
       const deps = params.deps ? parseOrchestrationTaskDepsFlag(params.deps) : undefined
       const run = resolveRunScope(runtime, {
         runId: params.run,

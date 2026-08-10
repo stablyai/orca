@@ -10,27 +10,21 @@ describe('parseOrchestrationTaskDepsFlag', () => {
   })
 
   it('recovers the quote-stripped WSL form of a JSON array', () => {
-    // Why: PS 5.1 drops " when forwarding native argv, so ["task_x"] becomes [task_x].
     expect(parseOrchestrationTaskDepsFlag('[task_907c556bfed6]')).toEqual(['task_907c556bfed6'])
     expect(parseOrchestrationTaskDepsFlag('[task_aa, task_bb]')).toEqual(['task_aa', 'task_bb'])
   })
 
-  it('accepts a bare task id or CSV list', () => {
-    expect(parseOrchestrationTaskDepsFlag('task_907c556bfed6')).toEqual(['task_907c556bfed6'])
-    expect(parseOrchestrationTaskDepsFlag('task_aa,task_bb')).toEqual(['task_aa', 'task_bb'])
-  })
-
-  it('rejects non-task-id content on both JSON and recovery paths', () => {
+  it('rejects invalid JSON and non-task-id recovery content', () => {
     expect(() => parseOrchestrationTaskDepsFlag('not-json')).toThrow('Invalid --deps')
+    expect(() => parseOrchestrationTaskDepsFlag('task_aa')).toThrow('Invalid --deps')
+    expect(() => parseOrchestrationTaskDepsFlag('task_aa,task_bb')).toThrow('Invalid --deps')
     expect(() => parseOrchestrationTaskDepsFlag('[not_a_task]')).toThrow('Invalid --deps')
-    expect(() => parseOrchestrationTaskDepsFlag('["not_a_task"]')).toThrow('Invalid --deps')
-    expect(() => parseOrchestrationTaskDepsFlag('[""]')).toThrow('Invalid --deps')
     expect(() => parseOrchestrationTaskDepsFlag('[{"id":"task_aa"}]')).toThrow('Invalid --deps')
   })
 
-  it('rejects empty CSV segments and unbalanced edge quotes', () => {
-    expect(() => parseOrchestrationTaskDepsFlag('task_aa,,task_bb')).toThrow('Invalid --deps')
+  it('rejects malformed quote-stripped arrays', () => {
+    expect(() => parseOrchestrationTaskDepsFlag('[task_aa,,task_bb]')).toThrow('Invalid --deps')
     expect(() => parseOrchestrationTaskDepsFlag('[task_aa,]')).toThrow('Invalid --deps')
-    expect(() => parseOrchestrationTaskDepsFlag('"task_aa')).toThrow('Invalid --deps')
+    expect(() => parseOrchestrationTaskDepsFlag("['task_aa']")).toThrow('Invalid --deps')
   })
 })

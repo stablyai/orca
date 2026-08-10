@@ -1771,7 +1771,6 @@ describe('orchestration RPC methods', () => {
 
       const result = (await call('orchestration.taskCreate', {
         spec: 'second',
-        // Why: PS 5.1 native splat drops ", so ["task_x"] becomes [task_x] (#12188).
         deps: `[${t1.id}]`
       })) as { task: { id: string; status: string } }
 
