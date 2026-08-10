@@ -341,6 +341,58 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     expect(patchWorkspaceSessionMock).not.toHaveBeenCalled()
   })
 
+  it('qualifies duplicate repository ids by SSH target during export', async () => {
+    const worktreeId = 'duplicate::/repo'
+    getRepoMock.mockImplementation((repoId: string, hostId?: string) => {
+      if (repoId !== 'duplicate' || !hostId?.startsWith('ssh:')) {
+        return undefined
+      }
+      return {
+        id: repoId,
+        path: '/repo',
+        displayName: 'Duplicate',
+        badgeColor: 'blue',
+        addedAt: 1,
+        connectionId: hostId.slice(4),
+        executionHostId: hostId
+      } as never
+    })
+    getWorkspaceSessionMock.mockImplementation((hostId?: string | null) => ({
+      ...baseSession,
+      tabsByWorktree:
+        hostId === 'ssh:target-1' || hostId === 'ssh:target-2'
+          ? {
+              [worktreeId]: [
+                {
+                  id: `${hostId}-tab`,
+                  title: hostId,
+                  ptyId: null,
+                  worktreeId
+                } as never
+              ]
+            }
+          : { [worktreeId]: [] }
+    }))
+
+    await callSetForConnectedTargets({ hydratedTargetIds: ['target-1', 'target-2'] })
+
+    for (const targetId of ['target-1', 'target-2']) {
+      expect(getRepoMock).toHaveBeenCalledWith('duplicate', `ssh:${targetId}`)
+      expect(requestByTargetId.get(targetId)).toHaveBeenCalledWith(
+        'workspace.patch',
+        expect.objectContaining({
+          patch: expect.objectContaining({
+            session: expect.objectContaining({
+              tabsByWorktreePath: {
+                '/repo': [expect.objectContaining({ id: `ssh:${targetId}-tab` })]
+              }
+            })
+          })
+        })
+      )
+    }
+  })
+
   it('does not consult ssh partitions when an explicit session argument is provided', async () => {
     const worktreeId = 'repo-target-1::/repo'
     await callSetForConnectedTargets({

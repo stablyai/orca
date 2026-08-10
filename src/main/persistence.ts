@@ -136,6 +136,7 @@ import {
 } from '../shared/constants'
 import { parseWorkspaceSessionSalvaging } from '../shared/workspace-session-salvage'
 import { adoptOrphanedWorkspaceSessionPartition } from '../shared/workspace-session-partition-adoption'
+import { findAmbiguousWorkspaceSessionKeys } from '../shared/workspace-session-partition-authority'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
@@ -4157,6 +4158,9 @@ export class Store {
   }
 
   flushOrThrow(): void {
+    if (this.writesFrozen) {
+      throw new Error('Cannot synchronously flush while persistence writes are frozen')
+    }
     if (this.quitFlushStarted) {
       throw new Error('Cannot synchronously flush after final persistence has started')
     }
@@ -4342,8 +4346,11 @@ export class Store {
     return this.state.repos.length
   }
 
-  getRepo(id: string): Repo | undefined {
-    const repo = this.state.repos.find((r) => r.id === id)
+  getRepo(id: string, hostId?: ExecutionHostId): Repo | undefined {
+    const repo = this.state.repos.find(
+      (candidate) =>
+        candidate.id === id && (!hostId || getRepoExecutionHostId(candidate) === hostId)
+    )
     return repo ? this.hydrateRepo(repo) : undefined
   }
 
@@ -6287,16 +6294,33 @@ export class Store {
     const originalPartitions = this.state.workspaceSessionsByHostId
     const sshPartitions = Object.entries(originalPartitions ?? {})
       .filter(([partitionHostId, session]) =>
-        Boolean(session && parseExecutionHostId(partitionHostId)?.kind === 'ssh')
+        Boolean(
+          session &&
+          parseExecutionHostId(partitionHostId)?.kind === 'ssh' &&
+          (!hostId || partitionHostId === hostId)
+        )
       )
       .sort(([left], [right]) => left.localeCompare(right)) as [string, WorkspaceSessionState][]
     if (sshPartitions.length === 0) {
       return originalOwner
     }
 
+    const preservedWorkspaceKeys = findAmbiguousWorkspaceSessionKeys(
+      sshPartitions.map(([, source]) => source)
+    )
+    const prunableHostIds = new Set<string>()
     let owner = originalOwner
-    for (const [, source] of sshPartitions) {
-      owner = adoptOrphanedWorkspaceSessionPartition(owner, source).session
+    for (const [partitionHostId, source] of sshPartitions) {
+      const adoption = adoptOrphanedWorkspaceSessionPartition(owner, source, {
+        preserveWorkspaceKeys: preservedWorkspaceKeys
+      })
+      owner = adoption.session
+      if (adoption.ambiguousWorktreeIds.length === 0) {
+        prunableHostIds.add(partitionHostId)
+      }
+    }
+    if (prunableHostIds.size === 0) {
+      return originalOwner
     }
     this.state.workspaceSession = owner
     try {
@@ -6309,7 +6333,7 @@ export class Store {
 
     this.state.workspaceSessionsByHostId = Object.fromEntries(
       Object.entries(originalPartitions ?? {}).filter(
-        ([partitionHostId]) => parseExecutionHostId(partitionHostId)?.kind !== 'ssh'
+        ([partitionHostId]) => !prunableHostIds.has(partitionHostId)
       )
     )
     try {

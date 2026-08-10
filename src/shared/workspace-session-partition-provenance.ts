@@ -1,9 +1,6 @@
-import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { BrowserHistoryEntry, TerminalLayoutSnapshot, WorkspaceSessionState } from './types'
-import { parseWorkspaceKey } from './workspace-scope'
-import { getRepoIdFromWorktreeId } from './worktree-id'
 
-const WORKTREE_RECORD_FIELDS = [
+export const WORKTREE_RECORD_FIELDS = [
   'tabsByWorktree',
   'openFilesByWorktree',
   'activeFileIdByWorktree',
@@ -27,32 +24,6 @@ export function paneTabId(paneKey: string): string {
 export function paneLeafId(paneKey: string): string {
   const separator = paneKey.indexOf(':')
   return separator < 0 ? '' : paneKey.slice(separator + 1)
-}
-
-function repoIdForWorkspaceKey(key: string): string | null {
-  const scope = parseWorkspaceKey(key)
-  if (scope?.type === 'folder') {
-    return null
-  }
-  return getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : key)
-}
-
-function sourceBindingRevisionIsCurrent(
-  base: WorkspaceSessionState,
-  source: WorkspaceSessionState,
-  workspaceKey: string | undefined
-): boolean {
-  if (!workspaceKey) {
-    return false
-  }
-  const repoId = repoIdForWorkspaceKey(workspaceKey)
-  if (!repoId) {
-    return true
-  }
-  return (
-    (source.terminalTopologyRevisionByRepoId?.[repoId] ?? 0) >=
-    (base.terminalTopologyRevisionByRepoId?.[repoId] ?? 0)
-  )
 }
 
 export function collectWorkspaceKeys(session: WorkspaceSessionState): Set<string> {
@@ -116,11 +87,7 @@ export function collectTerminalProvenance(
     const baseTombstone = base.terminalSurfaceTombstonesByPaneKey?.[paneKey]
     if (
       liveTabIds.has(paneTabId(paneKey)) &&
-      sourceBindingRevisionIsCurrent(
-        base,
-        source,
-        sourceWorkspaceKeyByTabId.get(paneTabId(paneKey))
-      ) &&
+      sourceAuthority.has(sourceWorkspaceKeyByTabId.get(paneTabId(paneKey)) ?? '') &&
       (!baseTombstone || baseTombstone.incarnationId !== incarnationId)
     ) {
       sourcePaneAuthority.add(paneKey)
@@ -133,6 +100,11 @@ export function collectTerminalProvenance(
       )) {
         sourcePaneAuthority.add(`${tab.id}:${leafId}`)
       }
+    }
+  }
+  for (const [paneKey, record] of Object.entries(source.sleepingAgentSessionsByPaneKey ?? {})) {
+    if (sourceAuthority.has(record.worktreeId)) {
+      sourcePaneAuthority.add(paneKey)
     }
   }
   return { liveTabIds, touchedTabIds, sourceWorkspaceKeyByTabId, sourcePaneAuthority }
@@ -155,25 +127,6 @@ export function mergeWorkspaceRecord<T>(
     }
   }
   return merged
-}
-
-export function sourceOwnsTerminalMembership(
-  base: WorkspaceSessionState,
-  source: WorkspaceSessionState,
-  workspaceKey: string
-): boolean {
-  const baseTabs = base.tabsByWorktree[workspaceKey] ?? []
-  const sourceTabs = source.tabsByWorktree[workspaceKey] ?? []
-  const repoId = repoIdForWorkspaceKey(workspaceKey)
-  if (!repoId) {
-    return sourceTabs.length > 0 && baseTabs.length === 0
-  }
-  const baseRevision = base.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-  const sourceRevision = source.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-  return (
-    sourceRevision > baseRevision ||
-    (sourceRevision === baseRevision && sourceTabs.length > 0 && baseTabs.length === 0)
-  )
 }
 
 function layoutContainsLeaf(root: TerminalLayoutSnapshot['root'], leafId: string): boolean {
@@ -201,28 +154,33 @@ export function mergeTerminalLayout(
   if (!base || !source) {
     return base ?? source
   }
-  const ptyIdsByLeafId = { ...base.ptyIdsByLeafId }
-  for (const [leafId, ptyId] of Object.entries(source.ptyIdsByLeafId ?? {})) {
-    const paneKey = `${tabId}:${leafId}`
-    if (
-      (sourcePaneAuthority.has(paneKey) || ptyIdsByLeafId[leafId] === undefined) &&
-      layoutContainsLeaf(base.root, leafId)
-    ) {
-      ptyIdsByLeafId[leafId] = ptyId
+  const merged: TerminalLayoutSnapshot = { ...source, ...base }
+  const paneFields = [
+    'ptyIdsByLeafId',
+    'buffersByLeafId',
+    'scrollbackRefsByLeafId',
+    'titlesByLeafId'
+  ] as const
+  for (const field of paneFields) {
+    const values = { ...base[field] }
+    const sourceValues = source[field]
+    for (const leafId of Object.keys(values)) {
+      if (sourcePaneAuthority.has(`${tabId}:${leafId}`) && sourceValues?.[leafId] === undefined) {
+        delete values[leafId]
+      }
     }
-  }
-  const merged: TerminalLayoutSnapshot = { ...source, ...base, ptyIdsByLeafId }
-  if (source.buffersByLeafId || base.buffersByLeafId) {
-    merged.buffersByLeafId = { ...source.buffersByLeafId, ...base.buffersByLeafId }
-  }
-  if (source.scrollbackRefsByLeafId || base.scrollbackRefsByLeafId) {
-    merged.scrollbackRefsByLeafId = {
-      ...source.scrollbackRefsByLeafId,
-      ...base.scrollbackRefsByLeafId
+    for (const [leafId, value] of Object.entries(sourceValues ?? {})) {
+      const paneKey = `${tabId}:${leafId}`
+      if (
+        (sourcePaneAuthority.has(paneKey) || values[leafId] === undefined) &&
+        layoutContainsLeaf(base.root, leafId)
+      ) {
+        values[leafId] = value
+      }
     }
-  }
-  if (source.titlesByLeafId || base.titlesByLeafId) {
-    merged.titlesByLeafId = { ...source.titlesByLeafId, ...base.titlesByLeafId }
+    if (Object.keys(values).length > 0 || base[field] || source[field]) {
+      merged[field] = values
+    }
   }
   return merged
 }
@@ -236,13 +194,6 @@ export function mergeTopologyRevisions(
     merged[repoId] = Math.max(merged[repoId] ?? 0, revision)
   }
   return merged
-}
-
-export function chooseSleepingRecord(
-  base: SleepingAgentSessionRecord | undefined,
-  source: SleepingAgentSessionRecord
-): SleepingAgentSessionRecord {
-  return !base || source.updatedAt >= base.updatedAt ? source : base
 }
 
 export function mergeUnique(

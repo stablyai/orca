@@ -148,6 +148,7 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
       terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@old') },
       terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-old' },
       remoteSessionIdsByTabId: { 'tab-1': 'ssh:one@@old' },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 1 },
       sleepingAgentSessionsByPaneKey: {
         [PANE_KEY]: {
           paneKey: PANE_KEY,
@@ -167,6 +168,7 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
       terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@new') },
       terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-new' },
       remoteSessionIdsByTabId: { 'tab-1': 'ssh:one@@new' },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 2 },
       sleepingAgentSessionsByPaneKey: {
         [PANE_KEY]: {
           paneKey: PANE_KEY,
@@ -194,6 +196,85 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
     expect(adoption.session.sleepingAgentSessionsByPaneKey?.[PANE_KEY]?.providerSession.id).toBe(
       'provider-new'
     )
+  })
+
+  it('moves an older provider record with its authoritative SSH incarnation', () => {
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@old')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@old') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-old' },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 4 },
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY]: {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: WORKTREE_ID,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'provider-wrong' },
+          prompt: 'wrong',
+          state: 'working',
+          capturedAt: 9,
+          updatedAt: 9
+        }
+      }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@new')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@new') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-new' },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 5 },
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY]: {
+          ...base.sleepingAgentSessionsByPaneKey![PANE_KEY],
+          providerSession: { key: 'session_id', id: 'provider-new' },
+          prompt: 'new',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
+
+    const adopted = adoptOrphanedWorkspaceSessionPartition(base, source).session
+
+    expect(adopted.terminalPtyIncarnationsByPaneKey?.[PANE_KEY]).toBe('inc-new')
+    expect(adopted.sleepingAgentSessionsByPaneKey?.[PANE_KEY]?.providerSession.id).toBe(
+      'provider-new'
+    )
+  })
+
+  it('preserves equal-revision pane bundles instead of combining their provenance', () => {
+    const base = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:one@@base')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:one@@base') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-base' },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 3 }
+    })
+    const source = session({
+      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1', WORKTREE_ID, 'ssh:two@@source')] },
+      terminalLayoutsByTabId: { 'tab-1': layout('ssh:two@@source') },
+      terminalPtyIncarnationsByPaneKey: { [PANE_KEY]: 'inc-source' },
+      terminalTopologyRevisionByRepoId: { 'repo-1': 3 },
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY]: {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: WORKTREE_ID,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'provider-source' },
+          prompt: 'source',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 10
+        }
+      }
+    })
+
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
+
+    expect(adoption.ambiguousWorktreeIds).toEqual([WORKTREE_ID])
+    expect(adoption.session.tabsByWorktree[WORKTREE_ID]?.[0]?.ptyId).toBe('ssh:one@@base')
+    expect(adoption.session.terminalPtyIncarnationsByPaneKey?.[PANE_KEY]).toBe('inc-base')
+    expect(adoption.session.sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeUndefined()
   })
 
   it('keeps a local incarnation when the SSH binding revision is older', () => {

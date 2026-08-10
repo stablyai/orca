@@ -28,7 +28,10 @@ describe('registerSessionHandlers', () => {
     )?.[1] as (event: unknown, hostId?: string) => unknown
 
     expect(handler({})).toBe(expected)
-    expect(store.adoptSshWorkspaceSessionPartition).toHaveBeenCalledOnce()
-    expect(store.adoptSshWorkspaceSessionPartition).toHaveBeenCalledWith(undefined)
+    expect(handler({}, 'ssh:target-1')).toBe(expected)
+    expect(store.adoptSshWorkspaceSessionPartition.mock.calls).toEqual([
+      [undefined],
+      ['ssh:target-1']
+    ])
   })
 })

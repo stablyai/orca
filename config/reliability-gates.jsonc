@@ -5962,7 +5962,8 @@
         {
           "file": "src/shared/workspace-session-partition-adoption.test.ts",
           "assertions": [
-            "topology revisions select terminal membership authority while SSH incarnation provenance selects newer pane bindings",
+            "topology revisions select terminal membership authority while each authoritative pane moves its PTY, incarnation, layout fields, and provider session as one bundle",
+            "equal-revision pane conflicts remain unmerged instead of pairing stale PTY identity with newer provider metadata",
             "folder-only workspaces retain tab groups, layouts, files, and provider-session identity",
             "old tombstones cannot retire a newer SSH incarnation and reconciliation is idempotent"
           ]
@@ -5971,7 +5972,9 @@
           "file": "src/main/persistence.test.ts",
           "assertions": [
             "one transaction enumerates every persisted SSH partition and preserves non-SSH partitions",
+            "equal-revision repository and folder conflicts preserve every ambiguous source while reconciled sources prune independently",
             "the durable owner flush precedes complete source pruning and both failure phases remain retryable",
+            "qualified adoption scopes to one SSH partition and frozen persistence rejects before reporting durable success",
             "a sync-flushed SSH binding and incarnation survive the crash window before renderer adoption"
           ]
         },
@@ -5979,7 +5982,14 @@
           "file": "src/renderer/src/lib/workspace-session-host-persistence.test.ts",
           "assertions": [
             "startup delegates persisted SSH enumeration to main even with no loaded repository",
+            "freshly adopted local and SSH state merges back with every runtime-host slice",
             "durability failure rejects startup adoption instead of being folded into an empty inventory"
+          ]
+        },
+        {
+          "file": "src/main/ipc/remote-workspace.test.ts",
+          "assertions": [
+            "duplicate repository ids resolve through the exact SSH target host and export only that target's adopted state"
           ]
         },
         {

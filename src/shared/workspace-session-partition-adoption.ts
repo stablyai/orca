@@ -1,17 +1,14 @@
 import type { WorkspaceSessionState } from './types'
+import { workspaceTerminalAuthority } from './workspace-session-partition-authority'
+import { mergeAdoptedWorkspaceSessionState } from './workspace-session-partition-state-merge'
 import {
-  chooseSleepingRecord,
   collectTerminalProvenance,
   collectWorkspaceKeys,
   layoutLeafCount,
-  mergeBrowserHistory,
   mergeTerminalLayout,
-  mergeTopologyRevisions,
-  mergeUnique,
   mergeWorkspaceRecord,
   paneLeafId,
-  paneTabId,
-  sourceOwnsTerminalMembership
+  paneTabId
 } from './workspace-session-partition-provenance'
 
 export type WorkspaceSessionPartitionAdoption = {
@@ -19,36 +16,62 @@ export type WorkspaceSessionPartitionAdoption = {
   reconciledWorktreeIds: string[]
   sourceAuthoritativeWorktreeIds: string[]
   sourceAuthoritativePaneKeys: string[]
+  ambiguousWorktreeIds: string[]
+}
+
+type WorkspaceSessionPartitionAdoptionOptions = {
+  preserveWorkspaceKeys?: ReadonlySet<string>
 }
 
 export function adoptOrphanedWorkspaceSessionPartition(
   base: WorkspaceSessionState,
-  source: WorkspaceSessionState | null | undefined
+  source: WorkspaceSessionState | null | undefined,
+  options: WorkspaceSessionPartitionAdoptionOptions = {}
 ): WorkspaceSessionPartitionAdoption {
   if (!source) {
     return {
       session: base,
       reconciledWorktreeIds: [],
       sourceAuthoritativeWorktreeIds: [],
-      sourceAuthoritativePaneKeys: []
+      sourceAuthoritativePaneKeys: [],
+      ambiguousWorktreeIds: []
     }
   }
   const sourceKeys = collectWorkspaceKeys(source)
-  const sourceAuthority = new Set(
-    [...sourceKeys].filter((key) => sourceOwnsTerminalMembership(base, source, key))
+  const baseKeys = collectWorkspaceKeys(base)
+  const authorityByWorkspaceKey = new Map(
+    [...sourceKeys].map((key) => [
+      key,
+      workspaceTerminalAuthority(base, source, key, {
+        base: baseKeys.has(key),
+        source: true
+      })
+    ])
   )
+  const ambiguousWorktreeIds = new Set(
+    [...sourceKeys].filter(
+      (key) =>
+        options.preserveWorkspaceKeys?.has(key) || authorityByWorkspaceKey.get(key) === 'ambiguous'
+    )
+  )
+  const sourceAuthority = new Set(
+    [...sourceKeys].filter(
+      (key) => !ambiguousWorktreeIds.has(key) && authorityByWorkspaceKey.get(key) === 'source'
+    )
+  )
+  const reconciledKeys = new Set([...sourceKeys].filter((key) => !ambiguousWorktreeIds.has(key)))
   const tabsByWorktree = mergeWorkspaceRecord(
     base.tabsByWorktree,
     source.tabsByWorktree,
-    sourceKeys,
+    reconciledKeys,
     sourceAuthority
   ) ?? { ...base.tabsByWorktree }
   const { liveTabIds, touchedTabIds, sourceWorkspaceKeyByTabId, sourcePaneAuthority } =
-    collectTerminalProvenance(base, source, tabsByWorktree, sourceKeys, sourceAuthority)
+    collectTerminalProvenance(base, source, tabsByWorktree, reconciledKeys, sourceAuthority)
   const sourcePaneAuthoritativeTabIds = new Set(
     [...sourcePaneAuthority].map((paneKey) => paneTabId(paneKey))
   )
-  for (const key of sourceKeys) {
+  for (const key of reconciledKeys) {
     if (sourceAuthority.has(key)) {
       continue
     }
@@ -93,10 +116,11 @@ export function adoptOrphanedWorkspaceSessionPartition(
   }
 
   const terminalPtyIncarnationsByPaneKey = { ...base.terminalPtyIncarnationsByPaneKey }
-  for (const [paneKey, incarnationId] of Object.entries(
-    source.terminalPtyIncarnationsByPaneKey ?? {}
-  )) {
-    if (sourcePaneAuthority.has(paneKey)) {
+  for (const paneKey of sourcePaneAuthority) {
+    const incarnationId = source.terminalPtyIncarnationsByPaneKey?.[paneKey]
+    if (incarnationId === undefined) {
+      delete terminalPtyIncarnationsByPaneKey[paneKey]
+    } else {
       terminalPtyIncarnationsByPaneKey[paneKey] = incarnationId
     }
   }
@@ -112,6 +136,9 @@ export function adoptOrphanedWorkspaceSessionPartition(
   for (const [paneKey, tombstone] of Object.entries(
     source.terminalSurfaceTombstonesByPaneKey ?? {}
   )) {
+    if (!sourceAuthority.has(tombstone.worktreeId)) {
+      continue
+    }
     const liveIncarnation = terminalPtyIncarnationsByPaneKey[paneKey]
     if (!liveIncarnation || liveIncarnation === tombstone.incarnationId) {
       terminalSurfaceTombstonesByPaneKey[paneKey] = tombstone
@@ -162,139 +189,42 @@ export function adoptOrphanedWorkspaceSessionPartition(
   }
 
   const sleepingAgentSessionsByPaneKey = { ...base.sleepingAgentSessionsByPaneKey }
-  for (const [paneKey, record] of Object.entries(source.sleepingAgentSessionsByPaneKey ?? {})) {
-    if (!sourceKeys.has(record.worktreeId)) {
-      continue
-    }
+  for (const paneKey of sourcePaneAuthority) {
+    const record = source.sleepingAgentSessionsByPaneKey?.[paneKey]
     const tombstone = terminalSurfaceTombstonesByPaneKey[paneKey]
-    if (!tombstone || tombstone.incarnationId !== terminalPtyIncarnationsByPaneKey[paneKey]) {
-      sleepingAgentSessionsByPaneKey[paneKey] = chooseSleepingRecord(
-        sleepingAgentSessionsByPaneKey[paneKey],
-        record
-      )
+    if (
+      record &&
+      (!tombstone || tombstone.incarnationId !== terminalPtyIncarnationsByPaneKey[paneKey])
+    ) {
+      sleepingAgentSessionsByPaneKey[paneKey] = record
+    } else {
+      delete sleepingAgentSessionsByPaneKey[paneKey]
     }
   }
   for (const [paneKey, record] of Object.entries(sleepingAgentSessionsByPaneKey)) {
-    if (sourceKeys.has(record.worktreeId) && record.tabId && retiredTabIds.has(record.tabId)) {
+    if (reconciledKeys.has(record.worktreeId) && record.tabId && retiredTabIds.has(record.tabId)) {
       delete sleepingAgentSessionsByPaneKey[paneKey]
     }
   }
 
-  const browserPagesByWorkspace = { ...base.browserPagesByWorkspace }
-  for (const [workspaceId, pages] of Object.entries(source.browserPagesByWorkspace ?? {})) {
-    if (
-      browserPagesByWorkspace[workspaceId] === undefined ||
-      pages.some((page) => sourceAuthority.has(page.worktreeId))
-    ) {
-      browserPagesByWorkspace[workspaceId] = pages
-    }
-  }
-
-  const session: WorkspaceSessionState = {
-    ...source,
-    ...base,
-    activeRepoId: base.activeRepoId ?? source.activeRepoId,
-    activeWorkspaceKey: base.activeWorkspaceKey ?? source.activeWorkspaceKey,
-    activeWorkspaceExecutionHostId:
-      base.activeWorkspaceExecutionHostId ?? source.activeWorkspaceExecutionHostId,
-    activeWorktreeId: base.activeWorktreeId ?? source.activeWorktreeId,
-    activeTabId: base.activeTabId ?? source.activeTabId,
+  const session = mergeAdoptedWorkspaceSessionState({
+    base,
+    source,
+    reconciledKeys,
+    sourceAuthority,
+    ambiguousWorktreeIds,
     tabsByWorktree,
     terminalLayoutsByTabId,
-    openFilesByWorktree: mergeWorkspaceRecord(
-      base.openFilesByWorktree,
-      source.openFilesByWorktree,
-      sourceKeys,
-      sourceAuthority
-    ),
-    activeFileIdByWorktree: mergeWorkspaceRecord(
-      base.activeFileIdByWorktree,
-      source.activeFileIdByWorktree,
-      sourceKeys,
-      sourceAuthority
-    ),
-    browserTabsByWorktree: mergeWorkspaceRecord(
-      base.browserTabsByWorktree,
-      source.browserTabsByWorktree,
-      sourceKeys,
-      sourceAuthority
-    ),
-    browserPagesByWorkspace,
-    browserUrlHistory: mergeBrowserHistory(base.browserUrlHistory, source.browserUrlHistory),
-    markdownFrontmatterVisible: {
-      ...source.markdownFrontmatterVisible,
-      ...base.markdownFrontmatterVisible
-    },
-    activeBrowserTabIdByWorktree: mergeWorkspaceRecord(
-      base.activeBrowserTabIdByWorktree,
-      source.activeBrowserTabIdByWorktree,
-      sourceKeys,
-      sourceAuthority
-    ),
-    activeTabTypeByWorktree: mergeWorkspaceRecord(
-      base.activeTabTypeByWorktree,
-      source.activeTabTypeByWorktree,
-      sourceKeys,
-      sourceAuthority
-    ),
-    activeTabIdByWorktree: mergeWorkspaceRecord(
-      base.activeTabIdByWorktree,
-      source.activeTabIdByWorktree,
-      sourceKeys,
-      sourceAuthority
-    ),
-    unifiedTabs: mergeWorkspaceRecord(
-      base.unifiedTabs,
-      source.unifiedTabs,
-      sourceKeys,
-      sourceAuthority
-    ),
-    tabGroups: mergeWorkspaceRecord(base.tabGroups, source.tabGroups, sourceKeys, sourceAuthority),
-    tabGroupLayouts: mergeWorkspaceRecord(
-      base.tabGroupLayouts,
-      source.tabGroupLayouts,
-      sourceKeys,
-      sourceAuthority
-    ),
-    activeGroupIdByWorktree: mergeWorkspaceRecord(
-      base.activeGroupIdByWorktree,
-      source.activeGroupIdByWorktree,
-      sourceKeys,
-      sourceAuthority
-    ),
-    lastVisitedAtByWorktreeId: mergeWorkspaceRecord(
-      base.lastVisitedAtByWorktreeId,
-      source.lastVisitedAtByWorktreeId,
-      sourceKeys,
-      sourceAuthority
-    ),
-    defaultTerminalTabsAppliedByWorktreeId: mergeWorkspaceRecord(
-      base.defaultTerminalTabsAppliedByWorktreeId,
-      source.defaultTerminalTabsAppliedByWorktreeId,
-      sourceKeys,
-      sourceAuthority
-    ),
-    activeWorktreeIdsOnShutdown: mergeUnique(
-      base.activeWorktreeIdsOnShutdown,
-      source.activeWorktreeIdsOnShutdown
-    ),
-    activeConnectionIdsAtShutdown: mergeUnique(
-      base.activeConnectionIdsAtShutdown,
-      source.activeConnectionIdsAtShutdown
-    ),
     remoteSessionIdsByTabId,
     sleepingAgentSessionsByPaneKey,
     terminalPtyIncarnationsByPaneKey,
-    terminalTopologyRevisionByRepoId: mergeTopologyRevisions(
-      base.terminalTopologyRevisionByRepoId,
-      source.terminalTopologyRevisionByRepoId
-    ),
     terminalSurfaceTombstonesByPaneKey
-  }
+  })
   return {
     session,
-    reconciledWorktreeIds: [...sourceKeys],
+    reconciledWorktreeIds: [...reconciledKeys],
     sourceAuthoritativeWorktreeIds: [...sourceAuthority],
-    sourceAuthoritativePaneKeys: [...sourcePaneAuthority]
+    sourceAuthoritativePaneKeys: [...sourcePaneAuthority],
+    ambiguousWorktreeIds: [...ambiguousWorktreeIds]
   }
 }

@@ -220,6 +220,38 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({})
   })
 
+  it('merges freshly adopted SSH state back with runtime host slices', async () => {
+    const sshWorktreeId = 'ssh-repo::/home/user/ssh-wt'
+    const runtimeWorktreeId = 'runtime-repo::/srv/runtime-wt'
+    const sshTab = sessionTab('ssh-tab', sshWorktreeId)
+    const runtimeTab = sessionTab('runtime-tab', runtimeWorktreeId)
+    const local = getDefaultWorkspaceSession()
+    const get = vi.fn(async (hostId?: string): Promise<WorkspaceSessionState> => {
+      return hostId === 'runtime:env-1'
+        ? {
+            ...getDefaultWorkspaceSession(),
+            tabsByWorktree: { [runtimeWorktreeId]: [runtimeTab] }
+          }
+        : local
+    })
+    const adoptSshPartition = vi.fn().mockResolvedValue({
+      ...local,
+      tabsByWorktree: { [sshWorktreeId]: [sshTab] }
+    })
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      { get, adoptSshPartition },
+      [{ connectionId: 'ssh-1', executionHostId: null }],
+      ['runtime:env-1']
+    )
+
+    expect(read.session.tabsByWorktree[sshWorktreeId]).toEqual([sshTab])
+    expect(read.session.tabsByWorktree[runtimeWorktreeId]).toEqual([runtimeTab])
+    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({
+      [runtimeWorktreeId]: 'runtime:env-1'
+    })
+  })
+
   it('keeps locally populated worktrees over a stale ssh partition copy', async () => {
     const worktreeId = 'ssh-repo::/home/user/wt'
     const sshRepo = { id: 'ssh-repo', connectionId: 'conn-1', executionHostId: null }

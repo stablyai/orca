@@ -11847,7 +11847,7 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree).toEqual({})
   })
 
-  it('keeps populated local state and removes the rejected ssh fork', async () => {
+  it('keeps populated local state and preserves an equal-revision SSH fork', async () => {
     const store = await createStore()
     const local = makeBoundHostSession('ssh:ssh-1@@local-pty')
     const source = makeBoundHostSession('ssh:ssh-1@@stale-pty')
@@ -11860,7 +11860,7 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(adopted.tabsByWorktree['repo-1::/worktree']).toEqual(
       local.tabsByWorktree['repo-1::/worktree']
     )
-    expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree).toEqual({})
+    expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree).toEqual(source.tabsByWorktree)
   })
 
   it('ignores non-ssh adoption requests without mutating their partition', async () => {
@@ -11938,6 +11938,101 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(adopted.openFilesByWorktree?.[folderKey]?.[0]?.relativePath).toBe('a.ts')
     expect(store.getWorkspaceSessionHostIds()).toEqual(['local', 'runtime:env-a'])
     expect(store.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('runtime-repo')
+  })
+
+  it('preserves equal-revision repo conflicts in both SSH source partitions', async () => {
+    const store = await createStore()
+    const left = makeBoundHostSession('ssh:left@@left-pty')
+    const right = makeBoundHostSession('ssh:right@@right-pty')
+    left.terminalTopologyRevisionByRepoId = { 'repo-1': 4 }
+    right.terminalTopologyRevisionByRepoId = { 'repo-1': 4 }
+    right.tabsByWorktree['repo-1::/worktree'][0].id = 'right-tab'
+    store.setWorkspaceSession(left, 'ssh:left')
+    store.setWorkspaceSession(right, 'ssh:right')
+
+    const adopted = store.adoptSshWorkspaceSessionPartition()
+
+    expect(adopted.tabsByWorktree['repo-1::/worktree']).toBeUndefined()
+    expect(store.getWorkspaceSession('ssh:left').tabsByWorktree).toEqual(left.tabsByWorktree)
+    expect(store.getWorkspaceSession('ssh:right').tabsByWorktree).toEqual(right.tabsByWorktree)
+  })
+
+  it('does not choose a folder tab between conflicting SSH sources', async () => {
+    const store = await createStore()
+    const folderKey = folderWorkspaceKey('shared-folder')
+    const left = makeBoundHostSession('ssh:left@@left-pty')
+    const right = makeBoundHostSession('ssh:right@@right-pty')
+    left.tabsByWorktree = {
+      [folderKey]: [{ ...left.tabsByWorktree['repo-1::/worktree'][0], worktreeId: folderKey }]
+    }
+    right.tabsByWorktree = {
+      [folderKey]: [
+        {
+          ...right.tabsByWorktree['repo-1::/worktree'][0],
+          id: 'right-tab',
+          worktreeId: folderKey
+        }
+      ]
+    }
+    store.setWorkspaceSession(left, 'ssh:left')
+    store.setWorkspaceSession(right, 'ssh:right')
+
+    const adopted = store.adoptSshWorkspaceSessionPartition()
+
+    expect(adopted.tabsByWorktree[folderKey]).toBeUndefined()
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local', 'ssh:left', 'ssh:right'])
+  })
+
+  it('prunes only the source whose state reconciled without ambiguity', async () => {
+    const store = await createStore()
+    const folderKey = folderWorkspaceKey('ambiguous-folder')
+    const local = getDefaultWorkspaceSession()
+    local.tabsByWorktree[folderKey] = [
+      makeTerminalTab({ id: 'local-folder-tab', worktreeId: folderKey })
+    ]
+    const accepted = makeBoundHostSession('ssh:accepted@@accepted-pty')
+    const retained = makeBoundHostSession('ssh:retained@@retained-pty')
+    retained.tabsByWorktree = {
+      [folderKey]: [makeTerminalTab({ id: 'remote-folder-tab', worktreeId: folderKey })]
+    }
+    store.setWorkspaceSession(local)
+    store.setWorkspaceSession(accepted, 'ssh:accepted')
+    store.setWorkspaceSession(retained, 'ssh:retained')
+
+    const adopted = store.adoptSshWorkspaceSessionPartition()
+
+    expect(adopted.tabsByWorktree['repo-1::/worktree']).toHaveLength(1)
+    expect(adopted.tabsByWorktree[folderKey]?.[0]?.id).toBe('local-folder-tab')
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local', 'ssh:retained'])
+  })
+
+  it('scopes a qualified adoption request to exactly one SSH partition', async () => {
+    const store = await createStore()
+    const left = makeBoundHostSession('ssh:left@@left-pty')
+    const right = makeBoundHostSession('ssh:right@@right-pty')
+    right.tabsByWorktree = {
+      'repo-2::/worktree': [makeTerminalTab({ id: 'right-tab', worktreeId: 'repo-2::/worktree' })]
+    }
+    store.setWorkspaceSession(left, 'ssh:left')
+    store.setWorkspaceSession(right, 'ssh:right')
+
+    const adopted = store.adoptSshWorkspaceSessionPartition('ssh:left')
+
+    expect(adopted.tabsByWorktree['repo-1::/worktree']).toHaveLength(1)
+    expect(adopted.tabsByWorktree['repo-2::/worktree']).toBeUndefined()
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local', 'ssh:right'])
+  })
+
+  it('rejects adoption before mutation when persistence writes are frozen', async () => {
+    const store = await createStore()
+    const source = makeBoundHostSession('ssh:ssh-1@@remote-pty')
+    store.setWorkspaceSession(source, 'ssh:ssh-1')
+    store.flushOrThrow()
+    store.freezeWrites()
+
+    expect(() => store.adoptSshWorkspaceSessionPartition()).toThrow('writes are frozen')
+    expect(store.getWorkspaceSession().tabsByWorktree).toEqual({})
+    expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree).toEqual(source.tabsByWorktree)
   })
 
   it('rolls back owner and sources when the durable owner flush fails', async () => {
@@ -12023,19 +12118,20 @@ describe('Store host-partitioned workspace sessions', () => {
         providerSession: { key: 'session_id', id: 'provider-old' },
         prompt: 'old',
         state: 'working',
-        capturedAt: 1,
-        updatedAt: 1
+        capturedAt: 9,
+        updatedAt: 9
       }
     }
     const source = makeBoundHostSession('ssh:ssh-1@@new-pty')
+    source.terminalTopologyRevisionByRepoId = { 'repo-1': 1 }
     source.terminalPtyIncarnationsByPaneKey = { [`tab-1:${TEST_LEAF_1}`]: 'inc-new' }
     source.sleepingAgentSessionsByPaneKey = {
       [`tab-1:${TEST_LEAF_1}`]: {
         ...local.sleepingAgentSessionsByPaneKey[`tab-1:${TEST_LEAF_1}`],
         providerSession: { key: 'session_id', id: 'provider-new' },
         prompt: 'new',
-        capturedAt: 2,
-        updatedAt: 2
+        capturedAt: 1,
+        updatedAt: 1
       }
     }
     store.setWorkspaceSession(local)

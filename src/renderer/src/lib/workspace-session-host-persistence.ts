@@ -336,11 +336,14 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   // Why: ssh partitions stay out of `slices` — SSH worktrees are local-owned
   // here, so an ssh slice must never feed the runtime-owner map or win a blind
   // last-wins merge; it is only a source for orphan adoption.
-  const session = await adoptStrandedSshHostPartitions(
-    api,
-    repos,
-    mergeWorkspaceSessionsFromHosts(slices)
-  )
+  if (api.adoptSshPartition) {
+    // Main enumerates persisted partitions, including folder-only SSH projects.
+    slices[LOCAL_EXECUTION_HOST_ID] = await api.adoptSshPartition()
+  }
+  const merged = mergeWorkspaceSessionsFromHosts(slices)
+  const session = api.adoptSshPartition
+    ? merged
+    : await adoptStrandedSshHostPartitions(api, repos, merged)
   return {
     session,
     runtimeHostIdByWorkspaceSessionKey: buildRuntimeHostIdByWorkspaceSessionKey(slices)

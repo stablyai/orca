@@ -222,9 +222,9 @@ function getExplicitHydratedTargetIds(value: unknown): Set<string> | null {
   return new Set(value)
 }
 
-function targetForWorktree(store: Store, worktreeId: string): string | null {
+function targetForWorktree(store: Store, worktreeId: string, targetId: string): string | null {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  return store.getRepo(repoId)?.connectionId ?? null
+  return store.getRepo(repoId, toSshExecutionHostId(targetId))?.connectionId ?? null
 }
 
 function exportSessionForTarget(
@@ -233,7 +233,7 @@ function exportSessionForTarget(
   session: WorkspaceSessionState
 ): RemoteWorkspaceSession {
   return exportRemoteWorkspaceSession(session, {
-    isTargetWorktree: (worktreeId) => targetForWorktree(store, worktreeId) === targetId
+    isTargetWorktree: (worktreeId) => targetForWorktree(store, worktreeId, targetId) === targetId
   })
 }
 
