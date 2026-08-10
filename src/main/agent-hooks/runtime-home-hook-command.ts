@@ -1,6 +1,7 @@
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 
 const MANAGED_SCRIPT_BASE_NAME = /^[A-Za-z0-9_-]+$/
+const WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE = '*\\&*|*\\^*|*\\(*|*\\)*|*\\;*|*,*|*=*|*%*|*\\!*'
 
 export function wrapRuntimeHomeHookCommand(scriptBaseName: string): string {
   if (!MANAGED_SCRIPT_BASE_NAME.test(scriptBaseName)) {
@@ -14,8 +15,8 @@ export function wrapRuntimeHomeHookCommand(scriptBaseName: string): string {
   const encodedCommand = Buffer.from(powershellCommand, 'utf16le').toString('base64')
   const powershellInvocation = `${powershell} -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
   const encodedWindowsBranch = `if [ -f ${powershell} ]; then ${powershellInvocation}; else ${drain}; fi`
-  const windowsBranch = `if [ -f ${windowsScript} ]; then case "$HOME" in *[!A-Za-z0-9_.:/~-]*) ${encodedWindowsBranch} ;; *) ${windowsScript} ;; esac; else ${drain}; fi`
+  const windowsBranch = `if [ -f ${windowsScript} ]; then case "$HOME" in ${WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE}) ${encodedWindowsBranch} ;; *) ${windowsScript} ;; esac; else ${drain}; fi`
   const posixBranch = `if [ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then /bin/sh ${posixScript}; else ${drain}; fi`
-  // Why: synced settings must select the destination runtime, not the installer profile or OS.
-  return `if [ -z "\${HOME-}" ]; then ${drain}; else case "$(command -p uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) ${windowsBranch} ;; *) ${posixBranch} ;; esac; fi`
+  // Why: OSTYPE is shell-owned, so platform selection adds no process to every hook invocation.
+  return `if [ -z "\${HOME-}" ]; then ${drain}; else case "\${OSTYPE-}" in msys*|cygwin*|win32*) ${windowsBranch} ;; *) ${posixBranch} ;; esac; fi`
 }

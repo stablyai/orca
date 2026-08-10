@@ -652,7 +652,9 @@ describe('wrapRuntimeHomeHookCommand', () => {
   it('selects the runtime platform variant under HOME', () => {
     const command = wrapRuntimeHomeHookCommand('claude-hook')
 
-    expect(command).toContain('case "$(command -p uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*)')
+    expect(command).toContain('case "${OSTYPE-}" in msys*|cygwin*|win32*)')
+    expect(command).toContain('case "$HOME" in *\\&*|*\\^*|*\\(*|*\\)*|*\\;*|*,*|*=*|*%*|*\\!*)')
+    expect(command).not.toContain('uname')
     expect(command).toContain('"$HOME/.orca/agent-hooks/claude-hook.cmd"')
     expect(command).toContain('/bin/sh "$HOME/.orca/agent-hooks/claude-hook.sh"')
     expect(command).not.toMatch(/[A-Z]:[\\/]|\/Users\/|\/home\//)
@@ -703,8 +705,8 @@ describe('wrapRuntimeHomeHookCommand', () => {
     expect(result.status, result.stderr.toString()).toBe(7)
   })
 
-  it.skipIf(process.platform !== 'win32')('keeps the safe Windows profile fast path', () => {
-    const destinationHome = join(tmpDir, 'destination-profile')
+  it.skipIf(process.platform !== 'win32')('keeps common Windows profiles on the fast path', () => {
+    const destinationHome = join(tmpDir, 'destination 国際 profile')
     const scriptDir = join(destinationHome, '.orca', 'agent-hooks')
     mkdirSync(scriptDir, { recursive: true })
     writeFileSync(join(scriptDir, 'claude-hook.cmd'), '@echo off\r\nexit /b 7\r\n', 'utf-8')
