@@ -47,13 +47,25 @@ function inEntry<T>(segment: string | number, parse: () => T): T {
   }
 }
 
+function parseEntry<T extends z.ZodType>(
+  schema: T,
+  raw: unknown
+): { success: true; data: z.output<T> } | { success: false } {
+  try {
+    const parsed = schema.safeParse(raw)
+    return parsed.success ? { success: true, data: parsed.data as z.output<T> } : { success: false }
+  } catch {
+    return { success: false }
+  }
+}
+
 /** Array that drops the elements it cannot parse instead of failing. */
 export function salvagingArray<T extends z.ZodType>(item: T): z.ZodType<z.output<T>[], unknown> {
   return z.array(z.unknown()).transform((values) =>
     values.flatMap((value, index) => {
-      const parsed = inEntry(index, () => item.safeParse(value))
+      const parsed = inEntry(index, () => parseEntry(item, value))
       if (parsed.success) {
-        return [parsed.data as z.output<T>]
+        return [parsed.data]
       }
       reportDrop(index)
       return []
@@ -71,11 +83,11 @@ export function salvagingRecord<K extends z.ZodType<string>, V extends z.ZodType
     // Why: null prototype so a persisted '__proto__' key cannot poison the result.
     const kept: Record<string, z.output<V>> = Object.create(null)
     for (const [entryKey, entryValue] of Object.entries(entries)) {
-      const parsed = key.safeParse(entryKey).success
-        ? inEntry(entryKey, () => value.safeParse(entryValue))
+      const parsed = parseEntry(key, entryKey).success
+        ? inEntry(entryKey, () => parseEntry(value, entryValue))
         : null
-      if (parsed?.success && (!accepts || accepts(entryKey, parsed.data as z.output<V>))) {
-        kept[entryKey] = parsed.data as z.output<V>
+      if (parsed?.success && (!accepts || accepts(entryKey, parsed.data))) {
+        kept[entryKey] = parsed.data
         continue
       }
       reportDrop(entryKey)
@@ -90,7 +102,7 @@ function salvaged(name: string, schema: z.ZodType, fallback: () => unknown): z.Z
       ctx.addIssue({ code: 'custom', message: 'required', input: raw })
       return z.NEVER
     }
-    const parsed = inEntry(name, () => schema.safeParse(raw))
+    const parsed = inEntry(name, () => parseEntry(schema, raw))
     if (parsed.success) {
       return parsed.data
     }

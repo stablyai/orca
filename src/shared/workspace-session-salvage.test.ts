@@ -399,4 +399,29 @@ describe('parseWorkspaceSessionSalvaging', () => {
       expect(result.value.tabGroupLayouts?.['repo-2::/other']).toBeDefined()
     }
   })
+
+  it('drops a recursive entry whose validator overflows instead of resetting the session', () => {
+    let layout: Record<string, unknown> = { type: 'leaf', groupId: 'group-deep' }
+    for (let depth = 0; depth < 3_000; depth += 1) {
+      layout = {
+        type: 'split',
+        direction: 'horizontal',
+        first: layout,
+        second: { type: 'leaf', groupId: `group-${depth}` }
+      }
+    }
+    const result = parseWorkspaceSessionSalvaging(
+      baseSession({
+        tabsByWorktree: { [WT]: [terminalTab('tab-keep')] },
+        tabGroupLayouts: { [WT]: layout }
+      })
+    )
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.droppedPaths).toEqual([`tabGroupLayouts.${WT}`])
+      expect(result.value.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-keep'])
+      expect(result.value.tabGroupLayouts).toEqual({})
+    }
+  })
 })
