@@ -2805,7 +2805,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "On latest origin/main bbcf89e221, the held-snapshot oracle erases the post-request tab and drops its pending write. The rebased published implementation 7daf37968d preserves that tab but fails authoritative deletion and slides its retry ceiling. Corrected request fence 03053f8ceb still fails both bidirectional barriers at test oracle 0e279f592a: it resurrects a post-request close and erases a pre-delivery local creation. Mutation acknowledgement implementation 66422d8a04 passes both barriers, the complete focused gate, and retains both real-SSH Electron journeys."
+        "evidence": "The byte-identical two-barrier oracle fails 0/2 on baseline c21dce152d and published 5a95f0aae8, passes 2/2 on corrected 215a897933, and fails 0/2 on disabled control 2935e9afd2. The failures are exactly post-request close resurrection and pre-delivery local creation erasure. Corrected also passes the complete focused gate and both real-SSH Electron journeys."
       },
       "performanceBudget": {
         "required": true,
@@ -2814,7 +2814,7 @@
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",
         "Run the headed journey on Linux and Windows clients, including system-SSH where available.",
-        "Keep the identical baseline, candidate, and disabled-control oracle artifacts with the review."
+        "Keep the identical baseline, published, corrected, and disabled-control oracle artifacts with the review."
       ],
       "knownGaps": [
         "No physical Linux or Windows client journey was run; cross-platform relay artifacts only received build coverage.",
