@@ -3,6 +3,28 @@ import type { OpenFile } from '@/store/slices/editor'
 
 type UntitledPathFile = Pick<OpenFile, 'filePath' | 'relativePath'>
 
+const MARKDOWN_SUFFIX = /\.md$/i
+
+/**
+ * True when the untitled placeholder is the one "New Markdown" creates. "New File" creates an
+ * extensionless placeholder, which must keep whatever extension the user types instead.
+ */
+export function isMarkdownUntitledName(currentName: string): boolean {
+  return MARKDOWN_SUFFIX.test(currentName)
+}
+
+/** Resolves the file name a rename should produce, or '' when nothing usable was typed. */
+export function resolveUntitledRenameFileName(currentName: string, typedName: string): string {
+  const trimmed = typedName.trim()
+  if (!isMarkdownUntitledName(currentName)) {
+    return trimmed
+  }
+  // Why: the markdown dialog shows a fixed ".md" next to the input, so strip a typed one
+  // rather than producing notes.md.md.
+  const stem = trimmed.replace(MARKDOWN_SUFFIX, '')
+  return stem ? `${stem}.md` : ''
+}
+
 export function getUntitledFileRoot(file: UntitledPathFile, worktreePath?: string | null): string {
   if (worktreePath) {
     return worktreePath
