@@ -17,13 +17,14 @@ vi.mock('child_process', () => {
 
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import { escapeWslShCommandForWindows } from '../../shared/wsl-login-shell-command'
 
 function lastShCommandPayload(): string {
   const call = execFileAsyncMock.mock.calls.at(-1)
   expect(call).toBeDefined()
   const [file, args] = call as [string, string[]]
   expect(file).toBe('wsl.exe')
-  // args: [...distroArgs, '--exec', 'sh', '-c', <payload>]
+  // args: [...distroArgs, '--', 'sh', '-c', <payload>]
   return args.at(-1) as string
 }
 
@@ -48,17 +49,20 @@ describe('detectWslCommandsOnPath', () => {
     expect(payload).toContain('fi\ndone')
   })
 
-  it('uses the shared alias- and function-neutral PATH lookup', async () => {
+  it('uses the shared alias- and function-neutral PATH lookup, skipping /mnt', async () => {
     execFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
     await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
 
     const payload = lastShCommandPayload()
-    const lookupScript = buildPosixCommandPathLookupScript({
-      kind: 'shell-variable',
-      name: 'cmd'
-    })
-    expect(payload).toContain(lookupScript)
+    const lookupScript = buildPosixCommandPathLookupScript(
+      { kind: 'shell-variable', name: 'cmd' },
+      { skipWindowsMountDirs: true }
+    )
+    expect(payload).toContain(escapeWslShCommandForWindows(lookupScript))
+    // Why: WSL appends the Windows PATH as a slow drvfs /mnt tail; the probe
+    // must skip it or the lookup can time out (issue #9725 root cause).
+    expect(payload).toContain('/mnt|/mnt/*)')
     expect(payload).not.toContain('type -P')
   })
 

@@ -94,7 +94,11 @@ export async function isCommandOnPath(
     const { stdout } = await execCommandInWsl(
       wslTarget,
       [
-        buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
+        // Why: skip the Windows-drive /mnt tail — slow drvfs stats can stall the probe.
+        buildPosixCommandPathLookupScript(
+          { kind: 'literal', value: command },
+          { skipWindowsMountDirs: true }
+        ),
         'if [ -n "$resolved" ]; then',
         `printf '${WSL_COMMAND_PATH_SENTINEL}%s\\n' "$resolved"`,
         'fi'

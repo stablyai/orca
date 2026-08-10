@@ -38,10 +38,15 @@ export async function detectWslCommandsOnPath(
   }
 
   const commandList = uniqueCommands.map(shellQuote).join(' ')
-  const lookupScript = buildPosixCommandPathLookupScript({
-    kind: 'shell-variable',
-    name: 'cmd'
-  })
+  const lookupScript = buildPosixCommandPathLookupScript(
+    {
+      kind: 'shell-variable',
+      name: 'cmd'
+    },
+    // Why: skip the Windows-drive /mnt tail WSL appends to PATH — drvfs stats
+    // are slow enough to time the probe out (issue #9725 root cause).
+    { skipWindowsMountDirs: true }
+  )
   // Newlines keep the loop valid in zsh and every POSIX shell used here.
   const script = [
     `for cmd in ${commandList}; do`,

@@ -73,7 +73,11 @@ export function buildWslCodexLoginArgs(distro: string, linuxHomePath: string): s
 }
 
 function buildCodexPathLookup(): string {
-  return buildPosixCommandPathLookupScript({ kind: 'literal', value: 'codex' })
+  // Why: skip the Windows-drive /mnt tail WSL appends to PATH — slow drvfs stats.
+  return buildPosixCommandPathLookupScript(
+    { kind: 'literal', value: 'codex' },
+    { skipWindowsMountDirs: true }
+  )
 }
 
 function buildWslCodexShellArgs(distro: string, command: string): string[] {
