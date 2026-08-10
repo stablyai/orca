@@ -16,6 +16,7 @@ import type {
 
 type GitStep = { method: string; params?: Record<string, unknown> }
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
+type RunRemoteGitAction = <T>(run: (remainingMs: () => number) => Promise<T>) => Promise<T>
 
 type Params = {
   client: RpcClient | null
@@ -32,6 +33,7 @@ type Params = {
   sendGitRequest: SendGitRequest
   sendCommitRequest: (message: string) => Promise<unknown>
   runGitSyncSteps: () => Promise<void>
+  runRemoteGitAction: RunRemoteGitAction
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
   mountedRef: MutableRefObject<boolean>
   busyActionRef: MutableRefObject<string | null>
@@ -68,6 +70,7 @@ export function useMobileSourceControlRunners(params: Params) {
     sendGitRequest,
     sendCommitRequest,
     runGitSyncSteps,
+    runRemoteGitAction,
     loadStatus,
     mountedRef,
     busyActionRef,
@@ -185,6 +188,7 @@ export function useMobileSourceControlRunners(params: Params) {
     sendCommitRequest,
     runGitSyncSteps,
     runGitWorkflow,
+    runRemoteGitAction,
     loadStatus,
     mountedRef,
     busyActionRef,
@@ -284,6 +288,7 @@ export function useMobileSourceControlRunners(params: Params) {
     worktreeId,
     sendGitRequest,
     runGitWorkflow,
+    runRemoteGitAction,
     runGitSequence,
     runGitSync,
     commit,

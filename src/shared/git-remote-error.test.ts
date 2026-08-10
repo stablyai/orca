@@ -94,6 +94,21 @@ describe('normalizeGitErrorMessage', () => {
     )
     expect(usedLineSplit).toBe(false)
   })
+
+  it('turns subprocess timeouts into operation-specific guidance', () => {
+    expect(normalizeGitErrorMessage(new Error('git timed out.'), 'push')).toBe(
+      'Push timed out. Check your network connection and Git authentication, then try again.'
+    )
+    expect(normalizeGitErrorMessage(new Error('wsl.exe timed out.'), 'fetch')).toBe(
+      'Fetch timed out. Check your network connection and Git authentication, then try again.'
+    )
+  })
+
+  it('preserves hook failures that mention a timeout', () => {
+    expect(normalizeGitErrorMessage(new Error('pre-push tests timed out.'), 'push')).toBe(
+      'pre-push tests timed out.'
+    )
+  })
 })
 
 describe('formatSubmodulePushFailureDetail', () => {

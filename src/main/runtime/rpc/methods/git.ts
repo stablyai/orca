@@ -195,49 +195,85 @@ export const GIT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'git.fetch',
     params: GitTargetedRemote,
-    handler: async (params, { runtime }) =>
-      params.pushTarget === undefined
-        ? runtime.fetchRuntimeGit(params.worktree)
-        : runtime.fetchRuntimeGit(params.worktree, params.pushTarget)
+    handler: async (params, { runtime }) => {
+      if (params.operationTimeoutMs === undefined) {
+        return params.pushTarget === undefined
+          ? runtime.fetchRuntimeGit(params.worktree)
+          : runtime.fetchRuntimeGit(params.worktree, params.pushTarget)
+      }
+      return runtime.fetchRuntimeGit(params.worktree, params.pushTarget, params.operationTimeoutMs)
+    }
   }),
   defineMethod({
     name: 'git.forkSync',
     params: GitForkSync,
     handler: async (params, { runtime }) =>
-      runtime.syncRuntimeGitForkDefaultBranch(params.worktree, params.expectedUpstream)
+      params.operationTimeoutMs === undefined
+        ? runtime.syncRuntimeGitForkDefaultBranch(params.worktree, params.expectedUpstream)
+        : runtime.syncRuntimeGitForkDefaultBranch(
+            params.worktree,
+            params.expectedUpstream,
+            params.operationTimeoutMs
+          )
   }),
   defineMethod({
     name: 'git.pull',
     params: GitTargetedRemote,
-    handler: async (params, { runtime }) =>
-      params.pushTarget === undefined
-        ? runtime.pullRuntimeGit(params.worktree)
-        : runtime.pullRuntimeGit(params.worktree, params.pushTarget)
+    handler: async (params, { runtime }) => {
+      if (params.operationTimeoutMs === undefined) {
+        return params.pushTarget === undefined
+          ? runtime.pullRuntimeGit(params.worktree)
+          : runtime.pullRuntimeGit(params.worktree, params.pushTarget)
+      }
+      return runtime.pullRuntimeGit(params.worktree, params.pushTarget, params.operationTimeoutMs)
+    }
   }),
   defineMethod({
     name: 'git.fastForward',
     params: GitTargetedRemote,
-    handler: async (params, { runtime }) =>
-      params.pushTarget === undefined
-        ? runtime.fastForwardRuntimeGit(params.worktree)
-        : runtime.fastForwardRuntimeGit(params.worktree, params.pushTarget)
+    handler: async (params, { runtime }) => {
+      if (params.operationTimeoutMs === undefined) {
+        return params.pushTarget === undefined
+          ? runtime.fastForwardRuntimeGit(params.worktree)
+          : runtime.fastForwardRuntimeGit(params.worktree, params.pushTarget)
+      }
+      return runtime.fastForwardRuntimeGit(
+        params.worktree,
+        params.pushTarget,
+        params.operationTimeoutMs
+      )
+    }
   }),
   defineMethod({
     name: 'git.rebaseFromBase',
     params: GitRebaseFromBase,
     handler: async (params, { runtime }) =>
-      runtime.rebaseRuntimeGitFromBase(params.worktree, params.baseRef)
+      params.operationTimeoutMs === undefined
+        ? runtime.rebaseRuntimeGitFromBase(params.worktree, params.baseRef)
+        : runtime.rebaseRuntimeGitFromBase(
+            params.worktree,
+            params.baseRef,
+            params.operationTimeoutMs
+          )
   }),
   defineMethod({
     name: 'git.push',
     params: GitPush,
     handler: async (params, { runtime }) =>
-      runtime.pushRuntimeGit(
-        params.worktree,
-        params.publish,
-        params.pushTarget,
-        params.forceWithLease
-      )
+      params.operationTimeoutMs === undefined
+        ? runtime.pushRuntimeGit(
+            params.worktree,
+            params.publish,
+            params.pushTarget,
+            params.forceWithLease
+          )
+        : runtime.pushRuntimeGit(
+            params.worktree,
+            params.publish,
+            params.pushTarget,
+            params.forceWithLease,
+            params.operationTimeoutMs
+          )
   }),
   defineMethod({
     name: 'git.branchDiff',

@@ -410,6 +410,42 @@ describe('git RPC methods', () => {
     expect(runtime.fetchRuntimeGit).toHaveBeenCalledWith('id:wt-1', pushTarget)
   })
 
+  it('forwards the optional remaining remote-operation budget', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      fetchRuntimeGit: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.fetch', {
+        worktree: 'id:wt-1',
+        operationTimeoutMs: 3_000
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.fetchRuntimeGit).toHaveBeenCalledWith('id:wt-1', undefined, 3_000)
+  })
+
+  it('rejects remote-operation budgets above the wire-safe maximum', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      fetchRuntimeGit: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.fetch', {
+        worktree: 'id:wt-1',
+        operationTimeoutMs: 120_001
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(runtime.fetchRuntimeGit).not.toHaveBeenCalled()
+  })
+
   it('forwards fork sync requests to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

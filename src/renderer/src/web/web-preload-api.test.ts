@@ -6,6 +6,7 @@ import type { FeatureInteractionState } from '../../../shared/feature-interactio
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../../shared/protocol-version'
+import { GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS } from '../../../shared/git-remote-operation-timeout'
 
 const TEST_COMMIT_OID = '0123456789abcdef0123456789abcdef01234567'
 
@@ -3535,8 +3536,8 @@ describe('web git preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
-  it('routes remote commit URL requests through the runtime git API', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
+  it('routes git requests and bounds remote operations', async () => {
+    const runtimeCalls: { method: string; params: unknown; timeoutMs?: number }[] = []
     const worktree = {
       id: 'wt-1',
       repoId: 'repo-1',
@@ -3561,8 +3562,12 @@ describe('web git preload API', () => {
     }
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
+        call(
+          method: string,
+          params?: unknown,
+          options?: { timeoutMs?: number }
+        ): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params, ...(options?.timeoutMs ? options : {}) })
           if (method === 'repo.list') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -3584,6 +3589,14 @@ describe('web git preload API', () => {
               id: `call-${runtimeCalls.length}`,
               ok: true,
               result: `https://git.example.com/project/commit/${TEST_COMMIT_OID}`,
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'git.fetch') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: undefined,
               _meta: { runtimeId: 'runtime-1' }
             })
           }
@@ -3610,10 +3623,22 @@ describe('web git preload API', () => {
         sha: TEST_COMMIT_OID
       })
     ).resolves.toBe(`https://git.example.com/project/commit/${TEST_COMMIT_OID}`)
+    await expect(
+      globals.window.api.git.fetch({ worktreePath: '/workspace/repo' })
+    ).resolves.toBeUndefined()
     expect(runtimeCalls).toEqual([
       { method: 'repo.list', params: undefined },
-      { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
-      { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: TEST_COMMIT_OID } }
+      { method: 'worktree.detectedList', params: { repo: 'repo-1' }, timeoutMs: 15_000 },
+      { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: TEST_COMMIT_OID } },
+      {
+        method: 'git.fetch',
+        params: {
+          worktree: 'id:wt-1',
+          pushTarget: undefined,
+          operationTimeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
+        },
+        timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS
+      }
     ])
   })
 

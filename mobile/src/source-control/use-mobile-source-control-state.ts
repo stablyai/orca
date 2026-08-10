@@ -170,11 +170,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
         ? 'No upstream'
         : null
 
-  const { sendGitRequest, sendCommitRequest, runGitSyncSteps } = useMobileGitRequests({
-    client,
-    connState,
-    worktreeId
-  })
+  const { sendGitRequest, sendCommitRequest, runGitSyncSteps, runRemoteGitAction } =
+    useMobileGitRequests({ client, connState, worktreeId })
 
   const runners = useMobileSourceControlRunners({
     client,
@@ -191,6 +188,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     sendGitRequest,
     sendCommitRequest,
     runGitSyncSteps,
+    runRemoteGitAction,
     loadStatus,
     mountedRef,
     busyActionRef,

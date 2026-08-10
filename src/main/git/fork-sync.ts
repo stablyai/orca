@@ -5,29 +5,32 @@ import {
   type GitForkSyncResult
 } from '../../shared/git-fork-sync'
 import type { GitRuntimeOptions } from './git-runtime-options'
-import { gitOptionsForWorktree } from './git-runtime-options'
+import {
+  gitRemoteOperationOptionsForWorktree,
+  runLocalGitRemoteOperation
+} from './git-remote-operation-options'
 import { gitExecFileAsync } from './runner'
+import { createGitNetworkSshPolicyCache } from './git-network-ssh-policy-cache'
 
 export async function gitSyncForkDefaultBranch(
   worktreePath: string,
   expectedUpstream: GitForkSyncExpectedUpstream,
   options: GitRuntimeOptions = {}
 ): Promise<GitForkSyncResult> {
-  // Compose the caller's cancel signal with the 60s timeout so neither is lost —
-  // the caller's signal was previously clobbered by the timeout controller.
-  const signal = options.signal
-    ? AbortSignal.any([options.signal, AbortSignal.timeout(60_000)])
-    : AbortSignal.timeout(60_000)
-  try {
-    return await syncForkDefaultBranch(
-      (args) =>
-        gitExecFileAsync(args, {
-          ...gitOptionsForWorktree(worktreePath, options),
-          timeout: 60_000,
-          signal
-        }),
-      { expectedUpstream }
+  if (!options.remoteOperationDeadline) {
+    return runLocalGitRemoteOperation(options, (remoteOptions) =>
+      gitSyncForkDefaultBranch(worktreePath, expectedUpstream, remoteOptions)
     )
+  }
+  try {
+    const networkSshPolicyCache = createGitNetworkSshPolicyCache()
+    const operationOptions = {
+      ...gitRemoteOperationOptionsForWorktree(worktreePath, options),
+      networkSshPolicyCache
+    }
+    return await syncForkDefaultBranch((args) => gitExecFileAsync(args, operationOptions), {
+      expectedUpstream
+    })
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'push'))
   }

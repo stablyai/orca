@@ -30,6 +30,13 @@ import {
   describeMaxBufferOverflowError,
   isMaxBufferOverflowError
 } from '../git/max-buffer-overflow'
+import {
+  gitRemoteOperationRemainingMs,
+  gitRemoteOperationTimeoutError,
+  resolveGitRemoteOperationTimeoutMs,
+  runWithGitRemoteOperationDeadline,
+  type GitRemoteOperationContext
+} from '../../shared/git-remote-operation-timeout'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
 
@@ -101,6 +108,35 @@ export class SshGitProvider implements IGitProvider {
     }
   }
   private loggedWorktreeIsCleanFallback = false
+
+  private runRemoteGitOperation<T>(
+    context: GitRemoteOperationContext | undefined,
+    run: (context: GitRemoteOperationContext) => Promise<T>
+  ): Promise<T> {
+    if (context) {
+      return run(context)
+    }
+    return runWithGitRemoteOperationDeadline(
+      resolveGitRemoteOperationTimeoutMs(process.env.ORCA_GIT_REMOTE_OPERATION_TIMEOUT_MS),
+      run
+    )
+  }
+
+  private remoteGitRequest<T>(
+    method: string,
+    params: Record<string, unknown>,
+    context: GitRemoteOperationContext
+  ): Promise<T> {
+    const timeoutMs = gitRemoteOperationRemainingMs(context.deadline)
+    if (timeoutMs <= 0) {
+      return Promise.reject(gitRemoteOperationTimeoutError())
+    }
+    return this.mux.request(
+      method,
+      { ...params, operationTimeoutMs: timeoutMs },
+      { timeoutMs, signal: context.signal }
+    ) as Promise<T>
+  }
 
   constructor(
     connectionId: string,
@@ -527,55 +563,100 @@ export class SshGitProvider implements IGitProvider {
     worktreePath: string,
     publish = false,
     pushTarget?: GitPushTarget,
-    options: { forceWithLease?: boolean } = {}
+    options: {
+      forceWithLease?: boolean
+      remoteOperationContext?: GitRemoteOperationContext
+    } = {}
   ): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.push', {
-        worktreePath,
-        publish,
-        pushTarget,
-        ...(options.forceWithLease === true ? { forceWithLease: true } : {})
+    await this.runRemoteGitOperation(options.remoteOperationContext, (context) =>
+      this.runWithDiffDedupeClear(async () => {
+        await this.remoteGitRequest(
+          'git.push',
+          {
+            worktreePath,
+            publish,
+            pushTarget,
+            ...(options.forceWithLease === true ? { forceWithLease: true } : {})
+          },
+          context
+        )
       })
-    })
+    )
   }
 
-  async pullBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.pull', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
-    })
-  }
-
-  async fastForwardBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.fastForward', {
-        worktreePath,
-        ...(pushTarget ? { pushTarget } : {})
+  async pullBranch(
+    worktreePath: string,
+    pushTarget?: GitPushTarget,
+    context?: GitRemoteOperationContext
+  ): Promise<void> {
+    await this.runRemoteGitOperation(context, (operation) =>
+      this.runWithDiffDedupeClear(async () => {
+        await this.remoteGitRequest(
+          'git.pull',
+          { worktreePath, ...(pushTarget ? { pushTarget } : {}) },
+          operation
+        )
       })
-    })
+    )
   }
 
-  async rebaseFromBase(worktreePath: string, baseRef: string): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.rebaseFromBase', { worktreePath, baseRef })
-    })
+  async fastForwardBranch(
+    worktreePath: string,
+    pushTarget?: GitPushTarget,
+    context?: GitRemoteOperationContext
+  ): Promise<void> {
+    await this.runRemoteGitOperation(context, (operation) =>
+      this.runWithDiffDedupeClear(async () => {
+        await this.remoteGitRequest(
+          'git.fastForward',
+          { worktreePath, ...(pushTarget ? { pushTarget } : {}) },
+          operation
+        )
+      })
+    )
   }
 
-  async fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.fetch', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
-    })
+  async rebaseFromBase(
+    worktreePath: string,
+    baseRef: string,
+    context?: GitRemoteOperationContext
+  ): Promise<void> {
+    await this.runRemoteGitOperation(context, (operation) =>
+      this.runWithDiffDedupeClear(async () => {
+        await this.remoteGitRequest('git.rebaseFromBase', { worktreePath, baseRef }, operation)
+      })
+    )
+  }
+
+  async fetchRemote(
+    worktreePath: string,
+    pushTarget?: GitPushTarget,
+    context?: GitRemoteOperationContext
+  ): Promise<void> {
+    await this.runRemoteGitOperation(context, (operation) =>
+      this.runWithDiffDedupeClear(async () => {
+        await this.remoteGitRequest(
+          'git.fetch',
+          { worktreePath, ...(pushTarget ? { pushTarget } : {}) },
+          operation
+        )
+      })
+    )
   }
 
   async syncForkDefaultBranch(
     worktreePath: string,
-    expectedUpstream: GitForkSyncExpectedUpstream
+    expectedUpstream: GitForkSyncExpectedUpstream,
+    context?: GitRemoteOperationContext
   ): Promise<GitForkSyncResult> {
-    return this.runWithDiffDedupeClear(
-      async () =>
-        (await this.mux.request('git.forkSync', {
-          worktreePath,
-          ...(expectedUpstream ? { expectedUpstream } : {})
-        })) as GitForkSyncResult
+    return this.runRemoteGitOperation(context, (operation) =>
+      this.runWithDiffDedupeClear(() =>
+        this.remoteGitRequest<GitForkSyncResult>(
+          'git.forkSync',
+          { worktreePath, ...(expectedUpstream ? { expectedUpstream } : {}) },
+          operation
+        )
+      )
     )
   }
 
@@ -584,38 +665,50 @@ export class SshGitProvider implements IGitProvider {
     remote: string,
     branch: string,
     ref: string,
-    options?: { skipAutoMaintenance?: boolean }
+    options?: {
+      skipAutoMaintenance?: boolean
+      remoteOperationContext?: GitRemoteOperationContext
+    }
   ): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.fetchRemoteTrackingRef', {
-        worktreePath,
-        remote,
-        branch,
-        ref,
-        ...(options?.skipAutoMaintenance ? { skipAutoMaintenance: true } : {})
+    await this.runRemoteGitOperation(options?.remoteOperationContext, (operation) =>
+      this.runWithDiffDedupeClear(async () => {
+        await this.remoteGitRequest(
+          'git.fetchRemoteTrackingRef',
+          {
+            worktreePath,
+            remote,
+            branch,
+            ref,
+            ...(options?.skipAutoMaintenance ? { skipAutoMaintenance: true } : {})
+          },
+          operation
+        )
       })
-    })
+    )
   }
 
   async fetchGitLabMergeRequestHead(
     worktreePath: string,
     remote: string,
-    mrIid: number
+    mrIid: number,
+    context?: GitRemoteOperationContext
   ): Promise<string> {
     try {
-      return await this.runWithDiffDedupeClear(async () => {
-        // Why: the durable-ref RPC is a NEW method name. Old relays only implement
-        // FETCH_HEAD-semantics git.fetchGitLabMergeRequestHead, so calling the ref
-        // variant makes them return -32601 rather than silently no-op the durable
-        // ref (which would leave the client resolving a stale/missing MR head).
-        const result = await this.mux.request('git.fetchGitLabMergeRequestHeadRef', {
-          worktreePath,
-          remote,
-          mrIid
+      return await this.runRemoteGitOperation(context, (operation) =>
+        this.runWithDiffDedupeClear(async () => {
+          // Why: the durable-ref RPC is a NEW method name. Old relays only implement
+          // FETCH_HEAD-semantics git.fetchGitLabMergeRequestHead, so calling the ref
+          // variant makes them return -32601 rather than silently no-op the durable
+          // ref (which would leave the client resolving a stale/missing MR head).
+          const result = await this.remoteGitRequest<unknown>(
+            'git.fetchGitLabMergeRequestHeadRef',
+            { worktreePath, remote, mrIid },
+            operation
+          )
+          // Why: use the host-written path; a second client-side get-url can disagree.
+          return readDurableReviewHeadLocalRef(result, 'merge request')
         })
-        // Why: use the host-written path; a second client-side get-url can disagree.
-        return readDurableReviewHeadLocalRef(result, 'merge request')
-      })
+      )
     } catch (error) {
       if (isJsonRpcMethodNotFoundError(error)) {
         // Why: older SSH relays predate the durable-ref MR fetch; surface a
@@ -631,18 +724,21 @@ export class SshGitProvider implements IGitProvider {
   async fetchGitHubPullRequestHead(
     worktreePath: string,
     remote: string,
-    prNumber: number
+    prNumber: number,
+    context?: GitRemoteOperationContext
   ): Promise<string> {
     try {
-      return await this.runWithDiffDedupeClear(async () => {
-        const result = await this.mux.request('git.fetchGitHubPullRequestHead', {
-          worktreePath,
-          remote,
-          prNumber
+      return await this.runRemoteGitOperation(context, (operation) =>
+        this.runWithDiffDedupeClear(async () => {
+          const result = await this.remoteGitRequest<unknown>(
+            'git.fetchGitHubPullRequestHead',
+            { worktreePath, remote, prNumber },
+            operation
+          )
+          // Why: use the host-written path; a second client-side get-url can disagree.
+          return readDurableReviewHeadLocalRef(result, 'pull request')
         })
-        // Why: use the host-written path; a second client-side get-url can disagree.
-        return readDurableReviewHeadLocalRef(result, 'pull request')
-      })
+      )
     } catch (error) {
       if (isJsonRpcMethodNotFoundError(error)) {
         // Why: older SSH relays predate git.fetchGitHubPullRequestHead; surface a

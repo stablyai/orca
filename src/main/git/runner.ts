@@ -42,12 +42,17 @@ import {
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
 import { endSubprocessStdin } from '../../shared/subprocess-stdin-write'
 import {
+  cleanupSpawnedProcessTree,
+  preserveProcessCleanupFailure
+} from '../../shared/spawned-process-tree-cleanup'
+import {
   disableWslGitReadEnvironment,
   getWslGitReadEnvironment,
   invalidateWslGitReadEnvironment,
   peekWslGitReadEnvironment,
   type WslGitReadEnvironment
 } from './wsl-git-read-environment'
+import type { GitNetworkSshPolicyCache } from './git-network-ssh-policy-cache'
 // Re-exported for existing importers; lightweight consumers should import from './exec-error' to avoid this heavy module.
 import { extractExecError, parseRetryAfterMs } from './exec-error'
 export { extractExecError, parseRetryAfterMs }
@@ -308,9 +313,12 @@ type GitExecOptions = {
   stdin?: string
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
+  killProcessTree?: boolean
+  processTreeCleanupDeadlineMs?: number
   wslDistro?: string
   preferWslDirectGit?: boolean
   useConfiguredSshCommandForNetwork?: boolean
+  networkSshPolicyCache?: GitNetworkSshPolicyCache
 }
 
 type CommandExecOptions = {
@@ -321,6 +329,8 @@ type CommandExecOptions = {
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
   wslDistro?: string
+  killProcessTree?: boolean
+  processTreeCleanupDeadlineMs?: number
 }
 
 function wslDistroForCommand(cwd: string | undefined, override?: string): string | null {
@@ -430,61 +440,19 @@ function createAbortError(): Error {
   return error
 }
 
-const WINDOWS_TREE_KILL_WAIT_MS = 2_000
-
-function killSpawnedCommandTree(child: ChildProcess): Promise<void> {
-  const pid = child.pid
-  if (!pid || process.platform !== 'win32') {
-    child.kill()
-    return Promise.resolve()
-  }
-  return new Promise((resolve) => {
-    let killer: ChildProcess
-    try {
-      // Why: Windows shims/wsl.exe own descendants; wait for /t tree cleanup so a timed-out command can't outlive its probe.
-      killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
-      if (!killer || typeof killer.unref !== 'function') {
-        child.kill()
-        resolve()
-        return
-      }
-    } catch {
-      child.kill()
-      resolve()
-      return
-    }
-    let settled = false
-    let timer: NodeJS.Timeout | null = null
-    const finish = (fallbackToChildKill: boolean): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
-      killer.removeAllListeners()
-      if (fallbackToChildKill) {
-        child.kill()
-      }
-      resolve()
-    }
-    killer.once('error', () => finish(true))
-    killer.once('close', (code) => finish(code !== 0))
-    timer = setTimeout(() => {
-      killer.kill()
-      finish(true)
-    }, WINDOWS_TREE_KILL_WAIT_MS)
-    killer.unref()
-  })
+function killSpawnedCommandTree(
+  child: ChildProcess,
+  killPosixProcessGroup = false,
+  deadlineMs?: number
+) {
+  return cleanupSpawnedProcessTree(child, { deadlineMs, killPosixProcessGroup })
 }
 
 type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
   stdin?: string
+  killProcessTree?: boolean
+  processTreeCleanupDeadlineMs?: number
 }
 
 function emptyExecFileOutput(options: ExecFileCaptureOptions): string | Buffer {
@@ -524,6 +492,7 @@ function execFileCapture(
         timer = null
       }
       options.signal?.removeEventListener('abort', onAbort)
+      child?.off('error', onChildError)
     }
     const finish = (
       error: Error | null,
@@ -555,10 +524,21 @@ function execFileCapture(
         finish(abortError)
         return
       }
-      void killSpawnedCommandTree(child).then(() => {
+      child.stdout?.pause()
+      child.stderr?.pause()
+      void killSpawnedCommandTree(
+        child,
+        options.killProcessTree,
+        options.processTreeCleanupDeadlineMs
+      ).then((result) => {
         terminating = false
-        finish(abortError)
+        finish(preserveProcessCleanupFailure(abortError, result))
       })
+    }
+    function onChildError(error: Error): void {
+      if (!terminating) {
+        finish(error)
+      }
     }
 
     try {
@@ -581,6 +561,18 @@ function execFileCapture(
             finish(null, stdout.stdout, stdout.stderr)
             return
           }
+          if (error && child && options.killProcessTree) {
+            terminating = true
+            child.stdout?.pause()
+            child.stderr?.pause()
+            void killSpawnedCommandTree(child, true, options.processTreeCleanupDeadlineMs).then(
+              (result) => {
+                terminating = false
+                finish(preserveProcessCleanupFailure(error, result), stdout, stderr)
+              }
+            )
+            return
+          }
           finish(error, stdout, stderr)
         }
       )
@@ -590,11 +582,7 @@ function execFileCapture(
       return
     }
 
-    child.once('error', (error) => {
-      if (!terminating) {
-        finish(error)
-      }
-    })
+    child.once('error', onChildError)
 
     if (options.stdin !== undefined) {
       endSubprocessStdin(child.stdin, options.stdin)
@@ -613,9 +601,15 @@ function execFileCapture(
           finish(timeoutError)
           return
         }
-        void killSpawnedCommandTree(child).then(() => {
+        child.stdout?.pause()
+        child.stderr?.pause()
+        void killSpawnedCommandTree(
+          child,
+          options.killProcessTree,
+          options.processTreeCleanupDeadlineMs
+        ).then((result) => {
           terminating = false
-          finish(timeoutError)
+          finish(preserveProcessCleanupFailure(timeoutError, result))
         })
       }, options.timeout)
     }
@@ -639,18 +633,39 @@ async function spawnCommandCapture(
     let stderr = ''
     let stdoutBytes = 0
     let stderrBytes = 0
+    const stdoutDecoder = new StringDecoder(options.encoding ?? 'utf-8')
+    const stderrDecoder = new StringDecoder(options.encoding ?? 'utf-8')
     const spawnStartedAt = performance.now()
     const child = spawn(spawnCmd, spawnArgs, {
       cwd: options.cwd,
+      detached: options.killProcessTree === true && process.platform !== 'win32',
       env: options.env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })
     recordSubprocessSpawn(spawnCmd, spawnArgs, performance.now() - spawnStartedAt)
     let timer: NodeJS.Timeout | null = null
+    let terminating = false
+    const terminate = (error: Error): void => {
+      if (settled || terminating) {
+        return
+      }
+      terminating = true
+      // Why: a flooding Git hook can starve taskkill settlement while cleanup awaits it.
+      cleanupListeners()
+      child.stdout?.pause()
+      child.stderr?.pause()
+      void killSpawnedCommandTree(
+        child,
+        options.killProcessTree,
+        options.processTreeCleanupDeadlineMs
+      ).then((result) => {
+        terminating = false
+        finish(preserveProcessCleanupFailure(error, result))
+      })
+    }
     const onAbort = (): void => {
-      void killSpawnedCommandTree(child)
-      finish(createAbortError())
+      terminate(createAbortError())
     }
     const cleanupListeners = (): void => {
       if (timer) {
@@ -668,6 +683,8 @@ async function spawnCommandCapture(
         return
       }
       settled = true
+      stdout += stdoutDecoder.end()
+      stderr += stderrDecoder.end()
       cleanupListeners()
       if (error) {
         reject(Object.assign(error, { stdout, stderr }))
@@ -676,39 +693,38 @@ async function spawnCommandCapture(
       resolve({ stdout, stderr })
     }
     timer = options.timeout
-      ? setTimeout(() => {
-          void killSpawnedCommandTree(child)
-          finish(new Error(`${command} timed out.`))
-        }, options.timeout)
+      ? setTimeout(() => terminate(new Error(`${command} timed out.`)), options.timeout)
       : null
     options.signal?.addEventListener('abort', onAbort, { once: true })
     function onStdoutData(chunk: Buffer): void {
       stdoutBytes += chunk.byteLength
       if (options.maxBuffer && stdoutBytes > options.maxBuffer) {
-        void killSpawnedCommandTree(child)
-        finish(new Error(`${command} stdout exceeded maxBuffer.`))
+        terminate(new Error(`${command} stdout exceeded maxBuffer.`))
         return
       }
-      stdout += chunk.toString(options.encoding ?? 'utf-8')
+      stdout += stdoutDecoder.write(chunk)
     }
     function onStderrData(chunk: Buffer): void {
       stderrBytes += chunk.byteLength
       if (options.maxBuffer && stderrBytes > options.maxBuffer) {
-        void killSpawnedCommandTree(child)
-        finish(new Error(`${command} stderr exceeded maxBuffer.`))
+        terminate(new Error(`${command} stderr exceeded maxBuffer.`))
         return
       }
-      stderr += chunk.toString(options.encoding ?? 'utf-8')
+      stderr += stderrDecoder.write(chunk)
     }
     function onError(error: Error): void {
-      finish(error)
+      terminate(error)
     }
     function onClose(code: number | null): void {
+      if (terminating) {
+        return
+      }
       if (code === 0) {
         finish(null)
         return
       }
-      finish(new Error(`${command} exited with ${code}.`))
+      const detail = stderr.trim()
+      terminate(new Error(`${command} exited with ${code}.${detail ? `\n${detail}` : ''}`))
     }
     child.stdout?.on('data', onStdoutData)
     child.stderr?.on('data', onStderrData)
@@ -899,7 +915,10 @@ function buildOpenSshBatchModeCommand(configuredCommand: string): string | null 
   return [...withoutBatchModeOptions(tokens), '-o', 'BatchMode=yes'].map(shellQuoteToken).join(' ')
 }
 
-async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
+async function buildNetworkSshPolicyEnv(
+  options: GitExecOptions,
+  expiresAtMs?: number
+): Promise<{
   env: NodeJS.ProcessEnv
   mode: GitSshPolicyMode
 }> {
@@ -915,19 +934,34 @@ async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
     options.wslDistro,
     { useWslLoginShell: Boolean(options.wslDistro) }
   )
-  let configuredCommand = ''
-  try {
-    const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
-      cwd: resolved.cwd,
-      encoding: 'utf-8',
-      maxBuffer: DEFAULT_GIT_MAX_BUFFER,
-      timeout: CORE_SSH_COMMAND_PROBE_TIMEOUT_MS,
-      env: promptEnv,
-      signal: options.signal
-    })
-    configuredCommand = String(stdout).trim()
-  } catch {
-    configuredCommand = ''
+  const probe = async (): Promise<string> => {
+    try {
+      const remainingMs =
+        expiresAtMs === undefined
+          ? CORE_SSH_COMMAND_PROBE_TIMEOUT_MS
+          : expiresAtMs - performance.now()
+      if (remainingMs <= 0) {
+        throw new Error('git timed out.')
+      }
+      const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
+        cwd: resolved.cwd,
+        encoding: 'utf-8',
+        maxBuffer: DEFAULT_GIT_MAX_BUFFER,
+        timeout: Math.min(CORE_SSH_COMMAND_PROBE_TIMEOUT_MS, Math.max(1, Math.ceil(remainingMs))),
+        env: promptEnv,
+        signal: options.signal
+      })
+      return String(stdout).trim()
+    } catch {
+      return ''
+    }
+  }
+  const probeScope = JSON.stringify([resolved.binary, resolved.args, resolved.cwd])
+  const configuredCommand = options.networkSshPolicyCache
+    ? await options.networkSshPolicyCache.resolve(probeScope, probe)
+    : await probe()
+  if (expiresAtMs !== undefined && expiresAtMs - performance.now() <= 0) {
+    throw new Error('git timed out.')
   }
 
   if (!configuredCommand) {
@@ -952,6 +986,17 @@ async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
   return { env, mode: 'configured-openssh' }
 }
 
+function remainingGitCommandTimeoutMs(expiresAtMs: number | undefined): number | undefined {
+  if (expiresAtMs === undefined) {
+    return undefined
+  }
+  const remainingMs = Math.ceil(expiresAtMs - performance.now())
+  if (remainingMs <= 0) {
+    throw new Error('git timed out.')
+  }
+  return remainingMs
+}
+
 /**
  * Async git command execution. Drop-in replacement for
  * `execFileAsync('git', args, { cwd, encoding, ... })`.
@@ -964,22 +1009,36 @@ export async function gitExecFileAsync(
   return withGitSpan(
     { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
     async () => {
+      const expiresAtMs = options.timeout ? performance.now() + options.timeout : undefined
       const resolved = resolveGitCommand(args, options)
       const policy = options.useConfiguredSshCommandForNetwork
-        ? await buildNetworkSshPolicyEnv(options)
+        ? await buildNetworkSshPolicyEnv(options, expiresAtMs)
         : { env: nonInteractiveGitEnv(options.env), mode: 'default' as const }
       const capture = (
         command: ResolvedCommand
       ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> =>
-        execFileCapture(command.binary, command.args, {
-          cwd: command.cwd,
-          encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
-          maxBuffer: options.maxBuffer,
-          timeout: options.timeout,
-          stdin: options.stdin,
-          env: policy.env,
-          signal: options.signal
-        })
+        options.killProcessTree === true
+          ? spawnCommandCapture(command.binary, command.args, {
+              cwd: command.cwd,
+              encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+              maxBuffer: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
+              timeout: remainingGitCommandTimeoutMs(expiresAtMs),
+              env: policy.env,
+              signal: options.signal,
+              killProcessTree: true,
+              processTreeCleanupDeadlineMs: options.processTreeCleanupDeadlineMs
+            })
+          : execFileCapture(command.binary, command.args, {
+              cwd: command.cwd,
+              encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+              maxBuffer: options.maxBuffer,
+              timeout: remainingGitCommandTimeoutMs(expiresAtMs),
+              stdin: options.stdin,
+              env: policy.env,
+              signal: options.signal,
+              killProcessTree: options.killProcessTree,
+              processTreeCleanupDeadlineMs: options.processTreeCleanupDeadlineMs
+            })
       let result: { stdout: string | Buffer; stderr: string | Buffer }
       try {
         result = await capture(resolved)
@@ -1029,7 +1088,8 @@ export async function commandExecFileAsync(
       maxBuffer: execOptions.maxBuffer,
       timeout: execOptions.timeout,
       env: execOptions.env,
-      signal: execOptions.signal
+      signal: execOptions.signal,
+      processTreeCleanupDeadlineMs: execOptions.processTreeCleanupDeadlineMs
     })
     return { stdout: stdout as string, stderr: stderr as string }
   } catch (error) {

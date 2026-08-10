@@ -29,6 +29,14 @@ type GitSpyTarget = {
   ): Promise<{ stdout: string; stderr: string }>
 }
 
+type RemoteGitSpyTarget = {
+  remoteGit(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }>
+}
+
+type RemotePreparationGitSpyTarget = {
+  remotePreparationGit(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }>
+}
+
 function deferredRelayBuffer(content: string): {
   promise: Promise<Buffer>
   resolve: () => void
@@ -1210,14 +1218,19 @@ describe('GitHandler', () => {
       const gitBufferSpy = vi
         .spyOn(handler as unknown as GitBufferSpyTarget, 'gitBuffer')
         .mockImplementation(async () => pendingBuffers.shift()!.promise)
-      const gitSpy = vi
-        .spyOn(handler as unknown as GitSpyTarget, 'git')
-        .mockImplementation(async (args: string[]) => {
-          if (args[0] === 'remote') {
-            return { stdout: 'origin\n', stderr: '' }
-          }
-          return { stdout: '', stderr: '' }
-        })
+      vi.spyOn(handler as unknown as GitSpyTarget, 'git').mockResolvedValue({
+        stdout: '',
+        stderr: ''
+      })
+      const remoteGitSpy = vi
+        .spyOn(handler as unknown as RemoteGitSpyTarget, 'remoteGit')
+        .mockResolvedValue({ stdout: '', stderr: '' })
+      const preparationSpy = vi
+        .spyOn(handler as unknown as RemotePreparationGitSpyTarget, 'remotePreparationGit')
+        .mockImplementation(async (args: string[]) => ({
+          stdout: args[0] === 'remote' ? 'origin\n' : '',
+          stderr: ''
+        }))
 
       const first = dispatcher.callRequest('git.diff', {
         worktreePath: tmpDir,
@@ -1246,20 +1259,15 @@ describe('GitHandler', () => {
       await Promise.all([first, second])
 
       expect(gitBufferSpy).toHaveBeenCalledTimes(2)
-      expect(gitSpy).toHaveBeenCalledWith(
-        [
-          '-c',
-          'maintenance.auto=false',
-          '-c',
-          'maintenance.commit-graph.auto=0',
-          '-c',
-          'gc.auto=0',
-          'fetch',
-          '--no-tags',
-          'origin',
-          '+refs/heads/main:refs/remotes/origin/main'
-        ],
-        tmpDir
+      expect(remoteGitSpy).toHaveBeenCalledWith(
+        expect.arrayContaining(['fetch', 'origin']),
+        tmpDir,
+        expect.any(Object)
+      )
+      expect(preparationSpy).toHaveBeenCalledWith(
+        ['check-ref-format', 'refs/heads/main'],
+        tmpDir,
+        expect.any(Object)
       )
     })
 
@@ -1663,6 +1671,21 @@ describe('GitHandler', () => {
       } finally {
         await fs.rm(bareDir, { recursive: true, force: true })
       }
+    })
+
+    it('expires while preparatory target validation is hung', async () => {
+      vi.spyOn(
+        handler as unknown as RemotePreparationGitSpyTarget,
+        'remotePreparationGit'
+      ).mockImplementation(() => new Promise(() => {}))
+
+      await expect(
+        dispatcher.callRequest('git.fetch', {
+          worktreePath: tmpDir,
+          pushTarget: { remoteName: 'fork', branchName: 'feature/fix' },
+          operationTimeoutMs: 25
+        })
+      ).rejects.toThrow('Fetch timed out.')
     })
 
     it('fast-forwards the tracked branch with ff-only pull semantics', async () => {

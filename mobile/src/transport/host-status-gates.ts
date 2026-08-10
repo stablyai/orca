@@ -7,6 +7,7 @@ import type { DesktopStatus } from '../worktree/host-worktree-rpc-types'
 export type HostStatusGates = {
   hostCapabilities: string[]
   floatingWorkspaceEnabled: boolean
+  gitRemoteOperationTimeoutMs?: number
   compatVerdict: CompatVerdict
   statusPending: boolean
 }
@@ -53,6 +54,7 @@ export function useHostStatusGates(args: {
           settle({
             hostCapabilities: [],
             floatingWorkspaceEnabled: false,
+            gitRemoteOperationTimeoutMs: undefined,
             compatVerdict: { kind: 'ok' }
           })
           return
@@ -67,6 +69,7 @@ export function useHostStatusGates(args: {
         settle({
           hostCapabilities: status.capabilities ?? [],
           floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
+          gitRemoteOperationTimeoutMs: status.gitRemoteOperationTimeoutMs,
           compatVerdict: verdict
         })
         if (verdict.kind === 'blocked') {
@@ -84,6 +87,7 @@ export function useHostStatusGates(args: {
           settle({
             hostCapabilities: [],
             floatingWorkspaceEnabled: false,
+            gitRemoteOperationTimeoutMs: undefined,
             compatVerdict: { kind: 'ok' }
           })
         }
@@ -100,6 +104,7 @@ export function useHostStatusGates(args: {
     return {
       hostCapabilities: EMPTY_HOST_CAPABILITIES,
       floatingWorkspaceEnabled: false,
+      gitRemoteOperationTimeoutMs: undefined,
       compatVerdict: { kind: 'ok' },
       statusPending: connState === 'connected' && client !== null
     }
@@ -107,6 +112,7 @@ export function useHostStatusGates(args: {
   return {
     hostCapabilities: proven.hostCapabilities,
     floatingWorkspaceEnabled: proven.floatingWorkspaceEnabled,
+    gitRemoteOperationTimeoutMs: proven.gitRemoteOperationTimeoutMs,
     compatVerdict: proven.compatVerdict,
     // Why (F10): unchanged pending timing — the reconnect refetch is still "unknown", it just no
     // longer blanks the capabilities this same host already proved.
