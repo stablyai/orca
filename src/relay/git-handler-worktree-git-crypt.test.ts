@@ -23,6 +23,7 @@ const BRANCH = 'feature/test'
 const GIT_CRYPT_DIR = join(REPO, '.git', 'git-crypt')
 const WORKTREE_GIT_DIR = join(REPO, '.git', 'worktrees', 'repo-feature')
 const directory = { isDirectory: () => true, isFile: () => false }
+const file = { isDirectory: () => false, isFile: () => true }
 const enoent = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 
 function mockUnlockedRepo(): void {
@@ -35,7 +36,11 @@ function mockUnlockedRepo(): void {
 }
 
 function createGitMock(): ReturnType<typeof vi.fn<GitExec>> {
+  let showRefCalls = 0
   return vi.fn<GitExec>(async (args) => {
+    if (args[0] === 'show-ref' && showRefCalls++ === 0) {
+      throw Object.assign(new Error('missing branch'), { code: 1 })
+    }
     if (args[0] === 'rev-parse' && args[1] === '--absolute-git-dir') {
       return { stdout: `${WORKTREE_GIT_DIR}\n`, stderr: '' }
     }
@@ -65,7 +70,7 @@ describe('SSH worktree creation with git-crypt', () => {
       branchName: BRANCH
     })
 
-    expect(git.mock.calls[0]).toEqual([
+    expect(git.mock.calls[2]).toEqual([
       ['worktree', 'add', '--no-checkout', '--no-track', '-b', BRANCH, WORKTREE],
       REPO,
       { signal: undefined, timeout: GIT_WORKTREE_CREATE_TIMEOUT_MS }
@@ -96,12 +101,49 @@ describe('SSH worktree creation with git-crypt', () => {
       checkoutExistingBranch: true
     })
 
-    expect(git.mock.calls[0]).toEqual([
+    expect(git.mock.calls[2]).toEqual([
       ['worktree', 'add', '--no-checkout', WORKTREE, BRANCH],
       REPO,
       { signal: undefined, timeout: GIT_WORKTREE_CREATE_TIMEOUT_MS }
     ])
     expect(git.mock.calls.map((call) => call[0])).toContainEqual(['checkout'])
+  })
+
+  it('resolves relay git-crypt authority through a linked or separate Git dir', async () => {
+    statMock.mockImplementation(async (pathValue: string) => {
+      if (pathValue === join(REPO, '.git')) {
+        return file
+      }
+      if (pathValue === '/main/.git/git-crypt') {
+        return directory
+      }
+      throw enoent()
+    })
+    const git = createGitMock()
+    git.mockImplementation(async (args) => {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
+        return { stdout: '/main/.git\n', stderr: '' }
+      }
+      if (args[0] === 'show-ref') {
+        throw Object.assign(new Error('missing branch'), { code: 1 })
+      }
+      if (args[0] === 'rev-parse' && args[1] === '--absolute-git-dir') {
+        return { stdout: `${WORKTREE_GIT_DIR}\n`, stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await addWorktreeOp(git, {
+      repoPath: REPO,
+      targetDir: WORKTREE,
+      branchName: BRANCH
+    })
+
+    expect(symlinkMock).toHaveBeenCalledWith(
+      '/main/.git/git-crypt',
+      join(WORKTREE_GIT_DIR, 'git-crypt'),
+      expect.any(String)
+    )
   })
 
   it('shares state without checkout when sparse setup owns checkout', async () => {
@@ -115,7 +157,7 @@ describe('SSH worktree creation with git-crypt', () => {
       noCheckout: true
     })
 
-    expect(git.mock.calls[0]?.[0]).toEqual([
+    expect(git.mock.calls[2]?.[0]).toEqual([
       'worktree',
       'add',
       '--no-checkout',
@@ -170,11 +212,15 @@ describe('SSH worktree creation with git-crypt', () => {
   it('owns rollback when worktree add itself leaves partial state', async () => {
     mockUnlockedRepo()
     const git = createGitMock()
+    let showRefCalls = 0
     git.mockImplementation(async (args) => {
       if (args[0] === 'worktree' && args[1] === 'add') {
         throw new Error('partial add failure')
       }
       if (args[0] === 'show-ref') {
+        if (showRefCalls++ === 0) {
+          throw Object.assign(new Error('missing branch'), { code: 1 })
+        }
         return { stdout: `${BRANCH}\n`, stderr: '' }
       }
       return { stdout: '', stderr: '' }
@@ -193,16 +239,45 @@ describe('SSH worktree creation with git-crypt', () => {
     expect(git.mock.calls.map((call) => call[0])).toContainEqual(['branch', '-D', '--', BRANCH])
   })
 
+  it('does not roll back a pre-existing same-target relay winner', async () => {
+    mockUnlockedRepo()
+    const git = createGitMock()
+    git.mockImplementation(async (args) => {
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: `worktree ${WORKTREE}\nHEAD def456\nbranch refs/heads/${BRANCH}\n`,
+          stderr: ''
+        }
+      }
+      if (args[0] === 'worktree' && args[1] === 'add') {
+        throw new Error('same-target loser')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      addWorktreeOp(git, { repoPath: REPO, targetDir: WORKTREE, branchName: BRANCH })
+    ).rejects.toThrow('same-target loser')
+
+    const commands = git.mock.calls.map((call) => call[0])
+    expect(commands).not.toContainEqual(['worktree', 'remove', '--force', WORKTREE])
+    expect(commands).not.toContainEqual(['branch', '-D', '--', BRANCH])
+  })
+
   it('reports removed worktree and preserved branch precisely', async () => {
     mockUnlockedRepo()
     symlinkMock.mockRejectedValue(Object.assign(new Error('cannot link state'), { code: 'EIO' }))
     const git = createGitMock()
+    let showRefCalls = 0
     git.mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args[1] === '--absolute-git-dir') {
         return { stdout: `${WORKTREE_GIT_DIR}\n`, stderr: '' }
       }
       if (args[0] === 'branch' && args[1] === '-D') {
         throw new Error('branch delete failed')
+      }
+      if (args[0] === 'show-ref' && showRefCalls++ === 0) {
+        throw Object.assign(new Error('missing branch'), { code: 1 })
       }
       return { stdout: '', stderr: '' }
     })
@@ -257,5 +332,47 @@ describe('SSH worktree creation with git-crypt', () => {
 
     await rejection
     expect(git.mock.calls.map((call) => call[0])).not.toContainEqual(['checkout'])
+  })
+
+  it('gives expired-deadline rollback a fresh bounded reserve', async () => {
+    mockUnlockedRepo()
+    symlinkMock.mockImplementation(async () => {
+      vi.mocked(Date.now).mockReturnValue(200_000)
+      throw new Error('late state-link failure')
+    })
+    const git = createGitMock()
+
+    await expect(
+      addWorktreeOp(git, { repoPath: REPO, targetDir: WORKTREE, branchName: BRANCH })
+    ).rejects.toThrow('late state-link failure')
+
+    const removeCall = git.mock.calls.find(
+      (call) => call[0][0] === 'worktree' && call[0][1] === 'remove'
+    )
+    expect(removeCall?.[2]).toMatchObject({ signal: undefined, timeout: 30_000 })
+  })
+
+  it('passes only the remaining operation budget to a slow checkout', async () => {
+    mockUnlockedRepo()
+    const git = createGitMock()
+    git.mockImplementation(async (args) => {
+      if (args[0] === 'show-ref') {
+        throw Object.assign(new Error('missing branch'), { code: 1 })
+      }
+      if (args[0] === 'rev-parse' && args[1] === '--absolute-git-dir') {
+        vi.mocked(Date.now).mockReturnValue(170_000)
+        return { stdout: `${WORKTREE_GIT_DIR}\n`, stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await addWorktreeOp(git, {
+      repoPath: REPO,
+      targetDir: WORKTREE,
+      branchName: BRANCH
+    })
+
+    const checkoutCall = git.mock.calls.find((call) => call[0][0] === 'checkout')
+    expect(checkoutCall?.[2]).toMatchObject({ timeout: 11_000 })
   })
 })

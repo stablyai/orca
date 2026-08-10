@@ -32,12 +32,13 @@ import {
 import {
   GIT_WORKTREE_CREATE_TIMEOUT_MAX_MS,
   GIT_WORKTREE_CREATE_TIMEOUT_MS,
+  createGitWorktreeCleanupDeadline,
   createGitWorktreeDeadline,
   remainingGitWorktreeCreateMs,
   resolveGitWorktreeCreateTimeoutMs,
-  withoutGitWorktreeCancellation,
   type GitWorktreeCreateDeadline
 } from '../../shared/git-worktree-create-timeout'
+import { withGitWorktreeCreateLock } from '../../shared/git-worktree-create-lock'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedRevParsePathFormatError,
@@ -933,30 +934,34 @@ async function rollbackDeferredWorktreeCreate(
   worktreePath: string,
   branch: string,
   options: AddWorktreeOptions,
+  ownership: { target: boolean; branch: boolean },
   error: unknown
 ): Promise<never> {
   const wrapped: SparseWorktreeCreateError =
     error instanceof Error ? (error as SparseWorktreeCreateError) : new Error(String(error))
+  if (!ownership.target && !ownership.branch) {
+    throw wrapped
+  }
   try {
-    const cleanupOptions: AddWorktreeOptions = options.deadline
-      ? {
-          ...options,
-          signal: undefined,
-          deadline: withoutGitWorktreeCancellation(options.deadline)
-        }
-      : { ...options, signal: undefined }
-    const result = await removeWorktree(repoPath, worktreePath, true, {
-      deleteBranch: !options.checkoutExistingBranch,
-      forceBranchDelete: !options.checkoutExistingBranch,
-      ...cleanupOptions,
-      ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
-    })
-    if (result.preservedBranch) {
-      wrapped.cleanupFailed = true
-      wrapped.message = `${wrapped.message} (cleanup also failed — the worktree was removed, but branch "${result.preservedBranch.branchName}" was preserved)`
-      throw wrapped
+    const cleanupOptions: AddWorktreeOptions = {
+      ...options,
+      signal: undefined,
+      deadline: createGitWorktreeCleanupDeadline()
     }
-    if (!options.checkoutExistingBranch) {
+    if (ownership.target) {
+      const result = await removeWorktree(repoPath, worktreePath, true, {
+        deleteBranch: ownership.branch,
+        forceBranchDelete: ownership.branch,
+        ...cleanupOptions,
+        ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
+      })
+      if (result.preservedBranch) {
+        wrapped.cleanupFailed = true
+        wrapped.message = `${wrapped.message} (cleanup also failed — the worktree was removed, but branch "${result.preservedBranch.branchName}" was preserved)`
+        throw wrapped
+      }
+    }
+    if (ownership.branch) {
       try {
         await gitExecFileAsync(
           ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`],
@@ -981,6 +986,34 @@ async function rollbackDeferredWorktreeCreate(
   throw wrapped
 }
 
+async function captureWorktreeCreateOwnership(
+  repoPath: string,
+  worktreePath: string,
+  branch: string,
+  options: AddWorktreeOptions
+): Promise<{ target: boolean; branch: boolean }> {
+  const { stdout } = await gitExecFileAsync(
+    ['worktree', 'list', '--porcelain'],
+    gitExecOptions(repoPath, options)
+  )
+  const targetExists = parseWorktreeList(translateWslOutputPaths(stdout, repoPath, options)).some(
+    (worktree) => areWorktreePathsEqual(worktree.path, worktreePath)
+  )
+  let branchExists = true
+  try {
+    await gitExecFileAsync(
+      ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`],
+      gitExecOptions(repoPath, options)
+    )
+  } catch (error) {
+    if (getErrorCode(error) !== '1') {
+      throw error
+    }
+    branchExists = false
+  }
+  return { target: !targetExists, branch: !branchExists }
+}
+
 /**
  * Create a new worktree.
  * @param repoPath - Path to the main repo (or bare repo)
@@ -1002,14 +1035,16 @@ export async function addWorktree(
 ): Promise<AddWorktreeResult> {
   try {
     return await runWithGitReadCacheInvalidation(() =>
-      performAddWorktree(
-        repoPath,
-        worktreePath,
-        branch,
-        baseBranch,
-        refreshLocalBaseRef,
-        noCheckout,
-        options
+      withGitWorktreeCreateLock(repoPath, branch, worktreePath, () =>
+        performAddWorktree(
+          repoPath,
+          worktreePath,
+          branch,
+          baseBranch,
+          refreshLocalBaseRef,
+          noCheckout,
+          options
+        )
       )
     )
   } finally {
@@ -1082,6 +1117,12 @@ async function performAddWorktree(
     }
   }
   if (gitCryptDir) {
+    const ownership = await captureWorktreeCreateOwnership(
+      repoPath,
+      worktreePath,
+      branch,
+      createOptions
+    )
     try {
       // Why: rollback ownership begins before Git can leave a branch or registration behind.
       await gitExecFileAsync(args, gitExecOptions(repoPath, createOptions))
@@ -1096,7 +1137,14 @@ async function performAddWorktree(
         await gitExecFileAsync(['checkout'], gitExecOptions(worktreePath, createOptions))
       }
     } catch (error) {
-      return rollbackDeferredWorktreeCreate(repoPath, worktreePath, branch, createOptions, error)
+      return rollbackDeferredWorktreeCreate(
+        repoPath,
+        worktreePath,
+        branch,
+        createOptions,
+        ownership,
+        error
+      )
     }
   } else {
     await gitExecFileAsync(args, {

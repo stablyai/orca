@@ -248,6 +248,9 @@ export class GitHandler {
     this.dispatcher.onRequest('git.commitDiff', (p, context) => this.commitDiff(p, context))
     this.dispatcher.onRequest('git.listWorktrees', (p, context) => this.listWorktrees(p, context))
     this.dispatcher.onRequest('git.addWorktree', (p, context) => this.addWorktree(p, context))
+    this.dispatcher.onRequest('git.addWorktreeWithCleanup', (p, context) =>
+      this.addWorktree(p, context)
+    )
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
     this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
     this.dispatcher.onRequest('git.refreshLocalBaseRefForWorktreeCreate', (p) =>

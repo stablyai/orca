@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  GIT_WORKTREE_CREATE_CLEANUP_TIMEOUT_MS,
   GIT_WORKTREE_CREATE_TIMEOUT_MAX_MS,
   GIT_WORKTREE_CREATE_TIMEOUT_MS,
+  createGitWorktreeCleanupDeadline,
   createGitWorktreeDeadline,
+  gitWorktreeCreateTransportTimeoutMs,
   remainingGitWorktreeCreateMs,
   resolveGitWorktreeCreateTimeoutMs,
   runWithinGitWorktreeDeadline
@@ -35,6 +38,23 @@ describe('git worktree create timeout policy', () => {
 
     expect(remainingGitWorktreeCreateMs(deadline, 'first child')).toBe(400)
     expect(remainingGitWorktreeCreateMs(deadline, 'later child')).toBe(250)
+  })
+
+  it('starts cleanup with a fresh reserve after the operation deadline expired', () => {
+    vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValue(2_000)
+    const operation = createGitWorktreeDeadline(500)
+
+    expect(() => remainingGitWorktreeCreateMs(operation, 'late child')).toThrow(
+      'timed out during late child'
+    )
+    const cleanup = createGitWorktreeCleanupDeadline()
+    expect(remainingGitWorktreeCreateMs(cleanup, 'rollback')).toBe(
+      GIT_WORKTREE_CREATE_CLEANUP_TIMEOUT_MS
+    )
+  })
+
+  it('keeps the transport alive through operation cleanup and response publication', () => {
+    expect(gitWorktreeCreateTransportTimeoutMs(600_000)).toBe(635_000)
   })
 
   it('bounds a stalled filesystem operation by the same deadline', async () => {

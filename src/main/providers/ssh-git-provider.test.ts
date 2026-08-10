@@ -1437,13 +1437,13 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(worktrees)
   })
 
-  it('addWorktree sends git.addWorktree request', async () => {
+  it('addWorktree uses the cleanup-aware relay request', async () => {
     await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
       base: 'main',
       noCheckout: true
     })
     expect(mux.request).toHaveBeenCalledWith(
-      'git.addWorktree',
+      'git.addWorktreeWithCleanup',
       {
         repoPath: '/home/user/repo',
         branchName: 'feature',
@@ -1452,7 +1452,7 @@ describe('SshGitProvider', () => {
         noCheckout: true,
         timeoutMs: 180_000
       },
-      { signal: undefined, timeoutMs: 180_000 }
+      { signal: undefined, timeoutMs: 215_000, waitForRemoteCancellation: true }
     )
   })
 
@@ -1465,15 +1465,53 @@ describe('SshGitProvider', () => {
     })
 
     expect(mux.request).toHaveBeenCalledWith(
-      'git.addWorktree',
+      'git.addWorktreeWithCleanup',
       {
         repoPath: '/home/user/repo',
         branchName: 'feature',
         targetDir: '/home/user/feat',
         timeoutMs: 600_000
       },
-      { signal: controller.signal, timeoutMs: 600_000 }
+      {
+        signal: controller.signal,
+        timeoutMs: 635_000,
+        waitForRemoteCancellation: true
+      }
     )
+  })
+
+  it('fails safely before mutation when an old relay lacks cleanup-aware creation', async () => {
+    mux.request.mockRejectedValue(
+      Object.assign(new Error('Method not found: git.addWorktreeWithCleanup'), { code: -32601 })
+    )
+
+    await expect(
+      provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat')
+    ).rejects.toThrow('Reconnect to deploy the latest relay')
+
+    expect(mux.request).toHaveBeenCalledOnce()
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.addWorktreeWithCleanup',
+      expect.any(Object),
+      expect.any(Object)
+    )
+  })
+
+  it('reports cancellation only after the relay returns its cleanup result', async () => {
+    const controller = new AbortController()
+    mux.request.mockImplementation(async () => {
+      controller.abort()
+      throw new Error('cancelled; cleanup also failed')
+    })
+
+    await expect(
+      provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
+        signal: controller.signal
+      })
+    ).rejects.toMatchObject({
+      name: 'AbortError',
+      message: 'cancelled; cleanup also failed'
+    })
   })
 
   it('removeWorktree sends git.removeWorktree request', async () => {

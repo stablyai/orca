@@ -1,6 +1,8 @@
 // Why: creation may traverse slow content filters, but every caller still needs a closed bound.
 export const GIT_WORKTREE_CREATE_TIMEOUT_MS = 180_000
 export const GIT_WORKTREE_CREATE_TIMEOUT_MAX_MS = 30 * 60_000
+export const GIT_WORKTREE_CREATE_CLEANUP_TIMEOUT_MS = 30_000
+export const GIT_WORKTREE_CREATE_TRANSPORT_MARGIN_MS = 5_000
 
 export type GitWorktreeCreateDeadline = Readonly<{
   expiresAt: number
@@ -44,10 +46,16 @@ export function createGitWorktreeDeadline(
   return { expiresAt: Date.now() + timeoutMs, ...(signal ? { signal } : {}) }
 }
 
-export function withoutGitWorktreeCancellation(
-  deadline: GitWorktreeCreateDeadline
-): GitWorktreeCreateDeadline {
-  return { expiresAt: deadline.expiresAt }
+export function createGitWorktreeCleanupDeadline(): GitWorktreeCreateDeadline {
+  return createGitWorktreeDeadline(GIT_WORKTREE_CREATE_CLEANUP_TIMEOUT_MS)
+}
+
+export function gitWorktreeCreateTransportTimeoutMs(operationTimeoutMs: number): number {
+  return (
+    operationTimeoutMs +
+    GIT_WORKTREE_CREATE_CLEANUP_TIMEOUT_MS +
+    GIT_WORKTREE_CREATE_TRANSPORT_MARGIN_MS
+  )
 }
 
 export function remainingGitWorktreeCreateMs(

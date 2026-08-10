@@ -32,7 +32,10 @@ import {
 } from '../git/max-buffer-overflow'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
-import { resolveGitWorktreeCreateTimeoutMs } from '../../shared/git-worktree-create-timeout'
+import {
+  gitWorktreeCreateTransportTimeoutMs,
+  resolveGitWorktreeCreateTimeoutMs
+} from '../../shared/git-worktree-create-timeout'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -727,18 +730,31 @@ export class SshGitProvider implements IGitProvider {
   ): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
       const timeoutMs = resolveGitWorktreeCreateTimeoutMs()
+      const transportTimeoutMs = gitWorktreeCreateTransportTimeoutMs(timeoutMs)
       const { signal, ...params } = options ?? {}
-      await this.mux.request(
-        'git.addWorktree',
-        {
-          repoPath,
-          branchName,
-          targetDir,
-          ...params,
-          timeoutMs
-        },
-        { signal, timeoutMs }
-      )
+      try {
+        await this.mux.request(
+          'git.addWorktreeWithCleanup',
+          {
+            repoPath,
+            branchName,
+            targetDir,
+            ...params,
+            timeoutMs
+          },
+          { signal, timeoutMs: transportTimeoutMs, waitForRemoteCancellation: true }
+        )
+      } catch (error) {
+        if (isJsonRpcMethodNotFoundError(error)) {
+          throw new Error(
+            'This SSH host cannot guarantee bounded worktree rollback. Reconnect to deploy the latest relay, then try again.'
+          )
+        }
+        if (signal?.aborted && error instanceof Error) {
+          error.name = 'AbortError'
+        }
+        throw error
+      }
     })
   }
 

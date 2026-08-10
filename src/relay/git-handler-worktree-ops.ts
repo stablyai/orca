@@ -5,11 +5,12 @@ import {
 } from '../shared/git-crypt-worktree-state'
 import {
   clampGitWorktreeCreateTimeoutMs,
+  createGitWorktreeCleanupDeadline,
   createGitWorktreeDeadline,
   remainingGitWorktreeCreateMs,
-  withoutGitWorktreeCancellation,
   type GitWorktreeCreateDeadline
 } from '../shared/git-worktree-create-timeout'
+import { withGitWorktreeCreateLock } from '../shared/git-worktree-create-lock'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 import type { GitExec } from './git-handler-ops'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
@@ -20,24 +21,29 @@ async function rollbackRelayWorktreeCreate(
   repoPath: string,
   targetDir: string,
   branchName: string,
-  deleteBranch: boolean,
+  ownership: { target: boolean; branch: boolean },
   error: unknown
 ): Promise<never> {
   const wrapped = error instanceof Error ? error : new Error(String(error))
-  let worktreeRemoved = false
+  if (!ownership.target && !ownership.branch) {
+    throw wrapped
+  }
+  let worktreeRemoved = !ownership.target
   try {
-    try {
-      await git(['worktree', 'remove', '--force', targetDir], repoPath)
-    } catch {
-      // Why: add may fail after creating only a branch or a stale registration; prune and verify below.
+    if (ownership.target) {
+      try {
+        await git(['worktree', 'remove', '--force', targetDir], repoPath)
+      } catch {
+        // Why: add may fail after creating only a branch or a stale registration; prune and verify below.
+      }
+      await git(['worktree', 'prune'], repoPath)
+      const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
+      worktreeRemoved = !stdout
+        .split(/\n(?=worktree )/)
+        .map((entry) => entry.match(/^worktree (.+)$/m)?.[1])
+        .some((candidate) => candidate && areRelayWorktreePathsEqual(candidate, targetDir))
     }
-    await git(['worktree', 'prune'], repoPath)
-    const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
-    worktreeRemoved = !stdout
-      .split(/\n(?=worktree )/)
-      .map((entry) => entry.match(/^worktree (.+)$/m)?.[1])
-      .some((candidate) => candidate && areRelayWorktreePathsEqual(candidate, targetDir))
-    if (deleteBranch) {
+    if (ownership.branch) {
       try {
         await git(['show-ref', '--verify', '--quiet', `refs/heads/${branchName}`], repoPath)
         await git(['branch', '-D', '--', branchName], repoPath)
@@ -57,6 +63,29 @@ async function rollbackRelayWorktreeCreate(
     }
   }
   throw wrapped
+}
+
+async function captureRelayWorktreeCreateOwnership(
+  git: GitExec,
+  repoPath: string,
+  targetDir: string,
+  branchName: string
+): Promise<{ target: boolean; branch: boolean }> {
+  const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
+  const targetExists = stdout
+    .split(/\n(?=worktree )/)
+    .map((entry) => entry.match(/^worktree (.+)$/m)?.[1])
+    .some((candidate) => candidate && areRelayWorktreePathsEqual(candidate, targetDir))
+  let branchExists = true
+  try {
+    await git(['show-ref', '--verify', '--quiet', `refs/heads/${branchName}`], repoPath)
+  } catch (error) {
+    if ((error as { code?: unknown })?.code !== 1) {
+      throw error
+    }
+    branchExists = false
+  }
+  return { target: !targetExists, branch: !branchExists }
 }
 
 async function persistRelayWorktreeCreationBase(
@@ -101,121 +130,132 @@ export async function addWorktreeOp(
     throw new Error('Branch name and base ref must not start with "-"')
   }
 
-  const timeoutMs = clampGitWorktreeCreateTimeoutMs(params.timeoutMs)
-  const deadline = createGitWorktreeDeadline(timeoutMs, request.signal)
-  const runWithDeadline =
-    (operationDeadline: GitWorktreeCreateDeadline): GitExec =>
-    (args, cwd, options) =>
-      git(args, cwd, {
-        ...options,
-        signal: operationDeadline.signal,
-        timeout: remainingGitWorktreeCreateMs(operationDeadline, `Git ${args.join(' ')}`)
-      })
-  const runWorktreeGit = runWithDeadline(deadline)
-
-  // Why: mirror local --no-track semantics so create has the same push UX over SSH.
-  const effectiveBase =
-    base && !checkoutExistingBranch
-      ? await resolveWorktreeAddBaseRef(base, async (qualifiedRef) => {
-          try {
-            await runWorktreeGit(
-              ['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`],
-              repoPath
-            )
-            return true
-          } catch {
-            return false
-          }
+  return withGitWorktreeCreateLock(repoPath, branchName, targetDir, async () => {
+    const timeoutMs = clampGitWorktreeCreateTimeoutMs(params.timeoutMs)
+    const deadline = createGitWorktreeDeadline(timeoutMs, request.signal)
+    const runWithDeadline =
+      (operationDeadline: GitWorktreeCreateDeadline): GitExec =>
+      (args, cwd, options) =>
+        git(args, cwd, {
+          ...options,
+          signal: operationDeadline.signal,
+          timeout: remainingGitWorktreeCreateMs(operationDeadline, `Git ${args.join(' ')}`)
         })
-      : undefined
+    const runWorktreeGit = runWithDeadline(deadline)
 
-  // Why: git-crypt resolves state through each worktree's private Git dir;
-  // defer checkout until that dir references the repository-wide state.
-  const gitCryptDir = await findGitCryptStateDirectory(
-    runWorktreeGit,
-    repoPath,
-    undefined,
-    deadline
-  )
-  const deferCheckoutForGitCrypt = gitCryptDir !== null && !noCheckout
+    // Why: mirror local --no-track semantics so create has the same push UX over SSH.
+    const effectiveBase =
+      base && !checkoutExistingBranch
+        ? await resolveWorktreeAddBaseRef(base, async (qualifiedRef) => {
+            try {
+              await runWorktreeGit(
+                ['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`],
+                repoPath
+              )
+              return true
+            } catch {
+              return false
+            }
+          })
+        : undefined
 
-  const args = ['worktree', 'add']
-  if (noCheckout || deferCheckoutForGitCrypt) {
-    args.push('--no-checkout')
-  }
-  if (checkoutExistingBranch) {
-    args.push(targetDir, branchName)
-  } else {
-    args.push('--no-track', '-b', branchName, targetDir)
-  }
-  if (effectiveBase) {
-    args.push(effectiveBase)
-  }
+    // Why: git-crypt resolves state through each worktree's private Git dir;
+    // defer checkout until that dir references the repository-wide state.
+    const gitCryptDir = await findGitCryptStateDirectory(
+      runWorktreeGit,
+      repoPath,
+      undefined,
+      deadline
+    )
+    const deferCheckoutForGitCrypt = gitCryptDir !== null && !noCheckout
 
-  if (gitCryptDir) {
-    try {
-      // Why: rollback ownership begins before Git can leave a branch or registration behind.
-      await runWorktreeGit(args, repoPath)
-      await shareGitCryptStateWithWorktree(
+    const args = ['worktree', 'add']
+    if (noCheckout || deferCheckoutForGitCrypt) {
+      args.push('--no-checkout')
+    }
+    if (checkoutExistingBranch) {
+      args.push(targetDir, branchName)
+    } else {
+      args.push('--no-track', '-b', branchName, targetDir)
+    }
+    if (effectiveBase) {
+      args.push(effectiveBase)
+    }
+
+    if (gitCryptDir) {
+      const ownership = await captureRelayWorktreeCreateOwnership(
         runWorktreeGit,
-        gitCryptDir,
-        targetDir,
-        undefined,
-        deadline
-      )
-      if (deferCheckoutForGitCrypt) {
-        await runWorktreeGit(['checkout'], targetDir)
-      }
-    } catch (error) {
-      const cleanupGit = runWithDeadline(withoutGitWorktreeCancellation(deadline))
-      return rollbackRelayWorktreeCreate(
-        cleanupGit,
         repoPath,
         targetDir,
-        branchName,
-        !checkoutExistingBranch,
-        error
+        branchName
       )
-    }
-  } else {
-    await runWorktreeGit(args, repoPath)
-  }
-
-  if (checkoutExistingBranch) {
-    return
-  }
-
-  if (effectiveBase) {
-    await persistRelayWorktreeCreationBase(runWorktreeGit, targetDir, branchName, effectiveBase)
-  }
-
-  // Why: best-effort write so a deliberate user value (any scope) is
-  // preserved and a real read failure is not silently overwritten. Final
-  // catch is warn-only — if the remote host's git is <2.37 the value is
-  // ignored at push time and the user falls back to `git push -u` once.
-  // (Note: it is the SSH host's git that matters here, not the client's.)
-  // Mirrors local addWorktree exactly.
-  try {
-    let alreadySet = false
-    try {
-      await runWorktreeGit(['config', '--get', 'push.autoSetupRemote'], targetDir)
-      alreadySet = true
-    } catch (readError) {
-      // Why: `git config --get` exits 1 only when the key is unset at every
-      // scope. Any other code is a real read failure (corrupt config,
-      // locked file) — surface it via the outer catch instead of falling
-      // through to overwrite the user's actual value.
-      const code = (readError as { code?: unknown })?.code
-      if (code !== 1) {
-        throw readError
+      try {
+        // Why: rollback ownership begins before Git can leave a branch or registration behind.
+        await runWorktreeGit(args, repoPath)
+        await shareGitCryptStateWithWorktree(
+          runWorktreeGit,
+          gitCryptDir,
+          targetDir,
+          undefined,
+          deadline
+        )
+        if (deferCheckoutForGitCrypt) {
+          await runWorktreeGit(['checkout'], targetDir)
+        }
+      } catch (error) {
+        const cleanupGit = runWithDeadline(createGitWorktreeCleanupDeadline())
+        return rollbackRelayWorktreeCreate(
+          cleanupGit,
+          repoPath,
+          targetDir,
+          branchName,
+          {
+            target: ownership.target,
+            branch: ownership.branch && !checkoutExistingBranch
+          },
+          error
+        )
       }
+    } else {
+      await runWorktreeGit(args, repoPath)
     }
-    if (!alreadySet) {
-      await runWorktreeGit(['config', '--local', 'push.autoSetupRemote', 'true'], targetDir)
+
+    if (checkoutExistingBranch) {
+      return
     }
-  } catch (error) {
-    console.warn(`relay addWorktree: failed to set push.autoSetupRemote for ${targetDir}`, error)
-  }
+
+    if (effectiveBase) {
+      await persistRelayWorktreeCreationBase(runWorktreeGit, targetDir, branchName, effectiveBase)
+    }
+
+    // Why: best-effort write so a deliberate user value (any scope) is
+    // preserved and a real read failure is not silently overwritten. Final
+    // catch is warn-only — if the remote host's git is <2.37 the value is
+    // ignored at push time and the user falls back to `git push -u` once.
+    // (Note: it is the SSH host's git that matters here, not the client's.)
+    // Mirrors local addWorktree exactly.
+    try {
+      let alreadySet = false
+      try {
+        await runWorktreeGit(['config', '--get', 'push.autoSetupRemote'], targetDir)
+        alreadySet = true
+      } catch (readError) {
+        // Why: `git config --get` exits 1 only when the key is unset at every
+        // scope. Any other code is a real read failure (corrupt config,
+        // locked file) — surface it via the outer catch instead of falling
+        // through to overwrite the user's actual value.
+        const code = (readError as { code?: unknown })?.code
+        if (code !== 1) {
+          throw readError
+        }
+      }
+      if (!alreadySet) {
+        await runWorktreeGit(['config', '--local', 'push.autoSetupRemote', 'true'], targetDir)
+      }
+    } catch (error) {
+      console.warn(`relay addWorktree: failed to set push.autoSetupRemote for ${targetDir}`, error)
+    }
+  })
 }
 
 function isPosixAbsolutePath(value: string): boolean {
