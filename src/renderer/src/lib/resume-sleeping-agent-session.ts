@@ -9,6 +9,8 @@ import {
   isPassiveCompletedHibernationEvidence,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
+import { shouldDeferSleepingAgentResumeForRemoteHydration } from './sleeping-agent-remote-hydration-gate'
+import { deferSleepingAgentActivationWake } from './sleeping-agent-wake-intent'
 import {
   launchSleepingAgentSession,
   type ResumeSleepingAgentSessionsOptions
@@ -143,9 +145,17 @@ function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): 
 
 export function resumeSleepingAgentSessionsForWorktree(
   worktreeId: string,
-  options?: ResumeSleepingAgentSessionsOptions
+  options?: ResumeSleepingAgentSessionsOptions & { skipRemoteHydrationDeferral?: boolean }
 ): number {
   const state = useAppStore.getState()
+  // Why: pre-merge SSH tab lists falsely make live sessions look unowned.
+  if (
+    !options?.skipRemoteHydrationDeferral &&
+    shouldDeferSleepingAgentResumeForRemoteHydration(state, worktreeId) &&
+    deferSleepingAgentActivationWake(worktreeId)
+  ) {
+    return 0
+  }
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
     .filter((record) => record.worktreeId === worktreeId)
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)

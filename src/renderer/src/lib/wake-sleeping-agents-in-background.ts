@@ -7,16 +7,38 @@ import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import { getSleepingAgentRemoteHydrationTargetId } from './sleeping-agent-remote-hydration-gate'
+import { installSleepingAgentWakeIntentOwner } from './sleeping-agent-wake-intent'
+import { subscribeToSleepingAgentHydrationTopology } from './sleeping-agent-hydration-topology-subscription'
 import {
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
 
+const MAX_SETTLED_REMOTE_PULL_TARGETS = 256
+
 type BackgroundSleepingAgentWakeDispatcherOptions = {
   isWorkspaceSessionReady?: () => boolean
   subscribeToStore?: (listener: () => void) => () => void
   wake?: (worktreeId: string) => void
+  resume?: (worktreeId: string) => void
+  getRemoteHydrationTargetId?: (worktreeId: string) => string | null
+  remoteHydrationEnabled?: boolean
+}
+
+type DeferredWakeIntent = {
+  targetId: string
+  background: boolean
+  activation: boolean
+}
+
+export type BackgroundSleepingAgentWakeDispatcher = {
+  request: (worktreeId: string) => void
+  requestActivation: (worktreeId: string) => boolean
+  remotePullStarted: (targetId: string) => void
+  remotePullSettled: (targetId: string) => void
+  dispose: () => void
 }
 
 /**
@@ -26,48 +48,160 @@ type BackgroundSleepingAgentWakeDispatcherOptions = {
  */
 export function createBackgroundSleepingAgentWakeDispatcher(
   options: BackgroundSleepingAgentWakeDispatcherOptions = {}
-): { request: (worktreeId: string) => void; dispose: () => void } {
-  const pendingWorktreeIds = new Set<string>()
+): BackgroundSleepingAgentWakeDispatcher {
+  const pendingUntilReady = new Set<string>()
+  const deferredByWorktreeId = new Map<string, DeferredWakeIntent>()
+  const activePullCountByTargetId = new Map<string, number>()
+  const settledPullTargetIds = new Set<string>()
   const isWorkspaceSessionReady =
     options.isWorkspaceSessionReady ?? (() => useAppStore.getState().workspaceSessionReady)
   const subscribeToStore =
-    options.subscribeToStore ?? ((listener) => useAppStore.subscribe(listener))
+    options.subscribeToStore ??
+    ((listener) => subscribeToSleepingAgentHydrationTopology(useAppStore, listener))
   const wake = options.wake ?? wakeSleepingAgentsForWorktreeInBackground
-  let unsubscribeReadiness: (() => void) | null = null
+  const resume =
+    options.resume ??
+    ((worktreeId) =>
+      resumeSleepingAgentSessionsForWorktree(worktreeId, {
+        skipRemoteHydrationDeferral: true
+      }))
+  const getRemoteHydrationTargetId =
+    options.getRemoteHydrationTargetId ??
+    ((worktreeId) => getSleepingAgentRemoteHydrationTargetId(useAppStore.getState(), worktreeId))
+  const remoteHydrationEnabled = options.remoteHydrationEnabled ?? true
+  let unsubscribeStore: (() => void) | null = null
   let disposed = false
 
-  const flushWhenReady = (): void => {
-    if (disposed || !isWorkspaceSessionReady()) {
-      return
-    }
-    const worktreeIds = [...pendingWorktreeIds]
-    pendingWorktreeIds.clear()
-    unsubscribeReadiness?.()
-    unsubscribeReadiness = null
-    for (const worktreeId of worktreeIds) {
+  const replay = (worktreeId: string, intent: DeferredWakeIntent): void => {
+    deferredByWorktreeId.delete(worktreeId)
+    if (intent.background) {
       wake(worktreeId)
+    } else if (intent.activation) {
+      resume(worktreeId)
     }
   }
 
-  return {
+  const updateSubscription = (): void => {
+    const needsSubscription = pendingUntilReady.size > 0 || deferredByWorktreeId.size > 0
+    if (needsSubscription && !unsubscribeStore) {
+      unsubscribeStore = subscribeToStore(flush)
+    } else if (!needsSubscription && unsubscribeStore) {
+      unsubscribeStore()
+      unsubscribeStore = null
+    }
+  }
+
+  const defer = (worktreeId: string, kind: 'activation' | 'background'): boolean => {
+    if (!remoteHydrationEnabled) {
+      return false
+    }
+    const targetId = getRemoteHydrationTargetId(worktreeId)
+    if (!targetId) {
+      return false
+    }
+    if (
+      settledPullTargetIds.has(targetId) &&
+      (activePullCountByTargetId.get(targetId) ?? 0) === 0
+    ) {
+      return false
+    }
+    const current = deferredByWorktreeId.get(worktreeId)
+    deferredByWorktreeId.set(worktreeId, {
+      targetId,
+      background: current?.background === true || kind === 'background',
+      activation: current?.activation === true || kind === 'activation'
+    })
+    updateSubscription()
+    return true
+  }
+
+  function flush(): void {
+    if (disposed) {
+      return
+    }
+    if (isWorkspaceSessionReady()) {
+      const readyWorktreeIds = [...pendingUntilReady]
+      pendingUntilReady.clear()
+      for (const worktreeId of readyWorktreeIds) {
+        if (!defer(worktreeId, 'background')) {
+          wake(worktreeId)
+        }
+      }
+    }
+    for (const [worktreeId, intent] of deferredByWorktreeId) {
+      const targetId = getRemoteHydrationTargetId(worktreeId)
+      if (!targetId) {
+        replay(worktreeId, intent)
+      } else if (targetId !== intent.targetId) {
+        deferredByWorktreeId.set(worktreeId, { ...intent, targetId })
+      }
+    }
+    updateSubscription()
+  }
+
+  let uninstallIntentOwner = (): void => {}
+
+  const dispatcher: BackgroundSleepingAgentWakeDispatcher = {
     request(worktreeId) {
       if (disposed || !worktreeId) {
         return
       }
-      if (isWorkspaceSessionReady()) {
+      if (!isWorkspaceSessionReady()) {
+        pendingUntilReady.add(worktreeId)
+        updateSubscription()
+      } else if (!defer(worktreeId, 'background')) {
         wake(worktreeId)
+      }
+    },
+    requestActivation(worktreeId) {
+      return !disposed && defer(worktreeId, 'activation')
+    },
+    remotePullStarted(targetId) {
+      if (!disposed) {
+        settledPullTargetIds.delete(targetId)
+        activePullCountByTargetId.set(targetId, (activePullCountByTargetId.get(targetId) ?? 0) + 1)
+      }
+    },
+    remotePullSettled(targetId) {
+      if (disposed) {
         return
       }
-      pendingWorktreeIds.add(worktreeId)
-      unsubscribeReadiness ??= subscribeToStore(flushWhenReady)
+      const remaining = Math.max(0, (activePullCountByTargetId.get(targetId) ?? 1) - 1)
+      if (remaining > 0) {
+        activePullCountByTargetId.set(targetId, remaining)
+        return
+      }
+      activePullCountByTargetId.delete(targetId)
+      if (settledPullTargetIds.size >= MAX_SETTLED_REMOTE_PULL_TARGETS) {
+        const oldestTargetId = settledPullTargetIds.values().next().value
+        if (oldestTargetId) {
+          settledPullTargetIds.delete(oldestTargetId)
+        }
+      }
+      settledPullTargetIds.add(targetId)
+      flush()
+      for (const [worktreeId, intent] of deferredByWorktreeId) {
+        if (intent.targetId === targetId) {
+          replay(worktreeId, intent)
+        }
+      }
+      updateSubscription()
     },
     dispose() {
       disposed = true
-      pendingWorktreeIds.clear()
-      unsubscribeReadiness?.()
-      unsubscribeReadiness = null
+      pendingUntilReady.clear()
+      deferredByWorktreeId.clear()
+      activePullCountByTargetId.clear()
+      settledPullTargetIds.clear()
+      unsubscribeStore?.()
+      unsubscribeStore = null
+      uninstallIntentOwner()
     }
   }
+  uninstallIntentOwner = installSleepingAgentWakeIntentOwner({
+    deferActivation: dispatcher.requestActivation
+  })
+  return dispatcher
 }
 
 function getSleepingRecordTabId(record: SleepingAgentSessionRecord): string | null {
@@ -212,6 +346,7 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   const launchedTabIds: string[] = []
   resumeSleepingAgentSessionsForWorktree(worktreeId, {
     suppressNavigation: true,
+    skipRemoteHydrationDeferral: true,
     skipClaimKeys: wokenClaimKeys,
     onSessionLaunched: (tabId) => launchedTabIds.push(tabId)
   })

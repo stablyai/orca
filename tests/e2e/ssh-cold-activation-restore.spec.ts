@@ -3,6 +3,7 @@ import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   focusActiveTerminalInput,
+  waitForActivePaneHookDescriptor,
   waitForActivePanePtyId,
   waitForActiveTerminalManager
 } from './helpers/terminal'
@@ -297,6 +298,133 @@ test.describe('SSH cold activation restore', () => {
         )
       ).toContainText(restoredMarker, { timeout: 30_000 })
       await expect.poll(() => readRemoteProof(target!, afterProofPath)).toBe(beforeProof)
+    } finally {
+      if (secondApp) {
+        await restart.close(secondApp)
+      }
+      if (firstApp) {
+        await restart.close(firstApp)
+      }
+      await restart.dispose()
+      cleanupDockerSshRelayTarget(target)
+    }
+  })
+
+  test('preserves live agent identity until the direct-SSH snapshot merges', async (// oxlint-disable-next-line no-empty-pattern -- This restart test owns both Electron launches.
+  {}, testInfo) => {
+    test.setTimeout(300_000)
+    const restart = createRestartSession(testInfo)
+    let target: DockerSshRelayTarget | null = null
+    let firstApp: ElectronApplication | null = null
+    let secondApp: ElectronApplication | null = null
+    try {
+      target = startDockerSshRelayTarget(testInfo)
+      const firstLaunch = await restart.launch()
+      firstApp = firstLaunch.app
+      await waitForSessionReady(firstLaunch.page)
+      const remote = await connectDockerSshRelayTarget(firstLaunch.page, target)
+      await expect
+        .poll(() => waitForActiveWorktree(firstLaunch.page), { timeout: 30_000 })
+        .toBe(remote.worktreeId)
+      await waitForActiveTerminalManager(firstLaunch.page, 60_000)
+      const firstPtyId = await waitForActivePanePtyId(firstLaunch.page, 60_000)
+      const descriptor = await waitForActivePaneHookDescriptor(firstLaunch.page, 60_000)
+      const providerSessionId = `ssh-hydration-${Date.now()}`
+
+      const originalTabId = await firstLaunch.page.evaluate(
+        ({ paneKey, providerSessionId, worktreeId }) => {
+          const state = window.__store?.getState()
+          const tabId = state?.activeTabId
+          if (!state || !tabId) {
+            throw new Error('Active SSH terminal unavailable')
+          }
+          const leafId = paneKey.slice(tabId.length + 1)
+          const providerSession = { key: 'session_id' as const, id: providerSessionId }
+          state.registerAgentLaunchConfig(
+            paneKey,
+            { agentCommand: 'echo', agentArgs: '', agentEnv: {} },
+            { agentType: 'codex', tabId, leafId, providerSession }
+          )
+          state.setAgentStatus(
+            paneKey,
+            { state: 'working', prompt: 'keep running', agentType: 'codex' },
+            'Codex',
+            undefined,
+            { tabId, worktreeId },
+            { providerSession }
+          )
+          return tabId
+        },
+        { ...descriptor, providerSessionId }
+      )
+      await expect
+        .poll(
+          () =>
+            firstLaunch.page.evaluate(
+              ({ paneKey, providerSessionId }) => {
+                const record = window.__store?.getState().sleepingAgentSessionsByPaneKey[paneKey]
+                return record?.providerSession.id === providerSessionId ? record.origin : null
+              },
+              { paneKey: descriptor.paneKey, providerSessionId }
+            ),
+          { timeout: 10_000 }
+        )
+        .toBe('live')
+
+      await firstLaunch.page.evaluate(() => window.dispatchEvent(new Event('beforeunload')))
+      await expect
+        .poll(
+          () =>
+            firstLaunch.page.evaluate(
+              async ({ targetId, worktreePath, tabId }) => {
+                const snapshot = await window.api.remoteWorkspace.get({ targetId })
+                return snapshot?.session.tabsByWorktreePath[worktreePath]?.some(
+                  (tab) => tab.id === tabId
+                )
+              },
+              {
+                targetId: remote.targetId,
+                worktreePath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
+                tabId: originalTabId
+              }
+            ),
+          { timeout: 30_000 }
+        )
+        .toBe(true)
+      await restart.close(firstApp)
+      firstApp = null
+
+      const secondLaunch = await restart.launch()
+      secondApp = secondLaunch.app
+      await waitForSessionReady(secondLaunch.page, 60_000)
+      await expect
+        .poll(() => waitForActiveWorktree(secondLaunch.page), { timeout: 60_000 })
+        .toBe(remote.worktreeId)
+      await waitForActiveTerminalManager(secondLaunch.page, 60_000)
+      expect(await waitForActivePanePtyId(secondLaunch.page, 60_000)).toBe(firstPtyId)
+
+      await expect
+        .poll(
+          () =>
+            secondLaunch.page.evaluate(
+              ({ providerSessionId, worktreeId }) => {
+                const state = window.__store?.getState()
+                const records = Object.values(state?.sleepingAgentSessionsByPaneKey ?? {}).filter(
+                  (record) => record.providerSession.id === providerSessionId
+                )
+                return {
+                  recordCount: records.length,
+                  tabIds: (state?.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id),
+                  resumeClaims: Object.values(
+                    state?.automaticAgentResumeClaimsByTabId ?? {}
+                  ).filter((claim) => claim.providerSession.id === providerSessionId).length
+                }
+              },
+              { providerSessionId, worktreeId: remote.worktreeId }
+            ),
+          { timeout: 60_000 }
+        )
+        .toEqual({ recordCount: 1, tabIds: [originalTabId], resumeClaims: 0 })
     } finally {
       if (secondApp) {
         await restart.close(secondApp)

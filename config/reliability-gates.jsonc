@@ -1206,7 +1206,7 @@
           "platform": "macos",
           "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "result": "passed",
-          "durationSeconds": 66,
+          "durationSeconds": 36.7,
           "summary": "Four Electron Docker SSH tests passed: two typing/performance paths, one concurrent file/Git load path, and exact-authority disconnect/reconnect with a container-visible remote proof file."
         }
       ],
@@ -3803,23 +3803,28 @@
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local", "daemon", "remote-runtime"],
-      "coverageNotes": "Renderer ownership/dedupe contracts cover provider-session claims. Local and daemon attach-only contracts prove an existing stable-pane owner is adopted without provider creation, while remote-runtime transport contracts preserve adopted ownership through cancellation. The Electron oracle covers a local macOS runtime and daemon with real agent, Setup, and unrelated-canary processes; SSH, WSL, paired-server, Linux, and Windows remain contract-only or unrun.",
+      "coveredProviders": ["local", "daemon", "ssh", "remote-runtime"],
+      "coverageNotes": "Renderer ownership/dedupe contracts cover provider-session claims, snapshot-owned direct-SSH Git-worktree deferral, every terminal pull outcome, folder-workspace exclusion, topology replacement, disposal, coalescing, target isolation, teardown ordering, and unrelated-store fanout. Local and daemon attach-only contracts prove an existing stable-pane owner is adopted without provider creation, while remote-runtime transport contracts preserve adopted ownership through cancellation. Electron-headless oracles cover a local macOS runtime and daemon with real agent, Setup, and unrelated-canary processes, plus direct SSH restart against an ephemeral Linux Docker host. WSL, paired-server, headed desktop, physical Linux, and Windows desktop remain contract-only or unrun.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6800",
         "https://github.com/stablyai/orca/pull/5240",
         "https://github.com/stablyai/orca/pull/6411",
         "https://github.com/stablyai/orca/pull/6833",
         "https://github.com/stablyai/orca/pull/11789",
-        "https://github.com/stablyai/orca/pull/11819"
+        "https://github.com/stablyai/orca/pull/11819",
+        "https://github.com/stablyai/orca/issues/12701",
+        "https://github.com/stablyai/orca/pull/12704"
       ],
-      "invariant": "Workspace activation, launch, restore, sleep, hibernate, dedupe, clearing, mount, remount, and reconnect code must not replay or resume a provider session id already owned, queued, pending, live, or durably bound to a host PTY in that workspace. A renderer with missing projection state must adopt the exact runtime-owned PTY for the original tab and leaf rather than create a replacement.",
-      "oracle": "Renderer-state tests assert provider-session ownership across preserved and queued panes. Main/provider contracts assert atomic attach-only adoption, stable host/worktree/tab/leaf identity, no fresh spawn on adoption, and safe paired-runtime cancellation. The Electron oracle creates inactive runtime-owned Codex and Setup PTYs plus an unrelated canary, seeds an exact resumable provider session, removes only the target renderer projections, and activates the workspace. It requires byte-stable handle, PTY, incarnation, tab, leaf, process PID, renderer graph, persisted binding, runtime id, graph epoch, and daemon PID across first mount and reload; PID-specific DOM keyboard I/O must remain live with one launch, zero resume argv, zero signals, zero interruption text, and no canary mutation.",
+      "invariant": "Workspace activation, launch, restore, sleep, hibernate, dedupe, clearing, mount, remount, and reconnect code must not replay or resume a provider session id already owned, queued, pending, live, or durably bound to a host PTY in that workspace. Only snapshot-owned direct-SSH Git worktrees may defer activation; every terminal pull outcome must release or transfer that intent without duplicate resumes, cross-target fanout, or retained lifecycle state. A renderer with missing projection state must adopt the exact runtime-owned PTY for the original tab and leaf rather than create a replacement.",
+      "oracle": "Renderer-state tests assert provider-session ownership across preserved and queued panes. The byte-identical six-case direct SSH hydration oracle deterministically orders activation sweep, snapshot merge, and post-merge sweep; it requires the original tab, stable leaf, PTY binding, and provider-session record with no resume claim. Dispatcher and target-sync contracts cover applied, revision-zero, offline, timeout, rejected/no-token, changed-authority, stale, and stopped pulls; duplicate activation/background requests coalesce, overlapping pulls wait for the last outcome, targets stay isolated, SSH folder workspaces never defer, topology changes reclassify stale ids, and disposal releases all state and subscriptions. Production cleanup disposes queued wake ownership before target-sync stop settles in-flight pulls, with zero wake, resume, or destructive dedupe afterward. A measured store-fanout control sends 20,000 unrelated terminal and agent-status writes, requires one total target-topology lookup, and admits a lookup only after a relevant hydration/topology identity changes. Main/provider contracts assert atomic attach-only adoption, stable host/worktree/tab/leaf identity, no fresh spawn on adoption, and safe paired-runtime cancellation. Electron-headless oracles require byte-stable process and surface identity across local daemon reload and direct SSH restart, with live keyboard I/O and no duplicate resume.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/ipc/pty.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/lib/pane-manager/pane-fit.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts",
-        "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/live-background-terminal-mount-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+        "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/live-background-terminal-mount-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session-ssh-hydration-gate.test.ts src/renderer/src/lib/resume-sleeping-agent-session-remote-compat.test.ts src/renderer/src/lib/wake-sleeping-agents-in-background.test.ts src/renderer/src/lib/wake-sleeping-agents-remote-hydration.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/use-ipc-events-direct-ssh-teardown.test.ts src/renderer/src/lib/wake-sleeping-agents-store-fanout.test.ts --reporter=dot",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
@@ -3832,7 +3837,15 @@
         "src/renderer/src/lib/pane-manager/pane-fit.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
-        "tests/e2e/live-background-terminal-mount-authority.spec.ts"
+        "tests/e2e/live-background-terminal-mount-authority.spec.ts",
+        "src/renderer/src/lib/resume-sleeping-agent-session-ssh-hydration-gate.test.ts",
+        "src/renderer/src/lib/resume-sleeping-agent-session-remote-compat.test.ts",
+        "src/renderer/src/lib/wake-sleeping-agents-in-background.test.ts",
+        "src/renderer/src/lib/wake-sleeping-agents-remote-hydration.test.ts",
+        "src/renderer/src/hooks/remote-workspace-target-sync.test.ts",
+        "src/renderer/src/hooks/use-ipc-events-direct-ssh-teardown.test.ts",
+        "src/renderer/src/lib/wake-sleeping-agents-store-fanout.test.ts",
+        "tests/e2e/ssh-cold-activation-restore.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -3886,6 +3899,47 @@
             "runtime inventory, renderer graph, persisted session, runtime epoch, and daemon PID converge without replacement or resume",
             "the unrelated canary remains writable and receives no signal across target projection repair"
           ]
+        },
+        {
+          "file": "src/renderer/src/lib/resume-sleeping-agent-session-ssh-hydration-gate.test.ts",
+          "assertions": [
+            "activation defers the provider-session sweep until the direct SSH snapshot settles",
+            "the ordered merge preserves the original tab, stable leaf, PTY binding, and provider-session record without a resume claim"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/wake-sleeping-agents-remote-hydration.test.ts",
+          "assertions": [
+            "activation and background intent coalesce under one disposable lifecycle owner",
+            "successful hydration replays before pull finalization without duplicate resume",
+            "overlapping stale pulls wait for the last target outcome while distinct targets remain isolated",
+            "topology changes reclassify or clear stale worktree ids and disposal releases state, subscription, and owner registration",
+            "terminal target memory is capped while pending intent remains one entry per worktree"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/remote-workspace-target-sync.test.ts",
+          "assertions": [
+            "applied, revision-zero, offline, timeout, rejected/no-token, changed-authority, stale, and stopped pulls settle lifecycle ownership exactly once"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/use-ipc-events-direct-ssh-teardown.test.ts",
+          "assertions": [
+            "production cleanup drops queued wake ownership before target-sync stop settlement can replay activation, background wake, or destructive dedupe"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/wake-sleeping-agents-store-fanout.test.ts",
+          "assertions": [
+            "20,000 unrelated terminal and agent-status writes trigger zero target-topology recomputations while one relevant identity change triggers exactly one"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-cold-activation-restore.spec.ts",
+          "assertions": [
+            "a full direct SSH restart preserves the original live PTY, tab, and provider-session record with zero resume claims"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -3897,6 +3951,15 @@
           "result": "passed",
           "durationSeconds": 1.9,
           "summary": "1 test file(s) passed, 30 tests passed on main@1282f5c2d in a clean checkout."
+        },
+        {
+          "date": "2026-08-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 66,
+          "summary": "Three electron-headless direct SSH restart journeys passed from a macOS client against an ephemeral Debian Bookworm Docker OpenSSH host, including six-terminal remount, authenticated PTY-owner continuity, and preservation of one live provider-session record with zero resume claims."
         }
       ],
       "runtimeBudget": {
@@ -3908,23 +3971,24 @@
         "evidence": "The renderer gate has prior local evidence; the stable-pane Electron oracle is new and needs CI soak before blocking promotion."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "Renderer tests encode provider-session dedupe across active, inactive, queued, and live claims. The cross-boundary Electron oracle is constructed for byte-identical latest-main, candidate, and candidate-revert runs; record those three terminal results before promoting this gate."
+        "status": "complete",
+        "evidence": "The byte-identical six-case oracle is 4/6 on base 9060a88ddebd0ef455334b71a45ef6502d7c14e7, 6/6 on published 99e8f888ac7795b2e479d378beddc4ecfc63b4e7, 6/6 on corrected implementation tree e85f91b4e3707df43fd5f2f0d7543fd6f87c99ed, and 4/6 on production-disabled 845e6d56e289c5295792c9be50641ef02f5daafc. The identical 54-test expanded oracle is 32/54 on base, 35/54 on published, 54/54 on the lifecycle correction, and 32/54 on its full disabled oracle; candidate and disabled retain byte-identical test files, while disabled production matches base. The bounded architecture correction is 2/2 on 171d0e1479d4525f42cc5e4acad3d5f91dffedb9 and 0/2 on correction-disabled 15e0a8dd4153dd3d2593b5e10d73d85eabc28554 with byte-identical tests; the identical lifecycle matrix remains 54/54 in both trees, isolating the teardown and fanout defects. The correction also passes three real Docker/OpenSSH restart journeys with exact PTY and provider-session continuity."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Renderer state tests assert bounded provider-session indexing. Stable-pane adoption is a targeted owner lookup and attach-only call; focused contracts require no provider listing scan, fresh spawn callback, or repeated resume probe. The Electron oracle checks exact launch counts but is not a throughput benchmark."
+        "evidence": "Renderer state tests assert bounded provider-session indexing. Deferred wake state contains at most one entry per requested worktree, one count per active target, and 256 remembered terminal targets; it uses one store subscription only while queued, coalesces duplicate requests, and clears all maps/listeners on drain or disposal. A measured regression processes 20,000 unrelated terminal-layout and agent-status identity writes under a 250 ms local bound with zero target-topology recomputations, then observes exactly one recomputation for a repo-topology identity change; the disabled correction performs 20,000 extra recomputations. There is no polling, provider listing, subprocess, or global target fanout. Stable-pane adoption is a targeted owner lookup and attach-only call. The Electron oracle checks exact launch counts but is not a throughput benchmark."
       },
       "promotionCriteria": [
         "Run in soak for at least 100 consecutive passes or 14 days across required CI platforms.",
         "Add bounded-work assertions for delayed hook/status ownership scans if those paths grow.",
         "Attach red/green evidence that display/replay evidence alone cannot claim ownership.",
-        "Record byte-identical latest-main, candidate, and candidate-revert Electron results."
+        "Record byte-identical latest-main, candidate, and candidate-revert results for the local stable-pane Electron oracle.",
+        "Collect the direct SSH restart journey in CI on a stable Linux SSH fixture."
       ],
       "knownGaps": [
-        "Providers listed on this gate are affected identity surfaces; live integration is limited to local macOS while daemon and remote-runtime adoption also have focused contracts.",
+        "Providers listed on this gate are affected identity surfaces; live integration is limited to a macOS client with local daemon and Linux Docker SSH targets while remote-runtime adoption has focused contracts.",
         "The Electron oracle seeds the production hook-store contract instead of running an authenticated Codex hook end to end.",
-        "The live Electron topology is local macOS only; folder workspaces, SSH, WSL, paired headed/headless servers, Linux, and Windows are not exercised by that journey.",
+        "Folder-workspace exclusion is deterministic only; live folder workspaces, WSL, paired-server, headed desktop, physical Linux, and Windows desktop are not exercised by the Electron-headless journeys.",
         "The oracle covers first activation and one renderer reload, not repeated soak activation or an installed-app update."
       ],
       "demotionRule": "Demote or quarantine if failures are non-actionable or if a duplicate resume escape occurs outside the modeled matrix."

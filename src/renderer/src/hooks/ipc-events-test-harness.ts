@@ -119,6 +119,7 @@ function createApiNamespaceStub(overrides: Record<string, unknown> = {}): Record
 export type IpcEventsHarness = {
   /** Call inside the test body: useIpcEvents runs its effects eagerly here. */
   useIpcEvents: () => void
+  cleanup: () => void
   createTerminal: (request: CreateTerminalRequest) => void
   requestTerminalCreate: (request: RequestTerminalCreateRequest) => void
   replyTerminalCreate: ReturnType<typeof vi.fn>
@@ -151,13 +152,20 @@ export async function loadIpcEventsHarness(
     | ((event: { browserPageId: string; url: string; title: string }) => void)
     | null = null
   const indexJumpListeners = new Map<string, (index: number) => void>()
+  let effectCleanup: (() => void) | null = null
 
   vi.resetModules()
   vi.unstubAllGlobals()
 
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof ReactModule>('react')
-    return { ...actual, useEffect: (effect: () => void | (() => void)) => void effect() }
+    return {
+      ...actual,
+      useEffect: (effect: () => void | (() => void)) => {
+        const cleanup = effect()
+        effectCleanup = typeof cleanup === 'function' ? cleanup : null
+      }
+    }
   })
   vi.doMock('../store', () => ({
     useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => storeState }
@@ -267,6 +275,12 @@ export async function loadIpcEventsHarness(
   const { useIpcEvents } = await import('./useIpcEvents')
   return {
     useIpcEvents,
+    cleanup: () => {
+      if (!effectCleanup) {
+        throw new Error('Expected the IPC effect cleanup to be registered')
+      }
+      effectCleanup()
+    },
     createTerminal: (request) => {
       if (typeof createTerminalListener !== 'function') {
         throw new Error('Expected the create-terminal listener to be registered')

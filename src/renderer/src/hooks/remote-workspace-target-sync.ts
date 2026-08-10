@@ -16,6 +16,7 @@ import type {
 import { buildDirectSshSnapshotApplyToken } from './direct-ssh-reconnect-coordinator'
 import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
 import { applyDirectSshRemoteWorkspaceSnapshot } from './remote-workspace-snapshot-apply'
+import { applyRemoteWorkspacePatchStatus } from './remote-workspace-patch-status'
 export { isDirectSshRemoteWorkspaceApplyInProgress } from './remote-workspace-snapshot-apply'
 
 const WORKSPACE_HYDRATION_TIMEOUT_MS = 10_000
@@ -40,6 +41,10 @@ export type RemoteWorkspaceTargetSyncDeps = {
   ) => Promise<DirectSshPreparationInput | null>
   prepareOnly: (input: DirectSshPreparationInput) => Promise<DirectSshPreparationOutcome>
   finalizeHydratedTerminals: (authority: DirectSshAuthority) => number
+  remotePullLifecycle?: {
+    started: (targetId: string) => void
+    settled: (targetId: string) => void
+  }
 }
 
 export type RemoteWorkspaceTargetSync = {
@@ -61,51 +66,28 @@ function exactTargetWorktreeIds(state: AppState, authority: DirectSshAuthority):
   }).gitWorktreeIds
 }
 
-function applyPatchStatus(
-  store: AppState,
-  targetId: string,
-  result: RemoteWorkspacePatchResult | undefined
-): void {
-  if (!result) {
-    store.setRemoteWorkspaceSyncStatus(targetId, {
-      phase: 'offline',
-      direction: 'push',
-      lastSyncedAt: Date.now(),
-      message: translate('auto.hooks.useIpcEvents.2fe88c2e06', 'Remote workspace sync unavailable')
-    })
-  } else if (result.ok) {
-    store.setRemoteWorkspaceSyncStatus(targetId, {
-      phase: 'synced',
-      direction: 'push',
-      revision: result.snapshot.revision,
-      updatedAt: result.snapshot.updatedAt,
-      lastSyncedAt: Date.now(),
-      message: translate('auto.hooks.useIpcEvents.f8aaf2bde3', 'Workspace uploaded')
-    })
-  } else {
-    store.setRemoteWorkspaceSyncStatus(targetId, {
-      phase: result.reason === 'stale-revision' ? 'conflict' : 'offline',
-      direction: 'push',
-      revision: result.snapshot?.revision,
-      updatedAt: result.snapshot?.updatedAt,
-      lastSyncedAt: Date.now(),
-      message:
-        result.message ??
-        (result.reason === 'stale-revision'
-          ? translate(
-              'auto.hooks.useIpcEvents.workspaceChangedOnAnotherDevice',
-              'Workspace changed on another device'
-            )
-          : translate('auto.hooks.useIpcEvents.2fe88c2e06', 'Remote workspace sync unavailable'))
-    })
-  }
-}
-
 export function createRemoteWorkspaceTargetSync(
   deps: RemoteWorkspaceTargetSyncDeps
 ): RemoteWorkspaceTargetSync {
   const arrivalByTarget = new Map<string, number>()
+  const activePullAttempts = new Set<{ targetId: string; settled: boolean }>()
   let stopped = false
+
+  const beginPull = (targetId: string): { targetId: string; settled: boolean } => {
+    const attempt = { targetId, settled: false }
+    activePullAttempts.add(attempt)
+    deps.remotePullLifecycle?.started(targetId)
+    return attempt
+  }
+
+  const settlePull = (attempt: { targetId: string; settled: boolean }): void => {
+    if (attempt.settled) {
+      return
+    }
+    attempt.settled = true
+    activePullAttempts.delete(attempt)
+    deps.remotePullLifecycle?.settled(attempt.targetId)
+  }
 
   const beginArrival = (targetId: string): number => {
     const arrival = (arrivalByTarget.get(targetId) ?? 0) + 1
@@ -127,11 +109,24 @@ export function createRemoteWorkspaceTargetSync(
     return !stopped && deps.store.getState().workspaceSessionReady
   }
 
-  const syncAfterConnect = async (token: DirectSshPreparationToken): Promise<void> => {
+  // Why: deferred ownership checks cannot remain parked after a failed pull.
+  const concludePullWithoutApply = (targetId: string): void => {
+    deps.store.getState().setRemoteWorkspaceSyncStatus(targetId, {
+      phase: 'error',
+      direction: 'pull',
+      message: translate('auto.hooks.useIpcEvents.2fe88c2e06', 'Remote workspace sync unavailable')
+    })
+  }
+
+  const runSyncAfterConnect = async (token: DirectSshPreparationToken): Promise<void> => {
     const { authority } = token
     const arrival = beginArrival(authority.targetId)
     const workspaceReady = await waitForWorkspaceSessionReady()
-    if (!isArrivalCurrent(authority.targetId, arrival) || !deps.isPreparationTokenCurrent(token)) {
+    if (!isArrivalCurrent(authority.targetId, arrival)) {
+      return
+    }
+    if (!deps.isPreparationTokenCurrent(token)) {
+      concludePullWithoutApply(authority.targetId)
       return
     }
     if (!workspaceReady) {
@@ -155,7 +150,11 @@ export function createRemoteWorkspaceTargetSync(
       direction: 'pull'
     })
     const snapshot = await deps.remoteWorkspace.get({ targetId: authority.targetId })
-    if (!isArrivalCurrent(authority.targetId, arrival) || !deps.isPreparationTokenCurrent(token)) {
+    if (!isArrivalCurrent(authority.targetId, arrival)) {
+      return
+    }
+    if (!deps.isPreparationTokenCurrent(token)) {
+      concludePullWithoutApply(authority.targetId)
       return
     }
     if (!snapshot) {
@@ -182,7 +181,17 @@ export function createRemoteWorkspaceTargetSync(
           waitForWorkspaceSessionReady,
           finalizeHydratedTerminals: deps.finalizeHydratedTerminals
         })
+        const currentState = deps.store.getState()
+        if (
+          isArrivalCurrent(authority.targetId, arrival) &&
+          !currentState.remoteWorkspaceHydratedTargetIds.has(authority.targetId) &&
+          currentState.remoteWorkspaceSyncStatusByTargetId[authority.targetId]?.phase === 'pulling'
+        ) {
+          concludePullWithoutApply(authority.targetId)
+        }
+        return
       }
+      concludePullWithoutApply(authority.targetId)
       return
     }
     deps.store.getState().markRemoteWorkspaceHydrated(authority.targetId)
@@ -206,10 +215,31 @@ export function createRemoteWorkspaceTargetSync(
       return
     }
     const result = results.find((entry) => entry.targetId === authority.targetId)?.result
-    applyPatchStatus(deps.store.getState(), authority.targetId, result)
+    applyRemoteWorkspacePatchStatus(deps.store.getState(), authority.targetId, result)
   }
 
-  const applyUnsolicitedSnapshot = async (
+  const syncAfterConnect = async (token: DirectSshPreparationToken): Promise<void> => {
+    const attempt = beginPull(token.authority.targetId)
+    let arrival: number | undefined
+    try {
+      const run = runSyncAfterConnect(token)
+      arrival = arrivalByTarget.get(token.authority.targetId)
+      await run
+    } catch (error) {
+      if (
+        !stopped &&
+        arrival !== undefined &&
+        arrivalByTarget.get(token.authority.targetId) === arrival
+      ) {
+        concludePullWithoutApply(token.authority.targetId)
+      }
+      throw error
+    } finally {
+      settlePull(attempt)
+    }
+  }
+
+  const runUnsolicitedSnapshot = async (
     targetId: string,
     snapshot: RemoteWorkspaceSnapshot
   ): Promise<void> => {
@@ -231,17 +261,31 @@ export function createRemoteWorkspaceTargetSync(
       return
     }
     const applyToken = buildDirectSshSnapshotApplyToken(prepared.token, snapshot.revision)
-    if (applyToken) {
-      await applyDirectSshRemoteWorkspaceSnapshot({
-        store: deps.store,
-        snapshot,
-        token: applyToken,
-        arrival,
-        isArrivalCurrent,
-        isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
-        waitForWorkspaceSessionReady,
-        finalizeHydratedTerminals: deps.finalizeHydratedTerminals
-      })
+    if (!applyToken) {
+      concludePullWithoutApply(targetId)
+      return
+    }
+    await applyDirectSshRemoteWorkspaceSnapshot({
+      store: deps.store,
+      snapshot,
+      token: applyToken,
+      arrival,
+      isArrivalCurrent,
+      isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
+      waitForWorkspaceSessionReady,
+      finalizeHydratedTerminals: deps.finalizeHydratedTerminals
+    })
+  }
+
+  const applyUnsolicitedSnapshot = async (
+    targetId: string,
+    snapshot: RemoteWorkspaceSnapshot
+  ): Promise<void> => {
+    const attempt = beginPull(targetId)
+    try {
+      await runUnsolicitedSnapshot(targetId, snapshot)
+    } finally {
+      settlePull(attempt)
     }
   }
 
@@ -251,6 +295,9 @@ export function createRemoteWorkspaceTargetSync(
     stop: () => {
       stopped = true
       arrivalByTarget.clear()
+      for (const attempt of activePullAttempts) {
+        settlePull(attempt)
+      }
     }
   }
 }
