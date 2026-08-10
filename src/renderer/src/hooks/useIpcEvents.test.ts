@@ -9332,9 +9332,12 @@ describe('useIpcEvents Space shortcut routing', () => {
 
     harness.jumpToSpaceIndex(1)
     harness.navigateSpace('next')
+    // Stepping back off the first Space wraps to the last, matching the pager's loop.
+    harness.navigateSpace('previous')
 
     expect(state.setActiveSpace).toHaveBeenNthCalledWith(1, 'work')
     expect(state.setActiveSpace).toHaveBeenNthCalledWith(2, 'work')
+    expect(state.setActiveSpace).toHaveBeenNthCalledWith(3, 'work')
   })
 })
 

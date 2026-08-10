@@ -16,10 +16,18 @@ describe('space shortcut navigation', () => {
     expect(getIndexedSpace(SPACES, 9)).toBeNull()
   })
 
-  it('moves between adjacent Spaces without wrapping', () => {
+  it('moves between adjacent Spaces', () => {
     expect(getAdjacentSpace(SPACES, 'work', 'previous')?.id).toBe('default')
     expect(getAdjacentSpace(SPACES, 'work', 'next')?.id).toBe('personal')
-    expect(getAdjacentSpace(SPACES, 'default', 'previous')).toBeNull()
-    expect(getAdjacentSpace(SPACES, 'personal', 'next')).toBeNull()
+  })
+
+  it('wraps past either end so the shortcuts match the pager loop', () => {
+    expect(getAdjacentSpace(SPACES, 'personal', 'next')?.id).toBe('default')
+    expect(getAdjacentSpace(SPACES, 'default', 'previous')?.id).toBe('personal')
+  })
+
+  it('has nowhere to wrap with a single Space', () => {
+    expect(getAdjacentSpace(SPACES.slice(0, 1), 'default', 'next')).toBeNull()
+    expect(getAdjacentSpace(SPACES.slice(0, 1), 'default', 'previous')).toBeNull()
   })
 })
