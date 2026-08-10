@@ -18,6 +18,12 @@ export type WorktreeDeleteWithToastOptions = {
   focusSuccessorOnDelete?: boolean
 }
 
+export function toWorktreeDeleteIdentities(
+  worktrees: readonly Pick<Worktree, 'id' | 'instanceId'>[]
+): WorktreeDeleteIdentity[] {
+  return worktrees.map(({ id, instanceId }) => ({ id, instanceId }))
+}
+
 export function resolveWorktreeBatchDeleteTargets(
   requestedWorktrees: readonly string[] | readonly WorktreeDeleteIdentity[],
   worktreeMap: ReadonlyMap<string, Worktree>
@@ -41,4 +47,19 @@ export function resolveWorktreeBatchDeleteTargets(
     }
   }
   return targets
+}
+
+export function readWorktreeDeleteIdentities(value: unknown): WorktreeDeleteIdentity[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object' || !('id' in entry) || typeof entry.id !== 'string') {
+      return []
+    }
+    const instanceId = 'instanceId' in entry ? entry.instanceId : undefined
+    return instanceId === undefined || typeof instanceId === 'string'
+      ? [{ id: entry.id, instanceId }]
+      : []
+  })
 }
