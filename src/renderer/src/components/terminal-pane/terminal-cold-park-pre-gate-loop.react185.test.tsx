@@ -1,5 +1,5 @@
 /** @vitest-environment happy-dom */
-import { act } from 'react'
+import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup, TerminalTab } from '../../../../shared/types'
@@ -73,6 +73,13 @@ vi.mock('./terminal-parked-tab-watchers', async () => {
             ...tab,
             title: `${tab.id}-${harness.syncCalls}`
           }))
+        },
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [args.worktreeId]: state.unifiedTabsByWorktree[args.worktreeId].map((tab) => ({
+            ...tab,
+            label: `${tab.entityId}-${harness.syncCalls}`
+          }))
         }
       }))
     }
@@ -94,7 +101,9 @@ const TAB_IDS = ['tab-a', 'tab-b'] as const
 const GROUP_ID = 'group-a'
 
 type ParkingStoreState = {
+  groupsByWorktree: Record<string, TabGroup[]>
   tabsByWorktree: Record<string, TerminalTab[]>
+  unifiedTabsByWorktree: Record<string, Tab[]>
 }
 
 const parkingStore = useAppStore as unknown as {
@@ -133,12 +142,14 @@ function renderProductionLayer(root: Root, coldParkTerminalPanes = true): unknow
   try {
     act(() => {
       root.render(
-        <TerminalPaneOverlayLayer
-          worktreeId={harness.worktreeId}
-          worktreePath="cold-park-pre-gate"
-          isWorktreeActive={false}
-          coldParkTerminalPanes={coldParkTerminalPanes}
-        />
+        <StrictMode>
+          <TerminalPaneOverlayLayer
+            worktreeId={harness.worktreeId}
+            worktreePath="cold-park-pre-gate"
+            isWorktreeActive={false}
+            coldParkTerminalPanes={coldParkTerminalPanes}
+          />
+        </StrictMode>
       )
     })
   } catch (error) {
@@ -194,7 +205,7 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
     const thrown = renderProductionLayer(root)
 
     expect(thrown).toBeNull()
-    expect(harness.coverageCalls).toBe(1)
+    expect(harness.coverageCalls).toBe(2)
     expect(harness.syncCalls).toBeLessThan(10)
     expect(harness.renderedParkedSets).not.toHaveLength(0)
     expect(new Set(harness.renderedParkedSets.map((ids) => ids.join(',')))).toEqual(
@@ -215,12 +226,83 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
       })
     })
 
-    expect(harness.coverageCalls).toBe(2)
+    expect(harness.coverageCalls).toBe(3)
     expect(harness.syncCalls).toBeGreaterThan(settledSyncCalls)
     expect(new Set(harness.renderedParkedSets.map((ids) => ids.join(',')))).toEqual(
       new Set([TAB_IDS.join(',')])
     )
     expect(harness.slotRenders).toBe(0)
+
+    const beforePendingSpawnSyncCalls = harness.syncCalls
+    const pendingSpawnState = parkingStore.getState()
+    act(() => {
+      parkingStore.setState({
+        tabsByWorktree: {
+          ...pendingSpawnState.tabsByWorktree,
+          [harness.worktreeId]: pendingSpawnState.tabsByWorktree[harness.worktreeId].map((tab) =>
+            tab.id === TAB_IDS[1] ? { ...tab, pendingActivationSpawn: 1 } : tab
+          )
+        }
+      })
+    })
+    expect(harness.syncCalls).toBeGreaterThan(beforePendingSpawnSyncCalls)
+
+    const beforeTabOrderSyncCalls = harness.syncCalls
+    const tabOrderState = parkingStore.getState()
+    act(() => {
+      parkingStore.setState({
+        tabsByWorktree: {
+          ...tabOrderState.tabsByWorktree,
+          [harness.worktreeId]: tabOrderState.tabsByWorktree[harness.worktreeId].toReversed()
+        }
+      })
+    })
+    expect(harness.syncCalls).toBeGreaterThan(beforeTabOrderSyncCalls)
+
+    const beforeActiveTabChangeSyncCalls = harness.syncCalls
+    const activeTabState = parkingStore.getState()
+    act(() => {
+      parkingStore.setState({
+        groupsByWorktree: {
+          ...activeTabState.groupsByWorktree,
+          [harness.worktreeId]: activeTabState.groupsByWorktree[harness.worktreeId].map(
+            (group) => ({
+              ...group,
+              activeTabId: `unified-${TAB_IDS[1]}`
+            })
+          )
+        }
+      })
+    })
+    expect(harness.syncCalls).toBeGreaterThan(beforeActiveTabChangeSyncCalls)
+
+    const beforeGroupChangeSyncCalls = harness.syncCalls
+    const groupState = parkingStore.getState()
+    const nextGroupId = 'group-b'
+    act(() => {
+      parkingStore.setState({
+        groupsByWorktree: {
+          ...groupState.groupsByWorktree,
+          [harness.worktreeId]: [
+            ...groupState.groupsByWorktree[harness.worktreeId],
+            {
+              id: nextGroupId,
+              worktreeId: harness.worktreeId,
+              activeTabId: `unified-${TAB_IDS[1]}`,
+              tabOrder: [`unified-${TAB_IDS[1]}`],
+              recentTabIds: [`unified-${TAB_IDS[1]}`]
+            }
+          ]
+        },
+        unifiedTabsByWorktree: {
+          ...groupState.unifiedTabsByWorktree,
+          [harness.worktreeId]: groupState.unifiedTabsByWorktree[harness.worktreeId].map((tab) =>
+            tab.entityId === TAB_IDS[1] ? { ...tab, groupId: nextGroupId } : tab
+          )
+        }
+      })
+    })
+    expect(harness.syncCalls).toBeGreaterThan(beforeGroupChangeSyncCalls)
 
     expect(renderProductionLayer(root, false)).toBeNull()
     expect(harness.slotRenders).toBeGreaterThan(0)

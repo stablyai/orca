@@ -1,32 +1,17 @@
-import { useRef } from 'react'
+import { useMemo } from 'react'
 import type { TerminalTab } from '../../../../shared/types'
 
-function haveSameTerminalParkingInputs(
-  left: readonly TerminalTab[],
-  right: readonly TerminalTab[]
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every(
-      (tab, index) =>
-        tab.id === right[index].id &&
-        tab.ptyId === right[index].ptyId &&
-        tab.pendingActivationSpawn === right[index].pendingActivationSpawn
-    )
-  )
+function getTerminalParkingInputsKey(terminalTabs: readonly TerminalTab[]): string {
+  return JSON.stringify(terminalTabs.map((tab) => [tab.id, tab.ptyId, tab.pendingActivationSpawn]))
 }
 
 export function useWorktreeParkTerminalTabs(
   terminalTabs: readonly TerminalTab[],
   coldParkTerminalPanes: boolean
 ): readonly TerminalTab[] {
-  const stableTabsRef = useRef(terminalTabs)
-  // Why: a dominant worktree park hides pre-gate churn from final-verdict damping.
-  if (
-    !coldParkTerminalPanes ||
-    !haveSameTerminalParkingInputs(stableTabsRef.current, terminalTabs)
-  ) {
-    stableTabsRef.current = terminalTabs
-  }
-  return stableTabsRef.current
+  const parkingInputsKey = coldParkTerminalPanes
+    ? getTerminalParkingInputsKey(terminalTabs)
+    : terminalTabs
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- decorative tab publications must not retrigger dominated pre-gate work.
+  return useMemo(() => terminalTabs, [parkingInputsKey])
 }
