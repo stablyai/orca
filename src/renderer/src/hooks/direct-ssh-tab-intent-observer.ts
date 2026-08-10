@@ -215,6 +215,7 @@ export function createDirectSshTabIntentObserver(
     withGeneration((generation) =>
       api.observeTabState({
         ...(authoritative ? { authoritative: true } : {}),
+        connected: state.sshConnectionStates.get(targetId)?.status === 'connected',
         hydrated,
         rendererGeneration: generation,
         targetId,

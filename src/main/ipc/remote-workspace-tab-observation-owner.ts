@@ -1,4 +1,4 @@
-import type { RemoteWorkspaceTabObservationAuthority } from './remote-workspace-tab-intent-store'
+import type { RemoteWorkspaceTabObservationAuthority } from './remote-workspace-tab-intent-types'
 
 type ObservationSender = {
   id: number

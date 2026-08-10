@@ -2,7 +2,7 @@ import { expect, test } from './helpers/orca-app'
 
 test.use({ seedTestRepo: false })
 
-test('keeps admitted and unrelated targets isolated across 1,000 renderer IPC observations', async ({
+test('keeps target 65 and unrelated targets isolated across 1,000 renderer IPC observations', async ({
   orcaPage
 }) => {
   const result = await orcaPage.evaluate(async () => {
@@ -24,8 +24,13 @@ test('keeps admitted and unrelated targets isolated across 1,000 renderer IPC ob
     })
     const existing = observedTab('existing', 1)
     const created = observedTab('created', 2)
-    const observe = (targetId: string, tabs: ReturnType<typeof observedTab>[]) =>
+    const observe = (
+      targetId: string,
+      tabs: ReturnType<typeof observedTab>[],
+      authoritative = false
+    ) =>
       api.observeTabState({
+        ...(authoritative ? { authoritative: true } : {}),
         hydrated: true,
         rendererGeneration: generation,
         targetId,
@@ -51,30 +56,33 @@ test('keeps admitted and unrelated targets isolated across 1,000 renderer IPC ob
       }
     })
 
-    await observe('target-0', [existing])
-    for (let index = 1; index < 1_000; index += 1) {
-      await observe(`target-${index}`, [])
+    for (let index = 1; index <= 64; index += 1) {
+      await observe(`target-${index}`, [], true)
     }
-    await observe('target-0', [existing, created])
+    await observe('target-65', [existing], true)
+    await observe('target-65', [existing, created])
+    for (let index = 66; index <= 1_000; index += 1) {
+      await observe(`target-${index}`, [], true)
+    }
     const retained = await api.reconcileSnapshot({
-      targetId: 'target-0',
+      targetId: 'target-65',
       snapshot: snapshot(2, [existing])
     })
     const unrelatedBeforeCleanup = await api.reconcileSnapshot({
-      targetId: 'target-999',
+      targetId: 'target-1000',
       snapshot: snapshot(2, [existing])
     })
 
-    await api.forgetTabState({ rendererGeneration: generation, targetId: 'target-1' })
-    await observe('target-999', [existing])
-    await observe('target-999', [existing, created])
-    const admittedAfterCleanup = await api.reconcileSnapshot({
-      targetId: 'target-999',
+    await api.forgetTabState({ rendererGeneration: generation, targetId: 'target-999' })
+    await observe('target-1000', [existing])
+    await observe('target-1000', [existing, created])
+    const unrelatedMutation = await api.reconcileSnapshot({
+      targetId: 'target-1000',
       snapshot: snapshot(3, [existing])
     })
     return {
-      admittedAfterCleanup:
-        admittedAfterCleanup?.session.tabsByWorktreePath[worktreePath]?.map((tab) => tab.id) ?? [],
+      unrelatedMutation:
+        unrelatedMutation?.session.tabsByWorktreePath[worktreePath]?.map((tab) => tab.id) ?? [],
       retained: retained?.session.tabsByWorktreePath[worktreePath]?.map((tab) => tab.id) ?? [],
       unrelatedBeforeCleanup:
         unrelatedBeforeCleanup?.session.tabsByWorktreePath[worktreePath]?.map((tab) => tab.id) ?? []
@@ -82,7 +90,7 @@ test('keeps admitted and unrelated targets isolated across 1,000 renderer IPC ob
   })
 
   expect(result).toEqual({
-    admittedAfterCleanup: ['existing', 'created'],
+    unrelatedMutation: ['existing', 'created'],
     retained: ['existing', 'created'],
     unrelatedBeforeCleanup: ['existing']
   })

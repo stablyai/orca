@@ -32,6 +32,8 @@ function tab(id: string, createdAt: number, ptyId = `pty-${id}`): RemoteWorkspac
 }
 
 function observation(args: {
+  authoritative?: boolean
+  connected?: boolean
   generation: number
   hydrated?: boolean
   instance: string | null
@@ -39,6 +41,8 @@ function observation(args: {
   targetId?: string
 }): RemoteWorkspaceTabObservation {
   return {
+    ...(args.authoritative ? { authoritative: true } : {}),
+    ...(args.connected === undefined ? {} : { connected: args.connected }),
     hydrated: args.hydrated ?? true,
     rendererGeneration: args.generation,
     targetId: args.targetId ?? TARGET,
@@ -272,6 +276,7 @@ describe('RemoteWorkspaceTabIntentStore', () => {
       store.observe(
         authority(1),
         observation({
+          authoritative: true,
           generation: 1,
           instance: `worktree-${index}`,
           tabs: [],
@@ -283,6 +288,7 @@ describe('RemoteWorkspaceTabIntentStore', () => {
       store.observe(
         authority(1),
         observation({
+          authoritative: true,
           generation: 1,
           instance: `worktree-${index}`,
           tabs: [],
@@ -320,5 +326,156 @@ describe('RemoteWorkspaceTabIntentStore', () => {
         WORKTREE_PATH
       ]
     ).toEqual([existing.tab, created.tab])
+  })
+
+  it('protects target 65 deletion acknowledgement and unsolicited creation', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    const deleted = tab('deleted', 1)
+    const created = tab('created', 2)
+    for (let index = 1; index <= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS; index += 1) {
+      store.observe(
+        authority(1),
+        observation({
+          authoritative: true,
+          generation: 1,
+          instance: `worktree-${index}`,
+          tabs: [],
+          targetId: `target-${index}`
+        })
+      )
+    }
+
+    store.observe(
+      authority(1),
+      observation({
+        authoritative: true,
+        generation: 1,
+        instance: 'worktree-65',
+        tabs: [deleted],
+        targetId: 'target-65'
+      })
+    )
+    store.observe(
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-65', tabs: [], targetId: 'target-65' })
+    )
+    expect(
+      store.reconcile('target-65', snapshot(2, [deleted]))?.session.tabsByWorktreePath[
+        WORKTREE_PATH
+      ]
+    ).toEqual([])
+
+    const acknowledgedDeletion = snapshot(3, [])
+    const capture = store.capturePatch('target-65', acknowledgedDeletion.session)
+    store.acknowledgePatch('target-65', capture, {
+      ok: true,
+      snapshot: acknowledgedDeletion
+    })
+    expect(store.stateForTests('target-65')).toEqual({ intents: 0, overflowed: false })
+
+    store.observe(
+      authority(1),
+      observation({
+        generation: 1,
+        instance: 'worktree-65',
+        tabs: [created],
+        targetId: 'target-65'
+      })
+    )
+    expect(
+      store.reconcile('target-65', snapshot(4, []))?.session.tabsByWorktreePath[WORKTREE_PATH]
+    ).toEqual([created.tab])
+  })
+
+  it('evicts an idle disconnected baseline before connected targets', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    for (let index = 1; index <= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS; index += 1) {
+      store.observe(
+        authority(1),
+        observation({
+          authoritative: true,
+          connected: index !== MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS,
+          generation: 1,
+          instance: `worktree-${index}`,
+          tabs: [],
+          targetId: `target-${index}`
+        })
+      )
+    }
+
+    store.observe(
+      authority(1),
+      observation({
+        authoritative: true,
+        connected: true,
+        generation: 1,
+        instance: 'worktree-65',
+        tabs: [],
+        targetId: 'target-65'
+      })
+    )
+
+    expect(store.stateForTests('target-1')).not.toBeNull()
+    expect(store.stateForTests(`target-${MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS}`)).toBeNull()
+    expect(store.stateForTests('target-65')).toEqual({ intents: 0, overflowed: false })
+
+    store.observe(
+      authority(1),
+      observation({
+        authoritative: true,
+        connected: false,
+        generation: 1,
+        instance: 'worktree-66',
+        tabs: [],
+        targetId: 'target-66'
+      })
+    )
+    expect(store.stateForTests('target-66')).toBeNull()
+  })
+
+  it('fails target-local reconciliation closed when every retained target is pending', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    for (let index = 1; index <= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS; index += 1) {
+      const created = tab(`created-${index}`, index)
+      store.observe(
+        authority(1),
+        observation({
+          authoritative: true,
+          generation: 1,
+          instance: `worktree-${index}`,
+          tabs: [],
+          targetId: `target-${index}`
+        })
+      )
+      store.observe(
+        authority(1),
+        observation({
+          generation: 1,
+          instance: `worktree-${index}`,
+          tabs: [created],
+          targetId: `target-${index}`
+        })
+      )
+    }
+
+    const target65Tab = tab('created-65', 65)
+    store.observe(
+      authority(1),
+      observation({
+        generation: 1,
+        instance: 'worktree-65',
+        tabs: [target65Tab],
+        targetId: 'target-65'
+      })
+    )
+    expect(store.hasPending('target-65')).toBe(true)
+    expect(store.reconcile('target-65', snapshot(2, []))).toBeNull()
+
+    const acknowledged = snapshot(3, [target65Tab])
+    const capture = store.capturePatch('target-65', acknowledged.session)
+    expect(capture.untracked).toBe(true)
+    store.acknowledgePatch('target-65', capture, { ok: true, snapshot: acknowledged })
+    expect(store.hasPending('target-65')).toBe(false)
+    expect(store.reconcile('target-65', acknowledged)).toEqual(acknowledged)
   })
 })

@@ -1,11 +1,9 @@
 import type {
-  RemoteWorkspaceObservedTab,
   RemoteWorkspaceObservedWorktree,
   RemoteWorkspacePatchResult,
   RemoteWorkspaceSession,
   RemoteWorkspaceSnapshot,
-  RemoteWorkspaceTabObservation,
-  RemoteWorkspaceTerminalTab
+  RemoteWorkspaceTabObservation
 } from '../../shared/remote-workspace-types'
 import {
   findObservedIntentWorktree,
@@ -14,100 +12,32 @@ import {
   sessionTabMatchesIntent,
   type RemoteWorkspaceTabIntent
 } from './remote-workspace-tab-intent-reconciliation'
+import {
+  boundedRemoteWorkspaceObservedWorktrees,
+  remoteWorkspaceObservedTabMap
+} from './remote-workspace-tab-observation-bounds'
+import type {
+  RemoteWorkspacePatchIntentCapture,
+  RemoteWorkspaceTabObservationAuthority
+} from './remote-workspace-tab-intent-types'
 
 type TargetState = {
   authority: RemoteWorkspaceTabObservationAuthority
+  connected: boolean
   intents: Map<string, RemoteWorkspaceTabIntent>
   overflowed: boolean
   sequence: number
   worktrees: Map<string, RemoteWorkspaceObservedWorktree>
 }
 
-export type RemoteWorkspaceTabObservationAuthority = {
-  processId: number
-  rendererGeneration: number
-  senderId: number
-}
-
-export type RemoteWorkspacePatchIntentCapture = {
-  fullSnapshot: boolean
-  sequences: Map<string, number>
-}
-
 export const MAX_REMOTE_WORKSPACE_TAB_INTENTS_PER_TARGET = 2_048
 export const MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS = 64
-export const MAX_REMOTE_WORKSPACE_OBSERVED_WORKTREES_PER_TARGET = 2_048
-export const MAX_REMOTE_WORKSPACE_OBSERVED_TABS_PER_TARGET = 4_096
-
-function tabSlotKey(worktreeInstanceId: string, tab: RemoteWorkspaceTerminalTab): string {
-  return JSON.stringify([worktreeInstanceId, tab.id, tab.createdAt])
-}
-
-function observedTabMap(
-  worktree: RemoteWorkspaceObservedWorktree
-): Map<string, RemoteWorkspaceObservedTab> {
-  if (!worktree.worktreeInstanceId) {
-    return new Map()
-  }
-  return new Map(
-    worktree.tabs.map((tab) => [tabSlotKey(worktree.worktreeInstanceId!, tab.tab), tab])
-  )
-}
-
-function boundedObservedWorktrees(
-  observation: RemoteWorkspaceTabObservation
-): Map<string, RemoteWorkspaceObservedWorktree> | null {
-  if (
-    typeof observation.targetId !== 'string' ||
-    !observation.targetId ||
-    observation.targetId.length > 512 ||
-    observation.hydrated !== true ||
-    !Array.isArray(observation.worktrees) ||
-    observation.worktrees.length > MAX_REMOTE_WORKSPACE_OBSERVED_WORKTREES_PER_TARGET
-  ) {
-    return null
-  }
-  const worktrees = new Map<string, RemoteWorkspaceObservedWorktree>()
-  let tabCount = 0
-  for (const worktree of observation.worktrees) {
-    if (!worktree || typeof worktree !== 'object' || !Array.isArray(worktree.tabs)) {
-      return null
-    }
-    tabCount += worktree.tabs.length
-    if (
-      tabCount > MAX_REMOTE_WORKSPACE_OBSERVED_TABS_PER_TARGET ||
-      typeof worktree.worktreeId !== 'string' ||
-      !worktree.worktreeId ||
-      worktree.worktreeId.length > 4_096 ||
-      typeof worktree.worktreePath !== 'string' ||
-      !worktree.worktreePath ||
-      worktree.worktreePath.length > 4_096 ||
-      (worktree.worktreeInstanceId !== null && typeof worktree.worktreeInstanceId !== 'string') ||
-      worktree.worktreeInstanceId?.length === 0 ||
-      (worktree.worktreeInstanceId?.length ?? 0) > 256 ||
-      worktrees.has(worktree.worktreeId) ||
-      worktree.tabs.some(
-        (entry) =>
-          !entry ||
-          typeof entry !== 'object' ||
-          !entry.tab ||
-          typeof entry.tab !== 'object' ||
-          typeof entry.tab.id !== 'string' ||
-          !entry.tab.id ||
-          entry.tab.id.length > 512 ||
-          typeof entry.processIdentity !== 'string' ||
-          entry.processIdentity.length > 4_096
-      )
-    ) {
-      return null
-    }
-    worktrees.set(worktree.worktreeId, worktree)
-  }
-  return worktrees
-}
+export const MAX_REMOTE_WORKSPACE_UNTRACKED_INTENT_TARGETS = 64
 
 export class RemoteWorkspaceTabIntentStore {
   private readonly targets = new Map<string, TargetState>()
+  private readonly untrackedTargets = new Map<string, RemoteWorkspaceTabObservationAuthority>()
+  private untrackedOverflowed = false
 
   observe(
     authority: RemoteWorkspaceTabObservationAuthority,
@@ -120,32 +50,52 @@ export class RemoteWorkspaceTabIntentStore {
       return
     }
     const existing = this.targets.get(observation.targetId)
+    const untrackedAuthority = this.untrackedTargets.get(observation.targetId)
     if (existing && !this.canObserve(existing.authority, authority)) {
       return
     }
-    if (!existing && this.targets.size >= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS) {
+    if (untrackedAuthority && !this.canObserve(untrackedAuthority, authority)) {
       return
     }
-    const nextWorktrees = boundedObservedWorktrees(observation)
+    const nextWorktrees = boundedRemoteWorkspaceObservedWorktrees(observation)
     if (!nextWorktrees) {
       if (existing) {
         existing.overflowed = true
       } else if (this.targets.size < MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS) {
         this.targets.set(observation.targetId, {
           authority,
+          connected: observation.connected === true,
           intents: new Map(),
           overflowed: true,
           sequence: 0,
           worktrees: new Map()
         })
+      } else if (
+        typeof observation.targetId === 'string' &&
+        observation.targetId.length > 0 &&
+        observation.targetId.length <= 512
+      ) {
+        this.recordUntrackedTarget(observation.targetId, authority)
       }
       return
     }
     if (!existing) {
+      const replacedBaseline =
+        this.targets.size >= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS
+          ? this.evictBaseline(observation.connected === true)
+          : false
+      if (this.targets.size >= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS) {
+        if (observation.authoritative !== true) {
+          this.recordUntrackedTarget(observation.targetId, authority)
+        }
+        return
+      }
+      this.untrackedTargets.delete(observation.targetId)
       this.targets.set(observation.targetId, {
         authority,
+        connected: observation.connected === true,
         intents: new Map(),
-        overflowed: false,
+        overflowed: replacedBaseline && observation.authoritative !== true,
         sequence: 0,
         worktrees: nextWorktrees
       })
@@ -157,7 +107,9 @@ export class RemoteWorkspaceTabIntentStore {
       authority.rendererGeneration > existing.authority.rendererGeneration
     ) {
       existing.authority = authority
+      existing.connected = observation.connected === true
       existing.worktrees = nextWorktrees
+      this.touch(observation.targetId, existing)
       return
     }
 
@@ -177,8 +129,8 @@ export class RemoteWorkspaceTabIntentStore {
         }
         continue
       }
-      const previousTabs = observedTabMap(previous)
-      const nextTabs = observedTabMap(next)
+      const previousTabs = remoteWorkspaceObservedTabMap(previous)
+      const nextTabs = remoteWorkspaceObservedTabMap(next)
       for (const slot of new Set([...previousTabs.keys(), ...nextTabs.keys()])) {
         const before = previousTabs.get(slot)
         const after = nextTabs.get(slot)
@@ -208,10 +160,16 @@ export class RemoteWorkspaceTabIntentStore {
         }
       }
     }
+    existing.connected = observation.connected === true
     existing.worktrees = nextWorktrees
+    this.touch(observation.targetId, existing)
   }
 
   forgetTarget(targetId: string, authority: RemoteWorkspaceTabObservationAuthority): void {
+    const untrackedAuthority = this.untrackedTargets.get(targetId)
+    if (untrackedAuthority && this.canObserve(untrackedAuthority, authority)) {
+      this.untrackedTargets.delete(targetId)
+    }
     const state = this.targets.get(targetId)
     if (state && this.canObserve(state.authority, authority)) {
       this.targets.delete(targetId)
@@ -220,11 +178,19 @@ export class RemoteWorkspaceTabIntentStore {
 
   hasPending(targetId: string): boolean {
     const state = this.targets.get(targetId)
-    return Boolean(state?.overflowed || state?.intents.size)
+    return Boolean(
+      state?.overflowed ||
+      state?.intents.size ||
+      this.untrackedTargets.has(targetId) ||
+      (!state && this.untrackedOverflowed)
+    )
   }
 
   reconcile(targetId: string, snapshot: RemoteWorkspaceSnapshot): RemoteWorkspaceSnapshot | null {
     const state = this.targets.get(targetId)
+    if (!state && (this.untrackedTargets.has(targetId) || this.untrackedOverflowed)) {
+      return null
+    }
     if (state?.overflowed) {
       return null
     }
@@ -240,7 +206,11 @@ export class RemoteWorkspaceTabIntentStore {
   ): RemoteWorkspacePatchIntentCapture {
     const state = this.targets.get(targetId)
     if (!state) {
-      return { fullSnapshot: false, sequences: new Map() }
+      return {
+        fullSnapshot: false,
+        sequences: new Map(),
+        untracked: this.untrackedTargets.has(targetId) || this.untrackedOverflowed
+      }
     }
     return {
       fullSnapshot: state.overflowed && sessionMatchesTabObservation(state.worktrees, session),
@@ -252,7 +222,8 @@ export class RemoteWorkspaceTabIntentStore {
               sessionTabMatchesIntent(session, intent)
           )
           .map(([slot, intent]) => [slot, intent.sequence])
-      )
+      ),
+      untracked: false
     }
   }
 
@@ -263,6 +234,9 @@ export class RemoteWorkspaceTabIntentStore {
   ): void {
     if (!result.ok) {
       return
+    }
+    if (capture.untracked) {
+      this.untrackedTargets.delete(targetId)
     }
     const state = this.targets.get(targetId)
     if (!state) {
@@ -292,6 +266,38 @@ export class RemoteWorkspaceTabIntentStore {
 
   resetForTests(): void {
     this.targets.clear()
+    this.untrackedTargets.clear()
+    this.untrackedOverflowed = false
+  }
+
+  private recordUntrackedTarget(
+    targetId: string,
+    authority: RemoteWorkspaceTabObservationAuthority
+  ): void {
+    if (this.untrackedTargets.size < MAX_REMOTE_WORKSPACE_UNTRACKED_INTENT_TARGETS) {
+      this.untrackedTargets.set(targetId, authority)
+      return
+    }
+    this.untrackedOverflowed = true
+  }
+
+  private evictBaseline(incomingConnected: boolean): boolean {
+    const candidates = [...this.targets].filter(
+      ([, state]) => !state.overflowed && state.intents.size === 0
+    )
+    const victim =
+      candidates.find(([, state]) => !state.connected) ??
+      (incomingConnected ? candidates[0] : undefined)
+    if (!victim) {
+      return false
+    }
+    this.targets.delete(victim[0])
+    return true
+  }
+
+  private touch(targetId: string, state: TargetState): void {
+    this.targets.delete(targetId)
+    this.targets.set(targetId, state)
   }
 
   private canObserve(
@@ -300,18 +306,9 @@ export class RemoteWorkspaceTabIntentStore {
   ): boolean {
     return (
       candidate.rendererGeneration > current.rendererGeneration ||
-      this.sameAuthority(current, candidate)
-    )
-  }
-
-  private sameAuthority(
-    left: RemoteWorkspaceTabObservationAuthority,
-    right: RemoteWorkspaceTabObservationAuthority
-  ): boolean {
-    return (
-      left.rendererGeneration === right.rendererGeneration &&
-      left.processId === right.processId &&
-      left.senderId === right.senderId
+      (candidate.rendererGeneration === current.rendererGeneration &&
+        candidate.processId === current.processId &&
+        candidate.senderId === current.senderId)
     )
   }
 }

@@ -2705,10 +2705,10 @@
       "providers": ["ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "Deterministic main/renderer tests cover causal patch acknowledgement, Electron sender/process ownership, monotonic renderer takeover, initial hydration, workspace/tab/process identity reuse, target-local overflow and cleanup, pre-delivery creation/deletion, request fencing, authoritative deletion, bounded writes, duplicate repair, and hot-title target-scan isolation. A real renderer/preload/main IPC run sends 1,000 target observations and proves retained and newly admitted targets reconcile across cleanup. A visible and headless macOS Electron client reached a throwaway Linux Docker OpenSSH target and real Git repository without ssh localhost; both preserved the exact new tab and PTY through a held stale snapshot, proved terminal input on the target, and exited with scoped cleanup. Physical Linux/Windows clients and paired-Orca-server topology remain unrun.",
+      "coverageNotes": "Deterministic main/renderer tests cover causal patch acknowledgement, Electron sender/process ownership, monotonic renderer takeover, initial hydration, workspace/tab/process identity reuse, connected-target admission preference, target-local overflow and cleanup, pre-delivery creation/deletion, request fencing, authoritative deletion, bounded writes, duplicate repair, and hot-title target-scan isolation. A target-65 oracle preloads 64 authoritative baselines, proves deletion acknowledgement, then preserves an unsolicited local creation; a saturated-pending variant fails closed and recovers after its target-local patch acknowledgement. A real renderer/preload/main IPC run sends 1,000 target observations and proves target 65 plus an unrelated target reconcile without cross-target poisoning. A visible and headless macOS Electron client reached a throwaway Linux Docker OpenSSH target and real Git repository without ssh localhost; both preserved the exact new tab and PTY through a held stale snapshot, proved terminal input on the target, and exited with scoped cleanup. Physical Linux/Windows clients and paired-Orca-server topology remain unrun.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/13013"],
       "invariant": "A direct SSH snapshot may change acknowledged terminal-tab presence, but it cannot erase an unacknowledged target-local creation or resurrect an unacknowledged target-local deletion. A relevant session write suppressed by snapshot application must persist after the trailing idle window or at one fixed 60-second ceiling that later mutations cannot postpone.",
-      "oracle": "Hold a requested snapshot, close one of its tabs, release it, and require the close to remain absent. Create a local tab before unsolicited-event delivery, apply a snapshot that omits it, and require the tab to survive until a returned or incoming snapshot acknowledges its presence. Also hold a real remoteWorkspace:get, create a terminal through the visible UI, require its exact tab and PTY identity in the next remote snapshot, and write a proof file through that PTY on a real SSH target.",
+      "oracle": "After 64 authoritative target baselines, admit target 65, close one of its tabs, and require a stale snapshot not to resurrect it; acknowledge the deletion through the captured patch, create a local tab, then require an unsolicited snapshot that omits it to preserve it. Saturate all 64 retained targets with pending mutations and require an untracked target-local mutation to block snapshot application until its own successful patch acknowledgement. Also hold a real remoteWorkspace:get, create a terminal through the visible UI, require its exact tab and PTY identity in the next remote snapshot, and write a proof file through that PTY on a real SSH target.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
         "for run in {1..100}; do pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts --reporter=dot; done",
@@ -2738,7 +2738,7 @@
           "assertions": [
             "unacknowledged intent survives renderer restart and only a causally captured successful patch acknowledges it",
             "worktree, tab, PTY, and process-incarnation reuse cannot acknowledge an older intent",
-            "pre-hydration observations cannot establish intent, and target-local admission recovers without poisoning retained targets"
+            "target 65 preserves deletion and creation intent after 64 baselines, prefers an idle disconnected eviction, and fails closed with target-local recovery when all retained targets are pending"
           ]
         },
         {
@@ -2782,7 +2782,7 @@
           "file": "tests/e2e/remote-workspace-tab-observation-scale.spec.ts",
           "assertions": [
             "1,000 observations traverse the real renderer/preload/main IPC owner",
-            "target zero and unrelated snapshots reconcile before cleanup, and freed admission accepts a later target"
+            "target 65 remains protected while later authoritative baselines churn and an unrelated target reconciles independently"
           ]
         },
         {
@@ -2801,7 +2801,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 3,
-          "summary": "Eleven focused files passed 91 hydration, Electron-owner, persistent-intent, identity-reuse, race-oracle, snapshot, target-sync, persistence, patch-queue, and relay-handler tests."
+          "summary": "Eleven focused files passed 94 hydration, Electron-owner, persistent-intent, target-65 admission, identity-reuse, race-oracle, snapshot, target-sync, persistence, patch-queue, and relay-handler tests."
         },
         {
           "date": "2026-08-10",
@@ -2810,7 +2810,7 @@
           "command": "for run in {1..100}; do pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/main/ipc/remote-workspace-tab-observation-owner.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts --reporter=dot; done",
           "result": "passed",
           "durationSeconds": 170,
-          "summary": "All 100 consecutive production-owner and byte-identical race-oracle iterations passed."
+          "summary": "All 100 consecutive production-owner and byte-identical race-oracle iterations passed, with 18 tests per iteration including the target-65 and saturated-pending admissions."
         },
         {
           "date": "2026-08-10",
@@ -2818,8 +2818,8 @@
           "platform": "macos",
           "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/remote-workspace-tab-observation-scale.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "result": "passed",
-          "durationSeconds": 5,
-          "summary": "A real renderer/preload/main Electron route processed 1,000 initial target observations and preserved target zero plus recovered admission after cleanup."
+          "durationSeconds": 3,
+          "summary": "A real renderer/preload/main Electron route processed 1,000 target observations, preserved target 65 through later baseline churn, and kept an unrelated target isolated."
         },
         {
           "date": "2026-08-10",
@@ -2827,7 +2827,7 @@
           "platform": "macos",
           "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-remote-workspace-snapshot-race.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
           "result": "passed",
-          "durationSeconds": 16,
+          "durationSeconds": 12,
           "summary": "A visible Electron client held a real direct SSH snapshot, retained the new tab and PTY, wrote the Linux-target proof marker, disconnected, removed Docker state, and exited cleanly."
         },
         {
@@ -2836,7 +2836,7 @@
           "platform": "macos",
           "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-remote-workspace-snapshot-race.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "result": "passed",
-          "durationSeconds": 19,
+          "durationSeconds": 11,
           "summary": "The identical real-SSH ordering and terminal-input oracle passed in headless Electron, then disconnected and exited with no lingering Docker target."
         }
       ],
@@ -2850,11 +2850,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical oracle blob 2a9c2c077e9718cadec4058eedbb05fb93fd4e33 fails 0/2 on base bbcf89e221ad5e759b1933bbd4b04b07f770f379 and published 587ea496d48b60f9c9473f47092f1246e66687eb (rebased as 7daf37968d), then passes 2/2 with the corrected production ownership and fails 0/2 when that reconciliation is disabled while retaining the tests. Exact corrected and disabled object IDs are recorded in the review handoff because they are created after this manifest content."
+        "evidence": "The original byte-identical oracle blob 2a9c2c077e9718cadec4058eedbb05fb93fd4e33 fails 0/2 on base bbcf89e221ad5e759b1933bbd4b04b07f770f379 and published 587ea496d48b60f9c9473f47092f1246e66687eb (rebased as 7daf37968d), then passes 2/2 with the main-process production owner and fails 0/2 when renderer reconciliation is disabled. The target-65 store oracle fails on candidate d5d8e63c295723d38eba4cb4a336888e6e1a96bd, passes with safe bounded admission, and fails on a fresh unpublished admission-disabled control; exact corrected and disabled object IDs are recorded in the review handoff because they are created after this manifest content."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Tab observation reuses cached exact-target scopes and skips unchanged tab/scope references. Main retains at most 64 admitted targets, 2,048 coalesced intents per target, 2,048 worktrees, and 4,096 tabs; excess targets are rejected locally without parsing or poisoning retained targets, and explicit target cleanup frees admission. A real 1,000-target IPC control passes before and after cleanup. Suppression retains one listener and one deadline timer with no predicate polling."
+        "evidence": "Tab observation reuses cached exact-target scopes and skips unchanged tab/scope references. Main retains at most 64 full targets, 2,048 coalesced intents per target, 2,048 worktrees and 4,096 tabs per target, plus 64 authority-fenced target IDs and one global fail-closed bit for the saturated-pending overflow case. Admission evicts only intent-free baselines, prefers disconnected baselines for a connected target, and never scans providers or targets. A real 1,000-target IPC control passes with target 65 protected through later baseline churn. Suppression retains one listener and one deadline timer with no predicate polling."
       },
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",
