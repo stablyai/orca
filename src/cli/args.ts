@@ -19,6 +19,7 @@ export const BOOLEAN_FLAGS = new Set([
   'children',
   'comments',
   'connect',
+  'count',
   'current',
   'dry-run',
   'enter',

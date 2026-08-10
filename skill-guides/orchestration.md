@@ -126,8 +126,8 @@ orca orchestration dispatch-show --task <task_id> --json
 ## Messaging
 
 ```bash
-orca orchestration send --subject <text> [--to <run:id|dispatch:id|legacy_handle>] [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--json]
-orca orchestration check [--terminal <handle>] [--ack <delivery_id>] [--peek|--all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--json]
+orca orchestration send --subject <text> [--to <run:id|dispatch:id|legacy_handle>] [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--delivery-class <interrupt|tool|turn>] [--thread-id <id>] [--payload <json>] [--json]
+orca orchestration check [--terminal <handle>] [--ack <delivery_id>] [--peek|--all|--count] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--json]
 orca orchestration reply --id <msg_id> --body <text> [--from <handle>] [--json]
 orca orchestration ask (--question <text>|--resume <msg_id>) [--options <csv>] [--timeout-ms <n>] [--from <handle>] [--json]
 orca orchestration inbox [--limit <n>] [--json]
@@ -137,6 +137,8 @@ Rules:
 
 - Omit `--from` unless impersonating another terminal; Orca auto-resolves it from the current terminal.
 - A coordinator `check` returns the bound Run's oldest FIFO Delivery (up to 50 messages) and replays that exact batch until `--ack <delivery_id>`. Process every message before acknowledging; `check --ack <id> --wait` acknowledges, checks, and waits in one operation.
+- `--delivery-class` says when the sender wants a message read: `interrupt` as soon as possible, `tool` at the recipient's next action boundary, or `turn` when it finishes its current turn. It defaults to `turn` and is independent of `--type` and `--priority`. Orca stores and returns it; whatever supervises the recipient decides what to do with it.
+- `check --count` answers only how many unread messages wait, broken down by delivery class. It creates no Delivery, reads no bodies, and marks nothing read, so it is safe to run far more often than a real check. It cannot be combined with `--ack`, `--wait`, `--all`, `--unread`, or `--format`.
 - Use `--peek` and `--all` only for read-only history/debugging. Type filters decide when a waiter wakes; the returned actionable Delivery is still the oldest full batch.
 - Use `dispatch:<id>` for coordinator guidance to one supervised worker. Orca routes that stable address locally or through the connected-server relay; do not substitute a remote terminal handle.
 - Terminal handles remain appropriate for low-level pre-Dispatch messaging. Prefer `agentTerminalHandle` from the create response, fall back to `startupTerminal.handle` for older runtimes, then re-resolve with `orca terminal list --worktree ... --json` if missing or stale. Continue with the replacement handle only; never dual-send to old and new handles.

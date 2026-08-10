@@ -1,8 +1,16 @@
-import { MESSAGE_TYPES, type MessagePriority, type MessageType } from './types'
+import {
+  DEFAULT_MESSAGE_DELIVERY_CLASS,
+  MESSAGE_DELIVERY_CLASSES,
+  MESSAGE_TYPES,
+  type MessageDeliveryClass,
+  type MessagePriority,
+  type MessageType
+} from './types'
 import type { OrchestrationDb } from './db'
 import { OrchestrationError } from './orchestration-error'
 
 const MESSAGE_TYPE_SET = new Set<MessageType>(MESSAGE_TYPES)
+const MESSAGE_DELIVERY_CLASS_SET = new Set<string>(MESSAGE_DELIVERY_CLASSES)
 
 export type FederatedControlMessage = {
   from: string
@@ -10,6 +18,7 @@ export type FederatedControlMessage = {
   body: string
   type: MessageType
   priority: MessagePriority
+  deliveryClass: MessageDeliveryClass
   threadId: string | null
   payload: string | null
 }
@@ -45,6 +54,11 @@ export function parseFederatedControlMessage(payload: string): FederatedControlM
     type: message.type as MessageType,
     priority:
       message.priority === 'high' || message.priority === 'urgent' ? message.priority : 'normal',
+    // Why: a peer that predates the delivery class omits it; 'turn' is the boundary its mail
+    // already lands at, so the older side degrades to today's behavior instead of failing.
+    deliveryClass: MESSAGE_DELIVERY_CLASS_SET.has(message.deliveryClass as string)
+      ? (message.deliveryClass as MessageDeliveryClass)
+      : DEFAULT_MESSAGE_DELIVERY_CLASS,
     threadId: typeof message.threadId === 'string' ? message.threadId : null,
     payload: typeof message.payload === 'string' ? message.payload : null
   }
@@ -62,6 +76,9 @@ export function importFederatedControlMessage(
   const recipient = `dispatch:${params.dispatchId}`
   const existing = db.getMessageById(params.messageId)
   if (existing) {
+    // Why: delivery_class stays out of this comparison — a relay item first imported by a peer
+    // that predates the field stores 'turn', and a re-import after that peer updates would
+    // otherwise look like a conflicting message.
     if (
       existing.to_handle !== recipient ||
       existing.from_handle !== message.from ||
@@ -87,6 +104,7 @@ export function importFederatedControlMessage(
     body: message.body,
     type: message.type,
     priority: message.priority,
+    deliveryClass: message.deliveryClass,
     threadId: message.threadId ?? undefined,
     payload: message.payload ?? undefined
   })

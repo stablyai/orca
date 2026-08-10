@@ -1,3 +1,5 @@
+import type { MessageDeliveryClass } from '../../../shared/orchestration-message-delivery-class'
+
 export const MESSAGE_TYPES = [
   'status',
   'dispatch',
@@ -13,6 +15,14 @@ export const MESSAGE_TYPES = [
 export type MessageType = (typeof MESSAGE_TYPES)[number]
 
 export type MessagePriority = 'normal' | 'high' | 'urgent'
+
+// Why: shared with the CLI, which cannot import main-process modules.
+export {
+  DEFAULT_MESSAGE_DELIVERY_CLASS,
+  MESSAGE_DELIVERY_CLASSES,
+  isMessageDeliveryClass,
+  type MessageDeliveryClass
+} from '../../../shared/orchestration-message-delivery-class'
 
 export type MessageDeliveryContract = 'legacy_direct' | 'current_delivery' | 'audit_only'
 
@@ -232,6 +242,8 @@ export type MessageRow = {
   body: string
   type: MessageType
   priority: MessagePriority
+  // Why: optional like delivery_contract — rows decoded from an older peer never carry it.
+  delivery_class?: MessageDeliveryClass
   thread_id: string | null
   payload: string | null
   read: number

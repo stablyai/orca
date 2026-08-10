@@ -5,6 +5,7 @@ import Database from '../../sqlite/sync-database'
 import type {
   MessageType,
   MessagePriority,
+  MessageDeliveryClass,
   MessageDeliveryContract,
   TaskStatus,
   DispatchStatus,
@@ -37,6 +38,7 @@ import type {
   FederationRelayDirection,
   FederationRelayItemRow
 } from './types'
+import { DEFAULT_MESSAGE_DELIVERY_CLASS, MESSAGE_DELIVERY_CLASSES } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -83,6 +85,7 @@ function paneKeyMatchSuffix(paneKey: string): string {
 export type {
   MessageType,
   MessagePriority,
+  MessageDeliveryClass,
   MessageDeliveryContract,
   TaskStatus,
   DispatchStatus,
@@ -282,7 +285,7 @@ type RunListCursor = {
 }
 
 // Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup.
-const SCHEMA_VERSION = 25
+const SCHEMA_VERSION = 26
 
 function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -347,6 +350,8 @@ export class OrchestrationDb {
           )),
         priority      TEXT NOT NULL DEFAULT 'normal'
           CHECK(priority IN ('normal', 'high', 'urgent')),
+        delivery_class TEXT NOT NULL DEFAULT 'turn'
+          CHECK(delivery_class IN ('interrupt', 'tool', 'turn')),
         thread_id     TEXT,
         payload       TEXT,
         read          INTEGER NOT NULL DEFAULT 0,
@@ -982,6 +987,14 @@ export class OrchestrationDb {
             ON dispatch_contexts(assignee_handle)
             WHERE assignee_handle IS NOT NULL AND status IN ('pending', 'dispatched');
         `)
+      }
+      // Why: existing rows predate the sender-set delivery class, and 'turn' is exactly the
+      // boundary today's pull-based check already delivers them at.
+      if (current < 26 && !this.hasColumn('messages', 'delivery_class')) {
+        this.db.exec(
+          `ALTER TABLE messages ADD COLUMN delivery_class TEXT NOT NULL DEFAULT 'turn'
+             CHECK(delivery_class IN ('interrupt', 'tool', 'turn'))`
+        )
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
@@ -2851,6 +2864,7 @@ export class OrchestrationDb {
     body?: string
     type?: MessageType
     priority?: MessagePriority
+    deliveryClass?: MessageDeliveryClass
     threadId?: string
     payload?: string
     senderPaneKey?: string
@@ -2864,9 +2878,9 @@ export class OrchestrationDb {
     const stmt = this.db.prepare(`
       INSERT INTO messages (
         id, run_id, delivery_contract, from_handle, to_handle, subject, body,
-        type, priority, thread_id, payload, sender_pane_key
+        type, priority, delivery_class, thread_id, payload, sender_pane_key
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     stmt.run(
       id,
@@ -2878,6 +2892,7 @@ export class OrchestrationDb {
       msg.body ?? '',
       msg.type ?? 'status',
       msg.priority ?? 'normal',
+      msg.deliveryClass ?? DEFAULT_MESSAGE_DELIVERY_CLASS,
       msg.threadId ?? null,
       msg.payload ?? null,
       msg.senderPaneKey ?? null
@@ -3476,6 +3491,45 @@ export class OrchestrationDb {
         )
         .all(toHandle) as MessageRow[]
     )
+  }
+
+  // Why: a supervising harness may probe on every tool call, so presence has to be answerable
+  // without building a Delivery, reading bodies, or marking anything read.
+  countUnreadMessages(params: { toHandle: string; runId?: string; types?: MessageType[] }): {
+    total: number
+    byDeliveryClass: Record<MessageDeliveryClass, number>
+  } {
+    const conditions = ['to_handle = ?', 'read = 0', "delivery_contract = 'current_delivery'"]
+    const values: (string | number)[] = [params.toHandle]
+    if (params.runId) {
+      conditions.push('run_id = ?')
+      values.push(params.runId)
+    }
+    if (params.types && params.types.length > 0) {
+      conditions.push(`type IN (${params.types.map(() => '?').join(',')})`)
+      values.push(...params.types)
+    }
+    const rows = this.db
+      .prepare(
+        `SELECT delivery_class AS deliveryClass, COUNT(*) AS total FROM messages
+         WHERE ${conditions.join(' AND ')} GROUP BY delivery_class`
+      )
+      .all(...values) as { deliveryClass: string | null; total: number }[]
+
+    const byDeliveryClass = Object.fromEntries(
+      MESSAGE_DELIVERY_CLASSES.map((deliveryClass) => [deliveryClass, 0])
+    ) as Record<MessageDeliveryClass, number>
+    let total = 0
+    for (const row of rows) {
+      total += row.total
+      const deliveryClass = (MESSAGE_DELIVERY_CLASSES as readonly string[]).includes(
+        row.deliveryClass ?? ''
+      )
+        ? (row.deliveryClass as MessageDeliveryClass)
+        : DEFAULT_MESSAGE_DELIVERY_CLASS
+      byDeliveryClass[deliveryClass] += row.total
+    }
+    return { total, byDeliveryClass }
   }
 
   convertLifecycleMessageToRejection(
@@ -5161,6 +5215,7 @@ export class OrchestrationDb {
       body: string
       type: MessageType
       priority: MessagePriority
+      deliveryClass?: MessageDeliveryClass
       threadId?: string
       payload?: string
     }

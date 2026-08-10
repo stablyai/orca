@@ -26,16 +26,50 @@ import { orchestrationMigrationData } from '../../shared/orchestration-rpc-contr
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../shared/orchestration-run-pagination'
 import {
   formatMessageReadOnlyTag,
+  formatOrchestrationCheckCountText,
   formatOrchestrationCheckText,
   prepareOrchestrationCheckOutput,
   type LegacyCompatibilityResult,
   type OrchestrationMessageSummary as MessageSummary
 } from '../../shared/orchestration-check-output'
+import {
+  DEFAULT_MESSAGE_DELIVERY_CLASS,
+  isMessageDeliveryClass,
+  MESSAGE_DELIVERY_CLASSES
+} from '../../shared/orchestration-message-delivery-class'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
 function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
+}
+
+// Why: a runtime that predates --count strips it and answers the peek the CLI sent alongside, so
+// the count is derived from those rows and callers see the same reply shape either way.
+function resolveCheckCount(result: {
+  messages: MessageSummary[]
+  count: number
+  countByDeliveryClass?: Record<string, number>
+}): { messages: MessageSummary[]; count: number; countByDeliveryClass: Record<string, number> } {
+  if (result.countByDeliveryClass) {
+    return { messages: [], count: result.count, countByDeliveryClass: result.countByDeliveryClass }
+  }
+  if (result.messages.length >= 100) {
+    console.error(
+      'Warning: this runtime does not support --count and returned only its newest 100 messages; the count may be low. Upgrade the runtime for an exact count.'
+    )
+  }
+  const countByDeliveryClass = Object.fromEntries(
+    MESSAGE_DELIVERY_CLASSES.map((deliveryClass) => [deliveryClass, 0])
+  )
+  const unread = result.messages.filter((message) => message.read !== 1)
+  for (const message of unread) {
+    const deliveryClass = isMessageDeliveryClass(message.delivery_class)
+      ? message.delivery_class
+      : DEFAULT_MESSAGE_DELIVERY_CLASS
+    countByDeliveryClass[deliveryClass] += 1
+  }
+  return { messages: [], count: unread.length, countByDeliveryClass }
 }
 
 // Why: test-only escape hatch so subprocess tests avoid the full 15 s window; bogus values fall back to the default.
@@ -545,6 +579,13 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration send': async ({ flags, client, cwd, json }) => {
     const to = getOptionalStringFlag(flags, 'to')
     const type = getOptionalStringFlag(flags, 'type')
+    const deliveryClass = getOptionalStringFlag(flags, 'delivery-class')
+    if (deliveryClass !== undefined && !isMessageDeliveryClass(deliveryClass)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `--delivery-class must be one of ${MESSAGE_DELIVERY_CLASSES.join(', ')}.`
+      )
+    }
     if (to) {
       rejectLifecycleGroupRecipient(type, to)
     }
@@ -575,6 +616,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       body: getOptionalStringFlag(flags, 'body'),
       type,
       priority: getOptionalStringFlag(flags, 'priority'),
+      deliveryClass,
       threadId: getOptionalStringFlag(flags, 'thread-id'),
       payload: getOptionalStructuredMessagePayload(flags),
       // Why: pane key is the remint-stable sender identity the runtime verifies lifecycle ownership against; older runtimes strip it.
@@ -612,12 +654,24 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration check': async ({ flags, client, cwd, json }) => {
     const wait = flags.has('wait')
-    const peek = flags.has('peek')
+    const countOnly = flags.has('count')
+    // Why: a runtime that predates --count strips it and would run a normal check, so the CLI
+    // also asks for a peek; that degrades to a non-consuming read it can count locally.
+    const peek = flags.has('peek') || countOnly
     // Why: enforce mode exclusivity client-side — older runtimes strip unknown peek and run --unread --peek as destructive mark-read.
-    if ([flags.has('unread'), peek, flags.has('all')].filter(Boolean).length > 1) {
+    if (
+      [flags.has('unread'), flags.has('peek'), flags.has('all'), countOnly].filter(Boolean).length >
+      1
+    ) {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Choose at most one message read mode: --unread, --peek, or --all.'
+        'Choose at most one message read mode: --unread, --peek, --all, or --count.'
+      )
+    }
+    if (countOnly && (wait || flags.has('ack') || flags.has('format'))) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--count returns only a mailbox count; it cannot be combined with --ack, --wait, or --format.'
       )
     }
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
@@ -629,6 +683,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     type CheckResult = {
       messages: MessageSummary[]
       count: number
+      countByDeliveryClass?: Record<string, number>
       formatted?: string
       deliveryId?: string | null
       runId?: string
@@ -646,6 +701,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         unread: flags.has('unread') ? true : peek ? false : undefined,
         peek: peek ? true : undefined,
         all: flags.has('all') ? true : undefined,
+        count: countOnly ? true : undefined,
         types: getOptionalStringFlag(flags, 'types'),
         format: flags.has('format') ? true : undefined,
         inject: flags.has('inject') ? true : undefined,
@@ -657,6 +713,14 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       })
     } finally {
       stopKeepalive?.()
+    }
+    if (countOnly) {
+      printResult(
+        { ...result, result: { ...result.result, ...resolveCheckCount(result.result) } },
+        json,
+        formatOrchestrationCheckCountText
+      )
+      return
     }
     if (peek) {
       const rawRowCount = result.result.messages.length

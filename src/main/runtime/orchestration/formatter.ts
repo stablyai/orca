@@ -1,4 +1,4 @@
-import type { MessageRow } from './types'
+import { DEFAULT_MESSAGE_DELIVERY_CLASS, type MessageRow } from './types'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 
 const BANNER_WIDTH = 60
@@ -58,6 +58,11 @@ export function formatMessageBanner(
 ): string {
   const priorityTag =
     msg.priority === 'urgent' ? ' [URGENT]' : msg.priority === 'high' ? ' [HIGH]' : ''
+  // Why: only a non-default class is shown, so banners for existing mail are byte-identical.
+  const deliveryClassTag =
+    msg.delivery_class && msg.delivery_class !== DEFAULT_MESSAGE_DELIVERY_CLASS
+      ? ` [${msg.delivery_class.toUpperCase()}]`
+      : ''
   const authority = resolveAuthority(msg, options.authority)
   const authorityTag =
     authority === 'legacy_compatibility'
@@ -69,7 +74,7 @@ export function formatMessageBanner(
           : ''
   const senderName = msg.from_handle.toUpperCase()
 
-  const header = `──── From: ${senderName} (${msg.from_handle})${priorityTag}${authorityTag} (${msg.type}) ────`
+  const header = `──── From: ${senderName} (${msg.from_handle})${priorityTag}${deliveryClassTag}${authorityTag} (${msg.type}) ────`
 
   const lines: string[] = [header]
   lines.push(`Subject: ${msg.subject}`)

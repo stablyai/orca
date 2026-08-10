@@ -45,7 +45,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'send'],
     summary: 'Send an inter-agent message',
     usage:
-      'orca orchestration send --subject <text> [--to <run:id|dispatch:id|legacy_handle>] [--run <run_id>] [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--json]',
+      'orca orchestration send --subject <text> [--to <run:id|dispatch:id|legacy_handle>] [--run <run_id>] [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--delivery-class <interrupt|tool|turn>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'to',
@@ -55,6 +55,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'body',
       'type',
       'priority',
+      'delivery-class',
       'thread-id',
       'payload',
       'task-id',
@@ -67,6 +68,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'phase'
     ],
     notes: [
+      "--delivery-class states the boundary the sender wants this read at: interrupt (as soon as possible), tool (at the next action boundary), or turn (when the recipient finishes its current turn). It defaults to turn and is independent of --type and --priority. Orca stores and returns it; acting on it is the supervising harness's job. A runtime that predates the flag stores the message with the default class.",
       'On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
       "worker_done and heartbeat are exact-Dispatch signals and cannot target groups; omit --to to use the Dispatch's Run mailbox.",
       'worker_done requires --outcome succeeded or --outcome failed.',
@@ -80,11 +82,14 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'check'],
     summary: 'Check messages for a terminal',
     usage:
-      'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--json]\n' +
+      'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all | --count] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--json]\n' +
       "  default: return the bound Run's oldest unacknowledged FIFO batch.\n" +
       '  --ack: acknowledge the prior whole batch before checking/waiting.\n' +
       '  --peek: return only unread messages without marking them read.\n' +
       '  --all: return every message for the handle; does not mark read.\n' +
+      '  --count: return only how many unread messages wait, broken down by\n' +
+      '           delivery class. Creates no Delivery, reads no bodies, and\n' +
+      '           marks nothing read.\n' +
       '  --wait: block until a matching message arrives or --timeout-ms expires.\n' +
       '          Emits JSON keepalive lines to stderr every 15s so the caller can\n' +
       '          tell the process is alive. `_keepalive` is unrelated to heartbeat\n' +
@@ -98,6 +103,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'unread',
       'peek',
       'all',
+      'count',
       'types',
       'format',
       'wait',
@@ -107,7 +113,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
       '--format renders the returned rows as local text only; it never writes to another terminal.',
-      'A bound Run replays the same Delivery until --ack; process every message before acknowledging.'
+      'A bound Run replays the same Delivery until --ack; process every message before acknowledging.',
+      "--count cannot be combined with --ack, --wait, --all, --unread, or --format. Against a runtime that predates it, the CLI falls back to a peek and counts locally, which caps the answer at that runtime's newest 100 messages."
     ]
   },
   {

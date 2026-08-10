@@ -1,5 +1,8 @@
 import {
+  DEFAULT_MESSAGE_DELIVERY_CLASS,
+  MESSAGE_DELIVERY_CLASSES,
   MESSAGE_TYPES,
+  type MessageDeliveryClass,
   type MessagePriority,
   type MessageType,
   type WorkerReportOutcome
@@ -8,6 +11,7 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from './orchestration-error'
 
 const MESSAGE_TYPE_SET = new Set<MessageType>(MESSAGE_TYPES)
+const MESSAGE_DELIVERY_CLASS_SET = new Set<string>(MESSAGE_DELIVERY_CLASSES)
 
 function isMessageType(value: unknown): value is MessageType {
   return typeof value === 'string' && MESSAGE_TYPE_SET.has(value as MessageType)
@@ -28,6 +32,7 @@ type RelayedMessage = {
   body: string
   type: MessageType
   priority: MessagePriority
+  deliveryClass: MessageDeliveryClass
   threadId: string | null
   payload: string | null
 }
@@ -85,6 +90,7 @@ export async function syncFederatedDispatch(
         body: message.body,
         type: message.type,
         priority: message.priority,
+        deliveryClass: message.deliveryClass,
         threadId: message.threadId ?? undefined,
         payload: message.payload ?? undefined
       },
@@ -154,6 +160,11 @@ export function parseRelayedMessage(payload: string): RelayedMessage {
     type: message.type,
     priority:
       message.priority === 'high' || message.priority === 'urgent' ? message.priority : 'normal',
+    // Why: a worker server that predates the delivery class omits it, and 'turn' is the boundary
+    // its mail already lands at.
+    deliveryClass: MESSAGE_DELIVERY_CLASS_SET.has(message.deliveryClass as string)
+      ? (message.deliveryClass as MessageDeliveryClass)
+      : DEFAULT_MESSAGE_DELIVERY_CLASS,
     threadId: typeof message.threadId === 'string' ? message.threadId : null,
     payload: typeof message.payload === 'string' ? message.payload : null
   }

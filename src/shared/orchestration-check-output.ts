@@ -11,6 +11,8 @@ export type OrchestrationMessageSummary = {
   body?: string
   payload?: string | null
   priority?: string
+  // Why: optional because a runtime that predates the delivery class never sends it.
+  delivery_class?: string
   read?: number
 }
 
@@ -34,6 +36,7 @@ export type LegacyCompatibilityResult = {
 export type OrchestrationCheckOutput = {
   messages: OrchestrationMessageSummary[]
   count: number
+  countByDeliveryClass?: Record<string, number>
   formatted?: string
   deliveryId?: string | null
   timedOut?: boolean
@@ -132,6 +135,26 @@ function formatMessagePriorityTag(message: OrchestrationMessageSummary): string 
   return message.priority === 'urgent' ? ' [URGENT]' : message.priority === 'high' ? ' [HIGH]' : ''
 }
 
+// Why: only a non-default class is tagged, so output for existing mail is unchanged.
+function formatMessageDeliveryClassTag(message: OrchestrationMessageSummary): string {
+  return message.delivery_class === 'interrupt' || message.delivery_class === 'tool'
+    ? ` [${message.delivery_class.toUpperCase()}]`
+    : ''
+}
+
+export function formatOrchestrationCheckCountText(result: OrchestrationCheckOutput): string {
+  if (result.count === 0) {
+    return 'No messages.'
+  }
+  const byClass = result.countByDeliveryClass ?? {}
+  const breakdown = Object.entries(byClass)
+    .filter(([, count]) => count > 0)
+    .map(([deliveryClass, count]) => `${count} ${deliveryClass}`)
+    .join(', ')
+  const noun = result.count === 1 ? 'message' : 'messages'
+  return breakdown ? `${result.count} ${noun} (${breakdown}).` : `${result.count} ${noun}.`
+}
+
 function escapeTerminalControlCharacters(value: string): string {
   return [...value]
     .map((character) => {
@@ -160,7 +183,7 @@ function formatLegacyAwareCheckMessages(
     .map((message) => {
       const legacyReadOnly = isLegacyReadOnlyMessage(message, legacyCompatibilityActive)
       const lines = [
-        `${message.id}${formatMessageReadOnlyTag(message, legacyCompatibilityActive)}${formatMessagePriorityTag(message)} [${message.type ?? 'status'}] from=${message.from_handle}`,
+        `${message.id}${formatMessageReadOnlyTag(message, legacyCompatibilityActive)}${formatMessagePriorityTag(message)}${formatMessageDeliveryClassTag(message)} [${message.type ?? 'status'}] from=${message.from_handle}`,
         formatQuotedMessageField('subject', message.subject)
       ]
       if (legacyReadOnly) {

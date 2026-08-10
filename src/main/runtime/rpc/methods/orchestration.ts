@@ -6,6 +6,7 @@ import {
   LEGACY_CONTRACT_VERSION,
   type MessageType,
   type MessagePriority,
+  type OrchestrationDb,
   type TaskStatus
 } from '../../orchestration/db'
 import { MESSAGE_TYPES } from '../../orchestration/types'
@@ -26,7 +27,7 @@ import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
 import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration-federation-methods'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { RunRow } from '../../orchestration/types'
+import type { MessageDeliveryClass, RunRow } from '../../orchestration/types'
 import { encodeFederatedControlMessage } from '../../orchestration/federation-control-message'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
 
@@ -61,6 +62,18 @@ function isWorkerReportOutcome(value: unknown): value is 'succeeded' | 'failed' 
   return value === 'succeeded' || value === 'failed'
 }
 
+// Why: `messages: []` keeps the response the same shape every check formatter already handles,
+// so a count reply never needs a special case downstream.
+function countMailbox(
+  db: OrchestrationDb,
+  toHandle: string,
+  runId: string | undefined,
+  types: MessageType[] | undefined
+): { messages: never[]; count: number; countByDeliveryClass: Record<string, number> } {
+  const counted = db.countUnreadMessages({ toHandle, runId, types })
+  return { messages: [], count: counted.total, countByDeliveryClass: counted.byDeliveryClass }
+}
+
 const SendParams = z
   .object({
     to: OptionalString,
@@ -81,6 +94,9 @@ const SendParams = z
       ])
       .optional(),
     priority: z.enum(['normal', 'high', 'urgent']).optional(),
+    // Why: the boundary the sender wants this read at; orthogonal to type and priority, and
+    // omitted by every caller that predates it, which is why it defaults to 'turn'.
+    deliveryClass: z.enum(['interrupt', 'tool', 'turn']).optional(),
     threadId: OptionalString,
     payload: OptionalString,
     // Why: pane key is the remint-stable identity used to verify worker_done/heartbeat ownership; the from handle stays routing metadata.
@@ -112,6 +128,9 @@ const CheckParams = z
     peek: OptionalBoolean,
     // Why: `all` surfaces every message and skips mark-read; legacy encoding was the `{unread: false}` trick (design doc §3.2/§3.3).
     all: OptionalBoolean,
+    // Why: presence only — no Delivery, no bodies, no mark-read, so a supervisor can ask on every
+    // tool call. The CLI also sends peek so a runtime that predates this degrades non-destructively.
+    count: OptionalBoolean,
     types: OptionalString,
     format: OptionalBoolean,
     // Why: one-release RPC compatibility only; the public CLI uses --format because no terminal input is injected.
@@ -135,6 +154,23 @@ const CheckParams = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose at most one message read mode: --unread, --peek, or --all.'
+      })
+    }
+    // Why: a presence probe returns no rows and applies no effects, so pairing it with an
+    // acknowledgment or a wait would silently drop the caller's real intent.
+    if (
+      params.count === true &&
+      (params.ack !== undefined ||
+        params.wait === true ||
+        params.all === true ||
+        params.unread === true ||
+        params.format === true ||
+        params.inject === true)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          '--count returns only a mailbox count; it cannot be combined with --ack, --wait, --all, --unread, or --format.'
       })
     }
   })
@@ -455,6 +491,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             body: params.body ?? '',
             type,
             priority: params.priority ?? 'normal',
+            deliveryClass: params.deliveryClass ?? 'turn',
             threadId: params.threadId ?? null,
             payload: params.payload ?? null
           }),
@@ -551,6 +588,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               body: params.body ?? '',
               type: (params.type ?? 'status') as MessageType,
               priority: (params.priority ?? 'normal') as MessagePriority,
+              deliveryClass: (params.deliveryClass ?? 'turn') as MessageDeliveryClass,
               threadId: params.threadId ?? null,
               payload: params.payload ?? null
             })
@@ -575,6 +613,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           body: params.body,
           type: params.type as MessageType,
           priority: params.priority as MessagePriority,
+          deliveryClass: params.deliveryClass as MessageDeliveryClass,
           threadId: params.threadId,
           payload: params.payload,
           senderPaneKey,
@@ -655,6 +694,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           body: params.body,
           type: params.type as MessageType,
           priority: params.priority as MessagePriority,
+          deliveryClass: params.deliveryClass as MessageDeliveryClass,
           threadId,
           payload: params.payload,
           senderPaneKey,
@@ -706,6 +746,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         })
         const generation = run.consumer_generation
         const address = `run:${run.id}`
+        if (params.count) {
+          // Why: skip the federation relay pull too — a per-tool-call probe must not start
+          // network work; the next real check still imports whatever the peer is holding.
+          return { runId: run.id, ...countMailbox(db, address, run.id, typeFilter) }
+        }
         runtime.ensureOrchestrationFederationRelay(run.id)
 
         const acknowledged = params.ack
@@ -875,6 +920,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           : undefined
       if (workerMailbox) {
         const address = `dispatch:${workerMailbox.dispatchId}`
+        if (params.count) {
+          return {
+            ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
+            dispatchId: workerMailbox.dispatchId,
+            ...countMailbox(db, address, undefined, typeFilter)
+          }
+        }
         const showAll = params.all === true || (params.unread === false && params.peek !== true)
         const messages = showAll
           ? db.getAllMessagesForHandle(address, 100, typeFilter)
@@ -920,6 +972,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             ? { formatted: arrived.map(formatMessageBanner).join('\n\n') }
             : {})
         }
+      }
+
+      if (params.count) {
+        return countMailbox(db, handle, undefined, typeFilter)
       }
 
       // Why: unread:false is honored for one release as a compat shim so in-flight callers don't break (design doc §5).
