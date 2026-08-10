@@ -8342,6 +8342,14 @@ export function connectPanePty(
           writeReplayData('\x1b[2J\x1b[3J\x1b[H')
           // Why: re-arm the kitty keyboard mirror from the snapshot preamble so Option chords keep their encoding after a window reload.
           kittyKeyboardModes.scanReplay(connectResult.snapshot)
+          // Why: stackless replay can zero nested push/pop windows while the live
+          // TUI still has protocol flags; seed from the daemon emulator (#10381).
+          if (
+            typeof connectResult.snapshotKittyKeyboardFlags === 'number' &&
+            connectResult.snapshotKittyKeyboardFlags > 0
+          ) {
+            kittyKeyboardModes.applyAuthoritativeFlags(connectResult.snapshotKittyKeyboardFlags)
+          }
           writeReplayData(connectResult.snapshot)
           // Snapshot reattach keeps a live session, so drop only renderer-owned state instead of the broader mode reset — unless this is a cold restore, whose owner is gone.
           writeReplayData(
@@ -8396,6 +8404,12 @@ export function connectPanePty(
               }
             }
             kittyKeyboardModes.scanReplay(modelData)
+            if (
+              typeof connectResult?.snapshotKittyKeyboardFlags === 'number' &&
+              connectResult.snapshotKittyKeyboardFlags > 0
+            ) {
+              kittyKeyboardModes.applyAuthoritativeFlags(connectResult.snapshotKittyKeyboardFlags)
+            }
             // Why shared: park+reveal of an alt-screen TUI needs the same
             // ?1049l/?1049h rebuild as applyMainBufferSnapshot (main strips
             // the ?1049h marker when splitting scrollbackAnsi) — inlined here
@@ -8427,6 +8441,12 @@ export function connectPanePty(
             writeReplayData('\x1b[2J\x1b[3J\x1b[H')
             // Why: raw relay replay may contain the app's own kitty pushes; re-arm with set semantics so redelivery can't grow the stack.
             kittyKeyboardModes.scanReplay(connectResult.replay)
+            if (
+              typeof connectResult.snapshotKittyKeyboardFlags === 'number' &&
+              connectResult.snapshotKittyKeyboardFlags > 0
+            ) {
+              kittyKeyboardModes.applyAuthoritativeFlags(connectResult.snapshotKittyKeyboardFlags)
+            }
             writeReplayData(connectResult.replay)
             writeReplayData(
               reattachReplayResetSequence(
@@ -8436,10 +8456,8 @@ export function connectPanePty(
               )
             )
             sendFocusedReattachFocusInAfterReplay(ptyId, attemptGeneration)
-            if (connectResult.coldRestore) {
-              if (!isRemoteRuntimePtyId(ptyId)) {
-                window.api.pty.ackColdRestore(ptyId)
-              }
+            if (connectResult.coldRestore && !isRemoteRuntimePtyId(ptyId)) {
+              window.api.pty.ackColdRestore(ptyId)
             }
           }
         } else if (connectResult?.coldRestore) {

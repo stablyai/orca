@@ -147,4 +147,26 @@ describe('TerminalKittyKeyboardModeTracker', () => {
     ranAndExited.scanReplay('\x1b[>1uoutput\x1b[<u')
     expect(ranAndExited.flags).toBe(0)
   })
+
+  it('applyAuthoritativeFlags re-seeds after a lossy stackless replay (#10381)', () => {
+    const tracker = new TerminalKittyKeyboardModeTracker()
+    // Nested push/push/pop in a retained window collapses under stackless replay.
+    tracker.scanReplay('\x1b[>7u\x1b[>7u\x1b[<u')
+    expect(tracker.flags).toBe(0)
+
+    tracker.applyAuthoritativeFlags(7)
+    expect(tracker.flags).toBe(7)
+
+    // Live exit pop still drains to inactive after authoritative seed.
+    tracker.scan('\x1b[<u')
+    expect(tracker.flags).toBe(0)
+  })
+
+  it('ignores non-positive authoritative flags', () => {
+    const tracker = new TerminalKittyKeyboardModeTracker()
+    tracker.scan('\x1b[>7u')
+    tracker.applyAuthoritativeFlags(0)
+    tracker.applyAuthoritativeFlags(-1)
+    expect(tracker.flags).toBe(7)
+  })
 })

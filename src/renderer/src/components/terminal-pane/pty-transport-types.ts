@@ -63,6 +63,12 @@ export type PtyConnectResult = {
   sessionExpired?: boolean
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
   replay?: string
+  /**
+   * Live PTY kitty keyboard flags from the daemon emulator at reattach time.
+   * Prefer this over stackless scanReplay arithmetic so Option chords stay
+   * protocol-encoded while the TUI still has the protocol pushed (#10381).
+   */
+  snapshotKittyKeyboardFlags?: number
   startupCwdFallback?: { kind: 'worktree'; cwd: string }
   /** Main declined an unverifiable provider-session resume and launched fresh. */
   agentResumeUnavailable?: true

@@ -45,6 +45,28 @@ export class TerminalKittyKeyboardModeTracker {
     return this.alternateScreenSwitchObserved
   }
 
+  /**
+   * Seed flags from the live PTY/emulator (daemon snapshot modes), not from
+   * stackless history replay. Reattach must never leave the mirror at 0 while
+   * the running TUI still has the protocol pushed (#10381).
+   */
+  applyAuthoritativeFlags(flags: number): void {
+    if (!Number.isInteger(flags) || flags <= 0) {
+      return
+    }
+    this.currentFlags = flags
+    // Why: drop stack frames that may have been left wrong by stackless
+    // scanReplay so a later live pop drains cleanly to inactive rather than a
+    // phantom pre-push value.
+    this.mainStack = []
+    this.altStack = []
+    if (this.alternateScreenActive) {
+      this.altFlags = flags
+    } else {
+      this.mainFlags = flags
+    }
+  }
+
   reset(): void {
     this.scanTail = ''
     this.currentFlags = 0
