@@ -245,6 +245,12 @@ export type DetectedPort = {
   host: string
   pid?: number
   processName?: string
+  /** Socket owner uid from /proc/net/tcp (Linux only). */
+  uid?: number
+  /** Resolved from /etc/passwd, or numeric uid string when resolution fails. */
+  username?: string
+  /** True when uid matches the relay process uid (connecting SSH user). */
+  ownedByConnectingUser?: boolean
 }
 
 /** A detected SSH port after the main process has mapped terminal-advertised

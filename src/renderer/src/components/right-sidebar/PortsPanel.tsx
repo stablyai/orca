@@ -57,6 +57,15 @@ import {
 } from '@/components/ui/context-menu'
 import type { PortForwardEntry, EnrichedDetectedPort } from '../../../../shared/ssh-types'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
+import {
+  shouldIncludeSshDetectedPortInPanel,
+  sshDetectedPortOwnershipFilteringActive
+} from '../../../../shared/ssh-detected-port-ownership'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  readSshPortsShowOtherUsers,
+  writeSshPortsShowOtherUsers
+} from './ssh-ports-other-users-preference'
 import { translate } from '@/i18n/i18n'
 
 export {
@@ -831,6 +840,20 @@ function SshPortsPanel(): React.JSX.Element {
     return set
   }, [allForwards])
 
+  const [showOtherUsers, setShowOtherUsers] = useState(() => readSshPortsShowOtherUsers())
+  const [forwardedCollapsed, setForwardedCollapsed] = useState(false)
+  const [detectedCollapsed, setDetectedCollapsed] = useState(false)
+  const [dialogState, setDialogState] = useState<PortForwardDialogState>({ mode: 'closed' })
+
+  const ownershipFilteringActive = useMemo(() => {
+    if (!activeConnectionId) {
+      return false
+    }
+    return sshDetectedPortOwnershipFilteringActive(
+      detectedPortsByConnection[activeConnectionId] ?? []
+    )
+  }, [detectedPortsByConnection, activeConnectionId])
+
   const allDetected = useMemo(() => {
     if (!activeConnectionId) {
       return []
@@ -838,13 +861,27 @@ function SshPortsPanel(): React.JSX.Element {
     const ports = detectedPortsByConnection[activeConnectionId] ?? []
     return ports
       .filter((p) => !forwardedKeys.has(`${normalizeHost(p.host)}:${p.port}`))
+      .filter((p) =>
+        shouldIncludeSshDetectedPortInPanel(p, {
+          showOtherUsers,
+          ownershipFilteringActive
+        })
+      )
       .map((p) => ({ ...p, targetId: activeConnectionId }))
       .sort((a, b) => a.port - b.port)
-  }, [detectedPortsByConnection, activeConnectionId, forwardedKeys])
+  }, [
+    detectedPortsByConnection,
+    activeConnectionId,
+    forwardedKeys,
+    showOtherUsers,
+    ownershipFilteringActive
+  ])
 
-  const [forwardedCollapsed, setForwardedCollapsed] = useState(false)
-  const [detectedCollapsed, setDetectedCollapsed] = useState(false)
-  const [dialogState, setDialogState] = useState<PortForwardDialogState>({ mode: 'closed' })
+  const handleShowOtherUsersChange = useCallback((checked: boolean | 'indeterminate') => {
+    const next = checked === true
+    setShowOtherUsers(next)
+    writeSshPortsShowOtherUsers(next)
+  }, [])
 
   const handleForwardDetected = useCallback((port: EnrichedDetectedPort & { targetId: string }) => {
     setDialogState({
@@ -961,7 +998,7 @@ function SshPortsPanel(): React.JSX.Element {
       )}
 
       {/* Detected ports */}
-      {allDetected.length > 0 && (
+      {(allDetected.length > 0 || ownershipFilteringActive) && (
         <div className="px-3 pt-2">
           <button
             type="button"
@@ -980,19 +1017,40 @@ function SshPortsPanel(): React.JSX.Element {
             </span>
             <span className="text-[10px] text-muted-foreground/60 ml-1">{allDetected.length}</span>
           </button>
+          {ownershipFilteringActive && !detectedCollapsed && (
+            <label className="mb-1 flex cursor-pointer items-center gap-2 px-1 py-0.5 text-xs text-muted-foreground">
+              <Checkbox
+                checked={showOtherUsers}
+                onCheckedChange={handleShowOtherUsersChange}
+                aria-label={translate(
+                  'auto.components.right.sidebar.PortsPanel.showOtherUsers',
+                  'Show ports from other users'
+                )}
+              />
+              <span>
+                {translate(
+                  'auto.components.right.sidebar.PortsPanel.showOtherUsers',
+                  'Show ports from other users'
+                )}
+              </span>
+            </label>
+          )}
           {!detectedCollapsed &&
             allDetected.map((port) => (
               <DetectedPortRow
                 key={`${port.targetId}-${port.host}-${port.port}`}
                 port={port}
                 onForward={() => handleForwardDetected(port)}
+                showUsername={
+                  ownershipFilteringActive && showOtherUsers && port.ownedByConnectingUser === false
+                }
               />
             ))}
         </div>
       )}
 
-      {/* Empty state */}
-      {allForwards.length === 0 && allDetected.length === 0 && (
+      {/* Empty state — skip when the Detected section is shown (toggle / filtered-empty). */}
+      {allForwards.length === 0 && allDetected.length === 0 && !ownershipFilteringActive && (
         <div className="flex flex-col items-center justify-center flex-1 px-4 text-center text-muted-foreground">
           <p className="text-sm">
             {translate('auto.components.right.sidebar.PortsPanel.1f0d2a24f9', 'No forwarded ports')}
@@ -1194,10 +1252,12 @@ function ForwardedPortRow({
 
 function DetectedPortRow({
   port,
-  onForward
+  onForward,
+  showUsername = false
 }: {
   port: EnrichedDetectedPort & { targetId: string }
   onForward: () => void
+  showUsername?: boolean
 }): React.JSX.Element {
   const advertisedBrowserUrl = advertisedBrowserUrlForDetectedPort(port)
   return (
@@ -1207,6 +1267,9 @@ function DetectedPortRow({
           <span className="text-xs text-foreground">:{port.port}</span>
           {port.processName && (
             <span className="text-xs text-muted-foreground truncate">{port.processName}</span>
+          )}
+          {showUsername && port.username && (
+            <span className="text-[11px] text-muted-foreground/70 truncate">{port.username}</span>
           )}
         </div>
         {advertisedBrowserUrl && (

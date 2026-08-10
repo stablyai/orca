@@ -9,6 +9,17 @@ export type DetectedPort = {
   host: string
   pid?: number
   processName?: string
+  uid?: number
+  username?: string
+  ownedByConnectingUser?: boolean
+}
+
+type ProcNetSocket = {
+  port: number
+  host: string
+  inode: number
+  /** Absent when /proc uid field is malformed — port still surfaces without ownership. */
+  uid?: number
 }
 
 const SYSTEM_PORTS_TO_EXCLUDE = new Set([22])
@@ -38,9 +49,10 @@ export class PortScanHandler {
   }
 
   private async scanLinuxListeningPorts(): Promise<DetectedPort[]> {
-    const [tcp4, tcp6] = await Promise.all([
+    const [tcp4, tcp6, uidUsernames] = await Promise.all([
       this.readProcNet('/proc/net/tcp'),
-      this.readProcNet('/proc/net/tcp6')
+      this.readProcNet('/proc/net/tcp6'),
+      this.loadUidUsernameMap()
     ])
 
     const listeningSockets = [...tcp4, ...tcp6]
@@ -55,6 +67,7 @@ export class PortScanHandler {
     const results: DetectedPort[] = []
     const relayPid = process.pid
     const relayParentPid = process.ppid
+    const connectingUid = typeof process.getuid === 'function' ? process.getuid() : undefined
 
     for (const socket of listeningSockets) {
       const key = `${socket.host}:${socket.port}`
@@ -78,11 +91,13 @@ export class PortScanHandler {
         continue
       }
 
+      const ownership = ownershipFieldsForSocket(socket.uid, connectingUid, uidUsernames)
       results.push({
         port: socket.port,
         host: socket.host,
         pid: pid ?? undefined,
-        processName
+        processName,
+        ...ownership
       })
     }
 
@@ -92,45 +107,22 @@ export class PortScanHandler {
     return results.slice(0, MAX_DETECTED_PORTS)
   }
 
-  private async readProcNet(
-    path: string
-  ): Promise<{ port: number; host: string; inode: number }[]> {
+  private async readProcNet(path: string): Promise<ProcNetSocket[]> {
     let content: string
     try {
       content = await readFile(path, 'utf-8')
     } catch {
       return []
     }
+    return parseProcNetListeningSockets(content)
+  }
 
-    const lines = content.split('\n')
-    const results: { port: number; host: string; inode: number }[] = []
-
-    for (let i = 1; i < lines.length; i++) {
-      const fields = getProcessOutputFields(lines[i], 10)
-      if (fields.length < 10) {
-        continue
-      }
-
-      // State field (index 3): 0A = TCP_LISTEN
-      if (fields[3] !== '0A') {
-        continue
-      }
-
-      const localAddress = fields[1]
-      const parsed = parseHexAddress(localAddress)
-      if (!parsed) {
-        continue
-      }
-
-      const inode = Number.parseInt(fields[9], 10)
-      if (Number.isNaN(inode) || inode === 0) {
-        continue
-      }
-
-      results.push({ port: parsed.port, host: parsed.host, inode })
+  private async loadUidUsernameMap(): Promise<Map<number, string>> {
+    try {
+      return parsePasswdUidUsernames(await readFile('/etc/passwd', 'utf-8'))
+    } catch {
+      return new Map()
     }
-
-    return results
   }
 
   private async mapInodesToPids(inodes: Set<number>): Promise<Map<number, number>> {
@@ -197,6 +189,83 @@ export class PortScanHandler {
     } catch {
       return undefined
     }
+  }
+}
+
+/** Parse /proc/net/tcp(6) listen rows including owner uid (field index 7). */
+export function parseProcNetListeningSockets(content: string): ProcNetSocket[] {
+  const lines = content.split('\n')
+  const results: ProcNetSocket[] = []
+
+  for (let i = 1; i < lines.length; i++) {
+    // Why: need through inode (index 9); uid is index 7 on the standard table.
+    const fields = getProcessOutputFields(lines[i], 10)
+    if (fields.length < 10) {
+      continue
+    }
+
+    // State field (index 3): 0A = TCP_LISTEN
+    if (fields[3] !== '0A') {
+      continue
+    }
+
+    const parsed = parseHexAddress(fields[1])
+    if (!parsed) {
+      continue
+    }
+
+    const inode = Number.parseInt(fields[9], 10)
+    if (Number.isNaN(inode) || inode === 0) {
+      continue
+    }
+
+    // Why: degrade uid like pid — keep the listen row when ownership metadata is unparseable.
+    const parsedUid = Number.parseInt(fields[7], 10)
+    const uid = Number.isNaN(parsedUid) || parsedUid < 0 ? undefined : parsedUid
+
+    results.push({ port: parsed.port, host: parsed.host, inode, uid })
+  }
+
+  return results
+}
+
+/** Map uid → username from /etc/passwd contents. */
+export function parsePasswdUidUsernames(content: string): Map<number, string> {
+  const map = new Map<number, string>()
+  for (const line of content.split('\n')) {
+    if (!line || line.startsWith('#')) {
+      continue
+    }
+    const parts = line.split(':')
+    if (parts.length < 3) {
+      continue
+    }
+    const username = parts[0]
+    const uid = Number.parseInt(parts[2], 10)
+    if (!username || Number.isNaN(uid) || uid < 0) {
+      continue
+    }
+    map.set(uid, username)
+  }
+  return map
+}
+
+export function resolveUsernameForUid(uid: number, uidUsernames: Map<number, string>): string {
+  return uidUsernames.get(uid) ?? String(uid)
+}
+
+export function ownershipFieldsForSocket(
+  uid: number | undefined,
+  connectingUid: number | undefined,
+  uidUsernames: Map<number, string>
+): Pick<DetectedPort, 'uid' | 'username' | 'ownedByConnectingUser'> {
+  if (uid === undefined) {
+    return {}
+  }
+  return {
+    uid,
+    username: resolveUsernameForUid(uid, uidUsernames),
+    ...(connectingUid !== undefined ? { ownedByConnectingUser: uid === connectingUid } : {})
   }
 }
 

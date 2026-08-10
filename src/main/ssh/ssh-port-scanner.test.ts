@@ -169,6 +169,32 @@ describe('PortScanner', () => {
     scanner.dispose()
   })
 
+  it('excludes initial-scan and non-owned ports from auto-forward suggestions', async () => {
+    const harness = createVisibilityHarness(true)
+    let ports: DetectedPort[] = [
+      { port: 3000, host: '127.0.0.1', ownedByConnectingUser: true },
+      { port: 3001, host: '127.0.0.1', ownedByConnectingUser: false, username: 'bob' }
+    ]
+    const { mux } = createMux(() => ports)
+    const scanner = new PortScanner(harness.visibility)
+    scanner.startScanning('t1', mux, vi.fn())
+
+    await vi.advanceTimersByTimeAsync(0)
+    // First scan seeds initialPorts — nothing is a "new" suggestion.
+    expect(scanner.getAutoForwardSuggestionPorts('t1')).toEqual([])
+
+    ports = [
+      { port: 3000, host: '127.0.0.1', ownedByConnectingUser: true },
+      { port: 3001, host: '127.0.0.1', ownedByConnectingUser: false, username: 'bob' },
+      { port: 4000, host: '127.0.0.1', ownedByConnectingUser: true, processName: 'node' },
+      { port: 4001, host: '127.0.0.1', ownedByConnectingUser: false, username: 'bob' }
+    ]
+    await vi.advanceTimersByTimeAsync(BASE)
+    expect(scanner.getAutoForwardSuggestionPorts('t1').map((p) => p.port)).toEqual([4000])
+
+    scanner.dispose()
+  })
+
   it('parks when the window hides mid-run and resumes with an immediate scan on show', async () => {
     const harness = createVisibilityHarness(true)
     let next = 3000

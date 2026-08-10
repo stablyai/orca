@@ -202,4 +202,41 @@ describe('SSH retained payload admission', () => {
       ])
     ).toEqual([{ port: 3001, host: '127.0.0.1', processName: 'node' }])
   })
+
+  it('retains optional ownership fields from modern Linux relays', () => {
+    expect(
+      admitSshDetectedPorts([
+        {
+          port: 3000,
+          host: '127.0.0.1',
+          uid: 1000,
+          username: 'alice',
+          ownedByConnectingUser: true,
+          unexpected: 'drop'
+        },
+        {
+          port: 3001,
+          host: '127.0.0.1',
+          uid: 1001,
+          username: 'bob',
+          ownedByConnectingUser: false
+        }
+      ])
+    ).toEqual([
+      {
+        port: 3000,
+        host: '127.0.0.1',
+        uid: 1000,
+        username: 'alice',
+        ownedByConnectingUser: true
+      },
+      {
+        port: 3001,
+        host: '127.0.0.1',
+        uid: 1001,
+        username: 'bob',
+        ownedByConnectingUser: false
+      }
+    ])
+  })
 })

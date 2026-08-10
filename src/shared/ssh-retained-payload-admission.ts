@@ -14,6 +14,7 @@ export const SSH_DETECTED_PORTS_MAX_ENTRIES = 50
 export const SSH_DETECTED_PORT_HOST_MAX_UTF8_BYTES = 1024
 export const SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES = 4 * 1024
 export const SSH_DETECTED_PORT_ADVERTISED_URL_MAX_UTF8_BYTES = 2048
+export const SSH_DETECTED_PORT_USERNAME_MAX_UTF8_BYTES = 256
 
 const CONNECTION_STATUSES = new Set<SshConnectionStatus>([
   'disconnected',
@@ -171,6 +172,10 @@ function admitDetectedPort(value: unknown): EnrichedDetectedPort | null {
     typeof input.processName === 'string'
       ? clampUtf8TextPrefix(input.processName, SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES)
       : undefined
+  const username =
+    typeof input.username === 'string'
+      ? clampUtf8TextPrefix(input.username, SSH_DETECTED_PORT_USERNAME_MAX_UTF8_BYTES)
+      : undefined
   const advertisedUrl = isStringWithinLimit(
     input.advertisedUrl,
     SSH_DETECTED_PORT_ADVERTISED_URL_MAX_UTF8_BYTES
@@ -182,6 +187,11 @@ function admitDetectedPort(value: unknown): EnrichedDetectedPort | null {
     host: input.host,
     ...(isNonNegativeSafeInteger(input.pid) && input.pid > 0 ? { pid: input.pid } : {}),
     ...(processName ? { processName } : {}),
+    ...(isNonNegativeSafeInteger(input.uid) ? { uid: input.uid } : {}),
+    ...(username ? { username } : {}),
+    ...(typeof input.ownedByConnectingUser === 'boolean'
+      ? { ownedByConnectingUser: input.ownedByConnectingUser }
+      : {}),
     ...(advertisedUrl ? { advertisedUrl } : {}),
     ...(input.advertisedProtocol === 'http' || input.advertisedProtocol === 'https'
       ? { advertisedProtocol: input.advertisedProtocol }

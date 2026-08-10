@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { parseHexAddress } from './port-scan-handler'
+import {
+  ownershipFieldsForSocket,
+  parseHexAddress,
+  parsePasswdUidUsernames,
+  parseProcNetListeningSockets,
+  resolveUsernameForUid
+} from './port-scan-handler'
 import { parseWindowsNetstatOutput, parseWindowsPowerShellPortRows } from './windows-port-scan'
 
 describe('parseHexAddress', () => {
@@ -65,6 +71,70 @@ describe('parseHexAddress', () => {
   it('parses port 3306 (mysql)', () => {
     const result = parseHexAddress('00000000:0CEA')
     expect(result).toEqual({ host: '0.0.0.0', port: 3306 })
+  })
+})
+
+describe('parseProcNetListeningSockets', () => {
+  it('parses listen rows with owner uid', () => {
+    const content = [
+      '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode',
+      '   0: 0100007F:0BB8 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 12345 1 0000000000000000 100 0 0 10 0',
+      '   1: 00000000:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1001        0 12346 1 0000000000000000 100 0 0 10 0',
+      // ESTABLISHED — ignored
+      '   2: 0100007F:0BB9 0100007F:ABCD 01 00000000:00000000 00:00000000 00000000  1000        0 12347 1 0000000000000000 100 0 0 10 0'
+    ].join('\n')
+
+    expect(parseProcNetListeningSockets(content)).toEqual([
+      { host: '127.0.0.1', port: 3000, inode: 12345, uid: 1000 },
+      { host: '0.0.0.0', port: 8080, inode: 12346, uid: 1001 }
+    ])
+  })
+
+  it('keeps listen rows with invalid uid but drops invalid inode', () => {
+    const content = [
+      '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode',
+      '   0: 0100007F:0BB8 00000000:0000 0A 00000000:00000000 00:00000000 00000000  notuid     0 12345 1',
+      '   1: 0100007F:0BB9 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 0 1'
+    ].join('\n')
+
+    expect(parseProcNetListeningSockets(content)).toEqual([
+      { host: '127.0.0.1', port: 3000, inode: 12345, uid: undefined }
+    ])
+  })
+})
+
+describe('parsePasswdUidUsernames / ownershipFieldsForSocket', () => {
+  it('resolves usernames from passwd content', () => {
+    const map = parsePasswdUidUsernames(
+      ['root:x:0:0:root:/root:/bin/bash', 'alice:x:1000:1000:Alice:/home/alice:/bin/bash', ''].join(
+        '\n'
+      )
+    )
+    expect(map.get(0)).toBe('root')
+    expect(map.get(1000)).toBe('alice')
+    expect(resolveUsernameForUid(1000, map)).toBe('alice')
+    expect(resolveUsernameForUid(42, map)).toBe('42')
+  })
+
+  it('marks ownership against the connecting uid and falls back to numeric username', () => {
+    const empty = new Map<number, string>()
+    expect(ownershipFieldsForSocket(1000, 1000, empty)).toEqual({
+      uid: 1000,
+      username: '1000',
+      ownedByConnectingUser: true
+    })
+    expect(ownershipFieldsForSocket(1001, 1000, empty)).toEqual({
+      uid: 1001,
+      username: '1001',
+      ownedByConnectingUser: false
+    })
+    // Why: no getuid (e.g. constrained environments) → leave ownership flag unset.
+    expect(ownershipFieldsForSocket(1000, undefined, empty)).toEqual({
+      uid: 1000,
+      username: '1000'
+    })
+    // Why: unparseable /proc uid → surface the port without ownership metadata.
+    expect(ownershipFieldsForSocket(undefined, 1000, empty)).toEqual({})
   })
 })
 

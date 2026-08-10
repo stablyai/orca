@@ -1,5 +1,6 @@
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import type { DetectedPort } from '../../shared/ssh-types'
+import { filterSshAutoForwardCandidates } from '../../shared/ssh-detected-port-ownership'
 
 // Why: every tick walks /proc/*/fd on the remote relay, so cadence is remote
 // CPU, not just a local timer. 12s cuts steady-state request volume 4x vs the
@@ -134,6 +135,18 @@ export class PortScanner {
     return Array.from(handle.previousPorts.values())
   }
 
+  /** Ports eligible for auto-forward: not initial-scan noise, and owned when known. */
+  getAutoForwardSuggestionPorts(targetId: string): DetectedPort[] {
+    const handle = this.handles.get(targetId)
+    if (!handle || handle.initialPorts === null) {
+      return []
+    }
+    return filterSshAutoForwardCandidates(
+      Array.from(handle.previousPorts.values()),
+      handle.initialPorts
+    )
+  }
+
   stopScanning(targetId: string): void {
     const handle = this.handles.get(targetId)
     if (!handle) {
@@ -162,7 +175,13 @@ function portsEqual(a: Map<string, DetectedPort>, b: Map<string, DetectedPort>):
     if (!entryB) {
       return false
     }
-    if (entryA.pid !== entryB.pid || entryA.processName !== entryB.processName) {
+    if (
+      entryA.pid !== entryB.pid ||
+      entryA.processName !== entryB.processName ||
+      entryA.uid !== entryB.uid ||
+      entryA.username !== entryB.username ||
+      entryA.ownedByConnectingUser !== entryB.ownedByConnectingUser
+    ) {
       return false
     }
   }
