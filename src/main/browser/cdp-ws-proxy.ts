@@ -185,9 +185,7 @@ export class CdpWsProxy {
   }
 
   private handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
-    // Why: discovery leaks the tab's live URL/title and the debugger endpoint, so it is
-    // gated exactly like the upgrade. A same-origin fetch after DNS rebinding sends no
-    // Origin header, which is why the Host check has to carry this path.
+    // Why: DNS-rebound discovery can omit Origin, so it shares the upgrade's Host gate.
     if (!isAllowedCdpProxyRequest(req, this.port)) {
       res.writeHead(403)
       res.end()
