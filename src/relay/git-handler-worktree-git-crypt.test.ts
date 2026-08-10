@@ -15,6 +15,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 import type { GitExec } from './git-handler-ops'
 import { addWorktreeOp } from './git-handler-worktree-ops'
+import { GIT_WORKTREE_CREATE_TIMEOUT_MS } from '../shared/git-worktree-create-timeout'
 
 const REPO = '/repo'
 const WORKTREE = '/repo-feature'
@@ -61,14 +62,20 @@ describe('SSH worktree creation with git-crypt', () => {
 
     expect(git.mock.calls[0]).toEqual([
       ['worktree', 'add', '--no-checkout', '--no-track', '-b', BRANCH, WORKTREE],
-      REPO
+      REPO,
+      { timeout: GIT_WORKTREE_CREATE_TIMEOUT_MS }
     ])
     expect(symlinkMock).toHaveBeenCalledWith(
       GIT_CRYPT_DIR,
       join(WORKTREE_GIT_DIR, 'git-crypt'),
       expect.stringMatching(/^(dir|junction)$/)
     )
-    expect(git.mock.calls.map((call) => call[0])).toContainEqual(['checkout'])
+    expect(git).toHaveBeenCalledWith(['rev-parse', '--absolute-git-dir'], WORKTREE, {
+      timeout: GIT_WORKTREE_CREATE_TIMEOUT_MS
+    })
+    expect(git).toHaveBeenCalledWith(['checkout'], WORKTREE, {
+      timeout: GIT_WORKTREE_CREATE_TIMEOUT_MS
+    })
   })
 
   it('supports deferred checkout for an existing branch', async () => {
@@ -84,7 +91,8 @@ describe('SSH worktree creation with git-crypt', () => {
 
     expect(git.mock.calls[0]).toEqual([
       ['worktree', 'add', '--no-checkout', WORKTREE, BRANCH],
-      REPO
+      REPO,
+      { timeout: GIT_WORKTREE_CREATE_TIMEOUT_MS }
     ])
     expect(git.mock.calls.map((call) => call[0])).toContainEqual(['checkout'])
   })

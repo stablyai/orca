@@ -109,7 +109,7 @@ describe('addWorktree on git-crypt repositories', () => {
     ])
     expect(gitExecFileAsyncMock.mock.calls[2]).toEqual([
       ['rev-parse', '--absolute-git-dir'],
-      { cwd: WORKTREE }
+      { cwd: WORKTREE, timeout: WORKTREE_ADD_TIMEOUT_MS }
     ])
     expect(symlinkMock).toHaveBeenCalledWith(
       REPO_GIT_CRYPT,
@@ -143,7 +143,7 @@ describe('addWorktree on git-crypt repositories', () => {
 
     expect(gitExecFileAsyncMock.mock.calls[0]).toEqual([
       ['rev-parse', '--git-common-dir'],
-      { cwd: REPO }
+      { cwd: REPO, timeout: WORKTREE_ADD_TIMEOUT_MS }
     ])
     expect(symlinkMock).toHaveBeenCalledWith(
       '/main/.git/git-crypt',
@@ -232,5 +232,21 @@ describe('addWorktree on git-crypt repositories', () => {
       '--',
       BRANCH
     ])
+  })
+
+  it('reports a cleanup failure when the fresh branch cannot be deleted', async () => {
+    const beforeRemoval = `worktree ${REPO}\nHEAD abc123\nbranch refs/heads/main\n\nworktree ${WORKTREE}\nHEAD def456\nbranch refs/heads/${BRANCH}\n`
+    mockUnlockedRepo()
+    symlinkMock.mockRejectedValue(Object.assign(new Error('cannot link state'), { code: 'EIO' }))
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${WORKTREE_GIT_DIR}\n` })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('branch delete failed'))
+
+    await expect(addWorktree(REPO, WORKTREE, BRANCH)).rejects.toMatchObject({
+      cleanupFailed: true,
+      message: expect.stringContaining('cleanup also failed')
+    })
   })
 })

@@ -29,6 +29,7 @@ import {
   findGitCryptStateDirectory,
   shareGitCryptStateWithWorktree
 } from '../../shared/git-crypt-worktree-state'
+import { GIT_WORKTREE_CREATE_TIMEOUT_MS } from '../../shared/git-worktree-create-timeout'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedRevParsePathFormatError,
@@ -96,7 +97,7 @@ const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
 
 // Why: bound `git worktree add` so a OneDrive cloud-placeholder stall fails fast (STA-1292); generous enough for a legit large checkout (#7225).
-export const WORKTREE_ADD_TIMEOUT_MS = 180_000
+export const WORKTREE_ADD_TIMEOUT_MS = GIT_WORKTREE_CREATE_TIMEOUT_MS
 export const WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS = 30_000
 export const WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS = 30_000
 // Why: one wedged shared scan otherwise hangs every later list, including create's post-add re-list.
@@ -922,11 +923,16 @@ async function rollbackDeferredWorktreeCreate(
   const wrapped: SparseWorktreeCreateError =
     error instanceof Error ? (error as SparseWorktreeCreateError) : new Error(String(error))
   try {
-    await removeWorktree(repoPath, worktreePath, true, {
+    const result = await removeWorktree(repoPath, worktreePath, true, {
       deleteBranch: !options.checkoutExistingBranch,
       forceBranchDelete: !options.checkoutExistingBranch,
+      timeout: options.timeout ?? WORKTREE_ADD_TIMEOUT_MS,
       ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
     })
+    if (result.preservedBranch) {
+      wrapped.cleanupFailed = true
+      wrapped.message = `${wrapped.message} (cleanup also failed — the worktree was removed, but branch "${result.preservedBranch.branchName}" was preserved)`
+    }
   } catch {
     wrapped.cleanupFailed = true
     wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${worktreePath}" may need manual removal)`
@@ -981,10 +987,14 @@ async function performAddWorktree(
 ): Promise<AddWorktreeResult> {
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
+  const worktreeCreateTimeout = options.timeout ?? WORKTREE_ADD_TIMEOUT_MS
   // Why: git-crypt resolves state through the per-worktree Git dir, so setup
   // must happen before checkout or its smudge filter aborts worktree creation.
   const runGitCryptCommand = (args: string[], cwd: string) =>
-    gitExecFileAsync(args, gitExecOptions(cwd, options))
+    gitExecFileAsync(args, {
+      ...gitExecOptions(cwd, options),
+      timeout: worktreeCreateTimeout
+    })
   const resolveGitCryptPath = (cwd: string, outputPath: string) =>
     resolveGitOutputPath(cwd, outputPath, options)
   const gitCryptDir = await findGitCryptStateDirectory(
@@ -1032,7 +1042,7 @@ async function performAddWorktree(
   await gitExecFileAsync(args, {
     ...gitExecOptions(repoPath, options),
     // Why: bound the checkout so a OneDrive cloud-placeholder stall (STA-1292) fails fast instead of hanging.
-    timeout: WORKTREE_ADD_TIMEOUT_MS
+    timeout: worktreeCreateTimeout
   })
 
   if (gitCryptDir) {
@@ -1046,7 +1056,7 @@ async function performAddWorktree(
       if (deferCheckoutForGitCrypt) {
         await gitExecFileAsync(['checkout'], {
           ...gitExecOptions(worktreePath, options),
-          timeout: WORKTREE_ADD_TIMEOUT_MS
+          timeout: worktreeCreateTimeout
         })
       }
     } catch (error) {

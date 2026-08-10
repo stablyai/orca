@@ -3,6 +3,7 @@ import {
   findGitCryptStateDirectory,
   shareGitCryptStateWithWorktree
 } from '../shared/git-crypt-worktree-state'
+import { GIT_WORKTREE_CREATE_TIMEOUT_MS } from '../shared/git-worktree-create-timeout'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 import type { GitExec } from './git-handler-ops'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
@@ -89,7 +90,12 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
 
   // Why: git-crypt resolves state through each worktree's private Git dir;
   // defer checkout until that dir references the repository-wide state.
-  const gitCryptDir = await findGitCryptStateDirectory(git, repoPath)
+  const runWorktreeGit: GitExec = (args, cwd, options) =>
+    git(args, cwd, {
+      ...options,
+      timeout: options?.timeout ?? GIT_WORKTREE_CREATE_TIMEOUT_MS
+    })
+  const gitCryptDir = await findGitCryptStateDirectory(runWorktreeGit, repoPath)
   const deferCheckoutForGitCrypt = gitCryptDir !== null && !noCheckout
 
   const args = ['worktree', 'add']
@@ -105,17 +111,17 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
     args.push(effectiveBase)
   }
 
-  await git(args, repoPath)
+  await runWorktreeGit(args, repoPath)
 
   if (gitCryptDir) {
     try {
-      await shareGitCryptStateWithWorktree(git, gitCryptDir, targetDir)
+      await shareGitCryptStateWithWorktree(runWorktreeGit, gitCryptDir, targetDir)
       if (deferCheckoutForGitCrypt) {
-        await git(['checkout'], targetDir)
+        await runWorktreeGit(['checkout'], targetDir)
       }
     } catch (error) {
       return rollbackRelayWorktreeCreate(
-        git,
+        runWorktreeGit,
         repoPath,
         targetDir,
         branchName,

@@ -150,6 +150,22 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await rm(join(repoPath, 'deferred-trash'), { recursive: true, force: true })
   })
 
+  it('creates a deferred-checkout worktree on the Git 2.25 baseline', async () => {
+    await runGit([
+      'worktree',
+      'add',
+      '--no-checkout',
+      '--no-track',
+      '-b',
+      'compat-deferred-add',
+      'deferred-add-wt'
+    ])
+    await expect(runGit(['-C', 'deferred-add-wt', 'checkout'])).resolves.toBeDefined()
+
+    const remaining = await runGit(['worktree', 'list', '--porcelain'])
+    expect(remaining.stdout).toContain('deferred-add-wt')
+  })
+
   it('recognizes ref and merge-tree compatibility boundaries', async () => {
     await expectPreferredOrRecognizedFallback(
       ['for-each-ref', '--format=%(refname)', '--exclude=refs/remotes/**/HEAD', '--count=10'],
