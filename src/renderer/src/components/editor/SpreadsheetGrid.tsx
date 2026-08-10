@@ -89,7 +89,10 @@ export function SpreadsheetGrid({
             </div>
           ))}
         </div>
-        <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+        {/* Why: role="rowgroup" keeps the table's owned-row relationship intact —
+        a generic element between role="table" and the data rows can stop
+        assistive technology from exposing them. */}
+        <div role="rowgroup" style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualRows.map((virtualRow) => {
             const row = rows[virtualRow.index] ?? []
             return (

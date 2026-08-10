@@ -28,24 +28,22 @@ export function forEachXlsxXmlElement(
     if (openTagStart === -1) {
       return
     }
-    const openTagEnd = xml.indexOf('>', openTagStart)
-    if (openTagEnd === -1) {
+    const attributesStart = openTagStart + tagName.length + 1
+    const openTag = scanOpenTag(xml, attributesStart)
+    if (openTag === null) {
       return
     }
 
-    const attributesEnd = xml.charCodeAt(openTagEnd - 1) === SLASH ? openTagEnd - 1 : openTagEnd
-    const attributes = parseXlsxXmlAttributes(
-      xml.slice(openTagStart + tagName.length + 1, attributesEnd)
-    )
-    if (attributesEnd !== openTagEnd) {
+    const attributes = parseXlsxXmlAttributes(xml.slice(attributesStart, openTag.attributesEnd))
+    if (openTag.selfClosing) {
       if (visit({ attributes, inner: '' }) === false) {
         return
       }
-      cursor = openTagEnd + 1
+      cursor = openTag.tagEnd + 1
       continue
     }
 
-    const innerStart = openTagEnd + 1
+    const innerStart = openTag.tagEnd + 1
     const innerEnd = findCloseTagStart(xml, tagName, innerStart)
     if (visit({ attributes, inner: xml.slice(innerStart, innerEnd) }) === false) {
       return
@@ -54,10 +52,21 @@ export function forEachXlsxXmlElement(
   }
 }
 
-/** Concatenates the text of every `<t>` element, the SpreadsheetML text run. */
+// Why: `<rPh>` holds the phonetic reading of a Japanese string (furigana) and
+// carries its own `<t>` runs. Excel shows it above the cell, never inside the
+// value, so it has to go before the runs are concatenated. The self-closing form
+// is matched first so a later `</rPh>` cannot make the lazy match span real text.
+const PHONETIC_RUN_PATTERN = /<rPh(?:\s[^>]*)?\/>|<rPh[\s>][\s\S]*?<\/rPh>/g
+
+/**
+ * Concatenates the text of every `<t>` element, the SpreadsheetML text run.
+ *
+ * Shared, inline and rich-text cells all store their value this way, so they all
+ * come through here and get the same treatment.
+ */
 export function readXlsxXmlTextRuns(xml: string): string {
   let text = ''
-  forEachXlsxXmlElement(xml, 't', (element) => {
+  forEachXlsxXmlElement(xml.replace(PHONETIC_RUN_PATTERN, ''), 't', (element) => {
     text += decodeXlsxXmlText(element.inner)
   })
   return text
@@ -103,6 +112,46 @@ export function decodeXlsxXmlText(value: string): string {
 }
 
 const SLASH = 47
+const GREATER_THAN = 62
+const DOUBLE_QUOTE = 34
+const SINGLE_QUOTE = 39
+
+type XlsxXmlOpenTag = {
+  /** End of the attribute region: before `/` on a self-closing tag. */
+  attributesEnd: number
+  /** Index of the `>` that closes the open tag. */
+  tagEnd: number
+  selfClosing: boolean
+}
+
+// Why: XML only requires `<` and `&` to be escaped inside an attribute value, so
+// a value may legally contain `>`. Finding the end of the tag with indexOf('>')
+// would stop inside such a value and desync attribute parsing — track quote
+// state instead. Once the scan is outside quotes at `>`, a preceding `/` is
+// necessarily outside quotes too, so the self-closing check is safe here.
+function scanOpenTag(xml: string, attributesStart: number): XlsxXmlOpenTag | null {
+  let openQuote = 0
+
+  for (let index = attributesStart; index < xml.length; index += 1) {
+    const codeUnit = xml.charCodeAt(index)
+    if (openQuote !== 0) {
+      if (codeUnit === openQuote) {
+        openQuote = 0
+      }
+      continue
+    }
+    if (codeUnit === DOUBLE_QUOTE || codeUnit === SINGLE_QUOTE) {
+      openQuote = codeUnit
+      continue
+    }
+    if (codeUnit === GREATER_THAN) {
+      const selfClosing = index > attributesStart && xml.charCodeAt(index - 1) === SLASH
+      return { attributesEnd: selfClosing ? index - 1 : index, tagEnd: index, selfClosing }
+    }
+  }
+
+  return null
+}
 
 function codePointToString(codePoint: number, entity: string): string {
   // Why: leave malformed or out-of-range references untouched rather than
@@ -157,14 +206,14 @@ function findCloseTagStart(xml: string, tagName: string, from: number): number {
     }
     const nextOpen = findOpenTagStart(xml, tagName, cursor)
     if (nextOpen !== -1 && nextOpen < nextClose) {
-      const nextOpenEnd = xml.indexOf('>', nextOpen)
-      if (nextOpenEnd === -1) {
+      const nestedOpenTag = scanOpenTag(xml, nextOpen + tagName.length + 1)
+      if (nestedOpenTag === null) {
         return xml.length
       }
-      if (xml.charCodeAt(nextOpenEnd - 1) !== SLASH) {
+      if (!nestedOpenTag.selfClosing) {
         depth += 1
       }
-      cursor = nextOpenEnd + 1
+      cursor = nestedOpenTag.tagEnd + 1
       continue
     }
     if (depth === 0) {

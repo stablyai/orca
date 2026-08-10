@@ -71,6 +71,16 @@ describe('parseXlsxNumberFormats', () => {
     expect(numberFormats.isDateStyle(0)).toBe(false)
   })
 
+  it('ignores a numFmt declared inside dxfs differential formatting', () => {
+    // Why: a `<numFmt>` under `<dxfs>` belongs to one conditional-format rule.
+    // Letting it through would clear the built-in date id for every cell format.
+    const numberFormats = parseXlsxNumberFormats(
+      `<styleSheet><cellXfs count="1"><xf numFmtId="14"/></cellXfs><dxfs count="1"><dxf><numFmt numFmtId="14" formatCode="0.000"/></dxf></dxfs></styleSheet>`
+    )
+
+    expect(numberFormats.isDateStyle(0)).toBe(true)
+  })
+
   it('treats an unknown style index and an absent style as non-dates', () => {
     const numberFormats = parseXlsxNumberFormats(stylesWithCellFormats([14]))
 
@@ -100,7 +110,15 @@ describe('isXlsxDateFormatCode', () => {
     expect(isXlsxDateFormatCode('yyyy-mm-dd')).toBe(true)
     expect(isXlsxDateFormatCode('d/m/yy')).toBe(true)
     expect(isXlsxDateFormatCode('[$-409]h:mm:ss AM/PM')).toBe(true)
-    expect(isXlsxDateFormatCode('[h]:mm:ss')).toBe(true)
+  })
+
+  it('rejects elapsed-duration codes, which are not clock times', () => {
+    // Why: `[h]` tells Excel not to wrap at 24h, so serial 1.5 means 36 hours,
+    // not a date. Showing the stored number beats inventing a calendar day.
+    expect(isXlsxDateFormatCode('[h]:mm:ss')).toBe(false)
+    expect(isXlsxDateFormatCode('[hh]:mm')).toBe(false)
+    expect(isXlsxDateFormatCode('[mm]:ss')).toBe(false)
+    expect(isXlsxDateFormatCode('[ss].0')).toBe(false)
   })
 
   it('rejects numeric codes', () => {

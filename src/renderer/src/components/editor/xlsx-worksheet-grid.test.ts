@@ -81,6 +81,28 @@ describe('parseXlsxWorksheetGrid', () => {
     expect(grid.rows).toEqual([['1', '2']])
   })
 
+  it('does not allocate a row for a column reference past the Excel grid', () => {
+    // Why: the padding loop runs up to the parsed column index, so a short but
+    // huge reference must be rejected before it can drive a giant allocation.
+    const xml = '<row r="1"><c r="A1"><v>1</v></c><c r="AAAAAAAA1"><v>2</v></c></row>'
+
+    const grid = parseXlsxWorksheetGrid(xml, context())
+
+    expect(grid.maxColumns).toBe(2)
+    expect(grid.rows).toEqual([['1', '2']])
+  })
+
+  it('drops phonetic runs from an inline string, like a shared string', () => {
+    // Why: the same Japanese value must not render differently depending on
+    // whether the producer stored it inline or in the shared string table.
+    const xml =
+      '<row r="1"><c r="A1" t="inlineStr"><is><t>課税</t><rPh sb="0" eb="2"><t>カゼイ</t></rPh></is></c></row>'
+
+    const grid = parseXlsxWorksheetGrid(xml, context())
+
+    expect(grid.rows).toEqual([['課税']])
+  })
+
   it('renders booleans and cached errors as their display text', () => {
     const xml =
       '<row r="1"><c r="A1" t="b"><v>1</v></c><c r="B1" t="b"><v>0</v></c><c r="C1" t="e"><v>#DIV/0!</v></c></row>'
@@ -185,6 +207,18 @@ describe('parseXlsxWorksheetGrid', () => {
     const grid = parseXlsxWorksheetGrid(xml, context({ maxRows: 1000 }))
 
     expect(grid.rows).toEqual([])
+    expect(grid.truncated).toBe(true)
+  })
+
+  it('keeps reading rows after one row lands past the cap', () => {
+    // Why: rows are normally ascending, but a hand-written sheet can list them
+    // out of order — stopping at the first over-cap row would discard the rest.
+    const xml =
+      '<row r="1"><c r="A1"><v>1</v></c></row><row r="900"><c r="A900"><v>900</v></c></row><row r="2"><c r="A2"><v>2</v></c></row>'
+
+    const grid = parseXlsxWorksheetGrid(xml, context({ maxRows: 3 }))
+
+    expect(grid.rows).toEqual([['1'], ['2']])
     expect(grid.truncated).toBe(true)
   })
 

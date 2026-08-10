@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { SpreadsheetGrid } from './SpreadsheetGrid'
 import { xlsxColumnLettersFromIndex } from './xlsx-cell-reference'
 import { MAX_XLSX_SHEET_ROWS, parseXlsxWorkbook, type XlsxWorkbook } from './xlsx-workbook'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 type XlsxViewerProps = {
   /** Base64 workbook bytes, as delivered by the previewable-binary read path. */
@@ -132,7 +132,7 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
           <>
             <span className="flex-shrink-0">
               {translate('auto.components.editor.XlsxViewer.cb88b1b447', '{{rowCount}} rows', {
-                rowCount: activeSheet.rows.length.toLocaleString()
+                rowCount: activeSheet.rows.length.toLocaleString(getIntlLocale())
               })}
             </span>
             <span className="flex-shrink-0">
@@ -149,7 +149,7 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
                 {translate(
                   'auto.components.editor.XlsxViewer.2c8df21237',
                   'truncated at {{limit}} rows',
-                  { limit: MAX_XLSX_SHEET_ROWS.toLocaleString() }
+                  { limit: MAX_XLSX_SHEET_ROWS.toLocaleString(getIntlLocale()) }
                 )}
               </span>
             )}

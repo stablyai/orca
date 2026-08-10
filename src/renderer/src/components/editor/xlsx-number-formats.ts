@@ -25,18 +25,24 @@ const GENERAL_NUMBER_FORMAT_ID = 0
 export function parseXlsxNumberFormats(stylesXml: string): XlsxNumberFormats {
   const dateNumberFormatIds = new Set(BUILTIN_DATE_NUMBER_FORMAT_IDS)
 
-  forEachXlsxXmlElement(stylesXml, 'numFmt', (element) => {
-    const numberFormatId = Number.parseInt(element.attributes.numFmtId ?? '', 10)
-    const formatCode = element.attributes.formatCode
-    if (!Number.isInteger(numberFormatId) || formatCode === undefined) {
-      return
-    }
-    if (isXlsxDateFormatCode(formatCode)) {
-      dateNumberFormatIds.add(numberFormatId)
-    } else {
-      // Why: a custom format may reuse a built-in id with a non-date code.
-      dateNumberFormatIds.delete(numberFormatId)
-    }
+  // Why: scope the scan to `<numFmts>`. A `<numFmt>` can also appear inside
+  // `<dxfs>` differential formatting, where it applies to one conditional-format
+  // rule — letting those through would rewrite the id for every cell format.
+  forEachXlsxXmlElement(stylesXml, 'numFmts', (numberFormatsBlock) => {
+    forEachXlsxXmlElement(numberFormatsBlock.inner, 'numFmt', (element) => {
+      const numberFormatId = Number.parseInt(element.attributes.numFmtId ?? '', 10)
+      const formatCode = element.attributes.formatCode
+      if (!Number.isInteger(numberFormatId) || formatCode === undefined) {
+        return
+      }
+      if (isXlsxDateFormatCode(formatCode)) {
+        dateNumberFormatIds.add(numberFormatId)
+      } else {
+        // Why: a custom format may reuse a built-in id with a non-date code.
+        dateNumberFormatIds.delete(numberFormatId)
+      }
+    })
+    return false
   })
 
   const styleNumberFormatIds = parseCellFormatNumberFormatIds(stylesXml)
@@ -76,7 +82,14 @@ function parseCellFormatNumberFormatIds(stylesXml: string): number[] {
 // format really is a date.
 const FORMAT_CODE_LITERALS_PATTERN = /"[^"]*"|\\.|\[[^\]]*\]|_.|\*./g
 const DATE_FORMAT_TOKEN_PATTERN = /[ymdhs]/i
+// Why: `[h]:mm:ss` and `[mm]:ss` are elapsed durations, not clock times — the
+// bracketed unit tells Excel not to wrap at 24h. Rendering serial 1.5 as a date
+// would be wrong (it means 36 hours), so those cells keep their stored number.
+const ELAPSED_TIME_SECTION_PATTERN = /\[(?:h+|m+|s+)\]/i
 
 export function isXlsxDateFormatCode(formatCode: string): boolean {
+  if (ELAPSED_TIME_SECTION_PATTERN.test(formatCode)) {
+    return false
+  }
   return DATE_FORMAT_TOKEN_PATTERN.test(formatCode.replace(FORMAT_CODE_LITERALS_PATTERN, ''))
 }

@@ -157,7 +157,7 @@ function buildWorkbookXml(sheets: WorkbookSheetInput[], use1904DateSystem: boole
   const sheetElements = sheets
     .map(
       (sheet, index) =>
-        `<sheet name="${sheet.name}" sheetId="${index + 1}"${sheet.hidden === true ? ' state="hidden"' : ''} r:id="rId${index + 1}"/>`
+        `<sheet name="${escapeXmlText(sheet.name)}" sheetId="${index + 1}"${sheet.hidden === true ? ' state="hidden"' : ''} r:id="rId${index + 1}"/>`
     )
     .join('')
   return `<?xml version="1.0" encoding="UTF-8"?>

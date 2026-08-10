@@ -20,6 +20,11 @@ const ZIP64_SIZE_MARKER = 0xffffffff
 const ZIP64_COUNT_MARKER = 0xffff
 const COMPRESSION_METHOD_STORED = 0
 const COMPRESSION_METHOD_DEFLATED = 8
+// Why: an absolute ceiling on a single inflated part, independent of what the
+// archive declares. Real workbooks inflate 4-9x (a 325KB file measured here has
+// a 1.4MB largest part), so this leaves an order of magnitude of headroom over
+// the 20MB read budget while keeping a deflate bomb from exhausting memory.
+const MAX_INFLATED_PART_SIZE = 256 * 1024 * 1024
 
 type ZipArchiveEntry = {
   name: string
@@ -166,12 +171,26 @@ async function readEntryBytes(
     return payload
   }
   if (entry.compressionMethod === COMPRESSION_METHOD_DEFLATED) {
-    return await inflateRaw(payload)
+    if (entry.uncompressedSize > MAX_INFLATED_PART_SIZE) {
+      throw new Error(`Not a valid workbook: ${entry.name} is too large to read`)
+    }
+    // Why: the declared size is attacker-controlled, so it only ever lowers the
+    // ceiling — never raises it — and a size of 0 (written by archivers that
+    // stream) falls back to the absolute cap.
+    const inflatedSizeLimit =
+      entry.uncompressedSize > 0
+        ? Math.min(entry.uncompressedSize, MAX_INFLATED_PART_SIZE)
+        : MAX_INFLATED_PART_SIZE
+    return await inflateRaw(payload, inflatedSizeLimit, entry.name)
   }
   throw new Error(`Unsupported compression method ${entry.compressionMethod} for ${entry.name}`)
 }
 
-async function inflateRaw(payload: Uint8Array): Promise<Uint8Array> {
+async function inflateRaw(
+  payload: Uint8Array,
+  inflatedSizeLimit: number,
+  partName: string
+): Promise<Uint8Array> {
   // Why: a stream chunk must be backed by a non-shared ArrayBuffer. Re-wrapping
   // the same memory satisfies that without copying the compressed bytes.
   const chunk = new Uint8Array(
@@ -189,13 +208,23 @@ async function inflateRaw(payload: Uint8Array): Promise<Uint8Array> {
   const chunks: Uint8Array[] = []
   let totalLength = 0
 
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) {
-      break
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+      totalLength += value.byteLength
+      // Why: deflate reaches roughly 1000:1 on crafted input, so a workbook well
+      // inside the read budget could otherwise expand to gigabytes. Stop at the
+      // ceiling instead of accumulating whatever the decompressor emits.
+      if (totalLength > inflatedSizeLimit) {
+        throw new Error(`Not a valid workbook: ${partName} expands beyond its declared size`)
+      }
+      chunks.push(value)
     }
-    chunks.push(value)
-    totalLength += value.byteLength
+  } finally {
+    await reader.cancel().catch(() => undefined)
   }
 
   const inflated = new Uint8Array(totalLength)

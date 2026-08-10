@@ -25,8 +25,13 @@ export type XlsxWorkbook = {
 const PACKAGE_RELATIONSHIPS_PART_PATH = '_rels/.rels'
 const OFFICE_DOCUMENT_RELATIONSHIP_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument'
+const SHARED_STRINGS_RELATIONSHIP_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings'
+const STYLES_RELATIONSHIP_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles'
 const FALLBACK_WORKBOOK_PART_PATH = 'xl/workbook.xml'
 const RELATIONSHIP_ID_ATTRIBUTE = 'r:id'
+const EXTERNAL_TARGET_MODE = 'External'
 
 // Why: a worksheet is rendered through a virtualized grid, so the ceiling exists
 // to bound parse time and renderer memory, not the viewport. One million rows of
@@ -41,9 +46,9 @@ export async function parseXlsxWorkbook(bytes: Uint8Array): Promise<XlsxWorkbook
     throw new Error('Not a valid workbook: xl/workbook.xml is missing')
   }
 
-  const relationshipTargets = await readRelationshipTargets(archive, workbookPartPath)
-  const sharedStrings = await readSharedStrings(archive, workbookPartPath)
-  const numberFormats = await readNumberFormats(archive, workbookPartPath)
+  const relationships = await readWorkbookRelationships(archive, workbookPartPath)
+  const sharedStrings = await readSharedStrings(archive, workbookPartPath, relationships)
+  const numberFormats = await readNumberFormats(archive, workbookPartPath, relationships)
   const use1904DateSystem = readUse1904DateSystem(workbookXml)
 
   const sheets: XlsxSheet[] = []
@@ -53,7 +58,7 @@ export async function parseXlsxWorkbook(bytes: Uint8Array): Promise<XlsxWorkbook
     // missing — hand-written and minimal-writer workbooks often omit the rels
     // part, and an empty grid would look like a data-loss bug to the reader.
     const worksheetPartPath =
-      relationshipTargets.get(descriptor.relationshipId) ??
+      relationships.byId.get(descriptor.relationshipId) ??
       resolveXlsxPartPath(workbookPartPath, `worksheets/sheet${index + 1}.xml`)
     const worksheetXml = await archive.readPartText(worksheetPartPath)
     const grid = parseXlsxWorksheetGrid(worksheetXml ?? '', {
@@ -95,42 +100,90 @@ async function resolveWorkbookPartPath(archive: XlsxZipArchive): Promise<string>
   return FALLBACK_WORKBOOK_PART_PATH
 }
 
-/** Maps each relationship id to the package part path it points at. */
-async function readRelationshipTargets(
+/** The workbook's relationships, indexed both by id and by relationship type. */
+type XlsxWorkbookRelationships = {
+  byId: Map<string, string>
+  byType: Map<string, string>
+}
+
+async function readWorkbookRelationships(
   archive: XlsxZipArchive,
   workbookPartPath: string
-): Promise<Map<string, string>> {
-  const targets = new Map<string, string>()
+): Promise<XlsxWorkbookRelationships> {
+  const relationships: XlsxWorkbookRelationships = { byId: new Map(), byType: new Map() }
   const relationshipsPartPath = resolveXlsxRelationshipsPartPath(workbookPartPath)
   const relationshipsXml = await archive.readPartText(relationshipsPartPath)
   if (relationshipsXml === null) {
-    return targets
+    return relationships
   }
 
   forEachXlsxXmlElement(relationshipsXml, 'Relationship', (element) => {
     const id = element.attributes.Id
     const target = element.attributes.Target
-    if (id !== undefined && target !== undefined) {
-      targets.set(id, resolveXlsxRelationshipTargetPath(relationshipsPartPath, target))
+    // Why: an external relationship holds a URI, not a part name, so resolving it
+    // as a package path would produce a part that cannot exist.
+    if (
+      id === undefined ||
+      target === undefined ||
+      element.attributes.TargetMode === EXTERNAL_TARGET_MODE
+    ) {
+      return
+    }
+    const partPath = resolveXlsxRelationshipTargetPath(relationshipsPartPath, target)
+    relationships.byId.set(id, partPath)
+    const type = element.attributes.Type
+    if (type !== undefined && !relationships.byType.has(type)) {
+      relationships.byType.set(type, partPath)
     }
   })
 
-  return targets
+  return relationships
+}
+
+// Why: prefer the declared relationship over the conventional file name. A
+// producer is free to name these parts anything, and guessing would silently
+// lose every string or every date format.
+function resolveSupportingPartPath(
+  workbookPartPath: string,
+  relationships: XlsxWorkbookRelationships,
+  relationshipType: string,
+  conventionalName: string
+): string {
+  return (
+    relationships.byType.get(relationshipType) ??
+    resolveXlsxPartPath(workbookPartPath, conventionalName)
+  )
 }
 
 async function readSharedStrings(
   archive: XlsxZipArchive,
-  workbookPartPath: string
+  workbookPartPath: string,
+  relationships: XlsxWorkbookRelationships
 ): Promise<string[]> {
-  const xml = await archive.readPartText(resolveXlsxPartPath(workbookPartPath, 'sharedStrings.xml'))
+  const xml = await archive.readPartText(
+    resolveSupportingPartPath(
+      workbookPartPath,
+      relationships,
+      SHARED_STRINGS_RELATIONSHIP_TYPE,
+      'sharedStrings.xml'
+    )
+  )
   return xml === null ? [] : parseXlsxSharedStrings(xml)
 }
 
 async function readNumberFormats(
   archive: XlsxZipArchive,
-  workbookPartPath: string
+  workbookPartPath: string,
+  relationships: XlsxWorkbookRelationships
 ): Promise<XlsxNumberFormats> {
-  const xml = await archive.readPartText(resolveXlsxPartPath(workbookPartPath, 'styles.xml'))
+  const xml = await archive.readPartText(
+    resolveSupportingPartPath(
+      workbookPartPath,
+      relationships,
+      STYLES_RELATIONSHIP_TYPE,
+      'styles.xml'
+    )
+  )
   return parseXlsxNumberFormats(xml ?? '')
 }
 

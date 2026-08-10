@@ -39,9 +39,12 @@ export function parseXlsxWorksheetGrid(
       Number.isInteger(declaredRowIndex) && declaredRowIndex > 0
         ? declaredRowIndex - 1
         : rows.length
+    // Why: skip the row but keep scanning rather than stopping. Rows normally
+    // arrive in ascending order, but a hand-written sheet can list them out of
+    // order, and stopping would discard every later row after one high `r`.
     if (rowIndex >= context.maxRows) {
       truncated = true
-      return false
+      return true
     }
     while (rows.length < rowIndex) {
       rows.push([])

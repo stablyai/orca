@@ -161,6 +161,62 @@ describe('parseXlsxWorkbook', () => {
     expect(workbook.sheets[0]).toMatchObject({ name: 'Elsewhere', rows: [['found']] })
   })
 
+  it('resolves sharedStrings and styles through their relationship types', async () => {
+    // Why: a producer may name these parts anything. Assuming the conventional
+    // file name would silently lose every string and every date format.
+    const bytes = buildZipArchive([
+      {
+        name: 'xl/workbook.xml',
+        content: '<workbook><sheets><sheet name="One" sheetId="1" r:id="rId1"/></sheets></workbook>'
+      },
+      {
+        name: 'xl/_rels/workbook.xml.rels',
+        content: `<Relationships>
+          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/one.xml"/>
+          <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="strings.xml"/>
+          <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="formats.xml"/>
+        </Relationships>`
+      },
+      {
+        name: 'xl/worksheets/one.xml',
+        content:
+          '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" s="1"><v>45658</v></c></row></sheetData></worksheet>'
+      },
+      { name: 'xl/strings.xml', content: '<sst><si><t>Renamed</t></si></sst>' },
+      { name: 'xl/formats.xml', content: DATE_STYLES_XML }
+    ])
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.rows).toEqual([['Renamed', '2025-01-01']])
+  })
+
+  it('ignores an external relationship target', async () => {
+    // Why: an external target is a URI, not a part name, so it must not be
+    // resolved as a package path or reused for the sheet it shares an id with.
+    const bytes = buildZipArchive([
+      {
+        name: 'xl/workbook.xml',
+        content: '<workbook><sheets><sheet name="One" sheetId="1" r:id="rId1"/></sheets></workbook>'
+      },
+      {
+        name: 'xl/_rels/workbook.xml.rels',
+        content: `<Relationships>
+          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink" Target="https://host/other.xlsx" TargetMode="External"/>
+        </Relationships>`
+      },
+      {
+        name: 'xl/worksheets/sheet1.xml',
+        content:
+          '<worksheet><sheetData><row r="1"><c r="A1" t="str"><v>local</v></c></row></sheetData></worksheet>'
+      }
+    ])
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.rows).toEqual([['local']])
+  })
+
   it('renders a sheet whose worksheet part is missing as empty rather than failing', async () => {
     const bytes = buildZipArchive([
       {

@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { openXlsxZipArchive } from './xlsx-zip-archive'
 import { buildZipArchive } from './xlsx-workbook-test-fixtures'
 
+function centralDirectoryOffset(bytes: Uint8Array): number {
+  return new DataView(bytes.buffer).getUint32(bytes.length - 22 + 16, true)
+}
+
 describe('openXlsxZipArchive', () => {
   it('reads deflated and stored parts from the same archive', async () => {
     const deflatedText = 'deflate me '.repeat(64)
@@ -163,6 +167,35 @@ describe('openXlsxZipArchive', () => {
     localView.setUint32(22, 0, true)
 
     expect(await openXlsxZipArchive(bytes).readPartText('xl/workbook.xml')).toBe('<workbook/>')
+  })
+
+  it('refuses a part that inflates past its declared size', async () => {
+    // Why: deflate reaches roughly 1000:1 on crafted input, so a workbook inside
+    // the read budget could otherwise expand to gigabytes before any error.
+    const bytes = buildZipArchive([{ name: 'xl/sharedStrings.xml', content: 'a'.repeat(8192) }])
+    const declaredSizeOffset = centralDirectoryOffset(bytes) + 24
+    new DataView(bytes.buffer).setUint32(declaredSizeOffset, 16, true)
+
+    await expect(openXlsxZipArchive(bytes).readPartBytes('xl/sharedStrings.xml')).rejects.toThrow(
+      /expands beyond its declared size/
+    )
+  })
+
+  it('refuses a part whose declared size is past the absolute ceiling', async () => {
+    const bytes = buildZipArchive([{ name: 'xl/sheet.xml', content: 'a'.repeat(64) }])
+    const declaredSizeOffset = centralDirectoryOffset(bytes) + 24
+    new DataView(bytes.buffer).setUint32(declaredSizeOffset, 300 * 1024 * 1024, true)
+
+    await expect(openXlsxZipArchive(bytes).readPartBytes('xl/sheet.xml')).rejects.toThrow(
+      /is too large to read/
+    )
+  })
+
+  it('still reads a part whose declared size is zero, as streaming archivers write', async () => {
+    const bytes = buildZipArchive([{ name: 'xl/sheet.xml', content: '<worksheet/>' }])
+    new DataView(bytes.buffer).setUint32(centralDirectoryOffset(bytes) + 24, 0, true)
+
+    expect(await openXlsxZipArchive(bytes).readPartText('xl/sheet.xml')).toBe('<worksheet/>')
   })
 
   it('reads an archive stored at a non-zero byte offset in its buffer', async () => {

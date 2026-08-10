@@ -82,6 +82,20 @@ describe('forEachXlsxXmlElement', () => {
     expect(collect('<worksheet><sheetData/></worksheet>', 'row')).toEqual([])
   })
 
+  it('does not end the open tag at a > inside an attribute value', () => {
+    // Why: XML only requires < and & to be escaped in a value, so > is legal
+    // there. Ending the tag at the first > would truncate attribute parsing.
+    expect(collect('<c r="A1" t="s" note="a > b"><v>1</v></c>', 'c')).toEqual([
+      { attributes: { r: 'A1', t: 's', note: 'a > b' }, inner: '<v>1</v>' }
+    ])
+  })
+
+  it('does not treat a value ending in a slash as a self-closing tag', () => {
+    expect(
+      collect('<Relationship Id="rId1" Target="https://host/">text</Relationship>', 'Relationship')
+    ).toEqual([{ attributes: { Id: 'rId1', Target: 'https://host/' }, inner: 'text' }])
+  })
+
   it('does not loop forever on an open tag that is never closed with >', () => {
     expect(collect('<row r="1"', 'row')).toEqual([])
   })
