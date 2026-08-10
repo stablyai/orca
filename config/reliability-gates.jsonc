@@ -11,6 +11,114 @@
   },
   "gates": [
     {
+      "id": "source-control.discard-preserves-index",
+      "title": "Source Control discard preserves the authoritative Git index",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "source-control",
+      "layer": "local-and-ssh-git-mutation",
+      "surfaces": [
+        "single-file discard",
+        "bulk discard",
+        "Source Control confirmation",
+        "direct SSH Git mutations"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh"],
+      "coveredPlatforms": ["macos", "linux"],
+      "coveredProviders": ["local", "ssh"],
+      "coverageNotes": "A real macOS Git oracle covers tracked staged-only, staged plus unstaged, added, intent-to-add, renamed, deleted, untracked, conflicted, partial-index, bulk, linked-worktree, and non-Git folder cases. Headed Electron covers the visible Source Control action, Git 2.25.5 covers the baseline command contract, and a macOS client against an ephemeral Linux Docker SSH target covers the authoritative relay mutation and remote index/worktree state. Physical Windows and WSL UI journeys remain gaps; deterministic WSL pathspec tests cover separator handling.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/5880"],
+      "invariant": "Discarding unstaged Source Control content must restore tracked paths from the current index without changing staged blobs, delete genuine untracked and intent-to-add paths as promised by the confirmation UI, refuse conflicted paths without mutation, and apply the same semantics on local, linked-worktree, folder-workspace, WSL, and direct-SSH execution owners.",
+      "oracle": "Snapshot the index entry, cached diff, worktree bytes, and porcelain status before discard, then require the exact staged blob to survive for tracked staged-only, staged-plus-unstaged, added, renamed, deleted, partial-index, bulk, and linked-worktree cases. Require intent-to-add and untracked content to disappear, conflicts and non-Git folders to remain byte-identical after an error, the headed UI to retain the staged row, and a real Docker SSH relay to produce the same remote index/worktree state.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/git/discard-index-semantics.test.ts src/shared/git-discard-status.test.ts src/shared/git-binary-compatibility.test.ts src/relay/git-handler.test.ts --reporter=dot",
+        "pnpm exec playwright test tests/e2e/source-control-discard-confirmation.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+        "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-source-control-discard.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/main/git/discard-index-semantics.test.ts",
+        "src/shared/git-discard-status.test.ts",
+        "src/shared/git-binary-compatibility.test.ts",
+        "src/relay/git-handler.test.ts",
+        "tests/e2e/source-control-discard-confirmation.spec.ts",
+        "tests/e2e/ssh-source-control-discard.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/git/discard-index-semantics.test.ts",
+          "assertions": [
+            "keeps a tracked staged-only blob in both the index and worktree",
+            "deletes an intent-to-add path as promised by the Source Control dialog",
+            "refuses an unmerged path without changing its index or worktree",
+            "works from a linked worktree without changing the main checkout",
+            "does not delete a file when a folder workspace is not a Git repository"
+          ]
+        },
+        {
+          "file": "src/shared/git-discard-status.test.ts",
+          "assertions": [
+            "distinguishes intent-to-add from staged additions and untracked paths",
+            "builds a literal, bounded status query"
+          ]
+        },
+        {
+          "file": "src/shared/git-binary-compatibility.test.ts",
+          "assertions": ["classifies discard state and restores staged content from the index"]
+        },
+        {
+          "file": "src/relay/git-handler.test.ts",
+          "assertions": ["preserves staged additions and deletes intent-to-add paths in bulk"]
+        },
+        {
+          "file": "tests/e2e/source-control-discard-confirmation.spec.ts",
+          "assertions": ["preserves staged content when discarding through the headed UI"]
+        },
+        {
+          "file": "tests/e2e/ssh-source-control-discard.spec.ts",
+          "assertions": ["preserves the remote index and deletes intent-to-add content"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-source-control-discard.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 37,
+          "summary": "One macOS Electron client connected through real OpenSSH to an ephemeral Linux Docker target; the relay preserved the staged blob and removed intent-to-add content from both the remote index and worktree."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 90,
+        "scope": "focused deterministic Git suites plus one headed local and one Docker SSH Electron journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic, headed, and Docker SSH oracles pass locally; focused CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "On current main, the byte-identical 12-case Git oracle fails 10 cases because --source=HEAD overwrites or deletes staged worktree content and conflict state. The candidate passes all 12; restoring the HEAD source reproduces the same 10 failures."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Each single discard adds one bounded porcelain-status subprocess before one mutation, while each bulk chunk replaces the prior classification subprocess with one bounded porcelain-status subprocess. There is no polling, retry, provider fanout, wire field, listener, retained payload, or additional subprocess per selected path."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Run the headed journey on physical Windows and a WSL-backed worktree.",
+        "Keep the exact index, worktree, status, conflict refusal, subprocess-count, and SSH-owner assertions green."
+      ],
+      "knownGaps": [
+        "Physical Windows and WSL UI journeys were not run.",
+        "The direct SSH journey uses a macOS client and Linux Docker host; physical Linux client and Windows OpenSSH host runs remain uncollected.",
+        "Git 2.25.5 compatibility is covered by the real-binary suite locally rather than by the Docker image."
+      ],
+      "demotionRule": "Demote if discard changes an index entry, restores a tracked path from HEAD, leaves intent-to-add content contrary to the confirmation contract, mutates a conflicted path after refusal, diverges between local and SSH owners, or adds per-path subprocess or provider fanout."
+    },
+    {
       "id": "editor.restored-sibling-owner-reparent",
       "title": "Restored sibling tabs migrate filesystem authority before becoming editable",
       "maturity": "experimental",

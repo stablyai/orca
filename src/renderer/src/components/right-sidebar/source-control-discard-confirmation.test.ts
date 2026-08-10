@@ -46,7 +46,7 @@ describe('getDiscardEntryConfirmationCopy', () => {
     ).toEqual({
       title: 'Restore "removed.ts"?',
       description:
-        'This will restore the file from HEAD and discard the deletion. This cannot be undone.',
+        'This will restore the staged version and discard the deletion. This cannot be undone.',
       confirmLabel: 'Restore'
     })
   })

@@ -11483,7 +11483,8 @@
                   "40e9357b2a": "This will restore the file from HEAD and discard the deletion. This cannot be undone.",
                   "5c0bdbc4cb": "Restore \"{{value0}}\"?",
                   "d97bf697c9": "This will permanently delete this file. This cannot be undone.",
-                  "96c772bee9": "Delete \"{{value0}}\"?"
+                  "96c772bee9": "Delete \"{{value0}}\"?",
+                  "b11c879a18": "This will restore the staged version and discard the deletion. This cannot be undone."
                 },
                 "dialog": {
                   "3bc61dc989": "Cancel",

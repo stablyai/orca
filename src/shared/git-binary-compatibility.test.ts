@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -14,6 +14,7 @@ import {
   isUnsupportedWorktreeListZError
 } from './git-worktree-command-capabilities'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
+import { classifyGitDiscardPaths, gitDiscardStatusArgs } from './git-discard-status'
 import {
   githubPullRequestHeadLocalRef,
   gitlabMergeRequestHeadLocalRef,
@@ -197,6 +198,33 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     })
     await expect(runGit(['rev-parse', '--verify', mergeRequestRef])).resolves.toMatchObject({
       stdout: `${head}\n`
+    })
+  })
+
+  it('classifies discard state and restores staged content from the index', async () => {
+    await writeFile(join(repoPath, 'discard-staged.txt'), 'staged\n')
+    await runGit(['add', 'discard-staged.txt'])
+    await writeFile(join(repoPath, 'discard-staged.txt'), 'staged\nunstaged\n')
+    await writeFile(join(repoPath, 'discard-intent.txt'), 'intent\n')
+    await runGit(['add', '-N', 'discard-intent.txt'])
+    const selectedPaths = ['discard-staged.txt', 'discard-intent.txt']
+    const { stdout } = await runGit(gitDiscardStatusArgs(selectedPaths, (filePath) => filePath))
+
+    expect(Object.fromEntries(classifyGitDiscardPaths(stdout, selectedPaths))).toEqual({
+      'discard-intent.txt': 'intent-to-add',
+      'discard-staged.txt': 'tracked'
+    })
+
+    await runGit(['restore', '--worktree', '--', 'discard-staged.txt'])
+    await runGit(['reset', '--', 'discard-intent.txt'])
+    await runGit(['clean', '-ffdx', '--', 'discard-intent.txt'])
+
+    await expect(readFile(join(repoPath, 'discard-staged.txt'), 'utf8')).resolves.toBe('staged\n')
+    await expect(readFile(join(repoPath, 'discard-intent.txt'), 'utf8')).rejects.toThrow()
+    await expect(
+      runGit(['status', '--porcelain=v1', '--', ...selectedPaths])
+    ).resolves.toMatchObject({
+      stdout: 'A  discard-staged.txt\n'
     })
   })
 

@@ -897,8 +897,32 @@ describe('GitHandler', () => {
       await expect(fs.access(path.join(tmpDir, 'new.txt'))).rejects.toThrow()
     })
 
+    it('preserves staged additions and deletes intent-to-add paths in bulk', async () => {
+      gitInit(tmpDir)
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'staged.txt'), 'staged\n')
+      execFileSync('git', ['add', 'staged.txt'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'staged.txt'), 'staged\nunstaged\n')
+      writeFileSync(path.join(tmpDir, 'intent.txt'), 'intent\n')
+      execFileSync('git', ['add', '-N', 'intent.txt'], { cwd: tmpDir, stdio: 'pipe' })
+
+      await dispatcher.callRequest('git.bulkDiscard', {
+        worktreePath: tmpDir,
+        filePaths: ['staged.txt', 'intent.txt']
+      })
+
+      await expect(fs.readFile(path.join(tmpDir, 'staged.txt'), 'utf8')).resolves.toBe('staged\n')
+      await expect(fs.access(path.join(tmpDir, 'intent.txt'))).rejects.toThrow()
+      expect(
+        execFileSync('git', ['status', '--porcelain=v1'], { cwd: tmpDir, encoding: 'utf8' })
+      ).toBe('A  staged.txt\n')
+    })
+
     it('handles large tracked path lists during bulk discard classification', async () => {
-      const trackedStdout = Array.from({ length: 150_000 }, (_, index) => `docs/file-${index}.ts`)
+      const trackedStdout = Array.from(
+        { length: 150_000 },
+        (_, index) => ` M docs/file-${index}.ts`
+      )
         .join('\0')
         .concat('\0')
       const gitMock = vi

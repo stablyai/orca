@@ -30,7 +30,7 @@ const wslOptions = { wslDistro: 'Ubuntu' }
 describe('WSL git pathspecs', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'tests/breakgit\0', stderr: '' })
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: ' M tests/breakgit\0', stderr: '' })
   })
 
   it('uses POSIX separators for tracked file mutations executed inside WSL', async () => {
@@ -55,12 +55,21 @@ describe('WSL git pathspecs', () => {
 
     try {
       gitExecFileAsyncMock
-        .mockRejectedValueOnce(new Error('not tracked'))
+        .mockResolvedValueOnce({ stdout: '?? tests/breakgit\0', stderr: '' })
         .mockResolvedValue({ stdout: '', stderr: '' })
       await discardChanges(repo, windowsRelativePath, wslOptions)
 
       expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
-        ['ls-files', '--error-unmatch', '--', ':(literal)tests/breakgit'],
+        [
+          'status',
+          '--porcelain=v1',
+          '-z',
+          '--untracked-files=all',
+          '--ignored',
+          '--no-renames',
+          '--',
+          ':(literal)tests/breakgit'
+        ],
         ['clean', '-ffdx', '--', ':(literal)tests/breakgit']
       ])
 
@@ -69,7 +78,16 @@ describe('WSL git pathspecs', () => {
       await bulkDiscardChanges(repo, [windowsRelativePath], wslOptions)
 
       expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
-        ['ls-files', '-z', '--', ':(literal)tests/breakgit'],
+        [
+          'status',
+          '--porcelain=v1',
+          '-z',
+          '--untracked-files=all',
+          '--ignored',
+          '--no-renames',
+          '--',
+          ':(literal)tests/breakgit'
+        ],
         ['clean', '-ffdx', '--', ':(literal)tests/breakgit']
       ])
     } finally {

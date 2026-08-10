@@ -45,6 +45,11 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../../shared/git-discard-path-safety'
+import {
+  classifyGitDiscardPaths,
+  gitDiscardStatusArgs,
+  type GitDiscardPathKind
+} from '../../shared/git-discard-status'
 import { readBranchCompareHead } from '../../shared/git-branch-compare-head'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
@@ -2128,39 +2133,24 @@ export async function discardChanges(
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
 
-    let tracked = false
-    try {
-      await gitExecFileAsync(
-        ['ls-files', '--error-unmatch', '--', literalPathspec(filePath, options)],
-        {
-          ...gitOptionsForWorktree(worktreePath, options)
-        }
-      )
-      tracked = true
-    } catch {
-      // File is not tracked by git
-    }
+    const kind = (await listDiscardPathKinds(worktreePath, [filePath], options)).get(filePath)
 
-    if (tracked) {
-      await gitExecFileAsync(
-        ['restore', '--worktree', '--', literalPathspec(filePath, options)],
-        {
-          ...gitOptionsForWorktree(worktreePath, options)
-        }
-      )
+    if (kind === 'tracked') {
+      await gitExecFileAsync(['restore', '--worktree', '--', literalPathspec(filePath, options)], {
+        ...gitOptionsForWorktree(worktreePath, options)
+      })
       return
     }
 
-    await removeSafeUntrackedDiscardTarget(worktreePath, filePath, (targetPath) =>
-      cleanUntrackedPaths(worktreePath, [targetPath], options)
-    )
+    await removeSafeUntrackedDiscardTarget(worktreePath, filePath, async (targetPath) => {
+      if (kind === 'intent-to-add') {
+        await resetIntentToAddPaths(worktreePath, [targetPath], options)
+      }
+      await cleanUntrackedPaths(worktreePath, [targetPath], options)
+    })
   } finally {
     invalidateGitReadCaches()
   }
-}
-
-function normalizeGitPathForCompare(filePath: string): string {
-  return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
 }
 
 function literalPathspec(filePath: string, options: GitRuntimeOptions): string {
@@ -2169,36 +2159,41 @@ function literalPathspec(filePath: string, options: GitRuntimeOptions): string {
   return `:(literal)${runtimePath}`
 }
 
-function isTrackedPathSpec(filePath: string, trackedPaths: readonly string[]): boolean {
-  const normalized = normalizeGitPathForCompare(filePath)
-  return trackedPaths.some((trackedPath) => {
-    const normalizedTracked = normalizeGitPathForCompare(trackedPath)
-    return normalizedTracked === normalized || normalizedTracked.startsWith(`${normalized}/`)
-  })
-}
-
-async function listTrackedPathSpecs(
+async function listDiscardPathKinds(
   worktreePath: string,
   filePaths: readonly string[],
   options: GitRuntimeOptions = {}
-): Promise<string[]> {
-  const trackedPaths: string[] = []
+): Promise<Map<string, GitDiscardPathKind>> {
+  const kinds = new Map<string, GitDiscardPathKind>()
   for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
     const { stdout } = await gitExecFileAsync(
-      ['ls-files', '-z', '--', ...chunk.map((filePath) => literalPathspec(filePath, options))],
+      gitDiscardStatusArgs(chunk, (filePath) => literalPathspec(filePath, options)),
       {
         ...gitOptionsForWorktree(worktreePath, options)
       }
     )
-    // Why: a tracked directory can hold enough paths to exceed the JS argument limit.
-    for (const trackedPath of stdout.split('\0')) {
-      if (trackedPath) {
-        trackedPaths.push(trackedPath)
-      }
+    for (const [filePath, kind] of classifyGitDiscardPaths(stdout, chunk, (selectedPath) =>
+      options.wslDistro || path.sep === '\\' ? selectedPath.replaceAll('\\', '/') : selectedPath
+    )) {
+      kinds.set(filePath, kind)
     }
   }
-  return trackedPaths
+  return kinds
+}
+
+async function resetIntentToAddPaths(
+  worktreePath: string,
+  filePaths: readonly string[],
+  options: GitRuntimeOptions = {}
+): Promise<void> {
+  for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+    const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+    await gitExecFileAsync(
+      ['reset', '--', ...chunk.map((filePath) => literalPathspec(filePath, options))],
+      gitOptionsForWorktree(worktreePath, options)
+    )
+  }
 }
 
 async function cleanUntrackedPaths(
@@ -2242,17 +2237,17 @@ export async function bulkDiscardChanges(
       }
     }
 
-    const trackedPathSpecs = await listTrackedPathSpecs(worktreePath, filePaths, options)
-    const trackedPaths = filePaths.filter((filePath) =>
-      isTrackedPathSpec(filePath, trackedPathSpecs)
-    )
-    const untrackedPaths = filePaths.filter(
-      (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
-    )
+    const kinds = await listDiscardPathKinds(worktreePath, filePaths, options)
+    const trackedPaths = filePaths.filter((filePath) => kinds.get(filePath) === 'tracked')
+    const intentToAddPaths = filePaths.filter((filePath) => kinds.get(filePath) === 'intent-to-add')
+    const untrackedPaths = filePaths.filter((filePath) => kinds.get(filePath) !== 'tracked')
     await removeSafeUntrackedDiscardTargets(
       worktreePath,
       untrackedPaths,
-      (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths, options),
+      async (targetPaths) => {
+        await resetIntentToAddPaths(worktreePath, intentToAddPaths, options)
+        await cleanUntrackedPaths(worktreePath, targetPaths, options)
+      },
       async () => {
         for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
           const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)

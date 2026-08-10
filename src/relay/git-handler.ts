@@ -67,6 +67,11 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../shared/git-discard-path-safety'
+import {
+  classifyGitDiscardPaths,
+  gitDiscardStatusArgs,
+  type GitDiscardPathKind
+} from '../shared/git-discard-status'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
 import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../shared/in-flight-promise-dedupe'
@@ -631,18 +636,6 @@ export class GitHandler {
     return { current, branches }
   }
 
-  private normalizeGitPathForCompare(filePath: string): string {
-    return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
-  }
-
-  private isTrackedPathSpec(filePath: string, trackedPaths: readonly string[]): boolean {
-    const normalized = this.normalizeGitPathForCompare(filePath)
-    return trackedPaths.some((trackedPath) => {
-      const normalizedTracked = this.normalizeGitPathForCompare(trackedPath)
-      return normalizedTracked === normalized || normalizedTracked.startsWith(`${normalized}/`)
-    })
-  }
-
   private assertInWorktree(worktreePath: string, filePath: string): string {
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
@@ -666,18 +659,9 @@ export class GitHandler {
     try {
       this.assertInWorktree(worktreePath, filePath)
 
-      let tracked = false
-      try {
-        await this.git(
-          ['ls-files', '--error-unmatch', '--', this.literalPathspec(filePath)],
-          worktreePath
-        )
-        tracked = true
-      } catch {
-        // untracked
-      }
+      const kind = (await this.listDiscardPathKinds(worktreePath, [filePath])).get(filePath)
 
-      if (tracked) {
+      if (kind === 'tracked') {
         await this.git(
           ['restore', '--worktree', '--', this.literalPathspec(filePath)],
           worktreePath
@@ -685,9 +669,12 @@ export class GitHandler {
         return
       }
 
-      await removeSafeUntrackedDiscardTarget(worktreePath, filePath, (targetPath) =>
-        this.cleanUntrackedPaths(worktreePath, [targetPath])
-      )
+      await removeSafeUntrackedDiscardTarget(worktreePath, filePath, async (targetPath) => {
+        if (kind === 'intent-to-add') {
+          await this.resetIntentToAddPaths(worktreePath, [targetPath])
+        }
+        await this.cleanUntrackedPaths(worktreePath, [targetPath])
+      })
     } finally {
       this.clearGitMutationReadCaches()
     }
@@ -705,41 +692,24 @@ export class GitHandler {
         this.assertInWorktree(worktreePath, filePath)
       }
 
-      const trackedPathSpecs: string[] = []
-      for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
-        const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-        const { stdout } = await this.git(
-          ['ls-files', '-z', '--', ...chunk.map((p) => this.literalPathspec(p))],
-          worktreePath
-        )
-        // Why: a selected tracked directory can make `ls-files -z` return enough descendants for push(...split) to exceed the argument limit.
-        for (const trackedPathSpec of stdout.split('\0')) {
-          if (trackedPathSpec) {
-            trackedPathSpecs.push(trackedPathSpec)
-          }
-        }
-      }
-
-      const trackedPaths = filePaths.filter((filePath) =>
-        this.isTrackedPathSpec(filePath, trackedPathSpecs)
+      const kinds = await this.listDiscardPathKinds(worktreePath, filePaths)
+      const trackedPaths = filePaths.filter((filePath) => kinds.get(filePath) === 'tracked')
+      const intentToAddPaths = filePaths.filter(
+        (filePath) => kinds.get(filePath) === 'intent-to-add'
       )
-      const untrackedPaths = filePaths.filter(
-        (filePath) => !this.isTrackedPathSpec(filePath, trackedPathSpecs)
-      )
+      const untrackedPaths = filePaths.filter((filePath) => kinds.get(filePath) !== 'tracked')
       await removeSafeUntrackedDiscardTargets(
         worktreePath,
         untrackedPaths,
-        (targetPaths) => this.cleanUntrackedPaths(worktreePath, targetPaths),
+        async (targetPaths) => {
+          await this.resetIntentToAddPaths(worktreePath, intentToAddPaths)
+          await this.cleanUntrackedPaths(worktreePath, targetPaths)
+        },
         async () => {
           for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
             const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
             await this.git(
-              [
-                'restore',
-                '--worktree',
-                '--',
-                ...chunk.map((p) => this.literalPathspec(p))
-              ],
+              ['restore', '--worktree', '--', ...chunk.map((p) => this.literalPathspec(p))],
               worktreePath
             )
           }
@@ -753,6 +723,38 @@ export class GitHandler {
   private literalPathspec(filePath: string): string {
     // Why: source-control selections are concrete paths, not user-authored Git globs.
     return `:(literal)${filePath}`
+  }
+
+  private async listDiscardPathKinds(
+    worktreePath: string,
+    filePaths: readonly string[]
+  ): Promise<Map<string, GitDiscardPathKind>> {
+    const kinds = new Map<string, GitDiscardPathKind>()
+    for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+      const { stdout } = await this.git(
+        gitDiscardStatusArgs(chunk, (filePath) => this.literalPathspec(filePath)),
+        worktreePath
+      )
+      for (const [filePath, kind] of classifyGitDiscardPaths(stdout, chunk, (selectedPath) =>
+        path.sep === '\\' ? selectedPath.replaceAll('\\', '/') : selectedPath
+      )) {
+        kinds.set(filePath, kind)
+      }
+    }
+    return kinds
+  }
+
+  private async resetIntentToAddPaths(worktreePath: string, filePaths: readonly string[]) {
+    for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+      if (chunk.length > 0) {
+        await this.git(
+          ['reset', '--', ...chunk.map((filePath) => this.literalPathspec(filePath))],
+          worktreePath
+        )
+      }
+    }
   }
 
   private async cleanUntrackedPaths(worktreePath: string, filePaths: readonly string[]) {
