@@ -118,7 +118,8 @@ import {
 } from './terminal-pane/terminal-park-pty-restore-eligibility'
 import {
   getTerminalParkWorktreeOwner,
-  useTerminalParkWorktreeOwner
+  useTerminalParkWorktreeOwner,
+  useTerminalParkWorktreeOwnerState
 } from './terminal-pane/terminal-park-worktree-owner'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
@@ -321,6 +322,7 @@ function Terminal(): React.JSX.Element | null {
     ],
     [allWorktrees, folderWorkspaces]
   )
+  const terminalParkWorktreeOwnerState = useTerminalParkWorktreeOwnerState()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const renderedActiveWorktreeId = activeWorktreeId
   const activeWorktreeDeferralHostId = useAppStore((s) =>
@@ -927,8 +929,6 @@ function Terminal(): React.JSX.Element | null {
       }
     }
 
-    // Why hoisted: the loop below resolves an owner per worktree off this snapshot.
-    const ownerState = useAppStore.getState()
     const retentionCandidates: TerminalWorktreeColdParkCandidate[] = []
     for (const workspace of workspaceSurfaces) {
       const worktreeId = workspace.id
@@ -974,7 +974,7 @@ function Terminal(): React.JSX.Element | null {
 
       retentionCandidates.push({
         worktreeId,
-        worktreeOwner: getTerminalParkWorktreeOwner(ownerState, worktreeId),
+        worktreeOwner: getTerminalParkWorktreeOwner(terminalParkWorktreeOwnerState, worktreeId),
         terminalTabs: tabsByWorktree[worktreeId] ?? [],
         isVisible,
         shouldMeasureHiddenWorktree,
@@ -1175,6 +1175,7 @@ function Terminal(): React.JSX.Element | null {
     terminalParkingRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
+    terminalParkWorktreeOwnerState,
     workspaceSurfaces
   ])
   // Why here: downloads outlive the pane-local state of hidden (unmounted)

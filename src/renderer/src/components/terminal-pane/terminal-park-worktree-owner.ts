@@ -6,6 +6,7 @@
  * pure predicate over ids, with no store dependency.
  */
 import { useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   getConnectionIdFromState,
   type ConnectionOwnerState
@@ -16,6 +17,8 @@ import {
 } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import type { TerminalParkWorktreeOwner } from './terminal-park-pty-restore-eligibility'
+
+export type TerminalParkWorktreeOwnerState = ConnectionOwnerState & WorktreeRuntimeOwnerState
 
 export function getTerminalParkWorktreeOwner(
   state: ConnectionOwnerState & WorktreeRuntimeOwnerState,
@@ -38,5 +41,25 @@ export function useTerminalParkWorktreeOwner(worktreeId: string | null): Termina
   return useMemo(
     () => ({ connectionId, runtimeEnvironmentId }),
     [connectionId, runtimeEnvironmentId]
+  )
+}
+
+/** Subscribes a many-worktree parking pass to every transport-owner authority slice. */
+export function useTerminalParkWorktreeOwnerState(): TerminalParkWorktreeOwnerState {
+  return useAppStore(
+    useShallow((state) => ({
+      activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
+      activeWorktreeId: state.activeWorktreeId,
+      detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+      folderWorkspaces: state.folderWorkspaces,
+      projectGroups: state.projectGroups,
+      removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
+      repos: state.repos,
+      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
+      runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
+      runtimeEnvironments: state.runtimeEnvironments,
+      settings: state.settings,
+      worktreesByRepo: state.worktreesByRepo
+    }))
   )
 }
