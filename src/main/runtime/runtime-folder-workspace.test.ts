@@ -106,6 +106,7 @@ describe('mergeRuntimeFolderWorkspace', () => {
       isMainWorktree: true,
       displayName: 'site',
       comment: '',
+      needsAttention: null,
       linkedIssue: null,
       linkedPR: null,
       linkedLinearIssue: null,
