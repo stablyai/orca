@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
@@ -46,7 +47,22 @@ async function closedPort(): Promise<number> {
   return address.port
 }
 
-async function createCrashedClaim(repository: string, pid = process.pid): Promise<string> {
+async function exitedPid(): Promise<number> {
+  const child = spawn(process.execPath, ['-e', 'process.exit(0)'])
+  if (!child.pid) {
+    throw new Error('Test child did not receive a pid')
+  }
+  await new Promise<void>((resolve, reject) => {
+    child.once('error', reject)
+    child.once('exit', () => resolve())
+  })
+  return child.pid
+}
+
+async function createCrashedClaim(
+  repository: string,
+  identity: { pid?: number; port?: number; processToken?: string } = {}
+): Promise<string> {
   const lockPath = gitWorktreeHostLockPathForTests(repository)
   const token = randomUUID()
   const claimPath = join(lockPath, `${token}.claim`)
@@ -55,9 +71,9 @@ async function createCrashedClaim(repository: string, pid = process.pid): Promis
   await writeFile(
     join(claimPath, 'owner.json'),
     JSON.stringify({
-      pid,
-      port: await closedPort(),
-      processToken: randomUUID(),
+      pid: identity.pid ?? process.pid,
+      port: identity.port ?? (await closedPort()),
+      processToken: identity.processToken ?? randomUUID(),
       token,
       choosing: false,
       ticket: 1
@@ -137,13 +153,98 @@ describe('Git worktree host lock', () => {
     expect(activity.maxActive).toBe(1)
   })
 
+  it('retries claim retirement after an injected EBUSY without stranding the queue', async () => {
+    const repository = repositoryIdentity()
+    cleanupPaths.push(gitWorktreeHostLockPathForTests(repository))
+    let retirementAttempts = 0
+    const release = await acquireGitWorktreeHostLock(repository, createGitWorktreeDeadline(1_000), {
+      beforeClaimRetired: async () => {
+        retirementAttempts += 1
+        if (retirementAttempts === 1) {
+          throw Object.assign(new Error('injected busy claim'), { code: 'EBUSY' })
+        }
+      }
+    })
+
+    await expect(release()).rejects.toMatchObject({ code: 'EBUSY' })
+    await expect(release()).resolves.toBeUndefined()
+    await expect(release()).resolves.toBeUndefined()
+    const nextRelease = await acquireGitWorktreeHostLock(
+      repository,
+      createGitWorktreeDeadline(1_000)
+    )
+    await nextRelease()
+    expect(retirementAttempts).toBe(2)
+  })
+
+  it('recovers a dead unknown owner within the caller deadline despite silent port reuse', async () => {
+    const repository = repositoryIdentity()
+    const silentServer = createServer(() => undefined)
+    await new Promise<void>((resolve, reject) => {
+      silentServer.once('error', reject)
+      silentServer.listen(0, '127.0.0.1', resolve)
+    })
+    const address = silentServer.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('Silent server did not receive a port')
+    }
+    const staleClaim = await createCrashedClaim(repository, {
+      pid: await exitedPid(),
+      port: address.port
+    })
+    const startedAt = Date.now()
+    try {
+      const release = await acquireGitWorktreeHostLock(repository, createGitWorktreeDeadline(50))
+      expect(Date.now() - startedAt).toBeLessThan(150)
+      expect(await pathExists(staleClaim)).toBe(false)
+      await release()
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        silentServer.close((error) => (error ? reject(error) : resolve()))
+      )
+    }
+  })
+
+  it('bounds an unknown live-pid probe without retiring its incarnation', async () => {
+    const repository = repositoryIdentity()
+    const silentServer = createServer(() => undefined)
+    await new Promise<void>((resolve, reject) => {
+      silentServer.once('error', reject)
+      silentServer.listen(0, '127.0.0.1', resolve)
+    })
+    const address = silentServer.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('Silent server did not receive a port')
+    }
+    const unknownClaim = await createCrashedClaim(repository, {
+      pid: process.pid,
+      port: address.port
+    })
+    const startedAt = Date.now()
+    try {
+      await expect(
+        acquireGitWorktreeHostLock(repository, createGitWorktreeDeadline(50))
+      ).rejects.toThrow('timed out during')
+      expect(Date.now() - startedAt).toBeLessThan(150)
+      expect(await pathExists(unknownClaim)).toBe(true)
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        silentServer.close((error) => (error ? reject(error) : resolve()))
+      )
+    }
+  })
+
   it('preserves a published live successor across 96 recovering contenders', async () => {
     const repository = repositoryIdentity()
     await createCrashedClaim(repository)
     const published = deferred()
     const finalize = deferred()
+    let successorClaim: string | undefined
+    let successorToken: string | undefined
     const hooks = {
-      afterClaimPublished: async () => {
+      afterClaimPublished: async (claim: { path: string; owner: { token: string } }) => {
+        successorClaim = claim.path
+        successorToken = claim.owner.token
         published.resolve()
         await finalize.promise
       }
@@ -151,13 +252,12 @@ describe('Git worktree host lock', () => {
     const activity = { active: 0, maxActive: 0 }
     const successor = runContenders(repository, 1, hooks, activity)
     await published.promise
-    const lockPath = gitWorktreeHostLockPathForTests(repository)
-    const successorClaim = (await readdir(lockPath)).find((entry) => entry.endsWith('.claim'))
     const contenders = runContenders(repository, 96, {}, activity)
     await new Promise((resolve) => setTimeout(resolve, 50))
 
     expect(successorClaim).toBeDefined()
-    expect(await pathExists(join(lockPath, successorClaim as string))).toBe(true)
+    expect(successorClaim).toContain(successorToken)
+    expect(await pathExists(successorClaim as string)).toBe(true)
     finalize.resolve()
     const [successorCounts, contenderCounts] = await Promise.all([successor, contenders])
     expect(successorCounts.acquired + contenderCounts.acquired).toBe(97)

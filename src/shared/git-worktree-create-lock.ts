@@ -1,6 +1,7 @@
 import { realpath } from 'node:fs/promises'
 import * as path from 'node:path'
 import { acquireGitWorktreeHostLock } from './git-worktree-host-lock'
+import type { GitWorktreeHostLockTestHooks } from './git-worktree-host-lock-types'
 import {
   remainingGitWorktreeCreateMs,
   runWithinGitWorktreeDeadline,
@@ -29,6 +30,23 @@ type GitWorktreeCreateLockExec = (
 type ResolveGitOutputPath = (cwd: string, outputPath: string) => string
 
 const createLocks = new Map<string, CreateLockState>()
+const cleanupErrors = new WeakMap<object, unknown>()
+
+function recordCleanupError(error: unknown, cleanupError: unknown): void {
+  if ((typeof error !== 'object' && typeof error !== 'function') || error === null) {
+    return
+  }
+  cleanupErrors.set(error, cleanupError)
+  if (Object.isExtensible(error) && !Object.hasOwn(error, 'cleanupError')) {
+    Object.defineProperty(error, 'cleanupError', { value: cleanupError, configurable: true })
+  }
+}
+
+export function getGitWorktreeCreateCleanupError(error: unknown): unknown {
+  return (typeof error === 'object' || typeof error === 'function') && error !== null
+    ? cleanupErrors.get(error)
+    : undefined
+}
 
 function getErrorCode(error: unknown): string | undefined {
   return typeof error === 'object' && error !== null && 'code' in error
@@ -155,24 +173,45 @@ async function acquireCreateLock(
 export async function withGitWorktreeCreateLock<T>(
   identity: GitWorktreeCreateLockIdentity,
   deadline: GitWorktreeCreateDeadline,
-  operation: (lockedIdentity: GitWorktreeCreateLockIdentity) => Promise<T>
+  operation: (lockedIdentity: GitWorktreeCreateLockIdentity) => Promise<T>,
+  hostLockHooks: GitWorktreeHostLockTestHooks = {}
 ): Promise<T> {
   const releaseProcessLock = await acquireCreateLock(identity.repository, deadline)
   let releaseHostLock: (() => Promise<void>) | undefined
+  let result!: T
+  let primaryError: unknown
+  let primaryFailed = false
+  let cleanupError: unknown
+  let cleanupFailed = false
   try {
-    releaseHostLock = await acquireGitWorktreeHostLock(identity.repository, deadline)
+    releaseHostLock = await acquireGitWorktreeHostLock(identity.repository, deadline, hostLockHooks)
     const lockedIdentity = {
       repository: identity.repository,
       target: await canonicalizePath(identity.target, deadline)
     }
-    return await operation(lockedIdentity)
-  } finally {
-    try {
-      await releaseHostLock?.()
-    } finally {
-      releaseProcessLock()
-    }
+    result = await operation(lockedIdentity)
+  } catch (error) {
+    primaryFailed = true
+    primaryError = error
   }
+  try {
+    await releaseHostLock?.()
+  } catch (error) {
+    cleanupFailed = true
+    cleanupError = error
+  } finally {
+    releaseProcessLock()
+  }
+  if (primaryFailed) {
+    if (cleanupFailed) {
+      recordCleanupError(primaryError, cleanupError)
+    }
+    throw primaryError
+  }
+  if (cleanupFailed) {
+    throw cleanupError
+  }
+  return result
 }
 
 export function resetGitWorktreeCreateLocksForTests(): void {

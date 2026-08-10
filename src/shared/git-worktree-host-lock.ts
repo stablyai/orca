@@ -12,6 +12,7 @@ import {
   runWithinGitWorktreeDeadline,
   type GitWorktreeCreateDeadline
 } from './git-worktree-create-timeout'
+import type { GitWorktreeHostLockTestHooks } from './git-worktree-host-lock-types'
 
 type HostLockOwner = GitWorktreeHostProcessIdentity & {
   token: string
@@ -19,11 +20,7 @@ type HostLockOwner = GitWorktreeHostProcessIdentity & {
   ticket?: number
 }
 
-export type GitWorktreeHostLockTestHooks = Readonly<{
-  afterPendingClaimCreated?: () => Promise<void>
-  afterClaimPublished?: () => Promise<void>
-  beforeStaleClaimRemoved?: (claimPath: string) => Promise<void>
-}>
+export type { GitWorktreeHostLockTestHooks } from './git-worktree-host-lock-types'
 
 const HOST_LOCK_INITIALIZATION_GRACE_MS = 5_000
 const HOST_LOCK_POLL_MS = 25
@@ -109,9 +106,18 @@ async function readClaimOwner(claimPath: string): Promise<HostLockOwner | null> 
   }
 }
 
-async function claimCanBeRemoved(claimPath: string, owner: HostLockOwner | null): Promise<boolean> {
+async function claimCanBeRemoved(
+  claimPath: string,
+  owner: HostLockOwner | null,
+  deadline: GitWorktreeCreateDeadline
+): Promise<boolean> {
   if (owner) {
-    return (await probeGitWorktreeHostProcess(owner)) === 'dead'
+    const probeTimeoutMs = remainingGitWorktreeCreateMs(deadline, 'host lock owner probe')
+    return (
+      (await runWithinGitWorktreeDeadline(deadline, 'host lock owner probe', () =>
+        probeGitWorktreeHostProcess(owner, probeTimeoutMs)
+      )) === 'dead'
+    )
   }
   try {
     return Date.now() - (await stat(claimPath)).mtimeMs >= HOST_LOCK_INITIALIZATION_GRACE_MS
@@ -120,22 +126,28 @@ async function claimCanBeRemoved(claimPath: string, owner: HostLockOwner | null)
   }
 }
 
-async function retireClaim(claimPath: string): Promise<void> {
-  localClaimOwners.delete(claimPath)
+async function retireClaim(
+  claimPath: string,
+  hooks: GitWorktreeHostLockTestHooks = {}
+): Promise<void> {
+  await hooks.beforeClaimRetired?.(claimPath)
   const retiredPath = `${claimPath}.retired-${randomUUID()}`
   try {
     await rename(claimPath, retiredPath)
   } catch (error) {
     if (getErrorCode(error) === 'ENOENT') {
+      localClaimOwners.delete(claimPath)
       return
     }
     throw error
   }
+  localClaimOwners.delete(claimPath)
   await rm(retiredPath, { recursive: true, force: true }).catch(() => undefined)
 }
 
 async function listLiveClaims(
   lockPath: string,
+  deadline: GitWorktreeCreateDeadline,
   hooks: GitWorktreeHostLockTestHooks = {}
 ): Promise<HostLockOwner[]> {
   const entries = await readdir(lockPath, { withFileTypes: true })
@@ -153,9 +165,9 @@ async function listLiveClaims(
       if (owner && entry.name !== `${owner.token}${CLAIM_SUFFIX}`) {
         throw new Error(`Git worktree host lock claim identity does not match: "${claimPath}"`)
       }
-      if (await claimCanBeRemoved(claimPath, owner)) {
+      if (await claimCanBeRemoved(claimPath, owner, deadline)) {
         await hooks.beforeStaleClaimRemoved?.(claimPath)
-        await retireClaim(claimPath)
+        await retireClaim(claimPath, hooks)
         return
       }
       if (!owner) {
@@ -183,7 +195,7 @@ async function publishClaim(
     })
     await rename(pendingPath, claimPath)
     localClaimOwners.set(claimPath, owner)
-    await hooks.afterClaimPublished?.()
+    await hooks.afterClaimPublished?.({ path: claimPath, owner })
     return claimPath
   } catch (error) {
     await rm(pendingPath, { recursive: true, force: true }).catch(() => undefined)
@@ -194,9 +206,10 @@ async function publishClaim(
 async function finalizeClaim(
   claimPath: string,
   owner: HostLockOwner,
+  deadline: GitWorktreeCreateDeadline,
   hooks: GitWorktreeHostLockTestHooks
 ): Promise<HostLockOwner> {
-  const claims = await listLiveClaims(path.dirname(claimPath), hooks)
+  const claims = await listLiveClaims(path.dirname(claimPath), deadline, hooks)
   const ticket = claims.reduce((max, claim) => Math.max(max, claim.ticket ?? 0), 0) + 1
   const finalized = { ...owner, choosing: false, ticket }
   const pendingOwnerPath = path.join(claimPath, `owner-${owner.token}.pending`)
@@ -249,7 +262,7 @@ async function waitForClaimTurn(
   hooks: GitWorktreeHostLockTestHooks
 ): Promise<void> {
   while (true) {
-    const claims = await listLiveClaims(lockPath, hooks)
+    const claims = await listLiveClaims(lockPath, deadline, hooks)
     if (claims.some((claim) => claim.token !== owner.token && claim.choosing)) {
       await waitForHostLockRetry(deadline)
       continue
@@ -264,9 +277,9 @@ async function waitForClaimTurn(
       if (!current) {
         break
       }
-      if (await claimCanBeRemoved(predecessorPath, current)) {
+      if (await claimCanBeRemoved(predecessorPath, current, deadline)) {
         await hooks.beforeStaleClaimRemoved?.(predecessorPath)
-        await retireClaim(predecessorPath)
+        await retireClaim(predecessorPath, hooks)
         break
       }
       await waitForHostLockRetry(deadline)
@@ -284,18 +297,23 @@ export async function acquireGitWorktreeHostLock(
   const identity = await getGitWorktreeHostProcessIdentity()
   const claimPath = await publishClaim(lockPath, { ...identity, token, choosing: true }, hooks)
   try {
-    const owner = await finalizeClaim(claimPath, { ...identity, token, choosing: true }, hooks)
+    const owner = await finalizeClaim(
+      claimPath,
+      { ...identity, token, choosing: true },
+      deadline,
+      hooks
+    )
     await waitForClaimTurn(lockPath, owner, deadline, hooks)
     let released = false
     return async () => {
       if (released) {
         return
       }
+      await retireClaim(claimPath, hooks)
       released = true
-      await retireClaim(claimPath)
     }
   } catch (error) {
-    await retireClaim(claimPath).catch(() => undefined)
+    await retireClaim(claimPath, hooks).catch(() => undefined)
     throw error
   }
 }

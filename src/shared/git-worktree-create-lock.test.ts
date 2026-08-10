@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  getGitWorktreeCreateCleanupError,
   resetGitWorktreeCreateLocksForTests,
   withGitWorktreeCreateLock
 } from './git-worktree-create-lock'
@@ -18,9 +19,10 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 function lock(
   target: string,
   operation: () => Promise<void>,
-  deadline = createGitWorktreeDeadline(1_000)
+  deadline = createGitWorktreeDeadline(1_000),
+  hooks = {}
 ): Promise<void> {
-  return withGitWorktreeCreateLock({ repository: '/repo/.git', target }, deadline, operation)
+  return withGitWorktreeCreateLock({ repository: '/repo/.git', target }, deadline, operation, hooks)
 }
 
 describe('git worktree create lock', () => {
@@ -113,5 +115,27 @@ describe('git worktree create lock', () => {
     await first
     await expect(lock('/three', async () => {})).resolves.toBeUndefined()
     vi.useRealTimers()
+  })
+
+  it('preserves the operation error and records a claim-retirement error', async () => {
+    const operationError = new Error('operation failed') as Error & { cleanupError?: unknown }
+    const cleanupError = Object.assign(new Error('claim retirement failed'), { code: 'EBUSY' })
+
+    const result = lock(
+      '/target',
+      async () => {
+        throw operationError
+      },
+      createGitWorktreeDeadline(1_000),
+      {
+        beforeClaimRetired: async () => {
+          throw cleanupError
+        }
+      }
+    )
+
+    await expect(result).rejects.toBe(operationError)
+    expect(operationError.cleanupError).toBe(cleanupError)
+    expect(getGitWorktreeCreateCleanupError(operationError)).toBe(cleanupError)
   })
 })

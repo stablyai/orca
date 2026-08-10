@@ -47,8 +47,18 @@ function isValidIdentity(identity: GitWorktreeHostProcessIdentity): boolean {
   )
 }
 
+function processIsDefinitelyDead(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return false
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ESRCH'
+  }
+}
+
 export async function probeGitWorktreeHostProcess(
-  identity: GitWorktreeHostProcessIdentity
+  identity: GitWorktreeHostProcessIdentity,
+  timeoutMs = PROCESS_PROBE_TIMEOUT_MS
 ): Promise<GitWorktreeHostProcessState> {
   if (!isValidIdentity(identity)) {
     return 'dead'
@@ -56,6 +66,9 @@ export async function probeGitWorktreeHostProcess(
   const ownIdentity = await getGitWorktreeHostProcessIdentity()
   if (identity.processToken === ownIdentity.processToken) {
     return identity.pid === ownIdentity.pid && identity.port === ownIdentity.port ? 'alive' : 'dead'
+  }
+  if (processIsDefinitelyDead(identity.pid)) {
+    return 'dead'
   }
   return new Promise((resolve) => {
     const socket = createConnection({ host: '127.0.0.1', port: identity.port })
@@ -70,7 +83,7 @@ export async function probeGitWorktreeHostProcess(
       socket.destroy()
       resolve(state)
     }
-    const timer = setTimeout(() => finish('unknown'), PROCESS_PROBE_TIMEOUT_MS)
+    const timer = setTimeout(() => finish('unknown'), Math.min(timeoutMs, PROCESS_PROBE_TIMEOUT_MS))
     socket.setEncoding('utf8')
     socket.on('data', (chunk: string) => {
       response += chunk
