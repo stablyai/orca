@@ -16,7 +16,10 @@ import type {
 import { buildDirectSshSnapshotApplyToken } from './direct-ssh-reconnect-coordinator'
 import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
 import { applyDirectSshRemoteWorkspaceSnapshot } from './remote-workspace-snapshot-apply'
-export { isDirectSshRemoteWorkspaceApplyInProgress } from './remote-workspace-snapshot-apply'
+export {
+  isDirectSshRemoteWorkspaceApplyInProgress,
+  subscribeDirectSshRemoteWorkspaceApplyIdle
+} from './remote-workspace-snapshot-apply'
 
 const WORKSPACE_HYDRATION_TIMEOUT_MS = 10_000
 
@@ -59,6 +62,14 @@ function exactTargetWorktreeIds(state: AppState, authority: DirectSshAuthority):
     projectGroups: state.projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
   }).gitWorktreeIds
+}
+
+function targetTabIds(state: AppState, worktreeIds: ReadonlySet<string>): Set<string> {
+  return new Set(
+    [...worktreeIds].flatMap((worktreeId) =>
+      (state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+    )
+  )
 }
 
 function applyPatchStatus(
@@ -147,6 +158,7 @@ export function createRemoteWorkspaceTargetSync(
     }
     const stateBeforeGet = deps.store.getState()
     const worktreeIds = exactTargetWorktreeIds(stateBeforeGet, authority)
+    const preexistingLocalTabIds = targetTabIds(stateBeforeGet, worktreeIds)
     const hasLocalTabs = [...worktreeIds].some(
       (worktreeId) => (stateBeforeGet.tabsByWorktree[worktreeId] ?? []).length > 0
     )
@@ -180,7 +192,8 @@ export function createRemoteWorkspaceTargetSync(
           isArrivalCurrent,
           isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
           waitForWorkspaceSessionReady,
-          finalizeHydratedTerminals: deps.finalizeHydratedTerminals
+          finalizeHydratedTerminals: deps.finalizeHydratedTerminals,
+          preexistingLocalTabIds
         })
       }
       return
@@ -218,6 +231,11 @@ export function createRemoteWorkspaceTargetSync(
     if (!authority) {
       return
     }
+    const stateAtArrival = deps.store.getState()
+    const preexistingLocalTabIds = targetTabIds(
+      stateAtArrival,
+      exactTargetWorktreeIds(stateAtArrival, authority)
+    )
     const input = await deps.capturePreparationInput(
       authority,
       'workspace-snapshot',
@@ -240,7 +258,8 @@ export function createRemoteWorkspaceTargetSync(
         isArrivalCurrent,
         isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
         waitForWorkspaceSessionReady,
-        finalizeHydratedTerminals: deps.finalizeHydratedTerminals
+        finalizeHydratedTerminals: deps.finalizeHydratedTerminals,
+        preexistingLocalTabIds
       })
     }
   }

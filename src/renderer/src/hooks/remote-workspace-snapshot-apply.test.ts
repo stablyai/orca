@@ -3,7 +3,7 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import {
   graftLocalTabsIntoRemoteSession,
-  staleDirectSshSnapshotTabIds
+  postBoundaryLocalTabIds
 } from './remote-workspace-snapshot-apply'
 
 const WT = 'repo-1::/home/user/worktree-a'
@@ -19,45 +19,50 @@ function tabsByWorktree(
   return entries
 }
 
-describe('staleDirectSshSnapshotTabIds', () => {
-  it('returns nothing when no local tabs are live', () => {
-    expect(staleDirectSshSnapshotTabIds(tabsByWorktree({}), new Set([WT]), new Set())).toEqual([])
+describe('postBoundaryLocalTabIds', () => {
+  it('returns nothing when there are no local tabs', () => {
+    expect(postBoundaryLocalTabIds(tabsByWorktree({}), new Set([WT]), {}, new Set())).toEqual([])
   })
 
-  it('returns nothing when every live tab is listed in the snapshot', () => {
-    const stale = staleDirectSshSnapshotTabIds(
+  it('returns nothing when every new local tab is listed in the snapshot', () => {
+    const local = { [WT]: [tab('tab-1', WT)] }
+    const postBoundary = postBoundaryLocalTabIds(
       tabsByWorktree({ [WT]: [tab('tab-1', WT), tab('tab-2', WT)] }),
       new Set([WT]),
-      new Set(['tab-1'])
+      local,
+      new Set()
     )
-    expect(stale).toEqual([])
+    expect(postBoundary).toEqual([])
   })
 
-  it('reports a live tab the snapshot omits from its worktree list', () => {
-    const stale = staleDirectSshSnapshotTabIds(
+  it('reports a new local tab the snapshot omits', () => {
+    const postBoundary = postBoundaryLocalTabIds(
       tabsByWorktree({ [WT]: [tab('tab-old', WT)] }),
       new Set([WT]),
-      new Set(['tab-fresh'])
+      { [WT]: [tab('tab-fresh', WT)] },
+      new Set()
     )
-    expect(stale).toEqual(['tab-fresh'])
+    expect(postBoundary).toEqual(['tab-fresh'])
   })
 
-  it('reports a live tab when the snapshot has no entry for its worktree at all', () => {
-    const stale = staleDirectSshSnapshotTabIds(
+  it('does not report a preexisting live tab omitted by a newer snapshot', () => {
+    const postBoundary = postBoundaryLocalTabIds(
       tabsByWorktree({}),
       new Set([WT]),
-      new Set(['tab-fresh'])
+      { [WT]: [tab('tab-existing', WT)] },
+      new Set(['tab-existing'])
     )
-    expect(stale).toEqual(['tab-fresh'])
+    expect(postBoundary).toEqual([])
   })
 
-  it('reports a live tab as stale even when a same-id tab sits under an out-of-scope worktree', () => {
-    const stale = staleDirectSshSnapshotTabIds(
+  it('ignores new local tabs outside the target scope', () => {
+    const postBoundary = postBoundaryLocalTabIds(
       tabsByWorktree({ [OTHER_WT]: [tab('tab-fresh', OTHER_WT)] }),
       new Set([WT]),
-      new Set(['tab-fresh'])
+      { [OTHER_WT]: [tab('tab-fresh', OTHER_WT)] },
+      new Set()
     )
-    expect(stale).toEqual(['tab-fresh'])
+    expect(postBoundary).toEqual([])
   })
 })
 

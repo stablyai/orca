@@ -91,7 +91,8 @@ async function applySnapshot(store: TestStore, snap: RemoteWorkspaceSnapshot): P
     isArrivalCurrent: () => true,
     isPreparationTokenCurrent: () => true,
     waitForWorkspaceSessionReady: async () => true,
-    finalizeHydratedTerminals: () => 0
+    finalizeHydratedTerminals: () => 0,
+    preexistingLocalTabIds: new Set()
   })
 }
 

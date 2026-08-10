@@ -4,7 +4,6 @@ import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-s
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
-import { tabHasLivePty } from '../lib/tab-has-live-pty'
 import { buildWorkspaceSessionPayload } from '../lib/workspace-session'
 import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
 import type { AppState } from '../store/types'
@@ -23,9 +22,33 @@ const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1_000
 const SNAPSHOT_TERMINAL_RECONNECT_TIMEOUT_MS = 30_000
 let snapshotApplyDepth = 0
 let snapshotWriteSuppressUntil = 0
+let snapshotIdleTimer: ReturnType<typeof setTimeout> | null = null
+const snapshotIdleListeners = new Set<() => void>()
 
 export function isDirectSshRemoteWorkspaceApplyInProgress(): boolean {
   return snapshotApplyDepth > 0 || Date.now() < snapshotWriteSuppressUntil
+}
+
+export function subscribeDirectSshRemoteWorkspaceApplyIdle(listener: () => void): () => void {
+  snapshotIdleListeners.add(listener)
+  return () => snapshotIdleListeners.delete(listener)
+}
+
+function scheduleSnapshotIdleNotification(): void {
+  if (snapshotIdleTimer !== null) {
+    clearTimeout(snapshotIdleTimer)
+  }
+  snapshotIdleTimer = setTimeout(
+    () => {
+      snapshotIdleTimer = null
+      if (!isDirectSshRemoteWorkspaceApplyInProgress()) {
+        for (const listener of snapshotIdleListeners) {
+          listener()
+        }
+      }
+    },
+    Math.max(0, snapshotWriteSuppressUntil - Date.now())
+  )
 }
 
 type RemoteWorkspaceSnapshotApplyInput = {
@@ -37,6 +60,7 @@ type RemoteWorkspaceSnapshotApplyInput = {
   isPreparationTokenCurrent: (token: DirectSshPreparationToken) => boolean
   waitForWorkspaceSessionReady: () => Promise<boolean>
   finalizeHydratedTerminals: (authority: DirectSshAuthority) => number
+  preexistingLocalTabIds: ReadonlySet<string>
 }
 
 function exactTargetWorktreeIds(state: AppState, authority: DirectSshAuthority): Set<string> {
@@ -75,35 +99,23 @@ function currentRecoveryTabIds(
   )
 }
 
-/** Tab ids that are live under the current authority but absent from the
- *  snapshot's tab lists for the in-scope worktrees. A pty running on the target
- *  host is ground truth the metadata store cannot contradict: a snapshot that
- *  does not list such a tab predates the local session write that created it
- *  (the write is still debounced, suppressed, or in flight), so applying it
- *  unmodified would delete the tab while its terminal keeps running
- *  unreachable on the host. */
-export function staleDirectSshSnapshotTabIds(
+export function postBoundaryLocalTabIds(
   remoteTabsByWorktree: WorkspaceSessionState['tabsByWorktree'],
   worktreeIds: ReadonlySet<string>,
-  liveLocalTabIds: ReadonlySet<string>
+  localTabsByWorktree: AppState['tabsByWorktree'],
+  preexistingLocalTabIds: ReadonlySet<string>
 ): string[] {
-  if (liveLocalTabIds.size === 0) {
-    return []
-  }
   const remoteTabIds = new Set(
     [...worktreeIds].flatMap((worktreeId) =>
       (remoteTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
     )
   )
-  return [...liveLocalTabIds].filter((tabId) => !remoteTabIds.has(tabId))
+  return [...worktreeIds]
+    .flatMap((worktreeId) => localTabsByWorktree[worktreeId] ?? [])
+    .map((tab) => tab.id)
+    .filter((tabId) => !preexistingLocalTabIds.has(tabId) && !remoteTabIds.has(tabId))
 }
 
-/** Append the named local tabs to the snapshot session's per-worktree tab
- *  lists. Only the tab lists are grafted: the merge preserves layouts and
- *  session ids from the current session for every tab in its preserve set, so
- *  grafted tabs keep their local state through the normal merge path — and
- *  remote-only tabs from other clients still apply, which a whole-apply skip
- *  would silently drop from the store on the next full-session push. */
 export function graftLocalTabsIntoRemoteSession(
   remoteSession: WorkspaceSessionState,
   worktreeIds: ReadonlySet<string>,
@@ -132,7 +144,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   isArrivalCurrent,
   isPreparationTokenCurrent,
   waitForWorkspaceSessionReady,
-  finalizeHydratedTerminals
+  finalizeHydratedTerminals,
+  preexistingLocalTabIds
 }: RemoteWorkspaceSnapshotApplyInput): Promise<void> {
   const { authority } = token
   if (!isArrivalCurrent(authority.targetId, arrival)) {
@@ -162,42 +175,31 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   const remoteSession = importRemoteWorkspaceSession(snapshot.session, {
     resolveWorktreeId: uniqueWorktreeIdByPath(worktreeIds)
   })
-  // Why: recovery-ledger entries cover tabs mid-reattach; ptyIdsByTabId covers
-  // tabs whose pty already attached — a freshly created tab is only in the
-  // latter, and it is the tab a stale snapshot is most likely to be missing.
   const recoveryTabIds = currentRecoveryTabIds(state, authority, worktreeIds)
-  const attachedTabIds = new Set(
-    [...worktreeIds].flatMap((worktreeId) =>
-      (state.tabsByWorktree[worktreeId] ?? [])
-        .filter((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
-        .map((tab) => tab.id)
-    )
-  )
-  const staleTabIds = staleDirectSshSnapshotTabIds(
+  const postBoundaryTabIds = postBoundaryLocalTabIds(
     remoteSession.tabsByWorktree,
     worktreeIds,
-    new Set([...recoveryTabIds, ...attachedTabIds])
+    state.tabsByWorktree,
+    preexistingLocalTabIds
   )
-  if (staleTabIds.length > 0) {
-    console.warn(
-      '[remote-workspace] snapshot predates live local terminals; keeping them through the merge',
-      staleTabIds
-    )
-  }
   const merged = mergeDirectSshRemoteWorkspaceSession(
     buildWorkspaceSessionPayload(state),
     graftLocalTabsIntoRemoteSession(
       remoteSession,
       worktreeIds,
       state.tabsByWorktree,
-      new Set(staleTabIds)
+      new Set(postBoundaryTabIds)
     ),
     worktreeIds,
     state.tabsByWorktree,
-    new Set([...recoveryTabIds, ...staleTabIds])
+    new Set([...recoveryTabIds, ...postBoundaryTabIds])
   )
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return
+  }
+  if (snapshotIdleTimer !== null) {
+    clearTimeout(snapshotIdleTimer)
+    snapshotIdleTimer = null
   }
   snapshotApplyDepth += 1
   try {
@@ -245,5 +247,6 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   } finally {
     snapshotWriteSuppressUntil = Date.now() + REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS
     snapshotApplyDepth -= 1
+    scheduleSnapshotIdleNotification()
   }
 }

@@ -585,10 +585,16 @@ describe('createSessionWriteSubscriber', () => {
   it('holds a suppressed write and lands it after shouldSchedulePersist reopens', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = true
+    let notifyReady = (): void => {}
+    const unsubscribeReady = vi.fn()
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,
-      shouldSchedulePersist: () => shouldSchedule
+      shouldSchedulePersist: () => shouldSchedule,
+      subscribeSchedulePersistReady: (listener) => {
+        notifyReady = listener
+        return unsubscribeReady
+      }
     })
 
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
@@ -600,6 +606,7 @@ describe('createSessionWriteSubscriber', () => {
     expect(persist).not.toHaveBeenCalled()
 
     shouldSchedule = true
+    notifyReady()
     vi.advanceTimersByTime(200)
     expect(persist).toHaveBeenCalledTimes(1)
     expect(persist.mock.calls[0]?.[0]?.patch).toHaveProperty(
@@ -607,15 +614,21 @@ describe('createSessionWriteSubscriber', () => {
       'tab-created-during-apply'
     )
     cleanup()
+    expect(unsubscribeReady).toHaveBeenCalledOnce()
   })
 
   it('holds a write suppressed mid-debounce until the suppression lifts', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = true
+    let notifyReady = (): void => {}
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,
-      shouldSchedulePersist: () => shouldSchedule
+      shouldSchedulePersist: () => shouldSchedule,
+      subscribeSchedulePersistReady: (listener) => {
+        notifyReady = listener
+        return () => {}
+      }
     })
 
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
@@ -628,6 +641,7 @@ describe('createSessionWriteSubscriber', () => {
     expect(persist).not.toHaveBeenCalled()
 
     shouldSchedule = true
+    notifyReady()
     vi.advanceTimersByTime(200)
     expect(persist).toHaveBeenCalledTimes(1)
     expect(persist.mock.calls[0]?.[0]?.patch).toHaveProperty(
@@ -684,6 +698,30 @@ describe('createSessionWriteSubscriber', () => {
 
     expect(persist).toHaveBeenCalledTimes(1)
     expect(persist.mock.calls[0][0].patch.activeTabId).toBe('tab-59900')
+    cleanup()
+  })
+
+  it('waits on one deadline instead of polling a suppressed write', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    let shouldSchedule = true
+    const shouldSchedulePersist = vi.fn(() => shouldSchedule)
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist
+    })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+    shouldSchedulePersist.mockClear()
+    shouldSchedule = false
+    useAppStore.setState({ activeTabId: 'held-without-polling' })
+    vi.advanceTimersByTime(59_000)
+
+    expect(shouldSchedulePersist).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(1)
+    expect(persist).not.toHaveBeenCalled()
     cleanup()
   })
 

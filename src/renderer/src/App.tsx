@@ -44,7 +44,11 @@ import {
 import { useAppStore } from './store'
 import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
 import { useShallow } from 'zustand/react/shallow'
-import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
+import {
+  isRemoteWorkspaceSnapshotApplyInProgress,
+  subscribeRemoteWorkspaceSnapshotApplyIdle,
+  useIpcEvents
+} from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import { AgentHibernationGate } from './components/AgentHibernationGate'
@@ -1290,6 +1294,7 @@ function App(): React.JSX.Element {
     return createSessionWriteSubscriber({
       store: useAppStore,
       shouldSchedulePersist: () => !isRemoteWorkspaceSnapshotApplyInProgress(),
+      subscribeSchedulePersistReady: subscribeRemoteWorkspaceSnapshotApplyIdle,
       persist: ({ patch }) => {
         const state = useAppStore.getState()
         // Why: route each host's worktree-scoped slice to its own partition; return the local write so the remote-workspace upload chain below keeps its ordering.

@@ -278,12 +278,23 @@ describe('createRemoteWorkspaceTargetSync', () => {
           id: 'fresh-tab',
           worktreeId: 'repo-a::/remote/work',
           ptyId: 'ssh:target-a@@pty-fresh',
-          generation: 1
+          generation: 1,
+          title: 'Fresh terminal',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
         }
       ]
     }
     state.ptyIdsByTabId = { 'fresh-tab': ['ssh:target-a@@pty-fresh'] }
-    state.terminalLayoutsByTabId = { 'fresh-tab': { activeLeafId: 'leaf-fresh' } }
+    state.terminalLayoutsByTabId = {
+      'fresh-tab': {
+        root: { type: 'leaf', leafId: 'leaf-fresh' },
+        activeLeafId: 'leaf-fresh',
+        expandedLeafId: null
+      }
+    }
     pendingGet.resolve(
       snapshot(4, {
         '/remote/work': [
@@ -302,7 +313,11 @@ describe('createRemoteWorkspaceTargetSync', () => {
     expect(
       merged.tabsByWorktree['repo-a::/remote/work'].map((tab: { id: string }) => tab.id)
     ).toEqual(['remote-tab', 'fresh-tab'])
-    expect(merged.terminalLayoutsByTabId['fresh-tab']).toEqual({ activeLeafId: 'leaf-fresh' })
+    expect(merged.terminalLayoutsByTabId['fresh-tab']).toEqual({
+      root: { type: 'leaf', leafId: 'leaf-fresh' },
+      activeLeafId: 'leaf-fresh',
+      expandedLeafId: null
+    })
   })
 
   it('accepts a newer snapshot that deletes a pre-request live tab', async () => {
@@ -437,49 +452,6 @@ describe('createRemoteWorkspaceTargetSync', () => {
     expect(
       hydrateTabsSession.mock.calls[0][0].tabsByWorktree['repo-a::/remote/work'][0]
     ).toMatchObject({ generation: 7, ptyId: 'local-pty' })
-  })
-
-  it('keeps a live local tab the snapshot omits and still applies remote-only tabs', async () => {
-    const hydrateTabsSession = vi.fn()
-    const state = appState({
-      tabsByWorktree: {
-        'repo-a::/remote/work': [
-          {
-            id: 'fresh-tab',
-            worktreeId: 'repo-a::/remote/work',
-            ptyId: 'ssh:target-a@@pty-9',
-            generation: 1
-          }
-        ]
-      },
-      // Why: an attached pty marks the tab live — the snapshot predates the
-      // session write that would have told the remote store about it.
-      ptyIdsByTabId: { 'fresh-tab': ['ssh:target-a@@pty-9'] },
-      terminalLayoutsByTabId: {
-        'fresh-tab': { activeLeafId: 'leaf-1' }
-      },
-      hydrateTabsSession
-    })
-    const harness = createHarness(state, async () => null)
-    const incoming = snapshot(4, {
-      '/remote/work': [
-        {
-          id: 'other-device-tab',
-          worktreePath: '/remote/work',
-          ptyId: 'ssh:target-a@@pty-2',
-          generation: 1
-        } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
-      ]
-    })
-
-    await harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
-
-    const merged = hydrateTabsSession.mock.calls[0][0]
-    expect(merged.tabsByWorktree['repo-a::/remote/work'].map((t: { id: string }) => t.id)).toEqual([
-      'other-device-tab',
-      'fresh-tab'
-    ])
-    expect(merged.terminalLayoutsByTabId['fresh-tab']).toEqual({ activeLeafId: 'leaf-1' })
   })
 
   it('admits a genuinely newer remote generation without local recovery state', async () => {

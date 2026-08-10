@@ -147,15 +147,11 @@ export type SessionWriteSubscriberDeps = {
   }
   persist: (payload: WorkspaceSessionWrite) => void
   shouldSchedulePersist?: () => boolean
+  subscribeSchedulePersistReady?: (listener: () => void) => () => void
   debounceMs?: number
 }
 
-// Why: a ceiling on how long a suppressed write may be held. Back-to-back
-// snapshot applies (each holding suppression for up to 30s of terminal
-// reconnects plus a 1s trailing window) could otherwise starve local
-// persistence indefinitely — including from a misbehaving remote host that
-// streams new snapshot revisions. Past the ceiling the write proceeds; the
-// payload is rebuilt from the current store, which is always self-consistent.
+// Why: a broken or continuously renewed suppression must not starve durable state indefinitely.
 const SUPPRESSED_WRITE_MAX_HOLD_MS = 60_000
 
 /**
@@ -168,9 +164,11 @@ export function createSessionWriteSubscriber({
   store,
   persist,
   shouldSchedulePersist,
+  subscribeSchedulePersistReady,
   debounceMs = 150
 }: SessionWriteSubscriberDeps): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
+  let timerDueAt: number | null = null
   let suppressedSince: number | null = null
   // Why: the subscriber fires on every store update (agent status, usage
   // refreshes, runtime title ticks, …). Without this gate each fire reset
@@ -181,6 +179,64 @@ export function createSessionWriteSubscriber({
   // sentinel guarantees the very first fire always proceeds.
   let prev: Record<string, unknown> | null = null
   const pendingChangedFields = new Set<SessionRelevantField>()
+
+  const clearTimer = (): void => {
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+      timerDueAt = null
+    }
+  }
+
+  const scheduleAt = (flush: () => void, dueAt: number): void => {
+    if (timer !== null && timerDueAt !== null && timerDueAt <= dueAt) {
+      return
+    }
+    clearTimer()
+    timerDueAt = dueAt
+    timer = setTimeout(flush, Math.max(0, dueAt - Date.now()))
+  }
+
+  const flush = (): void => {
+    timer = null
+    timerDueAt = null
+    const fresh = store.getState()
+    if (!shouldPersistWorkspaceSession(fresh)) {
+      suppressedSince = null
+      pendingChangedFields.clear()
+      return
+    }
+    if (shouldSchedulePersist && !shouldSchedulePersist()) {
+      const now = Date.now()
+      suppressedSince ??= now
+      const deadline = suppressedSince + SUPPRESSED_WRITE_MAX_HOLD_MS
+      if (now < deadline) {
+        scheduleAt(flush, deadline)
+        return
+      }
+    }
+    suppressedSince = null
+    const changed = new Set(pendingChangedFields)
+    pendingChangedFields.clear()
+    const patch = buildWorkspaceSessionPatch(fresh, changed)
+    if (Object.keys(patch).length > 0) {
+      persist({ patch })
+    }
+  }
+
+  const scheduleSuppressedFlush = (): void => {
+    suppressedSince ??= Date.now()
+    scheduleAt(flush, suppressedSince + SUPPRESSED_WRITE_MAX_HOLD_MS)
+  }
+
+  const unsubscribeReady = subscribeSchedulePersistReady?.(() => {
+    if (pendingChangedFields.size === 0 || (shouldSchedulePersist && !shouldSchedulePersist())) {
+      return
+    }
+    suppressedSince = null
+    clearTimer()
+    scheduleAt(flush, Date.now() + debounceMs)
+  })
 
   const unsub = store.subscribe((state) => {
     if (!shouldPersistWorkspaceSession(state)) {
@@ -207,57 +263,19 @@ export function createSessionWriteSubscriber({
     for (const field of changedFields) {
       pendingChangedFields.add(field)
     }
-    if (timer !== null) {
-      clearTimeout(timer)
+    if (shouldSchedulePersist && !shouldSchedulePersist()) {
+      scheduleSuppressedFlush()
+      return
     }
-    const flush = (): void => {
-      timer = null
-      // Why: rebuild from the freshest store state rather than the snapshot
-      // captured when this timer was scheduled. Today this is equivalent
-      // because buildWorkspaceSessionPayload reads only SESSION_RELEVANT_FIELDS
-      // (the same fields gating the timer reset), so the captured `state` is
-      // already current for those fields. Calling getState() guards against a
-      // future refactor that adds a non-relevant field read to the payload
-      // builder — without this, such a change would silently start emitting
-      // stale values for that field.
-      const fresh = store.getState()
-      if (!shouldPersistWorkspaceSession(fresh)) {
-        suppressedSince = null
-        pendingChangedFields.clear()
-        return
-      }
-      if (shouldSchedulePersist && !shouldSchedulePersist()) {
-        // Why: a remote snapshot apply suppresses session writes for its whole
-        // window (up to 30s of terminal reconnects). Dropping the pending
-        // fields here would erase any tab created during that window from both
-        // the local session and the remote push — the remote store then never
-        // learns the tab existed, and the next snapshot apply deletes it. Hold
-        // the fields and retry until the write can land, up to the hold
-        // ceiling.
-        const now = Date.now()
-        suppressedSince ??= now
-        if (now - suppressedSince < SUPPRESSED_WRITE_MAX_HOLD_MS) {
-          timer = setTimeout(flush, debounceMs)
-          return
-        }
-      }
-      suppressedSince = null
-      const changed = new Set(pendingChangedFields)
-      pendingChangedFields.clear()
-      const patch = buildWorkspaceSessionPatch(fresh, changed)
-      if (Object.keys(patch).length === 0) {
-        return
-      }
-      persist({ patch })
-    }
-    timer = setTimeout(flush, debounceMs)
+    suppressedSince = null
+    clearTimer()
+    scheduleAt(flush, Date.now() + debounceMs)
   })
 
   return () => {
     unsub()
-    if (timer !== null) {
-      clearTimeout(timer)
-    }
+    unsubscribeReady?.()
+    clearTimer()
     pendingChangedFields.clear()
   }
 }

@@ -181,6 +181,7 @@ import { createDirectSshReconnectProductTelemetryAdapter } from '@/lib/direct-ss
 import {
   createRemoteWorkspaceTargetSync,
   isDirectSshRemoteWorkspaceApplyInProgress,
+  subscribeDirectSshRemoteWorkspaceApplyIdle,
   type RemoteWorkspaceTargetSync
 } from './remote-workspace-target-sync'
 import {
@@ -467,6 +468,10 @@ function activateExistingLeafInLayout(
 
 export function isRemoteWorkspaceSnapshotApplyInProgress(): boolean {
   return isDirectSshRemoteWorkspaceApplyInProgress()
+}
+
+export function subscribeRemoteWorkspaceSnapshotApplyIdle(listener: () => void): () => void {
+  return subscribeDirectSshRemoteWorkspaceApplyIdle(listener)
 }
 
 type BrowserSessionTabTarget =
