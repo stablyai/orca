@@ -7,6 +7,7 @@ import type {
 } from '../../shared/remote-workspace-types'
 import {
   MAX_REMOTE_WORKSPACE_TAB_INTENTS_PER_TARGET,
+  MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS,
   RemoteWorkspaceTabIntentStore
 } from './remote-workspace-tab-intent-store'
 
@@ -31,13 +32,15 @@ function tab(id: string, createdAt: number, ptyId = `pty-${id}`): RemoteWorkspac
 }
 
 function observation(args: {
-  renderer: string
+  generation: number
+  hydrated?: boolean
   instance: string | null
   tabs: RemoteWorkspaceObservedTab[]
   targetId?: string
 }): RemoteWorkspaceTabObservation {
   return {
-    rendererInstanceId: args.renderer,
+    hydrated: args.hydrated ?? true,
+    rendererGeneration: args.generation,
     targetId: args.targetId ?? TARGET,
     worktrees: [
       {
@@ -48,6 +51,10 @@ function observation(args: {
       }
     ]
   }
+}
+
+function authority(generation: number, senderId = 1, processId = 10) {
+  return { processId, rendererGeneration: generation, senderId }
 }
 
 function session(tabs: RemoteWorkspaceObservedTab[]): RemoteWorkspaceSession {
@@ -74,9 +81,13 @@ describe('RemoteWorkspaceTabIntentStore', () => {
     const store = new RemoteWorkspaceTabIntentStore()
     const existing = tab('existing', 1)
     const created = tab('created', 2)
-    store.observe(observation({ renderer: 'renderer-1', instance: 'worktree-1', tabs: [existing] }))
     store.observe(
-      observation({ renderer: 'renderer-1', instance: 'worktree-1', tabs: [existing, created] })
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [existing] })
+    )
+    store.observe(
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [existing, created] })
     )
 
     expect(
@@ -84,7 +95,8 @@ describe('RemoteWorkspaceTabIntentStore', () => {
     ).toEqual([existing.tab, created.tab])
 
     store.observe(
-      observation({ renderer: 'renderer-2', instance: 'worktree-1', tabs: [existing, created] })
+      authority(2, 1, 11),
+      observation({ generation: 2, instance: 'worktree-1', tabs: [existing, created] })
     )
     expect(store.stateForTests(TARGET)?.intents).toBe(1)
     expect(
@@ -103,8 +115,11 @@ describe('RemoteWorkspaceTabIntentStore', () => {
   it('preserves a pre-delivery deletion without treating a matching notification as acknowledgement', () => {
     const store = new RemoteWorkspaceTabIntentStore()
     const deleted = tab('deleted', 1)
-    store.observe(observation({ renderer: 'renderer-1', instance: 'worktree-1', tabs: [deleted] }))
-    store.observe(observation({ renderer: 'renderer-1', instance: 'worktree-1', tabs: [] }))
+    store.observe(
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [deleted] })
+    )
+    store.observe(authority(1), observation({ generation: 1, instance: 'worktree-1', tabs: [] }))
 
     expect(
       store.reconcile(TARGET, snapshot(2, [deleted]))?.session.tabsByWorktreePath[WORKTREE_PATH]
@@ -116,9 +131,15 @@ describe('RemoteWorkspaceTabIntentStore', () => {
   it('does not let worktree and tab id reuse acknowledge an older workspace incarnation', () => {
     const store = new RemoteWorkspaceTabIntentStore()
     const reused = tab('same-tab', 1, 'pty-same')
-    store.observe(observation({ renderer: 'renderer-1', instance: 'worktree-old', tabs: [reused] }))
-    store.observe(observation({ renderer: 'renderer-1', instance: 'worktree-old', tabs: [] }))
-    store.observe(observation({ renderer: 'renderer-2', instance: 'worktree-new', tabs: [reused] }))
+    store.observe(
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-old', tabs: [reused] })
+    )
+    store.observe(authority(1), observation({ generation: 1, instance: 'worktree-old', tabs: [] }))
+    store.observe(
+      authority(2, 1, 11),
+      observation({ generation: 2, instance: 'worktree-new', tabs: [reused] })
+    )
 
     const coincidental = snapshot(2, [])
     const capture = store.capturePatch(TARGET, coincidental.session)
@@ -134,9 +155,13 @@ describe('RemoteWorkspaceTabIntentStore', () => {
     const store = new RemoteWorkspaceTabIntentStore()
     const first = tab('same-tab', 1, 'pty-old')
     const replacement = tab('same-tab', 1, 'pty-new')
-    store.observe(observation({ renderer: 'renderer-1', instance: 'worktree-1', tabs: [first] }))
     store.observe(
-      observation({ renderer: 'renderer-1', instance: 'worktree-1', tabs: [replacement] })
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [first] })
+    )
+    store.observe(
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [replacement] })
     )
 
     const oldPatch = snapshot(2, [first])
@@ -155,8 +180,8 @@ describe('RemoteWorkspaceTabIntentStore', () => {
       { length: MAX_REMOTE_WORKSPACE_TAB_INTENTS_PER_TARGET + 1 },
       (_, index) => tab(`tab-${index}`, index)
     )
-    store.observe(observation({ renderer: 'renderer-1', instance: 'worktree-1', tabs }))
-    store.observe(observation({ renderer: 'renderer-1', instance: 'worktree-1', tabs: [] }))
+    store.observe(authority(1), observation({ generation: 1, instance: 'worktree-1', tabs }))
+    store.observe(authority(1), observation({ generation: 1, instance: 'worktree-1', tabs: [] }))
 
     expect(store.reconcile(TARGET, snapshot(2, tabs))).toBeNull()
     const empty = snapshot(3, [])
@@ -169,13 +194,18 @@ describe('RemoteWorkspaceTabIntentStore', () => {
     const store = new RemoteWorkspaceTabIntentStore()
     const existing = tab('existing', 1)
     const created = tab('created', 2)
-    store.observe(observation({ renderer: 'renderer-1', instance: 'worktree-1', tabs: [existing] }))
     store.observe(
-      observation({ renderer: 'renderer-1', instance: 'worktree-1', tabs: [existing, created] })
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [existing] })
     )
     store.observe(
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [existing, created] })
+    )
+    store.observe(
+      authority(1),
       observation({
-        renderer: 'renderer-1',
+        generation: 1,
         instance: 'worktree-b',
         tabs: [],
         targetId: 'target-b'
@@ -183,7 +213,112 @@ describe('RemoteWorkspaceTabIntentStore', () => {
     )
 
     expect(store.reconcile('target-b', snapshot(2, [existing]))).toEqual(snapshot(2, [existing]))
-    store.forgetTarget(TARGET)
+    store.forgetTarget(TARGET, authority(1))
     expect(store.stateForTests(TARGET)).toBeNull()
+  })
+
+  it('ignores pre-hydration emptiness before accepting the post-snapshot baseline', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    const staleLocal = tab('deleted-remotely', 1)
+    store.observe(
+      authority(1),
+      observation({ generation: 1, hydrated: false, instance: 'worktree-1', tabs: [] })
+    )
+    expect(store.stateForTests(TARGET)).toBeNull()
+
+    store.observe(authority(1), observation({ generation: 1, instance: 'worktree-1', tabs: [] }))
+    expect(store.reconcile(TARGET, snapshot(2, [staleLocal]))).toEqual(snapshot(2, [staleLocal]))
+    expect(store.stateForTests(TARGET)).toEqual({ intents: 0, overflowed: false })
+  })
+
+  it('rejects an older renderer generation after a process-owned takeover', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    const existing = tab('existing', 1)
+    const staleCreation = tab('stale-creation', 2)
+    store.observe(
+      authority(1, 1, 10),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [existing] })
+    )
+    store.observe(
+      authority(2, 1, 11),
+      observation({ generation: 2, instance: 'worktree-1', tabs: [existing] })
+    )
+    store.observe(
+      authority(1, 1, 10),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [existing, staleCreation] })
+    )
+
+    expect(store.stateForTests(TARGET)).toEqual({ intents: 0, overflowed: false })
+    expect(store.reconcile(TARGET, snapshot(2, [existing]))).toEqual(snapshot(2, [existing]))
+    store.forgetTarget(TARGET, authority(1, 1, 10))
+    expect(store.stateForTests(TARGET)).not.toBeNull()
+    store.forgetTarget(TARGET, authority(3, 1, 12))
+    expect(store.stateForTests(TARGET)).toBeNull()
+  })
+
+  it('contains target admission overflow and recovers capacity after owner cleanup', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    const existing = tab('existing', 1)
+    const created = tab('created', 2)
+    store.observe(
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [existing] })
+    )
+    store.observe(
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-1', tabs: [existing, created] })
+    )
+    for (let index = 1; index < MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS; index += 1) {
+      store.observe(
+        authority(1),
+        observation({
+          generation: 1,
+          instance: `worktree-${index}`,
+          tabs: [],
+          targetId: `target-${index}`
+        })
+      )
+    }
+    for (let index = MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS; index < 1_000; index += 1) {
+      store.observe(
+        authority(1),
+        observation({
+          generation: 1,
+          instance: `worktree-${index}`,
+          tabs: [],
+          targetId: `target-${index}`
+        })
+      )
+    }
+
+    expect(
+      store.reconcile(TARGET, snapshot(2, [existing]))?.session.tabsByWorktreePath[WORKTREE_PATH]
+    ).toEqual([existing.tab, created.tab])
+    expect(store.reconcile('target-999', snapshot(2, [existing]))).toEqual(snapshot(2, [existing]))
+
+    store.forgetTarget('target-1', authority(1))
+    store.observe(
+      authority(1),
+      observation({
+        generation: 1,
+        instance: 'worktree-999',
+        tabs: [existing],
+        targetId: 'target-999'
+      })
+    )
+    store.observe(
+      authority(1),
+      observation({
+        generation: 1,
+        instance: 'worktree-999',
+        tabs: [existing, created],
+        targetId: 'target-999'
+      })
+    )
+    expect(
+      store.reconcile('target-999', snapshot(3, [existing]))?.session.tabsByWorktreePath[
+        WORKTREE_PATH
+      ]
+    ).toEqual([existing.tab, created.tab])
   })
 })

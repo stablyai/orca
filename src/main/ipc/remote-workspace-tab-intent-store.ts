@@ -16,11 +16,17 @@ import {
 } from './remote-workspace-tab-intent-reconciliation'
 
 type TargetState = {
+  authority: RemoteWorkspaceTabObservationAuthority
   intents: Map<string, RemoteWorkspaceTabIntent>
   overflowed: boolean
-  rendererInstanceId: string
   sequence: number
   worktrees: Map<string, RemoteWorkspaceObservedWorktree>
+}
+
+export type RemoteWorkspaceTabObservationAuthority = {
+  processId: number
+  rendererGeneration: number
+  senderId: number
 }
 
 export type RemoteWorkspacePatchIntentCapture = {
@@ -52,10 +58,10 @@ function boundedObservedWorktrees(
   observation: RemoteWorkspaceTabObservation
 ): Map<string, RemoteWorkspaceObservedWorktree> | null {
   if (
+    typeof observation.targetId !== 'string' ||
     !observation.targetId ||
     observation.targetId.length > 512 ||
-    !observation.rendererInstanceId ||
-    observation.rendererInstanceId.length > 256 ||
+    observation.hydrated !== true ||
     !Array.isArray(observation.worktrees) ||
     observation.worktrees.length > MAX_REMOTE_WORKSPACE_OBSERVED_WORKTREES_PER_TARGET
   ) {
@@ -64,22 +70,33 @@ function boundedObservedWorktrees(
   const worktrees = new Map<string, RemoteWorkspaceObservedWorktree>()
   let tabCount = 0
   for (const worktree of observation.worktrees) {
-    if (!Array.isArray(worktree.tabs)) {
+    if (!worktree || typeof worktree !== 'object' || !Array.isArray(worktree.tabs)) {
       return null
     }
     tabCount += worktree.tabs.length
     if (
       tabCount > MAX_REMOTE_WORKSPACE_OBSERVED_TABS_PER_TARGET ||
+      typeof worktree.worktreeId !== 'string' ||
       !worktree.worktreeId ||
       worktree.worktreeId.length > 4_096 ||
+      typeof worktree.worktreePath !== 'string' ||
       !worktree.worktreePath ||
       worktree.worktreePath.length > 4_096 ||
+      (worktree.worktreeInstanceId !== null && typeof worktree.worktreeInstanceId !== 'string') ||
       worktree.worktreeInstanceId?.length === 0 ||
       (worktree.worktreeInstanceId?.length ?? 0) > 256 ||
       worktrees.has(worktree.worktreeId) ||
       worktree.tabs.some(
         (entry) =>
-          !entry.tab.id || entry.tab.id.length > 512 || entry.processIdentity.length > 4_096
+          !entry ||
+          typeof entry !== 'object' ||
+          !entry.tab ||
+          typeof entry.tab !== 'object' ||
+          typeof entry.tab.id !== 'string' ||
+          !entry.tab.id ||
+          entry.tab.id.length > 512 ||
+          typeof entry.processIdentity !== 'string' ||
+          entry.processIdentity.length > 4_096
       )
     ) {
       return null
@@ -91,36 +108,44 @@ function boundedObservedWorktrees(
 
 export class RemoteWorkspaceTabIntentStore {
   private readonly targets = new Map<string, TargetState>()
-  private targetCapacityExceeded = false
 
-  observe(observation: RemoteWorkspaceTabObservation): void {
+  observe(
+    authority: RemoteWorkspaceTabObservationAuthority,
+    observation: RemoteWorkspaceTabObservation
+  ): void {
+    if (
+      observation.hydrated !== true ||
+      observation.rendererGeneration !== authority.rendererGeneration
+    ) {
+      return
+    }
     const existing = this.targets.get(observation.targetId)
+    if (existing && !this.canObserve(existing.authority, authority)) {
+      return
+    }
+    if (!existing && this.targets.size >= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS) {
+      return
+    }
     const nextWorktrees = boundedObservedWorktrees(observation)
     if (!nextWorktrees) {
       if (existing) {
         existing.overflowed = true
       } else if (this.targets.size < MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS) {
         this.targets.set(observation.targetId, {
+          authority,
           intents: new Map(),
           overflowed: true,
-          rendererInstanceId: observation.rendererInstanceId,
           sequence: 0,
           worktrees: new Map()
         })
-      } else {
-        this.targetCapacityExceeded = true
       }
       return
     }
     if (!existing) {
-      if (this.targets.size >= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS) {
-        this.targetCapacityExceeded = true
-        return
-      }
       this.targets.set(observation.targetId, {
+        authority,
         intents: new Map(),
         overflowed: false,
-        rendererInstanceId: observation.rendererInstanceId,
         sequence: 0,
         worktrees: nextWorktrees
       })
@@ -129,9 +154,9 @@ export class RemoteWorkspaceTabIntentStore {
 
     if (
       observation.authoritative ||
-      existing.rendererInstanceId !== observation.rendererInstanceId
+      authority.rendererGeneration > existing.authority.rendererGeneration
     ) {
-      existing.rendererInstanceId = observation.rendererInstanceId
+      existing.authority = authority
       existing.worktrees = nextWorktrees
       return
     }
@@ -186,18 +211,21 @@ export class RemoteWorkspaceTabIntentStore {
     existing.worktrees = nextWorktrees
   }
 
-  forgetTarget(targetId: string): void {
-    this.targets.delete(targetId)
+  forgetTarget(targetId: string, authority: RemoteWorkspaceTabObservationAuthority): void {
+    const state = this.targets.get(targetId)
+    if (state && this.canObserve(state.authority, authority)) {
+      this.targets.delete(targetId)
+    }
   }
 
   hasPending(targetId: string): boolean {
     const state = this.targets.get(targetId)
-    return this.targetCapacityExceeded || Boolean(state?.overflowed || state?.intents.size)
+    return Boolean(state?.overflowed || state?.intents.size)
   }
 
   reconcile(targetId: string, snapshot: RemoteWorkspaceSnapshot): RemoteWorkspaceSnapshot | null {
     const state = this.targets.get(targetId)
-    if (this.targetCapacityExceeded || state?.overflowed) {
+    if (state?.overflowed) {
       return null
     }
     if (!state || state.intents.size === 0) {
@@ -264,6 +292,26 @@ export class RemoteWorkspaceTabIntentStore {
 
   resetForTests(): void {
     this.targets.clear()
-    this.targetCapacityExceeded = false
+  }
+
+  private canObserve(
+    current: RemoteWorkspaceTabObservationAuthority,
+    candidate: RemoteWorkspaceTabObservationAuthority
+  ): boolean {
+    return (
+      candidate.rendererGeneration > current.rendererGeneration ||
+      this.sameAuthority(current, candidate)
+    )
+  }
+
+  private sameAuthority(
+    left: RemoteWorkspaceTabObservationAuthority,
+    right: RemoteWorkspaceTabObservationAuthority
+  ): boolean {
+    return (
+      left.rendererGeneration === right.rendererGeneration &&
+      left.processId === right.processId &&
+      left.senderId === right.senderId
+    )
   }
 }

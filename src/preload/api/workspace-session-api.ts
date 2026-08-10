@@ -45,8 +45,9 @@ export type WorkspaceSessionApi = {
       targetIds?: string[]
     }) => Promise<{ targetId: string; clients: RemoteWorkspaceConnectedClient[] }[]>
     clientId: () => Promise<string>
+    startTabStateObservation: () => Promise<number>
     observeTabState: (observation: RemoteWorkspaceTabObservation) => Promise<void>
-    forgetTabState: (args: { targetId: string }) => Promise<void>
+    forgetTabState: (args: { rendererGeneration: number; targetId: string }) => Promise<void>
     flushTabState: () => Promise<void>
     reconcileSnapshot: (args: {
       targetId: string

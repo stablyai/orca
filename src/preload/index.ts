@@ -3078,6 +3078,7 @@ const api = {
     listConnectedClients: (args) =>
       ipcRenderer.invoke('remoteWorkspace:listConnectedClients', args),
     clientId: () => ipcRenderer.invoke('remoteWorkspace:clientId'),
+    startTabStateObservation: () => ipcRenderer.invoke('remoteWorkspace:startTabStateObservation'),
     observeTabState: (observation) =>
       ipcRenderer.invoke('remoteWorkspace:observeTabState', observation),
     forgetTabState: (args) => ipcRenderer.invoke('remoteWorkspace:forgetTabState', args),

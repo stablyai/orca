@@ -1,6 +1,6 @@
 /* oxlint-disable max-lines -- Why: remote workspace IPC keeps snapshot normalization, relay compatibility, and handler registration together so revision/cache semantics stay auditable. */
 import { randomUUID } from 'node:crypto'
-import { ipcMain, type BrowserWindow } from 'electron'
+import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { hostname } from 'node:os'
 import { isDeepStrictEqual } from 'node:util'
 import type { Store } from '../persistence'
@@ -20,6 +20,7 @@ import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 import { RemoteWorkspaceTabIntentStore } from './remote-workspace-tab-intent-store'
+import { RemoteWorkspaceTabObservationOwnerRegistry } from './remote-workspace-tab-observation-owner'
 import { getPtyProcessIncarnation } from './pty-process-incarnation-registry'
 
 const CLIENT_ID = randomUUID()
@@ -31,11 +32,35 @@ let mainWindowGetter: (() => BrowserWindow | null) | null = null
 const latestSnapshotByTargetId = new Map<string, RemoteWorkspaceSnapshot>()
 const remoteWorkspacePatchTailByTargetId = new Map<string, Promise<void>>()
 const remoteWorkspaceTabIntents = new RemoteWorkspaceTabIntentStore()
+const remoteWorkspaceTabObservationOwners = new RemoteWorkspaceTabObservationOwnerRegistry()
 let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
 
 function attachPtyIncarnations(
   observation: RemoteWorkspaceTabObservation
-): RemoteWorkspaceTabObservation {
+): RemoteWorkspaceTabObservation | null {
+  if (!observation || !Array.isArray(observation.worktrees)) {
+    return null
+  }
+  for (const worktree of observation.worktrees) {
+    if (!worktree || !Array.isArray(worktree.tabs)) {
+      return null
+    }
+    for (const entry of worktree.tabs) {
+      const ptyIdsByLeafId = entry?.layout?.ptyIdsByLeafId
+      if (
+        !entry?.tab ||
+        typeof entry.processIdentity !== 'string' ||
+        (entry.tab.ptyId !== null && typeof entry.tab.ptyId !== 'string') ||
+        (entry.layout && (typeof entry.layout !== 'object' || Array.isArray(entry.layout))) ||
+        (ptyIdsByLeafId &&
+          (typeof ptyIdsByLeafId !== 'object' ||
+            Array.isArray(ptyIdsByLeafId) ||
+            Object.values(ptyIdsByLeafId).some((ptyId) => typeof ptyId !== 'string')))
+      ) {
+        return null
+      }
+    }
+  }
   return {
     ...observation,
     worktrees: observation.worktrees.map((worktree) => ({
@@ -89,6 +114,7 @@ export function _resetRemoteWorkspaceCachesForTests(): void {
   latestSnapshotByTargetId.clear()
   remoteWorkspacePatchTailByTargetId.clear()
   remoteWorkspaceTabIntents.resetForTests()
+  remoteWorkspaceTabObservationOwners.resetForTests()
 }
 
 export function _getRemoteWorkspaceTabIntentStateForTests(
@@ -440,6 +466,7 @@ export function registerRemoteWorkspaceHandlers(
   ipcMain.removeHandler('remoteWorkspace:listEnabledConnectedTargets')
   ipcMain.removeHandler('remoteWorkspace:listConnectedClients')
   ipcMain.removeHandler('remoteWorkspace:clientId')
+  ipcMain.removeHandler('remoteWorkspace:startTabStateObservation')
   ipcMain.removeHandler('remoteWorkspace:observeTabState')
   ipcMain.removeHandler('remoteWorkspace:forgetTabState')
   ipcMain.removeHandler('remoteWorkspace:flushTabState')
@@ -536,15 +563,43 @@ export function registerRemoteWorkspaceHandlers(
 
   ipcMain.handle('remoteWorkspace:clientId', () => CLIENT_ID)
 
+  const isMainRenderer = (event: IpcMainInvokeEvent): boolean =>
+    event.sender === getMainWindow()?.webContents
+
+  ipcMain.handle('remoteWorkspace:startTabStateObservation', (event) => {
+    if (!isMainRenderer(event)) {
+      return 0
+    }
+    return remoteWorkspaceTabObservationOwners.start(event.sender, event.processId)
+  })
+
   ipcMain.handle(
     'remoteWorkspace:observeTabState',
-    (_event, observation: RemoteWorkspaceTabObservation) => {
-      remoteWorkspaceTabIntents.observe(attachPtyIncarnations(observation))
+    (event, observation: RemoteWorkspaceTabObservation) => {
+      const authority = remoteWorkspaceTabObservationOwners.resolve(
+        event.sender,
+        event.processId,
+        observation?.rendererGeneration
+      )
+      if (isMainRenderer(event) && authority) {
+        const attached = attachPtyIncarnations(observation)
+        if (attached) {
+          remoteWorkspaceTabIntents.observe(authority, attached)
+        }
+      }
     }
   )
 
-  ipcMain.handle('remoteWorkspace:forgetTabState', (_event, args: { targetId: string }) => {
-    remoteWorkspaceTabIntents.forgetTarget(args.targetId)
+  ipcMain.handle('remoteWorkspace:forgetTabState', (event, args) => {
+    const input = args as { rendererGeneration?: number; targetId?: string }
+    const authority = remoteWorkspaceTabObservationOwners.resolve(
+      event.sender,
+      event.processId,
+      input.rendererGeneration
+    )
+    if (isMainRenderer(event) && authority && input.targetId) {
+      remoteWorkspaceTabIntents.forgetTarget(input.targetId, authority)
+    }
   })
 
   ipcMain.handle('remoteWorkspace:flushTabState', () => undefined)

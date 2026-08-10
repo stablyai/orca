@@ -6,13 +6,13 @@ import type {
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { splitWorktreeId } from '../../../shared/worktree/id'
-import { createBrowserUuid } from '../lib/browser-uuid'
 import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
 import type { AppState } from '../store/types'
 
 type ObservationApi = {
-  forgetTabState: (args: { targetId: string }) => Promise<void>
+  forgetTabState: (args: { rendererGeneration: number; targetId: string }) => Promise<void>
   observeTabState: (observation: RemoteWorkspaceTabObservation) => Promise<void>
+  startTabStateObservation: () => Promise<number>
 }
 
 type ScopeInputRefs = Pick<
@@ -36,7 +36,7 @@ export type DirectSshTabIntentObserver = {
 
 type ObserverOptions = {
   onTargetScanned?: (targetId: string) => void
-  rendererInstanceId?: string
+  rendererGeneration?: number
 }
 
 function configuredTargetIds(state: AppState): Set<string> {
@@ -170,7 +170,15 @@ export function createDirectSshTabIntentObserver(
   api: ObservationApi,
   options: ObserverOptions = {}
 ): DirectSshTabIntentObserver {
-  const rendererInstanceId = options.rendererInstanceId ?? createBrowserUuid()
+  let rendererGeneration = options.rendererGeneration ?? null
+  let stopped = false
+  const generationReady =
+    rendererGeneration === null
+      ? api.startTabStateObservation().then((generation) => {
+          rendererGeneration = generation
+          return generation
+        })
+      : Promise.resolve(rendererGeneration)
   const pausedTargets = new Set<string>()
   let scopeByTarget = new Map<string, Set<string>>()
   let targetByWorktree = new Map<string, string>()
@@ -179,23 +187,40 @@ export function createDirectSshTabIntentObserver(
   let signatureByTarget = new Map<string, string>()
   let latestState: AppState | null = null
 
+  const withGeneration = (run: (generation: number) => Promise<void>): void => {
+    if (stopped) {
+      return
+    }
+    if (rendererGeneration !== null) {
+      void run(rendererGeneration).catch(() => {})
+      return
+    }
+    void generationReady
+      .then((generation) => (stopped ? undefined : run(generation)))
+      .catch(() => {})
+  }
+
   const sendTarget = (state: AppState, targetId: string, authoritative = false): void => {
     if (pausedTargets.has(targetId)) {
       return
     }
     options.onTargetScanned?.(targetId)
     const worktrees = observedWorktrees(state, scopeByTarget.get(targetId) ?? new Set())
-    const signature = observationSignature(worktrees)
+    const hydrated = state.remoteWorkspaceHydratedTargetIds.has(targetId)
+    const signature = JSON.stringify([hydrated, observationSignature(worktrees)])
     if (!authoritative && signatureByTarget.get(targetId) === signature) {
       return
     }
     signatureByTarget.set(targetId, signature)
-    void api.observeTabState({
-      ...(authoritative ? { authoritative: true } : {}),
-      rendererInstanceId,
-      targetId,
-      worktrees
-    })
+    withGeneration((generation) =>
+      api.observeTabState({
+        ...(authoritative ? { authoritative: true } : {}),
+        hydrated,
+        rendererGeneration: generation,
+        targetId,
+        worktrees
+      })
+    )
   }
 
   const observeState = (state: AppState): void => {
@@ -215,7 +240,9 @@ export function createDirectSshTabIntentObserver(
         if (!targetIds.has(targetId)) {
           scopeByTarget.delete(targetId)
           signatureByTarget.delete(targetId)
-          void api.forgetTabState({ targetId })
+          withGeneration((generation) =>
+            api.forgetTabState({ rendererGeneration: generation, targetId })
+          )
         }
       }
       const ownersByWorktree = new Map<string, string[]>()
@@ -274,6 +301,7 @@ export function createDirectSshTabIntentObserver(
       }
     },
     clear: () => {
+      stopped = true
       pausedTargets.clear()
       scopeByTarget.clear()
       targetByWorktree.clear()

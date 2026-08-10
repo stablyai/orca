@@ -15,6 +15,7 @@ import {
 } from './helpers/docker-ssh-relay-target'
 import {
   connectDockerSshRelayTarget,
+  disconnectDockerSshRelayTarget,
   reconnectDockerSshRelayTarget
 } from './helpers/docker-ssh-relay-connection'
 import {
@@ -103,14 +104,18 @@ async function readRaceState(page: Page): Promise<{ freshTabId: string | null; d
 async function exerciseSnapshotRace(
   app: ElectronApplication,
   page: Page,
-  testInfo: TestInfo
+  testInfo: TestInfo,
+  registerPostElectronShutdownCleanup: (cleanup: () => Promise<void>) => void
 ): Promise<void> {
   test.setTimeout(240_000)
   let target: DockerSshRelayTarget | null = null
+  let connectedTargetId: string | null = null
   try {
     target = startDockerSshRelayTarget(testInfo)
+    registerPostElectronShutdownCleanup(async () => cleanupDockerSshRelayTarget(target))
     await waitForSessionReady(page)
     const remote = await connectDockerSshRelayTarget(page, target)
+    connectedTargetId = remote.targetId
     await expect
       .poll(() => waitForActiveWorktree(page), { timeout: 30_000 })
       .toBe(remote.worktreeId)
@@ -209,7 +214,11 @@ async function exerciseSnapshotRace(
       })
       .catch(() => {})
     await restoreRemoteWorkspaceSnapshotRequestHandler(app).catch(() => {})
+    if (connectedTargetId) {
+      await disconnectDockerSshRelayTarget(page, connectedTargetId).catch(() => {})
+    }
     cleanupDockerSshRelayTarget(target)
+    target = null
   }
 }
 
@@ -219,11 +228,15 @@ test.describe('direct SSH remote workspace snapshot ordering', () => {
 
   test('keeps a post-request terminal and its exact PTY identity @headful', async ({
     electronApp,
-    orcaPage
-  }, testInfo) => exerciseSnapshotRace(electronApp, orcaPage, testInfo))
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }, testInfo) =>
+    exerciseSnapshotRace(electronApp, orcaPage, testInfo, registerPostElectronShutdownCleanup))
 
   test('keeps a post-request terminal and its exact PTY identity headless parity', async ({
     electronApp,
-    orcaPage
-  }, testInfo) => exerciseSnapshotRace(electronApp, orcaPage, testInfo))
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }, testInfo) =>
+    exerciseSnapshotRace(electronApp, orcaPage, testInfo, registerPostElectronShutdownCleanup))
 })

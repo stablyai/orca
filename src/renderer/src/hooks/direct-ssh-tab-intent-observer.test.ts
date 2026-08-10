@@ -64,19 +64,43 @@ function state(): AppState {
 function harness() {
   const observeTabState = vi.fn(async () => {})
   const forgetTabState = vi.fn(async () => {})
+  const startTabStateObservation = vi.fn(async () => 1)
   const scanned: string[] = []
   return {
     forgetTabState,
     observeTabState,
     observer: createDirectSshTabIntentObserver(
-      { forgetTabState, observeTabState },
-      { onTargetScanned: (targetId) => scanned.push(targetId), rendererInstanceId: 'renderer-1' }
+      { forgetTabState, observeTabState, startTabStateObservation },
+      { onTargetScanned: (targetId) => scanned.push(targetId), rendererGeneration: 1 }
     ),
     scanned
   }
 }
 
 describe('createDirectSshTabIntentObserver', () => {
+  it('waits for the main-issued renderer generation before publishing state', async () => {
+    let resolveGeneration!: (generation: number) => void
+    const observeTabState = vi.fn(async () => {})
+    const observer = createDirectSshTabIntentObserver({
+      forgetTabState: vi.fn(async () => {}),
+      observeTabState,
+      startTabStateObservation: () =>
+        new Promise<number>((resolve) => {
+          resolveGeneration = resolve
+        })
+    })
+
+    observer.observeState(state())
+    expect(observeTabState).not.toHaveBeenCalled()
+    resolveGeneration(9)
+
+    await vi.waitFor(() =>
+      expect(observeTabState).toHaveBeenCalledWith(
+        expect.objectContaining({ rendererGeneration: 9 })
+      )
+    )
+  })
+
   it('sends topology changes only to the owning target and ignores live title churn', () => {
     const base = state()
     const { observer, observeTabState, scanned } = harness()
@@ -187,6 +211,24 @@ describe('createDirectSshTabIntentObserver', () => {
     )
   })
 
+  it('marks observations unhydrated until the target snapshot handshake completes', () => {
+    const base = state()
+    const { observer, observeTabState } = harness()
+    observer.observeState({ ...base, remoteWorkspaceHydratedTargetIds: new Set() })
+    expect(observeTabState).toHaveBeenCalledWith(
+      expect.objectContaining({ hydrated: false, rendererGeneration: 1, targetId: 'target-a' })
+    )
+
+    observeTabState.mockClear()
+    observer.observeState({
+      ...base,
+      remoteWorkspaceHydratedTargetIds: new Set(['target-a', 'target-b'])
+    })
+    expect(observeTabState).toHaveBeenCalledWith(
+      expect.objectContaining({ hydrated: true, rendererGeneration: 1, targetId: 'target-a' })
+    )
+  })
+
   it('reports a new immutable worktree identity even when path and tab ids are reused', () => {
     const base = state()
     const { observer, observeTabState } = harness()
@@ -222,7 +264,10 @@ describe('createDirectSshTabIntentObserver', () => {
       remoteWorkspaceHydratedTargetIds: new Set(['target-b'])
     })
 
-    expect(forgetTabState).toHaveBeenCalledWith({ targetId: 'target-a' })
-    expect(forgetTabState).not.toHaveBeenCalledWith({ targetId: 'target-b' })
+    expect(forgetTabState).toHaveBeenCalledWith({ rendererGeneration: 1, targetId: 'target-a' })
+    expect(forgetTabState).not.toHaveBeenCalledWith({
+      rendererGeneration: 1,
+      targetId: 'target-b'
+    })
   })
 })

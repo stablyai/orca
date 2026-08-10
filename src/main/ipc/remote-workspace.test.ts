@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type {
@@ -36,6 +37,7 @@ vi.mock('./remote-workspace-events', () => ({
 
 import {
   _resetRemoteWorkspaceCachesForTests,
+  _getRemoteWorkspaceTabIntentStateForTests,
   registerRemoteWorkspaceHandlers,
   remoteWorkspaceSessionMatchesSnapshot
 } from './remote-workspace'
@@ -295,5 +297,72 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
         })
       })
     )
+  })
+})
+
+describe('remote workspace tab observation IPC ownership', () => {
+  it('requires the main Electron sender, hydration, and its current process generation', async () => {
+    const handlers = new Map<string, (event: never, args?: never) => unknown>()
+    vi.mocked(ipcMain.handle).mockReset()
+    vi.mocked(ipcMain.handle).mockImplementation((channel, handler) => {
+      handlers.set(channel, handler as (event: never, args?: never) => unknown)
+    })
+    _resetRemoteWorkspaceCachesForTests()
+    const mainSender = Object.assign(new EventEmitter(), { id: 7 })
+    const otherSender = Object.assign(new EventEmitter(), { id: 8 })
+    registerRemoteWorkspaceHandlers({} as Store, () => ({ webContents: mainSender }) as never)
+    const start = handlers.get('remoteWorkspace:startTabStateObservation')!
+    const observe = handlers.get('remoteWorkspace:observeTabState')!
+    const event = (sender: typeof mainSender, processId: number) => ({ processId, sender }) as never
+    const observation = (generation: number, tabs: string[], hydrated = true) =>
+      ({
+        hydrated,
+        rendererGeneration: generation,
+        targetId: 'target-owned',
+        worktrees: [
+          {
+            worktreeId: 'repo::/remote/work',
+            worktreeInstanceId: 'worktree-1',
+            worktreePath: '/remote/work',
+            tabs: tabs.map((id, index) => ({
+              processIdentity: `process-${id}`,
+              tab: {
+                id,
+                worktreePath: '/remote/work',
+                ptyId: `pty-${id}`,
+                title: id,
+                customTitle: null,
+                color: null,
+                sortOrder: 0,
+                createdAt: index + 1
+              }
+            }))
+          }
+        ]
+      }) as never
+
+    expect(start(event(otherSender, 10))).toBe(0)
+    const first = start(event(mainSender, 10)) as number
+    expect(() =>
+      observe(event(mainSender, 10), {
+        hydrated: true,
+        rendererGeneration: first,
+        targetId: 'target-owned',
+        worktrees: null
+      } as never)
+    ).not.toThrow()
+    await observe(event(mainSender, 10), observation(first, [], false))
+    expect(_getRemoteWorkspaceTabIntentStateForTests('target-owned')).toBeNull()
+    await observe(event(mainSender, 10), observation(first, ['existing']))
+
+    const second = start(event(mainSender, 11)) as number
+    await observe(event(mainSender, 11), observation(second, ['existing']))
+    await observe(event(mainSender, 10), observation(first, ['existing', 'stale']))
+    await observe(event(mainSender, 11), observation(999_999, ['existing', 'forged']))
+
+    expect(_getRemoteWorkspaceTabIntentStateForTests('target-owned')).toEqual({
+      intents: 0,
+      overflowed: false
+    })
   })
 })

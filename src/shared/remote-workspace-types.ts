@@ -64,7 +64,8 @@ export type RemoteWorkspaceObservedWorktree = {
 
 export type RemoteWorkspaceTabObservation = {
   authoritative?: boolean
-  rendererInstanceId: string
+  hydrated?: boolean
+  rendererGeneration?: number
   targetId: string
   worktrees: RemoteWorkspaceObservedWorktree[]
 }
