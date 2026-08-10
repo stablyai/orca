@@ -1,6 +1,7 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
 
 // Created in vi.hoisted because session-scanner-source-discovery resolves
 // ~/.codex at module load, so the fake home must exist before that import runs.
@@ -30,6 +31,14 @@ vi.mock('../wsl', () => ({
   getWslHomeAsync: vi.fn(),
   listWslDistrosAsync: vi.fn().mockResolvedValue([])
 }))
+vi.mock('./session-scanner-worker-spawn', async () => {
+  const { scanAiVaultSessions } = await import('./session-scanner')
+  return {
+    scanAiVaultSessionsInWorker: (options: AiVaultWorkerScanOptions, signal?: AbortSignal) =>
+      scanAiVaultSessions({ ...options, signal }),
+    resetAiVaultScannerWorkerForTests: vi.fn()
+  }
+})
 
 import {
   configureAiVaultSessionSources,
