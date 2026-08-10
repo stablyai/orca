@@ -90,8 +90,8 @@ import {
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_SUBMIT,
-  AGENT_PROMPT_SUBMIT_DELAY_MS,
-  buildAgentPromptPasteBytes
+  buildAgentPromptPasteBytes,
+  getAgentPromptSubmitDelayMs
 } from '../../shared/agent-prompt-injection'
 import { gitExecFileAsync, gitSpawn, nonInteractiveGitEnv } from '../git/runner'
 import { runWithGitReadCacheInvalidation } from '../git/status'
@@ -17164,7 +17164,13 @@ export class OrcaRuntimeService {
       throw error
     }
 
-    await new Promise((resolve) => setTimeout(resolve, AGENT_PROMPT_SUBMIT_DELAY_MS))
+    // Why: long bracketed pastes need more render time before Enter; fixed 500ms left
+    // multi-KB worker-start preambles in the Claude composer unsubmitted (#13488).
+    const submitDelayMs = getAgentPromptSubmitDelayMs(
+      process.platform,
+      Buffer.byteLength(pastePayload, 'utf8')
+    )
+    await new Promise((resolve) => setTimeout(resolve, submitDelayMs))
     try {
       await options.beforeWrite?.(ptyId)
     } catch (error) {

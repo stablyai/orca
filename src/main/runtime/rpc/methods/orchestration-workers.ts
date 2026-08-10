@@ -13,6 +13,7 @@ import {
   type WorkerEffect,
   type WorkerSetupReceipt
 } from './orchestration-worker-topology'
+import { waitForWorkerAgentTuiReady } from './orchestration-worker-agent-readiness'
 import {
   persistGatedSetupSpawnFailure,
   persistWorkerReadinessStage,
@@ -194,9 +195,13 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         persistWorkerReadinessStage(setupStage)
 
         failedStage = 'agent_readiness'
-        const wait = await runtime.waitForTerminal(terminalHandle, {
-          condition: 'tui-idle',
-          timeoutMs: params.timeoutMs ?? 60_000
+        // Why: a single tui-idle can fire during Claude MCP boot while the composer
+        // will not submit; settle + re-wait for Orca-created agents (#13488).
+        const wait = await waitForWorkerAgentTuiReady({
+          runtime,
+          terminalHandle,
+          timeoutMs: params.timeoutMs ?? 60_000,
+          externalTerminal: Boolean(params.terminal)
         })
         persistWorkerSetupWaitOutcome({ ...setupStage, wait })
         if (!wait.satisfied) {

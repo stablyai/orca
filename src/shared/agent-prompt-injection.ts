@@ -6,12 +6,22 @@ export const AGENT_PROMPT_SUBMIT = '\r'
 
 const DEFAULT_AGENT_PROMPT_SUBMIT_DELAY_MS = 500
 const WINDOWS_AGENT_PROMPT_SUBMIT_DELAY_MS = 1_500
+const MAX_AGENT_PROMPT_SUBMIT_DELAY_MS = 5_000
+// Why: ~5ms per 100 bytes scales long orchestration preambles without punishing tiny prompts.
+const AGENT_PROMPT_SUBMIT_DELAY_BYTES_PER_MS = 20
 
-// Why: ConPTY renders long bracketed pastes more slowly; an early Enter leaves the task in the agent input buffer.
-export function getAgentPromptSubmitDelayMs(platform: NodeJS.Platform): number {
-  return platform === 'win32'
-    ? WINDOWS_AGENT_PROMPT_SUBMIT_DELAY_MS
-    : DEFAULT_AGENT_PROMPT_SUBMIT_DELAY_MS
+// Why: ConPTY (and long Claude pastes on macOS/Linux) need more time before Enter is accepted (#13488).
+export function getAgentPromptSubmitDelayMs(
+  platform: NodeJS.Platform,
+  pasteByteLength = 0
+): number {
+  const base =
+    platform === 'win32'
+      ? WINDOWS_AGENT_PROMPT_SUBMIT_DELAY_MS
+      : DEFAULT_AGENT_PROMPT_SUBMIT_DELAY_MS
+  const sized =
+    pasteByteLength > 0 ? Math.ceil(pasteByteLength / AGENT_PROMPT_SUBMIT_DELAY_BYTES_PER_MS) : 0
+  return Math.min(MAX_AGENT_PROMPT_SUBMIT_DELAY_MS, Math.max(base, sized))
 }
 
 export const AGENT_PROMPT_SUBMIT_DELAY_MS = getAgentPromptSubmitDelayMs(process.platform)

@@ -30,6 +30,14 @@ describe('agent prompt injection bytes', () => {
     expect(getAgentPromptSubmitDelayMs('linux')).toBe(500)
   })
 
+  it('scales submit delay for long orchestration pastes', () => {
+    // 10_000 bytes / 20 = 500ms base floor on darwin; 20_000 → 1_000ms
+    expect(getAgentPromptSubmitDelayMs('darwin', 10_000)).toBe(500)
+    expect(getAgentPromptSubmitDelayMs('darwin', 20_000)).toBe(1_000)
+    expect(getAgentPromptSubmitDelayMs('win32', 20_000)).toBe(1_500)
+    expect(getAgentPromptSubmitDelayMs('darwin', 200_000)).toBe(5_000)
+  })
+
   it('sanitizes embedded escape bytes before framing', () => {
     const bytes = buildAgentPromptPasteBytes('before\x1b[201~after\x1b')
     expect(bytes).toBe(`${BEGIN}before<ESC>[201~after<ESC>${END}`)
