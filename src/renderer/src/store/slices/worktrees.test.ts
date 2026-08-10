@@ -862,8 +862,69 @@ describe('fetchWorktrees', () => {
     expect(mockApi.runtime.call).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'worktree.teardownMissingTerminals' })
     )
-    expect(store.getState().tabsByWorktree[live.id]).toBeDefined()
-    expect(store.getState().worktreesByRepo.repo1).toHaveLength(1)
+    expect(store.getState().tabsByWorktree[live.id]).toEqual([{ id: 'tab-l', worktreeId: live.id }])
+    expect(store.getState().worktreesByRepo.repo1).toEqual([live])
+  })
+
+  it('preserves hydrated terminal identity when no worktree row exists yet', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/p/hydrated'
+    const tabs = [{ id: 'tab-h', worktreeId }]
+
+    store.setState({
+      repos: [{ id: 'repo1', path: '/p/repo1', displayName: 'R', badgeColor: '#000', addedAt: 0 }],
+      worktreesByRepo: { repo1: [] },
+      tabsByWorktree: { [worktreeId]: tabs }
+    } as unknown as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
+      qualifyDetectedResult(args, makeDetectedResult('repo1', []))
+    )
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(mockApi.runtime.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'worktree.teardownMissingTerminals' })
+    )
+    expect(store.getState().tabsByWorktree[worktreeId]).toEqual(tabs)
+  })
+
+  it('preserves folder-workspace terminals when a legacy host returns an empty scan', async () => {
+    const store = createTestStore()
+    const live = makeWorktree({
+      id: 'repo-folder::/p/folder::workspace:11111111-1111-1111-1111-111111111111',
+      repoId: 'repo-folder',
+      path: '/p/folder'
+    })
+    const tabs = [{ id: 'tab-f', worktreeId: live.id }]
+
+    store.setState({
+      repos: [
+        {
+          id: 'repo-folder',
+          path: '/p/folder',
+          displayName: 'Folder',
+          badgeColor: '#000',
+          addedAt: 0,
+          kind: 'folder'
+        }
+      ],
+      worktreesByRepo: { 'repo-folder': [live] },
+      detectedWorktreesByRepo: {
+        'repo-folder': makeDetectedResult('repo-folder', [live])
+      },
+      tabsByWorktree: { [live.id]: tabs }
+    } as unknown as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
+      qualifyDetectedResult(args, makeDetectedResult('repo-folder', []))
+    )
+
+    await store.getState().fetchWorktrees('repo-folder')
+
+    expect(mockApi.runtime.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'worktree.teardownMissingTerminals' })
+    )
+    expect(store.getState().tabsByWorktree[live.id]).toEqual(tabs)
+    expect(store.getState().worktreesByRepo['repo-folder']).toEqual([live])
   })
 
   // Why: teardown rides outside the scan coalescer, so identical fan-out requests
@@ -2463,6 +2524,47 @@ describe('fetchWorktrees', () => {
       timeoutMs: 15_000
     })
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
+  })
+
+  it('preserves paired-runtime terminals when a legacy host returns an empty scan', async () => {
+    const store = createTestStore()
+    const live = makeWorktree({
+      id: 'repo1::/remote/live',
+      repoId: 'repo1',
+      path: '/remote/live',
+      hostId: 'runtime:env-1'
+    })
+    const tabs = [{ id: 'tab-r', worktreeId: live.id }]
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        {
+          id: 'repo1',
+          path: '/remote/repo1',
+          displayName: 'R',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-1'
+        }
+      ],
+      worktreesByRepo: { repo1: [live] },
+      detectedWorktreesByRepo: { repo1: makeDetectedResult('repo1', [live]) },
+      tabsByWorktree: { [live.id]: tabs }
+    } as unknown as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: makeDetectedResult('repo1', []),
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'worktree.teardownMissingTerminals' })
+    )
+    expect(store.getState().tabsByWorktree[live.id]).toEqual(tabs)
+    expect(store.getState().worktreesByRepo.repo1).toEqual([live])
   })
 
   it('pins the list fetch to the local host when forceLocalOwner is set', async () => {

@@ -20,12 +20,12 @@ describe('scanLocalRepoWorktreesForResolution', () => {
     })
   })
 
-  it('preserves a successful empty scan verdict', async () => {
+  it('treats an empty WSL scan as non-authoritative', async () => {
     vi.mocked(listWorktreesStrict).mockResolvedValue([])
 
     await expect(
       scanLocalRepoWorktreesForResolution('/repo', { wslDistro: 'Ubuntu' })
-    ).resolves.toEqual({ ok: true, worktrees: [] })
+    ).resolves.toEqual({ ok: false, worktrees: [] })
     expect(listWorktreesStrict).toHaveBeenCalledWith('/repo', { wslDistro: 'Ubuntu' })
   })
 })

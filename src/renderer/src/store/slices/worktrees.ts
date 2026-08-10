@@ -2979,9 +2979,12 @@ function mergeFetchedWorktrees(
       args.setup,
       matchOptions
     )
-    // Why: an empty scan never proves the repo's workspaces are gone (see teardown guard above),
-    // so keep the known rows regardless of the authoritative flag.
-    if (worktrees.length === 0 && currentForHost.length > 0) {
+    // Why: legacy hosts can still label an unreadable repo as authoritative-empty.
+    if (
+      args.refresh.result.worktrees.length === 0 &&
+      (currentForHost.length > 0 ||
+        getKnownWorktreeIdsForPurge(s, args.repoId, args.hostId).length > 0)
+    ) {
       return areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[args.repoId], mergedDetected)
         ? s
         : {

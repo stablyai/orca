@@ -28867,7 +28867,10 @@ export class OrcaRuntimeService {
       return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
     try {
-      return { ok: true, worktrees: await provider.listWorktrees(repo.path) }
+      const worktrees = await provider.listWorktrees(repo.path)
+      return worktrees.length > 0
+        ? { ok: true, worktrees }
+        : { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     } catch {
       return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }

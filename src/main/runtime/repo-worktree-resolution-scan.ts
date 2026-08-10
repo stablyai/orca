@@ -14,7 +14,7 @@ export async function scanLocalRepoWorktreesForResolution(
     const worktrees = options.wslDistro
       ? await listWorktreesStrict(repoPath, options)
       : await listWorktreesStrict(repoPath)
-    return { ok: true, worktrees }
+    return worktrees.length > 0 ? { ok: true, worktrees } : { ok: false, worktrees }
   } catch {
     return { ok: false, worktrees: [] }
   }

@@ -2469,7 +2469,7 @@ describe('registerWorktreeHandlers', () => {
       signal: expect.any(AbortSignal)
     })
     expect(result).toEqual({
-      status: 'complete',
+      status: 'non-authoritative',
       providerRequestId: 'request-1',
       repoId: 'shared-repo',
       authority: {
@@ -2479,8 +2479,8 @@ describe('registerWorktreeHandlers', () => {
       },
       result: {
         repoId: 'shared-repo',
-        authoritative: true,
-        source: 'git',
+        authoritative: false,
+        source: 'metadata-fallback',
         worktrees: []
       }
     })
@@ -2528,7 +2528,7 @@ describe('registerWorktreeHandlers', () => {
     expect(provider.listWorktrees).not.toHaveBeenCalled()
   })
 
-  it('returns a local discriminant without SSH authority fields', async () => {
+  it('treats an empty local Git scan as non-authoritative', async () => {
     listWorktreesMock.mockResolvedValue([])
 
     const result = await handlers['worktrees:listDetected'](ipcEvent, {
@@ -2538,14 +2538,14 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(result).toEqual({
-      status: 'complete',
+      status: 'non-authoritative',
       providerRequestId: 'request-1',
       repoId: 'repo-1',
       authority: { kind: 'local', executionHostId: 'local' },
       result: {
         repoId: 'repo-1',
-        authoritative: true,
-        source: 'git',
+        authoritative: false,
+        source: 'metadata-fallback',
         worktrees: []
       }
     })
@@ -2913,7 +2913,7 @@ describe('registerWorktreeHandlers', () => {
       expectedAuthority
     })
 
-    expect(result).toMatchObject({ status: 'complete' })
+    expect(result).toMatchObject({ status: 'non-authoritative' })
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
   })
@@ -3206,7 +3206,7 @@ describe('registerWorktreeHandlers', () => {
 
     resolveB([])
     await expect(pendingB).resolves.toMatchObject({
-      status: 'complete',
+      status: 'non-authoritative',
       providerRequestId: 'request-b'
     })
     rotateSshProviderAuthority('target-b')
@@ -3339,7 +3339,7 @@ describe('registerWorktreeHandlers', () => {
           expectedAuthority: getSshProviderAuthority('target-a')
         })
       ).resolves.toMatchObject({
-        status: 'complete',
+        status: 'non-authoritative',
         providerRequestId: 'request-1'
       })
 
