@@ -40,6 +40,8 @@ type SpreadsheetGridProps = {
   declaredRowHeights?: readonly (number | undefined)[]
   /** Merged ranges the file declares. */
   mergedRanges?: readonly XlsxMergedRange[]
+  /** Images the file anchors into the grid. */
+  images?: readonly SpreadsheetSheetImage[]
   /**
    * `center` for the generated column letters of a workbook; `left` for a CSV,
    * whose heading row holds the file's own first row of text.
@@ -52,8 +54,95 @@ export type SpreadsheetCellStyle = {
   backgroundColor?: string
   textColor?: string
   bold?: boolean
+  italic?: boolean
+  /** Font size relative to the file's own default. */
+  fontScale?: number
   horizontalAlignment?: 'left' | 'right' | 'center'
   wrapText?: boolean
+  borders?: {
+    top?: SpreadsheetCellBorderEdge
+    right?: SpreadsheetCellBorderEdge
+    bottom?: SpreadsheetCellBorderEdge
+    left?: SpreadsheetCellBorderEdge
+  }
+}
+
+export type SpreadsheetCellBorderEdge = { width: string; style: string; color?: string }
+
+/** An image anchored over a cell range. */
+export type SpreadsheetSheetImage = {
+  source: string
+  fromRow: number
+  fromColumn: number
+  toRow: number
+  toColumn: number
+  description?: string
+}
+
+type SpreadsheetImagePlacement = {
+  image: SpreadsheetSheetImage
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+function placeSpreadsheetImages({
+  images,
+  columnWidths,
+  rowCount,
+  getRowHeight,
+  rowNumberColumnPx
+}: {
+  images: readonly SpreadsheetSheetImage[]
+  columnWidths: readonly number[]
+  rowCount: number
+  getRowHeight: (index: number) => number
+  rowNumberColumnPx: number
+}): SpreadsheetImagePlacement[] {
+  const columnOffsets = buildOffsets(columnWidths.length, (index) => columnWidths[index] ?? 0)
+  const rowOffsets = buildOffsets(rowCount, getRowHeight)
+  const offsetAt = (offsets: number[], index: number): number =>
+    offsets[Math.min(Math.max(index, 0), offsets.length - 1)] ?? 0
+
+  return images.map((image) => {
+    const left = rowNumberColumnPx + offsetAt(columnOffsets, image.fromColumn)
+    const top = offsetAt(rowOffsets, image.fromRow)
+    return {
+      image,
+      left,
+      top,
+      // Why: an anchor's end cell is exclusive of its own extent in Excel's model
+      // only when it carries offsets we do not read, so span through it and keep a
+      // minimum so a single-cell anchor is still visible.
+      width: Math.max(1, rowNumberColumnPx + offsetAt(columnOffsets, image.toColumn + 1) - left),
+      height: Math.max(1, offsetAt(rowOffsets, image.toRow + 1) - top)
+    }
+  })
+}
+
+/** Prefix sums, so `offsets[i]` is where track `i` starts. */
+function buildOffsets(count: number, getSize: (index: number) => number): number[] {
+  const offsets = Array.from<number>({ length: count + 1 })
+  offsets[0] = 0
+  for (let index = 0; index < count; index += 1) {
+    offsets[index + 1] = offsets[index]! + getSize(index)
+  }
+  return offsets
+}
+
+function buildCellBorderStyle(borders: SpreadsheetCellStyle['borders']): React.CSSProperties {
+  if (borders === undefined) {
+    return {}
+  }
+  const edgeStyle = (edge: SpreadsheetCellBorderEdge | undefined): string | undefined =>
+    edge === undefined ? undefined : `${edge.width} ${edge.style} ${edge.color ?? 'currentColor'}`
+  return {
+    borderTop: edgeStyle(borders.top),
+    borderRight: edgeStyle(borders.right),
+    borderBottom: edgeStyle(borders.bottom),
+    borderLeft: edgeStyle(borders.left)
+  }
 }
 
 // Why: shared by CsvViewer and XlsxViewer — both render a read-only sheet of
@@ -78,6 +167,7 @@ export function SpreadsheetGrid({
   declaredColumnWidths,
   declaredRowHeights,
   mergedRanges,
+  images,
   headerAlignment = 'left'
 }: SpreadsheetGridProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -109,6 +199,21 @@ export function SpreadsheetGrid({
     [paddedHeader, rows, columnCount, declaredColumnWidths, zoomScale]
   )
   const mergeIndex = useMemo(() => buildSpreadsheetMergeIndex(mergedRanges ?? []), [mergedRanges])
+  // Why: only pay for the offset tables when the sheet actually anchors an image.
+  const imagePlacements = useMemo(
+    () =>
+      images === undefined || images.length === 0
+        ? []
+        : placeSpreadsheetImages({
+            images,
+            columnWidths,
+            rowCount: rows.length,
+            getRowHeight: (index) =>
+              Math.round((declaredRowHeights?.[index] ?? SPREADSHEET_GRID_ROW_HEIGHT) * zoomScale),
+            rowNumberColumnPx
+          }),
+    [images, columnWidths, rows, declaredRowHeights, zoomScale, rowNumberColumnPx]
+  )
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
@@ -158,7 +263,7 @@ export function SpreadsheetGrid({
         role="table"
         aria-rowcount={rows.length + 1}
         aria-colcount={columnCount + 1}
-        className="inline-block min-w-full"
+        className="relative inline-block min-w-full"
         style={{ width: rowNumberColumnPx + columnsTotalWidth }}
       >
         <div
@@ -268,7 +373,8 @@ export function SpreadsheetGrid({
                         cellStyle?.wrapText === true
                           ? 'items-start py-1 whitespace-pre-wrap break-words'
                           : 'items-center',
-                        cellStyle?.bold === true && 'font-semibold'
+                        cellStyle?.bold === true && 'font-semibold',
+                        cellStyle?.italic === true && 'italic'
                       )}
                       // Why: these colours come from the opened file, not from the
                       // design system, so no token can express them. A cell that
@@ -280,6 +386,13 @@ export function SpreadsheetGrid({
                               backgroundColor: cellStyle.backgroundColor,
                               color: cellStyle.textColor
                             }),
+                        ...(cellStyle?.fontScale === undefined
+                          ? {}
+                          : { fontSize: Math.round(fontSizePx * cellStyle.fontScale) }),
+                        // Why: an author-set edge replaces the default gridline on
+                        // that side only, so a cell with one underline keeps the
+                        // grid intact everywhere else.
+                        ...buildCellBorderStyle(cellStyle?.borders),
                         ...(mergePlacement === null
                           ? {}
                           : { gridColumn: `span ${mergePlacement.columnSpan}` })
@@ -297,6 +410,27 @@ export function SpreadsheetGrid({
             )
           })}
         </div>
+        {imagePlacements.length > 0 && (
+          // Why: a separate layer, not cells — a drawing spans a range and must not
+          // disturb the grid tracks the header and rows share. It ignores pointer
+          // events so the cells underneath stay hoverable.
+          <div aria-hidden={false} className="pointer-events-none absolute inset-0">
+            {imagePlacements.map((placement, index) => (
+              <img
+                key={index}
+                src={placement.image.source}
+                alt={placement.image.description ?? ''}
+                className="absolute object-contain"
+                style={{
+                  left: placement.left,
+                  top: placement.top,
+                  width: placement.width,
+                  height: placement.height
+                }}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

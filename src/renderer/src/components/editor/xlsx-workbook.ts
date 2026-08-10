@@ -6,6 +6,7 @@ import {
 import { parseXlsxCellStyles, type XlsxCellStyle, type XlsxCellStyles } from './xlsx-cell-styles'
 import { parseXlsxNumberFormats } from './xlsx-number-formats'
 import { parseXlsxSharedStrings } from './xlsx-shared-strings'
+import { readXlsxSheetImages, type XlsxSheetImage } from './xlsx-drawings'
 import { parseXlsxWorksheetGrid } from './xlsx-worksheet-grid'
 import { parseXlsxWorksheetLayout, type XlsxMergedRange } from './xlsx-worksheet-layout'
 import { forEachXlsxXmlElement } from './xlsx-xml-elements'
@@ -23,6 +24,8 @@ export type XlsxSheet = {
   /** Author-set row heights in pixels, by row index. */
   rowHeights: (number | undefined)[]
   mergedRanges: XlsxMergedRange[]
+  /** Images the sheet anchors into the grid. */
+  images: XlsxSheetImage[]
   maxColumns: number
   truncated: boolean
 }
@@ -97,7 +100,14 @@ export async function parseXlsxWorkbook(
       locale
     })
     const layout = parseXlsxWorksheetLayout(worksheetXml ?? '')
-    sheets.push({ name: descriptor.name, hidden: descriptor.hidden, ...grid, ...layout })
+    const images = await readXlsxSheetImages(archive, worksheetPartPath, worksheetXml ?? '')
+    sheets.push({
+      name: descriptor.name,
+      hidden: descriptor.hidden,
+      ...grid,
+      ...layout,
+      images
+    })
   }
 
   if (sheets.length === 0) {

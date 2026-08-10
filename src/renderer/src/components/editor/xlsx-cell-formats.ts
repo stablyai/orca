@@ -11,6 +11,7 @@ export type XlsxCellFormat = {
   numberFormatId: number
   fontId: number
   fillId: number
+  borderId: number
   /** `horizontal` from `<alignment>`, when the author set one. */
   horizontalAlignment?: string
   wrapText?: boolean
@@ -19,6 +20,7 @@ export type XlsxCellFormat = {
 const GENERAL_NUMBER_FORMAT_ID = 0
 const DEFAULT_FONT_ID = 0
 const DEFAULT_FILL_ID = 0
+const DEFAULT_BORDER_ID = 0
 
 // Why: scoped to `<cellXfs>`, never `<cellStyleXfs>`. Both hold `<xf>` children,
 // but only cellXfs is what a cell's `s` attribute points into.
@@ -31,6 +33,7 @@ export function parseXlsxCellFormats(stylesXml: string): XlsxCellFormat[] {
         numberFormatId: readIdAttribute(cellFormat.attributes.numFmtId, GENERAL_NUMBER_FORMAT_ID),
         fontId: readIdAttribute(cellFormat.attributes.fontId, DEFAULT_FONT_ID),
         fillId: readIdAttribute(cellFormat.attributes.fillId, DEFAULT_FILL_ID),
+        borderId: readIdAttribute(cellFormat.attributes.borderId, DEFAULT_BORDER_ID),
         ...readAlignment(cellFormat.inner)
       })
     })

@@ -102,6 +102,7 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
           declaredColumnWidths={activeSheet.columnWidths}
           declaredRowHeights={activeSheet.rowHeights}
           mergedRanges={activeSheet.mergedRanges}
+          images={activeSheet.images}
           headerAlignment="center"
         />
       ) : (

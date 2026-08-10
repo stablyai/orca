@@ -1,4 +1,5 @@
 import { pickReadableCellTextColor } from './spreadsheet-cell-contrast'
+import { parseXlsxCellBorders, type XlsxCellBorders } from './xlsx-cell-borders'
 import { parseXlsxCellFormats } from './xlsx-cell-formats'
 import { resolveXlsxColor } from './xlsx-color'
 import { parseXlsxThemePalette, type XlsxThemePalette } from './xlsx-theme-palette'
@@ -12,6 +13,10 @@ export type XlsxCellStyle = {
   /** Horizontal alignment the author set, which wins over inferring it. */
   horizontalAlignment?: 'left' | 'right' | 'center'
   wrapText?: boolean
+  italic?: boolean
+  /** Font size relative to the workbook default; 1 leaves the app's own size. */
+  fontScale?: number
+  borders?: XlsxCellBorders
 }
 
 export type XlsxCellStyles = {
@@ -43,6 +48,10 @@ export function parseXlsxCellStyles(stylesXml: string, themeXml: string): XlsxCe
   const themePalette = parseXlsxThemePalette(themeXml)
   const fills = parseFills(stylesXml, themePalette)
   const fonts = parseFonts(stylesXml, themePalette)
+  const borders = parseXlsxCellBorders(stylesXml, themePalette)
+  // Why: font sizes are relative to the workbook's own default, so a sheet keeps
+  // its typographic hierarchy while still following the app's base size and zoom.
+  const defaultFontSizePt = fonts[0]?.sizePt ?? DEFAULT_FONT_SIZE_PT
   const cellFormats = parseXlsxCellFormats(stylesXml)
   const styleCache = new Map<number, XlsxCellStyle | undefined>()
 
@@ -60,6 +69,17 @@ export function parseXlsxCellStyles(stylesXml: string, themeXml: string): XlsxCe
     }
     if (font?.bold === true) {
       style.bold = true
+    }
+    if (font?.italic === true) {
+      style.italic = true
+    }
+    const fontScale = resolveFontScale(font?.sizePt, defaultFontSizePt)
+    if (fontScale !== undefined) {
+      style.fontScale = fontScale
+    }
+    const cellBorders = borders[cellFormat.borderId]
+    if (cellBorders !== undefined) {
+      style.borders = cellBorders
     }
     const horizontalAlignment = normalizeHorizontalAlignment(cellFormat.horizontalAlignment)
     if (horizontalAlignment !== undefined) {
@@ -133,7 +153,24 @@ function readSolidFillColor(fillXml: string, themePalette: XlsxThemePalette): st
   return color
 }
 
-type XlsxFont = { color?: string; bold?: boolean }
+const DEFAULT_FONT_SIZE_PT = 11
+// Why: bound the scale so one absurd font size cannot blow a row out of the
+// viewport, and ignore a difference too small to see.
+const MIN_FONT_SCALE = 0.6
+const MAX_FONT_SCALE = 3
+
+function resolveFontScale(
+  sizePt: number | undefined,
+  defaultFontSizePt: number
+): number | undefined {
+  if (sizePt === undefined || defaultFontSizePt <= 0) {
+    return undefined
+  }
+  const scale = Math.min(MAX_FONT_SCALE, Math.max(MIN_FONT_SCALE, sizePt / defaultFontSizePt))
+  return Math.abs(scale - 1) < 0.05 ? undefined : Number(scale.toFixed(3))
+}
+
+type XlsxFont = { color?: string; bold?: boolean; italic?: boolean; sizePt?: number }
 
 function parseFonts(stylesXml: string, themePalette: XlsxThemePalette): XlsxFont[] {
   const fonts: XlsxFont[] = []
@@ -142,7 +179,9 @@ function parseFonts(stylesXml: string, themePalette: XlsxThemePalette): XlsxFont
     forEachXlsxXmlElement(fontsBlock.inner, 'font', (font) => {
       fonts.push({
         color: readFontColor(font.inner, themePalette),
-        bold: hasBoldElement(font.inner)
+        bold: hasToggleElement(font.inner, 'b'),
+        italic: hasToggleElement(font.inner, 'i'),
+        sizePt: readFontSize(font.inner)
       })
     })
     return false
@@ -160,13 +199,23 @@ function readFontColor(fontXml: string, themePalette: XlsxThemePalette): string 
   return color
 }
 
-function hasBoldElement(fontXml: string): boolean {
-  let bold = false
-  forEachXlsxXmlElement(fontXml, 'b', (element) => {
-    // Why: `<b val="0"/>` explicitly turns bold off, which a named cell style
-    // does when it overrides an inherited bold.
-    bold = element.attributes.val !== '0' && element.attributes.val !== 'false'
+function readFontSize(fontXml: string): number | undefined {
+  let sizePt: number | undefined
+  forEachXlsxXmlElement(fontXml, 'sz', (element) => {
+    const parsed = Number.parseFloat(element.attributes.val ?? '')
+    sizePt = Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
     return false
   })
-  return bold
+  return sizePt
+}
+
+// Why: `<b val="0"/>` explicitly turns the toggle off, which a named cell style
+// does when it overrides an inherited bold or italic.
+function hasToggleElement(fontXml: string, tagName: string): boolean {
+  let enabled = false
+  forEachXlsxXmlElement(fontXml, tagName, (element) => {
+    enabled = element.attributes.val !== '0' && element.attributes.val !== 'false'
+    return false
+  })
+  return enabled
 }
