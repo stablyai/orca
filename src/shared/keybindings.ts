@@ -1750,6 +1750,7 @@ function keyTokenFromInput(input: KeybindingInput, platform: NodeJS.Platform): s
   }
   if (
     !canUsePhysicalCodeFallback(input) &&
+    !canUseDigitCodeFallback(input, platform) &&
     !shouldUseMacOptionComposedCaptureFallback(input, platform) &&
     !shouldUseNonLatinShortcutPhysicalFallback(input, platform)
   ) {
@@ -1991,6 +1992,21 @@ function letterKeyMatches(
   )
 }
 
+// Why: modifiers and non-US layouts rewrite a digit's logical key (⌥1 -> ¡, ⇧1 -> !, AZERTY 1 -> &),
+// but the number row is positionally stable, so the physical code is the reliable token. AltGr
+// (Ctrl+Alt on Windows/Linux) is excluded: there the digit row is text input (German AltGr+7 -> {).
+function canUseDigitCodeFallback(input: KeybindingInput, platform: NodeJS.Platform): boolean {
+  if (
+    getKeybindingPlatform(platform) !== 'darwin' &&
+    hasModifier(input, 'control') &&
+    hasModifier(input, 'alt')
+  ) {
+    return false
+  }
+  const code = input.code ?? ''
+  return code.startsWith('Digit') && code.length === 6
+}
+
 function digitKeyMatches(
   input: KeybindingInput,
   digit: string,
@@ -2000,7 +2016,7 @@ function digitKeyMatches(
   if (logicalKey && logicalKey.length === 1 && logicalKey >= '0' && logicalKey <= '9') {
     return logicalKey === digit
   }
-  return canFallBackToPhysicalCode(input, platform) && input.code === `Digit${digit}`
+  return canUseDigitCodeFallback(input, platform) && input.code === `Digit${digit}`
 }
 
 function isPunctuationKeyToken(token: string | null): token is string {

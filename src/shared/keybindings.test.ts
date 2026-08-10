@@ -147,7 +147,20 @@ describe('keybindings', () => {
         { key: '¡', code: 'Digit1', meta: true, control: false, alt: true, shift: false },
         'darwin'
       )
-    ).toEqual({ ok: false, error: 'Press a key, not only a modifier.' })
+    ).toEqual({ ok: true, value: 'Mod+Alt+1' })
+    // Shift mangles the digit the same way (⇧1 -> !), and AZERTY reports & for an unmodified 1.
+    expect(
+      keybindingFromInput(
+        { key: '!', code: 'Digit1', meta: true, control: false, alt: false, shift: true },
+        'darwin'
+      )
+    ).toEqual({ ok: true, value: 'Mod+Shift+1' })
+    expect(
+      keybindingFromInput(
+        { key: '&', code: 'Digit1', meta: true, control: false, alt: false, shift: false },
+        'darwin'
+      )
+    ).toEqual({ ok: true, value: 'Mod+1' })
   })
 
   it('applies per-action bare-key rules while capturing shortcuts', () => {
@@ -1624,6 +1637,31 @@ describe('digit-index shortcuts', () => {
     expect(isDigitIndexActionId('tab.selectByIndex')).toBe(true)
     expect(isDigitIndexActionId('workspace.selectByIndex')).toBe(true)
     expect(isDigitIndexActionId('tab.newTerminal')).toBe(false)
+  })
+
+  it('matches digit chords from the physical number row across layouts and modifiers', () => {
+    // macOS rewrites the logical key under Option/Shift, and AZERTY reports & for an unmodified 1.
+    expect(
+      keybindingMatchesInput(
+        'Ctrl+Shift+1',
+        { key: '!', code: 'Digit1', control: true, shift: true },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(keybindingMatchesInput('Alt+1', { key: '¡', code: 'Digit1', alt: true }, 'darwin')).toBe(
+      true
+    )
+    expect(
+      keybindingMatchesInput('Mod+1', { key: '&', code: 'Digit1', meta: true }, 'darwin')
+    ).toBe(true)
+    // AltGr (Ctrl+Alt on Windows/Linux) types text from the digit row, so it must not fire a chord.
+    expect(
+      keybindingMatchesInput(
+        'Mod+Alt+7',
+        { key: '{', code: 'Digit7', control: true, alt: true },
+        'win32'
+      )
+    ).toBe(false)
   })
 
   it('keeps Space number shortcuts opt-in and blocks collisions with tab numbers', () => {
