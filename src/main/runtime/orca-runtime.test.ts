@@ -34342,6 +34342,42 @@ describe('OrcaRuntimeService', () => {
     db.close()
   })
 
+  it('does not nag when the bound Run has no undelivered terminal mail', async () => {
+    // Why: #13563 primary symptom — only foreign-Run handle mail must not write a pointer.
+    const runtime = new OrcaRuntimeService(store)
+    const db = new InMemoryOrchestrationMessages()
+    const write = vi.fn().mockReturnValue(true)
+    setInMemoryOrchestrationMessages(runtime, db)
+    runtime.setPtyController({
+      write,
+      kill: vi.fn(),
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    db.setRun({
+      id: 'run_bound',
+      coordinator_handle: terminal.handle,
+      coordinator_pane_key: 'tab-1:pane:1'
+    })
+    runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+    db.insertMessage({
+      from: 'sender',
+      to: terminal.handle,
+      subject: 'other run only',
+      runId: 'run_other'
+    })
+
+    runtime.deliverPendingMessagesForHandle(terminal.handle)
+
+    expect(write).not.toHaveBeenCalledWith(
+      'pty-1',
+      expect.stringContaining('orchestration message')
+    )
+    db.close()
+  })
+
   it('resolves message waiters when notifyMessageArrived is called', async () => {
     const runtime = new OrcaRuntimeService(store)
 
