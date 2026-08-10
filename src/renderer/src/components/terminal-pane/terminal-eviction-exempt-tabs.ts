@@ -2,19 +2,20 @@
  * Eviction-exempt parked terminal tabs.
  *
  * Why: force-park unmounts restorable tabs under the hidden-worktree retention
- * budget, but some live local PTYs cannot reattach on remount. Those tabs must
- * keep their panes mounted so eviction does not orphan a live shell.
+ * budget, but live local PTYs without reattach and remote PTYs without exact
+ * owner authority must stay mounted so eviction cannot orphan a shell.
  */
 import { useAppStore } from '@/store'
 import { isEvictionExemptTerminalPty } from './terminal-hidden-worktree-retention'
+import { getTerminalParkWorktreeOwner } from './terminal-park-worktree-owner'
 import {
   resolveParkedTerminalPaneCandidates,
   type ParkableTerminalTabModel
 } from './terminal-parked-tab-watchers'
 
 /**
- * Whether force-park must keep this tab's panes mounted: ANY of its pane PTYs is
- * one a remount could not reattach. Resolved from the same pane candidates as
+ * Whether force-park must keep this tab's panes mounted: ANY pane cannot safely
+ * reattach for this exact owner and pane identity. Resolved from the same candidates as
  * canWatcherCoverParkedTerminalTab — tab.ptyId is only the first leaf's PTY, so
  * a split tab whose SECOND leaf holds the unrestorable PTY fails coverage (and
  * so becomes a retention candidate) yet would otherwise look exempt-free and
@@ -33,12 +34,18 @@ export function isEvictionExemptTerminalTab(
   tab: ParkableTerminalTabModel,
   worktreeId: string
 ): boolean {
-  if (isEvictionExemptTerminalPty(tab.ptyId, worktreeId)) {
+  const state = useAppStore.getState()
+  const worktreeOwner = getTerminalParkWorktreeOwner(state, worktreeId)
+  const panes = resolveParkedTerminalPaneCandidates(tab, state)
+  const isExempt = (ptyId: string | null, leafId: string | null): boolean =>
+    isEvictionExemptTerminalPty(ptyId, worktreeId, worktreeOwner, {
+      tabId: tab.id,
+      leafId
+    })
+  if (panes.some((pane) => isExempt(pane.ptyId, pane.leafId))) {
     return true
   }
-  return resolveParkedTerminalPaneCandidates(tab, useAppStore.getState()).some((pane) =>
-    isEvictionExemptTerminalPty(pane.ptyId, worktreeId)
-  )
+  return panes.every((pane) => pane.ptyId !== tab.ptyId) && isExempt(tab.ptyId, null)
 }
 
 /**

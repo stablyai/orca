@@ -7,7 +7,12 @@ import {
   type ColdParkRetainCandidate,
   type TerminalColdParkPolicyOverrides
 } from './terminal-hidden-view-parking'
-import { isSnapshotBackedTerminalPty } from './terminal-park-pty-restore-eligibility'
+import {
+  hasTerminalParkPtyOwnerAuthority,
+  isSnapshotBackedTerminalPty,
+  type TerminalParkPaneIdentity,
+  type TerminalParkWorktreeOwner
+} from './terminal-park-pty-restore-eligibility'
 import type { TerminalTab } from '../../../../shared/types'
 
 // Why these sizes: a retained hidden pane costs a measured ~2.5MB of V8 heap
@@ -42,18 +47,23 @@ export function hasPendingRetentionSpawnWork(
   return Boolean(tab.pendingActivationSpawn && (!tab.ptyId || !isRemoteRuntimePtyId(tab.ptyId)))
 }
 
-// Why: an eviction-exempt pty is a live local one a remount cannot restore
-// faithfully (daemon-fail-open/foreign ids or a preserved legacy daemon). Its
-// TAB keeps its mounted pane when the worktree force-parks.
+// Why: an eviction-exempt pty is either a live local one a remount cannot
+// restore faithfully or a remote one this worktree cannot authoritatively own.
+// Its TAB keeps its mounted pane when the worktree force-parks.
 // Per-PTY, not per-tab: the coverage veto that makes a worktree a retention
 // candidate walks every split pane, so the exemption must too (see
 // isEvictionExemptTerminalTab).
 export function isEvictionExemptTerminalPty(
   ptyId: string | null | undefined,
-  worktreeId: string
+  worktreeId: string,
+  worktreeOwner: TerminalParkWorktreeOwner,
+  paneIdentity: TerminalParkPaneIdentity
 ): boolean {
-  if (!ptyId || isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
+  if (!ptyId) {
     return false
+  }
+  if (isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
+    return !hasTerminalParkPtyOwnerAuthority(ptyId, worktreeId, worktreeOwner, paneIdentity)
   }
   return (
     !isSnapshotBackedTerminalPty(ptyId, worktreeId) ||

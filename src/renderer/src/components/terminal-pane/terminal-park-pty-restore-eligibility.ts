@@ -60,6 +60,39 @@ export function selectPairedRuntimeParkingEnvironmentIds(
   return capable
 }
 
+export function hasTerminalParkPtyOwnerAuthority(
+  ptyId: string,
+  worktreeId: string,
+  worktreeOwner: TerminalParkWorktreeOwner,
+  paneIdentity?: TerminalParkPaneIdentity
+): boolean {
+  if (isRemoteRuntimePtyId(ptyId)) {
+    const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+    if (environmentId === null) {
+      return false
+    }
+    if (worktreeOwner.kind === 'runtime') {
+      return worktreeOwner.environmentId === environmentId
+    }
+    return (
+      worktreeOwner.kind === 'local' &&
+      paneIdentity?.leafId != null &&
+      hasWebSessionTerminalParkAuthority({
+        environmentId,
+        worktreeId,
+        tabId: paneIdentity.tabId,
+        leafId: paneIdentity.leafId,
+        ptyId
+      })
+    )
+  }
+  const sshConnectionId = parseAppSshPtyId(ptyId)?.connectionId ?? null
+  if (sshConnectionId !== null) {
+    return worktreeOwner.kind === 'ssh' && worktreeOwner.connectionId === sshConnectionId
+  }
+  return isSnapshotBackedTerminalPty(ptyId, worktreeId)
+}
+
 export function isParkRestorableTerminalPty(
   ptyId: string | null,
   worktreeId: string,
@@ -78,26 +111,13 @@ export function isParkRestorableTerminalPty(
     ) {
       return false
     }
-    if (worktreeOwner.kind === 'runtime') {
-      return worktreeOwner.environmentId === environmentId
-    }
-    return (
-      worktreeOwner.kind === 'local' &&
-      paneIdentity?.leafId != null &&
-      hasWebSessionTerminalParkAuthority({
-        environmentId,
-        worktreeId,
-        tabId: paneIdentity.tabId,
-        leafId: paneIdentity.leafId,
-        ptyId
-      })
-    )
+    return hasTerminalParkPtyOwnerAuthority(ptyId, worktreeId, worktreeOwner, paneIdentity)
   }
   const sshConnectionId = ptyId ? (parseAppSshPtyId(ptyId)?.connectionId ?? null) : null
   return (
     policy?.sshParkingEnabled === true &&
+    ptyId !== null &&
     sshConnectionId !== null &&
-    worktreeOwner.kind === 'ssh' &&
-    worktreeOwner.connectionId === sshConnectionId
+    hasTerminalParkPtyOwnerAuthority(ptyId, worktreeId, worktreeOwner, paneIdentity)
   )
 }

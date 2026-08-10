@@ -7,6 +7,11 @@ import {
 } from '@/runtime/web-session-terminal-park-authority'
 import type { TerminalParkWorktreeOwner } from './terminal-park-pty-restore-eligibility'
 import { canParkTerminalWorktreeRenderers } from './terminal-hidden-view-parking'
+import {
+  isEvictionExemptTerminalPty,
+  selectForceParkEvictableTabIds,
+  selectRetentionForceParkedTerminalWorktrees
+} from './terminal-hidden-worktree-retention'
 
 const WORKTREE_ID = 'repo::/worktree'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -123,6 +128,46 @@ describe('remote PTY parking owner oracle', () => {
   ] as const)('rejects %s ownership', (_name, ptyId, owner) => {
     expect(canParkRemotePty({ ptyId, owner })).toBe(false)
   })
+
+  it.each([
+    ['paired-runtime', 'remote:env-foreign@@pty-1', RUNTIME_OWNER],
+    ['SSH', 'ssh:ssh-foreign@@pty-1', SSH_OWNER]
+  ] as const)(
+    'keeps a proven-foreign %s PTY mounted when retention force-parks',
+    (_name, ptyId, owner) => {
+      const forceParked = selectRetentionForceParkedTerminalWorktrees({
+        worktrees: [
+          {
+            worktreeId: WORKTREE_ID,
+            hiddenSinceMs: 0,
+            isVisible: false,
+            shouldMeasureHiddenWorktree: false,
+            hasActivityTerminalPortal: false,
+            ordinaryParkingCovers: false,
+            hasPendingSpawnWork: false
+          }
+        ],
+        parkingEnabled: true,
+        retentionBudgetEnabled: true,
+        nowMs: 2,
+        coldParkDelayMs: 0,
+        retentionTtlMs: 1
+      })
+      const ownerAwareExemption = isEvictionExemptTerminalPty as (
+        candidatePtyId: string,
+        worktreeId: string,
+        worktreeOwner: TerminalParkWorktreeOwner,
+        paneIdentity: { tabId: string; leafId: string }
+      ) => boolean
+
+      expect(forceParked).toEqual(new Set([WORKTREE_ID]))
+      expect(
+        selectForceParkEvictableTabIds([{ id: TAB_ID }], () =>
+          ownerAwareExemption(ptyId, WORKTREE_ID, owner, { tabId: TAB_ID, leafId: LEAF_ID })
+        )
+      ).toEqual([])
+    }
+  )
 
   it('permits the exact local web-mirror session and rejects every near miss', () => {
     replaceWebSessionTerminalParkAuthority(mirrorSnapshot(), 'env-owner')
