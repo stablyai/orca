@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 import { existsSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import * as path from 'node:path'
 import type {
   GitBranchChangeEntry,
@@ -55,6 +56,12 @@ import {
   gitStagedDiscardStatusArgs,
   resolveGitStagedDiscardPaths
 } from '../../shared/git-staged-discard-operation'
+import {
+  failedGitStagedDiscardReceipt,
+  runGitStagedDiscardBatches,
+  throwIfGitStagedDiscardFailed,
+  type GitStagedDiscardReceipt
+} from '../../shared/git-staged-discard-receipt'
 import { readBranchCompareHead } from '../../shared/git-branch-compare-head'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
@@ -2226,9 +2233,32 @@ export async function bulkDiscardStagedChanges(
   filePaths: string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
+  const receipt = await bulkDiscardStagedChangesWithReceipt(
+    worktreePath,
+    filePaths,
+    randomUUID(),
+    options
+  )
+  throwIfGitStagedDiscardFailed(receipt)
+}
+
+export async function bulkDiscardStagedChangesWithReceipt(
+  worktreePath: string,
+  filePaths: string[],
+  operationId: string,
+  options: GitRuntimeOptions = {}
+): Promise<GitStagedDiscardReceipt> {
   invalidateGitReadCaches()
   if (filePaths.length === 0) {
-    return
+    return {
+      operationId,
+      state: 'succeeded',
+      mutation: 'none',
+      affectedPaths: [],
+      completedPaths: [],
+      uncertainPaths: [],
+      remainingPaths: []
+    }
   }
   try {
     const resolvedWorktree = path.resolve(worktreePath)
@@ -2248,14 +2278,19 @@ export async function bulkDiscardStagedChanges(
     if (selection.hasConflict) {
       throw new Error('Cannot discard staged changes for conflicted paths')
     }
-    const pathspecs = selection.paths.map((filePath) => literalPathspec(filePath, options))
-    for (let i = 0; i < pathspecs.length; i += BULK_CHUNK_SIZE) {
-      const chunk = pathspecs.slice(i, i + BULK_CHUNK_SIZE)
-      await gitExecFileAsync(
-        gitStagedDiscardArgs(chunk),
-        gitOptionsForWorktree(worktreePath, options)
-      )
-    }
+    return await runGitStagedDiscardBatches(
+      operationId,
+      selection.paths,
+      BULK_CHUNK_SIZE,
+      async (chunk) => {
+        await gitExecFileAsync(
+          gitStagedDiscardArgs(chunk.map((filePath) => literalPathspec(filePath, options))),
+          gitOptionsForWorktree(worktreePath, options)
+        )
+      }
+    )
+  } catch (error) {
+    return failedGitStagedDiscardReceipt(operationId, filePaths, error)
   } finally {
     invalidateGitReadCaches()
   }

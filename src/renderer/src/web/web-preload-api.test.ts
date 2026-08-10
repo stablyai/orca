@@ -3553,7 +3553,15 @@ describe('web git preload API', () => {
               authoritative: true,
               worktrees: [{ id: 'wt-1', repoId: 'repo-1', path: '/workspace/repo' }]
             },
-            'git.bulkDiscardStaged': { ok: true }
+            'git.bulkDiscardStaged': {
+              operationId: 'op-web',
+              state: 'succeeded',
+              mutation: 'complete',
+              affectedPaths: ['file.txt'],
+              completedPaths: ['file.txt'],
+              uncertainPaths: [],
+              remainingPaths: []
+            }
           }
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
@@ -3573,7 +3581,8 @@ describe('web git preload API', () => {
 
     await globals.window.api.git.bulkDiscardStaged({
       worktreePath: '/workspace/repo',
-      filePaths: ['file.txt']
+      filePaths: ['file.txt'],
+      operationId: 'op-web'
     })
 
     expect(runtimeCalls).toEqual([
@@ -3585,6 +3594,7 @@ describe('web git preload API', () => {
         params: {
           worktree: 'id:wt-1',
           filePaths: ['file.txt'],
+          operationId: 'op-web',
           stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
         }
       }
@@ -3616,7 +3626,8 @@ describe('web git preload API', () => {
     await expect(
       globals.window.api.git.bulkDiscardStaged({
         worktreePath: '/workspace/repo',
-        filePaths: ['file.txt']
+        filePaths: ['file.txt'],
+        operationId: 'op-web'
       })
     ).rejects.toThrow('newer Orca server')
     expect(runtimeCalls).toEqual(['status.get'])

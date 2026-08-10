@@ -87,8 +87,8 @@ export type DiscardAllResult = {
   /** Paths whose `discardOne` call rejected. Best-effort: the loop continues past these. */
   failed: string[]
   /**
-   * True only when the host-authoritative staged operation failed
-   * and we never entered the per-file discard loop. Per-file failures do
+   * True when the host-authoritative staged operation did not fully succeed.
+   * Its mutation receipt may still report partial or uncertain changes. Per-file failures do
    * NOT set this flag — they are reported via `failed`.
    */
   aborted: boolean

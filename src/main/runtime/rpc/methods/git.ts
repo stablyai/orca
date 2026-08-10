@@ -7,6 +7,7 @@ import {
   GitBranchDiff,
   GitBulkPaths,
   GitBulkStagedDiscard,
+  GitStagedDiscardReceipt,
   GitCheckIgnored,
   GitCheckout,
   GitCommit,
@@ -376,7 +377,17 @@ export const GIT_METHODS: RpcMethod[] = [
     name: 'git.bulkDiscardStaged',
     params: GitBulkStagedDiscard,
     handler: async (params, { runtime }) =>
-      runtime.bulkDiscardStagedRuntimeGitPaths(params.worktree, params.filePaths)
+      runtime.bulkDiscardStagedRuntimeGitPaths(
+        params.worktree,
+        params.filePaths,
+        params.operationId
+      )
+  }),
+  defineMethod({
+    name: 'git.getStagedDiscardReceipt',
+    params: GitStagedDiscardReceipt,
+    handler: async (params, { runtime }) =>
+      runtime.getStagedDiscardRuntimeGitReceipt(params.worktree, params.operationId)
   }),
   defineMethod({
     name: 'git.remoteFileUrl',

@@ -34,6 +34,10 @@ import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
 import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../../shared/protocol-version'
 import { SshGitStagedDiscardCapability } from './ssh-git-staged-discard-capability'
+import {
+  assertGitStagedDiscardReceipt,
+  type GitStagedDiscardReceipt
+} from '../../shared/git-staged-discard-receipt'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -452,7 +456,11 @@ export class SshGitProvider implements IGitProvider {
     }
   }
 
-  async bulkDiscardStagedChanges(worktreePath: string, filePaths: string[]): Promise<void> {
+  async bulkDiscardStagedChanges(
+    worktreePath: string,
+    filePaths: string[],
+    operationId: string
+  ): Promise<GitStagedDiscardReceipt> {
     if (!(await this.stagedDiscardCapability.supports())) {
       throw new Error(
         'Discarding staged changes requires the latest SSH relay. Reconnect and try again.'
@@ -460,11 +468,23 @@ export class SshGitProvider implements IGitProvider {
     }
     this.gitDiffReadDedupe.clear()
     try {
-      await this.mux.request('git.bulkDiscardStaged', {
-        worktreePath,
-        filePaths,
-        stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
-      })
+      try {
+        const receipt = await this.mux.request('git.bulkDiscardStaged', {
+          worktreePath,
+          filePaths,
+          operationId,
+          stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+        })
+        return assertGitStagedDiscardReceipt(receipt, operationId)
+      } catch (error) {
+        const receipt = await this.mux
+          .request('git.getStagedDiscardReceipt', { worktreePath, operationId })
+          .catch(() => null)
+        if (receipt !== null) {
+          return assertGitStagedDiscardReceipt(receipt, operationId)
+        }
+        throw error
+      }
     } finally {
       this.gitDiffReadDedupe.clear()
     }

@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import {
   appendFileSync,
+  chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -13,6 +15,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   bulkDiscardChanges,
   bulkDiscardStagedChanges,
+  bulkDiscardStagedChangesWithReceipt,
   bulkUnstageFiles,
   discardChanges
 } from './status'
@@ -256,6 +259,46 @@ describe('discard index/worktree semantics', () => {
     expect(git(repo, 'status', '--porcelain=v1')).toBe('')
     expect(existsSync(path.join(repo, 'original-100.txt'))).toBe(true)
     expect(existsSync(path.join(repo, 'renamed-100.txt'))).toBe(false)
+  })
+
+  it('reports completed and uncertain batches after a real permission failure', async () => {
+    const repo = initRepo()
+    const paths: string[] = []
+    for (let index = 0; index < 100; index += 1) {
+      const relativePath = `writable-${index}.txt`
+      paths.push(relativePath)
+      writeFileSync(path.join(repo, relativePath), `base-${index}\n`)
+    }
+    mkdirSync(path.join(repo, 'locked'))
+    paths.push('locked/final.txt')
+    writeFileSync(path.join(repo, 'locked/final.txt'), 'base-locked\n')
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-qm', 'permission fixtures')
+    for (const relativePath of paths) {
+      writeFileSync(path.join(repo, relativePath), `staged-${relativePath}\n`)
+    }
+    git(repo, 'add', '.')
+    for (const relativePath of paths) {
+      writeFileSync(path.join(repo, relativePath), `worktree-${relativePath}\n`)
+    }
+    chmodSync(path.join(repo, 'locked'), 0o555)
+
+    const receipt = await bulkDiscardStagedChangesWithReceipt(repo, paths, 'permission-op')
+    chmodSync(path.join(repo, 'locked'), 0o755)
+
+    expect(receipt).toMatchObject({
+      state: 'failed',
+      mutation: 'partial',
+      completedPaths: paths.slice(0, 100),
+      uncertainPaths: ['locked/final.txt'],
+      remainingPaths: []
+    })
+    expect(readFileSync(path.join(repo, 'writable-99.txt'), 'utf8')).toBe('base-99\n')
+    expect(readFileSync(path.join(repo, 'locked/final.txt'), 'utf8')).toBe(
+      'worktree-locked/final.txt\n'
+    )
+    expect(git(repo, 'diff', '--cached')).toBe('')
+    expect(git(repo, 'status', '--short')).toBe(' M locked/final.txt\n')
   })
 
   it('keeps the legacy old-client/new-host two-step behavior safe', async () => {

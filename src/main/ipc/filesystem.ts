@@ -53,7 +53,7 @@ import {
   bulkStageFiles,
   bulkUnstageFiles,
   bulkDiscardChanges,
-  bulkDiscardStagedChanges,
+  bulkDiscardStagedChangesWithReceipt,
   discardChanges,
   getStagedCommitContext,
   getBranchCompare,
@@ -61,6 +61,11 @@ import {
   getCommitCompare,
   getCommitDiff
 } from '../git/status'
+import {
+  GitStagedDiscardReceiptLedger,
+  pendingGitStagedDiscardReceipt,
+  type GitStagedDiscardReceipt
+} from '../../shared/git-staged-discard-receipt'
 import { getHistory } from '../git/history'
 import {
   cancelGenerateCommitMessageLocal,
@@ -504,6 +509,7 @@ export function registerFilesystemHandlers(
   store: Store,
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
 ): void {
+  const stagedDiscardReceipts = new GitStagedDiscardReceiptLedger()
   const activeTextSearches = new Map<string, ChildProcess>()
   const downloadSessions = new Map<string, DownloadSession>()
 
@@ -2229,14 +2235,23 @@ export function registerFilesystemHandlers(
     'git:bulkDiscardStaged',
     async (
       _event,
-      args: { worktreePath: string; filePaths: string[]; connectionId?: string }
-    ): Promise<void> => {
+      args: {
+        worktreePath: string
+        filePaths: string[]
+        operationId: string
+        connectionId?: string
+      }
+    ): Promise<GitStagedDiscardReceipt> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.bulkDiscardStagedChanges(args.worktreePath, args.filePaths)
+        return provider.bulkDiscardStagedChanges(
+          args.worktreePath,
+          args.filePaths,
+          args.operationId
+        )
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
@@ -2245,7 +2260,14 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      await bulkDiscardStagedChanges(worktreePath, filePaths, gitOptions)
+      return stagedDiscardReceipts.run(
+        worktreePath,
+        args.operationId,
+        filePaths.join('\0'),
+        pendingGitStagedDiscardReceipt(args.operationId, filePaths),
+        () =>
+          bulkDiscardStagedChangesWithReceipt(worktreePath, filePaths, args.operationId, gitOptions)
+      )
     }
   )
 

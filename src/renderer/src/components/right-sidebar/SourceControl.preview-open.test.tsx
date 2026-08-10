@@ -144,7 +144,17 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
   vi.clearAllMocks()
   mocks.calls.createEmptySplitGroup.mockReturnValue('group-2')
   mocks.calls.discardRuntimeGitPath.mockResolvedValue(undefined)
-  mocks.calls.bulkDiscardStagedRuntimeGitPaths.mockResolvedValue(undefined)
+  mocks.calls.bulkDiscardStagedRuntimeGitPaths.mockImplementation(
+    async (_context: unknown, filePaths: string[]) => ({
+      operationId: 'op-test',
+      state: 'succeeded',
+      mutation: 'complete',
+      affectedPaths: filePaths,
+      completedPaths: filePaths,
+      uncertainPaths: [],
+      remainingPaths: []
+    })
+  )
   mocks.calls.bulkStageRuntimeGitPaths.mockResolvedValue(undefined)
   mocks.calls.refreshGitStatusForWorktree.mockResolvedValue(undefined)
   mocks.calls.requestEditorSaveQuiesce.mockResolvedValue(undefined)
@@ -478,6 +488,45 @@ describe('SourceControl preview row opens', () => {
     expect(mocks.calls.bulkDiscardStagedRuntimeGitPaths.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.calls.notifyEditorExternalFileChange.mock.invocationCallOrder[0]
     )
+    expect(mocks.calls.refreshGitStatusForWorktree).toHaveBeenCalled()
+  })
+
+  it('refreshes status and editors after a partial staged discard receipt', async () => {
+    mocks.calls.bulkDiscardStagedRuntimeGitPaths.mockResolvedValueOnce({
+      operationId: 'op-partial',
+      state: 'failed',
+      mutation: 'possible',
+      affectedPaths: ['src/staged.ts'],
+      completedPaths: [],
+      uncertainPaths: ['src/staged.ts'],
+      remainingPaths: []
+    })
+    resetState({
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({ path: 'src/staged.ts', area: 'staged', status: 'modified' })
+        ]
+      }
+    })
+    renderSourceControl()
+
+    act(() =>
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Discard all"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    const confirmButton = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Discard all'
+    )
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(mocks.calls.notifyEditorExternalFileChange).toHaveBeenCalledWith(
+      expect.objectContaining({ relativePath: 'src/staged.ts' })
+    )
+    expect(mocks.calls.refreshGitStatusForWorktree).toHaveBeenCalled()
   })
 
   it('keeps nested-only submodule rows non-stageable from the parent repo', () => {

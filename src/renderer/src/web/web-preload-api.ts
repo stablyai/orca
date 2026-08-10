@@ -11,6 +11,7 @@ import { parseHostAccessLink } from '../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing-verification'
 import { assertGitIndexPreservingDiscardCapability } from '../../../shared/git-index-preserving-discard-capability'
 import { assertGitStagedDiscardCapability } from '../../../shared/git-staged-discard-operation'
+import type { GitStagedDiscardReceipt } from '../../../shared/git-staged-discard-receipt'
 import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../../../shared/protocol-version'
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
@@ -2253,14 +2254,27 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       assertGitIndexPreservingDiscardCapability(await callRuntimeResult('status.get'))
       await mutateGitPaths('git.bulkDiscardFromIndex', worktreePath, filePaths)
     },
-    bulkDiscardStaged: async ({ worktreePath, filePaths }) => {
+    bulkDiscardStaged: async ({ worktreePath, filePaths, operationId }) => {
       assertGitStagedDiscardCapability(await callRuntimeResult('status.get'))
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.bulkDiscardStaged', {
-        worktree: toRuntimeWorktreeSelector(worktree.id),
-        filePaths,
-        stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
-      })
+      const selector = toRuntimeWorktreeSelector(worktree.id)
+      try {
+        return await callRuntimeResult<GitStagedDiscardReceipt>('git.bulkDiscardStaged', {
+          worktree: selector,
+          filePaths,
+          operationId,
+          stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+        })
+      } catch (error) {
+        const receipt = await callRuntimeResult<GitStagedDiscardReceipt | null>(
+          'git.getStagedDiscardReceipt',
+          { worktree: selector, operationId }
+        ).catch(() => null)
+        if (receipt !== null) {
+          return receipt
+        }
+        throw error
+      }
     },
     remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)

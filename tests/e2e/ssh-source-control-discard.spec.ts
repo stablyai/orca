@@ -82,7 +82,8 @@ test.describe('Docker SSH Source Control discard', () => {
           await window.api.git.bulkDiscardStaged({
             connectionId,
             worktreePath,
-            filePaths: ['staged.txt']
+            filePaths: ['staged.txt'],
+            operationId: crypto.randomUUID()
           })
         },
         {

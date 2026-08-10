@@ -88,8 +88,8 @@ export const GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY =
   'git.index-preserving-discard.v1' as const
 export const GIT_INDEX_PRESERVING_DISCARD_UPDATE_REQUIRED_MESSAGE =
   'Discard requires a newer Orca server. Update the HUB and try again.'
-export const GIT_STAGED_DISCARD_RUNTIME_CAPABILITY = 'git.staged-discard.v1' as const
-export const GIT_STAGED_DISCARD_OPERATION_VERSION = 1 as const
+export const GIT_STAGED_DISCARD_RUNTIME_CAPABILITY = 'git.staged-discard.v2' as const
+export const GIT_STAGED_DISCARD_OPERATION_VERSION = 2 as const
 export const GIT_STAGED_DISCARD_UPDATE_REQUIRED_MESSAGE =
   'Discarding staged changes requires a newer Orca server. Update the HUB and try again.'
 

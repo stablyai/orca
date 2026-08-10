@@ -86,6 +86,7 @@ import {
   canStageStatusEntry,
   canUnstageStatusEntry
 } from './source-control-entry-actions'
+import { throwIfGitStagedDiscardFailed } from '../../../../shared/git-staged-discard-receipt'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import {
   buildGitStatusSourceControlTree,
@@ -5399,23 +5400,29 @@ function SourceControlInner(): React.JSX.Element {
           })
         )
       )
-      await bulkDiscardStagedRuntimeGitPaths(
-        {
-          // Why: capability proof and both Git mutations belong to the repo owner.
-          settings: activeRepoSettings,
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId: getConnectionId(activeWorktreeId) ?? undefined
-        },
-        filePaths
-      )
-      for (const relativePath of filePaths) {
-        notifyEditorExternalFileChange({
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          relativePath,
-          runtimeEnvironmentId
-        })
+      let affectedPaths = filePaths
+      try {
+        const receipt = await bulkDiscardStagedRuntimeGitPaths(
+          {
+            // Why: capability proof and both Git mutations belong to the repo owner.
+            settings: activeRepoSettings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId: getConnectionId(activeWorktreeId) ?? undefined
+          },
+          filePaths
+        )
+        affectedPaths = receipt.affectedPaths
+        throwIfGitStagedDiscardFailed(receipt)
+      } finally {
+        for (const relativePath of affectedPaths) {
+          notifyEditorExternalFileChange({
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            relativePath,
+            runtimeEnvironmentId
+          })
+        }
       }
     },
     [activeRepoSettings, activeWorktreeId, worktreePath]
@@ -5461,7 +5468,7 @@ function SourceControlInner(): React.JSX.Element {
           toast.error(
             translate(
               'auto.components.right.sidebar.SourceControl.a5e5a11090',
-              'Discard all failed before staged changes were modified'
+              'Discard all may have partially completed'
             ),
             {
               description: errors[0] instanceof Error ? errors[0].message : undefined
@@ -5490,11 +5497,14 @@ function SourceControlInner(): React.JSX.Element {
           )
         }
         if (!result.aborted) {
-          await refreshActiveGitStatusAfterMutation()
           clearSelection()
         }
       } finally {
-        setIsExecutingBulk(false)
+        try {
+          await refreshActiveGitStatusAfterMutation()
+        } finally {
+          setIsExecutingBulk(false)
+        }
       }
     },
     [

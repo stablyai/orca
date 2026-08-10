@@ -8992,6 +8992,8 @@ export class OrcaRuntimeService {
     this.gitCommands.bulkDiscardRuntimeGitPaths.bind(this.gitCommands)
   bulkDiscardStagedRuntimeGitPaths: RuntimeGitCommands['bulkDiscardStagedRuntimeGitPaths'] =
     this.gitCommands.bulkDiscardStagedRuntimeGitPaths.bind(this.gitCommands)
+  getStagedDiscardRuntimeGitReceipt: RuntimeGitCommands['getStagedDiscardRuntimeGitReceipt'] =
+    this.gitCommands.getStagedDiscardRuntimeGitReceipt.bind(this.gitCommands)
   discardRuntimeGitPath: RuntimeGitCommands['discardRuntimeGitPath'] =
     this.gitCommands.discardRuntimeGitPath.bind(this.gitCommands)
   getRuntimeGitRemoteFileUrl: RuntimeGitCommands['getRuntimeGitRemoteFileUrl'] =

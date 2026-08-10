@@ -72,7 +72,7 @@ describe('staged discard mixed-version safety', () => {
   it.each([
     ['absent', undefined],
     ['malformed', GIT_STAGED_DISCARD_RUNTIME_CAPABILITY],
-    ['unsupported', ['git.staged-discard.v2']],
+    ['unsupported', ['git.staged-discard.v1']],
     ['mixed malformed', [GIT_STAGED_DISCARD_RUNTIME_CAPABILITY, 1]]
   ])('new client rejects an %s old-host proof without changing Git bytes', async (_, proof) => {
     const repo = createStagedRepo()
@@ -134,7 +134,8 @@ describe('staged discard mixed-version safety', () => {
 
     expect(call.mock.calls.map(([args]) => args.method)).toEqual([
       'status.get',
-      'git.bulkDiscardStaged'
+      'git.bulkDiscardStaged',
+      'git.getStagedDiscardReceipt'
     ])
     expect(snapshot(repo)).toEqual(before)
   })

@@ -25,6 +25,10 @@ import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-hi
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree-id'
 import { assertGitIndexPreservingDiscardCapability } from '../../../shared/git-index-preserving-discard-capability'
 import { assertGitStagedDiscardCapability } from '../../../shared/git-staged-discard-operation'
+import {
+  assertGitStagedDiscardReceipt,
+  type GitStagedDiscardReceipt
+} from '../../../shared/git-staged-discard-receipt'
 import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../../../shared/protocol-version'
 import {
   callRuntimeRpc,
@@ -897,28 +901,50 @@ export async function bulkUnstageRuntimeGitPaths(
 export async function bulkDiscardStagedRuntimeGitPaths(
   context: RuntimeGitContext,
   filePaths: string[]
-): Promise<void> {
+): Promise<GitStagedDiscardReceipt> {
+  const operationId = crypto.randomUUID()
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind === 'local' || !context.worktreeId) {
-    await window.api.git.bulkDiscardStaged({
-      worktreePath: resolveLocalWorktreePath(context),
-      filePaths,
-      connectionId: context.connectionId
-    })
-    return
+    return assertGitStagedDiscardReceipt(
+      await window.api.git.bulkDiscardStaged({
+        worktreePath: resolveLocalWorktreePath(context),
+        filePaths,
+        operationId,
+        connectionId: context.connectionId
+      }),
+      operationId
+    )
   }
   const status = await getRuntimeEnvironmentStatus(target.environmentId, 15_000)
   assertGitStagedDiscardCapability(status)
-  await callRuntimeRpc(
-    target,
-    'git.bulkDiscardStaged',
-    {
-      worktree: toRuntimeWorktreeSelector(context.worktreeId),
-      filePaths,
-      stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
-    },
-    { timeoutMs: 15_000 }
-  )
+  const worktree = toRuntimeWorktreeSelector(context.worktreeId)
+  try {
+    return assertGitStagedDiscardReceipt(
+      await callRuntimeRpc(
+        target,
+        'git.bulkDiscardStaged',
+        {
+          worktree,
+          filePaths,
+          operationId,
+          stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+        },
+        { timeoutMs: 15_000 }
+      ),
+      operationId
+    )
+  } catch (error) {
+    const receipt = await callRuntimeRpc(
+      target,
+      'git.getStagedDiscardReceipt',
+      { worktree, operationId },
+      { timeoutMs: 15_000 }
+    ).catch(() => null)
+    if (receipt !== null) {
+      return assertGitStagedDiscardReceipt(receipt, operationId)
+    }
+    throw error
+  }
 }
 
 export async function bulkDiscardRuntimeGitPaths(

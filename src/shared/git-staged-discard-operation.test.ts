@@ -26,7 +26,7 @@ describe('staged discard operation', () => {
     null,
     {},
     { capabilities: GIT_STAGED_DISCARD_RUNTIME_CAPABILITY },
-    { capabilities: ['git.staged-discard.v2'] },
+    { capabilities: ['git.staged-discard.v1'] },
     { capabilities: [GIT_STAGED_DISCARD_RUNTIME_CAPABILITY, 1] }
   ])('rejects absent, malformed, or mismatched runtime capabilities', (status) => {
     expect(() => assertGitStagedDiscardCapability(status)).toThrow(
@@ -42,7 +42,7 @@ describe('staged discard operation', () => {
     ).toBe(true)
     expect(supportsGitStagedDiscardOperation(undefined)).toBe(false)
     expect(supportsGitStagedDiscardOperation({ stagedDiscardOperationVersion: '1' })).toBe(false)
-    expect(supportsGitStagedDiscardOperation({ stagedDiscardOperationVersion: 2 })).toBe(false)
+    expect(supportsGitStagedDiscardOperation({ stagedDiscardOperationVersion: 1 })).toBe(false)
   })
 
   it('builds one combined index and worktree restore', () => {

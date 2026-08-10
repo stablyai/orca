@@ -251,7 +251,8 @@ describe('git RPC methods', () => {
       makeRequest('git.bulkDiscardStaged', {
         worktree: 'id:wt-1',
         filePaths: ['src/e.ts', 'f.ts'],
-        stagedDiscardOperationVersion: 1
+        operationId: 'op-1',
+        stagedDiscardOperationVersion: 2
       })
     )
 
@@ -261,13 +262,14 @@ describe('git RPC methods', () => {
     expect(runtime.bulkDiscardRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['src/a.ts', 'b.ts'])
     expect(runtime.discardRuntimeGitPath).toHaveBeenCalledWith('id:wt-1', 'src/c.ts')
     expect(runtime.bulkDiscardRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['src/c.ts', 'd.ts'])
-    expect(runtime.bulkDiscardStagedRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', [
-      'src/e.ts',
-      'f.ts'
-    ])
+    expect(runtime.bulkDiscardStagedRuntimeGitPaths).toHaveBeenCalledWith(
+      'id:wt-1',
+      ['src/e.ts', 'f.ts'],
+      'op-1'
+    )
   })
 
-  it.each([undefined, '1', 2])(
+  it.each([undefined, '2', 1])(
     'rejects staged discard version %s before the runtime mutation',
     async (stagedDiscardOperationVersion) => {
       const runtime = {
@@ -280,6 +282,7 @@ describe('git RPC methods', () => {
         makeRequest('git.bulkDiscardStaged', {
           worktree: 'id:wt-1',
           filePaths: ['staged.txt'],
+          operationId: 'op-rejected',
           stagedDiscardOperationVersion
         })
       )

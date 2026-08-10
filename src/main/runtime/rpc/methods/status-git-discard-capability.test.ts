@@ -41,7 +41,7 @@ describe('Git discard runtime capability', () => {
   it('advertises staged discard only when its authoritative handler is registered', async () => {
     const capable = (await handler(undefined, {
       runtime: runtime(),
-      registeredMethods: new Set(['git.bulkDiscardStaged'])
+      registeredMethods: new Set(['git.bulkDiscardStaged', 'git.getStagedDiscardReceipt'])
     })) as { capabilities: string[] }
     const legacy = (await handler(undefined, {
       runtime: runtime(),

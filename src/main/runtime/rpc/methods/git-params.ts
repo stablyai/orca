@@ -205,7 +205,12 @@ export const GitBulkPaths = WorktreeSelector.extend({
 })
 
 export const GitBulkStagedDiscard = GitBulkPaths.extend({
-  stagedDiscardOperationVersion: z.literal(GIT_STAGED_DISCARD_OPERATION_VERSION)
+  stagedDiscardOperationVersion: z.literal(GIT_STAGED_DISCARD_OPERATION_VERSION),
+  operationId: z.string().min(1).max(128)
+})
+
+export const GitStagedDiscardReceipt = WorktreeSelector.extend({
+  operationId: z.string().min(1).max(128)
 })
 
 const GitPushTargetParam = z.object({

@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: this suite covers the SSH git provider's one-RPC-per-method contract; splitting it would duplicate the shared mux fixture. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshGitProvider } from './ssh-git-provider'
+import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../../shared/protocol-version'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
@@ -798,10 +799,20 @@ describe('SshGitProvider', () => {
 
   it('bulkDiscardStagedChanges proves relay support before one mutation request', async () => {
     mux.request
-      .mockResolvedValueOnce({ stagedDiscardOperationVersion: 1 })
-      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+      })
+      .mockResolvedValueOnce({
+        operationId: 'op-1',
+        state: 'succeeded',
+        mutation: 'complete',
+        affectedPaths: ['a.ts', 'b.ts'],
+        completedPaths: ['a.ts', 'b.ts'],
+        uncertainPaths: [],
+        remainingPaths: []
+      })
 
-    await provider.bulkDiscardStagedChanges('/home/user/repo', ['a.ts', 'b.ts'])
+    await provider.bulkDiscardStagedChanges('/home/user/repo', ['a.ts', 'b.ts'], 'op-1')
 
     expect(mux.request.mock.calls).toEqual([
       ['git.getCapabilities', undefined, { timeoutMs: 5_000 }],
@@ -810,7 +821,8 @@ describe('SshGitProvider', () => {
         {
           worktreePath: '/home/user/repo',
           filePaths: ['a.ts', 'b.ts'],
-          stagedDiscardOperationVersion: 1
+          operationId: 'op-1',
+          stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
         }
       ]
     ])
@@ -820,17 +832,42 @@ describe('SshGitProvider', () => {
     undefined,
     {},
     { stagedDiscardOperationVersion: '1' },
-    { stagedDiscardOperationVersion: 2 }
+    { stagedDiscardOperationVersion: 1 }
   ])('bulkDiscardStagedChanges fails closed for relay proof %#', async (capabilities) => {
     mux.request.mockResolvedValue(capabilities)
 
-    await expect(provider.bulkDiscardStagedChanges('/home/user/repo', ['a.ts'])).rejects.toThrow(
-      'latest SSH relay'
-    )
+    await expect(
+      provider.bulkDiscardStagedChanges('/home/user/repo', ['a.ts'], 'op-1')
+    ).rejects.toThrow('latest SSH relay')
 
     expect(mux.request).toHaveBeenCalledTimes(1)
     expect(mux.request).toHaveBeenCalledWith('git.getCapabilities', undefined, {
       timeoutMs: 5_000
+    })
+  })
+
+  it('recovers the authoritative relay receipt after a lost mutation acknowledgement', async () => {
+    mux.request
+      .mockResolvedValueOnce({
+        stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+      })
+      .mockRejectedValueOnce(new Error('request timed out'))
+      .mockResolvedValueOnce({
+        operationId: 'op-lost-ack',
+        state: 'pending',
+        mutation: 'possible',
+        affectedPaths: ['a.ts'],
+        completedPaths: [],
+        uncertainPaths: ['a.ts'],
+        remainingPaths: []
+      })
+
+    await expect(
+      provider.bulkDiscardStagedChanges('/home/user/repo', ['a.ts'], 'op-lost-ack')
+    ).resolves.toMatchObject({ state: 'pending', mutation: 'possible' })
+    expect(mux.request).toHaveBeenLastCalledWith('git.getStagedDiscardReceipt', {
+      worktreePath: '/home/user/repo',
+      operationId: 'op-lost-ack'
     })
   })
 

@@ -24,7 +24,10 @@ export const STATUS_METHODS: RpcMethod[] = [
       ) {
         capabilities.push(GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY)
       }
-      if (registeredMethods?.has('git.bulkDiscardStaged')) {
+      if (
+        registeredMethods?.has('git.bulkDiscardStaged') &&
+        registeredMethods.has('git.getStagedDiscardReceipt')
+      ) {
         capabilities.push(GIT_STAGED_DISCARD_RUNTIME_CAPABILITY)
       }
       return {

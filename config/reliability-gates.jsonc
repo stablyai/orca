@@ -20,7 +20,7 @@
       "surfaces": [
         "single-file discard",
         "bulk discard",
-        "atomic staged discard",
+        "receipted staged discard",
         "paired-runtime version skew",
         "Source Control confirmation",
         "direct SSH Git mutations"
@@ -29,14 +29,14 @@
       "providers": ["local", "ssh", "paired-runtime", "web"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["local", "ssh", "paired-runtime", "web"],
-      "coverageNotes": "A real macOS Git oracle covers tracked staged-only, staged plus unstaged, added, intent-to-add, renamed, deleted, untracked, conflicted, partial-index, bulk, linked-worktree, and non-Git folder cases. Byte-identical skew oracles reject absent, malformed, unsupported, mismatched, and falsely advertised capability before mutation; web and mobile authorization contracts pin paired callers. Headed Electron covers both visible discard paths, Git 2.25.5 covers both restore commands, and a macOS client against an ephemeral Linux Docker SSH target covers the authoritative relay mutation and remote index/worktree state. Physical Windows and WSL UI journeys remain gaps; deterministic WSL argv tests cover separator handling.",
+      "coverageNotes": "A real macOS Git oracle covers tracked staged-only, staged plus unstaged, added, intent-to-add, renamed, deleted, untracked, conflicted, partial-index, bulk, linked-worktree, non-Git folder, and cross-batch permission-failure cases. Byte-identical skew oracles reject absent, malformed, unsupported, mismatched, and falsely advertised capability before mutation; mutation-ID ledgers return pending or settled host receipts after timeout and lost acknowledgement. Web and mobile authorization contracts pin paired callers, while Source Control always reconciles status and editors after possible mutation. Headed Electron covers both visible discard paths, Git 2.25.5 covers both restore commands, and a macOS client against an ephemeral Linux Docker SSH target covers the authoritative relay mutation and remote index/worktree state. Physical Windows and WSL UI journeys remain gaps; deterministic WSL argv tests cover separator handling.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/5880"],
-      "invariant": "Unstaged discard must preserve the authoritative index, while staged Discard all must negotiate the exact operation version before one host-owned combined index/worktree restore. Any absent, malformed, unsupported, mismatched, or falsely advertised capability must fail closed without invoking legacy unstage, changing cached status/diff, or changing index/worktree bytes across paired-runtime and direct-SSH owners.",
-      "oracle": "Snapshot the raw index, cached diff, porcelain status, and worktree bytes before discard. Require the unstaged matrix to preserve staged blobs, the staged matrix to restore index and worktree from HEAD including expanded rename sources, conflicts and non-Git folders to remain byte-identical after refusal, every rejected skew path to make zero mutation calls, the headed UI to exercise both actions, and a real Docker SSH relay to produce the same authoritative state.",
+      "invariant": "Unstaged discard must preserve the authoritative index, while staged Discard all must negotiate the exact operation version before one host-owned combined index/worktree restore. Any absent, malformed, unsupported, mismatched, or falsely advertised capability must fail closed without invoking legacy unstage. Every accepted operation must return an idempotent host receipt that identifies complete, partial, uncertain, remaining, or pending paths, and the renderer must reconcile status and editors whenever mutation may have occurred.",
+      "oracle": "Snapshot the raw index, cached diff, porcelain status, and worktree bytes before discard. Require the unstaged matrix to preserve staged blobs, the staged matrix to restore index and worktree from HEAD including expanded rename sources, conflicts and non-Git folders to remain byte-identical after refusal, every rejected skew path to make zero mutation calls, a real permission failure after one bounded batch to report completed and uncertain paths, timeout/lost-ack replay to return the same owner receipt, the headed UI to exercise both actions, and a real Docker SSH relay to produce the same authoritative state.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/git/discard-index-semantics.test.ts src/main/git/status-discard-symlink.test.ts src/main/git/status-wsl-pathspecs.test.ts src/main/git/status.test.ts src/shared/git-discard-status.test.ts src/shared/git-binary-compatibility.test.ts src/relay/git-handler.test.ts src/relay/integration.test.ts src/renderer/src/components/right-sidebar/discard-all-sequence.test.ts src/renderer/src/components/right-sidebar/source-control-discard-confirmation.test.ts src/renderer/src/components/right-sidebar/SourceControl.preview-open.test.tsx --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/git.test.ts src/main/runtime/rpc/methods/status-git-discard-capability.test.ts src/renderer/src/runtime/runtime-git-client.test.ts src/shared/git-index-preserving-discard-capability.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/git-staged-discard-operation.test.ts src/main/providers/ssh-git-staged-discard-capability.test.ts src/main/providers/ssh-git-provider.test.ts src/main/ipc/filesystem.test.ts src/main/runtime/mobile-rpc-allowlist.test.ts src/renderer/src/runtime/runtime-git-staged-discard-client.test.ts src/renderer/src/runtime/runtime-git-staged-discard-skew.test.ts src/renderer/src/web/web-preload-api.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/git-staged-discard-operation.test.ts src/shared/git-staged-discard-receipt.test.ts src/main/providers/ssh-git-staged-discard-capability.test.ts src/main/providers/ssh-git-provider.test.ts src/main/ipc/filesystem.test.ts src/main/runtime/mobile-rpc-allowlist.test.ts src/renderer/src/runtime/runtime-git-staged-discard-client.test.ts src/renderer/src/runtime/runtime-git-staged-discard-skew.test.ts src/renderer/src/web/web-preload-api.test.ts --reporter=dot",
         "pnpm --dir mobile exec vitest run src/source-control/mobile-git-index-preserving-discard.test.ts --reporter=dot",
         "pnpm exec playwright test tests/e2e/source-control-discard-confirmation.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-source-control-discard.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
@@ -58,6 +58,7 @@
         "src/renderer/src/runtime/runtime-git-client.test.ts",
         "src/shared/git-index-preserving-discard-capability.test.ts",
         "src/shared/git-staged-discard-operation.test.ts",
+        "src/shared/git-staged-discard-receipt.test.ts",
         "src/main/providers/ssh-git-staged-discard-capability.test.ts",
         "src/main/providers/ssh-git-provider.test.ts",
         "src/main/ipc/filesystem.test.ts",
@@ -76,7 +77,15 @@
             "deletes an intent-to-add path as promised by the Source Control dialog",
             "refuses an unmerged path without changing its index or worktree",
             "works from a linked worktree without changing the main checkout",
-            "does not delete a file when a folder workspace is not a Git repository"
+            "does not delete a file when a folder workspace is not a Git repository",
+            "reports completed and uncertain batches after a real permission failure"
+          ]
+        },
+        {
+          "file": "src/shared/git-staged-discard-receipt.test.ts",
+          "assertions": [
+            "reports uncertain and untouched paths after a batched failure",
+            "returns in-flight and settled receipts after a lost acknowledgement"
           ]
         },
         {
@@ -114,12 +123,16 @@
         },
         {
           "file": "src/renderer/src/components/right-sidebar/SourceControl.preview-open.test.tsx",
-          "assertions": ["quiesces staged Discard all before the owner mutation and reloads after"]
+          "assertions": [
+            "quiesces staged Discard all before the owner mutation and reloads after",
+            "refreshes status and editors after a partial staged discard receipt"
+          ]
         },
         {
           "file": "src/main/providers/ssh-git-provider.test.ts",
           "assertions": [
-            "bulkDiscardStagedChanges proves relay support before one mutation request"
+            "bulkDiscardStagedChanges proves relay support before one mutation request",
+            "recovers the relay receipt after a lost mutation acknowledgement"
           ]
         }
       ],
@@ -148,7 +161,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Each staged operation adds one tracked-status preflight with untracked scanning disabled and one combined restore per 100 expanded pathspecs. Paired runtimes add one status proof; direct SSH caches one positive capability probe per provider, re-probes only negative results after upgrade, and sends one mutation request. There is no polling, per-path subprocess, provider fanout, listener, or retained payload."
+        "evidence": "Each staged operation adds one tracked-status preflight with untracked scanning disabled and one combined restore per 100 expanded pathspecs. Paired runtimes add one status proof; direct SSH caches one positive capability probe per provider and sends one mutation request. A receipt lookup occurs only after transport failure, and each host retains at most 256 small receipts; there is no steady-state polling, per-path subprocess, provider fanout, or listener."
       },
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",

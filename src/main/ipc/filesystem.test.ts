@@ -154,7 +154,7 @@ vi.mock('../git/status', () => ({
   unstageFile: unstageFileMock,
   bulkUnstageFiles: bulkUnstageFilesMock,
   bulkDiscardChanges: bulkDiscardChangesMock,
-  bulkDiscardStagedChanges: bulkDiscardStagedChangesMock,
+  bulkDiscardStagedChangesWithReceipt: bulkDiscardStagedChangesMock,
   discardChanges: discardChangesMock
 }))
 
@@ -1730,17 +1730,27 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('routes staged discard to one local owner operation', async () => {
-    bulkDiscardStagedChangesMock.mockResolvedValue(undefined)
+    bulkDiscardStagedChangesMock.mockResolvedValue({
+      operationId: 'op-local',
+      state: 'succeeded',
+      mutation: 'complete',
+      affectedPaths: [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
+      completedPaths: [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
+      uncertainPaths: [],
+      remainingPaths: []
+    })
     registerFilesystemHandlers(store as never)
 
     await handlers.get('git:bulkDiscardStaged')!(null, {
       worktreePath: WORKTREE_FEATURE_PATH,
-      filePaths: ['./src/../src/file.ts', 'nested//child.ts']
+      filePaths: ['./src/../src/file.ts', 'nested//child.ts'],
+      operationId: 'op-local'
     })
 
     expect(bulkDiscardStagedChangesMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
       [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
+      'op-local',
       {}
     )
     expect(bulkUnstageFilesMock).not.toHaveBeenCalled()
@@ -2934,10 +2944,15 @@ describe('registerFilesystemHandlers', () => {
     await handlers.get('git:bulkDiscardStaged')!(null, {
       worktreePath: '/remote/repo',
       filePaths: ['a.ts', 'b.ts'],
+      operationId: 'op-ssh',
       connectionId: 'conn-1'
     })
 
-    expect(sshBulkDiscardStagedMock).toHaveBeenCalledWith('/remote/repo', ['a.ts', 'b.ts'])
+    expect(sshBulkDiscardStagedMock).toHaveBeenCalledWith(
+      '/remote/repo',
+      ['a.ts', 'b.ts'],
+      'op-ssh'
+    )
     expect(bulkDiscardStagedChangesMock).not.toHaveBeenCalled()
   })
 

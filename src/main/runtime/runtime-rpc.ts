@@ -229,6 +229,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'git.bulkStage',
   'git.bulkDiscardFromIndex',
   'git.bulkDiscardStaged',
+  'git.getStagedDiscardReceipt',
   'git.bulkUnstage',
   'git.branchCompare',
   'git.branchDiff',

@@ -3477,8 +3477,9 @@ const api = {
     bulkDiscardStaged: (args: {
       worktreePath: string
       filePaths: string[]
+      operationId: string
       connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('git:bulkDiscardStaged', args),
+    }) => ipcRenderer.invoke('git:bulkDiscardStaged', args),
     remoteFileUrl: (args: {
       worktreePath: string
       relativePath: string

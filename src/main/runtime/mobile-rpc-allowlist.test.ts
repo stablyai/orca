@@ -135,7 +135,9 @@ describe('mobile RPC allowlist', () => {
 
   it('authorizes paired web staged discard without adding a mobile caller', () => {
     expect(mobileRpcAllowlist()).toContain('git.bulkDiscardStaged')
+    expect(mobileRpcAllowlist()).toContain('git.getStagedDiscardReceipt')
     expect(registeredRuntimeMethods()).toContain('git.bulkDiscardStaged')
+    expect(registeredRuntimeMethods()).toContain('git.getStagedDiscardReceipt')
     expect(mobileRpcMethods()).not.toContain('git.bulkDiscardStaged')
   })
 

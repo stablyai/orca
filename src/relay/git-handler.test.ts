@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { MAX_RENDERED_DIFF_COMBINED_CHARACTERS } from '../shared/large-diff-render-limit'
 import { reviewHeadRemoteRefComponent } from '../shared/review-head-tracking-ref'
+import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../shared/protocol-version'
 import {
   createMockDispatcher,
   gitInit,
@@ -143,7 +144,7 @@ describe('GitHandler', () => {
 
   it('reports the staged discard owner capability', async () => {
     await expect(dispatcher.callRequest('git.getCapabilities')).resolves.toEqual({
-      stagedDiscardOperationVersion: 1
+      stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
     })
   })
 
@@ -918,7 +919,8 @@ describe('GitHandler', () => {
       await dispatcher.callRequest('git.bulkDiscardStaged', {
         worktreePath: tmpDir,
         filePaths: ['file.txt', 'new.txt'],
-        stagedDiscardOperationVersion: 1
+        operationId: 'op-success',
+        stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
       })
 
       await expect(fs.readFile(path.join(tmpDir, 'file.txt'), 'utf8')).resolves.toBe('base\n')
@@ -931,7 +933,7 @@ describe('GitHandler', () => {
       ).toBe('')
     })
 
-    it.each([undefined, '1', 2])(
+    it.each([undefined, '2', 1])(
       'rejects staged discard version %s before changing any Git bytes',
       async (stagedDiscardOperationVersion) => {
         gitInit(tmpDir)
@@ -957,6 +959,7 @@ describe('GitHandler', () => {
           dispatcher.callRequest('git.bulkDiscardStaged', {
             worktreePath: tmpDir,
             filePaths: ['file.txt'],
+            operationId: 'op-rejected',
             stagedDiscardOperationVersion
           })
         ).rejects.toThrow('unsupported_staged_discard_operation')

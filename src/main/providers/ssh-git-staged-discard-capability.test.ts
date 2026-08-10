@@ -20,7 +20,7 @@ describe('SSH staged discard capability', () => {
     undefined,
     {},
     { stagedDiscardOperationVersion: '1' },
-    { stagedDiscardOperationVersion: 2 }
+    { stagedDiscardOperationVersion: 1 }
   ])('rejects and re-probes absent, malformed, or mismatched proof %#', async (result) => {
     const request = vi.fn().mockResolvedValue(result)
     const capability = new SshGitStagedDiscardCapability({ request } as never)
