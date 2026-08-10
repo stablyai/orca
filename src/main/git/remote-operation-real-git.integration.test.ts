@@ -178,7 +178,7 @@ describe.skipIf(process.platform !== 'win32')('real Windows remote Git cleanup',
     const hook = join(remote, 'hooks', 'pre-receive')
     writeFileSync(
       hook,
-      `#!/bin/sh\npowershell.exe -NoProfile -NonInteractive -Command '$PID | Set-Content -Encoding ascii -LiteralPath "hook-helper-pid"; while ($true) { [Console]::Error.Write(("x" * 65536)); [Console]::Error.Flush() }'\n`
+      `#!/bin/sh\npowershell.exe -NoProfile -NonInteractive -Command '$PID | Set-Content -Encoding ascii -LiteralPath "hook-helper-pid"; while ($true) { [Console]::Error.WriteLine(("x" * 4096)); [Console]::Error.Flush() }'\n`
     )
     chmodSync(hook, 0o755)
     writeFileSync(join(worktree, 'file.txt'), 'next\n')
