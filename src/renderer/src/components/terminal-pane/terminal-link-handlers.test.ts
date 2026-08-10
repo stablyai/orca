@@ -785,17 +785,17 @@ describe('handleOscLink', () => {
     await flushDoubleRaf()
 
     expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+      targetPath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
     })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
       }),
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
-      fileId: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
+      filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
+      fileId: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
       line: 5,
       column: 3,
       matchLength: 0
@@ -817,17 +817,17 @@ describe('handleOscLink', () => {
     await flushDoubleRaf()
 
     expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+      targetPath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
     })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
       }),
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
-      fileId: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
+      filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
+      fileId: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
       line: 5,
       column: 3,
       matchLength: 0
@@ -1666,7 +1666,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\repo',
         runtimeEnvironmentId: null,
         pathExistsCache: new Map([
-          ['active\0//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md', true]
+          ['active\0\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md', true]
         ])
       }
     )
@@ -1675,17 +1675,17 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(opened).toBe(true)
     expect(statMock).toHaveBeenCalledWith({
-      filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+      filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
     })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
       }),
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
-      fileId: '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md',
+      filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
+      fileId: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
       line: 5,
       column: 3,
       matchLength: 0
@@ -1873,7 +1873,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     ['modern', '\\\\wsl.localhost\\Ubuntu\\home\\repo'],
     ['legacy', '\\\\wsl$\\Ubuntu\\home\\repo']
   ])('maps POSIX terminal links for a %s WSL worktree', async (_label, worktreePath) => {
-    const mappedPath = '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+    const mappedPath = '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
     vi.mocked(window.api.shell.pathExists).mockImplementation(
       async (pathValue) => pathValue === mappedPath
     )
@@ -1912,7 +1912,7 @@ describe('createFilePathLinkProvider range bounds', () => {
   })
 
   it('resolves relative POSIX terminal links against the pane cwd before mapping', async () => {
-    const mappedPath = '//wsl.localhost/Ubuntu/root/workspace/myrepo/README.md'
+    const mappedPath = '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
     vi.mocked(window.api.shell.pathExists).mockImplementation(
       async (pathValue) => pathValue === mappedPath
     )
@@ -1930,10 +1930,16 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(window.api.shell.pathExists).toHaveBeenCalledWith(mappedPath)
   })
 
-  it('preserves existing UNC and native paths', () => {
+  it('canonicalizes WSL UNC to the Windows backslash form', () => {
     expect(
       mapTerminalFilePath('//wsl.localhost/Ubuntu/root/file.md', '\\\\wsl.localhost\\Ubuntu\\repo')
-    ).toBe('//wsl.localhost/Ubuntu/root/file.md')
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\root\\file.md')
+    expect(
+      mapTerminalFilePath(
+        '\\\\wsl.localhost\\Ubuntu\\root\\file.md',
+        '\\\\wsl.localhost\\Ubuntu\\repo'
+      )
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\root\\file.md')
     expect(
       mapTerminalFilePath('\\\\server\\share\\file.md', '\\\\wsl.localhost\\Ubuntu\\repo')
     ).toBe('\\\\server\\share\\file.md')
@@ -1949,7 +1955,7 @@ describe('createFilePathLinkProvider range bounds', () => {
 
   it('maps POSIX paths with the pane WSL distro when the worktree is on a Windows drive', () => {
     expect(mapTerminalFilePath('/home/alice/notes.md', 'C:\\repo', 'Ubuntu')).toBe(
-      '//wsl.localhost/Ubuntu/home/alice/notes.md'
+      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\notes.md'
     )
     expect(mapTerminalFilePath('/mnt/c/repo/README.md', 'C:\\repo', 'Ubuntu')).toBe(
       'C:\\repo\\README.md'

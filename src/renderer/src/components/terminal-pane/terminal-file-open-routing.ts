@@ -58,16 +58,19 @@ export function mapTerminalFilePath(
   worktreePath: string,
   wslDistro?: string | null
 ): string {
+  // Why: //wsl.localhost/... and \\wsl.localhost\... are the same file. Keep the
+  // backslash form so open tabs and file watchers match the Files sidebar (#13349).
+  const alreadyUnc = parseWslUncPath(filePath)
+  if (alreadyUnc) {
+    return toWindowsWslPath(alreadyUnc.linuxPath, alreadyUnc.distro)
+  }
   const distro = wslDistro?.trim() || parseWslUncPath(worktreePath)?.distro
-  if (!distro || !filePath.startsWith('/') || filePath.startsWith('//')) {
+  if (!distro || !filePath.startsWith('/')) {
     return filePath
   }
   // Why: /mnt/<drive> is a Windows drive mounted into WSL — reach it directly
   // instead of routing a native file back through the 9P share.
-  if (/^\/mnt\/[a-z](\/|$)/.test(filePath)) {
-    return toWindowsWslPath(filePath, distro)
-  }
-  return `//wsl.localhost/${distro}${filePath}`
+  return toWindowsWslPath(filePath, distro)
 }
 
 // Why: remote-runtime panes print the remote host's POSIX paths; the local WSL
