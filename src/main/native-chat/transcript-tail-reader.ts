@@ -7,6 +7,10 @@ import type {
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
+  readOpenCodeNativeChatTranscriptTail,
+  resolveOpenCodeNativeChatDbPath
+} from './opencode-sqlite-transcript'
+import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
@@ -217,6 +221,17 @@ export async function readNativeChatTranscriptTail(
 > {
   const decode = nativeChatLineDecoderForAgent(args.agent)
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
+  // Why: OpenCode stores conversations in SQLite (not JSONL) — route before
+  // the file-path resolver so missing .jsonl never becomes a false error.
+  if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
+    signal?.throwIfAborted()
+    return readOpenCodeNativeChatTranscriptTail({
+      dbPath: resolveOpenCodeNativeChatDbPath(args.openCodeDbPath),
+      sessionId: args.sessionId,
+      limit: args.limit,
+      beforeOffset: args.beforeOffset
+    })
+  }
   const filePath =
     args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
   signal?.throwIfAborted()

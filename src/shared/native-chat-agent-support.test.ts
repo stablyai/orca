@@ -12,10 +12,11 @@ describe('resolveNativeChatTranscriptAgent', () => {
     expect(resolveNativeChatTranscriptAgent('claude')).toBe('claude')
   })
 
-  it('passes codex, grok and omp through and rejects everything else', () => {
+  it('passes codex, grok, omp and opencode through and rejects everything else', () => {
     expect(resolveNativeChatTranscriptAgent('codex')).toBe('codex')
     expect(resolveNativeChatTranscriptAgent('grok')).toBe('grok')
     expect(resolveNativeChatTranscriptAgent('omp')).toBe('omp')
+    expect(resolveNativeChatTranscriptAgent('opencode')).toBe('opencode')
     expect(resolveNativeChatTranscriptAgent('cursor')).toBeNull()
     expect(resolveNativeChatTranscriptAgent(null)).toBeNull()
     expect(resolveNativeChatTranscriptAgent(undefined)).toBeNull()
@@ -27,6 +28,7 @@ describe('isNativeChatSupportedAgent', () => {
     expect(isNativeChatSupportedAgent('claude')).toBe(true)
     expect(isNativeChatSupportedAgent('openclaude')).toBe(true)
     expect(isNativeChatSupportedAgent('omp')).toBe(true)
+    expect(isNativeChatSupportedAgent('opencode')).toBe(true)
     expect(isNativeChatSupportedAgent('cursor')).toBe(false)
     expect(isNativeChatSupportedAgent(null)).toBe(false)
     expect(isNativeChatSupportedAgent(undefined)).toBe(false)
@@ -35,10 +37,12 @@ describe('isNativeChatSupportedAgent', () => {
 
 describe('nativeChatRequiresLocalTranscript', () => {
   it('covers the agents whose hook discloses no transcript path', () => {
-    // Claude/Codex report `transcript_path`; Grok and omp report only an id, so
-    // native chat has to find their file on a disk this process can read.
+    // Claude/Codex report `transcript_path`; Grok, omp, and OpenCode report only
+    // an id, so native chat has to find their session data on a disk this
+    // process can read (OpenCode conversations live in its local SQLite DB).
     expect(nativeChatRequiresLocalTranscript('grok')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('omp')).toBe(true)
+    expect(nativeChatRequiresLocalTranscript('opencode')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('claude')).toBe(false)
     expect(nativeChatRequiresLocalTranscript('openclaude')).toBe(false)
     expect(nativeChatRequiresLocalTranscript('codex')).toBe(false)

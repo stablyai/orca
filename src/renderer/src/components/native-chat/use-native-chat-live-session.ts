@@ -310,8 +310,14 @@ export function useNativeChatLiveSession(
   // Computed outside the status memo so hookState churn (status-only) never re-runs the assembler.
   const baseMessages = read.phase === 'ready' ? read.messages : EMPTY_MESSAGES
   const assembledMessages = useMemo(() => {
+    // Why: OpenCode re-emits the same message id when a part mutates in place
+    // (streaming text / tool state). Drop base copies of those ids so the live
+    // append wins and the list never shows two rows for one turn.
+    const appendedIds = appended.length > 0 ? new Set(appended.map((m) => m.id)) : null
     const transcript =
-      appended.length > 0 ? [...baseMessages, ...appended] : (baseMessages as NativeChatMessage[])
+      appended.length > 0
+        ? [...baseMessages.filter((m) => !appendedIds?.has(m.id)), ...appended]
+        : (baseMessages as NativeChatMessage[])
     // Base-axis signature: any change forces a full assembler reset so a missed trigger can't leave the cache stale.
     const baseSig = `${agent}\u0000${sessionId ?? ''}`
     const baseChanged = baseSig !== baseSigRef.current || baseMessages !== baseMessagesRef.current

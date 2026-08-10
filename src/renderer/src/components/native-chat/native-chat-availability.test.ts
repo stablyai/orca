@@ -105,6 +105,21 @@ describe('canToggleNativeChat', () => {
     expect(forConnection('runtime-ssh-env-1')).toBe(true)
   })
 
+  // Why: OpenCode keeps conversations in its local SQLite DB and reports no
+  // hook transcript path, so chat is only reachable on a readable disk.
+  it('rejects Model-A SSH opencode but accepts it local and runtime-owned', () => {
+    const forConnection = (connectionId: string | null): boolean =>
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'opencode',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+      })
+    expect(forConnection('ssh-target-1')).toBe(false)
+    expect(forConnection(null)).toBe(true)
+    expect(forConnection('runtime-ssh-env-1')).toBe(true)
+  })
+
   it('lets an existing Model-A SSH Grok chat toggle back to terminal', () => {
     expect(
       canToggleNativeChat({

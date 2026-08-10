@@ -1,9 +1,12 @@
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import {
   needsWslHostTranslation,
   toHostReadableTranscriptPath
 } from './host-readable-transcript-path'
+import { subscribeOpenCodeNativeChatTranscript } from './opencode-sqlite-live'
+import { resolveOpenCodeNativeChatDbPath } from './opencode-sqlite-transcript'
 import { resolveSessionFilePath } from './session-file-resolver'
 import { installTranscriptWatcher } from './transcript-watch-engine'
 import type {
@@ -195,6 +198,21 @@ export async function subscribeNativeChatTranscript(
   setupSignal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription> {
   setupSignal?.throwIfAborted()
+  // Why: OpenCode keeps conversations in SQLite, so live updates poll the DB
+  // instead of fs.watch on a JSONL path. Must run before the line-decoder gate.
+  if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
+    if (!args.sessionId.trim()) {
+      return { unsubscribe: () => {}, watching: false }
+    }
+    return subscribeOpenCodeNativeChatTranscript({
+      dbPath: resolveOpenCodeNativeChatDbPath(args.openCodeDbPath),
+      sessionId: args.sessionId,
+      initialLimit: args.initialLimit,
+      reconciliationIntervalMs: args.reconciliationIntervalMs,
+      onInitialSnapshot: args.onInitialSnapshot,
+      onAppend: args.onAppend
+    })
+  }
   const decode = nativeChatLineDecoderForAgent(args.agent)
   if (!decode) {
     // Nothing watchable — return a no-op teardown so callers can unconditionally

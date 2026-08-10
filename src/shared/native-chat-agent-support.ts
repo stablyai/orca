@@ -1,4 +1,4 @@
-export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp'
+export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp' | 'opencode'
 
 /** Agents whose transcripts the native chat view can parse and render. */
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
@@ -6,7 +6,8 @@ export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
   'openclaude',
   'codex',
   'grok',
-  'omp'
+  'omp',
+  'opencode'
 ])
 
 export function isNativeChatSupportedAgent(agent: string | null | undefined): boolean {
@@ -19,7 +20,13 @@ export function isNativeChatSupportedAgent(agent: string | null | undefined): bo
  *  so the chat view must stay closed instead of loading forever. */
 export function nativeChatRequiresLocalTranscript(agent: string | null | undefined): boolean {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  return transcriptAgent === 'grok' || transcriptAgent === 'omp'
+  return (
+    transcriptAgent === 'grok' ||
+    transcriptAgent === 'omp' ||
+    // Why: OpenCode reports only a session id; conversations live in its local
+    // SQLite DB (~/.local/share/opencode/opencode.db), so the reader needs that disk.
+    transcriptAgent === 'opencode'
+  )
 }
 
 /** True when the agent renders a digit-commit question selector that ignores
@@ -40,7 +47,7 @@ export function resolveNativeChatTranscriptAgent(
   if (agent === 'claude' || agent === 'openclaude') {
     return 'claude'
   }
-  if (agent === 'codex' || agent === 'grok' || agent === 'omp') {
+  if (agent === 'codex' || agent === 'grok' || agent === 'omp' || agent === 'opencode') {
     return agent
   }
   return null
