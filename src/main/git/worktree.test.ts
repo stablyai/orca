@@ -119,7 +119,8 @@ describe('listWorktrees in-flight sharing', () => {
           stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
         })
 
-      await expect(listWorktrees('/repo')).resolves.toEqual([])
+      // Why: timeouts must surface as failures — empty success would look like "no worktrees" (#13556).
+      await expect(listWorktrees('/repo')).rejects.toThrow('git timed out.')
       await expect(listWorktrees('/repo')).resolves.toEqual([
         expect.objectContaining({ path: '/repo', head: 'abc123' })
       ])

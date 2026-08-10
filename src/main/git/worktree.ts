@@ -790,9 +790,11 @@ async function listWorktreesUnshared(
     if (isNotGitRepositoryError(err)) {
       return []
     }
-    // Why: don't swallow git-compat/repo-state failures — else they resurface as opaque "created but not found in listing" errors.
+    // Why: rethrow transient failures (WSL/Git timeouts, spawn errors). Returning []
+    // made callers treat an unknown scan as "no worktrees", authorizing missing-worktree
+    // cleanup and killing live sessions (#13556).
     console.warn(`[git/worktree] listWorktrees failed for ${repoPath}:`, err)
-    return []
+    throw err
   }
 }
 
