@@ -69,6 +69,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'task_not_found',
   'task_not_startable',
   'dispatch_not_found',
+  'terminal_not_found',
   'dispatch_run_mismatch',
   'dispatch_inactive',
   'worker_identity_changed',

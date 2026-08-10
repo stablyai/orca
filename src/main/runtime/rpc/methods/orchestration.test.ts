@@ -375,6 +375,34 @@ describe('orchestration RPC methods', () => {
       ).rejects.toMatchObject({ code: 'invalid_argument' })
     })
 
+    it('rejects unknown bare terminal handles instead of storing unread mail', async () => {
+      setup()
+      await expect(
+        call('orchestration.send', {
+          from: 'term_coord',
+          to: 'term_00000000-0000-0000-0000-000000000000',
+          subject: 'gone'
+        })
+      ).rejects.toMatchObject({ code: 'terminal_not_found' })
+      expect(db.getUnreadMessages('term_00000000-0000-0000-0000-000000000000')).toHaveLength(0)
+    })
+
+    it('still delivers bare-handle mail to an active Dispatch assignee without a pane key', async () => {
+      setup()
+      const task = db.createTask({ spec: 'in-flight work' })
+      db.createDispatchContext(task.id, 'term_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      const result = (await call('orchestration.send', {
+        from: 'term_coord',
+        to: 'term_worker',
+        subject: 'how is it going?',
+        type: 'status'
+      })) as { message: { to_handle: string } }
+
+      expect(result.message.to_handle).toBe('term_worker')
+    })
+
     it('stores the runtime-observed sender pane key on the message row', async () => {
       setup()
       vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_runtime:leaf_runtime')

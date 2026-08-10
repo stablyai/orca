@@ -511,6 +511,21 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         )
       }
 
+      // Why: bare terminal handles used to accept unknown UUIDs with ok:true and
+      // store mail nobody can read; refuse like run:/dispatch: (#13363).
+      if (
+        !isGroupAddress(to) &&
+        !to.startsWith('run:') &&
+        !to.startsWith('dispatch:') &&
+        !to.startsWith('task:')
+      ) {
+        const livePaneKey = runtime.getTerminalPaneKey(to)
+        const activeAssignee = db.getActiveDispatchForTerminal(to)
+        if (!livePaneKey && !activeAssignee) {
+          throw new OrchestrationError('terminal_not_found', `Terminal ${to} was not found.`)
+        }
+      }
+
       if (!isGroupAddress(to)) {
         const federatedDispatchId = routing.dispatchId
         const federatedTarget =
