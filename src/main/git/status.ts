@@ -113,6 +113,42 @@ export function invalidateGitReadCaches(): void {
   resolvedUpstreamNameCache.clear()
 }
 
+/**
+ * Drop every cache entry whose worktree path matches one of the given paths (substring match
+ * against the cache key, which is `[worktreePath, ...runtimeOptions].join('\0')`). WSL and SSH
+ * runtimes only key on `wslDistro` / `connectionId`, so the path portion is always present.
+ * Cheap relative to a full cache clear; intended for repo-removal teardown so stale entries do
+ * not linger up to SUBMODULE_PATHS_CACHE_TTL_MS / RESOLVED_UPSTREAM_NAME_CACHE_TTL_MS.
+ */
+export function clearGitReadCachesForPaths(paths: readonly string[]): void {
+  if (paths.length === 0) {
+    return
+  }
+  const matches = (key: string): boolean => {
+    for (const path of paths) {
+      if (key.startsWith(path)) {
+        return true
+      }
+    }
+    return false
+  }
+  for (const [key] of submodulePathsCache) {
+    if (matches(key)) {
+      submodulePathsCache.delete(key)
+    }
+  }
+  for (const [key] of resolvedUpstreamNameCache) {
+    if (matches(key)) {
+      resolvedUpstreamNameCache.delete(key)
+    }
+  }
+  for (const [key] of effectiveUpstreamStatusCache) {
+    if (matches(key)) {
+      effectiveUpstreamStatusCache.delete(key)
+    }
+  }
+}
+
 export async function runWithGitReadCacheInvalidation<T>(run: () => Promise<T>): Promise<T> {
   invalidateGitReadCaches()
   try {

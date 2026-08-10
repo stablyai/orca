@@ -823,9 +823,9 @@ if (hasSingleInstanceLock) {
     ...getMainProcessLifecycleIdentity()
   })
   configureElectronNetworkCompatibility()
-  enableRendererHeapHeadroom()
+  enableRendererHeapHeadroom({ isServeMode })
   maybeApplyGpuFallbackForThisLaunch()
-  if (!gpuFallbackActiveThisLaunch) {
+  if (!gpuFallbackActiveThisLaunch && !isServeMode) {
     enableMainProcessGpuFeatures()
   }
   // Why: headless serve's offscreen BrowserWindows need an X display (Xvfb) on Linux; the result gates whether the offscreen backend is installed.
@@ -2125,7 +2125,10 @@ void app.whenReady().then(async () => {
   )
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
-  store = new Store({ dataFile: activeOrcaProfile.dataFile })
+  store = new Store({
+    dataFile: activeOrcaProfile.dataFile,
+    dropNonLocalHostWorkspaceSessions: isServeMode
+  })
   const windowsShellPathHydration = createWindowsShellPathHydration()
   if (process.platform === 'win32') {
     const settings = store.getSettings()
@@ -2458,6 +2461,9 @@ void app.whenReady().then(async () => {
       )
   }
   const runtimeService = new OrcaRuntimeService(store, stats, {
+    // Why: serve allocates one HeadlessEmulator per PTY and scrollback dominates per-PTY RSS.
+    // Mobile clients re-pull via terminal-snapshot if they need more history.
+    headlessEmulatorScrollback: isServeMode ? 1000 : undefined,
     agentSessionClaimSigner: loadAgentSessionClaimSigner(
       getProfileUserDataPath(),
       getProfileUserDataPath()
@@ -2615,140 +2621,153 @@ void app.whenReady().then(async () => {
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
     prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
   })
-  const pluginSystemStartupStartedAt = performance.now()
-  pluginKillListService = new PluginKillListService({
-    pluginsDataDir: getPluginsDataDir(app.getPath('userData'))
-  })
-  await pluginKillListService.initialize()
-  pluginMarketplaceService = new PluginMarketplaceService({
-    pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
-    getKillListEntry: (pluginKey) => pluginKillListService?.find(pluginKey) ?? null
-  })
-  const requestOfficialMarketplaceSeed = (): void => {
-    if (store?.getSettings().pluginSystemEnabled !== true) {
-      return
-    }
-    void pluginMarketplaceService?.seedOfficialSource().catch((error) => {
-      console.warn('[plugins] failed to configure the official marketplace:', error)
+  // Why: `orca serve` with plugins disabled never reaches PluginService through RPC. Constructing the
+  // service + kill list + marketplace eagerly costs ~5 small Maps and a kill-list file read on every serve
+  // boot. When the setting is off in serve, skip the whole block; toggling plugins on in serve requires a
+  // restart (desktop still hot-toggles via the existing onSettingsChanged path below).
+  const pluginSystemEnabledAtStartup = store?.getSettings().pluginSystemEnabled === true
+  const shouldInitPluginServices = !isServeMode || pluginSystemEnabledAtStartup
+  if (shouldInitPluginServices) {
+    const pluginSystemStartupStartedAt = performance.now()
+    pluginKillListService = new PluginKillListService({
+      pluginsDataDir: getPluginsDataDir(app.getPath('userData'))
     })
-  }
-  pluginMarketplaceInstaller = new PluginMarketplaceInstaller({
-    marketplace: pluginMarketplaceService,
-    userDataPath: app.getPath('userData'),
-    hostVersion: app.getVersion(),
-    blockedPluginReason: (pluginKey) => pluginKillListService?.reason(pluginKey) ?? null
-  })
-  pluginService = new PluginService({
-    userDataPath: app.getPath('userData'),
-    hostVersion: app.getVersion(),
-    // Feature flag: with the setting off, discovery returns nothing and no
-    // plugin code path runs at all.
-    isPluginSystemEnabled: () => store?.getSettings().pluginSystemEnabled === true,
-    getDisabledPlugins: () => normalizePluginIdList(store?.getSettings().disabledPlugins),
-    getPluginConsents: () => normalizePluginConsents(store?.getSettings().pluginConsents),
-    getDevPluginPaths: () => normalizePluginIdList(store?.getSettings().devPluginPaths),
-    getKeybindings: () => keybindings?.getOverrides() ?? {},
-    getPluginKillListEntry: (pluginKey) => pluginKillListService?.find(pluginKey) ?? null,
-    hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged)
-  })
-  const bundledPluginBootstrap = new PluginBundledBootstrapCoordinator({
-    root: resolveBundledPluginRoot({
-      isPackaged: app.isPackaged,
-      resourcesPath: process.resourcesPath,
-      appPath: app.getAppPath()
-    }),
-    userDataPath: app.getPath('userData'),
-    hostVersion: app.getVersion(),
-    isEnabled: () => store?.getSettings().pluginSystemEnabled === true,
-    blockedPluginReason: (pluginKey) => pluginKillListService?.reason(pluginKey) ?? null,
-    refreshPlugins: () => pluginService?.refresh() ?? Promise.resolve()
-  })
-  const requestBundledPluginBootstrap = (): void => {
-    void bundledPluginBootstrap
-      .request()
-      .then((result) => {
-        for (const failure of result?.errors ?? []) {
-          console.warn(`[plugins] failed to publish bundled ${failure.pluginKey}:`, failure.error)
-        }
+    await pluginKillListService.initialize()
+    pluginMarketplaceService = new PluginMarketplaceService({
+      pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
+      getKillListEntry: (pluginKey) => pluginKillListService?.find(pluginKey) ?? null
+    })
+    const requestOfficialMarketplaceSeed = (): void => {
+      if (store?.getSettings().pluginSystemEnabled !== true) {
+        return
+      }
+      void pluginMarketplaceService?.seedOfficialSource().catch((error) => {
+        console.warn('[plugins] failed to configure the official marketplace:', error)
+      })
+    }
+    pluginMarketplaceInstaller = new PluginMarketplaceInstaller({
+      marketplace: pluginMarketplaceService,
+      userDataPath: app.getPath('userData'),
+      hostVersion: app.getVersion(),
+      blockedPluginReason: (pluginKey) => pluginKillListService?.reason(pluginKey) ?? null
+    })
+    pluginService = new PluginService({
+      userDataPath: app.getPath('userData'),
+      hostVersion: app.getVersion(),
+      // Feature flag: with the setting off, discovery returns nothing and no
+      // plugin code path runs at all.
+      isPluginSystemEnabled: () => store?.getSettings().pluginSystemEnabled === true,
+      getDisabledPlugins: () => normalizePluginIdList(store?.getSettings().disabledPlugins),
+      getPluginConsents: () => normalizePluginConsents(store?.getSettings().pluginConsents),
+      getDevPluginPaths: () => normalizePluginIdList(store?.getSettings().devPluginPaths),
+      getKeybindings: () => keybindings?.getOverrides() ?? {},
+      getPluginKillListEntry: (pluginKey) => pluginKillListService?.find(pluginKey) ?? null,
+      hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged)
+    })
+    const bundledPluginBootstrap = new PluginBundledBootstrapCoordinator({
+      root: resolveBundledPluginRoot({
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        appPath: app.getAppPath()
+      }),
+      userDataPath: app.getPath('userData'),
+      hostVersion: app.getVersion(),
+      isEnabled: () => store?.getSettings().pluginSystemEnabled === true,
+      blockedPluginReason: (pluginKey) => pluginKillListService?.reason(pluginKey) ?? null,
+      refreshPlugins: () => pluginService?.refresh() ?? Promise.resolve()
+    })
+    const requestBundledPluginBootstrap = (): void => {
+      void bundledPluginBootstrap
+        .request()
+        .then((result) => {
+          for (const failure of result?.errors ?? []) {
+            console.warn(`[plugins] failed to publish bundled ${failure.pluginKey}:`, failure.error)
+          }
+        })
+        .catch((error) => {
+          console.warn('[plugins] failed to bootstrap bundled plugins:', error)
+        })
+    }
+    pluginKillListService.onChanged(() => {
+      void pluginService?.reconcileActivationState().catch((error) => {
+        console.warn('[plugins] failed to apply plugin safety-list refresh:', error)
+      })
+    })
+    store.onSettingsChanged((updates) => {
+      if (updates.pluginSystemEnabled === true) {
+        requestBundledPluginBootstrap()
+        requestOfficialMarketplaceSeed()
+      }
+      if (app.isPackaged && updates.pluginSystemEnabled === true) {
+        void pluginKillListService?.refresh().catch((error) => {
+          console.warn('[plugins] failed to refresh plugin safety list; using cached state:', error)
+        })
+      }
+    })
+    // Why: headless `orca serve` clients reach plugins through the runtime RPC
+    // methods, which resolve the service via this module-level setter. Consent
+    // over RPC uses the same hash-keyed write path as the desktop dialog.
+    setPluginServiceForRpc(pluginService, {
+      applyConsent: (request) =>
+        applyPluginConsent({ store: store!, pluginService: pluginService!, ...request }),
+      applyEnablement: (pluginKey, enabled) =>
+        applyPluginEnablement({ store: store!, pluginService: pluginService!, pluginKey, enabled })
+    })
+    // Lazy kernel: initialize() only discovers manifests — no worker forks, no
+    // panel reads. Zero plugin code runs before an explicit trigger.
+    void pluginService
+      .initialize()
+      .then(() => {
+        logStartupMilestone('plugin-system-initialized', {
+          durationMs: Number((performance.now() - pluginSystemStartupStartedAt).toFixed(2)),
+          installedPlugins: pluginService?.getDiscovered().length ?? 0
+        })
       })
       .catch((error) => {
-        console.warn('[plugins] failed to bootstrap bundled plugins:', error)
+        console.warn('[plugins] failed to initialize plugin service:', error)
       })
-  }
-  pluginKillListService.onChanged(() => {
-    void pluginService?.reconcileActivationState().catch((error) => {
-      console.warn('[plugins] failed to apply plugin safety-list refresh:', error)
-    })
-  })
-  store.onSettingsChanged((updates) => {
-    if (updates.pluginSystemEnabled === true) {
-      requestBundledPluginBootstrap()
-      requestOfficialMarketplaceSeed()
-    }
-    if (app.isPackaged && updates.pluginSystemEnabled === true) {
-      void pluginKillListService?.refresh().catch((error) => {
+    if (app.isPackaged && store?.getSettings().pluginSystemEnabled === true) {
+      void pluginKillListService.refresh().catch((error) => {
         console.warn('[plugins] failed to refresh plugin safety list; using cached state:', error)
       })
     }
-  })
-  // Why: headless `orca serve` clients reach plugins through the runtime RPC
-  // methods, which resolve the service via this module-level setter. Consent
-  // over RPC uses the same hash-keyed write path as the desktop dialog.
-  setPluginServiceForRpc(pluginService, {
-    applyConsent: (request) =>
-      applyPluginConsent({ store: store!, pluginService: pluginService!, ...request }),
-    applyEnablement: (pluginKey, enabled) =>
-      applyPluginEnablement({ store: store!, pluginService: pluginService!, pluginKey, enabled })
-  })
-  // Lazy kernel: initialize() only discovers manifests — no worker forks, no
-  // panel reads. Zero plugin code runs before an explicit trigger.
-  void pluginService
-    .initialize()
-    .then(() => {
-      logStartupMilestone('plugin-system-initialized', {
-        durationMs: Number((performance.now() - pluginSystemStartupStartedAt).toFixed(2)),
-        installedPlugins: pluginService?.getDiscovered().length ?? 0
+    pluginService.onChanged((event) => {
+      if (
+        event.contentPacksChanged &&
+        setMainPluginLanguagePacks(pluginService?.contentPacks.languagePacks.list() ?? [])
+      ) {
+        void setMainUiLanguage(store!.getSettings().uiLanguage).then(() => rebuildAppMenu())
+      }
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) {
+          window.webContents.send('plugins:changed', event)
+        }
+      }
+    })
+    requestBundledPluginBootstrap()
+    requestOfficialMarketplaceSeed()
+    // v0 plugin event seams: agent status (hook pipeline tap) + worktree
+    // lifecycle (runtime tap). Server-side filtered per plugin subscription.
+    agentHookServer.subscribeEnrichedStatus((enriched) => {
+      pluginService?.emitEvent('agent.status.changed', {
+        worktreeId: enriched.worktreeId ?? null,
+        paneKey: enriched.paneKey,
+        state: enriched.payload.state,
+        receivedAt: enriched.receivedAt
       })
     })
-    .catch((error) => {
-      console.warn('[plugins] failed to initialize plugin service:', error)
-    })
-  if (app.isPackaged && store?.getSettings().pluginSystemEnabled === true) {
-    void pluginKillListService.refresh().catch((error) => {
-      console.warn('[plugins] failed to refresh plugin safety list; using cached state:', error)
+    runtimeService.onWorktreeLifecycle((event) => {
+      emitPluginWorktreeLifecycle(event)
     })
   }
-  pluginService.onChanged((event) => {
-    if (
-      event.contentPacksChanged &&
-      setMainPluginLanguagePacks(pluginService?.contentPacks.languagePacks.list() ?? [])
-    ) {
-      void setMainUiLanguage(store!.getSettings().uiLanguage).then(() => rebuildAppMenu())
-    }
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send('plugins:changed', event)
-      }
-    }
-  })
-  requestBundledPluginBootstrap()
-  requestOfficialMarketplaceSeed()
-  // v0 plugin event seams: agent status (hook pipeline tap) + worktree
-  // lifecycle (runtime tap). Server-side filtered per plugin subscription.
-  agentHookServer.subscribeEnrichedStatus((enriched) => {
-    pluginService?.emitEvent('agent.status.changed', {
-      worktreeId: enriched.worktreeId ?? null,
-      paneKey: enriched.paneKey,
-      state: enriched.payload.state,
-      receivedAt: enriched.receivedAt
-    })
-  })
-  runtimeService.onWorktreeLifecycle((event) => {
-    emitPluginWorktreeLifecycle(event)
-  })
-  starNag = new StarNagService(store, stats)
-  starNag.start()
-  starNag.registerIpcHandlers()
+  // Why: `orca serve` has no renderer to show the nag card/toast or handle its IPC commands, so the
+  // entire service is dead weight — its StatsCollector listener runs on every agent spawn and its
+  // IPC handlers are unreachable. Skip the constructor + listeners; cleanup at stop() is null-safe.
+  if (!isServeMode) {
+    starNag = new StarNagService(store, stats)
+    starNag.start()
+    starNag.registerIpcHandlers()
+  }
   runtimeService.setAgentBrowserBridge(
     new AgentBrowserBridge(browserManager, {
       onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
@@ -2811,8 +2830,15 @@ void app.whenReady().then(async () => {
   })
 
   logStartupMilestone('services-initialized')
-  await ensureMainI18n()
-  await setMainUiLanguage(store.getSettings().uiLanguage)
+  // Why: `orca serve` never builds the native app menu (see menu/register-app-menu.ts), so the
+  // bulk of translateMain() callers are unreachable. translateMain() already returns the literal
+  // fallback when not initialized (main-i18n.ts:128), so serve skips the await and keeps English.
+  // RPC startup-failure dialogs and the on-demand setMainUiLanguage(settings) path still get a
+  // lazy init when they actually need it.
+  if (!isServeMode) {
+    await ensureMainI18n()
+    await setMainUiLanguage(store.getSettings().uiLanguage)
+  }
   logStartupMilestone('i18n-ready')
 
   registerAppMenu({

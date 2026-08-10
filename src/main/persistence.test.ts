@@ -11783,6 +11783,32 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(store.getWorkspaceSession('local').activeRepoId).toBe('canonical-local')
   })
 
+  // Why: `orca serve` only needs the local partition; everything else is a multi-SSH-host
+  // desktop footprint that should not survive into a long-lived serve process.
+  it('drops non-local host partitions when dropNonLocalHostWorkspaceSessions is true', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: makeHostSession('local-repo'),
+      workspaceSessionsByHostId: {
+        'runtime:env-a': makeHostSession('runtime-repo'),
+        'ssh:host-b': makeHostSession('ssh-repo')
+      }
+    })
+
+    vi.resetModules()
+    const { Store, initDataPath } = await import('./persistence')
+    initDataPath()
+    const store = new Store({ dropNonLocalHostWorkspaceSessions: true })
+
+    expect(store.getWorkspaceSession('local').activeRepoId).toBe('local-repo')
+    expect(store.getWorkspaceSession('runtime:env-a').activeRepoId).toBe(
+      getDefaultWorkspaceSession().activeRepoId
+    )
+    expect(store.getWorkspaceSession('ssh:host-b').activeRepoId).toBe(
+      getDefaultWorkspaceSession().activeRepoId
+    )
+  })
+
   it('isolates writes: setting host A does not mutate host B or local', async () => {
     const store = await createStore()
 
