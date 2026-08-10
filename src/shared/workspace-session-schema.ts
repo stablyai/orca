@@ -303,7 +303,10 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'defaultTerminalTabsAppliedByWorktreeId',
     salvagingRecord(worktreeIdSchema, z.literal(true))
   ),
-  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema,
+  sleepingAgentSessionsByPaneKey: salvagedOptional(
+    'sleepingAgentSessionsByPaneKey',
+    sleepingAgentSessionsByPaneKeySchema
+  ),
   terminalPtyIncarnationsByPaneKey: salvagedOptional(
     'terminalPtyIncarnationsByPaneKey',
     salvagingRecord(z.string(), z.string().min(1).max(128))

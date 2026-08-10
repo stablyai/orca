@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { parseWorkspaceSessionSalvaging } from './workspace-session-salvage'
+import { collectSalvageDrops, salvagingArray } from './zod-salvage'
 
 const WT = 'repo-1::/home/user/project'
 
@@ -30,6 +32,19 @@ function baseSession(overrides: Record<string, unknown> = {}): Record<string, un
 }
 
 describe('parseWorkspaceSessionSalvaging', () => {
+  it('restores outer diagnostics after a nested collection', () => {
+    const schema = salvagingArray(z.string())
+    const outer = collectSalvageDrops(() => {
+      schema.parse([1])
+      const inner = collectSalvageDrops(() => schema.parse([2]))
+      schema.parse([3])
+      return inner
+    })
+
+    expect(outer.droppedCount).toBe(2)
+    expect(outer.value.droppedCount).toBe(1)
+  })
+
   it('returns a valid session unchanged with nothing dropped', () => {
     const result = parseWorkspaceSessionSalvaging(
       baseSession({ tabsByWorktree: { [WT]: [terminalTab('tab-1')] } })
@@ -61,6 +76,21 @@ describe('parseWorkspaceSessionSalvaging', () => {
     if (result.ok) {
       expect(result.droppedPaths).toEqual([`tabsByWorktree.${WT}.2`])
       expect(result.value.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-1', 'tab-2'])
+    }
+  })
+
+  it('reports sleeping-agent records removed during normalization', () => {
+    const result = parseWorkspaceSessionSalvaging(
+      baseSession({
+        sleepingAgentSessionsByPaneKey: {
+          'tab-bad:leaf': { paneKey: 'different:leaf' }
+        }
+      })
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.droppedPaths).toEqual(['sleepingAgentSessionsByPaneKey.tab-bad:leaf'])
+      expect(result.value.sleepingAgentSessionsByPaneKey).toBeUndefined()
     }
   })
 

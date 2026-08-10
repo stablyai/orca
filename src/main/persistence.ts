@@ -555,16 +555,27 @@ function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatc
   )
 }
 
+function workspaceSessionSalvageLogDetails(result: {
+  droppedCount: number
+  droppedPaths: string[]
+}): { count: number; fields: string[]; detailsTruncated: boolean } {
+  return {
+    count: result.droppedCount,
+    fields: [...new Set(result.droppedPaths.map((path) => path.split('.', 1)[0]))],
+    detailsTruncated: result.droppedCount > result.droppedPaths.length
+  }
+}
+
 /** Normalize non-'local' host partitions; 'local' (the legacy workspaceSession blob) is dropped so the two surfaces never diverge.
  *  Each partition is zod-validated independently, so one corrupt host drops to defaults without taking out the others. Idempotent. */
 function parseWorkspaceSessionsByHostId(
   raw: unknown,
   defaults: WorkspaceSessionState
-): { partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>>; salvaged: boolean } {
+): { partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>>; repaired: boolean } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { partitions: {}, salvaged: false }
+    return { partitions: {}, repaired: raw !== undefined }
   }
-  let salvaged = false
+  let repaired = false
   const partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const hostId = normalizeExecutionHostId(key)
@@ -574,6 +585,7 @@ function parseWorkspaceSessionsByHostId(
     }
     const result = parseWorkspaceSessionSalvaging(value)
     if (!result.ok) {
+      repaired = true
       console.error(
         `[persistence] Corrupt workspace session for host ${hostId}, using defaults:`,
         result.error
@@ -583,17 +595,13 @@ function parseWorkspaceSessionsByHostId(
     if (result.droppedCount > 0) {
       console.warn(
         `[persistence] Salvaged workspace session for host ${hostId}; dropped corrupt entries:`,
-        {
-          count: result.droppedCount,
-          paths: result.droppedPaths,
-          pathsTruncated: result.droppedCount > result.droppedPaths.length
-        }
+        workspaceSessionSalvageLogDetails(result)
       )
-      salvaged = true
+      repaired = true
     }
     partitions[hostId] = { ...defaults, ...result.value }
   }
-  return { partitions, salvaged }
+  return { partitions, repaired }
 }
 
 function backupPath(dataFile: string, index: number): string {
@@ -3672,11 +3680,10 @@ export class Store {
               return defaults.workspaceSession
             }
             if (result.droppedCount > 0) {
-              console.warn('[persistence] Salvaged workspace session; dropped corrupt entries:', {
-                count: result.droppedCount,
-                paths: result.droppedPaths,
-                pathsTruncated: result.droppedCount > result.droppedPaths.length
-              })
+              console.warn(
+                '[persistence] Salvaged workspace session; dropped corrupt entries:',
+                workspaceSessionSalvageLogDetails(result)
+              )
               // Why: salvage repairs only the in-memory session; without a save the corrupt entries stay on disk and get re-dropped every launch.
               this.loadNeedsSave = true
             }
@@ -3684,11 +3691,11 @@ export class Store {
           })(),
           // Why: per-host session partitions, validated independently; 'local' stays in workspaceSession for downgrade compat.
           workspaceSessionsByHostId: (() => {
-            const { partitions, salvaged } = parseWorkspaceSessionsByHostId(
+            const { partitions, repaired } = parseWorkspaceSessionsByHostId(
               parsed.workspaceSessionsByHostId,
               defaults.workspaceSession
             )
-            if (salvaged) {
+            if (repaired) {
               // Why: salvage repairs only the in-memory partitions; without a save the corrupt entries stay on disk and get re-dropped every launch.
               this.loadNeedsSave = true
             }

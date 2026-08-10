@@ -14,6 +14,8 @@ export function collectSalvageDrops<T>(parse: () => T): {
   droppedPaths: string[]
   droppedCount: number
 } {
+  const previousCollector = dropCollector
+  const previousPath = [...dropPath]
   const collector: DropCollector = { paths: [], count: 0 }
   dropCollector = collector
   dropPath.length = 0
@@ -21,8 +23,8 @@ export function collectSalvageDrops<T>(parse: () => T): {
     const value = parse()
     return { value, droppedPaths: collector.paths, droppedCount: collector.count }
   } finally {
-    dropCollector = null
-    dropPath.length = 0
+    dropCollector = previousCollector
+    dropPath.splice(0, dropPath.length, ...previousPath)
   }
 }
 
@@ -62,7 +64,8 @@ export function salvagingArray<T extends z.ZodType>(item: T): z.ZodType<z.output
 /** Record that drops entries with invalid keys or values instead of failing. */
 export function salvagingRecord<K extends z.ZodType<string>, V extends z.ZodType>(
   key: K,
-  value: V
+  value: V,
+  accepts?: (key: string, value: z.output<V>) => boolean
 ): z.ZodType<Record<string, z.output<V>>, unknown> {
   return z.record(z.string(), z.unknown()).transform((entries) => {
     // Why: null prototype so a persisted '__proto__' key cannot poison the result.
@@ -71,7 +74,7 @@ export function salvagingRecord<K extends z.ZodType<string>, V extends z.ZodType
       const parsed = key.safeParse(entryKey).success
         ? inEntry(entryKey, () => value.safeParse(entryValue))
         : null
-      if (parsed?.success) {
+      if (parsed?.success && (!accepts || accepts(entryKey, parsed.data as z.output<V>))) {
         kept[entryKey] = parsed.data as z.output<V>
         continue
       }

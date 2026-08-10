@@ -12190,7 +12190,10 @@ describe('Store host-partitioned workspace sessions', () => {
   })
 
   type PersistedSessionsFile = {
-    workspaceSession?: { tabsByWorktree?: Record<string, { id: string }[]> }
+    workspaceSession?: {
+      tabsByWorktree?: Record<string, { id: string }[]>
+      sleepingAgentSessionsByPaneKey?: Record<string, unknown>
+    }
     workspaceSessionsByHostId?: Record<
       string,
       { tabsByWorktree?: Record<string, { id: string }[]> }
@@ -12238,7 +12241,17 @@ describe('Store host-partitioned workspace sessions', () => {
     tabs!.push({ id: 'tab-corrupt' })
     writeDataFile(profile)
 
-    await loadAndAwaitScheduledSave()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await loadAndAwaitScheduledSave()
+      expect(warn).toHaveBeenCalledWith(
+        '[persistence] Salvaged workspace session; dropped corrupt entries:',
+        { count: 1, fields: ['tabsByWorktree'], detailsTruncated: false }
+      )
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(worktreeId)
+    } finally {
+      warn.mockRestore()
+    }
 
     const persisted = readDataFile() as PersistedSessionsFile
     expect(persisted.workspaceSession?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual([
@@ -12268,6 +12281,8 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(sshTabs).toBeDefined()
     runtimeTabs!.push({ id: 'runtime-corrupt' })
     sshTabs!.push({ id: 'ssh-corrupt' })
+    const mutablePartitions = partitions as Record<string, unknown>
+    mutablePartitions['runtime:broken'] = 'not a session'
     writeDataFile(profile)
     await loadAndAwaitScheduledSave()
 
@@ -12278,6 +12293,26 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(persisted?.['ssh:target-b']?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual(
       ['ssh-keep']
     )
+    expect(persisted).not.toHaveProperty('runtime:broken')
+  })
+
+  it('writes back sleeping-agent records dropped during salvage', async () => {
+    const profile = await canonicalize({
+      schemaVersion: 1,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        sleepingAgentSessionsByPaneKey: {}
+      }
+    })
+    profile.workspaceSession!.sleepingAgentSessionsByPaneKey = {
+      'tab-bad:leaf': { paneKey: 'different:leaf' }
+    }
+    writeDataFile(profile)
+
+    await loadAndAwaitScheduledSave()
+
+    const persisted = readDataFile() as PersistedSessionsFile
+    expect(persisted.workspaceSession?.sleepingAgentSessionsByPaneKey).toBeUndefined()
   })
 })
 
