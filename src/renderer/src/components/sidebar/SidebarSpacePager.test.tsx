@@ -67,6 +67,8 @@ type CapturedSwiperProps = {
   mousewheel: { forceToAxis: boolean; thresholdDelta: number }
   onActiveIndexChange: (swiper: SwiperInstance) => void
   onSwiper: (swiper: SwiperInstance) => void
+  onTransitionStart: () => void
+  onTransitionEnd: () => void
   simulateTouch: boolean
   slidesPerGroup: number
   slidesPerView: number
@@ -141,6 +143,15 @@ function attach(instance: StatefulSwiper): void {
   act(() => swiperProps().onSwiper(instance))
 }
 
+/** The mock's container stands in for `swiper.el`, which the pager listens on for pointer intent. */
+function pagerElement(container: HTMLElement): HTMLElement {
+  return container.querySelector('[data-swiper]') as HTMLElement
+}
+
+function swiperWithElement(container: HTMLElement): StatefulSwiper {
+  return Object.assign(swiper(0), { el: pagerElement(container) }) as StatefulSwiper
+}
+
 function transitionTo(spaceId: string): boolean {
   let handled = false
   act(() => {
@@ -180,12 +191,41 @@ describe('SidebarSpacePager', () => {
     )
   })
 
-  it('mounts the active Space and both circular neighbours', () => {
+  it('mounts only the active Space while the strip is idle and unpointed', () => {
     renderPager('a')
 
     expect(document.querySelectorAll('[data-slide]')).toHaveLength(4)
+    expect(slotContents()).toEqual(['a', null, null, null])
+    expect(inertBySpaceId()).toEqual({ a: 'false' })
+  })
+
+  it('brings neighbours back while a slide runs, so a swipe never reveals an empty page', () => {
+    // Why: a wheel swipe moves the strip with no travel to pin the outgoing slot, so without this
+    // the Space being swiped away unmounts the moment activeSpaceId changes and blanks mid-slide.
+    renderPager('a')
+
+    act(() => swiperProps().onTransitionStart())
     expect(slotContents()).toEqual(['a', 'b', null, 'd'])
-    expect(inertBySpaceId()).toEqual({ a: 'false', b: 'true', d: 'true' })
+
+    act(() => swiperProps().onTransitionEnd())
+    expect(slotContents()).toEqual(['a', null, null, null])
+  })
+
+  it('pre-mounts neighbours while the pointer rests on the strip', () => {
+    // Why: Swiper starts its slide inside its own wheel handler, so a neighbour mounted on that
+    // event lands mid-animation — pointing at the strip is the earliest signal a swipe may follow.
+    const { container } = renderPager('a')
+    act(() => swiperProps().onSwiper(swiperWithElement(container)))
+
+    act(() => {
+      pagerElement(container).dispatchEvent(new Event('pointerenter'))
+    })
+    expect(slotContents()).toEqual(['a', 'b', null, 'd'])
+
+    act(() => {
+      pagerElement(container).dispatchEvent(new Event('pointerleave'))
+    })
+    expect(slotContents()).toEqual(['a', null, null, null])
   })
 
   it('activates the Space its Swiper slot is showing', () => {
@@ -243,7 +283,7 @@ describe('SidebarSpacePager', () => {
     expect(instance.slideNext).toHaveBeenCalledTimes(1)
     expect(instance.slideNext).toHaveBeenCalledWith(180)
     expect(instance.path).toEqual([1, 2])
-    expect(slotContents()).toEqual([null, 'b', 'e', 'f', null, null])
+    expect(slotContents()).toEqual([null, 'b', 'e', null, null, null])
     expect(mocks.setActiveSpace).toHaveBeenCalledTimes(1)
     expect(mocks.setActiveSpace).toHaveBeenCalledWith('e')
   })
@@ -258,7 +298,7 @@ describe('SidebarSpacePager', () => {
     expect(instance.slidePrev).toHaveBeenCalledTimes(1)
     expect(instance.slideNext).not.toHaveBeenCalled()
     expect(instance.path).toEqual([4, 3])
-    expect(slotContents()).toEqual([null, null, 'a', 'b', 'e', null])
+    expect(slotContents()).toEqual([null, null, null, 'b', 'e', null])
   })
 
   it('follows the strip rather than the shorter way round the loop', () => {
@@ -272,7 +312,7 @@ describe('SidebarSpacePager', () => {
     expect(instance.slideNext).toHaveBeenCalledTimes(1)
     expect(instance.slidePrev).not.toHaveBeenCalled()
     expect(instance.path).toEqual([1, 2])
-    expect(slotContents()).toEqual([null, 'b', 'f', 'a', null, null])
+    expect(slotContents()).toEqual([null, 'b', 'f', null, null, null])
   })
 
   it('releases the outgoing Space once the slide has finished', () => {
@@ -285,8 +325,8 @@ describe('SidebarSpacePager', () => {
       vi.advanceTimersByTime(500)
     })
 
-    // The slot that held b during the slide falls back into place as e's circular predecessor.
-    expect(slotContents()).toEqual([null, 'd', 'e', 'f', null, null])
+    // The slot that held b during the slide is released, leaving only the arrived Space mounted.
+    expect(slotContents()).toEqual([null, null, 'e', null, null, null])
     expect(instance.path).toEqual([1, 2])
   })
 
@@ -343,7 +383,7 @@ describe('SidebarSpacePager', () => {
     act(() => {
       vi.advanceTimersByTime(500)
     })
-    expect(slotContents()).toEqual([null, null, null, 'f', 'a', 'b'])
+    expect(slotContents()).toEqual([null, null, null, null, 'a', null])
   })
 
   it('chains a second jump without stranding the first', () => {

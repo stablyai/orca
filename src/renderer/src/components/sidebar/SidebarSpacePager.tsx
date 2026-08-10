@@ -57,6 +57,12 @@ function SidebarSpacePager({
   const travelIdRef = React.useRef(0)
   const [rotation, setRotation] = React.useState(0)
   const [travel, setTravel] = React.useState<SpaceSlideTravel | null>(null)
+  const [pagerElement, setPagerElement] = React.useState<HTMLElement | null>(null)
+  const [neighborsArmed, setNeighborsArmed] = React.useState(false)
+  const armingRef = React.useRef({ hovering: false, sliding: false })
+  const syncNeighborsArmed = React.useCallback(() => {
+    setNeighborsArmed(armingRef.current.hovering || armingRef.current.sliding)
+  }, [])
 
   const count = spaces.length
   const activeIndex = Math.max(
@@ -87,7 +93,6 @@ function SidebarSpacePager({
     () => getSlotSpaceIds(spaces, rotation, travel?.pinned),
     [rotation, spaces, travel]
   )
-  const mountedSlots = React.useMemo(() => getMountedSlots(activeSlot, count), [activeSlot, count])
   const scrollStateBySpaceId = useSpaceScrollState(scrollOffsetRef, scrollAnchorRef, activeSpaceId)
 
   const handleActiveIndexChange = React.useCallback((swiper: SwiperInstance): void => {
@@ -102,6 +107,27 @@ function SidebarSpacePager({
     latest.activeSpaceId = target.id
     latest.setActiveSpace(target.id)
   }, [])
+
+  // Why hover and not the wheel itself: Swiper starts the slide inside its own wheel handler, so
+  // mounting a neighbour on that event lands mid-animation. Pointing at the strip is the earliest
+  // reliable signal that a wheel gesture may follow, and it costs nothing while the mouse is away.
+  React.useEffect(() => {
+    if (!pagerElement) {
+      return
+    }
+    const setHovering = (hovering: boolean) => (): void => {
+      armingRef.current.hovering = hovering
+      syncNeighborsArmed()
+    }
+    const enter = setHovering(true)
+    const leave = setHovering(false)
+    pagerElement.addEventListener('pointerenter', enter)
+    pagerElement.addEventListener('pointerleave', leave)
+    return () => {
+      pagerElement.removeEventListener('pointerenter', enter)
+      pagerElement.removeEventListener('pointerleave', leave)
+    }
+  }, [pagerElement, syncNeighborsArmed])
 
   React.useLayoutEffect(() => {
     const swiper = swiperRef.current
@@ -188,15 +214,31 @@ function SidebarSpacePager({
       mousewheel={{ forceToAxis: true, thresholdDelta: 6 }}
       onSwiper={(swiper) => {
         swiperRef.current = swiper
+        setPagerElement(swiper.el ?? null)
       }}
       onActiveIndexChange={handleActiveIndexChange}
+      onTransitionStart={() => {
+        armingRef.current.sliding = true
+        syncNeighborsArmed()
+      }}
+      onTransitionEnd={() => {
+        armingRef.current.sliding = false
+        syncNeighborsArmed()
+      }}
       onDestroy={() => {
         swiperRef.current = null
+        setPagerElement(null)
       }}
     >
       {spaces.map((slotSpace, slot) => {
         const spaceId = slotSpaceIds[slot]
-        const mounted = mountedSlots.has(slot) || travel?.pinned.has(slot) === true
+        // Why: a WorktreeList is the heaviest tree in the app, so an idle strip keeps exactly one.
+        // Neighbours come back while the strip is under the pointer or mid-slide, because a wheel
+        // swipe reveals one with no warning and an unmounted slide reads as the Space vanishing.
+        const mounted =
+          slot === activeSlot ||
+          travel?.pinned.has(slot) === true ||
+          (neighborsArmed && isAdjacentSlot(slot, activeSlot, count))
         if (spaceId === null || !mounted) {
           return <SwiperSlide key={slotSpace.id} className={SPACE_SLIDE_CLASS} />
         }
@@ -219,6 +261,12 @@ function SidebarSpacePager({
   )
 }
 
+function isAdjacentSlot(slot: number, activeSlot: number, count: number): boolean {
+  return (
+    count > 1 && (slot === (activeSlot + 1) % count || slot === (activeSlot - 1 + count) % count)
+  )
+}
+
 /** Null where a slot has nothing of its own to show, because a pin is holding its Space elsewhere. */
 function getSlotSpaceIds(
   spaces: readonly { id: string }[],
@@ -236,17 +284,6 @@ function getSlotSpaceIds(
     const rotated = spaces[(slot + rotation) % spaces.length].id
     return held.has(rotated) ? null : rotated
   })
-}
-
-function getMountedSlots(activeSlot: number, count: number): Set<number> {
-  if (count <= 3) {
-    return new Set(spaceSlotRange(count))
-  }
-  return new Set([activeSlot, (activeSlot - 1 + count) % count, (activeSlot + 1) % count])
-}
-
-function spaceSlotRange(count: number): number[] {
-  return Array.from({ length: count }, (_, slot) => slot)
 }
 
 function useSpaceScrollState(
