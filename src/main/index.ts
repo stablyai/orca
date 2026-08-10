@@ -290,6 +290,7 @@ import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headles
 import { AgentAwakeService } from './agent-awake-service'
 import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
+import { listSystemFontFamilies } from './system-fonts'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { beginSshShutdown } from './ipc/ssh'
@@ -3244,6 +3245,15 @@ void app.whenReady().then(async () => {
       )
     }
   }
+
+  // Why: enumerating fonts takes ~20s on a macOS box with a large catalog, and the
+  // settings font pickers show a 5-entry placeholder until it lands — long enough
+  // that the real list reads as broken. Warm the cache once the window is up so it
+  // is ready well before settings can be opened; failures fall back as before.
+  win.once('show', () => {
+    const warmUp = setTimeout(() => void listSystemFontFamilies().catch(() => undefined), 2_000)
+    warmUp.unref()
+  })
 
   // Why: macOS notification permission dialog must fire after the window is shown, else it's hidden behind the maximized window.
   win.once('show', () => {
