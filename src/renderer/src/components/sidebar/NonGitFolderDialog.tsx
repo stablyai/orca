@@ -57,7 +57,9 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           const result = await window.api.repos.addRemote({
             connectionId,
             remotePath: folderPath,
-            kind: 'folder'
+            kind: 'folder',
+            // Why: main can't infer the Space — another window may have switched last (see Store.addRepo).
+            spaceId: stateBeforeAdd.activeSpaceId
           })
           if ('error' in result) {
             throw new Error(result.error)

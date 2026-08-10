@@ -281,7 +281,8 @@ function alignRepoWithRequestedProject(
 async function addLocalRepoFromPath(
   store: Store,
   path: string,
-  kind: 'git' | 'folder' = 'git'
+  kind: 'git' | 'folder' = 'git',
+  spaceId: string | null = null
 ): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
   const repoKind = kind === 'folder' ? 'folder' : 'git'
   if (repoKind === 'git' && !isGitRepo(path)) {
@@ -352,7 +353,7 @@ async function addLocalRepoFromPath(
       : {})
   }
 
-  store.addRepo(repo)
+  store.addRepo(repo, spaceId)
   await prepareLocalWorktreeRootForRepo(store, repo)
   return { repo, alreadyExisted: false }
 }
@@ -365,6 +366,7 @@ async function addRemoteRepoFromPath(
     displayName?: string
     kind?: 'git' | 'folder'
     setupMethod?: Repo['projectHostSetupMethod']
+    spaceId?: string | null
   }
 ): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
   const gitProvider = getSshGitProvider(args.connectionId)
@@ -450,7 +452,7 @@ async function addRemoteRepoFromPath(
       : {})
   }
 
-  store.addRepo(repo)
+  store.addRepo(repo, args.spaceId ?? null)
   const mux = getActiveMultiplexer(args.connectionId)
   if (mux) {
     mux.notify('session.registerRoot', { rootPath: resolvedPath })
@@ -474,6 +476,7 @@ async function cloneRemoteRepo(
     connectionId: string
     url: string
     destination: string
+    spaceId?: string | null
   }
 ): Promise<Repo> {
   const gitProvider = getSshGitProvider(args.connectionId)
@@ -570,7 +573,8 @@ async function cloneRemoteRepo(
     connectionId: args.connectionId,
     remotePath: clonePath,
     kind: 'git',
-    setupMethod: 'cloned'
+    setupMethod: 'cloned',
+    spaceId: args.spaceId ?? null
   })
   if ('error' in result) {
     throw new Error(result.error)
@@ -586,6 +590,7 @@ async function createRemoteRepo(
     parentPath: string
     name: string
     kind: 'git' | 'folder'
+    spaceId?: string | null
   }
 ): Promise<{ repo: Repo } | { error: string }> {
   const name = args.name?.trim() ?? ''
@@ -709,7 +714,8 @@ async function createRemoteRepo(
     connectionId: args.connectionId,
     remotePath: targetPath,
     kind: repoKind,
-    displayName: name
+    displayName: name,
+    spaceId: args.spaceId ?? null
   })
   if ('error' in result) {
     return result
@@ -842,6 +848,14 @@ const SpaceMoveProjectArgs = z.object({
   hostId: z.string().min(1)
 })
 
+// Why: each window has its own active Space, so an add carries the requesting window's Space; absent means Default.
+const RequestedSpaceIdArg = z.string().min(1).nullable().optional()
+
+function parseRequestedSpaceId(value: unknown): string | null {
+  const parsed = RequestedSpaceIdArg.safeParse(value)
+  return parsed.success ? (parsed.data ?? null) : null
+}
+
 const ProjectHostSetupExistingFolderIpcArgs = z.object({
   projectId: z.string().min(1),
   projectProviderIdentity: z
@@ -856,7 +870,8 @@ const ProjectHostSetupExistingFolderIpcArgs = z.object({
   path: z.string().min(1),
   kind: z.enum(['git', 'folder']).optional(),
   displayName: z.string().min(1).optional(),
-  setupMethod: z.enum(['imported-existing-folder', 'cloned']).optional()
+  setupMethod: z.enum(['imported-existing-folder', 'cloned']).optional(),
+  spaceId: RequestedSpaceIdArg
 })
 
 const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
@@ -1009,6 +1024,7 @@ const ProjectGroupImportNestedArgs = z.discriminatedUnion('mode', [
     projectPaths: z.array(z.string()),
     connectionId: z.string().min(1).optional(),
     scanId: z.string().min(1).optional(),
+    spaceId: RequestedSpaceIdArg,
     mode: z.literal('group')
   }),
   z.object({
@@ -1017,6 +1033,7 @@ const ProjectGroupImportNestedArgs = z.discriminatedUnion('mode', [
     projectPaths: z.array(z.string()),
     connectionId: z.string().min(1).optional(),
     scanId: z.string().min(1).optional(),
+    spaceId: RequestedSpaceIdArg,
     mode: z.literal('separate')
   })
 ])
@@ -1450,13 +1467,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       }
       const result =
         parsedHost.kind === 'local'
-          ? await addLocalRepoFromPath(store, args.path, args.kind)
+          ? await addLocalRepoFromPath(store, args.path, args.kind, args.spaceId ?? null)
           : parsedHost.kind === 'ssh'
             ? await addRemoteRepoFromPath(store, {
                 connectionId: parsedHost.targetId,
                 remotePath: args.path,
                 displayName: args.displayName,
-                kind: args.kind
+                kind: args.kind,
+                spaceId: args.spaceId ?? null
               })
             : {
                 error:
@@ -1828,7 +1846,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
                 }
               : {})
           }
-          store.addRepo(repo)
+          store.addRepo(repo, args.spaceId ?? null)
           await prepareLocalWorktreeRootForRepo(store, repo)
           if (args.connectionId) {
             getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
@@ -1873,9 +1891,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     'repos:add',
     async (
       _event,
-      args: { path: string; kind?: 'git' | 'folder' }
+      args: { path: string; kind?: 'git' | 'folder'; spaceId?: string | null }
     ): Promise<{ repo: Repo } | { error: string }> => {
-      const result = await addLocalRepoFromPath(store, args.path, args.kind)
+      const result = await addLocalRepoFromPath(
+        store,
+        args.path,
+        args.kind,
+        parseRequestedSpaceId(args?.spaceId)
+      )
       if ('error' in result) {
         return result
       }
@@ -1898,9 +1921,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         remotePath: string
         displayName?: string
         kind?: 'git' | 'folder'
+        spaceId?: string | null
       }
     ): Promise<{ repo: Repo } | { error: string }> => {
-      const result = await addRemoteRepoFromPath(store, args)
+      const result = await addRemoteRepoFromPath(store, {
+        ...args,
+        spaceId: parseRequestedSpaceId(args?.spaceId)
+      })
       if ('error' in result) {
         return result
       }
@@ -1919,9 +1946,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         parentPath: string
         name: string
         kind: 'git' | 'folder'
+        spaceId?: string | null
       }
     ): Promise<{ repo: Repo } | { error: string }> => {
-      const result = await createRemoteRepo(store, args)
+      const result = await createRemoteRepo(store, {
+        ...args,
+        spaceId: parseRequestedSpaceId(args?.spaceId)
+      })
       if ('error' in result) {
         return result
       }
@@ -1935,7 +1966,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     'repos:create',
     async (
       _event,
-      args: { parentPath: string; name: string; kind: 'git' | 'folder' }
+      args: { parentPath: string; name: string; kind: 'git' | 'folder'; spaceId?: string | null }
     ): Promise<{ repo: Repo } | { error: string }> => {
       const name = args.name?.trim() ?? ''
       const parentPath = args.parentPath?.trim() ?? ''
@@ -2085,7 +2116,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           : {})
       }
 
-      store.addRepo(repo)
+      store.addRepo(repo, parseRequestedSpaceId(args?.spaceId))
       await prepareLocalWorktreeRootForRepo(store, repo)
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
@@ -2409,9 +2440,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle(
     'repos:clone',
-    async (_event, args: { url: string; destination: string }): Promise<Repo> => {
+    async (
+      _event,
+      args: { url: string; destination: string; spaceId?: string | null }
+    ): Promise<Repo> => {
       // Why: derive the repo folder name from the URL's last segment, matching default git clone behavior.
       const clonePath = deriveValidatedClonePath(args)
+      const requestedSpaceId = parseRequestedSpaceId(args?.spaceId)
       const clonePathKey = getClonePathComparisonKey(clonePath)
       return runWithClonePathLock(clonePathKey, async () => {
         await pendingAbortCleanupByPath.get(clonePathKey)
@@ -2559,7 +2594,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             projectHostSetupMethod: 'cloned'
           }
 
-          store.addRepo(repo)
+          store.addRepo(repo, requestedSpaceId)
           await prepareLocalWorktreeRootForRepo(store, repo)
           invalidateAuthorizedRootsCache()
           notifyReposChanged(mainWindow)
@@ -2579,9 +2614,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     'repos:cloneRemote',
     async (
       _event,
-      args: { connectionId: string; url: string; destination: string }
+      args: { connectionId: string; url: string; destination: string; spaceId?: string | null }
     ): Promise<Repo> => {
-      const repo = await cloneRemoteRepo(store, mainWindow, args)
+      const repo = await cloneRemoteRepo(store, mainWindow, {
+        ...args,
+        spaceId: parseRequestedSpaceId(args?.spaceId)
+      })
       notifyReposChanged(mainWindow)
       return repo
     }

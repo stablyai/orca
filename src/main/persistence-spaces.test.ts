@@ -126,20 +126,27 @@ describe('Space persistence', () => {
     expect(store.moveProjectToSpace('missing', 'space-a', 'local')).toBeNull()
   })
 
-  it('inherits active membership unless explicitly assigned or bypassed by a remote caller', async () => {
-    const store = await createStoreFromState({ spaces: [customSpace('space-a')] })
-    store.updateUI({ activeSpaceId: 'space-a' })
+  it('takes membership from the caller, not from whichever window switched Space last', async () => {
+    const store = await createStoreFromState({
+      spaces: [customSpace('space-work'), customSpace('space-personal')]
+    })
+    // Window A switched to Work most recently, so the single persisted activeSpaceId says 'space-work'.
+    store.updateUI({ activeSpaceId: 'space-work' })
 
-    store.addRepo(repo('active'))
-    store.addRepo(repo('explicit', 'space-a'))
-    store.addRepo(repo('invalid', 'space-gone'))
+    store.addRepo(repo('from-window-b'), 'space-personal')
+    store.addRepo(repo('explicit-on-repo', 'space-personal'))
+    store.addRepo(repo('unknown-space'), 'space-gone')
+    store.addRepo(repo('unstated'))
     store.addRepo(repo('remote'), null)
 
     expect(store.getRepos().map((entry) => [entry.id, entry.spaceId])).toEqual([
-      ['active', 'space-a'],
-      ['explicit', 'space-a'],
-      ['invalid', undefined],
+      ['from-window-b', 'space-personal'],
+      ['explicit-on-repo', 'space-personal'],
+      ['unknown-space', undefined],
+      // Why: no caller Space means Default — never the Space another window happens to be showing.
+      ['unstated', undefined],
       ['remote', undefined]
     ])
+    expect(store.getUI().activeSpaceId).toBe('space-work')
   })
 })

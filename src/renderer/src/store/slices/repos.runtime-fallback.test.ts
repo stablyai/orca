@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { Repo } from '../../../../shared/types'
+import { DEFAULT_SPACE_ID } from '../../../../shared/spaces'
 import {
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES
@@ -315,7 +316,8 @@ describe('repo slice runtime folder fallback', () => {
     expect(runtimeEnvironmentTransportCall).not.toHaveBeenCalled()
     expect(reposAdd).toHaveBeenNthCalledWith(1, {
       path: '/local/non-git',
-      kind: 'git'
+      kind: 'git',
+      spaceId: DEFAULT_SPACE_ID
     })
     expect(store.getState().activeModal).toBe('confirm-non-git-folder')
     expect(store.getState().modalData).toEqual({ folderPath: '/local/non-git' })
@@ -327,7 +329,8 @@ describe('repo slice runtime folder fallback', () => {
 
     expect(reposAdd).toHaveBeenNthCalledWith(2, {
       path: '/local/non-git',
-      kind: 'folder'
+      kind: 'folder',
+      spaceId: DEFAULT_SPACE_ID
     })
     expect(added?.kind).toBe('folder')
     expect(added?.path).toBe('/local/non-git')

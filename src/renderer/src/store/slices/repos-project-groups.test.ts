@@ -13,6 +13,7 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { DEFAULT_SPACE_ID } from '../../../../shared/spaces'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 
 const remoteRepo: Repo = {
@@ -701,7 +702,8 @@ describe('project group store routing', () => {
       parentPath: '/platform',
       groupName: 'Platform',
       projectPaths: [importedRepo.path],
-      mode: 'group'
+      mode: 'group',
+      spaceId: DEFAULT_SPACE_ID
     })
     expect(projectGroupsList).toHaveBeenCalled()
     expect(folderWorkspacesList).toHaveBeenCalled()

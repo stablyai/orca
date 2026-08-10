@@ -515,7 +515,8 @@ describe('projectGroups IPC validation', () => {
     expect(result).toMatchObject({ importedCount: 1, failedCount: 1 })
     expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
     expect(mockStore.addRepo).toHaveBeenCalledWith(
-      expect.objectContaining({ path: '/srv/platform/api' })
+      expect.objectContaining({ path: '/srv/platform/api' }),
+      null
     )
   })
 
@@ -810,7 +811,8 @@ describe('projectGroups IPC validation', () => {
         path: '/srv/platform/api',
         connectionId: 'conn-1',
         projectGroupId: group.id
-      })
+      }),
+      null
     )
     expect(mockMultiplexer.notify).toHaveBeenCalledWith('session.registerRoot', {
       rootPath: '/srv/platform/api'
@@ -879,7 +881,8 @@ describe('projectGroups IPC validation', () => {
       expect.objectContaining({
         path: mainPath,
         connectionId: 'conn-1'
-      })
+      }),
+      null
     )
     expect(mockMultiplexer.notify).toHaveBeenCalledWith('session.registerRoot', {
       rootPath: mainPath
@@ -942,13 +945,16 @@ describe('projectGroups IPC validation', () => {
     })
     expect(mockStore.addRepo).toHaveBeenCalledTimes(3)
     expect(mockStore.addRepo).toHaveBeenCalledWith(
-      expect.objectContaining({ path: selectedPaths[0], projectGroupId: group.id })
+      expect.objectContaining({ path: selectedPaths[0], projectGroupId: group.id }),
+      null
     )
     expect(mockStore.addRepo).toHaveBeenCalledWith(
-      expect.objectContaining({ path: selectedPaths[1], projectGroupId: group.id })
+      expect.objectContaining({ path: selectedPaths[1], projectGroupId: group.id }),
+      null
     )
     expect(mockStore.addRepo).toHaveBeenCalledWith(
-      expect.objectContaining({ path: selectedPaths[2], projectGroupId: group.id })
+      expect.objectContaining({ path: selectedPaths[2], projectGroupId: group.id }),
+      null
     )
   })
 
@@ -1003,7 +1009,10 @@ describe('projectGroups IPC validation', () => {
         failedCount: 0
       })
       expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
-      expect(mockStore.addRepo).toHaveBeenCalledWith(expect.objectContaining({ path: mainPath }))
+      expect(mockStore.addRepo).toHaveBeenCalledWith(
+        expect.objectContaining({ path: mainPath }),
+        null
+      )
       expect(listWorktreeGraphMock).toHaveBeenCalledTimes(1)
       expect((result as { projects: { projectId?: string }[] }).projects[0].projectId).toBe(
         (result as { projects: { projectId?: string }[] }).projects[1].projectId
@@ -1209,7 +1218,8 @@ describe('repos:addRemote', () => {
         externalWorktreeVisibility: 'hide',
         externalWorktreeVisibilityLegacy: false,
         projectHostSetupMethod: 'imported-existing-folder'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.id')
     expect(result).toHaveProperty('repo.connectionId', 'conn-1')
@@ -1227,7 +1237,8 @@ describe('repos:addRemote', () => {
       expect.objectContaining({
         displayName: 'My Server Repo',
         path: '/home/user/project'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.displayName', 'My Server Repo')
   })
@@ -1258,7 +1269,8 @@ describe('repos:addRemote', () => {
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
         externalWorktreeVisibility: 'hide',
         externalWorktreeVisibilityLegacy: false
-      })
+      }),
+      null
     )
     expect(mockMultiplexer.notify).toHaveBeenCalledWith('session.registerRoot', {
       rootPath: '/home/user/orca'
@@ -1485,7 +1497,8 @@ describe('repos:addRemote', () => {
         kind: 'git',
         displayName: 'created',
         externalWorktreeVisibility: 'hide'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.path', '/home/user/created')
     expect(result).toHaveProperty('repo.connectionId', 'conn-1')
@@ -1526,7 +1539,8 @@ describe('repos:addRemote', () => {
         connectionId: 'conn-1',
         kind: 'folder',
         displayName: 'notes'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.kind', 'folder')
   })
@@ -1654,7 +1668,8 @@ describe('repos:addRemote', () => {
         kind: 'folder',
         path: '/home/user/documents',
         badgeColor: DEFAULT_REPO_BADGE_COLOR
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.kind', 'folder')
   })
@@ -1674,7 +1689,8 @@ describe('repos:addRemote', () => {
       expect.objectContaining({
         kind: 'git',
         path: '/home/user/project'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.path', '/home/user/project')
   })
@@ -1694,7 +1710,8 @@ describe('repos:addRemote', () => {
       expect.objectContaining({
         path: '/home/user/project',
         displayName: 'project'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.displayName', 'project')
   })
@@ -1710,7 +1727,8 @@ describe('repos:addRemote', () => {
       expect.objectContaining({
         path: 'C:\\Users\\alice\\project',
         displayName: 'project'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.displayName', 'project')
   })
@@ -1744,7 +1762,8 @@ describe('repos:addRemote', () => {
       expect.objectContaining({
         displayName: 'ubuntu-box',
         path: '/home/ubuntu'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.displayName', 'ubuntu-box')
     expect(result).toHaveProperty('repo.path', '/home/ubuntu')
@@ -1762,7 +1781,8 @@ describe('repos:addRemote', () => {
       expect.objectContaining({
         path: '/home/ubuntu/subdir',
         displayName: 'subdir'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.path', '/home/ubuntu/subdir')
   })
@@ -1812,7 +1832,8 @@ describe('repos:addRemote', () => {
       expect.objectContaining({
         displayName: 'My Home',
         path: '/home/ubuntu'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.displayName', 'My Home')
   })
@@ -1892,7 +1913,8 @@ describe('repos:add + repos:clone', () => {
     const result = await handlers.get('repos:add')!(null, { path: '/tmp/from-add', kind: 'folder' })
 
     expect(mockStore.addRepo).toHaveBeenCalledWith(
-      expect.objectContaining({ path: '/tmp/from-add', badgeColor: DEFAULT_REPO_BADGE_COLOR })
+      expect.objectContaining({ path: '/tmp/from-add', badgeColor: DEFAULT_REPO_BADGE_COLOR }),
+      null
     )
     expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
   })
@@ -1907,7 +1929,8 @@ describe('repos:add + repos:clone', () => {
         externalWorktreeVisibility: 'hide',
         externalWorktreeVisibilityLegacy: false,
         projectHostSetupMethod: 'imported-existing-folder'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'hide')
   })
@@ -1933,7 +1956,8 @@ describe('repos:add + repos:clone', () => {
       expect.objectContaining({
         path: '/tmp/from-add',
         displayName: 'from-add'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.path', '/tmp/from-add')
   })
@@ -2246,7 +2270,8 @@ describe('repos:add + repos:clone', () => {
         kind: 'git',
         externalWorktreeVisibility: 'hide',
         externalWorktreeVisibilityLegacy: false
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('badgeColor', DEFAULT_REPO_BADGE_COLOR)
     expect(result).toHaveProperty('externalWorktreeVisibility', 'hide')

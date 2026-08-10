@@ -2473,7 +2473,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       )
       const result =
         target.kind === 'local'
-          ? await window.api.projectGroups.importNested(args)
+          ? // Why: main can't infer the Space — another window may have switched last (see Store.addRepo).
+            await window.api.projectGroups.importNested({ ...args, spaceId: get().activeSpaceId })
           : await callRuntimeRpc<ProjectGroupImportResult>(
               target,
               'projectGroup.importNested',
@@ -2901,7 +2902,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       let repo: Repo
       try {
         if (target.kind === 'local') {
-          const result = await window.api.repos.add({ path, kind })
+          // Why: main can't infer the Space — another window may have switched last (see Store.addRepo).
+          const result = await window.api.repos.add({ path, kind, spaceId: get().activeSpaceId })
           if ('error' in result) {
             throw new Error(result.error)
           }
@@ -3013,7 +3015,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const setupArgs = projectProviderIdentity ? { ...args, projectProviderIdentity } : args
       const result =
         target.kind === 'local'
-          ? await window.api.projects.setupExistingFolder(setupArgs)
+          ? // Why: main can't infer the Space — another window may have switched last (see Store.addRepo).
+            // Runtime hosts are omitted on purpose: runtime-owned repos never carry Space membership.
+            await window.api.projects.setupExistingFolder({
+              ...setupArgs,
+              spaceId: get().activeSpaceId
+            })
           : (
               await callRuntimeRpc<{ result: ProjectHostSetupResult }>(
                 target,

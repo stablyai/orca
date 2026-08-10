@@ -76,7 +76,9 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
       if (connectionId) {
         const result = await window.api.repos.addRemote({
           connectionId,
-          remotePath: folderPath
+          remotePath: folderPath,
+          // Why: main can't infer the Space — another window may have switched last (see Store.addRepo).
+          spaceId: useAppStore.getState().activeSpaceId
         })
         if ('error' in result) {
           throw new Error(result.error)

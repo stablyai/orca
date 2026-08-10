@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { workItemsCacheKey } from './github'
 import type { Project, ProjectHostSetup } from '../../../../shared/types'
+import { DEFAULT_SPACE_ID } from '../../../../shared/spaces'
 import { toast } from 'sonner'
 import {
   installReposRuntimeRoutingHarness,
@@ -287,7 +288,8 @@ describe('repo slice runtime routing', () => {
       projectProviderIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' },
       hostId: 'local',
       path: '/local',
-      kind: 'git'
+      kind: 'git',
+      spaceId: DEFAULT_SPACE_ID
     })
   })
 
@@ -400,7 +402,8 @@ describe('repo slice runtime routing', () => {
       projectId: project.id,
       hostId: 'ssh:openclaw%202',
       path: '/srv/project',
-      kind: 'git'
+      kind: 'git',
+      spaceId: DEFAULT_SPACE_ID
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
@@ -455,7 +458,8 @@ describe('repo slice runtime routing', () => {
       path: clonedRepo.path,
       kind: 'git',
       displayName: 'Project',
-      setupMethod: 'cloned'
+      setupMethod: 'cloned',
+      spaceId: DEFAULT_SPACE_ID
     })
   })
 
@@ -591,7 +595,8 @@ describe('repo slice runtime routing', () => {
       path: clonedRepo.path,
       kind: 'git',
       displayName: 'Project',
-      setupMethod: 'cloned'
+      setupMethod: 'cloned',
+      spaceId: DEFAULT_SPACE_ID
     })
   })
 

@@ -103,12 +103,15 @@ export function useCreateRepo(
       // Why: Create Project is intentionally Git-only; non-Git folders use the
       // existing add-folder flows instead of this path.
       const createKind = 'git' as const
+      // Why: main can't infer the Space — another window may have switched last (see Store.addRepo).
+      const requestedSpaceId = useAppStore.getState().activeSpaceId
       const result = options.sshTargetId
         ? await window.api.repos.createRemote({
             connectionId: options.sshTargetId,
             parentPath,
             name,
-            kind: createKind
+            kind: createKind,
+            spaceId: requestedSpaceId
           })
         : target.kind === 'environment'
           ? await callRuntimeRpc<{ repo: Repo } | { error: string }>(
@@ -124,7 +127,8 @@ export function useCreateRepo(
           : await window.api.repos.create({
               parentPath,
               name,
-              kind: createKind
+              kind: createKind,
+              spaceId: requestedSpaceId
             })
       // Why: if the user closed the dialog or clicked Back mid-create,
       // createGenRef was bumped by resetCreateState. Ignore stale results.

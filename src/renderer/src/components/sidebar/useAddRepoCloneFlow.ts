@@ -132,11 +132,14 @@ export function useAddRepoCloneFlow({
             ...useAppStore.getState().settings,
             activeRuntimeEnvironmentId: null
           })
+      // Why: main can't infer the Space — another window may have switched last (see Store.addRepo).
+      const requestedSpaceId = useAppStore.getState().activeSpaceId
       const repo = sshTargetId?.trim()
         ? await window.api.repos.cloneRemote({
             connectionId: sshTargetId.trim(),
             url: trimmedUrl,
-            destination: cloneDestination.trim()
+            destination: cloneDestination.trim(),
+            spaceId: requestedSpaceId
           })
         : target.kind === 'environment'
           ? (
@@ -152,7 +155,8 @@ export function useAddRepoCloneFlow({
             ).repo
           : ((await window.api.repos.clone({
               url: trimmedUrl,
-              destination: cloneDestination.trim()
+              destination: cloneDestination.trim(),
+              spaceId: requestedSpaceId
             })) as Repo)
       if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return

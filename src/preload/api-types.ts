@@ -1234,6 +1234,8 @@ export type PreloadApi = {
     add: (args: {
       path: string
       kind?: 'git' | 'folder'
+      // Why: the requesting window's active Space — main must not infer it, since another window may sit elsewhere.
+      spaceId?: string | null
     }) => Promise<{ repo: Repo } | { error: string }>
     remove: (args: { repoId: string }) => Promise<void>
     // Forget a project on one execution host only, leaving the same repo id on other hosts intact.
@@ -1274,13 +1276,19 @@ export type PreloadApi = {
     pickFolder: () => Promise<string | null>
     pickFolders: () => Promise<string[]>
     pickDirectory: () => Promise<string | null>
-    clone: (args: { url: string; destination: string }) => Promise<Repo>
-    cloneRemote: (args: { connectionId: string; url: string; destination: string }) => Promise<Repo>
+    clone: (args: { url: string; destination: string; spaceId?: string | null }) => Promise<Repo>
+    cloneRemote: (args: {
+      connectionId: string
+      url: string
+      destination: string
+      spaceId?: string | null
+    }) => Promise<Repo>
     createRemote: (args: {
       connectionId: string
       parentPath: string
       name: string
       kind: 'git' | 'folder'
+      spaceId?: string | null
     }) => Promise<{ repo: Repo } | { error: string }>
     cloneAbort: () => Promise<void>
     // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
@@ -1289,12 +1297,14 @@ export type PreloadApi = {
       remotePath: string
       displayName?: string
       kind?: 'git' | 'folder'
+      spaceId?: string | null
     }) => Promise<{ repo: Repo } | { error: string }>
     // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
     create: (args: {
       parentPath: string
       name: string
       kind: 'git' | 'folder'
+      spaceId?: string | null
     }) => Promise<{ repo: Repo } | { error: string }>
     isGitAvailable: () => Promise<boolean>
     getDefaultCreateProjectParent: () => Promise<string>
@@ -1364,6 +1374,8 @@ export type PreloadApi = {
       projectPaths: string[]
       connectionId?: string
       scanId?: string
+      // Why: the requesting window's active Space — main must not infer it, since another window may sit elsewhere.
+      spaceId?: string | null
       mode: ProjectGroupImportMode
     }) => Promise<ProjectGroupImportResult>
   }

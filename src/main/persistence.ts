@@ -4508,10 +4508,6 @@ export class Store {
     return this.hydrateRepo(repo)
   }
 
-  private getActiveSpaceId(): string {
-    return normalizeActiveSpaceId(this.state.ui?.activeSpaceId, this.getSpaces())
-  }
-
   /** Default membership stays sparse: an absent spaceId already resolves to Default. */
   private normalizeStoredSpaceId(spaceId: string | null | undefined): string | null {
     if (!spaceId || spaceId === DEFAULT_SPACE_ID) {
@@ -4716,7 +4712,9 @@ export class Store {
     return this.hydrateRepo(repo)
   }
 
-  addRepo(repo: Repo, fallbackSpaceId: string | null = this.getActiveSpaceId()): void {
+  // Why: never infer the Space from persisted UI state — windows sit in different Spaces, so only the
+  // requesting caller knows which one to use. No fallback means Default.
+  addRepo(repo: Repo, fallbackSpaceId: string | null = null): void {
     const requestedSpaceId = repo.spaceId !== undefined ? repo.spaceId : fallbackSpaceId
     const storedSpaceId = this.normalizeStoredSpaceId(requestedSpaceId)
     if (storedSpaceId) {

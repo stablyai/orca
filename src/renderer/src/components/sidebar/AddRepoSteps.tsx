@@ -184,7 +184,9 @@ export function useRemoteRepo(
       setRemoteNestedScanId(null)
       const result = await window.api.repos.addRemote({
         connectionId: selectedTargetId,
-        remotePath: trimmedRemotePath
+        remotePath: trimmedRemotePath,
+        // Why: main can't infer the Space — another window may have switched last (see Store.addRepo).
+        spaceId: useAppStore.getState().activeSpaceId
       })
       if ('error' in result) {
         throw new Error(result.error)

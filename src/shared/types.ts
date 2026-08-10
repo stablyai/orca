@@ -179,6 +179,8 @@ export type ProjectHostSetupExistingFolderArgs = {
   kind?: RepoKind
   displayName?: string
   setupMethod?: RepoProjectHostSetupMethod
+  /** Requesting window's active Space; absent means Default (windows can sit in different Spaces). */
+  spaceId?: string | null
 }
 
 export type ProjectHostSetupCreateArgs = {

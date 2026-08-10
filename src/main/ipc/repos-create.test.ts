@@ -222,7 +222,8 @@ describe('repos:create', () => {
     expect(mkdirMock).toHaveBeenCalledWith('/tmp', { recursive: true })
     expect(mkdirMock).not.toHaveBeenCalledWith('/tmp/empty', expect.anything())
     expect(mockStore.addRepo).toHaveBeenCalledWith(
-      expect.objectContaining({ path: tmpPath('empty'), kind: 'folder' })
+      expect.objectContaining({ path: tmpPath('empty'), kind: 'folder' }),
+      null
     )
     expect(result).toHaveProperty('repo.kind', 'folder')
   })
@@ -262,7 +263,8 @@ describe('repos:create', () => {
         path: tmpPath('plain'),
         displayName: 'plain',
         kind: 'folder'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.kind', 'folder')
   })
@@ -271,7 +273,8 @@ describe('repos:create', () => {
     const result = await callCreate({ parentPath: '/tmp', name: 'default-color', kind: 'folder' })
 
     expect(mockStore.addRepo).toHaveBeenCalledWith(
-      expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })
+      expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR }),
+      null
     )
     expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
   })
@@ -294,7 +297,8 @@ describe('repos:create', () => {
         path: tmpPath('gitproj'),
         displayName: 'gitproj',
         kind: 'git'
-      })
+      }),
+      null
     )
     expect(result).toHaveProperty('repo.kind', 'git')
   })
