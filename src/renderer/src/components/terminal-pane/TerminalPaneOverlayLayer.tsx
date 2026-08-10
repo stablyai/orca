@@ -99,6 +99,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     }
     return entries
   }, [groupActiveTabById, unifiedTabs])
+
   const parkedTerminalTabIds = useTerminalTabColdParking({
     worktreeId,
     terminalTabs,

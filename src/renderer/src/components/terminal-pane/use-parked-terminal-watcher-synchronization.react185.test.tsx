@@ -180,7 +180,6 @@ describe('parked terminal watcher synchronization', () => {
         ptyIdsByTabId: { [TAB_ID]: [FIRST_PTY_ID, NEW_SECOND_PTY_ID] },
         terminalLayoutsByTabId: { [TAB_ID]: splitLayout(NEW_SECOND_PTY_ID) }
       })
-      harness.watchedPtyIds.delete(OLD_SECOND_PTY_ID)
     })
 
     expect(harness.syncCalls).toBe(2)

@@ -103,6 +103,59 @@ describe('mobile session-tabs agent-status heartbeat', () => {
     expect(emitted).toEqual(['worktree-1'])
   })
 
+  it('does not slip spacing-delayed worktrees to the next stale boundary', () => {
+    const emitted: { worktreeId: string; at: number }[] = []
+    worktreesByPtyId.set('pty-1', ['worktree-1'])
+    worktreesByPtyId.set('pty-2', ['worktree-2'])
+    const heartbeat = createMobileSessionTabsAgentStatusHeartbeat(
+      (ptyId) => worktreesByPtyId.get(ptyId) ?? [],
+      (worktreeId) => emitted.push({ worktreeId, at: Date.now() })
+    )
+    heartbeat.observeSemanticTitle('pty-1')
+    heartbeat.observeSemanticTitle('pty-2')
+
+    vi.advanceTimersByTime(SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS)
+    heartbeat.scheduleDecorativeHeartbeat('pty-1')
+    heartbeat.scheduleDecorativeHeartbeat('pty-2')
+    vi.advanceTimersByTime(SESSION_TABS_AGENT_STATUS_HEARTBEAT_SPACING_MS)
+    expect(emitted).toEqual([
+      { worktreeId: 'worktree-1', at: SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS },
+      {
+        worktreeId: 'worktree-2',
+        at:
+          SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS +
+          SESSION_TABS_AGENT_STATUS_HEARTBEAT_SPACING_MS
+      }
+    ])
+
+    vi.advanceTimersByTime(
+      SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS -
+        SESSION_TABS_AGENT_STATUS_HEARTBEAT_SPACING_MS
+    )
+    heartbeat.scheduleDecorativeHeartbeat('pty-1')
+    heartbeat.scheduleDecorativeHeartbeat('pty-2')
+    vi.runOnlyPendingTimers()
+    expect(emitted.at(-1)).toEqual({
+      worktreeId: 'worktree-1',
+      at: SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS * 2
+    })
+
+    vi.advanceTimersByTime(SESSION_TABS_AGENT_STATUS_HEARTBEAT_SPACING_MS - 1)
+    heartbeat.scheduleDecorativeHeartbeat('pty-2')
+    vi.runOnlyPendingTimers()
+    expect(emitted).toHaveLength(3)
+
+    vi.advanceTimersByTime(1)
+    heartbeat.scheduleDecorativeHeartbeat('pty-2')
+    vi.runOnlyPendingTimers()
+    expect(emitted.at(-1)).toEqual({
+      worktreeId: 'worktree-2',
+      at:
+        SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS * 2 +
+        SESSION_TABS_AGENT_STATUS_HEARTBEAT_SPACING_MS
+    })
+  })
+
   it('drops removed worktrees and pending work during teardown', () => {
     const emitted: string[] = []
     worktreesByPtyId.set('pty-1', ['worktree-1'])

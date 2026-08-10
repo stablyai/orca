@@ -414,12 +414,13 @@ describe('real PTY decorative session-tabs fanout', () => {
     ).toBe(true)
 
     publications.length = 0
+    const completionAt = Date.now()
     for (const ptyId of ptyIds) {
       runtime.onPtyData(ptyId, '\x1b]0;Cursor ready\x07', Date.now())
     }
     vi.advanceTimersByTime(50)
     expect(publications).toHaveLength(WORKTREE_COUNT)
-    expect(publications.every(({ at }) => at - Date.now() <= 0)).toBe(true)
+    expect(publications.every(({ updatedAt }) => updatedAt === completionAt)).toBe(true)
     unsubscribe()
   })
 
@@ -516,6 +517,103 @@ describe('real PTY decorative session-tabs fanout', () => {
       completedTerminal?.type === 'terminal' ? completedTerminal.agentStatus : undefined
     expect(completedStatus).toMatchObject({ state: 'done', prompt: '' })
     expect(completedStatus?.stateStartedAt).toBeGreaterThan(finalAgentStatus!.stateStartedAt)
+    unsubscribe()
+  })
+
+  it('does not publish a stored working row over a later permission title', () => {
+    const runtime = new OrcaRuntimeService()
+    const ptyId = seedWorktree(runtime, 0)
+    const internals = runtime as unknown as RuntimeInternals
+    const seededTab = internals.mobileSessionTabsByWorktree.get('workspace-0')?.tabs[0]
+    if (seededTab?.type !== 'terminal') {
+      throw new Error('expected seeded terminal')
+    }
+    seededTab.agentStatus = {
+      state: 'working',
+      prompt: 'previous task',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      agentType: 'cursor',
+      paneKey: seededTab.id,
+      stateHistory: []
+    }
+    const publications: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
+      publications.push(structuredClone(snapshot))
+    })
+
+    runtime.onPtyData(ptyId, '\x1b]0;⠋ Cursor Agent\x07', Date.now())
+    vi.advanceTimersByTime(50)
+    publications.length = 0
+    vi.advanceTimersByTime(1)
+    const permissionAt = Date.now()
+    runtime.onPtyData(ptyId, '\x1b]0;Cursor Agent waiting\x07', permissionAt)
+    vi.advanceTimersByTime(50)
+
+    const terminal = publications.at(-1)?.tabs[0]
+    const status = terminal?.type === 'terminal' ? terminal.agentStatus : undefined
+    expect(status).toMatchObject({
+      state: 'blocked',
+      prompt: '',
+      updatedAt: permissionAt,
+      stateStartedAt: permissionAt
+    })
+    unsubscribe()
+  })
+
+  it('does not publish a prior done row over a newer working title', () => {
+    const runtime = new OrcaRuntimeService()
+    const ptyId = seedWorktree(runtime, 0)
+    const internals = runtime as unknown as RuntimeInternals
+    const seededTab = internals.mobileSessionTabsByWorktree.get('workspace-0')?.tabs[0]
+    if (seededTab?.type !== 'terminal') {
+      throw new Error('expected seeded terminal')
+    }
+    seededTab.agentStatus = {
+      state: 'working',
+      prompt: 'first task',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      agentType: 'cursor',
+      paneKey: seededTab.id,
+      stateHistory: []
+    }
+    const publications: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
+      publications.push(structuredClone(snapshot))
+    })
+
+    runtime.onPtyData(ptyId, '\x1b]0;⠋ Cursor Agent\x07', Date.now())
+    vi.advanceTimersByTime(50)
+    vi.advanceTimersByTime(1)
+    runtime.onPtyData(ptyId, '\x1b]0;bash\x07', Date.now())
+    vi.advanceTimersByTime(50)
+    vi.advanceTimersByTime(1)
+    const doneAt = Date.now()
+    seededTab.agentStatus = {
+      state: 'done',
+      prompt: 'first task',
+      updatedAt: doneAt,
+      stateStartedAt: doneAt,
+      agentType: 'cursor',
+      paneKey: seededTab.id,
+      stateHistory: []
+    }
+    publications.length = 0
+
+    vi.advanceTimersByTime(1)
+    const nextWorkingAt = Date.now()
+    runtime.onPtyData(ptyId, '\x1b]0;⠙ Cursor Agent\x07', nextWorkingAt)
+    vi.advanceTimersByTime(50)
+
+    const terminal = publications.at(-1)?.tabs[0]
+    const status = terminal?.type === 'terminal' ? terminal.agentStatus : undefined
+    expect(status).toMatchObject({
+      state: 'working',
+      prompt: '',
+      updatedAt: nextWorkingAt,
+      stateStartedAt: nextWorkingAt
+    })
     unsubscribe()
   })
 

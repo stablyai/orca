@@ -48,9 +48,13 @@ export function createMobileSessionTabsAgentStatusHeartbeat(
       if (typeof worktreeId !== 'string') {
         return
       }
+      const pendingPtyIds = pendingPtyIdsByWorktreeId.get(worktreeId)
       pendingPtyIdsByWorktreeId.delete(worktreeId)
       const emittedAt = Date.now()
       lastRefreshAtByWorktreeId.set(worktreeId, emittedAt)
+      for (const ptyId of pendingPtyIds ?? []) {
+        lastEligibilityCheckAtByPtyId.set(ptyId, emittedAt)
+      }
       lastGlobalHeartbeatAt = emittedAt
       emit(worktreeId)
       arm()

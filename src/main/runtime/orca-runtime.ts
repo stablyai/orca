@@ -1289,6 +1289,8 @@ type RuntimePtyWorktreeRecord = {
   /** False until a live OSC frame sets the status; restore seeds never set it. */
   lastAgentStatusObservedLive: boolean
   lastAgentStatusStartedAtEpochMs: number | null
+  // A later semantic title interval cannot inherit rich fields from an earlier task.
+  lastAgentStatusRichInvalidatedAtEpochMs: number | null
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   // Why a second stamp: `lastOscTitleAt` is a title-observation sequence number,
@@ -1498,12 +1500,8 @@ type RuntimePtyTitleTrackerEntry = {
   tracker: TerminalTitleTracker
   // Why: onPtyData batches the mobile session-tab touch to once per chunk;
   // the stale-working-title timer fires between chunks and must touch
-  // immediately. These flags route the tracker callback to the right mode.
+  // immediately. This flag routes the tracker callback to the right mode.
   applyingChunk: boolean
-  // Why: synthetic spinner ticks arrive ~12.5x/sec per working pane; the
-  // synthetic path gates mobile snapshot fan-out on a non-decorative title
-  // change (spinner glyph + status comparison key kept below).
-  applyingSyntheticFrame: boolean
   lastMobileTitleGateKey: string | null
   chunkTouchedSessionTabs: boolean
   // Why: facts observed while applying a chunk are batched into one
@@ -10034,13 +10032,11 @@ export class OrcaRuntimeService {
   ingestSyntheticTitleFrame(ptyId: string, data: string): void {
     const entry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
     entry.applyingChunk = true
-    entry.applyingSyntheticFrame = true
     entry.chunkTouchedSessionTabs = false
     try {
       entry.tracker.applySyntheticTitleFrame(data)
     } finally {
       entry.applyingChunk = false
-      entry.applyingSyntheticFrame = false
       this.flushPendingTerminalSideEffectFacts(ptyId, entry)
     }
     if (entry.chunkTouchedSessionTabs) {
@@ -10394,7 +10390,6 @@ export class OrcaRuntimeService {
     const entry: RuntimePtyTitleTrackerEntry = {
       tracker,
       applyingChunk: false,
-      applyingSyntheticFrame: false,
       lastMobileTitleGateKey: null,
       chunkTouchedSessionTabs: false,
       pendingFacts: [],
@@ -10444,6 +10439,13 @@ export class OrcaRuntimeService {
       pty.lastAgentStatusObservedLive = true
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
+      }
+      if (
+        identityOnlyTitle ||
+        terminalTitleBlocksExplicitAgentStatus(recordedTitle) ||
+        (prevStatus !== null && agentStatus !== null && prevStatus !== agentStatus)
+      ) {
+        pty.lastAgentStatusRichInvalidatedAtEpochMs = observedAtEpochMs ?? Date.now()
       }
       if (identityOnlyTitle) {
         pty.managementTitle = null
@@ -10548,6 +10550,7 @@ export class OrcaRuntimeService {
       // so the seed a same-id restore applies must not inherit its authority.
       pty.lastAgentStatusObservedLive = false
       pty.lastAgentStatusStartedAtEpochMs = null
+      pty.lastAgentStatusRichInvalidatedAtEpochMs = Date.now()
       pty.managementTitle = null
       pty.managementTitleAt = null
     }
@@ -29186,6 +29189,7 @@ export class OrcaRuntimeService {
         lastAgentStatus: null,
         lastAgentStatusObservedLive: false,
         lastAgentStatusStartedAtEpochMs: null,
+        lastAgentStatusRichInvalidatedAtEpochMs: null,
         lastOscTitle: null,
         lastOscTitleAt: null,
         lastOscTitleEpochMs: null,
@@ -30607,42 +30611,72 @@ export class OrcaRuntimeService {
     status: AgentStatusEntry | null,
     pty: RuntimePtyWorktreeRecord | null
   ): AgentStatusEntry | null {
-    const titleEvidenceAt = pty?.lastOscTitleEpochMs
-    if (!status || !pty || !titleEvidenceAt) {
+    if (!status || !pty) {
       return status
     }
+    const richStatusCanOwnTitleInterval =
+      pty.lastAgentStatusRichInvalidatedAtEpochMs === null ||
+      status.updatedAt > pty.lastAgentStatusRichInvalidatedAtEpochMs
+    const titleEvidenceAt = pty.lastOscTitleEpochMs
+    if (titleEvidenceAt === null) {
+      return richStatusCanOwnTitleInterval ? status : null
+    }
+    const buildTitleOnlyStatus = (
+      state: AgentStatusEntry['state'],
+      updatedAt: number,
+      stateStartedAt: number
+    ): AgentStatusEntry => ({
+      state,
+      prompt: '',
+      updatedAt,
+      stateStartedAt,
+      paneKey: status.paneKey,
+      stateHistory: [],
+      ...(status.agentType ? { agentType: status.agentType } : {}),
+      ...(status.terminalHandle ? { terminalHandle: status.terminalHandle } : {}),
+      ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
+      ...(status.tabId ? { tabId: status.tabId } : {}),
+      ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
+      ...(status.providerSession ? { providerSession: status.providerSession } : {})
+    })
     const titleConfirmsState =
       (pty.lastAgentStatus === 'working' && status.state === 'working') ||
       (pty.lastAgentStatus === 'permission' &&
         (status.state === 'blocked' || status.state === 'waiting'))
     if (!titleConfirmsState) {
-      return status
+      if (richStatusCanOwnTitleInterval && status.updatedAt >= titleEvidenceAt) {
+        return status
+      }
+      if (
+        pty.lastAgentStatus === null &&
+        !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle)
+      ) {
+        return status
+      }
+      const titleState =
+        pty.lastAgentStatus === 'working'
+          ? 'working'
+          : pty.lastAgentStatus === 'permission'
+            ? 'blocked'
+            : 'done'
+      return buildTitleOnlyStatus(
+        titleState,
+        titleEvidenceAt,
+        pty.lastAgentStatusStartedAtEpochMs ?? titleEvidenceAt
+      )
     }
     const richStatusIsFresh = Date.now() - status.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
-    // Fresh explicit evidence owns acknowledgement identity; title-only fallback
-    // inherits it after the rich lease expires.
-    const stateStartedAt = richStatusIsFresh
+    const richStatusOwnsCurrentState = richStatusIsFresh && richStatusCanOwnTitleInterval
+    // Fresh explicit evidence from this title interval owns acknowledgement identity.
+    const stateStartedAt = richStatusOwnsCurrentState
       ? status.stateStartedAt
       : (pty.lastAgentStatusStartedAtEpochMs ?? status.stateStartedAt)
-    if (richStatusIsFresh) {
+    if (richStatusOwnsCurrentState) {
       pty.lastAgentStatusStartedAtEpochMs = stateStartedAt
     }
     const updatedAt = Math.max(status.updatedAt, titleEvidenceAt)
-    if (!richStatusIsFresh) {
-      return {
-        state: status.state,
-        prompt: '',
-        updatedAt,
-        stateStartedAt,
-        paneKey: status.paneKey,
-        stateHistory: [],
-        ...(status.agentType ? { agentType: status.agentType } : {}),
-        ...(status.terminalHandle ? { terminalHandle: status.terminalHandle } : {}),
-        ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
-        ...(status.tabId ? { tabId: status.tabId } : {}),
-        ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
-        ...(status.providerSession ? { providerSession: status.providerSession } : {})
-      }
+    if (!richStatusOwnsCurrentState) {
+      return buildTitleOnlyStatus(status.state, updatedAt, stateStartedAt)
     }
     if (updatedAt === status.updatedAt && stateStartedAt === status.stateStartedAt) {
       return status
@@ -30741,8 +30775,9 @@ export class OrcaRuntimeService {
         },
         ownerAgent
       )
-      return {
-        agentStatus: this.renewMobileAgentStatusFromPtyTitle(liveStatus, pty) ?? liveStatus
+      const renewedStatus = this.renewMobileAgentStatusFromPtyTitle(liveStatus, pty)
+      if (renewedStatus) {
+        return { agentStatus: renewedStatus }
       }
     }
     // Last resort: the pane's hook evidence is identity only (resume rows, stale

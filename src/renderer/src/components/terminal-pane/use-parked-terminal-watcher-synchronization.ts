@@ -145,6 +145,7 @@ export function useParkedTerminalWatcherSynchronization(args: {
       // Why: activation-deferred tabs have no prior pane-owned title slot.
       restoreTitleOnStartTabIds: activationDeferredMountTabIds ?? undefined
     })
+    // Why: capture cleanup mutates the registry during commit; store its post-commit key.
     synchronizationKeyRef.current = getWatcherSynchronizationKey({
       worktreeId,
       inputsKey,
