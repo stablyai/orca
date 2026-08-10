@@ -5,6 +5,10 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { adoptOrphanedWorkspaceSessionPartition } from '../../../shared/workspace-session-partition-adoption'
+import {
+  findCrossHostWorkspaceSessionKeyCollisions,
+  findWorkspaceTabIdOwnerCollisions
+} from '../../../shared/workspace-session-partition-authority'
 
 type SshPartitionHydrationApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
@@ -30,13 +34,23 @@ export async function adoptStrandedSshHostPartitions(
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[],
   merged: WorkspaceSessionState
 ): Promise<WorkspaceSessionState> {
-  let session = merged
+  const sources: WorkspaceSessionState[] = []
   for (const hostId of listKnownSshHostIds(repos)) {
     try {
-      session = adoptOrphanedWorkspaceSessionPartition(session, await api.get(hostId)).session
+      sources.push(await api.get(hostId))
     } catch (err) {
       console.warn(`[session] skipping unreadable host partition ${hostId}:`, err)
     }
+  }
+  const preserveWorkspaceKeys = new Set([
+    ...findCrossHostWorkspaceSessionKeyCollisions(sources),
+    ...findWorkspaceTabIdOwnerCollisions([merged, ...sources])
+  ])
+  let session = merged
+  for (const source of sources) {
+    session = adoptOrphanedWorkspaceSessionPartition(session, source, {
+      preserveWorkspaceKeys
+    }).session
   }
   return session
 }

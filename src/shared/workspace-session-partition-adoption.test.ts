@@ -36,6 +36,53 @@ function layout(ptyId: string | null): TerminalLayoutSnapshot {
 }
 
 describe('adoptOrphanedWorkspaceSessionPartition', () => {
+  it.each([
+    ['git worktrees', 'repo-a::/srv/a', 'repo-b::/srv/b'],
+    ['folder workspaces', folderWorkspaceKey('folder-a'), folderWorkspaceKey('folder-b')]
+  ])('fails closed when %s reuse one tab identity', (_kind, baseKey, sourceKey) => {
+    const tabId = 'duplicate-tab'
+    const paneKey = `${tabId}:${LEAF_ID}`
+    const base = session({
+      tabsByWorktree: { [baseKey]: [tab(tabId, baseKey, 'local-pty')] },
+      terminalLayoutsByTabId: { [tabId]: layout('local-pty') },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'local-incarnation' },
+      remoteSessionIdsByTabId: { [tabId]: 'local-session' }
+    })
+    const source = session({
+      tabsByWorktree: { [sourceKey]: [tab(tabId, sourceKey, 'ssh:one@@remote-pty')] },
+      terminalLayoutsByTabId: { [tabId]: layout('ssh:one@@remote-pty') },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'remote-incarnation' },
+      remoteSessionIdsByTabId: { [tabId]: 'ssh:one@@remote-session' },
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId,
+          worktreeId: sourceKey,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'remote-provider-session' },
+          prompt: 'remote',
+          state: 'working',
+          capturedAt: 2,
+          updatedAt: 2
+        }
+      }
+    })
+
+    const adoption = adoptOrphanedWorkspaceSessionPartition(base, source)
+
+    expect(new Set(adoption.ambiguousWorktreeIds)).toEqual(new Set([baseKey, sourceKey]))
+    expect(adoption.reconciledWorktreeIds).toEqual([])
+    expect(adoption.sourceAuthoritativePaneKeys).toEqual([])
+    expect(adoption.session.tabsByWorktree[baseKey]?.[0]?.ptyId).toBe('local-pty')
+    expect(adoption.session.tabsByWorktree[sourceKey]).toBeUndefined()
+    expect(adoption.session.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[LEAF_ID]).toBe(
+      'local-pty'
+    )
+    expect(adoption.session.terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe('local-incarnation')
+    expect(adoption.session.remoteSessionIdsByTabId?.[tabId]).toBe('local-session')
+    expect(adoption.session.sleepingAgentSessionsByPaneKey?.[paneKey]).toBeUndefined()
+  })
+
   it('adopts complete folder-only state without a repository entry', () => {
     const source = session({
       activeWorkspaceKey: FOLDER_KEY,

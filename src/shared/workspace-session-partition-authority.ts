@@ -147,3 +147,27 @@ export function findCrossHostWorkspaceSessionKeyCollisions(
   }
   return collisions
 }
+
+export function findWorkspaceTabIdOwnerCollisions(
+  sources: readonly WorkspaceSessionState[]
+): Set<string> {
+  const ownersByTabId = new Map<string, Set<string>>()
+  for (const source of sources) {
+    for (const [workspaceKey, tabs] of Object.entries(source.tabsByWorktree)) {
+      for (const tab of tabs) {
+        const owners = ownersByTabId.get(tab.id) ?? new Set<string>()
+        owners.add(workspaceKey)
+        ownersByTabId.set(tab.id, owners)
+      }
+    }
+  }
+  const collisions = new Set<string>()
+  for (const owners of ownersByTabId.values()) {
+    if (owners.size > 1) {
+      for (const owner of owners) {
+        collisions.add(owner)
+      }
+    }
+  }
+  return collisions
+}

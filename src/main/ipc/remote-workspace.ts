@@ -277,8 +277,12 @@ async function queueRemoteWorkspacePatch<T>(
 
 async function patchRemoteWorkspaceSession(
   target: SshTarget,
-  session: RemoteWorkspaceSession
+  session: RemoteWorkspaceSession,
+  authority: DirectSshAuthority
 ): Promise<RemoteWorkspacePatchResult | null> {
+  if (authority.targetId !== target.id || !isCurrentSshProviderAuthority(authority)) {
+    return null
+  }
   const mux = getActiveMultiplexer(target.id)
   if (!mux) {
     return null
@@ -482,7 +486,7 @@ export function registerRemoteWorkspaceHandlers(
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
           const result = await queueRemoteWorkspacePatch(target.id, () =>
-            patchRemoteWorkspaceSession(target, session)
+            patchRemoteWorkspaceSession(target, session, authority)
           )
           return result ? { targetId: target.id, result } : null
         })

@@ -284,6 +284,35 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     expect(read.session.tabsByWorktree[worktreeId]).toEqual([liveTab])
   })
 
+  it('keeps legacy SSH partitions isolated when distinct workspaces reuse a tab identity', async () => {
+    const leftKey = 'left::/home/user/left'
+    const rightKey = folderWorkspaceKey('right-folder')
+    const sharedTabId = 'shared-tab'
+    const repos = [
+      { id: 'left', connectionId: 'conn-1', executionHostId: null },
+      { id: 'right', connectionId: 'conn-2', executionHostId: null }
+    ]
+    const get = vi.fn(async (hostId?: string): Promise<WorkspaceSessionState> => {
+      if (hostId === 'ssh:conn-1') {
+        return {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: { [leftKey]: [sessionTab(sharedTabId, leftKey)] }
+        }
+      }
+      if (hostId === 'ssh:conn-2') {
+        return {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: { [rightKey]: [sessionTab(sharedTabId, rightKey)] }
+        }
+      }
+      return getDefaultWorkspaceSession()
+    })
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners({ get }, repos)
+
+    expect(read.session.tabsByWorktree).toEqual({})
+  })
+
   it('delegates persisted SSH partition enumeration to one main transaction', async () => {
     const worktreeA = 'repo-a::/home/user/wt-a'
     const worktreeB = 'repo-b::/home/user/wt-b'

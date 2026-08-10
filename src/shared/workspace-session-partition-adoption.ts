@@ -1,5 +1,8 @@
 import type { WorkspaceSessionState } from './types'
-import { workspaceTerminalAuthority } from './workspace-session-partition-authority'
+import {
+  findWorkspaceTabIdOwnerCollisions,
+  workspaceTerminalAuthority
+} from './workspace-session-partition-authority'
 import { mergeAdoptedWorkspaceSessionState } from './workspace-session-partition-state-merge'
 import {
   collectTerminalProvenance,
@@ -48,12 +51,13 @@ export function adoptOrphanedWorkspaceSessionPartition(
       })
     ])
   )
-  const ambiguousWorktreeIds = new Set(
-    [...sourceKeys].filter(
+  const ambiguousWorktreeIds = new Set([
+    ...findWorkspaceTabIdOwnerCollisions([base, source]),
+    ...[...sourceKeys].filter(
       (key) =>
         options.preserveWorkspaceKeys?.has(key) || authorityByWorkspaceKey.get(key) === 'ambiguous'
     )
-  )
+  ])
   const sourceAuthority = new Set(
     [...sourceKeys].filter(
       (key) => !ambiguousWorktreeIds.has(key) && authorityByWorkspaceKey.get(key) === 'source'

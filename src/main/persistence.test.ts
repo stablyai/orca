@@ -11913,11 +11913,14 @@ describe('Store host-partitioned workspace sessions', () => {
       [folderKey]: [
         {
           ...boundFolderSession.tabsByWorktree['repo-1::/worktree'][0],
+          id: 'folder-tab',
           worktreeId: folderKey
         }
       ]
     }
-    folderSession.terminalLayoutsByTabId = boundFolderSession.terminalLayoutsByTabId
+    folderSession.terminalLayoutsByTabId = {
+      'folder-tab': boundFolderSession.terminalLayoutsByTabId['tab-1']
+    }
     folderSession.openFilesByWorktree = {
       [folderKey]: [
         {
@@ -11955,6 +11958,27 @@ describe('Store host-partitioned workspace sessions', () => {
     const adopted = store.adoptSshWorkspaceSessionPartition()
 
     expect(adopted.tabsByWorktree['repo-1::/worktree']).toBeUndefined()
+    expect(store.getWorkspaceSession('ssh:left').tabsByWorktree).toEqual(left.tabsByWorktree)
+    expect(store.getWorkspaceSession('ssh:right').tabsByWorktree).toEqual(right.tabsByWorktree)
+  })
+
+  it('preserves SSH sources whose distinct workspaces reuse one tab identity', async () => {
+    const store = await createStore()
+    const left = getDefaultWorkspaceSession()
+    const right = getDefaultWorkspaceSession()
+    left.tabsByWorktree = {
+      'repo-1::/worktree': [makeTerminalTab({ id: 'shared-tab', worktreeId: 'repo-1::/worktree' })]
+    }
+    right.tabsByWorktree = {
+      'repo-2::/worktree': [makeTerminalTab({ id: 'shared-tab', worktreeId: 'repo-2::/worktree' })]
+    }
+    store.setWorkspaceSession(left, 'ssh:left')
+    store.setWorkspaceSession(right, 'ssh:right')
+
+    const adopted = store.adoptSshWorkspaceSessionPartition()
+
+    expect(adopted.tabsByWorktree).toEqual({})
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local', 'ssh:left', 'ssh:right'])
     expect(store.getWorkspaceSession('ssh:left').tabsByWorktree).toEqual(left.tabsByWorktree)
     expect(store.getWorkspaceSession('ssh:right').tabsByWorktree).toEqual(right.tabsByWorktree)
   })
