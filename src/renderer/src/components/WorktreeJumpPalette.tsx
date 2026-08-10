@@ -22,7 +22,7 @@ import {
   SquareTerminal
 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { getRepoMapFromState, useAllWorktrees } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/selectors'
 import {
   selectPaletteIndexStatusSnapshot,
   selectPaletteStatusInputs
@@ -54,6 +54,13 @@ import {
   isDefaultBranchWorkspace,
   isSleepingSweepExemptWorkspace
 } from '@/components/sidebar/visible-worktrees'
+import {
+  filterProjectGroupsForActiveSpace,
+  filterReposForActiveSpace,
+  getActiveSpaceFilterId,
+  getActiveSpaceProjectGroupIdSet,
+  isWorktreeInActiveSpace
+} from '@/components/sidebar/space-scoping'
 import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import {
@@ -366,8 +373,12 @@ function getComposerPrefetchRepoId(
   state: ReturnType<typeof useAppStore.getState>,
   initialRepoId?: string
 ): string | null {
+  const repos = filterReposForActiveSpace(
+    state.repos,
+    getActiveSpaceFilterId(state.activeSpaceId, state.repos)
+  )
   return resolveComposerGitRepoId({
-    eligibleRepos: getComposerEligibleRepos(state.repos),
+    eligibleRepos: getComposerEligibleRepos(repos),
     initialRepoId,
     activeRepoId: state.activeRepoId,
     focusedHostScope: state.workspaceHostScope
@@ -552,9 +563,30 @@ function WorktreeJumpPaletteContent({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const revealSidebarRow = useAppStore((s) => s.revealSidebarRow)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const allWorktrees = useAllWorktrees()
-  const repos = useAppStore((s) => s.repos)
-  const projectGroups = useAppStore((s) => s.projectGroups)
+  const allWorktreesAcrossSpaces = useAllWorktrees()
+  const reposAcrossSpaces = useAppStore((s) => s.repos)
+  const activeSpaceId = useAppStore((s) => s.activeSpaceId)
+  const activeSpaceFilterId = useMemo(
+    () => getActiveSpaceFilterId(activeSpaceId, reposAcrossSpaces),
+    [activeSpaceId, reposAcrossSpaces]
+  )
+  const repos = useMemo(
+    () => filterReposForActiveSpace(reposAcrossSpaces, activeSpaceFilterId),
+    [activeSpaceFilterId, reposAcrossSpaces]
+  )
+  const projectGroupsAcrossSpaces = useAppStore((s) => s.projectGroups)
+  const projectGroups = useMemo(
+    () =>
+      filterProjectGroupsForActiveSpace(
+        projectGroupsAcrossSpaces,
+        getActiveSpaceProjectGroupIdSet(
+          projectGroupsAcrossSpaces,
+          reposAcrossSpaces,
+          activeSpaceFilterId
+        )
+      ),
+    [activeSpaceFilterId, projectGroupsAcrossSpaces, reposAcrossSpaces]
+  )
   const projects = useAppStore((s) => s.projects)
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
@@ -658,6 +690,19 @@ function WorktreeJumpPaletteContent({
   const preserveCreateLookupOnCloseRef = useRef(false)
 
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
+  const spaceRepoByHostIdentity = useMemo(
+    () => new Map(reposAcrossSpaces.map((repo) => [getRepoHostIdentity(repo), repo] as const)),
+    [reposAcrossSpaces]
+  )
+  const allWorktrees = useMemo(
+    () =>
+      activeSpaceFilterId
+        ? allWorktreesAcrossSpaces.filter((worktree) =>
+            isWorktreeInActiveSpace(worktree, repoMap, activeSpaceFilterId, spaceRepoByHostIdentity)
+          )
+        : allWorktreesAcrossSpaces,
+    [activeSpaceFilterId, allWorktreesAcrossSpaces, repoMap, spaceRepoByHostIdentity]
+  )
   const repoByHostIdentity = useMemo(
     () => new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo])),
     [repos]
@@ -2259,7 +2304,7 @@ function WorktreeJumpPaletteContent({
       }
 
       // Why: hand the raw URL to the composer so it runs Cmd+N cross-project detection; pre-resolving here silently linked to the wrong project.
-      const eligibleRepos = state.repos.filter((r) => isGitRepoKind(r))
+      const eligibleRepos = repos.filter((r) => isGitRepoKind(r))
       const repoForLookup =
         (state.activeRepoId && eligibleRepos.find((r) => r.id === state.activeRepoId)) ||
         eligibleRepos[0]
@@ -2291,7 +2336,7 @@ function WorktreeJumpPaletteContent({
 
       const repoForLookup =
         (state.activeRepoId ? (repoMap.get(state.activeRepoId) ?? null) : null) ||
-        [...getRepoMapFromState(state).values()].find((repo) => isGitRepoKind(repo))
+        repos.find((repo) => isGitRepoKind(repo))
       if (!repoForLookup || !isGitRepoKind(repoForLookup)) {
         openComposer({ prefilledName: trimmed })
         return
@@ -2362,7 +2407,8 @@ function WorktreeJumpPaletteContent({
     openModal,
     prefetchCreateWorkspaceBaseForComposer,
     recordFeatureInteraction,
-    repoMap
+    repoMap,
+    repos
   ])
 
   const handleCloseAutoFocus = useCallback((e: Event) => {

@@ -88,6 +88,7 @@ import {
   normalizeBrowserPageZoomLevel
 } from '../../../../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
+import { normalizeActiveSpaceId } from '../../../../shared/spaces'
 import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
@@ -807,6 +808,8 @@ export type UISlice = {
     | 'feature-tips'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
+    | 'space-editor'
+    | 'delete-space'
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
@@ -2588,6 +2591,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
           ui.workspaceCleanup?.dismissals
         ),
+        // Why: per-window like activeView below — on 'sync' another window's switch would yank this sidebar into its Space.
+        activeSpaceId:
+          source === 'startup'
+            ? normalizeActiveSpaceId(ui.activeSpaceId, s.spaces)
+            : s.activeSpaceId,
         // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
         activeView:
           source === 'startup'

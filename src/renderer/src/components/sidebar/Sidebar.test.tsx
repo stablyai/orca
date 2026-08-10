@@ -7,6 +7,7 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/types'
+import { DEFAULT_SPACE_ID, createDefaultSpace } from '../../../../shared/spaces'
 
 const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
@@ -104,6 +105,11 @@ function setSidebarState(settings: GlobalSettings, statusBarVisible = true): voi
     repos: [],
     setSidebarWidth: vi.fn(),
     settings,
+    spaces: [createDefaultSpace()],
+    activeSpaceId: DEFAULT_SPACE_ID,
+    activeWorkspaceKey: null,
+    activeWorktreeId: null,
+    rememberSpaceWorkspaceKey: vi.fn(),
     sidebarOpen: true,
     sidebarWidth: 320,
     statusBarVisible

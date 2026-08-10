@@ -118,8 +118,15 @@ import {
 } from '@/lib/new-workspace-ssh-gate'
 import {
   getComposerEligibleRepos,
-  resolveComposerActiveRepoId
+  resolveComposerActiveRepoId,
+  resolveComposerEligibleRepoId
 } from '@/lib/new-workspace-composer-repo'
+import {
+  filterProjectGroupsForActiveSpace,
+  filterReposForActiveSpace,
+  getActiveSpaceFilterId,
+  getActiveSpaceProjectGroupIdSet
+} from '@/components/sidebar/space-scoping'
 import {
   resolveWorkspaceCreationRepoId,
   resolveWorkspaceCreationTarget
@@ -647,9 +654,30 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     fetchSparsePresets
   } = actions
 
-  const repos = useAppStore((s) => s.repos)
+  const reposAcrossSpaces = useAppStore((s) => s.repos)
+  const activeSpaceId = useAppStore((s) => s.activeSpaceId)
+  const activeSpaceFilterId = useMemo(
+    () => getActiveSpaceFilterId(activeSpaceId, reposAcrossSpaces),
+    [activeSpaceId, reposAcrossSpaces]
+  )
+  const repos = useMemo(
+    () => filterReposForActiveSpace(reposAcrossSpaces, activeSpaceFilterId),
+    [activeSpaceFilterId, reposAcrossSpaces]
+  )
   const projects = useAppStore((s) => s.projects)
-  const projectGroups = useAppStore((s) => s.projectGroups)
+  const projectGroupsAcrossSpaces = useAppStore((s) => s.projectGroups)
+  const projectGroups = useMemo(
+    () =>
+      filterProjectGroupsForActiveSpace(
+        projectGroupsAcrossSpaces,
+        getActiveSpaceProjectGroupIdSet(
+          projectGroupsAcrossSpaces,
+          reposAcrossSpaces,
+          activeSpaceFilterId
+        )
+      ),
+    [activeSpaceFilterId, projectGroupsAcrossSpaces, reposAcrossSpaces]
+  )
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const settings = useAppStore((s) => s.settings)
@@ -664,6 +692,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const eligibleRepos = useMemo(() => getComposerEligibleRepos(repos), [repos])
+  const spaceScopedInitialRepoId = resolveComposerEligibleRepoId(eligibleRepos, initialRepoId)
+  const spaceScopedRepoIdOverride = resolveComposerEligibleRepoId(eligibleRepos, repoIdOverride)
   const hostOptions = useMemo(
     () =>
       buildExecutionHostRegistry({
@@ -690,9 +720,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [hostOptions]
   )
   // Why: a runtime-owned SSH repo (active right after creating a per-workspace-env) is ineligible; seed from its local same-project sibling, not another project.
+  // Why: that hidden repo can sit outside the active Space, so look it up unscoped; only the sibling it maps to must be eligible.
   const seedActiveRepoId = useMemo(
-    () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId),
-    [repos, eligibleRepos, activeRepoId]
+    () => resolveComposerActiveRepoId(reposAcrossSpaces, eligibleRepos, activeRepoId),
+    [reposAcrossSpaces, eligibleRepos, activeRepoId]
   )
   const draftRepoId = persistDraft ? (newWorkspaceDraft?.repoId ?? null) : null
   const draftProjectId = persistDraft ? (newWorkspaceDraft?.projectId ?? null) : null
@@ -721,7 +752,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     projects,
     projectHostSetups,
     draftRepoId,
-    initialRepoId,
+    initialRepoId: spaceScopedInitialRepoId,
     activeRepoId: seedActiveRepoId,
     projectId: initialRunSeed.projectId,
     hostId: initialRunSeed.hostId,
@@ -753,7 +784,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
   const initialProjectGroupAppliedRef = useRef(Boolean(initialFolderProjectGroup))
   const [projectError, setProjectError] = useState<string | null>(null)
-  const repoId = repoIdOverride ?? internalRepoId
+  const repoId = spaceScopedRepoIdOverride ?? internalRepoId
   const selectedProjectGroup = useMemo<ProjectGroup | null>(
     () =>
       findActionableFolderProjectGroup({
@@ -868,7 +899,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             activeRepoId,
             activeWorktreeId: null,
             projects,
-            repos,
+            repos: reposAcrossSpaces,
             settings,
             worktreesByRepo
           },
@@ -876,7 +907,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           CLIENT_PLATFORM
         )
     return getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)
-  }, [activeRepoId, projects, repos, selectedRepo, settings, worktreesByRepo])
+  }, [activeRepoId, projects, reposAcrossSpaces, selectedRepo, settings, worktreesByRepo])
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only `orca-ide` rename must not apply to remote launch commands.
   const selectedRepoIsRemote = selectedRepo ? repoIsRemote(selectedRepo) : false
   const selectedRepoStartupShell = resolveLocalWindowsAgentStartupShell({
@@ -1272,7 +1303,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     getInitialGitHubPrStartPointSelection({
       item: initialGitHubWorkItem,
       linkedWorkItem: initialLinkedWorkItemSeed,
-      repoId: selectedRepo?.id ?? initialRepoId
+      repoId: selectedRepo?.id ?? spaceScopedInitialRepoId
     })
   )
   useEffect(() => {

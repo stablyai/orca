@@ -3,6 +3,7 @@ import type { Repo } from '../../../shared/types'
 import {
   getComposerEligibleRepos,
   resolveComposerActiveRepoId,
+  resolveComposerEligibleRepoId,
   resolveComposerGitRepoId,
   resolveComposerRepoId
 } from './new-workspace-composer-repo'
@@ -54,6 +55,14 @@ describe('new-workspace-composer-repo', () => {
     expect(
       getComposerEligibleRepos([makeRepo('missing-path', { path: '' }), makeRepo('repo')])
     ).toEqual([expect.objectContaining({ id: 'repo' })])
+  })
+
+  it('rejects an externally supplied repo outside the eligible catalog', () => {
+    const eligibleRepos = [makeRepo('visible')]
+
+    expect(resolveComposerEligibleRepoId(eligibleRepos, 'visible')).toBe('visible')
+    expect(resolveComposerEligibleRepoId(eligibleRepos, 'another-space')).toBeUndefined()
+    expect(resolveComposerEligibleRepoId(eligibleRepos, undefined)).toBeUndefined()
   })
 
   it('defaults to a repo on the focused host when no explicit repo is chosen', () => {

@@ -24,7 +24,8 @@ import type {
   ProjectHostSetupUpdateResult,
   NestedRepoScanResult,
   BaseRefDefaultResult,
-  SparsePreset
+  SparsePreset,
+  Space
 } from '../../shared/types'
 import type { FolderWorkspacePathStatusRequest } from '../../shared/folder-workspace-path-status'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -818,6 +819,29 @@ const ProjectGroupMoveProjectArgs = z.object({
   order: z.number().finite().optional()
 })
 
+const SpaceCreateArgs = z.object({
+  name: z.string().min(1),
+  emoji: z.string().nullable().optional()
+})
+
+const SpaceUpdateArgs = z.object({
+  spaceId: z.string().min(1),
+  updates: z.object({
+    name: z.string().min(1).optional(),
+    emoji: z.string().nullable().optional()
+  })
+})
+
+const SpaceSelectorArgs = z.object({
+  spaceId: z.string().min(1)
+})
+
+const SpaceMoveProjectArgs = z.object({
+  projectId: z.string().min(1),
+  spaceId: z.string().nullable(),
+  hostId: z.string().min(1)
+})
+
 const ProjectHostSetupExistingFolderIpcArgs = z.object({
   projectId: z.string().min(1),
   projectProviderIdentity: z
@@ -1285,6 +1309,11 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('projectGroups:scanNested')
   ipcMain.removeHandler('projectGroups:cancelNestedScan')
   ipcMain.removeHandler('projectGroups:importNested')
+  ipcMain.removeHandler('spaces:list')
+  ipcMain.removeHandler('spaces:create')
+  ipcMain.removeHandler('spaces:update')
+  ipcMain.removeHandler('spaces:delete')
+  ipcMain.removeHandler('spaces:moveProject')
   ipcMain.removeHandler('folderWorkspaces:list')
   ipcMain.removeHandler('folderWorkspaces:create')
   ipcMain.removeHandler('folderWorkspaces:update')
@@ -1616,6 +1645,47 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       'invalid_project_group_move_repo_args'
     )
     const moved = store.moveProjectToGroup(args.projectId, args.groupId, args.order)
+    if (moved) {
+      notifyReposChanged(mainWindow)
+    }
+    return moved
+  })
+
+  ipcMain.handle('spaces:list', (): Space[] => store.getSpaces())
+
+  ipcMain.handle('spaces:create', (_event, rawArgs: unknown): Space => {
+    const args = parseProjectGroupIpcArgs(SpaceCreateArgs, rawArgs, 'invalid_space_create_args')
+    const space = store.createSpace(args)
+    notifyReposChanged(mainWindow)
+    return space
+  })
+
+  ipcMain.handle('spaces:update', (_event, rawArgs: unknown): Space | null => {
+    const args = parseProjectGroupIpcArgs(SpaceUpdateArgs, rawArgs, 'invalid_space_update_args')
+    const updated = store.updateSpace(args.spaceId, args.updates)
+    if (updated) {
+      notifyReposChanged(mainWindow)
+    }
+    return updated
+  })
+
+  ipcMain.handle('spaces:delete', (_event, rawArgs: unknown): boolean => {
+    const args = parseProjectGroupIpcArgs(SpaceSelectorArgs, rawArgs, 'invalid_space_delete_args')
+    const deleted = store.deleteSpace(args.spaceId)
+    if (deleted) {
+      notifyReposChanged(mainWindow)
+    }
+    return deleted
+  })
+
+  ipcMain.handle('spaces:moveProject', (_event, rawArgs: unknown): Repo | null => {
+    const args = parseProjectGroupIpcArgs(
+      SpaceMoveProjectArgs,
+      rawArgs,
+      'invalid_space_move_project_args'
+    )
+    const hostId = normalizeExecutionHostId(args.hostId)
+    const moved = hostId ? store.moveProjectToSpace(args.projectId, args.spaceId, hostId) : null
     if (moved) {
       notifyReposChanged(mainWindow)
     }

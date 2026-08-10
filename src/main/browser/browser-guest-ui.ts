@@ -443,6 +443,10 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:openSettings')
     } else if (action?.type === 'forceReload') {
       renderer.reloadIgnoringCache()
+    } else if (action?.type === 'jumpToSpaceIndex') {
+      renderer.send('ui:jumpToSpaceIndex', action.index)
+    } else if (action?.type === 'spaceNavigate') {
+      renderer.send('ui:spaceNavigate', action.direction)
     } else if (action?.type === 'jumpToWorktreeIndex') {
       if (isFloatingGuest) {
         renderer.send('ui:selectFloatingIndex', { index: action.index })

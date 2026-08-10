@@ -8,6 +8,7 @@ import type {
   HostedReviewInfo,
   HostedReviewProvider
 } from '../shared/hosted-review'
+import type { SpaceCreateInput, SpaceUpdates } from '../shared/spaces'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type { BrowserFindSource } from '../shared/browser-find-source'
@@ -265,6 +266,7 @@ import type {
   ProjectGroupImportResult,
   ProjectGroupImportMode,
   ShellHydrationFailureReason,
+  Space,
   SparsePreset,
   SearchOptions,
   NestedRepoScanResult,
@@ -1371,6 +1373,17 @@ export type PreloadApi = {
       scanId?: string
       mode: ProjectGroupImportMode
     }) => Promise<ProjectGroupImportResult>
+  }
+  spaces: {
+    list: () => Promise<Space[]>
+    create: (args: SpaceCreateInput) => Promise<Space>
+    update: (args: { spaceId: string; updates: SpaceUpdates }) => Promise<Space | null>
+    delete: (args: { spaceId: string }) => Promise<boolean>
+    moveProject: (args: {
+      projectId: string
+      spaceId: string | null
+      hostId: ExecutionHostId
+    }) => Promise<Repo | null>
   }
   folderWorkspaces: {
     list: () => Promise<FolderWorkspace[]>
@@ -3194,6 +3207,8 @@ export type PreloadApi = {
     onDeleteCurrentWorkspace: (callback: () => void) => () => void
     onOpenWorkspaceBoard: (callback: () => void) => () => void
     onOpenTasks: (callback: () => void) => () => void
+    onJumpToSpaceIndex: (callback: (index: number) => void) => () => void
+    onSpaceNavigate: (callback: (direction: 'next' | 'previous') => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
     onJumpToTabIndex: (callback: (index: number) => void) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void

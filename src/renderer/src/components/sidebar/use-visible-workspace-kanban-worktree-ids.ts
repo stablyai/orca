@@ -4,6 +4,7 @@ import type { Repo, Worktree } from '../../../../shared/types'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]
@@ -17,6 +18,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   repoMap
 }: UseVisibleWorkspaceKanbanWorktreeIdsParams): ReadonlySet<string> {
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const repos = useAppStore((s) => s.repos)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
@@ -25,6 +27,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
+  const activeSpaceId = useAppStore((s) => s.activeSpaceId)
   const settings = useAppStore((s) => s.settings)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const tabsByWorktree = useAppStore((s) => (!showSleepingWorkspaces ? s.tabsByWorktree : null))
@@ -50,6 +53,9 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     // Why: the board has its own status ordering, but visibility must match
     // the sidebar filters exactly so hidden workspaces do not reappear here.
     const sortedIds = allWorktrees.map((worktree) => worktree.id)
+    const repoByHostIdentity = new Map(
+      repos.map((repo) => [getRepoHostIdentity(repo), repo] as const)
+    )
     return new Set(
       computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
         filterRepoIds,
@@ -64,6 +70,8 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         hideDetachedHeadWorkspaces,
         alwaysShowDefaultBranchWorkspace,
         repoMap,
+        repoByHostIdentity,
+        activeSpaceId,
         workspaceHostScope,
         visibleWorkspaceHostIds,
         defaultHostId: getSettingsFocusedExecutionHostId(settings),
@@ -74,6 +82,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
       })
     )
   }, [
+    activeSpaceId,
     allWorktrees,
     browserTabsByWorktree,
     filterRepoIds,
@@ -87,6 +96,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     settings,
     ptyIdsByTabId,
     repoMap,
+    repos,
     showSleepingWorkspaces,
     tabsByWorktree,
     worktreeIdsWithLiveAgent,

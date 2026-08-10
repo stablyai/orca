@@ -984,6 +984,8 @@ describe('useIpcEvents browser tab create routing', () => {
           onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
+          onJumpToSpaceIndex: () => () => {},
+          onSpaceNavigate: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
@@ -1215,6 +1217,8 @@ describe('useIpcEvents updater integration', () => {
           onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
+          onJumpToSpaceIndex: () => () => {},
+          onSpaceNavigate: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
@@ -1586,6 +1590,8 @@ describe('useIpcEvents updater integration', () => {
           onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
+          onJumpToSpaceIndex: () => () => {},
+          onSpaceNavigate: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
@@ -2057,6 +2063,8 @@ describe('useIpcEvents updater integration', () => {
           onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
+          onJumpToSpaceIndex: () => () => {},
+          onSpaceNavigate: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onActivateWorktree: () => () => {},
@@ -3199,6 +3207,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
+          onJumpToSpaceIndex: () => () => {},
+          onSpaceNavigate: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
@@ -3771,6 +3781,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
+          onJumpToSpaceIndex: () => () => {},
+          onSpaceNavigate: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
@@ -3992,6 +4004,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
+          onJumpToSpaceIndex: () => () => {},
+          onSpaceNavigate: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
@@ -4208,6 +4222,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
+          onJumpToSpaceIndex: () => () => {},
+          onSpaceNavigate: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
@@ -4531,6 +4547,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
+          onJumpToSpaceIndex: () => () => {},
+          onSpaceNavigate: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
@@ -4801,6 +4819,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
+          onJumpToSpaceIndex: () => () => {},
+          onSpaceNavigate: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
@@ -5074,6 +5094,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
+          onJumpToSpaceIndex: () => () => {},
+          onSpaceNavigate: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
@@ -9097,7 +9119,8 @@ describe('parked terminal recovery on repos:changed', () => {
       remountTerminalTabForRecovery,
       fetchRepos: vi.fn(() => Promise.resolve()),
       fetchProjectGroups: vi.fn(() => Promise.resolve()),
-      fetchFolderWorkspaces: vi.fn(() => Promise.resolve())
+      fetchFolderWorkspaces: vi.fn(() => Promise.resolve()),
+      loadSpaces: vi.fn(() => Promise.resolve())
     }
 
     vi.doMock('react', async () => {
@@ -9291,6 +9314,29 @@ describe('useIpcEvents silent terminal adoption (surfaceOwner: false)', () => {
 })
 
 type CmdJRowIndexJumpModule = typeof CmdJRowIndexJump
+
+describe('useIpcEvents Space shortcut routing', () => {
+  it('switches to a Space by visible index and adjacent direction', async () => {
+    const state = createHarnessStoreState({
+      tabsByWorktree: {},
+      activeModal: null,
+      activeSpaceId: 'default',
+      spaces: [
+        { id: 'default', name: 'Default', emoji: null, createdAt: 0, updatedAt: 0 },
+        { id: 'work', name: 'Work', emoji: null, createdAt: 1, updatedAt: 1 }
+      ],
+      setActiveSpace: vi.fn()
+    })
+    const harness = await loadIpcEventsHarness(state)
+    harness.useIpcEvents()
+
+    harness.jumpToSpaceIndex(1)
+    harness.navigateSpace('next')
+
+    expect(state.setActiveSpace).toHaveBeenNthCalledWith(1, 'work')
+    expect(state.setActiveSpace).toHaveBeenNthCalledWith(2, 'work')
+  })
+})
 
 describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
   function createPaletteState(activeModal: string | null): HarnessStoreState {

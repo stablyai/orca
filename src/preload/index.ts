@@ -750,6 +750,14 @@ const api = {
     importNested: (args) => ipcRenderer.invoke('projectGroups:importNested', args)
   } satisfies PreloadApi['projectGroups'],
 
+  spaces: {
+    list: () => ipcRenderer.invoke('spaces:list'),
+    create: (args) => ipcRenderer.invoke('spaces:create', args),
+    update: (args) => ipcRenderer.invoke('spaces:update', args),
+    delete: (args) => ipcRenderer.invoke('spaces:delete', args),
+    moveProject: (args) => ipcRenderer.invoke('spaces:moveProject', args)
+  } satisfies PreloadApi['spaces'],
+
   folderWorkspaces: {
     list: () => ipcRenderer.invoke('folderWorkspaces:list'),
     getPathStatus: (args) => ipcRenderer.invoke('folderWorkspaces:getPathStatus', args),
@@ -3578,6 +3586,17 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openTasks', listener)
       return () => ipcRenderer.removeListener('ui:openTasks', listener)
+    },
+    onJumpToSpaceIndex: (callback: (index: number) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)
+      ipcRenderer.on('ui:jumpToSpaceIndex', listener)
+      return () => ipcRenderer.removeListener('ui:jumpToSpaceIndex', listener)
+    },
+    onSpaceNavigate: (callback: (direction: 'next' | 'previous') => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 'next' | 'previous') =>
+        callback(direction)
+      ipcRenderer.on('ui:spaceNavigate', listener)
+      return () => ipcRenderer.removeListener('ui:spaceNavigate', listener)
     },
     onJumpToWorktreeIndex: (callback: (index: number) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)

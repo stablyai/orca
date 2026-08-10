@@ -627,18 +627,38 @@
   height: 0;
 }
 
-/* Why: horizontal tab strips scroll via chevrons, wheel, and trackpad; a
-   native scrollbar thumb overlays tab labels and looks broken. */
+/* Why: horizontal strips scroll via chevrons, wheel, and trackpad; a
+   native scrollbar thumb overlays their labels and looks broken. */
+.sidebar-space-switcher-scroll,
 .terminal-tab-strip,
 .project-view-tab-strip {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
+.sidebar-space-switcher-scroll::-webkit-scrollbar,
 .terminal-tab-strip::-webkit-scrollbar,
 .project-view-tab-strip::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+/* Why: overflowing Space indicators recede before reaching adjacent toolbar controls. */
+.sidebar-space-switcher-scroll {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 0.75rem,
+    #000 calc(100% - 0.75rem),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 0.75rem,
+    #000 calc(100% - 0.75rem),
+    transparent
+  );
 }
 
 /* Why: mask fades avoid painting card-colored overlays that mismatch active tabs. */

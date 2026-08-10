@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
 import type { Repo, TerminalTab, Worktree, WorktreeLineage } from '../../../../shared/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { DEFAULT_SPACE_ID } from '../../../../shared/spaces'
 
 function makeTab(id: string, worktreeId: string, ptyId: string | null): TerminalTab {
   return {
@@ -839,5 +840,52 @@ describe('computeVisibleWorktreeIds', () => {
     )
 
     expect(result).toEqual([child.id])
+  })
+})
+
+describe('computeVisibleWorktreeIds Space scoping', () => {
+  const local = makeWorktree('local', 'repo1')
+  const remote = makeWorktree('remote', 'repo2')
+  const worktreesByRepo = { repo1: [local], repo2: [remote] }
+  const sortedIds = [local.id, remote.id]
+
+  function spacedRepoMap(repo1SpaceId?: string | null, repo2SpaceId?: string | null) {
+    return new Map<string, Repo>([
+      ['repo1', { ...makeRepo('repo1', 'Repo 1', '#000'), spaceId: repo1SpaceId }],
+      [
+        'repo2',
+        { ...makeRepo('repo2', 'Repo 2', '#111'), connectionId: 'ssh-1', spaceId: repo2SpaceId }
+      ]
+    ])
+  }
+
+  function visible(
+    repoMap: Map<string, Repo>,
+    activeSpaceId: string,
+    overrides: Partial<VisibleOptions> = {}
+  ) {
+    return computeVisibleWorktreeIds(
+      worktreesByRepo,
+      sortedIds,
+      visibleOptions({
+        repoMap,
+        activeSpaceId,
+        ...overrides
+      })
+    )
+  }
+
+  it('preserves the Default fast path and scopes both Default and custom Spaces', () => {
+    expect(visible(spacedRepoMap(undefined, null), DEFAULT_SPACE_ID)).toEqual(sortedIds)
+    expect(visible(spacedRepoMap('space-a', null), DEFAULT_SPACE_ID)).toEqual([remote.id])
+    expect(visible(spacedRepoMap('space-a', null), 'space-a')).toEqual([local.id])
+  })
+
+  it('does not inject a lineage parent from another Space', () => {
+    expect(
+      visible(spacedRepoMap('space-a', null), 'space-a', {
+        worktreeLineageById: { [local.id]: makeWorktreeLineage(local, remote) }
+      })
+    ).toEqual([local.id])
   })
 })

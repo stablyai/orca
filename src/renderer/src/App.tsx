@@ -360,6 +360,8 @@ const AddProjectFromFolderDialog = lazy(
   () => import('./components/sidebar/AddProjectFromFolderDialog')
 )
 const ProjectAddedDialog = lazy(() => import('./components/sidebar/ProjectAddedDialog'))
+const SpaceEditorDialog = lazy(() => import('./components/sidebar/SpaceEditorDialog'))
+const SpaceDeleteDialog = lazy(() => import('./components/sidebar/SpaceDeleteDialog'))
 const DeleteWorktreeDialog = lazy(() => import('./components/sidebar/DeleteWorktreeDialog'))
 const DictationController = lazy(() =>
   import('./components/dictation/DictationController').then((module) => ({
@@ -471,6 +473,7 @@ function App(): React.JSX.Element {
       fetchWorktrees: s.fetchWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchOrcaProfiles: s.fetchOrcaProfiles,
+      loadSpaces: s.loadSpaces,
       fetchSettings: s.fetchSettings,
       fetchKeybindings: s.fetchKeybindings,
       initGitHubCache: s.initGitHubCache,
@@ -914,8 +917,11 @@ function App(): React.JSX.Element {
           window.api.onboarding.get()
         )
         onboardingPromise.catch(() => {})
+        const spacesPromise = timeRendererStartupStep('load-spaces', () => actions.loadSpaces())
+        spacesPromise.catch(() => {})
         // Why: await ui.get() (not overlap) so persisted view settings hydrate before the local catalog/session steps and first paint reflects them.
         const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
+        await spacesPromise
         uiHydrated = timeRendererStartupSyncStep('hydrate-persisted-ui', () =>
           hydratePersistedUIAfterStartupRead({
             persistedUI,
@@ -2555,6 +2561,26 @@ function App(): React.JSX.Element {
                   compact
                 >
                   <ProjectAddedDialog />
+                </RecoverableRenderErrorBoundary>
+              ) : null}
+              {activeModal === 'space-editor' ? (
+                <RecoverableRenderErrorBoundary
+                  boundaryId="modal.space-editor"
+                  surface="modal"
+                  resetKey
+                  compact
+                >
+                  <SpaceEditorDialog />
+                </RecoverableRenderErrorBoundary>
+              ) : null}
+              {activeModal === 'delete-space' ? (
+                <RecoverableRenderErrorBoundary
+                  boundaryId="modal.delete-space"
+                  surface="modal"
+                  resetKey
+                  compact
+                >
+                  <SpaceDeleteDialog />
                 </RecoverableRenderErrorBoundary>
               ) : null}
             </Suspense>

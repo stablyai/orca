@@ -9,6 +9,9 @@ import {
   type KeybindingOverrides,
   type PhysicalModifierToken
 } from './keybindings'
+import type { WindowShortcutAction } from './window-shortcut-action'
+
+export type { WindowShortcutAction } from './window-shortcut-action'
 
 export type WindowShortcutInput = {
   type?: string
@@ -26,26 +29,6 @@ export type WindowShortcutInput = {
   // the main-process resolver so allowlisted actions can fire on double-tap.
   doubleTapModifier?: PhysicalModifierToken
 }
-
-export type WindowShortcutAction =
-  | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
-  | { type: 'openSettings' }
-  | { type: 'forceReload' }
-  | { type: 'toggleWorktreePalette' }
-  | { type: 'toggleFloatingTerminal' }
-  | { type: 'toggleLeftSidebar' }
-  | { type: 'toggleRightSidebar' }
-  | { type: 'openQuickOpen' }
-  | { type: 'toggleQuickCommandsMenu' }
-  | { type: 'openNewWorkspace' }
-  | { type: 'deleteCurrentWorkspace' }
-  | { type: 'openWorkspaceBoard' }
-  | { type: 'openTasks' }
-  | { type: 'switchRecentTab' }
-  | { type: 'jumpToWorktreeIndex'; index: number }
-  | { type: 'jumpToTabIndex'; index: number }
-  | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
-  | { type: 'dictationKeyDown' }
 
 type WindowShortcutResolveOptions = KeybindingMatchOptions
 
@@ -251,14 +234,34 @@ export function resolveWindowShortcutAction(
     return { type: 'openTasks' }
   }
 
+  if (actionMatches('space.next', input, platform, keybindings, options)) {
+    return { type: 'spaceNavigate', direction: 'next' }
+  }
+
+  if (actionMatches('space.previous', input, platform, keybindings, options)) {
+    return { type: 'spaceNavigate', direction: 'previous' }
+  }
+
   if (actionMatches('tab.previousRecent', input, platform, keybindings, options)) {
     return { type: 'switchRecentTab' }
   }
 
-  // Why: the two ranges live in different scopes (no shared conflictGroup), so a
+  const spaceIndex = matchKeybindingDigitIndex(
+    'space.selectByIndex',
+    input,
+    platform,
+    keybindings,
+    options
+  )
+  if (spaceIndex !== null) {
+    return { type: 'jumpToSpaceIndex', index: spaceIndex }
+  }
+
+  // Why: workspace and tab ranges live in different scopes (no shared conflictGroup), so a
   // user is free to map both onto the same modifier without it being blocked as a
-  // conflict. Checking workspace first gives that overlap deterministic
+  // conflict. Checking workspace before tab gives that overlap deterministic
   // precedence — workspace wins — matching the historical Cmd-before-Ctrl order.
+  // The opt-in space range is matched ahead of both, so an explicit Space binding wins outright.
   const worktreeIndex = matchKeybindingDigitIndex(
     'workspace.selectByIndex',
     input,
@@ -326,6 +329,10 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'view.tasks'
     case 'switchRecentTab':
       return 'tab.previousRecent'
+    case 'jumpToSpaceIndex':
+      return 'space.selectByIndex'
+    case 'spaceNavigate':
+      return action.direction === 'next' ? 'space.next' : 'space.previous'
     case 'worktreeHistoryNavigate':
       return action.direction === 'back' ? 'worktree.history.back' : 'worktree.history.forward'
     case 'dictationKeyDown':

@@ -2743,6 +2743,7 @@ describe('web repos preload API', () => {
                   displayName: 'repo',
                   badgeColor: '#000',
                   addedAt: 1,
+                  spaceId: 'space-work',
                   executionHostId: 'local'
                 }
               ]
@@ -2761,7 +2762,7 @@ describe('web repos preload API', () => {
     installWebPreloadApi()
 
     await expect(globals.window.api.repos.list()).resolves.toMatchObject([
-      { id: 'repo-1', executionHostId: 'runtime:web-server-a' }
+      { id: 'repo-1', spaceId: null, executionHostId: 'runtime:web-server-a' }
     ])
   })
 

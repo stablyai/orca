@@ -54,6 +54,7 @@ import type {
   RepoProjectHostSetupMethod,
   Repo,
   ProjectGroup,
+  Space,
   FolderWorkspace,
   SparsePreset,
   PersistedMobileClientTabSelections,
@@ -226,6 +227,17 @@ import {
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from '../shared/project-groups'
+import {
+  DEFAULT_SPACE_ID,
+  clearMissingSpaceMemberships,
+  createSpace,
+  normalizeActiveSpaceId,
+  normalizeSpaceEmoji,
+  normalizeSpaceName,
+  normalizeSpaces,
+  type SpaceCreateInput,
+  type SpaceUpdates
+} from '../shared/spaces'
 import { createNestedProjectGroupResolver } from './project-groups/nested-repo-import'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
@@ -3347,6 +3359,7 @@ export class Store {
           this.loadNeedsSave = true
         }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
+        const normalizedSpaces = normalizeSpaces(parsed.spaces)
         const loadedCompactWorktreeCards =
           parsed.settings?.compactWorktreeCards ??
           parsed.settings?.experimentalCompactWorktreeCards ??
@@ -3395,6 +3408,7 @@ export class Store {
             parsed.featureInteractionTelemetryBuckets
           ),
           projectGroups: normalizedProjectGroups,
+          spaces: normalizedSpaces,
           folderWorkspaces: normalizeFolderWorkspaces(
             parsed.folderWorkspaces,
             normalizedProjectGroups
@@ -3769,7 +3783,10 @@ export class Store {
       this.loadNeedsSave = true
     }
 
-    const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
+    const repos = clearMissingSpaceMemberships(
+      clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? []),
+      result.spaces ?? []
+    )
     const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
     if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {
       this.loadNeedsSave = true
@@ -4456,6 +4473,88 @@ export class Store {
     return true
   }
 
+  getSpaces(): Space[] {
+    return this.state.spaces
+  }
+
+  createSpace(input: SpaceCreateInput): Space {
+    const space = createSpace(input)
+    this.state.spaces = [...this.state.spaces, space]
+    this.scheduleSave()
+    return space
+  }
+
+  updateSpace(spaceId: string, updates: SpaceUpdates): Space | null {
+    const space = this.state.spaces.find((entry) => entry.id === spaceId)
+    if (!space) {
+      return null
+    }
+    if (updates.name !== undefined) {
+      space.name = normalizeSpaceName(updates.name, space.name)
+    }
+    if (updates.emoji !== undefined) {
+      space.emoji = normalizeSpaceEmoji(updates.emoji)
+    }
+    space.updatedAt = Date.now()
+    this.scheduleSave()
+    return space
+  }
+
+  deleteSpace(spaceId: string): boolean {
+    if (spaceId === DEFAULT_SPACE_ID) {
+      return false
+    }
+    const remaining = this.state.spaces.filter((space) => space.id !== spaceId)
+    if (remaining.length === this.state.spaces.length) {
+      return false
+    }
+    this.state.spaces = remaining
+    // Why: Spaces are organization only, so deleting one sends its projects back to Default rather than deleting them.
+    for (const repo of this.state.repos) {
+      if (repo.spaceId === spaceId) {
+        delete repo.spaceId
+      }
+    }
+    if (this.state.ui) {
+      this.state.ui.activeSpaceId = normalizeActiveSpaceId(this.state.ui.activeSpaceId, remaining)
+    }
+    this.scheduleSave()
+    return true
+  }
+
+  moveProjectToSpace(
+    projectId: string,
+    spaceId: string | null,
+    hostId: ExecutionHostId
+  ): Repo | null {
+    const repo = this.state.repos.find(
+      (entry) => entry.id === projectId && getRepoExecutionHostId(entry) === hostId
+    )
+    if (!repo) {
+      return null
+    }
+    const storedSpaceId = this.normalizeStoredSpaceId(spaceId)
+    if (storedSpaceId) {
+      repo.spaceId = storedSpaceId
+    } else {
+      delete repo.spaceId
+    }
+    this.scheduleSave()
+    return this.hydrateRepo(repo)
+  }
+
+  private getActiveSpaceId(): string {
+    return normalizeActiveSpaceId(this.state.ui?.activeSpaceId, this.getSpaces())
+  }
+
+  /** Default membership stays sparse: an absent spaceId already resolves to Default. */
+  private normalizeStoredSpaceId(spaceId: string | null | undefined): string | null {
+    if (!spaceId || spaceId === DEFAULT_SPACE_ID) {
+      return null
+    }
+    return this.getSpaces().some((space) => space.id === spaceId) ? spaceId : null
+  }
+
   getFolderWorkspaces(): FolderWorkspace[] {
     return [...(this.state.folderWorkspaces ?? [])].sort(
       (left, right) => right.sortOrder - left.sortOrder || left.name.localeCompare(right.name)
@@ -4652,7 +4751,14 @@ export class Store {
     return this.hydrateRepo(repo)
   }
 
-  addRepo(repo: Repo): void {
+  addRepo(repo: Repo, fallbackSpaceId: string | null = this.getActiveSpaceId()): void {
+    const requestedSpaceId = repo.spaceId !== undefined ? repo.spaceId : fallbackSpaceId
+    const storedSpaceId = this.normalizeStoredSpaceId(requestedSpaceId)
+    if (storedSpaceId) {
+      repo.spaceId = storedSpaceId
+    } else {
+      delete repo.spaceId
+    }
     this.state.repos.push(repo)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
@@ -6021,6 +6127,7 @@ export class Store {
       ),
       workspaceHostOrder: normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
       manualRepoOrder: normalizeManualRepoOrder(this.state.ui?.manualRepoOrder),
+      activeSpaceId: normalizeActiveSpaceId(this.state.ui?.activeSpaceId, this.state.spaces),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         this.state.ui?.browserDefaultZoomLevel
       ),
@@ -6134,6 +6241,10 @@ export class Store {
         updates.manualRepoOrder !== undefined
           ? normalizeManualRepoOrder(updates.manualRepoOrder)
           : normalizeManualRepoOrder(this.state.ui?.manualRepoOrder),
+      activeSpaceId:
+        updates.activeSpaceId !== undefined
+          ? normalizeActiveSpaceId(updates.activeSpaceId, this.state.spaces)
+          : normalizeActiveSpaceId(this.state.ui?.activeSpaceId, this.state.spaces),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
       ),

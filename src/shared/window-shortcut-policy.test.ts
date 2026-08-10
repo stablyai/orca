@@ -100,6 +100,27 @@ describe('resolveWindowShortcutAction', () => {
     ).toBeNull()
   })
 
+  it('resolves opt-in Space navigation before tab number shortcuts', () => {
+    // Why: Ctrl+1 is tab.selectByIndex's darwin default, so the collision is real.
+    const arcStyle: KeybindingOverrides = {
+      'space.selectByIndex': ['Ctrl+1']
+    }
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
+        'darwin',
+        arcStyle
+      )
+    ).toEqual({ type: 'jumpToSpaceIndex', index: 2 })
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'BracketRight', key: ']', meta: false, control: true, alt: true, shift: false },
+        'darwin',
+        { 'space.next': ['Ctrl+Alt+BracketRight'] }
+      )
+    ).toEqual({ type: 'spaceNavigate', direction: 'next' })
+  })
+
   it('resolves customized quick-command menu shortcuts with terminal policy gating', () => {
     const input: WindowShortcutInput = {
       code: 'KeyQ',

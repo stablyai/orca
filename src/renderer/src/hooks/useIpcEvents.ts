@@ -24,9 +24,11 @@ import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constan
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
+import { getAdjacentSpace, getIndexedSpace } from '@/lib/space-shortcut-navigation'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import type {
+  Space,
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   UpdateStatus
@@ -1061,6 +1063,8 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.repos.onChanged(() => {
         const state = useAppStore.getState()
+        // Why: project Space membership rides the repo catalog, so the Space list refreshes with it.
+        void state.loadSpaces()
         if (isRuntimeEnvironmentActive()) {
           // Why: the all-host sidebar shows local repos even under a runtime; refresh the local slice, keep runtime slices.
           void (async () => {
@@ -1345,6 +1349,30 @@ export function useIpcEvents(): void {
         }
         store.openTaskPage()
       })
+    )
+
+    // Why: an open overlay owns the digit chords (Cmd+J routes them to its rows), so never switch behind one.
+    const switchToSpace = (pickTarget: (store: AppState) => Space | null): void => {
+      const store = useAppStore.getState()
+      if (store.activeModal && store.activeModal !== 'none') {
+        return
+      }
+      const target = pickTarget(store)
+      if (target) {
+        store.setActiveSpace(target.id)
+      }
+    }
+
+    unsubs.push(
+      window.api.ui.onJumpToSpaceIndex((index) =>
+        switchToSpace((store) => getIndexedSpace(store.spaces, index))
+      )
+    )
+
+    unsubs.push(
+      window.api.ui.onSpaceNavigate((direction) =>
+        switchToSpace((store) => getAdjacentSpace(store.spaces, store.activeSpaceId, direction))
+      )
     )
 
     unsubs.push(

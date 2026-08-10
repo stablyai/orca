@@ -297,6 +297,8 @@ export type Repo = {
   symlinkPaths?: string[]
   /** Durable sidebar-only repo organization. Execution remains repo-scoped. */
   projectGroupId?: string | null
+  /** Null/undefined belongs to Default Space. */
+  spaceId?: string | null
   /** User-authored ordering inside the project group or ungrouped bucket. */
   projectGroupOrder?: number
   /** Repo-specific source-control AI overrides. Missing fields inherit global settings. */
@@ -320,6 +322,15 @@ export type ProjectGroup = {
   tabOrder: number
   isCollapsed: boolean
   color: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type Space = {
+  id: string
+  name: string
+  /** Optional single grapheme. */
+  emoji: string | null
   createdAt: number
   updatedAt: number
 }
@@ -3409,6 +3420,8 @@ export type PersistedUIState = {
   showActiveOnly: boolean
   /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */
   hideSleepingWorkspaces?: boolean
+  /** Missing/unknown resolves to Default. */
+  activeSpaceId?: string
   /** Which execution hosts the sidebar shows; `all` = mixed view, specific IDs focus without tearing down other hosts' sessions. */
   workspaceHostScope?: WorkspaceHostScope
   /** Which execution hosts the sidebar shows; `null` = sticky all-hosts so new hosts appear automatically. */
@@ -3650,6 +3663,7 @@ export type PersistedState = {
   projects: Project[]
   projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
+  spaces: Space[]
   folderWorkspaces: FolderWorkspace[]
   /** Sparse-checkout presets keyed by repoId. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>

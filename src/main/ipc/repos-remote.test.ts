@@ -38,6 +38,11 @@ const {
     updateProjectGroup: vi.fn(),
     deleteProjectGroup: vi.fn(),
     moveProjectToGroup: vi.fn(),
+    getSpaces: vi.fn().mockReturnValue([]),
+    createSpace: vi.fn(),
+    updateSpace: vi.fn(),
+    deleteSpace: vi.fn(),
+    moveProjectToSpace: vi.fn(),
     getSshTarget: vi.fn()
   },
   mockGitProvider: {
@@ -179,6 +184,10 @@ describe('projectGroups IPC validation', () => {
     mockStore.updateProjectGroup.mockReset()
     mockStore.deleteProjectGroup.mockReset()
     mockStore.moveProjectToGroup.mockReset()
+    mockStore.createSpace.mockReset()
+    mockStore.updateSpace.mockReset()
+    mockStore.deleteSpace.mockReset()
+    mockStore.moveProjectToSpace.mockReset()
     mockStore.addRepo.mockReset()
     mockStore.getProjects.mockReset().mockReturnValue([])
     mockStore.getProjectHostSetups.mockReset().mockReturnValue([])
@@ -348,6 +357,21 @@ describe('projectGroups IPC validation', () => {
     ).toThrow('invalid_project_group_update_args')
 
     expect(mockStore.updateProjectGroup).not.toHaveBeenCalled()
+  })
+
+  it('broadcasts repos:changed only when a space mutation actually landed', () => {
+    mockStore.deleteSpace.mockReturnValue(false)
+    expect(handlers.get('spaces:delete')!(null, { spaceId: 'space:default' })).toBe(false)
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('repos:changed')
+
+    mockStore.moveProjectToSpace.mockReturnValue({ id: 'repo-1' })
+    handlers.get('spaces:moveProject')!(null, {
+      projectId: 'repo-1',
+      spaceId: null,
+      hostId: 'local'
+    })
+    expect(mockStore.moveProjectToSpace).toHaveBeenCalledWith('repo-1', null, 'local')
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
   })
 
   it('scans nested repositories over a connected SSH filesystem', async () => {

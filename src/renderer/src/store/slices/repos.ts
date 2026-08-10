@@ -85,6 +85,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { isRepoInSpace } from '../../../../shared/spaces'
 import { isRemovedRuntimeHostId } from './stale-runtime-host-rows'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -423,12 +424,33 @@ function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Repo[]): 
 
 function repoWithFetchedOwner(repo: Repo, target: ReturnType<typeof getActiveRuntimeTarget>): Repo {
   if (target.kind === 'environment') {
-    return { ...repo, executionHostId: getRuntimeTargetHostId(target) }
+    const owned = { ...repo, executionHostId: getRuntimeTargetHostId(target) }
+    // Spaces stay desktop-local until runtime support is capability-negotiated.
+    delete owned.spaceId
+    return owned
   }
   if (repo.connectionId) {
     return { ...repo, executionHostId: getRepoExecutionHostId(repo) }
   }
   return repo.executionHostId ? repo : { ...repo, executionHostId: LOCAL_EXECUTION_HOST_ID }
+}
+
+// Why: re-adding an existing project is an explicit "put it here", so follow the active Space.
+async function moveAlreadyAddedRepoToActiveSpace(
+  get: () => AppState,
+  repoIdentity: string
+): Promise<void> {
+  const state = get()
+  const present = state.repos.find((r) => getRepoHostIdentity(r) === repoIdentity)
+  if (!present || isRepoInSpace(present, state.activeSpaceId)) {
+    return
+  }
+  const hostId = getRepoExecutionHostId(present)
+  // Runtime-owned rows never carry Space membership (see repoWithFetchedOwner).
+  if (parseExecutionHostId(hostId)?.kind === 'runtime') {
+    return
+  }
+  await state.moveProjectToSpace(present.id, state.activeSpaceId, hostId)
 }
 
 function projectGroupWithFetchedOwner(
@@ -2951,6 +2973,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         }
       })
       if (alreadyAdded) {
+        await moveAlreadyAddedRepoToActiveSpace(get, repoIdentity)
         toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
           description: repo.displayName
         })

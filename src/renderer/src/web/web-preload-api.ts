@@ -2770,6 +2770,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenNewWorkspace: () => noopUnsubscribe,
     onDeleteCurrentWorkspace: () => noopUnsubscribe,
     onOpenWorkspaceBoard: () => noopUnsubscribe,
+    onJumpToSpaceIndex: () => noopUnsubscribe,
+    onSpaceNavigate: () => noopUnsubscribe,
     onJumpToWorktreeIndex: () => noopUnsubscribe,
     onJumpToTabIndex: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
@@ -3460,7 +3462,8 @@ async function callRuntimeResultWithOwner<TResult>(
 }
 
 function withRuntimeRepoOwner(repo: Repo, hostId: ExecutionHostId): Repo {
-  return { ...repo, executionHostId: hostId }
+  // Why: the host's Space ids are host-local and absent from this client's catalog, so drop them — remote projects pin to Default.
+  return { ...repo, spaceId: null, executionHostId: hostId }
 }
 
 function withRuntimeRepoMutationOwner(

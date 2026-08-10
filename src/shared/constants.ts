@@ -30,6 +30,7 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
+import { createDefaultSpace } from './spaces'
 import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
@@ -429,6 +430,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     projects: [],
     projectHostSetups: [],
     projectGroups: [],
+    spaces: [createDefaultSpace()],
     folderWorkspaces: [],
     sparsePresetsByRepo: {},
     worktreeMeta: {},

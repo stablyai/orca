@@ -356,7 +356,7 @@ describe('fetchReposForAllHosts', () => {
     resolveRepoList({
       id: 'rpc-repo-list',
       ok: true,
-      result: { repos: [remoteRepo] },
+      result: { repos: [{ ...remoteRepo, spaceId: 'space-server' }] },
       _meta: { runtimeId: 'runtime-remote' }
     })
     await load
