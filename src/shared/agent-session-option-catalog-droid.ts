@@ -16,10 +16,11 @@ export const DROID_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     // interactive CLI is dropped without warning, so the draft honestly reports the
     // model as available only after the session starts.
     //
-    // Why agent-picker: `/model` opens Droid's own selector pane and takes no
-    // argument, and the selection is never echoed back, so no command can carry a
-    // model id and no dispatch result could be trusted as the new value.
-    midSession: { kind: 'agent-picker', command: '/model' }
+    // Why unsupported: `/model` opens Droid's own interactive selector pane that
+    // takes no argument and never echoes the selection back, so the chat UI cannot
+    // track or verify the result. Marking it unsupported sends the command as plain
+    // text when the user types it, without auto-switching to the terminal view.
+    midSession: { kind: 'unsupported' }
   },
   // Reasoning effort is deliberately absent: `droid exec` takes `-r`, but the
   // interactive CLI has neither the flag nor a slash command for it, so every

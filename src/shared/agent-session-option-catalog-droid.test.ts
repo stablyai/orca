@@ -54,12 +54,12 @@ describe('droid session option catalog', () => {
     expect(draftModel?.kind.type === 'select' ? draftModel.kind.currentValue : null).toBeUndefined()
   })
 
-  it('routes a live change into droid\u2019s own /model selector', () => {
+  it('does not auto-switch to terminal for /model — the chat UI sends it as plain text', () => {
     const liveModel = snapshot('live', [{ id: 'Opus 5', label: 'Opus 5', options: [] }])[0]
-    expect(liveModel).toMatchObject({ settable: true, action: { type: 'agent-picker' } })
+    expect(liveModel).toMatchObject({ settable: false, disabledReason: 'set-when-session-starts' })
+    expect(liveModel?.action).toBeUndefined()
     expect(DROID_SESSION_OPTION_CATALOG.modelApply.midSession).toEqual({
-      kind: 'agent-picker',
-      command: '/model'
+      kind: 'unsupported'
     })
   })
 
