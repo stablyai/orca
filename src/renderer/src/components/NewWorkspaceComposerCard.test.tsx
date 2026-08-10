@@ -983,8 +983,8 @@ describe('NewWorkspaceComposerCard WSL agent detection hint', () => {
   }
 
   it('offers WSL detection when no agents are detected on Windows and WSL is available', () => {
-    const { container } = renderCard({ detectedAgentIds: new Set() })
-    const hint = findWslHint(container)
+    current = renderCard({ detectedAgentIds: new Set() })
+    const hint = findWslHint(current.container)
     expect(hint).toBeTruthy()
     const action = [...(hint?.querySelectorAll('button') ?? [])].find((button) =>
       button.textContent?.includes('Detect in WSL (Ubuntu)')
@@ -993,8 +993,8 @@ describe('NewWorkspaceComposerCard WSL agent detection hint', () => {
   })
 
   it('clicking the hint enables the WSL agent runtime and refreshes detection', async () => {
-    const { container } = renderCard({ detectedAgentIds: new Set() })
-    const action = [...container.querySelectorAll('button')].find((button) =>
+    current = renderCard({ detectedAgentIds: new Set() })
+    const action = [...current.container.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('Detect in WSL (Ubuntu)')
     )
     expect(action).toBeTruthy()
@@ -1007,30 +1007,30 @@ describe('NewWorkspaceComposerCard WSL agent detection hint', () => {
   })
 
   it('hides the hint when agents are already detected', () => {
-    const { container } = renderCard({ detectedAgentIds: new Set(['claude']) })
-    expect(findWslHint(container)).toBeNull()
+    current = renderCard({ detectedAgentIds: new Set(['claude']) })
+    expect(findWslHint(current.container)).toBeNull()
   })
 
   it('hides the hint while detection is still in flight', () => {
-    const { container } = renderCard({ detectedAgentIds: null })
-    expect(findWslHint(container)).toBeNull()
+    current = renderCard({ detectedAgentIds: null })
+    expect(findWslHint(current.container)).toBeNull()
   })
 
   it('hides the hint when WSL is unavailable', () => {
     wslCapabilitiesMock.mockReturnValue({ ...WSL_CAPABILITIES, wslAvailable: false })
-    const { container } = renderCard({ detectedAgentIds: new Set() })
-    expect(findWslHint(container)).toBeNull()
+    current = renderCard({ detectedAgentIds: new Set() })
+    expect(findWslHint(current.container)).toBeNull()
   })
 
   it('hides the hint when the agent runtime is already WSL', () => {
     storeSettings.localWindowsRuntimeDefault = { kind: 'wsl', distro: 'Ubuntu' }
-    const { container } = renderCard({ detectedAgentIds: new Set() })
-    expect(findWslHint(container)).toBeNull()
+    current = renderCard({ detectedAgentIds: new Set() })
+    expect(findWslHint(current.container)).toBeNull()
   })
 
   it('hides the hint on non-Windows platforms', () => {
     platformMock.mockReturnValue('linux')
-    const { container } = renderCard({ detectedAgentIds: new Set() })
-    expect(findWslHint(container)).toBeNull()
+    current = renderCard({ detectedAgentIds: new Set() })
+    expect(findWslHint(current.container)).toBeNull()
   })
 })
