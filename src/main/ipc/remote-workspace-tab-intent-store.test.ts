@@ -8,8 +8,10 @@ import type {
 import {
   MAX_REMOTE_WORKSPACE_TAB_INTENTS_PER_TARGET,
   MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS,
+  MAX_REMOTE_WORKSPACE_UNTRACKED_INTENT_TARGETS,
   RemoteWorkspaceTabIntentStore
 } from './remote-workspace-tab-intent-store'
+import { MAX_REMOTE_WORKSPACE_OBSERVATION_BYTES_PER_TARGET } from './remote-workspace-tab-observation-bounds'
 
 const TARGET = 'target-a'
 const WORKTREE_ID = 'repo-a::/remote/work'
@@ -191,6 +193,63 @@ describe('RemoteWorkspaceTabIntentStore', () => {
     const empty = snapshot(3, [])
     const capture = store.capturePatch(TARGET, empty.session)
     store.acknowledgePatch(TARGET, capture, { ok: true, snapshot: empty })
+    expect(store.stateForTests(TARGET)).toEqual({ intents: 0, overflowed: false })
+  })
+
+  it('bounds retained tab layouts per target and recovers through a bounded full observation', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    const created = tab('created', 1)
+    store.observe(
+      authority(1),
+      observation({
+        authoritative: true,
+        generation: 1,
+        instance: 'worktree-1',
+        tabs: []
+      })
+    )
+    store.observe(
+      authority(1),
+      observation({
+        generation: 1,
+        instance: 'worktree-1',
+        tabs: [
+          {
+            ...created,
+            layout: {
+              activeLeafId: 'leaf',
+              buffersByLeafId: {
+                leaf: 'x'.repeat(MAX_REMOTE_WORKSPACE_OBSERVATION_BYTES_PER_TARGET)
+              },
+              expandedLeafId: null,
+              root: null
+            }
+          }
+        ]
+      })
+    )
+
+    expect(store.stateForTests(TARGET)).toEqual({ intents: 0, overflowed: true })
+    expect(store.reconcile(TARGET, snapshot(2, []))).toBeNull()
+    const oversizedCapture = store.capturePatch(TARGET, snapshot(3, [created]).session)
+    store.acknowledgePatch(TARGET, oversizedCapture, {
+      ok: true,
+      snapshot: snapshot(3, [created])
+    })
+    expect(store.stateForTests(TARGET)?.overflowed).toBe(true)
+
+    store.observe(
+      authority(1),
+      observation({
+        authoritative: true,
+        generation: 1,
+        instance: 'worktree-1',
+        tabs: [created]
+      })
+    )
+    const bounded = snapshot(4, [created])
+    const boundedCapture = store.capturePatch(TARGET, bounded.session)
+    store.acknowledgePatch(TARGET, boundedCapture, { ok: true, snapshot: bounded })
     expect(store.stateForTests(TARGET)).toEqual({ intents: 0, overflowed: false })
   })
 
@@ -433,6 +492,64 @@ describe('RemoteWorkspaceTabIntentStore', () => {
     expect(store.stateForTests('target-66')).toBeNull()
   })
 
+  it('uses connection-only observations for admission, eviction, and cleanup', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    for (let index = 1; index <= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS; index += 1) {
+      store.observe(
+        authority(1),
+        observation({
+          authoritative: true,
+          connected: true,
+          generation: 1,
+          instance: `worktree-${index}`,
+          tabs: [],
+          targetId: `target-${index}`
+        })
+      )
+    }
+
+    store.observe(
+      authority(1),
+      observation({
+        connected: false,
+        generation: 1,
+        instance: `worktree-${MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS}`,
+        tabs: [],
+        targetId: `target-${MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS}`
+      })
+    )
+    store.observe(
+      authority(1),
+      observation({
+        authoritative: true,
+        connected: true,
+        generation: 1,
+        instance: 'worktree-65',
+        tabs: [],
+        targetId: 'target-65'
+      })
+    )
+
+    expect(store.stateForTests(`target-${MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS}`)).toBeNull()
+    expect(store.stateForTests('target-65')).toEqual({ intents: 0, overflowed: false })
+
+    store.forgetTarget('target-65', authority(1))
+    expect(store.stateForTests('target-65')).toBeNull()
+
+    store.observe(
+      authority(1),
+      observation({
+        authoritative: true,
+        connected: false,
+        generation: 1,
+        instance: 'worktree-66',
+        tabs: [],
+        targetId: 'target-66'
+      })
+    )
+    expect(store.stateForTests('target-66')).toEqual({ intents: 0, overflowed: false })
+  })
+
   it('fails target-local reconciliation closed when every retained target is pending', () => {
     const store = new RemoteWorkspaceTabIntentStore()
     for (let index = 1; index <= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS; index += 1) {
@@ -477,6 +594,48 @@ describe('RemoteWorkspaceTabIntentStore', () => {
     store.acknowledgePatch('target-65', capture, { ok: true, snapshot: acknowledged })
     expect(store.hasPending('target-65')).toBe(false)
     expect(store.reconcile('target-65', acknowledged)).toEqual(acknowledged)
+  })
+
+  it('recovers secondary overflow after authoritative all-target cleanup', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    for (let index = 1; index <= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS; index += 1) {
+      const retained = tab(`retained-${index}`, index)
+      store.observe(
+        authority(1),
+        observation({
+          authoritative: true,
+          generation: 1,
+          instance: `worktree-${index}`,
+          tabs: [],
+          targetId: `target-${index}`
+        })
+      )
+      store.observe(
+        authority(1),
+        observation({
+          generation: 1,
+          instance: `worktree-${index}`,
+          tabs: [retained],
+          targetId: `target-${index}`
+        })
+      )
+    }
+    for (let index = 1; index <= MAX_REMOTE_WORKSPACE_UNTRACKED_INTENT_TARGETS + 1; index += 1) {
+      store.observe(
+        authority(1),
+        observation({
+          generation: 1,
+          instance: `overflow-${index}`,
+          tabs: [tab(`overflow-${index}`, index)],
+          targetId: `overflow-${index}`
+        })
+      )
+    }
+
+    expect(store.hasPending('never-observed')).toBe(true)
+    store.forgetAll(authority(1))
+    expect(store.hasPending('never-observed')).toBe(false)
+    expect(store.stateForTests('target-1')).toBeNull()
   })
 
   it('keeps a newer untracked mutation pending when an older patch is acknowledged', () => {

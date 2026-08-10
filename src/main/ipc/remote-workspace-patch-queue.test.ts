@@ -2,8 +2,10 @@ import { ipcMain } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type {
+  RemoteWorkspaceObservedTab,
   RemoteWorkspaceSession,
-  RemoteWorkspaceSnapshot
+  RemoteWorkspaceSnapshot,
+  RemoteWorkspaceTabObservation
 } from '../../shared/remote-workspace-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -61,6 +63,58 @@ function sessionWithTab(worktreeId: string, tabId: string): WorkspaceSessionStat
   }
 }
 
+function sessionWithTabs(worktreeId: string, tabIds: string[]): WorkspaceSessionState {
+  return {
+    ...sessionWithTab(worktreeId, tabIds[0] ?? ''),
+    activeTabId: tabIds[0] ?? null,
+    tabsByWorktree: {
+      [worktreeId]: tabIds.map(
+        (tabId, index) =>
+          ({
+            id: tabId,
+            type: 'terminal',
+            title: tabId,
+            sortOrder: index,
+            createdAt: index + 1,
+            worktreeId
+          }) as never
+      )
+    }
+  }
+}
+
+function observedTab(
+  id: string,
+  worktreePath: string,
+  createdAt: number
+): RemoteWorkspaceObservedTab {
+  return {
+    processIdentity: `pty-${id}`,
+    tab: {
+      id,
+      worktreePath,
+      ptyId: `pty-${id}`,
+      title: id,
+      customTitle: null,
+      color: null,
+      sortOrder: createdAt - 1,
+      createdAt
+    }
+  }
+}
+
+function remoteSession(
+  worktreePath: string,
+  tabs: RemoteWorkspaceObservedTab[]
+): RemoteWorkspaceSession {
+  return {
+    activeWorktreePath: worktreePath,
+    activeTabId: tabs[0]?.tab.id ?? null,
+    tabsByWorktreePath: { [worktreePath]: tabs.map((entry) => entry.tab) },
+    terminalLayoutsByTabId: {}
+  }
+}
+
 function patchSession(params: Record<string, unknown>): RemoteWorkspaceSession {
   return (params.patch as { session: RemoteWorkspaceSession }).session
 }
@@ -72,6 +126,12 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
   const store = {
     getRepo: getRepoMock
   } as unknown as Store
+  const mainSender = {
+    id: 1,
+    once: vi.fn(),
+    removeListener: vi.fn()
+  }
+  const mainEvent = { processId: 10, sender: mainSender }
 
   const target: SshTarget = {
     id: 'target-1',
@@ -111,8 +171,24 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
     getActiveMultiplexerMock.mockImplementation((targetId: string) => muxByTargetId.get(targetId))
     registerRemoteWorkspaceNotificationHandlerMock.mockClear()
 
-    registerRemoteWorkspaceHandlers(store, () => null)
+    registerRemoteWorkspaceHandlers(store, () => ({ webContents: mainSender }) as never)
   })
+
+  function observe(generation: number, observation: RemoteWorkspaceTabObservation): void {
+    const handler = handlers.get('remoteWorkspace:observeTabState')
+    if (!handler) {
+      throw new Error('remoteWorkspace:observeTabState handler was never registered')
+    }
+    handler(mainEvent, { ...observation, rendererGeneration: generation })
+  }
+
+  function startObservation(): number {
+    const handler = handlers.get('remoteWorkspace:startTabStateObservation')
+    if (!handler) {
+      throw new Error('remoteWorkspace:startTabStateObservation handler was never registered')
+    }
+    return handler(mainEvent, undefined) as number
+  }
 
   async function callSetForConnectedTargets(args: {
     session: WorkspaceSessionState
@@ -180,6 +256,118 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       [{ targetId: 'target-1', result: { ok: true } }]
     ])
     expect(patchBaseRevisions).toEqual([7, 8])
+  })
+
+  it('does not let an older queued session acknowledge a newer untracked mutation', async () => {
+    const generation = startObservation()
+    const observation = (
+      targetId: string,
+      worktreePath: string,
+      tabs: RemoteWorkspaceObservedTab[],
+      authoritative = false
+    ): RemoteWorkspaceTabObservation => ({
+      ...(authoritative ? { authoritative: true } : {}),
+      connected: true,
+      hydrated: true,
+      rendererGeneration: generation,
+      targetId,
+      worktrees: [
+        {
+          worktreeId: `repo-${targetId}::${worktreePath}`,
+          worktreeInstanceId: `instance-${targetId}`,
+          worktreePath,
+          tabs
+        }
+      ]
+    })
+    for (let index = 1; index <= 64; index += 1) {
+      const targetId = `retained-${index}`
+      const worktreePath = `/remote/retained-${index}`
+      observe(generation, observation(targetId, worktreePath, [], true))
+      observe(
+        generation,
+        observation(targetId, worktreePath, [observedTab(`pending-${index}`, worktreePath, 1)])
+      )
+    }
+
+    const worktreeId = 'repo-target-1::/remote/workspace-a'
+    const worktreePath = '/remote/workspace-a'
+    const firstTab = observedTab('first', worktreePath, 1)
+    const laterTab = observedTab('later', worktreePath, 2)
+    observe(generation, observation('target-1', worktreePath, [firstTab]))
+
+    let releaseFirst!: () => void
+    let releaseThird!: () => void
+    const firstCanFinish = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const thirdCanFinish = new Promise<void>((resolve) => {
+      releaseThird = resolve
+    })
+    let revision = 7
+    let patchCount = 0
+    const request = vi
+      .fn()
+      .mockImplementation(async (method: string, params: Record<string, unknown>) => {
+        if (method === 'workspace.get') {
+          return snapshot(
+            {
+              activeWorktreePath: null,
+              activeTabId: null,
+              tabsByWorktreePath: {},
+              terminalLayoutsByTabId: {}
+            },
+            revision
+          )
+        }
+        if (method !== 'workspace.patch') {
+          throw new Error(`Unexpected method ${method}`)
+        }
+        patchCount += 1
+        if (patchCount === 1) {
+          await firstCanFinish
+        } else if (patchCount === 3) {
+          await thirdCanFinish
+        }
+        revision += 1
+        return { ok: true, snapshot: snapshot(patchSession(params), revision) }
+      })
+    muxByTargetId.set('target-1', { request })
+
+    const first = callSetForConnectedTargets({
+      session: sessionWithTabs(worktreeId, ['first']),
+      hydratedTargetIds: ['target-1']
+    })
+    await vi.waitFor(() => expect(patchCount).toBe(1))
+    const olderQueued = callSetForConnectedTargets({
+      session: sessionWithTabs(worktreeId, ['first']),
+      hydratedTargetIds: ['target-1']
+    })
+
+    observe(generation, observation('target-1', worktreePath, [firstTab, laterTab]))
+    const newerQueued = callSetForConnectedTargets({
+      session: sessionWithTabs(worktreeId, ['first', 'later']),
+      hydratedTargetIds: ['target-1']
+    })
+    releaseFirst()
+    await vi.waitFor(() => expect(patchCount).toBe(3))
+
+    const reconcile = handlers.get('remoteWorkspace:reconcileSnapshot')
+    expect(
+      reconcile?.(null, {
+        targetId: 'target-1',
+        snapshot: snapshot(remoteSession(worktreePath, [firstTab]), 10)
+      })
+    ).toBeNull()
+
+    releaseThird()
+    await expect(Promise.all([first, olderQueued, newerQueued])).resolves.toHaveLength(3)
+    expect(
+      reconcile?.(null, {
+        targetId: 'target-1',
+        snapshot: snapshot(remoteSession(worktreePath, [firstTab]), 11)
+      })
+    ).not.toBeNull()
   })
 
   it('patches independent hydrated targets concurrently', async () => {

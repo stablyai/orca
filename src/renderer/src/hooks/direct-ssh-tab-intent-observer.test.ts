@@ -64,13 +64,15 @@ function state(): AppState {
 function harness() {
   const observeTabState = vi.fn(async () => {})
   const forgetTabState = vi.fn(async () => {})
+  const forgetAllTabState = vi.fn(async () => {})
   const startTabStateObservation = vi.fn(async () => 1)
   const scanned: string[] = []
   return {
+    forgetAllTabState,
     forgetTabState,
     observeTabState,
     observer: createDirectSshTabIntentObserver(
-      { forgetTabState, observeTabState, startTabStateObservation },
+      { forgetAllTabState, forgetTabState, observeTabState, startTabStateObservation },
       { onTargetScanned: (targetId) => scanned.push(targetId), rendererGeneration: 1 }
     ),
     scanned
@@ -82,6 +84,7 @@ describe('createDirectSshTabIntentObserver', () => {
     let resolveGeneration!: (generation: number) => void
     const observeTabState = vi.fn(async () => {})
     const observer = createDirectSshTabIntentObserver({
+      forgetAllTabState: vi.fn(async () => {}),
       forgetTabState: vi.fn(async () => {}),
       observeTabState,
       startTabStateObservation: () =>
@@ -190,6 +193,55 @@ describe('createDirectSshTabIntentObserver', () => {
 
     expect(scanned).toEqual(['target-500'])
     expect(observeTabState).not.toHaveBeenCalled()
+
+    scanned.length = 0
+    observer.observeState({
+      ...scaled,
+      sshConnectionStates: new Map([['target-500', { status: 'connected' }]])
+    } as unknown as AppState)
+    expect(scanned).toEqual(['target-500'])
+    expect(observeTabState).toHaveBeenCalledWith(
+      expect.objectContaining({ connected: true, targetId: 'target-500' })
+    )
+  })
+
+  it('publishes only the transitioned target when SSH connectedness changes', () => {
+    const base = state()
+    const { observer, observeTabState, scanned } = harness()
+    observer.observeState(base)
+    observeTabState.mockClear()
+    scanned.length = 0
+
+    const connected = {
+      ...base,
+      sshConnectionStates: new Map([
+        ['target-a', { status: 'connected' }],
+        ['target-b', { status: 'disconnected' }]
+      ])
+    } as unknown as AppState
+    observer.observeState(connected)
+
+    expect(scanned).toEqual(['target-a'])
+    expect(observeTabState).toHaveBeenCalledOnce()
+    expect(observeTabState).toHaveBeenCalledWith(
+      expect.objectContaining({ connected: true, targetId: 'target-a' })
+    )
+
+    observeTabState.mockClear()
+    scanned.length = 0
+    observer.observeState({
+      ...connected,
+      sshConnectionStates: new Map([
+        ['target-a', { status: 'disconnected' }],
+        ['target-b', { status: 'disconnected' }]
+      ])
+    } as unknown as AppState)
+
+    expect(scanned).toEqual(['target-a'])
+    expect(observeTabState).toHaveBeenCalledOnce()
+    expect(observeTabState).toHaveBeenCalledWith(
+      expect.objectContaining({ connected: false, targetId: 'target-a' })
+    )
   })
 
   it('publishes snapshot hydration as an authoritative baseline after the apply bracket', () => {
@@ -269,5 +321,22 @@ describe('createDirectSshTabIntentObserver', () => {
       rendererGeneration: 1,
       targetId: 'target-b'
     })
+  })
+
+  it('clears secondary overflow only after the configured target set becomes empty', () => {
+    const base = state()
+    const { observer, forgetAllTabState } = harness()
+    observer.observeState(base)
+
+    observer.observeState({
+      ...base,
+      repos: [],
+      worktreesByRepo: {},
+      sshTargetLabels: new Map(),
+      remoteWorkspaceHydratedTargetIds: new Set()
+    })
+
+    expect(forgetAllTabState).toHaveBeenCalledOnce()
+    expect(forgetAllTabState).toHaveBeenCalledWith({ rendererGeneration: 1 })
   })
 })
