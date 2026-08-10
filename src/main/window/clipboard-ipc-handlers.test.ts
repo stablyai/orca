@@ -186,6 +186,7 @@ function shellIdListArray(childCount: number): Buffer {
 describe('registerClipboardHandlers', () => {
   beforeEach(() => {
     vi.spyOn(Date, 'now').mockReturnValue(1760000000000)
+    isEditorPopoutRendererMock.mockReturnValue(false)
     removeHandlerMock.mockReset()
     handleMock.mockReset()
     spawnMock.mockClear()

@@ -53,7 +53,7 @@ describe('createEditorPopoutAction', () => {
 
   it('closes the original editor only after the detached window opens', async () => {
     const closeFile = vi.fn()
-    const open = vi.fn().mockResolvedValue(undefined)
+    const open = vi.fn().mockResolvedValue({ created: true })
     createRequestMock.mockReturnValue(request)
     vi.stubGlobal('window', { api: { editorPopout: { open } } })
     const action = createEditorPopoutAction({
@@ -68,6 +68,25 @@ describe('createEditorPopoutAction', () => {
     action?.()
     await vi.waitFor(() => expect(closeFile).toHaveBeenCalledWith(file.id))
     expect(open).toHaveBeenCalledWith(request)
+  })
+
+  it('keeps a new draft open when an existing detached window is only focused', async () => {
+    const closeFile = vi.fn()
+    const open = vi.fn().mockResolvedValue({ created: false })
+    createRequestMock.mockReturnValue(request)
+    vi.stubGlobal('window', { api: { editorPopout: { open } } })
+    const action = createEditorPopoutAction({
+      getState: () => ({ closeFile }) as unknown as AppState,
+      file,
+      fileContent: { content: '# Saved\n', isBinary: false },
+      content: '# New draft\n',
+      viewMode: 'source',
+      showFrontmatter: true
+    })
+
+    action?.()
+    await vi.waitFor(() => expect(open).toHaveBeenCalledOnce())
+    expect(closeFile).not.toHaveBeenCalled()
   })
 
   it('keeps the original editor when the detached window fails to open', async () => {

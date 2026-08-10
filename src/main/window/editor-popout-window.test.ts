@@ -98,7 +98,9 @@ import {
   completeEditorPopoutSaveAndClose,
   createOrFocusEditorPopout,
   getEditorPopoutRequest,
+  openEditorPopout,
   reportEditorPopoutCloseState,
+  reportEditorPopoutReady,
   setEditorPopoutDirty
 } from './editor-popout-window'
 
@@ -162,6 +164,33 @@ describe('editor popout window', () => {
     expect(second).toBe(first)
     expect(instances).toHaveLength(1)
     expect(first.focus).toHaveBeenCalledOnce()
+  })
+
+  it('acknowledges creation only after the detached renderer adopts state', async () => {
+    const opened = openEditorPopout(request)
+    let settled = false
+    void opened.then(() => {
+      settled = true
+    })
+
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    reportEditorPopoutReady(instances[0].webContents as never)
+
+    await expect(opened).resolves.toEqual({ created: true })
+  })
+
+  it('rejects creation when the detached renderer never adopts state', async () => {
+    vi.useFakeTimers()
+    const opened = openEditorPopout(request)
+    const rejected = expect(opened).rejects.toThrow('Detached editor did not become ready.')
+
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    await rejected
+    expect(instances[0].destroyed).toBe(true)
+    vi.useRealTimers()
   })
 
   it('requests current renderer state before closing an initially clean document', () => {

@@ -16,7 +16,7 @@ import type {
   DashboardSnapshot,
   DashboardSpawnAgentArgs
 } from '../shared/dashboard-snapshot'
-import type { EditorPopoutOpenRequest } from '../shared/editor-popout'
+import type { EditorPopoutOpenRequest, EditorPopoutOpenResult } from '../shared/editor-popout'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -2544,8 +2544,9 @@ export type PreloadApi = {
     sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>
   }
   editorPopout: {
-    open: (request: EditorPopoutOpenRequest) => Promise<void>
+    open: (request: EditorPopoutOpenRequest) => Promise<EditorPopoutOpenResult>
     getState: () => Promise<EditorPopoutOpenRequest | null>
+    reportReady: () => Promise<void>
     setDirty: (dirty: boolean) => Promise<void>
     reportCloseState: (dirty: boolean) => Promise<void>
     completeSaveAndClose: (saved: boolean) => Promise<void>

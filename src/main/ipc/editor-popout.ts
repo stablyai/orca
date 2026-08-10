@@ -1,11 +1,15 @@
 import { ipcMain } from 'electron'
-import { admitEditorPopoutOpenRequest } from '../../shared/editor-popout'
+import {
+  admitEditorPopoutOpenRequest,
+  type EditorPopoutOpenResult
+} from '../../shared/editor-popout'
 import {
   completeEditorPopoutSaveAndClose,
-  createOrFocusEditorPopout,
   getEditorPopoutRequest,
   isEditorPopoutRenderer,
+  openEditorPopout,
   reportEditorPopoutCloseState,
+  reportEditorPopoutReady,
   setEditorPopoutDirty
 } from '../window/editor-popout-window'
 import { getTrustedUIRendererWebContents } from './ui'
@@ -13,22 +17,33 @@ import { getTrustedUIRendererWebContents } from './ui'
 export function registerEditorPopoutHandlers(): void {
   ipcMain.removeHandler('editorPopout:open')
   ipcMain.removeHandler('editorPopout:getState')
+  ipcMain.removeHandler('editorPopout:ready')
   ipcMain.removeHandler('editorPopout:setDirty')
   ipcMain.removeHandler('editorPopout:reportCloseState')
   ipcMain.removeHandler('editorPopout:completeSaveAndClose')
 
-  ipcMain.handle('editorPopout:open', (event, value: unknown): void => {
-    if (getTrustedUIRendererWebContents() !== event.sender) {
-      return
+  ipcMain.handle(
+    'editorPopout:open',
+    async (event, value: unknown): Promise<EditorPopoutOpenResult> => {
+      if (getTrustedUIRendererWebContents() !== event.sender) {
+        return { created: false }
+      }
+      const request = admitEditorPopoutOpenRequest(value)
+      if (!request) {
+        return { created: false }
+      }
+      return openEditorPopout(request)
     }
-    const request = admitEditorPopoutOpenRequest(value)
-    if (request) {
-      createOrFocusEditorPopout(request)
-    }
-  })
+  )
 
   ipcMain.handle('editorPopout:getState', (event) => {
     return isEditorPopoutRenderer(event.sender) ? getEditorPopoutRequest(event.sender) : null
+  })
+
+  ipcMain.handle('editorPopout:ready', (event): void => {
+    if (isEditorPopoutRenderer(event.sender)) {
+      reportEditorPopoutReady(event.sender)
+    }
   })
 
   ipcMain.handle('editorPopout:setDirty', (event, dirty: unknown): void => {

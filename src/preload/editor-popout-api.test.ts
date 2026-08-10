@@ -38,6 +38,7 @@ describe('createEditorPopoutPreloadApi', () => {
     } as never)
 
     await api.editorPopout.getState()
+    await api.editorPopout.reportReady()
 
     expect(Object.keys(api).sort()).toEqual([
       'editorPopout',
@@ -51,11 +52,21 @@ describe('createEditorPopoutPreloadApi', () => {
     expect(api.fs).not.toHaveProperty('authorizeExternalPath')
     expect(api.settings.getSync()).toEqual({ theme: 'dark' })
     await api.ui.writeClipboardText('copied')
+    await expect(api.ui.readClipboardText()).resolves.toBe('')
+    await expect(api.ui.saveClipboardImageAsTempFile()).resolves.toBeNull()
     api.ui.setMarkdownEditorFocused(true)
-    await api.shell.openFileUri('https://example.com')
+    await expect(api.shell.pathExists('/private/secret')).resolves.toBe(false)
+    await expect(api.shell.openFileUri('file:///private/secret')).resolves.toBeUndefined()
+    await expect(api.shell.pickImage()).resolves.toBeNull()
     expect(send).toHaveBeenCalledWith('ui:setMarkdownEditorFocused', true)
     expect(invoke).toHaveBeenCalledWith('clipboard:writeText', 'copied')
-    expect(invoke).toHaveBeenCalledWith('shell:openFileUri', 'https://example.com')
+    expect(invoke).toHaveBeenCalledWith('editorPopout:ready')
+    const invokedChannels = invoke.mock.calls.map(([channel]) => channel)
+    expect(invokedChannels).not.toContain('clipboard:readText')
+    expect(invokedChannels).not.toContain('clipboard:saveImageAsTempFile')
+    expect(invokedChannels).not.toContain('shell:pathExists')
+    expect(invokedChannels).not.toContain('shell:openFileUri')
+    expect(invokedChannels).not.toContain('shell:pickImage')
   })
 
   it('rejects filesystem and runtime access outside the owned document', async () => {

@@ -136,6 +136,10 @@ function LoadedEditorPopout({ request }: { request: EditorPopoutOpenRequest }): 
   }, [dirty, request])
 
   useEffect(() => {
+    void window.api.editorPopout.reportReady()
+  }, [])
+
+  useEffect(() => {
     const offRequestCloseState = window.api.editorPopout.onRequestCloseState(() => {
       void window.api.editorPopout.reportCloseState(dirtyRef.current)
     })

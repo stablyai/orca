@@ -10,7 +10,7 @@ import type {
   DashboardSnapshot,
   DashboardSpawnAgentArgs
 } from '../shared/dashboard-snapshot'
-import type { EditorPopoutOpenRequest } from '../shared/editor-popout'
+import type { EditorPopoutOpenRequest, EditorPopoutOpenResult } from '../shared/editor-popout'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -2364,10 +2364,11 @@ const api = {
   },
 
   editorPopout: {
-    open: (request: EditorPopoutOpenRequest): Promise<void> =>
+    open: (request: EditorPopoutOpenRequest): Promise<EditorPopoutOpenResult> =>
       ipcRenderer.invoke('editorPopout:open', request),
     getState: (): Promise<EditorPopoutOpenRequest | null> =>
       ipcRenderer.invoke('editorPopout:getState'),
+    reportReady: (): Promise<void> => ipcRenderer.invoke('editorPopout:ready'),
     setDirty: (dirty: boolean): Promise<void> => ipcRenderer.invoke('editorPopout:setDirty', dirty),
     reportCloseState: (dirty: boolean): Promise<void> =>
       ipcRenderer.invoke('editorPopout:reportCloseState', dirty),

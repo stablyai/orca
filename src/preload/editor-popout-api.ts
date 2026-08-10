@@ -97,6 +97,7 @@ export function createEditorPopoutPreloadApi(ipc: EditorPopoutIpc) {
         request = admitEditorPopoutOpenRequest(await ipc.invoke('editorPopout:getState'))
         return request
       },
+      reportReady: (): Promise<unknown> => ipc.invoke('editorPopout:ready'),
       setDirty: (dirty: boolean): Promise<unknown> => ipc.invoke('editorPopout:setDirty', dirty),
       reportCloseState: (dirty: boolean): Promise<unknown> =>
         ipc.invoke('editorPopout:reportCloseState', dirty),
@@ -154,14 +155,13 @@ export function createEditorPopoutPreloadApi(ipc: EditorPopoutIpc) {
       }
     },
     ui: {
-      readClipboardText: (options?: unknown): Promise<unknown> =>
-        ipc.invoke('clipboard:readText', options),
+      readClipboardText: (_options?: unknown): Promise<string> => Promise.resolve(''),
       writeClipboardText: (text: string): Promise<unknown> =>
         ipc.invoke('clipboard:writeText', text),
-      saveClipboardImageAsTempFile: (args?: {
+      saveClipboardImageAsTempFile: (_args?: {
         connectionId?: string | null
         runtimeEnvironmentId?: string | null
-      }): Promise<unknown> => ipc.invoke('clipboard:saveImageAsTempFile', args),
+      }): Promise<null> => Promise.resolve(null),
       setMarkdownEditorFocused: (focused: boolean): void => {
         ipc.send('ui:setMarkdownEditorFocused', focused)
       },
@@ -182,9 +182,9 @@ export function createEditorPopoutPreloadApi(ipc: EditorPopoutIpc) {
       }
     },
     shell: {
-      pathExists: (filePath: string): Promise<unknown> => ipc.invoke('shell:pathExists', filePath),
-      openFileUri: (uri: string): Promise<unknown> => ipc.invoke('shell:openFileUri', uri),
-      pickImage: (): Promise<unknown> => ipc.invoke('shell:pickImage')
+      pathExists: (_filePath: string): Promise<boolean> => Promise.resolve(false),
+      openFileUri: (_uri: string): Promise<void> => Promise.resolve(),
+      pickImage: (): Promise<null> => Promise.resolve(null)
     }
   }
 }

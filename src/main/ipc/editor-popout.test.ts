@@ -5,9 +5,10 @@ const {
   handlers,
   mainSender,
   popoutSender,
-  createOrFocusMock,
+  openEditorPopoutMock,
   getRequestMock,
   isEditorPopoutRendererMock,
+  reportReadyMock,
   setDirtyMock,
   completeSaveAndCloseMock,
   getTrustedRendererMock
@@ -15,9 +16,10 @@ const {
   handlers: new Map<string, (event: { sender: unknown }, ...args: unknown[]) => unknown>(),
   mainSender: { id: 1 },
   popoutSender: { id: 2 },
-  createOrFocusMock: vi.fn(),
+  openEditorPopoutMock: vi.fn(),
   getRequestMock: vi.fn(),
   isEditorPopoutRendererMock: vi.fn(),
+  reportReadyMock: vi.fn(),
   setDirtyMock: vi.fn(),
   completeSaveAndCloseMock: vi.fn(),
   getTrustedRendererMock: vi.fn()
@@ -35,9 +37,10 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../window/editor-popout-window', () => ({
-  createOrFocusEditorPopout: createOrFocusMock,
+  openEditorPopout: openEditorPopoutMock,
   getEditorPopoutRequest: getRequestMock,
   isEditorPopoutRenderer: isEditorPopoutRendererMock,
+  reportEditorPopoutReady: reportReadyMock,
   setEditorPopoutDirty: setDirtyMock,
   completeEditorPopoutSaveAndClose: completeSaveAndCloseMock
 }))
@@ -75,16 +78,25 @@ describe('registerEditorPopoutHandlers', () => {
     getTrustedRendererMock.mockReturnValue(mainSender)
     isEditorPopoutRendererMock.mockImplementation((sender) => sender === popoutSender)
     getRequestMock.mockReturnValue(request)
+    openEditorPopoutMock.mockResolvedValue({ created: true })
     registerEditorPopoutHandlers()
   })
 
-  it('opens only from the primary trusted renderer with an admitted request', () => {
-    handlers.get('editorPopout:open')!({ sender: { id: 99 } }, request)
-    handlers.get('editorPopout:open')!({ sender: mainSender }, { nope: true })
-    handlers.get('editorPopout:open')!({ sender: mainSender }, request)
+  it('opens only from the primary trusted renderer with an admitted request', async () => {
+    await expect(
+      handlers.get('editorPopout:open')!({ sender: { id: 99 } }, request)
+    ).resolves.toEqual({
+      created: false
+    })
+    await expect(
+      handlers.get('editorPopout:open')!({ sender: mainSender }, { nope: true })
+    ).resolves.toEqual({ created: false })
+    await expect(
+      handlers.get('editorPopout:open')!({ sender: mainSender }, request)
+    ).resolves.toEqual({ created: true })
 
-    expect(createOrFocusMock).toHaveBeenCalledOnce()
-    expect(createOrFocusMock).toHaveBeenCalledWith(request)
+    expect(openEditorPopoutMock).toHaveBeenCalledOnce()
+    expect(openEditorPopoutMock).toHaveBeenCalledWith(request)
   })
 
   it('serves state and lifecycle updates only to an editor popout renderer', () => {
@@ -92,11 +104,13 @@ describe('registerEditorPopoutHandlers', () => {
     expect(handlers.get('editorPopout:getState')!({ sender: popoutSender })).toEqual(request)
 
     handlers.get('editorPopout:setDirty')!({ sender: mainSender }, true)
+    handlers.get('editorPopout:ready')!({ sender: popoutSender })
     handlers.get('editorPopout:setDirty')!({ sender: popoutSender }, true)
     handlers.get('editorPopout:completeSaveAndClose')!({ sender: popoutSender }, true)
     handlers.get('editorPopout:completeSaveAndClose')!({ sender: popoutSender }, 'yes')
 
     expect(setDirtyMock).toHaveBeenCalledOnce()
+    expect(reportReadyMock).toHaveBeenCalledOnce()
     expect(setDirtyMock).toHaveBeenCalledWith(popoutSender, true)
     expect(completeSaveAndCloseMock).toHaveBeenCalledOnce()
     expect(completeSaveAndCloseMock).toHaveBeenCalledWith(popoutSender, true)

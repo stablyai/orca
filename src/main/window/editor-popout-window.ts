@@ -1,15 +1,22 @@
 import { BrowserWindow, dialog, nativeTheme, type WebContents } from 'electron'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
-import type { EditorPopoutOpenRequest } from '../../shared/editor-popout'
+import type { EditorPopoutOpenRequest, EditorPopoutOpenResult } from '../../shared/editor-popout'
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import { translateMain } from '../i18n/main-i18n'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 
 const EDITOR_POPOUT_PARTITION = 'orca-editor-popout'
 const CLOSE_STATE_TIMEOUT_MS = 1_500
+const READY_TIMEOUT_MS = 10_000
 const MIN_WIDTH = 560
 const MIN_HEIGHT = 420
+
+type EditorPopoutReadyWaiter = {
+  resolve: () => void
+  reject: (error: Error) => void
+  timer: ReturnType<typeof setTimeout>
+}
 
 type EditorPopoutEntry = {
   window: BrowserWindow
@@ -20,6 +27,8 @@ type EditorPopoutEntry = {
   closeCheckPending: boolean
   closeCheckTimer: ReturnType<typeof setTimeout> | null
   onQuitAborted?: () => void
+  ready: boolean
+  readyWaiters: Set<EditorPopoutReadyWaiter>
 }
 
 const entriesByKey = new Map<string, EditorPopoutEntry>()
@@ -149,7 +158,9 @@ export function createOrFocusEditorPopout(request: EditorPopoutOpenRequest): Bro
     allowClose: false,
     closeDialogOpen: false,
     closeCheckPending: false,
-    closeCheckTimer: null
+    closeCheckTimer: null,
+    ready: false,
+    readyWaiters: new Set()
   }
   const webContentsId = window.webContents.id
   entriesByKey.set(key, entry)
@@ -184,10 +195,66 @@ export function createOrFocusEditorPopout(request: EditorPopoutOpenRequest): Bro
     }
     entriesByKey.delete(key)
     entriesByWebContentsId.delete(webContentsId)
+    for (const waiter of entry.readyWaiters) {
+      clearTimeout(waiter.timer)
+      waiter.reject(new Error('Detached editor closed before it was ready.'))
+    }
+    entry.readyWaiters.clear()
   })
 
   loadEditorPopout(window)
   return window
+}
+
+function waitForEditorPopoutReady(entry: EditorPopoutEntry): Promise<void> {
+  if (entry.ready) {
+    return Promise.resolve()
+  }
+  return new Promise<void>((resolve, reject) => {
+    const waiter: EditorPopoutReadyWaiter = {
+      resolve,
+      reject,
+      timer: setTimeout(() => {
+        entry.readyWaiters.delete(waiter)
+        if (!entry.window.isDestroyed()) {
+          entry.allowClose = true
+          entry.window.close()
+        }
+        reject(new Error('Detached editor did not become ready.'))
+      }, READY_TIMEOUT_MS)
+    }
+    entry.readyWaiters.add(waiter)
+  })
+}
+
+export async function openEditorPopout(
+  request: EditorPopoutOpenRequest
+): Promise<EditorPopoutOpenResult> {
+  const existing = entriesByKey.get(getRequestKey(request))
+  if (existing && !existing.window.isDestroyed()) {
+    createOrFocusEditorPopout(request)
+    return { created: false }
+  }
+  const window = createOrFocusEditorPopout(request)
+  const entry = entriesByWebContentsId.get(window.webContents.id)
+  if (!entry) {
+    throw new Error('Detached editor state was not registered.')
+  }
+  await waitForEditorPopoutReady(entry)
+  return { created: true }
+}
+
+export function reportEditorPopoutReady(sender: WebContents): void {
+  const entry = entriesByWebContentsId.get(sender.id)
+  if (!entry || entry.ready) {
+    return
+  }
+  entry.ready = true
+  for (const waiter of entry.readyWaiters) {
+    clearTimeout(waiter.timer)
+    waiter.resolve()
+  }
+  entry.readyWaiters.clear()
 }
 
 export function isEditorPopoutRenderer(sender: WebContents): boolean {

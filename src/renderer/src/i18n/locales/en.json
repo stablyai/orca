@@ -15427,6 +15427,8 @@
     "unsavedChanges": "Unsaved Changes",
     "closeConfirmTitle": "Save changes to {{name}}?",
     "closeConfirmMessage": "Your changes will be lost if you close this window without saving.",
+    "closeStateUnavailable": "The detached editor is not responding.",
+    "closeStateUnavailableDetail": "Its latest changes could not be checked. Closing may discard unsaved work.",
     "stateUnavailable": "The detached editor state is unavailable.",
     "recoverableError": {
       "title": "Orca editor hit an error.",

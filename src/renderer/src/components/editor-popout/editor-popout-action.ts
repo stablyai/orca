@@ -49,7 +49,11 @@ export function createEditorPopoutAction({
       if (request) {
         void window.api.editorPopout
           .open(request)
-          .then(() => getState().closeFile(file.id))
+          .then(({ created }) => {
+            if (created) {
+              getState().closeFile(file.id)
+            }
+          })
           .catch(reportEditorPopoutOpenFailure)
       }
     } catch (cause) {
