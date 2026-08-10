@@ -78,7 +78,7 @@ describe('Agent Session History scan coalescing', () => {
 
     // The local leg must rescan; the SSH leg holds no local sessions and is
     // budgeted seconds, so a local settings change must not re-pay its walk.
-    expect(mocks.scanAiVaultSessions.mock.calls.length).toBeGreaterThan(1)
+    expect(mocks.scanAiVaultSessionsInWorker.mock.calls.length).toBeGreaterThan(1)
     expect(mocks.scanRemoteAiVaultSessions.mock.calls.length).toBe(remoteScansBefore)
   })
 
@@ -101,7 +101,7 @@ describe('Agent Session History scan coalescing', () => {
   it('starts a new local scan when the configured Codex source changes', async () => {
     let sourceHome = '/custom/codex/a'
     const resolveScans: ((result: AiVaultListResult) => void)[] = []
-    mocks.scanAiVaultSessions.mockImplementation(
+    mocks.scanAiVaultSessionsInWorker.mockImplementation(
       () => new Promise<AiVaultListResult>((resolve) => resolveScans.push(resolve))
     )
     registerAiVaultHandlers({ getCodexSessionSourceHomePath: () => sourceHome })
@@ -112,7 +112,7 @@ describe('Agent Session History scan coalescing', () => {
     const second = _internals.listAiVaultSessions({ executionHostScope: 'local' })
     await vi.waitFor(() => expect(resolveScans).toHaveLength(2))
 
-    expect(mocks.scanAiVaultSessions.mock.calls[1]?.[0]).toMatchObject({
+    expect(mocks.scanAiVaultSessionsInWorker.mock.calls[1]?.[0]).toMatchObject({
       additionalCodexSessionsDirs: [join('/custom/codex/b', 'sessions')]
     })
     resolveScans.forEach((resolve) => resolve(EMPTY_RESULT))
