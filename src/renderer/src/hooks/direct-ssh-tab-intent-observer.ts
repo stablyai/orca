@@ -8,6 +8,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import { resolveDirectSshGitWorktreeTargetIds } from '../lib/direct-ssh-target-scope'
 import type { AppState } from '../store/types'
+import { createDirectSshTabProcessInputTracker } from './direct-ssh-tab-process-inputs'
 import {
   configuredDirectSshTargetIds,
   directSshConnectednessTransitionTargetIds,
@@ -131,6 +132,7 @@ export function createDirectSshTabIntentObserver(
         })
       : Promise.resolve(rendererGeneration)
   const pausedTargets = new Set<string>()
+  const processInputTracker = createDirectSshTabProcessInputTracker()
   let scopeByTarget = new Map<string, Set<string>>()
   let targetByWorktree = new Map<string, string>()
   let previousScopeInputs: DirectSshObservationScopeInputRefs | null = null
@@ -187,9 +189,11 @@ export function createDirectSshTabIntentObserver(
     const nextScopeInputs = directSshObservationScopeInputRefs(state)
     const scopeChanged = !directSshObservationScopeInputsEqual(previousScopeInputs, nextScopeInputs)
     const connectionStatesChanged = previousSshConnectionStates !== state.sshConnectionStates
+    const processInputsChanged = processInputTracker.inputsChanged(state)
     if (
       !scopeChanged &&
       !connectionStatesChanged &&
+      !processInputsChanged &&
       previousTabsByWorktree === state.tabsByWorktree
     ) {
       return
@@ -260,6 +264,12 @@ export function createDirectSshTabIntentObserver(
         }
       }
     }
+    processInputTracker.collectChanges({
+      rebuildOwners: scopeChanged || previousTabs !== state.tabsByWorktree,
+      state,
+      targetByWorktree,
+      targets: targetsToSend
+    })
     targetsToSend.forEach((targetId) => sendTarget(state, targetId))
   }
 
@@ -284,6 +294,7 @@ export function createDirectSshTabIntentObserver(
       pausedTargets.clear()
       scopeByTarget.clear()
       targetByWorktree.clear()
+      processInputTracker.clear()
       signatureByTarget.clear()
       previousScopeInputs = null
       previousSshConnectionStates = null

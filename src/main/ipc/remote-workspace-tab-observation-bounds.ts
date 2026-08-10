@@ -11,6 +11,11 @@ export const MAX_REMOTE_WORKSPACE_OBSERVED_TABS_PER_TARGET = 4_096
 export const MAX_REMOTE_WORKSPACE_OBSERVATION_BYTES_PER_TARGET = 2 * 1024 * 1024
 export const MAX_REMOTE_WORKSPACE_TARGET_ID_BYTES = 512
 
+export type BoundedRemoteWorkspaceObservedWorktrees = {
+  retainedBytes: number
+  worktrees: Map<string, RemoteWorkspaceObservedWorktree>
+}
+
 export function isValidRemoteWorkspaceTargetId(targetId: unknown): targetId is string {
   return (
     typeof targetId === 'string' &&
@@ -42,7 +47,7 @@ export function remoteWorkspaceObservedTabMap(
 
 export function boundedRemoteWorkspaceObservedWorktrees(
   observation: RemoteWorkspaceTabObservation
-): Map<string, RemoteWorkspaceObservedWorktree> | null {
+): BoundedRemoteWorkspaceObservedWorktrees | null {
   if (
     !isValidRemoteWorkspaceTargetId(observation.targetId) ||
     observation.hydrated !== true ||
@@ -96,5 +101,5 @@ export function boundedRemoteWorkspaceObservedWorktrees(
     }
     worktrees.set(worktree.worktreeId, worktree)
   }
-  return worktrees
+  return { retainedBytes, worktrees }
 }

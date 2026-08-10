@@ -19,6 +19,7 @@ import {
 import {
   MAX_REMOTE_WORKSPACE_TAB_INTENT_BYTES_PER_TARGET,
   MAX_REMOTE_WORKSPACE_TAB_INTENTS_PER_TARGET,
+  MAX_REMOTE_WORKSPACE_TAB_RETAINED_BYTES,
   RemoteWorkspaceTabIntentRetention,
   type RemoteWorkspaceTabIntentTargetState as TargetState
 } from './remote-workspace-tab-intent-retention'
@@ -39,6 +40,7 @@ export const MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS = 64
 export {
   MAX_REMOTE_WORKSPACE_TAB_INTENT_BYTES_PER_TARGET,
   MAX_REMOTE_WORKSPACE_TAB_INTENTS_PER_TARGET,
+  MAX_REMOTE_WORKSPACE_TAB_RETAINED_BYTES,
   MAX_REMOTE_WORKSPACE_UNTRACKED_INTENT_TARGETS
 }
 
@@ -68,15 +70,16 @@ export class RemoteWorkspaceTabIntentStore {
     if (!this.untracked.canObserve(observation.targetId, authority)) {
       return
     }
-    const nextWorktrees = boundedRemoteWorkspaceObservedWorktrees(observation)
-    if (!nextWorktrees) {
+    const boundedObservation = boundedRemoteWorkspaceObservedWorktrees(observation)
+    if (!boundedObservation) {
       if (existing) {
         this.retention.overflow(existing)
       } else if (this.targets.size < MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS) {
         const state = this.retention.createTarget(
           authority,
           observation.connected === true,
-          new Map()
+          new Map(),
+          0
         )
         state.overflowed = true
         this.targets.set(observation.targetId, state)
@@ -85,10 +88,11 @@ export class RemoteWorkspaceTabIntentStore {
       }
       return
     }
+    const { retainedBytes: nextWorktreeBytes, worktrees: nextWorktrees } = boundedObservation
     if (!existing) {
       const replacedBaseline =
         this.targets.size >= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS
-          ? this.evictBaseline(observation.connected === true)
+          ? this.retention.evictBaseline(this.targets, observation.connected === true)
           : false
       if (this.targets.size >= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS) {
         if (observation.authoritative !== true) {
@@ -100,9 +104,10 @@ export class RemoteWorkspaceTabIntentStore {
       const state = this.retention.createTarget(
         authority,
         observation.connected === true,
-        nextWorktrees
+        nextWorktrees,
+        nextWorktreeBytes
       )
-      state.overflowed = replacedBaseline && observation.authoritative !== true
+      state.overflowed ||= replacedBaseline && observation.authoritative !== true
       this.targets.set(observation.targetId, state)
       return
     }
@@ -113,18 +118,17 @@ export class RemoteWorkspaceTabIntentStore {
     ) {
       existing.authority = authority
       existing.connected = observation.connected === true
-      existing.worktrees = nextWorktrees
+      this.retention.replaceWorktrees(existing, nextWorktrees, nextWorktreeBytes)
       this.touch(observation.targetId, existing)
       return
     }
 
     if (existing.overflowed) {
       existing.connected = observation.connected === true
-      existing.worktrees = nextWorktrees
+      this.retention.replaceWorktrees(existing, nextWorktrees, nextWorktreeBytes)
       this.touch(observation.targetId, existing)
       return
     }
-
     observationScan: for (const worktreeId of new Set([
       ...existing.worktrees.keys(),
       ...nextWorktrees.keys()
@@ -177,7 +181,7 @@ export class RemoteWorkspaceTabIntentStore {
       }
     }
     existing.connected = observation.connected === true
-    existing.worktrees = nextWorktrees
+    this.retention.replaceWorktrees(existing, nextWorktrees, nextWorktreeBytes)
     this.touch(observation.targetId, existing)
   }
 
@@ -185,6 +189,7 @@ export class RemoteWorkspaceTabIntentStore {
     this.untracked.forget(targetId, authority)
     const state = this.targets.get(targetId)
     if (state && canReplaceRemoteWorkspaceTabObservationAuthority(state.authority, authority)) {
+      this.retention.release(state)
       this.targets.delete(targetId)
     }
   }
@@ -193,6 +198,7 @@ export class RemoteWorkspaceTabIntentStore {
     this.untracked.forgetAll(authority)
     for (const [targetId, state] of this.targets) {
       if (canReplaceRemoteWorkspaceTabObservationAuthority(state.authority, authority)) {
+        this.retention.release(state)
         this.targets.delete(targetId)
       }
     }
@@ -292,20 +298,6 @@ export class RemoteWorkspaceTabIntentStore {
     this.retention.reset()
     this.targets.clear()
     this.untracked.reset()
-  }
-
-  private evictBaseline(incomingConnected: boolean): boolean {
-    const candidates = [...this.targets].filter(
-      ([, state]) => !state.overflowed && state.intents.size === 0
-    )
-    const victim =
-      candidates.find(([, state]) => !state.connected) ??
-      (incomingConnected ? candidates[0] : undefined)
-    if (!victim) {
-      return false
-    }
-    this.targets.delete(victim[0])
-    return true
   }
 
   private touch(targetId: string, state: TargetState): void {

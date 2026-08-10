@@ -3,7 +3,10 @@ import type {
   RemoteWorkspaceObservedTab,
   RemoteWorkspaceTabObservation
 } from '../../shared/remote-workspace-types'
-import { RemoteWorkspaceTabIntentStore } from './remote-workspace-tab-intent-store'
+import {
+  MAX_REMOTE_WORKSPACE_TAB_RETAINED_BYTES,
+  RemoteWorkspaceTabIntentStore
+} from './remote-workspace-tab-intent-store'
 import { MAX_REMOTE_WORKSPACE_OBSERVATION_BYTES_PER_TARGET } from './remote-workspace-tab-observation-bounds'
 
 const TARGET = 'target-a'
@@ -31,11 +34,14 @@ function tab(id: string, layoutBytes: number): RemoteWorkspaceObservedTab {
   }
 }
 
-function observation(tabs: RemoteWorkspaceObservedTab[]): RemoteWorkspaceTabObservation {
+function observation(
+  tabs: RemoteWorkspaceObservedTab[],
+  targetId = TARGET
+): RemoteWorkspaceTabObservation {
   return {
     hydrated: true,
     rendererGeneration: 1,
-    targetId: TARGET,
+    targetId,
     worktrees: [
       {
         worktreeId: WORKTREE_ID,
@@ -81,5 +87,44 @@ describe('remote workspace tab intent retention', () => {
 
     overflow.forgetTarget(TARGET, authority)
     expect(overflow.stateForTests(TARGET)).toBeNull()
+  })
+
+  it('bounds observed and historical payload bytes across targets without poisoning earlier state', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    const authority = { processId: 10, rendererGeneration: 1, senderId: 1 }
+    const layoutBytes = Math.floor(MAX_REMOTE_WORKSPACE_TAB_RETAINED_BYTES / 10)
+
+    for (let index = 0; index < 5; index += 1) {
+      const targetId = `target-${index}`
+      store.observe(authority, {
+        ...observation([], targetId),
+        authoritative: true
+      })
+      store.observe(authority, observation([tab(`tab-${index}`, layoutBytes)], targetId))
+    }
+
+    expect(store.stateForTests('target-0')).toEqual({ intents: 1, overflowed: false })
+    expect(store.stateForTests('target-4')).toEqual({ intents: 0, overflowed: true })
+    const reconciled = store.reconcile('target-0', {
+      namespace: 'workspace',
+      revision: 1,
+      schemaVersion: 1,
+      session: {
+        activeTabId: null,
+        activeWorktreePath: '/remote/work',
+        tabsByWorktreePath: { '/remote/work': [] },
+        terminalLayoutsByTabId: {}
+      },
+      updatedAt: 1
+    })
+    expect(reconciled?.session.tabsByWorktreePath['/remote/work']?.[0]?.id).toBe('tab-0')
+
+    store.forgetTarget('target-0', authority)
+    store.forgetTarget('target-4', authority)
+    store.observe(authority, {
+      ...observation([tab('tab-recovered', 1_024)], 'target-4'),
+      authoritative: true
+    })
+    expect(store.stateForTests('target-4')).toEqual({ intents: 0, overflowed: false })
   })
 })

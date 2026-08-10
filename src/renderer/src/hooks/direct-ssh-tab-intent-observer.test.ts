@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { RemoteWorkspaceTabObservation } from '../../../shared/remote-workspace-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { AppState } from '../store/types'
 import { createDirectSshTabIntentObserver } from './direct-ssh-tab-intent-observer'
@@ -55,6 +56,8 @@ function state(): AppState {
       [WT_A]: [tab('a-old', WT_A)],
       [WT_B]: [tab('b-old', WT_B)]
     },
+    ptyIdsByTabId: {},
+    lastKnownRelayPtyIdByTabId: {},
     terminalLayoutsByTabId: {},
     terminalPtyIncarnationsByPaneKey: {},
     remoteSessionIdsByTabId: {}
@@ -62,7 +65,7 @@ function state(): AppState {
 }
 
 function harness() {
-  const observeTabState = vi.fn(async () => {})
+  const observeTabState = vi.fn(async (_observation: RemoteWorkspaceTabObservation) => {})
   const forgetTabState = vi.fn(async () => {})
   const forgetAllTabState = vi.fn(async () => {})
   const startTabStateObservation = vi.fn(async () => 1)
@@ -136,6 +139,57 @@ describe('createDirectSshTabIntentObserver', () => {
     })
     expect(scanned).toEqual(['target-a'])
     expect(observeTabState).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      name: 'split-pane layout',
+      update: (base: AppState): AppState => ({
+        ...base,
+        terminalLayoutsByTabId: {
+          ...base.terminalLayoutsByTabId,
+          'a-old': {
+            activeLeafId: null,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { leaf: 'pty-split' },
+            root: null
+          }
+        }
+      })
+    },
+    {
+      name: 'tab PTY binding',
+      update: (base: AppState): AppState => ({
+        ...base,
+        ptyIdsByTabId: { ...base.ptyIdsByTabId, 'a-old': ['pty-bound'] }
+      })
+    },
+    {
+      name: 'relay PTY binding',
+      update: (base: AppState): AppState => ({
+        ...base,
+        lastKnownRelayPtyIdByTabId: {
+          ...base.lastKnownRelayPtyIdByTabId,
+          'a-old': 'pty-relay'
+        }
+      })
+    }
+  ])('publishes $name changes only to the owning target', ({ update }) => {
+    const base = state()
+    const { observer, observeTabState, scanned } = harness()
+    observer.observeState(base)
+    const initialIdentity =
+      observeTabState.mock.calls[0]?.[0]?.worktrees[0]?.tabs[0]?.processIdentity
+    observeTabState.mockClear()
+    scanned.length = 0
+
+    observer.observeState(update(base))
+
+    expect(scanned).toEqual(['target-a'])
+    expect(observeTabState).toHaveBeenCalledOnce()
+    const observation = observeTabState.mock.calls[0]?.[0]
+    expect(observation?.targetId).toBe('target-a')
+    expect(observation?.worktrees[0]?.tabs[0]?.processIdentity).not.toBe(initialIdentity)
   })
 
   it('scans one owner, not every configured target, for title churn at 1,000-target scale', () => {
