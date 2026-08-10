@@ -328,6 +328,16 @@
 .markdown-annotation-block,
 .markdown-annotation-list-block {
   position: relative;
+}
+
+/* Why: reserve the right-hand notes column only when a block actually carries a
+   note or is being composed on. Otherwise every block stays full width, so prose
+   (and full-width blocks like math) don't sit in a permanently narrowed column
+   beside an empty gutter. */
+.markdown-annotation-block.has-review-notes,
+.markdown-annotation-block.is-active,
+.markdown-annotation-list-block.has-review-notes,
+.markdown-annotation-list-block.is-active {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, min(28cqw, 300px));
   column-gap: 32px;
@@ -362,6 +372,19 @@
   grid-row: 1;
   min-width: 0;
   margin-top: 0;
+}
+
+/* Why: when the gutter is collapsed (no note, not composing), the block is
+   display:block and this controls div would flow BELOW the content, dragging
+   the add-note "+" down with it. Pin it to the block's top-left so the "+"
+   stays beside the block in the left margin instead of underneath it. */
+.markdown-annotation-block:not(.has-review-notes):not(.is-active) > .markdown-annotation-controls,
+.markdown-annotation-list-block:not(.has-review-notes):not(.is-active)
+  > .markdown-annotation-controls {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 0;
 }
 
 .markdown-annotation-add {
@@ -453,13 +476,28 @@
 }
 
 @container (max-width: 760px) {
+  /* Match the class-qualified grid rules (.has-review-notes/.is-active) so
+     annotated and composing blocks still stack instead of forcing a cramped
+     two-column grid on a narrow pane. */
   .markdown-annotation-block,
-  .markdown-annotation-list-block {
+  .markdown-annotation-block.has-review-notes,
+  .markdown-annotation-block.is-active,
+  .markdown-annotation-list-block,
+  .markdown-annotation-list-block.has-review-notes,
+  .markdown-annotation-list-block.is-active {
     display: block;
   }
 
   .markdown-annotation-controls {
     margin-top: 6px;
+  }
+
+  /* Undo the collapsed-gutter absolute pin so the stacked "+" flows normally. */
+  .markdown-annotation-block:not(.has-review-notes):not(.is-active) > .markdown-annotation-controls,
+  .markdown-annotation-list-block:not(.has-review-notes):not(.is-active)
+    > .markdown-annotation-controls {
+    position: static;
+    height: auto;
   }
 
   .markdown-annotation-add {
@@ -492,6 +530,15 @@
   font-size: 1.85em;
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+/* Underline h1/h2 to break sections up, matching GitHub's rendered markdown. */
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body details.orca-details[data-orca-toggle='heading-1'] > summary,
+.markdown-body details.orca-details[data-orca-toggle='heading-2'] > summary {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
 }
 
 .markdown-body h2 {
@@ -656,48 +703,83 @@
   padding: 0;
   background: none;
   border: none;
-  font-size: inherit;
+  /* Match inline code (0.88em) and the rich editor's code blocks; `inherit`
+     left block code at full body size, larger than everything around it. */
+  font-size: 0.88em;
   border-radius: 0;
 }
 
-/* Code copy button — appears on hover over code blocks in preview mode */
+/* Why: the inline-code background is theme-scoped (.markdown-light/dark), which
+   outweighs the plain `.markdown-body pre code` reset above and repaints the
+   inline grey box behind block code — as per-line bands, since <code> is
+   inline. Match that specificity so block code stays background-free. */
+.markdown-light .markdown-body pre code,
+.markdown-dark .markdown-body pre code {
+  background: none;
+}
+
+/* Code block header — language label + copy button in a bar across the top,
+   matching the VS Code / Obsidian / ChatGPT convention. The wrapper owns the
+   frame so the header and body read as one unit. */
 .code-block-wrapper {
   position: relative;
+  margin: 1em 0;
+  border-radius: 8px;
+  overflow: hidden;
 }
-.code-block-copy-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 4px;
-  cursor: pointer;
-  color: var(--muted-foreground);
+
+.markdown-body .code-block-wrapper {
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+/* Body: the wrapper now carries the margin/border/radius. */
+.markdown-body .code-block-wrapper pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.code-block-header {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px 5px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--foreground) 3%, transparent);
+  font-family: var(--font-sans, system-ui, sans-serif);
 }
-.code-block-wrapper:hover .code-block-copy-btn {
-  opacity: 1;
+
+.code-block-language {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  user-select: none;
+}
+
+.code-block-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  border-radius: 5px;
+  padding: 3px 7px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  line-height: 1;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
 }
 .code-block-copy-btn:hover {
   background: var(--accent);
   color: var(--foreground);
 }
-/* Always show on touch devices that lack hover */
-@media (hover: none) {
-  .code-block-copy-btn {
-    opacity: 1;
-  }
-}
 
 .code-block-copy-label {
-  font-size: 11px;
-  margin-left: 3px;
-  font-family: var(--font-sans, sans-serif);
+  font-size: 12px;
 }
 
 /* Mermaid diagram container */
@@ -820,6 +902,78 @@
 .markdown-light .markdown-body blockquote {
   background: rgba(0, 0, 0, 0.02);
   color: rgba(0, 0, 0, 0.6);
+}
+
+/* Block math (KaTeX display): give it the same left-aligned, tinted, bordered
+   box as the rich editor instead of KaTeX's bare centered default. */
+.markdown-body .katex-display {
+  margin: 1em 0;
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+  text-align: left;
+}
+
+/* ── GitHub-style alerts (> [!NOTE] etc.) ─────────────── */
+.markdown-body .markdown-alert {
+  --markdown-alert-accent: var(--border);
+  border-left-color: var(--markdown-alert-accent);
+}
+
+/* Alert body uses normal text; only the title carries the accent hue. */
+.markdown-light .markdown-body .markdown-alert,
+.markdown-dark .markdown-body .markdown-alert {
+  color: var(--foreground);
+}
+
+.markdown-body .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin: 0 0 0.4em;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--markdown-alert-accent);
+}
+
+.markdown-body .markdown-alert-title .markdown-alert-icon {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
+
+.markdown-light .markdown-body .markdown-alert-note {
+  --markdown-alert-accent: #0969da;
+}
+.markdown-dark .markdown-body .markdown-alert-note {
+  --markdown-alert-accent: #4493f8;
+}
+.markdown-light .markdown-body .markdown-alert-tip {
+  --markdown-alert-accent: #1a7f37;
+}
+.markdown-dark .markdown-body .markdown-alert-tip {
+  --markdown-alert-accent: #3fb950;
+}
+.markdown-light .markdown-body .markdown-alert-important {
+  --markdown-alert-accent: #8250df;
+}
+.markdown-dark .markdown-body .markdown-alert-important {
+  --markdown-alert-accent: #ab7df8;
+}
+.markdown-light .markdown-body .markdown-alert-warning {
+  --markdown-alert-accent: #9a6700;
+}
+.markdown-dark .markdown-body .markdown-alert-warning {
+  --markdown-alert-accent: #d29922;
+}
+.markdown-light .markdown-body .markdown-alert-caution {
+  --markdown-alert-accent: #cf222e;
+}
+.markdown-dark .markdown-body .markdown-alert-caution {
+  --markdown-alert-accent: #f85149;
 }
 
 .markdown-body table {

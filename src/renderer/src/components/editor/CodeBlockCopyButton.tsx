@@ -4,10 +4,13 @@ import { translate } from '@/i18n/i18n'
 
 type CodeBlockCopyButtonProps = React.HTMLAttributes<HTMLPreElement> & {
   children?: React.ReactNode
+  /** Fenced-code language shown as a label; omitted for plain fences. */
+  language?: string | null
 }
 
 export default function CodeBlockCopyButton({
   children,
+  language,
   ...props
 }: CodeBlockCopyButtonProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
@@ -67,26 +70,36 @@ export default function CodeBlockCopyButton({
 
   return (
     <div className="code-block-wrapper">
+      {/* Plain fences (no language) skip the header — they read fine as a bare
+          framed block, and the header only earns its space when it labels a language. */}
+      {language ? (
+        <div className="code-block-header">
+          <span className="code-block-language">{language}</span>
+          <button
+            ref={setCopyButtonRef}
+            type="button"
+            className="code-block-copy-btn"
+            onClick={handleCopy}
+            aria-label={translate(
+              'auto.components.editor.CodeBlockCopyButton.1f9f4def45',
+              'Copy code'
+            )}
+            title={translate('auto.components.editor.CodeBlockCopyButton.1f9f4def45', 'Copy code')}
+          >
+            {copied ? (
+              <>
+                <Check size={13} />
+                <span className="code-block-copy-label">
+                  {translate('auto.components.editor.CodeBlockCopyButton.28921f5bf9', 'Copied')}
+                </span>
+              </>
+            ) : (
+              <Copy size={13} />
+            )}
+          </button>
+        </div>
+      ) : null}
       <pre {...props}>{children}</pre>
-      <button
-        ref={setCopyButtonRef}
-        type="button"
-        className="code-block-copy-btn"
-        onClick={handleCopy}
-        aria-label={translate('auto.components.editor.CodeBlockCopyButton.1f9f4def45', 'Copy code')}
-        title={translate('auto.components.editor.CodeBlockCopyButton.1f9f4def45', 'Copy code')}
-      >
-        {copied ? (
-          <>
-            <Check size={14} />
-            <span className="code-block-copy-label">
-              {translate('auto.components.editor.CodeBlockCopyButton.28921f5bf9', 'Copied')}
-            </span>
-          </>
-        ) : (
-          <Copy size={14} />
-        )}
-      </button>
     </div>
   )
 }
