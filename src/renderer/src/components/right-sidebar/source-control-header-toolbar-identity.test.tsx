@@ -59,6 +59,8 @@ function renderToolbar(options?: {
       onChangeBaseRef={vi.fn()}
       onRefreshBranchCompare={vi.fn()}
       branchCompareRefreshDisabled={false}
+      onManualRefresh={vi.fn()}
+      isManualRefreshing={false}
       diffCommentCount={0}
       onExpandNotes={vi.fn()}
       branchSummary={options?.branchSummary === undefined ? readySummary : options.branchSummary}
@@ -74,6 +76,12 @@ function renderToolbar(options?: {
 }
 
 describe('SourceControlHeaderToolbar branch identity', () => {
+  it('exposes a manual refresh control beside filter/overflow', () => {
+    const markup = renderToolbar()
+    expect(markup).toContain('data-testid="source-control-manual-refresh"')
+    expect(markup).toContain('aria-label="Refresh"')
+  })
+
   it('keeps Create PR while stacking head above base in the context row', () => {
     const markup = renderToolbar()
     const branchIndex = markup.indexOf('brennanb2025/source-control-branch-name')

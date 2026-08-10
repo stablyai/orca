@@ -137,6 +137,11 @@ import {
   refreshGitStatusForWorktree,
   refreshGitStatusForWorktreeStrict
 } from './git-status-refresh'
+import { isSourceControlOpenDiffStaged } from './source-control-diff-load'
+import {
+  applyManualSourceControlDiffReload,
+  shouldStartManualSourceControlRefresh
+} from './source-control-manual-refresh'
 import { describeForkPushTarget } from './fork-push-target-label'
 import { toast } from 'sonner'
 import { SourceControlEntryContextMenu } from './source-control-entry-context-menu'
@@ -1320,6 +1325,9 @@ function SourceControlInner(): React.JSX.Element {
       console.warn('[SourceControl] post-mutation git status refresh failed', error)
     }
   }, [refreshActiveGitStatus])
+
+  const [isManualSourceControlRefreshing, setIsManualSourceControlRefreshing] = useState(false)
+  const manualSourceControlRefreshInFlightRef = useRef(false)
 
   // Why: when status is truncated, offer once per worktree to .gitignore the flooding folder; local-only since the SSH huge-folder write path isn't wired.
   useEffect(() => {
@@ -4524,10 +4532,17 @@ function SourceControlInner(): React.JSX.Element {
         setEditorViewMode(filePath, 'changes')
         return
       }
-      openDiff(activeWorktreeId, filePath, entry.path, language, entry.area === 'staged', {
-        targetGroupId,
-        preview: openAsPreview
-      })
+      openDiff(
+        activeWorktreeId,
+        filePath,
+        entry.path,
+        language,
+        isSourceControlOpenDiffStaged(entry.area),
+        {
+          targetGroupId,
+          preview: openAsPreview
+        }
+      )
     },
     [
       activeWorktreeId,
@@ -4990,6 +5005,45 @@ function SourceControlInner(): React.JSX.Element {
 
   const refreshGitHistoryRef = useRef(refreshGitHistory)
   refreshGitHistoryRef.current = refreshGitHistory
+
+  const handleManualSourceControlRefresh = useCallback(async (): Promise<void> => {
+    if (
+      !activeWorktreeId ||
+      !worktreePath ||
+      isFolder ||
+      !shouldStartManualSourceControlRefresh(manualSourceControlRefreshInFlightRef.current)
+    ) {
+      return
+    }
+
+    manualSourceControlRefreshInFlightRef.current = true
+    setIsManualSourceControlRefreshing(true)
+    try {
+      // Why: manual refresh must re-read status and force open staged/unstaged diffs to
+      // refetch even when porcelain area/status signatures are unchanged.
+      await refreshActiveGitStatus()
+      useAppStore.setState((state) => ({
+        openFiles: applyManualSourceControlDiffReload(
+          state.openFiles,
+          activeWorktreeId,
+          state.editorViewMode
+        )
+      }))
+      await Promise.all([refreshBranchCompare(), refreshGitHistory()])
+    } catch (error) {
+      console.warn('[SourceControl] manual refresh failed', error)
+    } finally {
+      manualSourceControlRefreshInFlightRef.current = false
+      setIsManualSourceControlRefreshing(false)
+    }
+  }, [
+    activeWorktreeId,
+    isFolder,
+    refreshActiveGitStatus,
+    refreshBranchCompare,
+    refreshGitHistory,
+    worktreePath
+  ])
 
   useEffect(() => {
     if (!activeWorktreeId || !worktreePath || !isBranchVisible || !compareBaseRef || isFolder) {
@@ -5572,6 +5626,8 @@ function SourceControlInner(): React.JSX.Element {
           onChangeBaseRef={() => setBaseRefDialogOpen(true)}
           onRefreshBranchCompare={() => void refreshBranchCompare()}
           branchCompareRefreshDisabled={!branchSummary || branchSummary.status === 'loading'}
+          onManualRefresh={() => void handleManualSourceControlRefresh()}
+          isManualRefreshing={isManualSourceControlRefreshing}
           diffCommentCount={diffCommentCount}
           onExpandNotes={() => setDiffCommentsExpanded(true)}
           branchSummary={branchSummary}

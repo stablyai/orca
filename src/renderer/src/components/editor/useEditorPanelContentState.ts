@@ -287,7 +287,9 @@ export function useEditorPanelContentState({
         const gitScope = getRuntimeGitScope(fileSettings, connectionId)
         const effectiveDiffSource: typeof file.diffSource =
           file.mode === 'edit' ? 'unstaged' : file.diffSource
-        const compareAgainstHead = file.mode === 'edit'
+        // Why: SC Changes / edit Changes view must be WT vs index (`git diff`).
+        // HEAD-vs-WT mixed already-staged hunks into remaining unstaged work (#11133).
+        const compareAgainstHead = false
         const key = inFlightDiffKey(
           { ...file, diffSource: effectiveDiffSource },
           gitScope ?? undefined,
@@ -543,7 +545,8 @@ export function useEditorPanelContentState({
       return
     }
     const current = openFilesRef.current.find((f) => f.id === activeFile.id)
-    if (!current || !isReloadableSingleFileDiffTab(current)) {
+    // Why: edit-mode Changes tabs also bump this nonce on manual SC refresh.
+    if (!current || !(isReloadableSingleFileDiffTab(current) || isChangesMode)) {
       return
     }
     setDiffContents((prev) => {
@@ -555,7 +558,7 @@ export function useEditorPanelContentState({
       return next
     })
     void loadDiffContent(current, { force: true })
-  }, [activeFile?.diffContentReloadNonce, activeFile?.id, loadDiffContent])
+  }, [activeFile?.diffContentReloadNonce, activeFile?.id, isChangesMode, loadDiffContent])
 
   useEffect(() => {
     const nonce = activeFile?.fileContentReloadNonce
