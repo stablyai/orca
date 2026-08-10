@@ -35,6 +35,21 @@ describe('parseFrontMatterFields', () => {
     ])
   })
 
+  it('marks circular YAML alias structures instead of overflowing', () => {
+    const raw = '---\nnode: &node { title: Hello, self: *node }\n---\n'
+    expect(parseFrontMatterFields(raw)).toEqual([
+      { key: 'node', value: 'title: Hello, self: [circular]' }
+    ])
+  })
+
+  it('formats repeated (non-circular) aliases normally', () => {
+    const raw = '---\nbase: &base { a: 1 }\npair:\n  left: *base\n  right: *base\n---\n'
+    expect(parseFrontMatterFields(raw)).toEqual([
+      { key: 'base', value: 'a: 1' },
+      { key: 'pair', value: 'left: a: 1, right: a: 1' }
+    ])
+  })
+
   it('returns null for TOML front matter', () => {
     expect(parseFrontMatterFields('+++\ntitle = "Hi"\n+++\n')).toBeNull()
   })

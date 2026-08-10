@@ -50,24 +50,34 @@ export function stripFrontMatterDelimiters(raw: string): string {
     .trim()
 }
 
-function formatValue(value: unknown): string {
+function formatValue(value: unknown, ancestors = new WeakSet<object>()): string {
   if (value == null) {
     return ''
-  }
-  if (Array.isArray(value)) {
-    return value.map(formatValue).join(', ')
   }
   if (value instanceof Date) {
     return value.toISOString()
   }
-  if (typeof value === 'object') {
+  if (typeof value !== 'object') {
+    return String(value)
+  }
+  // YAML aliases can build self-referencing structures; mark the cycle instead
+  // of recursing forever.
+  if (ancestors.has(value)) {
+    return '[circular]'
+  }
+  ancestors.add(value)
+  try {
+    if (Array.isArray(value)) {
+      return value.map((item) => formatValue(item, ancestors)).join(', ')
+    }
     const entries = Object.entries(value as Record<string, unknown>)
     // Why: fall back to String() for objects with no enumerable entries (e.g. an
     // exotic tagged value) so they don't silently render as an empty cell.
     if (entries.length === 0) {
       return String(value)
     }
-    return entries.map(([key, nested]) => `${key}: ${formatValue(nested)}`).join(', ')
+    return entries.map(([key, nested]) => `${key}: ${formatValue(nested, ancestors)}`).join(', ')
+  } finally {
+    ancestors.delete(value)
   }
-  return String(value)
 }

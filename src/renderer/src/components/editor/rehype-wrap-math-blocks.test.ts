@@ -42,7 +42,7 @@ describe('rehypeWrapMathBlocks', () => {
   })
 
   it('also wraps a math-display pre', () => {
-    const tree = run(root(pre(['language-math', 'math-display'])))
+    const tree = run(root(pre(['math-display'])))
     expect(tree.children![0].properties?.className).toEqual(['math-block'])
   })
 

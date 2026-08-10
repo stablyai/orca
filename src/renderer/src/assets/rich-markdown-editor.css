@@ -1000,6 +1000,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+  line-height: 1;
+}
+
+.rich-markdown-code-block-wrapper .code-block-copy-label {
+  font-size: 12px;
 }
 .rich-markdown-code-block-wrapper:hover .code-block-copy-btn {
   opacity: 1;

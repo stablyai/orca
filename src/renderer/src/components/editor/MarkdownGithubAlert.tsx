@@ -1,5 +1,6 @@
 import type React from 'react'
 import { Info, Lightbulb, MessageSquareWarning, OctagonAlert, TriangleAlert } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
 import { GITHUB_ALERT_TYPES, type GithubAlertType } from './markdown-github-alerts'
 
 const ALERT_ICONS: Record<GithubAlertType, React.ComponentType<{ className?: string }>> = {
@@ -10,12 +11,19 @@ const ALERT_ICONS: Record<GithubAlertType, React.ComponentType<{ className?: str
   caution: OctagonAlert
 }
 
-export const GITHUB_ALERT_TITLES: Record<GithubAlertType, string> = {
-  note: 'Note',
-  tip: 'Tip',
-  important: 'Important',
-  warning: 'Warning',
-  caution: 'Caution'
+export function getGithubAlertTitle(type: GithubAlertType): string {
+  switch (type) {
+    case 'note':
+      return translate('auto.components.editor.MarkdownGithubAlert.8b6fda49fa', 'Note')
+    case 'tip':
+      return translate('auto.components.editor.MarkdownGithubAlert.b28ab35be4', 'Tip')
+    case 'important':
+      return translate('auto.components.editor.MarkdownGithubAlert.eb04b1d571', 'Important')
+    case 'warning':
+      return translate('auto.components.editor.MarkdownGithubAlert.013315d1fa', 'Warning')
+    case 'caution':
+      return translate('auto.components.editor.MarkdownGithubAlert.91dd428e07', 'Caution')
+  }
 }
 
 // Reads the alert type off the blockquote className the remark plugin attached.

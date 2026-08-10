@@ -24,7 +24,7 @@ import { extractFrontMatter } from './markdown-frontmatter'
 import { MarkdownFrontMatterView } from './MarkdownFrontMatterView'
 import { remarkGithubAlerts } from './markdown-github-alerts'
 import { rehypeWrapMathBlocks } from './rehype-wrap-math-blocks'
-import { getGithubAlertType, GITHUB_ALERT_TITLES, GithubAlertIcon } from './MarkdownGithubAlert'
+import { getGithubAlertType, getGithubAlertTitle, GithubAlertIcon } from './MarkdownGithubAlert'
 import {
   Check,
   ChevronDown,
@@ -305,7 +305,10 @@ function extractCodeBlockLanguage(children: React.ReactNode): string | null {
       continue
     }
     const className = (child.props as { className?: unknown }).className
-    const match = typeof className === 'string' ? className.match(/language-([\w-]+)/) : null
+    // Why: bounded charset (not \S+) — sanitize passes any `language-*` class, and
+    // the label renders raw; `#+.` keep c#/f#/c++/vb.net intact.
+    const match =
+      typeof className === 'string' ? className.match(/(?:^|\s)language-([\w#+.-]{1,32})/) : null
     if (match) {
       return match[1]
     }
@@ -1753,7 +1756,7 @@ export default function MarkdownPreview({
             {alertType ? (
               <p className="markdown-alert-title">
                 <GithubAlertIcon type={alertType} />
-                {GITHUB_ALERT_TITLES[alertType]}
+                {getGithubAlertTitle(alertType)}
               </p>
             ) : null}
             {children}

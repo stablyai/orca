@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { Copy, Check } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 
 type CodeBlockCopyButtonProps = React.HTMLAttributes<HTMLPreElement> & {
@@ -75,10 +76,14 @@ export default function CodeBlockCopyButton({
       {language ? (
         <div className="code-block-header">
           <span className="code-block-language">{language}</span>
-          <button
+          {/* code-block-copy-btn is a functional marker: export scrubbing
+              removes the button from PDF/HTML output by that selector. */}
+          <Button
             ref={setCopyButtonRef}
             type="button"
-            className="code-block-copy-btn"
+            variant="ghost"
+            size="xs"
+            className="code-block-copy-btn text-muted-foreground"
             onClick={handleCopy}
             aria-label={translate(
               'auto.components.editor.CodeBlockCopyButton.1f9f4def45',
@@ -88,15 +93,13 @@ export default function CodeBlockCopyButton({
           >
             {copied ? (
               <>
-                <Check size={13} />
-                <span className="code-block-copy-label">
-                  {translate('auto.components.editor.CodeBlockCopyButton.28921f5bf9', 'Copied')}
-                </span>
+                <Check />
+                {translate('auto.components.editor.CodeBlockCopyButton.28921f5bf9', 'Copied')}
               </>
             ) : (
-              <Copy size={13} />
+              <Copy />
             )}
-          </button>
+          </Button>
         </div>
       ) : null}
       <pre {...props}>{children}</pre>

@@ -223,6 +223,12 @@
   --annotation-highlight: #f59e0b;
   --markdown-search-match: #facc15;
   --markdown-search-match-active: #fb923c;
+  /* GitHub-style alert accents (> [!NOTE] etc.), matching github.com's palette. */
+  --markdown-alert-note: #0969da;
+  --markdown-alert-tip: #1a7f37;
+  --markdown-alert-important: #8250df;
+  --markdown-alert-warning: #9a6700;
+  --markdown-alert-caution: #cf222e;
   /* Why: tab-group splits use a dedicated divider — `--border` is too faint on
      card/editor surfaces when panes are side-by-side or stacked. Default must
      meet >=3:1 against `--card`, not only the hover/drag strong state. */
@@ -330,6 +336,11 @@
   --annotation-highlight: #fbbf24;
   --markdown-search-match: #facc15;
   --markdown-search-match-active: #fb923c;
+  --markdown-alert-note: #4493f8;
+  --markdown-alert-tip: #3fb950;
+  --markdown-alert-important: #ab7df8;
+  --markdown-alert-warning: #d29922;
+  --markdown-alert-caution: #f85149;
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --tab-group-split-divider: #71717a;
   --tab-group-split-divider-strong: #a1a1aa;

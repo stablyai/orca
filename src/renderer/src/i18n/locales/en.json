@@ -13486,6 +13486,13 @@
           "59b6cd874b": "code",
           "ba149053d5": "markdown"
         },
+        "MarkdownGithubAlert": {
+          "8b6fda49fa": "Note",
+          "b28ab35be4": "Tip",
+          "eb04b1d571": "Important",
+          "013315d1fa": "Warning",
+          "91dd428e07": "Caution"
+        },
         "MarkdownPreview": {
           "e4683f70c4": "Cancel",
           "d737791433": "Add note for the AI",

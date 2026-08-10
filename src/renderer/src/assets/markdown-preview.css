@@ -760,30 +760,6 @@
   user-select: none;
 }
 
-.code-block-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: none;
-  border-radius: 5px;
-  padding: 3px 7px;
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  line-height: 1;
-  transition:
-    background-color 0.12s ease,
-    color 0.12s ease;
-}
-.code-block-copy-btn:hover {
-  background: var(--accent);
-  color: var(--foreground);
-}
-
-.code-block-copy-label {
-  font-size: 12px;
-}
-
 /* Mermaid diagram container */
 .mermaid-block svg {
   max-width: 100%;
@@ -922,6 +898,7 @@
 /* ── GitHub-style alerts (> [!NOTE] etc.) ─────────────── */
 .markdown-body .markdown-alert {
   --markdown-alert-accent: var(--border);
+
   border-left-color: var(--markdown-alert-accent);
 }
 
@@ -947,35 +924,20 @@
   flex-shrink: 0;
 }
 
-.markdown-light .markdown-body .markdown-alert-note {
-  --markdown-alert-accent: #0969da;
+.markdown-body .markdown-alert-note {
+  --markdown-alert-accent: var(--markdown-alert-note);
 }
-.markdown-dark .markdown-body .markdown-alert-note {
-  --markdown-alert-accent: #4493f8;
+.markdown-body .markdown-alert-tip {
+  --markdown-alert-accent: var(--markdown-alert-tip);
 }
-.markdown-light .markdown-body .markdown-alert-tip {
-  --markdown-alert-accent: #1a7f37;
+.markdown-body .markdown-alert-important {
+  --markdown-alert-accent: var(--markdown-alert-important);
 }
-.markdown-dark .markdown-body .markdown-alert-tip {
-  --markdown-alert-accent: #3fb950;
+.markdown-body .markdown-alert-warning {
+  --markdown-alert-accent: var(--markdown-alert-warning);
 }
-.markdown-light .markdown-body .markdown-alert-important {
-  --markdown-alert-accent: #8250df;
-}
-.markdown-dark .markdown-body .markdown-alert-important {
-  --markdown-alert-accent: #ab7df8;
-}
-.markdown-light .markdown-body .markdown-alert-warning {
-  --markdown-alert-accent: #9a6700;
-}
-.markdown-dark .markdown-body .markdown-alert-warning {
-  --markdown-alert-accent: #d29922;
-}
-.markdown-light .markdown-body .markdown-alert-caution {
-  --markdown-alert-accent: #cf222e;
-}
-.markdown-dark .markdown-body .markdown-alert-caution {
-  --markdown-alert-accent: #f85149;
+.markdown-body .markdown-alert-caution {
+  --markdown-alert-accent: var(--markdown-alert-caution);
 }
 
 .markdown-body table {
