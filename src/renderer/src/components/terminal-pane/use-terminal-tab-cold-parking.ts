@@ -31,10 +31,7 @@ import {
   selectEvictionExemptTerminalTabLayoutKey
 } from './terminal-eviction-exempt-tabs'
 import { selectSleepingRecordParkExemptTabIds } from './sleeping-record-park-exemption'
-import {
-  canWatcherCoverParkedTerminalTab,
-  disposeParkedTerminalWatchersForWorktree
-} from './terminal-parked-tab-watchers'
+import { canWatcherCoverParkedTerminalTab } from './terminal-parked-tab-watchers'
 import {
   getTerminalParkingAssignmentsKey,
   getTerminalParkingInputsKey,
@@ -378,8 +375,6 @@ export function useTerminalTabColdParking(args: {
     parkedTabIds: parkedTerminalTabIds,
     activationDeferredMountTabIds
   })
-
-  useEffect(() => () => disposeParkedTerminalWatchersForWorktree(worktreeId), [worktreeId])
 
   return parkedTerminalTabIds
 }
