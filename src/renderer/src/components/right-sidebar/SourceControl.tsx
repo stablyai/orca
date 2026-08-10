@@ -1185,6 +1185,7 @@ function SourceControlInner(): React.JSX.Element {
   >({})
   const gitHistoryRequestSeqRef = useRef(0)
   const gitHistoryRequestByWorktreeRef = useRef<Record<string, number>>({})
+  const stagedDiscardAbortControllerRef = useRef<AbortController | null>(null)
   const gitHistoryState = activeWorktreeId
     ? (gitHistoryByWorktree[activeWorktreeId] ?? EMPTY_GIT_HISTORY_STATE)
     : EMPTY_GIT_HISTORY_STATE
@@ -1213,6 +1214,12 @@ function SourceControlInner(): React.JSX.Element {
 
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
+  useEffect(() => {
+    return () => {
+      stagedDiscardAbortControllerRef.current?.abort()
+      stagedDiscardAbortControllerRef.current = null
+    }
+  }, [activeWorktreeId])
   const { expandedSubmoduleKeys, submoduleStatusByKey, toggleSubmodule } =
     useSourceControlSubmoduleStatus({
       activeWorktreeId,
@@ -5392,6 +5399,9 @@ function SourceControlInner(): React.JSX.Element {
       }
       const runtimeEnvironmentId =
         useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+      stagedDiscardAbortControllerRef.current?.abort()
+      const abortController = new AbortController()
+      stagedDiscardAbortControllerRef.current = abortController
       const editorPaths = getStagedDiscardEditorPaths(grouped.staged, filePaths)
       const releaseSaveHolds = await Promise.all(
         editorPaths.map((relativePath) =>
@@ -5412,22 +5422,28 @@ function SourceControlInner(): React.JSX.Element {
             worktreePath,
             connectionId: getConnectionId(activeWorktreeId) ?? undefined
           },
-          filePaths
+          filePaths,
+          abortController.signal
         )
         throwIfGitStagedDiscardFailed(receipt)
       } finally {
         try {
-          for (const relativePath of editorPaths) {
-            notifyEditorExternalFileChange({
-              worktreeId: activeWorktreeId,
-              worktreePath,
-              relativePath,
-              runtimeEnvironmentId
-            })
+          if (!abortController.signal.aborted) {
+            for (const relativePath of editorPaths) {
+              notifyEditorExternalFileChange({
+                worktreeId: activeWorktreeId,
+                worktreePath,
+                relativePath,
+                runtimeEnvironmentId
+              })
+            }
           }
         } finally {
           for (const release of releaseSaveHolds) {
             release()
+          }
+          if (stagedDiscardAbortControllerRef.current === abortController) {
+            stagedDiscardAbortControllerRef.current = null
           }
         }
       }
@@ -5459,6 +5475,7 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
       setIsExecutingBulk(true)
+      let canceled = false
       try {
         // Why: onError fires per failure; aggregate into one toast so a partial failure across N files doesn't spam N toasts.
         const errors: unknown[] = []
@@ -5468,6 +5485,7 @@ function SourceControlInner(): React.JSX.Element {
           discardOne: discardSingle,
           onError: (error) => {
             errors.push(error)
+            canceled ||= error instanceof Error && error.name === 'AbortError'
             console.error('[SourceControl] discard-all failure', error)
           }
         })
@@ -5508,7 +5526,9 @@ function SourceControlInner(): React.JSX.Element {
         }
       } finally {
         try {
-          await refreshActiveGitStatusAfterMutation()
+          if (!canceled) {
+            await refreshActiveGitStatusAfterMutation()
+          }
         } finally {
           setIsExecutingBulk(false)
         }

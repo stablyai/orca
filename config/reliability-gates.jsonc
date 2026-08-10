@@ -38,7 +38,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/git/discard-index-semantics.test.ts src/main/git/status-discard-symlink.test.ts src/main/git/status-wsl-pathspecs.test.ts src/main/git/status.test.ts src/shared/git-discard-status.test.ts src/shared/git-binary-compatibility.test.ts src/relay/git-handler.test.ts src/relay/integration.test.ts src/renderer/src/components/editor/editor-autosave-controller.test.ts src/renderer/src/components/right-sidebar/discard-all-sequence.test.ts src/renderer/src/components/right-sidebar/source-control-discard-confirmation.test.ts src/renderer/src/components/right-sidebar/SourceControl.preview-open.test.tsx --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-git-staged-discard.test.ts src/main/runtime/rpc/methods/git.test.ts src/main/runtime/rpc/methods/status-git-discard-capability.test.ts src/renderer/src/runtime/runtime-git-client.test.ts src/shared/git-index-preserving-discard-capability.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/git-staged-discard-operation.test.ts src/shared/git-staged-discard-receipt.test.ts src/main/providers/ssh-git-staged-discard-capability.test.ts src/main/providers/ssh-git-provider.test.ts src/main/ipc/filesystem.test.ts src/main/runtime/mobile-rpc-allowlist.test.ts src/relay/git-staged-discard-receipt-ledger.test.ts src/renderer/src/runtime/runtime-git-staged-discard-client.test.ts src/renderer/src/runtime/runtime-git-staged-discard-skew.test.ts src/renderer/src/web/web-preload-api.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/git-staged-discard-operation.test.ts src/shared/git-staged-discard-receipt.test.ts src/shared/git-staged-discard-receipt-performance.test.ts src/main/providers/ssh-git-staged-discard-capability.test.ts src/main/providers/ssh-git-provider.test.ts src/main/ipc/filesystem.test.ts src/main/runtime/mobile-rpc-allowlist.test.ts src/relay/git-staged-discard-receipt-ledger.test.ts src/renderer/src/runtime/runtime-git-staged-discard-client.test.ts src/renderer/src/runtime/runtime-git-staged-discard-skew.test.ts src/renderer/src/web/web-preload-api.test.ts --reporter=dot",
         "pnpm --dir mobile exec vitest run src/source-control/mobile-git-index-preserving-discard.test.ts --reporter=dot",
         "pnpm exec playwright test tests/e2e/source-control-discard-confirmation.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-source-control-discard.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
@@ -63,6 +63,7 @@
         "src/shared/git-index-preserving-discard-capability.test.ts",
         "src/shared/git-staged-discard-operation.test.ts",
         "src/shared/git-staged-discard-receipt.test.ts",
+        "src/shared/git-staged-discard-receipt-performance.test.ts",
         "src/main/providers/ssh-git-staged-discard-capability.test.ts",
         "src/main/providers/ssh-git-provider.test.ts",
         "src/main/ipc/filesystem.test.ts",
@@ -93,6 +94,10 @@
             "rejects contradictory exact path partitions",
             "preserves replay identity across eviction and restart without duplicate mutation"
           ]
+        },
+        {
+          "file": "src/shared/git-staged-discard-receipt-performance.test.ts",
+          "assertions": ["bounds 256 by 100-path durable receipts without whole-ledger rewrites"]
         },
         {
           "file": "src/shared/git-discard-status.test.ts",
@@ -168,7 +173,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Each staged operation adds one tracked-status preflight with untracked scanning disabled and one combined restore per 100 expanded pathspecs. Paired runtimes add one status proof; direct SSH caches one positive capability probe per provider and sends one mutation request. Receipt polling occurs only while settlement is unknown and exponentially backs off from 250ms to 5s. Each host durably retains at most 256 small receipts for 24 hours, refuses capacity rather than losing replay identity, and adds no steady-state polling, per-path subprocess, or provider fanout."
+        "evidence": "Each staged operation adds one tracked-status preflight with untracked scanning disabled and one combined restore per 100 expanded pathspecs. Paired runtimes add one status proof; direct SSH caches one positive capability probe per provider and sends one mutation request. Receipt polling occurs only while settlement is unknown and exponentially backs off from 250ms to 5s. Each host retains at most 256 live receipts within a 4 MiB aggregate byte budget, journals incremental updates with periodic 8 MiB compaction, bounds skewed replay fences, and adds no steady-state polling, per-path subprocess, or provider fanout."
       },
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",

@@ -1007,7 +1007,12 @@ export class RuntimeGitCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const scope = `${target.connectionId ?? 'local'}\0${target.worktree.path}`
     const receipt = this.stagedDiscardReceipts.get(scope, operationId)
-    if (receipt?.state !== 'pending' || !target.connectionId) {
+    if (
+      !receipt ||
+      !target.connectionId ||
+      receipt.state === 'succeeded' ||
+      (receipt.state === 'failed' && receipt.mutation !== 'possible')
+    ) {
       return receipt
     }
     const provider = getSshGitProvider(target.connectionId)
@@ -1021,7 +1026,7 @@ export class RuntimeGitCommands {
     )
     return authoritative === null
       ? receipt
-      : this.stagedDiscardReceipts.update(scope, operationId, authoritative)
+      : this.stagedDiscardReceipts.reconcileAuthoritative(scope, operationId, authoritative)
   }
 
   async discardRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {

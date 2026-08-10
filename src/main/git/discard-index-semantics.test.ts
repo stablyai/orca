@@ -314,6 +314,30 @@ describe('discard index/worktree semantics', () => {
     expect(git(repo, 'status', '--porcelain=v1')).toBe('')
   })
 
+  it('deletes only selected staged files from an unborn repository', async () => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'orca-discard-unborn-'))
+    repos.push(repo)
+    git(repo, 'init', '-q')
+    writeFileSync(path.join(repo, 'selected.txt'), 'selected\n')
+    writeFileSync(path.join(repo, 'unrelated.txt'), 'unrelated\n')
+    git(repo, 'add', 'selected.txt', 'unrelated.txt')
+    const unrelatedBefore = snapshot(repo, 'unrelated.txt')
+
+    await bulkDiscardStagedChanges(repo, ['selected.txt'])
+
+    expect(snapshot(repo, 'selected.txt')).toEqual({
+      cachedDiff: '',
+      index: '',
+      status: 'A  unrelated.txt\n',
+      worktree: null
+    })
+    const unrelatedAfter = snapshot(repo, 'unrelated.txt')
+    expect(unrelatedAfter.cachedDiff).toBe(unrelatedBefore.cachedDiff)
+    expect(unrelatedAfter.index).toBe(unrelatedBefore.index)
+    expect(unrelatedAfter.worktree).toBe(unrelatedBefore.worktree)
+    expect(unrelatedAfter.status).toBe('A  unrelated.txt\n')
+  })
+
   it('rejects a conflicted staged discard without changing index or worktree state', async () => {
     const repo = initRepo()
     const baseBranch = git(repo, 'branch', '--show-current').trim()

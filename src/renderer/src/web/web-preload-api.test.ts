@@ -3601,6 +3601,86 @@ describe('web git preload API', () => {
     ])
   })
 
+  it('returns reconnect-aware pending after losing mutation and first receipt transports', async () => {
+    let receiptReads = 0
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'status.get') {
+            return Promise.resolve({
+              id: method,
+              ok: true,
+              result: { capabilities: [GIT_STAGED_DISCARD_RUNTIME_CAPABILITY] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'repo.list') {
+            return Promise.resolve({
+              id: method,
+              ok: true,
+              result: { repos: [{ id: 'repo-1' }] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'worktree.detectedList') {
+            return Promise.resolve({
+              id: method,
+              ok: true,
+              result: {
+                repoId: 'repo-1',
+                authoritative: true,
+                worktrees: [{ id: 'wt-1', repoId: 'repo-1', path: '/workspace/repo' }]
+              },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'git.bulkDiscardStaged') {
+            return Promise.reject(new Error('mutation transport lost'))
+          }
+          receiptReads += 1
+          if (receiptReads === 1) {
+            return Promise.reject(new Error('receipt transport lost'))
+          }
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {
+              operationId: 'op-web',
+              state: 'succeeded',
+              mutation: 'complete',
+              affectedPaths: ['file.txt'],
+              completedPaths: ['file.txt'],
+              uncertainPaths: [],
+              remainingPaths: []
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.git.bulkDiscardStaged({
+        worktreePath: '/workspace/repo',
+        filePaths: ['file.txt'],
+        operationId: 'op-web'
+      })
+    ).resolves.toMatchObject({ state: 'pending', uncertainPaths: ['file.txt'] })
+    await expect(
+      globals.window.api.git.getStagedDiscardReceipt({
+        worktreePath: '/workspace/repo',
+        operationId: 'op-web'
+      })
+    ).resolves.toMatchObject({ state: 'succeeded' })
+    expect(receiptReads).toBe(2)
+  })
+
   it('rejects an old host before resolving or mutating its worktree', async () => {
     const runtimeCalls: string[] = []
     vi.doMock('./web-runtime-client', () => ({

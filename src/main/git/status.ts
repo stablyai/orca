@@ -2279,6 +2279,7 @@ export async function bulkDiscardStagedChangesWithReceipt(
     if (selection.hasConflict) {
       throw new Error('Cannot discard staged changes for conflicted paths')
     }
+    const source = await resolveGitStagedDiscardSource(worktreePath, options)
     return projectGitStagedDiscardReceiptPaths(
       await runGitStagedDiscardBatches(
         operationId,
@@ -2286,7 +2287,10 @@ export async function bulkDiscardStagedChangesWithReceipt(
         BULK_CHUNK_SIZE,
         async (chunk) => {
           await gitExecFileAsync(
-            gitStagedDiscardArgs(chunk.map((filePath) => literalPathspec(filePath, options))),
+            gitStagedDiscardArgs(
+              chunk.map((filePath) => literalPathspec(filePath, options)),
+              source
+            ),
             gitOptionsForWorktree(worktreePath, options)
           )
         }
@@ -2298,6 +2302,28 @@ export async function bulkDiscardStagedChangesWithReceipt(
   } finally {
     invalidateGitReadCaches()
   }
+}
+
+async function resolveGitStagedDiscardSource(
+  worktreePath: string,
+  options: GitRuntimeOptions
+): Promise<string> {
+  const gitOptions = gitOptionsForWorktree(worktreePath, options)
+  try {
+    const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', 'HEAD'], gitOptions)
+    const head = stdout.trim()
+    if (head) {
+      return head
+    }
+  } catch {
+    // Status already established repository ownership; a missing HEAD means an unborn branch.
+  }
+  const { stdout } = await gitExecFileAsync(['mktree'], { ...gitOptions, stdin: '' })
+  const emptyTree = stdout.trim()
+  if (!emptyTree) {
+    throw new Error('Git did not create an empty tree for the unborn repository')
+  }
+  return emptyTree
 }
 
 /**

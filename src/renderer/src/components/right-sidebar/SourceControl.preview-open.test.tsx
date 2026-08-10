@@ -477,7 +477,8 @@ describe('SourceControl preview row opens', () => {
         worktreeId: mocks.activeWorktree.id,
         worktreePath: '/repo/wt'
       }),
-      ['src/staged.ts']
+      ['src/staged.ts'],
+      expect.anything()
     )
     expect(mocks.calls.notifyEditorExternalFileChange).toHaveBeenCalledWith({
       worktreeId: mocks.activeWorktree.id,
@@ -546,8 +547,6 @@ describe('SourceControl preview row opens', () => {
       settle = resolve
     })
     const release = vi.fn()
-    mocks.calls.holdEditorSaveQuiescence.mockResolvedValueOnce(release)
-    mocks.calls.bulkDiscardStagedRuntimeGitPaths.mockReturnValueOnce(delayed)
     resetState({
       gitStatusByWorktree: {
         [mocks.activeWorktree.id]: [
@@ -555,6 +554,8 @@ describe('SourceControl preview row opens', () => {
         ]
       }
     })
+    mocks.calls.holdEditorSaveQuiescence.mockImplementation(async () => release)
+    mocks.calls.bulkDiscardStagedRuntimeGitPaths.mockReturnValueOnce(delayed)
     renderSourceControl()
 
     act(() =>
@@ -597,6 +598,61 @@ describe('SourceControl preview row opens', () => {
     expect(mocks.calls.notifyEditorExternalFileChange).toHaveBeenCalled()
     expect(mocks.calls.refreshGitStatusForWorktree).toHaveBeenCalled()
     expect(release).toHaveBeenCalledOnce()
+  })
+
+  it('cancels staged settlement on worktree switch without stale reconciliation', async () => {
+    let observedSignal: AbortSignal | undefined
+    resetState({
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({ path: 'src/staged.ts', area: 'staged', status: 'modified' })
+        ]
+      }
+    })
+    mocks.calls.bulkDiscardStagedRuntimeGitPaths.mockImplementationOnce(
+      async (_context: unknown, _paths: string[], signal?: AbortSignal) => {
+        observedSignal = signal
+        return new Promise((_, reject) => {
+          signal?.addEventListener(
+            'abort',
+            () => {
+              const error = new Error('canceled')
+              error.name = 'AbortError'
+              reject(error)
+            },
+            { once: true }
+          )
+        })
+      }
+    )
+    renderSourceControl()
+    act(() =>
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Discard all"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    const confirmButton = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Discard all'
+    )
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    mocks.state.activeWorktreeId = null
+    await act(async () => {
+      root.render(
+        <TooltipProvider>
+          <SourceControl />
+        </TooltipProvider>
+      )
+      await Promise.resolve()
+    })
+
+    expect(observedSignal).toBeDefined()
+    expect(mocks.calls.holdEditorSaveQuiescence).toHaveBeenCalledOnce()
+    expect(mocks.calls.notifyEditorExternalFileChange).not.toHaveBeenCalled()
+    expect(mocks.calls.refreshGitStatusForWorktree).not.toHaveBeenCalled()
   })
 
   it('keeps nested-only submodule rows non-stageable from the parent repo', () => {

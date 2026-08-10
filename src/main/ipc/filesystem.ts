@@ -2284,7 +2284,11 @@ export function registerFilesystemHandlers(
       if (args.connectionId) {
         const scope = `${args.connectionId}\0${args.worktreePath}`
         const receipt = stagedDiscardReceipts.get(scope, args.operationId)
-        if (receipt?.state !== 'pending') {
+        if (
+          !receipt ||
+          receipt.state === 'succeeded' ||
+          (receipt.state === 'failed' && receipt.mutation !== 'possible')
+        ) {
           return receipt
         }
         const provider = getSshGitProvider(args.connectionId)
@@ -2298,7 +2302,7 @@ export function registerFilesystemHandlers(
         )
         return authoritative === null
           ? receipt
-          : stagedDiscardReceipts.update(scope, args.operationId, authoritative)
+          : stagedDiscardReceipts.reconcileAuthoritative(scope, args.operationId, authoritative)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return stagedDiscardReceipts.get(worktreePath, args.operationId)

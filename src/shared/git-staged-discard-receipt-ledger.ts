@@ -4,52 +4,55 @@ import {
   gitStagedDiscardOperationTimestamp,
   type GitStagedDiscardReceipt
 } from './git-staged-discard-receipt'
+import {
+  assertGitStagedDiscardReceiptLedgerAvailable,
+  createGitStagedDiscardReceiptEntry,
+  createGitStagedDiscardReceiptLedgerSnapshot,
+  durableGitStagedDiscardReceiptEntry,
+  gitStagedDiscardReceiptEntriesBytes,
+  gitStagedDiscardReceiptKey,
+  interruptedGitStagedDiscardReceipt,
+  isInterruptedGitStagedDiscardReceipt,
+  MAX_RETIRED_SKEWED_OPERATION_IDS,
+  parseGitStagedDiscardReceiptLedgerSnapshot,
+  persistGitStagedDiscardReceiptLedger,
+  sameGitStagedDiscardReceipt,
+  type GitStagedDiscardReceiptEntry,
+  type GitStagedDiscardReceiptLedgerChange,
+  type GitStagedDiscardReceiptLedgerOptions,
+  type GitStagedDiscardReceiptLedgerSnapshot,
+  type GitStagedDiscardReceiptLedgerStorage
+} from './git-staged-discard-receipt-ledger-state'
 
-type ReceiptEntry = {
-  scope: string
-  operationId: string
-  fingerprint: string
-  createdAt: number
-  receipt: GitStagedDiscardReceipt
-  promise: Promise<GitStagedDiscardReceipt>
-}
-
-export type GitStagedDiscardReceiptLedgerSnapshot = {
-  version: 1
-  rejectUnknownLegacyOperationIds: boolean
-  retiredOperationTimestamp: number
-  entries: Omit<ReceiptEntry, 'promise'>[]
-}
-
-export type GitStagedDiscardReceiptLedgerStorage = {
-  load(): unknown
-  save(snapshot: GitStagedDiscardReceiptLedgerSnapshot): void
-}
-
-export type GitStagedDiscardReceiptLedgerOptions = {
-  maxReceipts?: number
-  retentionMs?: number
-  storage?: GitStagedDiscardReceiptLedgerStorage
-  now?: () => number
-}
+export type {
+  GitStagedDiscardReceiptLedgerChange,
+  GitStagedDiscardReceiptLedgerOptions,
+  GitStagedDiscardReceiptLedgerSnapshot,
+  GitStagedDiscardReceiptLedgerStorage
+} from './git-staged-discard-receipt-ledger-state'
 
 const DEFAULT_MAX_RECEIPTS = 256
 const DEFAULT_RETENTION_MS = 24 * 60 * 60 * 1_000
+const DEFAULT_MAX_BYTES = 4 * 1024 * 1024
+const MAX_TRUSTED_CLIENT_CLOCK_SKEW_MS = 5 * 60 * 1_000
 
 export class GitStagedDiscardReceiptLedger {
-  private readonly entries = new Map<string, ReceiptEntry>()
+  private readonly entries = new Map<string, GitStagedDiscardReceiptEntry>()
   private readonly maxReceipts: number
   private readonly retentionMs: number
+  private readonly maxBytes: number
   private readonly storage?: GitStagedDiscardReceiptLedgerStorage
   private readonly now: () => number
   private rejectUnknownLegacyOperationIds = false
   private retiredOperationTimestamp = -1
+  private readonly retiredSkewedOperationIds = new Set<string>()
   private loadError: Error | null = null
 
   constructor(options: number | GitStagedDiscardReceiptLedgerOptions = {}) {
     const resolved = typeof options === 'number' ? { maxReceipts: options } : options
     this.maxReceipts = resolved.maxReceipts ?? DEFAULT_MAX_RECEIPTS
     this.retentionMs = resolved.retentionMs ?? DEFAULT_RETENTION_MS
+    this.maxBytes = resolved.maxBytes ?? DEFAULT_MAX_BYTES
     this.storage = resolved.storage
     this.now = resolved.now ?? Date.now
     this.hydrate()
@@ -63,8 +66,8 @@ export class GitStagedDiscardReceiptLedger {
     operation: () => Promise<GitStagedDiscardReceipt>
   ): Promise<GitStagedDiscardReceipt> {
     try {
-      this.assertAvailable()
-      const existing = this.entries.get(receiptKey(scope, operationId))
+      assertGitStagedDiscardReceiptLedgerAvailable(this.loadError)
+      const existing = this.entries.get(gitStagedDiscardReceiptKey(scope, operationId))
       if (existing) {
         if (existing.fingerprint !== fingerprint) {
           throw new Error('Staged discard operation ID was reused')
@@ -73,11 +76,19 @@ export class GitStagedDiscardReceiptLedger {
       }
       this.prepareNewOperation(operationId)
       assertGitStagedDiscardReceipt(pending, operationId, pending.affectedPaths)
-      const entry = this.startEntry(scope, operationId, fingerprint, pending)
+      const entry = createGitStagedDiscardReceiptEntry(
+        scope,
+        operationId,
+        fingerprint,
+        this.now(),
+        pending
+      )
+      this.entries.set(gitStagedDiscardReceiptKey(scope, operationId), entry)
       try {
-        this.persist()
+        const removedKeys = this.evictForByteBound(entry)
+        this.persist({ upsert: durableGitStagedDiscardReceiptEntry(entry), removedKeys })
       } catch (error) {
-        this.entries.delete(receiptKey(scope, operationId))
+        this.entries.delete(gitStagedDiscardReceiptKey(scope, operationId))
         throw error
       }
       entry.promise = Promise.resolve()
@@ -97,56 +108,46 @@ export class GitStagedDiscardReceiptLedger {
   }
 
   get(scope: string, operationId: string): GitStagedDiscardReceipt | null {
-    this.assertAvailable()
-    return this.entries.get(receiptKey(scope, operationId))?.receipt ?? null
+    assertGitStagedDiscardReceiptLedgerAvailable(this.loadError)
+    return this.entries.get(gitStagedDiscardReceiptKey(scope, operationId))?.receipt ?? null
   }
 
-  update(
+  reconcileAuthoritative(
     scope: string,
     operationId: string,
     value: GitStagedDiscardReceipt
   ): GitStagedDiscardReceipt | null {
-    this.assertAvailable()
-    const entry = this.entries.get(receiptKey(scope, operationId))
+    assertGitStagedDiscardReceiptLedgerAvailable(this.loadError)
+    const entry = this.entries.get(gitStagedDiscardReceiptKey(scope, operationId))
     if (!entry) {
       return null
     }
-    return this.settle(entry, value)
+    return this.settle(entry, value, true)
   }
 
-  private startEntry(
-    scope: string,
-    operationId: string,
-    fingerprint: string,
-    pending: GitStagedDiscardReceipt
-  ): ReceiptEntry {
-    const entry: ReceiptEntry = {
-      scope,
-      operationId,
-      fingerprint,
-      createdAt: this.now(),
-      receipt: pending,
-      promise: Promise.resolve(pending)
-    }
-    this.entries.set(receiptKey(scope, operationId), entry)
-    return entry
-  }
-
-  private settle(entry: ReceiptEntry, value: GitStagedDiscardReceipt): GitStagedDiscardReceipt {
+  private settle(
+    entry: GitStagedDiscardReceiptEntry,
+    value: GitStagedDiscardReceipt,
+    allowInterruptedReconciliation = false
+  ): GitStagedDiscardReceipt {
     const receipt = assertGitStagedDiscardReceipt(
       value,
       entry.operationId,
       entry.receipt.affectedPaths
     )
-    if (entry.receipt.state !== 'pending') {
-      if (receipt.state === 'pending' || sameReceipt(entry.receipt, receipt)) {
+    if (
+      entry.receipt.state !== 'pending' &&
+      !(allowInterruptedReconciliation && isInterruptedGitStagedDiscardReceipt(entry.receipt))
+    ) {
+      if (receipt.state === 'pending' || sameGitStagedDiscardReceipt(entry.receipt, receipt)) {
         return entry.receipt
       }
       throw new Error('The Git owner returned contradictory staged discard settlements')
     }
     entry.receipt = receipt
     entry.promise = Promise.resolve(receipt)
-    this.persist()
+    const removedKeys = this.evictForByteBound(entry)
+    this.persist({ upsert: durableGitStagedDiscardReceiptEntry(entry), removedKeys })
     return receipt
   }
 
@@ -154,35 +155,97 @@ export class GitStagedDiscardReceiptLedger {
     const now = this.now()
     this.evictExpired(now)
     const timestamp = gitStagedDiscardOperationTimestamp(operationId)
+    if (this.retiredSkewedOperationIds.has(operationId)) {
+      throw new Error('Staged discard operation is outside the replay window')
+    }
     if (timestamp === null && this.rejectUnknownLegacyOperationIds) {
       throw new Error('This staged discard operation predates the retained replay window')
     }
     if (timestamp !== null && timestamp <= this.retiredOperationTimestamp) {
       throw new Error('Staged discard operation is outside the replay window')
     }
-    if (this.entries.size >= this.maxReceipts) {
-      throw new Error('Too many staged discard operations are retained for safe replay')
+    const removedKeys: string[] = []
+    while (this.entries.size >= this.maxReceipts) {
+      const candidate = [...this.entries.entries()].find(
+        ([, entry]) => entry.receipt.state !== 'pending' && this.canRetire(entry)
+      )
+      if (!candidate) {
+        throw new Error('Too many staged discard operations are retained for safe replay')
+      }
+      const [key, entry] = candidate
+      this.retireEntry(entry)
+      this.entries.delete(key)
+      removedKeys.push(key)
+    }
+    if (removedKeys.length > 0) {
+      this.persist({ removedKeys })
     }
   }
 
   private evictExpired(now: number): void {
-    let changed = false
+    const removedKeys: string[] = []
     for (const [key, entry] of this.entries) {
       if (entry.receipt.state === 'pending' || entry.createdAt > now - this.retentionMs) {
         continue
       }
-      const timestamp = gitStagedDiscardOperationTimestamp(entry.operationId)
-      if (timestamp === null) {
-        this.rejectUnknownLegacyOperationIds = true
-      } else {
-        this.retiredOperationTimestamp = Math.max(this.retiredOperationTimestamp, timestamp)
+      if (!this.retireEntry(entry)) {
+        continue
       }
       this.entries.delete(key)
-      changed = true
+      removedKeys.push(key)
     }
-    if (changed) {
-      this.persist()
+    if (removedKeys.length > 0) {
+      this.persist({ removedKeys })
     }
+  }
+
+  private evictForByteBound(newEntry?: GitStagedDiscardReceiptEntry): string[] {
+    const removedKeys: string[] = []
+    while (
+      gitStagedDiscardReceiptEntriesBytes(this.entries.values()) +
+        this.retiredSkewedOperationIds.size * 130 >
+      this.maxBytes
+    ) {
+      const candidate = [...this.entries.entries()].find(
+        ([, entry]) =>
+          entry !== newEntry &&
+          entry.receipt.state !== 'pending' &&
+          (newEntry !== undefined || !isInterruptedGitStagedDiscardReceipt(entry.receipt)) &&
+          this.canRetire(entry)
+      )
+      if (!candidate) {
+        throw new Error('Staged discard operations exceed the retained byte bound')
+      }
+      const [key, entry] = candidate
+      this.retireEntry(entry)
+      this.entries.delete(key)
+      removedKeys.push(key)
+    }
+    return removedKeys
+  }
+
+  private canRetire(entry: GitStagedDiscardReceiptEntry): boolean {
+    const timestamp = gitStagedDiscardOperationTimestamp(entry.operationId)
+    return (
+      timestamp === null ||
+      Math.abs(timestamp - entry.createdAt) <= MAX_TRUSTED_CLIENT_CLOCK_SKEW_MS ||
+      this.retiredSkewedOperationIds.size < MAX_RETIRED_SKEWED_OPERATION_IDS
+    )
+  }
+
+  private retireEntry(entry: GitStagedDiscardReceiptEntry): boolean {
+    if (!this.canRetire(entry)) {
+      return false
+    }
+    const timestamp = gitStagedDiscardOperationTimestamp(entry.operationId)
+    if (timestamp === null) {
+      this.rejectUnknownLegacyOperationIds = true
+    } else if (Math.abs(timestamp - entry.createdAt) <= MAX_TRUSTED_CLIENT_CLOCK_SKEW_MS) {
+      this.retiredOperationTimestamp = Math.max(this.retiredOperationTimestamp, timestamp)
+    } else {
+      this.retiredSkewedOperationIds.add(entry.operationId)
+    }
+    return true
   }
 
   private hydrate(): void {
@@ -194,117 +257,59 @@ export class GitStagedDiscardReceiptLedger {
       if (value === null || value === undefined) {
         return
       }
-      const snapshot = parseSnapshot(value)
+      const snapshot = parseGitStagedDiscardReceiptLedgerSnapshot(value)
       if (snapshot.entries.length > this.maxReceipts) {
         throw new Error('Staged discard ledger exceeds its retention bound')
       }
       this.rejectUnknownLegacyOperationIds = snapshot.rejectUnknownLegacyOperationIds
       this.retiredOperationTimestamp = snapshot.retiredOperationTimestamp
+      for (const operationId of snapshot.retiredSkewedOperationIds ?? []) {
+        this.retiredSkewedOperationIds.add(operationId)
+      }
       let recoveredPending = false
       for (const durable of snapshot.entries) {
         const receipt =
           durable.receipt.state === 'pending'
-            ? interruptedReceipt(durable.operationId, durable.receipt.affectedPaths)
+            ? interruptedGitStagedDiscardReceipt(durable.operationId, durable.receipt.affectedPaths)
             : durable.receipt
         recoveredPending ||= receipt !== durable.receipt
         const entry = { ...durable, receipt, promise: Promise.resolve(receipt) }
-        this.entries.set(receiptKey(entry.scope, entry.operationId), entry)
+        this.entries.set(gitStagedDiscardReceiptKey(entry.scope, entry.operationId), entry)
       }
       this.evictExpired(this.now())
+      const removedKeys = this.evictForByteBound()
       if (recoveredPending) {
-        this.persist()
+        this.storage.save(this.snapshot())
+      } else if (removedKeys.length > 0) {
+        this.persist({ removedKeys })
       }
     } catch (error) {
       this.loadError = error instanceof Error ? error : new Error('Invalid staged discard ledger')
     }
   }
 
-  private persist(): void {
-    this.storage?.save({
-      version: 1,
-      rejectUnknownLegacyOperationIds: this.rejectUnknownLegacyOperationIds,
-      retiredOperationTimestamp: this.retiredOperationTimestamp,
-      entries: [...this.entries.values()].map(({ promise: _promise, ...entry }) => entry)
-    })
+  private snapshot(): GitStagedDiscardReceiptLedgerSnapshot {
+    return createGitStagedDiscardReceiptLedgerSnapshot(
+      this.entries.values(),
+      this.rejectUnknownLegacyOperationIds,
+      this.retiredOperationTimestamp,
+      this.retiredSkewedOperationIds
+    )
   }
 
-  private assertAvailable(): void {
-    if (this.loadError) {
-      throw new Error('The staged discard replay ledger is unavailable', { cause: this.loadError })
-    }
+  private persist(
+    change: Pick<GitStagedDiscardReceiptLedgerChange, 'upsert' | 'removedKeys'>
+  ): void {
+    const snapshot = this.snapshot()
+    persistGitStagedDiscardReceiptLedger(
+      this.storage,
+      {
+        ...change,
+        rejectUnknownLegacyOperationIds: this.rejectUnknownLegacyOperationIds,
+        retiredOperationTimestamp: this.retiredOperationTimestamp,
+        retiredSkewedOperationIds: [...this.retiredSkewedOperationIds]
+      },
+      snapshot
+    )
   }
-}
-
-function sameReceipt(left: GitStagedDiscardReceipt, right: GitStagedDiscardReceipt): boolean {
-  return JSON.stringify(left) === JSON.stringify(right)
-}
-
-function receiptKey(scope: string, operationId: string): string {
-  return `${scope}\0${operationId}`
-}
-
-function interruptedReceipt(
-  operationId: string,
-  affectedPaths: readonly string[]
-): GitStagedDiscardReceipt {
-  return {
-    operationId,
-    state: 'failed',
-    mutation: 'possible',
-    affectedPaths: [...affectedPaths],
-    completedPaths: [],
-    uncertainPaths: [...affectedPaths],
-    remainingPaths: [],
-    error: 'Staged discard was interrupted before authoritative settlement'
-  }
-}
-
-function parseSnapshot(value: unknown): GitStagedDiscardReceiptLedgerSnapshot {
-  if (!value || typeof value !== 'object') {
-    throw new Error('Invalid staged discard ledger')
-  }
-  const snapshot = value as Partial<GitStagedDiscardReceiptLedgerSnapshot>
-  if (
-    snapshot.version !== 1 ||
-    typeof snapshot.rejectUnknownLegacyOperationIds !== 'boolean' ||
-    !Array.isArray(snapshot.entries)
-  ) {
-    throw new Error('Invalid staged discard ledger')
-  }
-  const entries = snapshot.entries.map((entry) => {
-    if (
-      !entry ||
-      typeof entry.scope !== 'string' ||
-      typeof entry.operationId !== 'string' ||
-      typeof entry.fingerprint !== 'string' ||
-      !Number.isSafeInteger(entry.createdAt) ||
-      entry.createdAt < 0
-    ) {
-      throw new Error('Invalid staged discard ledger entry')
-    }
-    return {
-      ...entry,
-      receipt: assertGitStagedDiscardReceipt(
-        entry.receipt,
-        entry.operationId,
-        (entry.receipt as GitStagedDiscardReceipt).affectedPaths
-      )
-    }
-  })
-  return {
-    version: 1,
-    rejectUnknownLegacyOperationIds: snapshot.rejectUnknownLegacyOperationIds,
-    retiredOperationTimestamp: parseRetiredOperationTimestamp(snapshot.retiredOperationTimestamp),
-    entries
-  }
-}
-
-function parseRetiredOperationTimestamp(value: unknown): number {
-  if (value === undefined) {
-    return -1
-  }
-  if (!Number.isSafeInteger(value) || (value as number) < -1) {
-    throw new Error('Invalid staged discard ledger retirement fence')
-  }
-  return value as number
 }

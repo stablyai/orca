@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -90,7 +90,7 @@ describe('staged discard mutation receipts', () => {
     expect(getReceipt).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps waiting when an intermediate receipt is contradictory', async () => {
+  it('terminates polling when an intermediate receipt is contradictory', async () => {
     const pending = pendingGitStagedDiscardReceipt('op-1', ['a'])
     const getReceipt = vi
       .fn()
@@ -110,8 +110,36 @@ describe('staged discard mutation receipts', () => {
 
     await expect(
       awaitTerminalGitStagedDiscardReceipt(pending, 'op-1', ['a'], getReceipt, async () => {})
-    ).resolves.toMatchObject({ state: 'succeeded' })
-    expect(getReceipt).toHaveBeenCalledTimes(2)
+    ).rejects.toThrow('invalid')
+    expect(getReceipt).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels polling without retaining a waiter or reading another receipt', async () => {
+    const pending = pendingGitStagedDiscardReceipt('op-1', ['a'])
+    const controller = new AbortController()
+    let releaseWait!: () => void
+    const wait = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseWait = resolve
+        })
+    )
+    const getReceipt = vi.fn()
+    const result = awaitTerminalGitStagedDiscardReceipt(
+      pending,
+      'op-1',
+      ['a'],
+      getReceipt,
+      wait,
+      controller.signal
+    )
+
+    controller.abort()
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' })
+    releaseWait()
+    await Promise.resolve()
+    expect(wait).toHaveBeenCalledTimes(1)
+    expect(getReceipt).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -204,7 +232,7 @@ describe('staged discard mutation receipts', () => {
     await ledger.run('repo', operationId, 'a', pending, async () => pending)
     const succeeded = await runGitStagedDiscardBatches(operationId, ['a'], 100, async () => {})
 
-    ledger.update('repo', operationId, succeeded)
+    ledger.reconcileAuthoritative('repo', operationId, succeeded)
 
     const duplicateMutation = vi.fn()
     await expect(ledger.run('repo', operationId, 'a', pending, duplicateMutation)).resolves.toEqual(
@@ -300,12 +328,19 @@ describe('staged discard mutation receipts', () => {
     const now = 1_000
     const ledger = new GitStagedDiscardReceiptLedger({ maxReceipts: 1, now: () => now })
     const firstId = createGitStagedDiscardOperationId(now)
-    await ledger.run(
+    let finish!: () => void
+    const blocked = new Promise<void>((resolve) => {
+      finish = resolve
+    })
+    const first = ledger.run(
       'repo',
       firstId,
       'a',
       pendingGitStagedDiscardReceipt(firstId, ['a']),
-      async () => runGitStagedDiscardBatches(firstId, ['a'], 100, async () => {})
+      async () => {
+        await blocked
+        return runGitStagedDiscardBatches(firstId, ['a'], 100, async () => {})
+      }
     )
     const secondId = createGitStagedDiscardOperationId(now)
     const secondMutation = vi.fn()
@@ -319,6 +354,8 @@ describe('staged discard mutation receipts', () => {
       )
     ).rejects.toThrow('retained')
     expect(secondMutation).not.toHaveBeenCalled()
+    finish()
+    await first
   })
 
   it('does not compare client operation timestamps to an SSH host clock', async () => {
@@ -333,5 +370,88 @@ describe('staged discard mutation receipts', () => {
         async () => runGitStagedDiscardBatches(farFutureClientId, ['a'], 100, async () => {})
       )
     ).resolves.toMatchObject({ state: 'succeeded' })
+  })
+
+  it('does not let an evicted far-future client clock poison normal host operations', async () => {
+    let now = 1_000
+    const ledger = new GitStagedDiscardReceiptLedger({
+      maxReceipts: 1,
+      retentionMs: 10,
+      now: () => now
+    })
+    const futureId = createGitStagedDiscardOperationId(9_000_000_000)
+    await ledger.run(
+      'repo',
+      futureId,
+      'a',
+      pendingGitStagedDiscardReceipt(futureId, ['a']),
+      async () => runGitStagedDiscardBatches(futureId, ['a'], 100, async () => {})
+    )
+    now = 1_011
+    const currentId = createGitStagedDiscardOperationId(now)
+    await expect(
+      ledger.run(
+        'repo',
+        currentId,
+        'b',
+        pendingGitStagedDiscardReceipt(currentId, ['b']),
+        async () => runGitStagedDiscardBatches(currentId, ['b'], 100, async () => {})
+      )
+    ).resolves.toMatchObject({ state: 'succeeded' })
+    await expect(
+      ledger.run('repo', futureId, 'a', pendingGitStagedDiscardReceipt(futureId, ['a']), vi.fn())
+    ).rejects.toThrow('outside the replay window')
+  })
+
+  it('bounds retained receipt bytes and journals incremental settlements', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'orca-staged-discard-bytes-'))
+    cleanupPaths.push(root)
+    const filePath = path.join(root, 'receipts.json')
+    const storage = new GitStagedDiscardReceiptFileStorage(filePath)
+    let now = 1_000
+    const ledger = new GitStagedDiscardReceiptLedger({
+      storage,
+      maxReceipts: 64,
+      maxBytes: 8_000,
+      now: () => now
+    })
+    for (let index = 0; index < 20; index += 1) {
+      const operationId = createGitStagedDiscardOperationId(now++)
+      const paths = Array.from({ length: 10 }, (_, pathIndex) => `${index}-${pathIndex}.txt`)
+      await ledger.run(
+        'repo',
+        operationId,
+        paths.join('\0'),
+        pendingGitStagedDiscardReceipt(operationId, paths),
+        async () => runGitStagedDiscardBatches(operationId, paths, 100, async () => {})
+      )
+    }
+
+    expect(readFileSync(filePath, 'utf8')).toContain('ORCA_GIT_STAGED_DISCARD_V1')
+    expect(statSync(filePath).size).toBeLessThan(64_000)
+    expect(
+      new GitStagedDiscardReceiptLedger({ storage, maxReceipts: 64 }).get('repo', 'missing')
+    ).toBeNull()
+  })
+
+  it('ignores only a crash-truncated final journal record', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'orca-staged-discard-crash-'))
+    cleanupPaths.push(root)
+    const filePath = path.join(root, 'receipts.json')
+    const storage = new GitStagedDiscardReceiptFileStorage(filePath)
+    const operationId = createGitStagedDiscardOperationId(1_000)
+    const ledger = new GitStagedDiscardReceiptLedger({ storage, now: () => 1_000 })
+    await ledger.run(
+      'repo',
+      operationId,
+      'a',
+      pendingGitStagedDiscardReceipt(operationId, ['a']),
+      async () => runGitStagedDiscardBatches(operationId, ['a'], 100, async () => {})
+    )
+    appendFileSync(filePath, '\nORCA_GIT_STAGED_DISCARD_V1 {"upsert":')
+
+    expect(
+      new GitStagedDiscardReceiptLedger({ storage, now: () => 1_001 }).get('repo', operationId)
+    ).toMatchObject({ state: 'succeeded' })
   })
 })

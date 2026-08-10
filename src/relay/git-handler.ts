@@ -630,6 +630,7 @@ export class GitHandler {
           if (selection.hasConflict) {
             throw new Error('Cannot discard staged changes for conflicted paths')
           }
+          const source = await this.resolveStagedDiscardSource(worktreePath)
           this.clearGitMutationReadCaches()
           try {
             return projectGitStagedDiscardReceiptPaths(
@@ -639,7 +640,10 @@ export class GitHandler {
                 BULK_CHUNK_SIZE,
                 async (chunk) => {
                   await this.git(
-                    gitStagedDiscardArgs(chunk.map((filePath) => this.literalPathspec(filePath))),
+                    gitStagedDiscardArgs(
+                      chunk.map((filePath) => this.literalPathspec(filePath)),
+                      source
+                    ),
                     worktreePath
                   )
                 }
@@ -663,6 +667,24 @@ export class GitHandler {
       throw new Error('invalid_staged_discard_operation_id')
     }
     return this.stagedDiscardReceipts.get(worktreePath, operationId)
+  }
+
+  private async resolveStagedDiscardSource(worktreePath: string): Promise<string> {
+    try {
+      const { stdout } = await this.git(['rev-parse', '--verify', 'HEAD'], worktreePath)
+      const head = stdout.trim()
+      if (head) {
+        return head
+      }
+    } catch {
+      // Status already established repository ownership; a missing HEAD means an unborn branch.
+    }
+    const { stdout } = await this.git(['mktree'], worktreePath, { stdin: '' })
+    const emptyTree = stdout.trim()
+    if (!emptyTree) {
+      throw new Error('Git did not create an empty tree for the unborn repository')
+    }
+    return emptyTree
   }
 
   private async abortMerge(params: Record<string, unknown>) {

@@ -28,8 +28,8 @@ export function supportsGitStagedDiscardOperation(capabilities: unknown): boolea
   )
 }
 
-export function gitStagedDiscardArgs(pathspecs: readonly string[]): string[] {
-  return ['restore', '--source=HEAD', '--staged', '--worktree', '--', ...pathspecs]
+export function gitStagedDiscardArgs(pathspecs: readonly string[], source = 'HEAD'): string[] {
+  return ['restore', `--source=${source}`, '--staged', '--worktree', '--', ...pathspecs]
 }
 
 export function gitStagedDiscardStatusArgs(): string[] {

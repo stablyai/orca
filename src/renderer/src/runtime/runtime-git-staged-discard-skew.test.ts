@@ -134,8 +134,7 @@ describe('staged discard mixed-version safety', () => {
 
     expect(call.mock.calls.map(([args]) => args.method)).toEqual([
       'status.get',
-      'git.bulkDiscardStaged',
-      'git.getStagedDiscardReceipt'
+      'git.bulkDiscardStaged'
     ])
     expect(snapshot(repo)).toEqual(before)
   })

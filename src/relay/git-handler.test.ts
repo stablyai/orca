@@ -933,6 +933,34 @@ describe('GitHandler', () => {
       ).toBe('')
     })
 
+    it('discards only selected staged additions on an unborn branch', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'selected.txt'), 'selected\n')
+      writeFileSync(path.join(tmpDir, 'unrelated.txt'), 'unrelated\n')
+      execFileSync('git', ['add', 'selected.txt', 'unrelated.txt'], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+
+      await dispatcher.callRequest('git.bulkDiscardStaged', {
+        worktreePath: tmpDir,
+        filePaths: ['selected.txt'],
+        operationId: 'op-unborn',
+        stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+      })
+
+      await expect(fs.access(path.join(tmpDir, 'selected.txt'))).rejects.toThrow()
+      await expect(fs.readFile(path.join(tmpDir, 'unrelated.txt'), 'utf8')).resolves.toBe(
+        'unrelated\n'
+      )
+      expect(
+        execFileSync('git', ['status', '--porcelain=v1'], {
+          cwd: tmpDir,
+          encoding: 'utf8'
+        })
+      ).toBe('A  unrelated.txt\n')
+    })
+
     it.each([undefined, '2', 1])(
       'rejects staged discard version %s before changing any Git bytes',
       async (stagedDiscardOperationVersion) => {

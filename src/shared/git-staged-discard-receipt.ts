@@ -138,8 +138,10 @@ export async function awaitTerminalGitStagedDiscardReceipt(
   expectedOperationId: string,
   expectedAffectedPaths: readonly string[],
   getReceipt: () => Promise<unknown>,
-  wait?: () => Promise<void>
+  wait?: () => Promise<void>,
+  signal?: AbortSignal
 ): Promise<GitStagedDiscardReceipt> {
+  throwIfAborted(signal)
   let receipt = assertGitStagedDiscardReceipt(
     initialReceipt,
     expectedOperationId,
@@ -147,20 +149,19 @@ export async function awaitTerminalGitStagedDiscardReceipt(
   )
   let delayMs = 250
   while (receipt.state === 'pending') {
-    await (wait ? wait() : waitForReceiptPoll(delayMs))
+    await abortableGitStagedDiscardPromise(wait ? wait() : waitForReceiptPoll(delayMs), signal)
     delayMs = Math.min(delayMs * 2, 5_000)
     let next: unknown
     try {
-      next = await getReceipt()
-    } catch {
+      next = await abortableGitStagedDiscardPromise(getReceipt(), signal)
+    } catch (error) {
+      if (signal?.aborted || isAbortError(error)) {
+        throw error
+      }
       continue
     }
     if (next !== null) {
-      try {
-        receipt = assertGitStagedDiscardReceipt(next, expectedOperationId, expectedAffectedPaths)
-      } catch {
-        continue
-      }
+      receipt = assertGitStagedDiscardReceipt(next, expectedOperationId, expectedAffectedPaths)
     }
   }
   return receipt
@@ -185,6 +186,50 @@ function describeGitStagedDiscardError(error: unknown): string {
 
 function waitForReceiptPoll(delayMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, delayMs))
+}
+
+export function abortableGitStagedDiscardPromise<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  if (!signal) {
+    return promise
+  }
+  throwIfAborted(signal)
+  return new Promise<T>((resolve, reject) => {
+    const cleanup = (): void => signal.removeEventListener('abort', onAbort)
+    const onAbort = (): void => {
+      cleanup()
+      reject(createAbortError())
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(
+      (value) => {
+        cleanup()
+        resolve(value)
+      },
+      (error) => {
+        cleanup()
+        reject(error)
+      }
+    )
+  })
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw createAbortError()
+  }
+}
+
+function createAbortError(): Error {
+  const error = new Error('Staged discard receipt polling was canceled')
+  error.name = 'AbortError'
+  return error
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
 }
 
 function sameUniquePathSet(actual: readonly string[], expected: readonly string[]): boolean {

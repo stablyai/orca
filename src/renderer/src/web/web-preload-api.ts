@@ -13,7 +13,7 @@ import { assertGitIndexPreservingDiscardCapability } from '../../../shared/git-i
 import { assertGitStagedDiscardCapability } from '../../../shared/git-staged-discard-operation'
 import {
   assertGitStagedDiscardReceipt,
-  awaitTerminalGitStagedDiscardReceipt,
+  pendingGitStagedDiscardReceipt,
   type GitStagedDiscardReceipt
 } from '../../../shared/git-staged-discard-receipt'
 import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../../../shared/protocol-version'
@@ -2275,21 +2275,33 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
           filePaths
         )
       } catch (error) {
-        const recovered = await callRuntimeResult<GitStagedDiscardReceipt | null>(
-          'git.getStagedDiscardReceipt',
-          { worktree: selector, operationId }
-        ).catch(() => null)
-        if (recovered === null) {
+        if (error instanceof WebRuntimeApplicationError) {
           throw error
         }
-        receipt = assertGitStagedDiscardReceipt(recovered, operationId, filePaths)
+        try {
+          const recovered = await callRuntimeResult<GitStagedDiscardReceipt | null>(
+            'git.getStagedDiscardReceipt',
+            { worktree: selector, operationId }
+          )
+          receipt =
+            recovered === null
+              ? pendingGitStagedDiscardReceipt(operationId, filePaths)
+              : assertGitStagedDiscardReceipt(recovered, operationId, filePaths)
+        } catch (recoveryError) {
+          if (recoveryError instanceof WebRuntimeApplicationError) {
+            throw recoveryError
+          }
+          receipt = pendingGitStagedDiscardReceipt(operationId, filePaths)
+        }
       }
-      return awaitTerminalGitStagedDiscardReceipt(receipt, operationId, filePaths, () =>
-        callRuntimeResult<GitStagedDiscardReceipt | null>('git.getStagedDiscardReceipt', {
-          worktree: selector,
-          operationId
-        })
-      )
+      return receipt
+    },
+    getStagedDiscardReceipt: async ({ worktreePath, operationId }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult<GitStagedDiscardReceipt | null>('git.getStagedDiscardReceipt', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        operationId
+      })
     },
     remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -3486,9 +3498,19 @@ async function callRuntimeResult<TResult>(
 ): Promise<TResult> {
   const response = await callRuntimeEnvelope(method, params, timeoutMs)
   if (!response.ok) {
-    throw new Error(response.error.message)
+    throw new WebRuntimeApplicationError(response.error.code, response.error.message)
   }
   return response.result as TResult
+}
+
+class WebRuntimeApplicationError extends Error {
+  constructor(
+    readonly code: string,
+    message: string
+  ) {
+    super(message)
+    this.name = 'WebRuntimeApplicationError'
+  }
 }
 
 async function callRuntimeResultWithOwner<TResult>(

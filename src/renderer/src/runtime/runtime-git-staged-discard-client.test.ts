@@ -273,4 +273,85 @@ describe('runtime staged discard client', () => {
     })
     expect(receiptReads).toBe(2)
   })
+
+  it('keeps the operation pending after losing both mutation and first receipt transports', async () => {
+    let receiptReads = 0
+    runtimeEnvironmentCall.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'git.bulkDiscardStaged') {
+        throw new Error('mutation transport lost')
+      }
+      receiptReads += 1
+      if (receiptReads === 1) {
+        throw new Error('first receipt transport lost')
+      }
+      const operationId = (paramsOf(args) as { operationId: string }).operationId
+      return {
+        id: `receipt-${receiptReads}`,
+        ok: true,
+        result:
+          receiptReads === 2
+            ? {
+                operationId,
+                state: 'pending',
+                mutation: 'possible',
+                affectedPaths: ['staged.txt'],
+                completedPaths: [],
+                uncertainPaths: ['staged.txt'],
+                remainingPaths: []
+              }
+            : {
+                operationId,
+                state: 'succeeded',
+                mutation: 'complete',
+                affectedPaths: ['staged.txt'],
+                completedPaths: ['staged.txt'],
+                uncertainPaths: [],
+                remainingPaths: []
+              },
+        _meta: { runtimeId: 'remote-runtime' }
+      }
+    })
+
+    await expect(
+      bulkDiscardStagedRuntimeGitPaths(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo'
+        },
+        ['staged.txt']
+      )
+    ).resolves.toMatchObject({ state: 'succeeded' })
+    expect(receiptReads).toBe(3)
+  })
+
+  it('cancels an in-flight transport without waiting for its timeout', async () => {
+    let resolveMutation!: (value: unknown) => void
+    runtimeEnvironmentCall.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveMutation = resolve
+        })
+    )
+    const controller = new AbortController()
+    const result = bulkDiscardStagedRuntimeGitPaths(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      ['staged.txt'],
+      controller.signal
+    )
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+
+    controller.abort()
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' })
+    resolveMutation({
+      id: 'late',
+      ok: true,
+      result: null,
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+  })
 })

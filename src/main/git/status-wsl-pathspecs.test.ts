@@ -101,14 +101,16 @@ describe('WSL git pathspecs', () => {
       stdout: 'R  tests/breakgit\0tests/old-breakgit\0',
       stderr: ''
     })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'head-oid\n', stderr: '' })
 
     await bulkDiscardStagedChanges(worktreePath, [windowsRelativePath], wslOptions)
 
     expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
       ['status', '--porcelain=v1', '-z', '--untracked-files=no', '--renames'],
+      ['rev-parse', '--verify', 'HEAD'],
       [
         'restore',
-        '--source=HEAD',
+        '--source=head-oid',
         '--staged',
         '--worktree',
         '--',
