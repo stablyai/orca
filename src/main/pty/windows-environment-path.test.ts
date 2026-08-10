@@ -267,7 +267,7 @@ describe('readPersistedWindowsPathSegments', () => {
     }
   })
 
-  it('does not let an invalidated asynchronous read repopulate the cache', async () => {
+  it('retries an invalidated asynchronous read before merging its result', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const callbacks: ExecCallback[] = []
@@ -280,16 +280,20 @@ describe('readPersistedWindowsPathSegments', () => {
     __resetPersistedWindowsPathCacheForTests()
 
     try {
-      const staleRead = readPersistedWindowsPathSegmentsAsync()
+      const env = { Path: 'C:\\Injected' }
+      const merge = mergePersistedWindowsPathAsync(env)
       invalidatePersistedWindowsPathCache()
       callbacks[0]?.(null, '    Path    REG_SZ    C:\\OldMachine\r\n', '')
       callbacks[1]?.(null, '    Path    REG_SZ    C:\\OldUser\r\n', '')
-      await expect(staleRead).resolves.toEqual(['C:\\OldMachine', 'C:\\OldUser'])
-
-      const freshRead = readPersistedWindowsPathSegmentsAsync()
+      await vi.waitFor(() => expect(defaultExecFileMock).toHaveBeenCalledTimes(4))
       callbacks[2]?.(null, '    Path    REG_SZ    C:\\NewMachine\r\n', '')
       callbacks[3]?.(null, '    Path    REG_SZ    C:\\NewUser\r\n', '')
-      await expect(freshRead).resolves.toEqual(['C:\\NewMachine', 'C:\\NewUser'])
+      await merge
+      expect(env.Path).toBe('C:\\Injected;C:\\NewMachine;C:\\NewUser')
+      await expect(readPersistedWindowsPathSegmentsAsync()).resolves.toEqual([
+        'C:\\NewMachine',
+        'C:\\NewUser'
+      ])
       expect(defaultExecFileMock).toHaveBeenCalledTimes(4)
     } finally {
       __resetPersistedWindowsPathCacheForTests()

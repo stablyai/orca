@@ -218,7 +218,8 @@ export async function readPersistedWindowsPathSegmentsAsync(
       return segments
     }
     if (cacheGeneration !== persistedWindowsPathCacheGeneration) {
-      return segments
+      // Why: callers must not merge or inspect a snapshot invalidated while its queries ran.
+      return readPersistedWindowsPathSegmentsAsync({ forceRefresh: true })
     }
     return cachePersistedWindowsPathSegments(segments, reads.filter((read) => read.failed).length)
   })
