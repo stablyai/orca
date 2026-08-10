@@ -204,7 +204,8 @@ export async function readNativeChatTranscriptTail(
     filePath?: string
     limit: number
     beforeOffset?: number
-  }
+  },
+  signal?: AbortSignal
 ): Promise<
   | {
       messages: NativeChatMessage[]
@@ -216,7 +217,9 @@ export async function readNativeChatTranscriptTail(
 > {
   const decode = nativeChatLineDecoderForAgent(args.agent)
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
-  const filePath = args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args))
+  const filePath =
+    args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
+  signal?.throwIfAborted()
   if (!decode) {
     return { error: 'Transcript unavailable' }
   }
@@ -234,6 +237,7 @@ export async function readNativeChatTranscriptTail(
       args.beforeOffset,
       decodeLifecycle
     )
+    signal?.throwIfAborted()
     return {
       messages: result.messages,
       // Why: an older pagination page must not rewind the live lifecycle; only
@@ -245,6 +249,7 @@ export async function readNativeChatTranscriptTail(
       beforeOffset: result.beforeOffset
     }
   } catch (error) {
+    signal?.throwIfAborted()
     const message = error instanceof Error ? error.message : String(error)
     return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
       ? { error: message, notFound: true }

@@ -16,6 +16,76 @@ function jsonLines(records: unknown[]): string {
 }
 
 describe('parseCodexSessionFile', () => {
+  it('uses completed user items for paginated session metadata', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-paginated-'))
+    tempRoots.push(root)
+    const sessionPath = join(root, 'sessions', '2026', '08', '10', 'rollout-paginated.jsonl')
+    await mkdir(dirname(sessionPath), { recursive: true })
+
+    await writeFile(
+      sessionPath,
+      jsonLines([
+        {
+          timestamp: '2026-08-10T10:00:00.000Z',
+          type: 'session_meta',
+          payload: { id: 'paginated-session', history_mode: 'paginated', cwd: '/repo/app' }
+        },
+        {
+          timestamp: '2026-08-10T10:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: 'model-only prompt copy' }]
+          }
+        },
+        {
+          timestamp: '2026-08-10T10:00:02.000Z',
+          type: 'event_msg',
+          payload: {
+            type: 'item_completed',
+            item: {
+              type: 'UserMessage',
+              content: [{ type: 'text', text: 'Visible paginated prompt' }]
+            }
+          }
+        },
+        {
+          timestamp: '2026-08-10T10:00:03.000Z',
+          type: 'event_msg',
+          payload: {
+            type: 'item_completed',
+            item: {
+              type: 'AgentMessage',
+              content: [{ type: 'Text', text: 'Visible paginated response' }]
+            }
+          }
+        }
+      ])
+    )
+
+    const sessionStat = await stat(sessionPath)
+    const session = await parseCodexSessionFile(
+      {
+        path: sessionPath,
+        mtimeMs: sessionStat.mtimeMs,
+        modifiedAt: sessionStat.mtime.toISOString()
+      },
+      'darwin',
+      root
+    )
+
+    expect(session).toMatchObject({
+      title: 'Visible paginated prompt',
+      lastUserPrompt: 'Visible paginated prompt',
+      messageCount: 2,
+      previewMessages: [
+        { role: 'user', text: 'Visible paginated prompt' },
+        { role: 'assistant', text: 'Visible paginated response' }
+      ]
+    })
+  })
+
   it('uses user-message events instead of later injected user-role records', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-last-prompt-'))
     tempRoots.push(root)

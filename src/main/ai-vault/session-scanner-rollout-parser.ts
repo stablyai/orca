@@ -2,9 +2,7 @@ import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { normalizePromptField } from '../../shared/agent-status-field-normalization'
 import {
-  addPreviewContent,
   cloneSessionAccumulator,
   createAccumulator,
   finalizeSession,
@@ -16,6 +14,11 @@ import {
   extractRolloutSessionMetadataTitle,
   isRolloutWorkerSession
 } from './session-scanner-rollout-metadata'
+import {
+  consumeRolloutCompletedMessage,
+  consumeRolloutLegacyEventMessage,
+  consumeRolloutResponseMessage
+} from './session-scanner-rollout-message-records'
 import type {
   CodexUsageSnapshot,
   FileWithMtime,
@@ -27,7 +30,6 @@ import type {
 import {
   addCodexUsage,
   asRecord,
-  extractContentText,
   extractGitBranch,
   extractModel,
   extractString,
@@ -42,6 +44,7 @@ type RolloutSessionParseState = {
   previousTotals: CodexUsageSnapshot | null
   rejectedWorkerSession: boolean
   sawSessionMeta: boolean
+  historyMode: string | null
   titleSource: RolloutTitleSource
 }
 export async function parseRolloutSessionFile(args: {
@@ -100,6 +103,7 @@ function createRolloutParseState(
     previousTotals: null,
     rejectedWorkerSession: false,
     sawSessionMeta: false,
+    historyMode: null,
     titleSource: null
   }
 }
@@ -128,6 +132,7 @@ function consumeRolloutRecordLine(state: RolloutSessionParseState, line: string)
       return
     }
     state.sawSessionMeta = true
+    state.historyMode = accumulator.agent === 'codex' ? extractString(payload.history_mode) : null
     const sessionId = extractString(payload.id)
     accumulator.sessionId = sessionId || accumulator.sessionId
     const metadataTitle = extractRolloutSessionMetadataTitle(payload)
@@ -151,38 +156,27 @@ function consumeRolloutRecordLine(state: RolloutSessionParseState, line: string)
     return
   }
   if (record.type === 'response_item' && payload.type === 'message') {
-    accumulator.messageCount++
-    if (payload.role === 'user' && !accumulator.title) {
-      accumulator.title = extractContentText(payload.content)
-      state.titleSource = accumulator.title ? 'user' : state.titleSource
+    if (state.historyMode === 'paginated') {
+      return
     }
-    addPreviewContent(
-      accumulator,
-      payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : 'unknown',
-      payload.content,
-      record.timestamp
-    )
+    if (consumeRolloutResponseMessage(accumulator, payload, record.timestamp)) {
+      state.titleSource = 'user'
+    }
     return
   }
   if (record.type !== 'event_msg') {
     return
   }
-  if (payload.type === 'user_message') {
-    accumulator.messageCount++
-    const prompt = normalizePromptField(payload.message)
-    if (prompt) {
-      accumulator.lastUserPrompt = prompt
+  if (state.historyMode === 'paginated' && payload.type === 'item_completed') {
+    if (consumeRolloutCompletedMessage(accumulator, payload, record.timestamp)) {
+      state.titleSource = 'user'
     }
-    if (!accumulator.title) {
-      accumulator.title = extractContentText(payload.message)
-      state.titleSource = accumulator.title ? 'user' : state.titleSource
-    }
-    addPreviewContent(accumulator, 'user', payload.message, record.timestamp)
     return
   }
-  if (payload.type === 'agent_message') {
-    accumulator.messageCount++
-    addPreviewContent(accumulator, 'assistant', payload.message, record.timestamp)
+  if (payload.type === 'user_message' || payload.type === 'agent_message') {
+    if (consumeRolloutLegacyEventMessage(accumulator, payload, record.timestamp)) {
+      state.titleSource = 'user'
+    }
     return
   }
   if (payload.type !== 'token_count') {

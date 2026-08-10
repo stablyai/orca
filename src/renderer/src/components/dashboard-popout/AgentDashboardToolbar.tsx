@@ -48,7 +48,7 @@ type AgentDashboardToolbarProps = {
   showAgentlessWorkspaces?: boolean
   agentlessWorkspaceCount?: number
   onShowAgentlessWorkspacesChange?: (show: boolean) => void
-  /** Map-only: the dashed parent→child dispatch edges. */
+  /** Map-only: the directional parent→child dispatch edges. */
   showOrchestrationLinks?: boolean
   onShowOrchestrationLinksChange?: (show: boolean) => void
   searchInputRef: React.RefObject<HTMLInputElement | null>

@@ -3769,6 +3769,7 @@ describe('web GitHub preload API', () => {
         'resolveProjectRef',
         'resolveReviewThread',
         'setPRAutoMerge',
+        'setPRCommentReaction',
         'setPRFileViewed',
         'starOrca',
         'updateIssue',
@@ -3949,6 +3950,17 @@ describe('web GitHub preload API', () => {
         args: { repoPath, prNumber: 7, noCache: true },
         expectedMethod: 'github.prComments',
         expectedParams: withRepo({ repoPath, prNumber: 7, noCache: true })
+      },
+      {
+        key: 'setPRCommentReaction',
+        args: { repoPath, reactionSubjectId: 'IC_1', content: 'heart', reacted: true },
+        expectedMethod: 'github.setPRCommentReaction',
+        expectedParams: withRepo({
+          repoPath,
+          reactionSubjectId: 'IC_1',
+          content: 'heart',
+          reacted: true
+        })
       },
       {
         key: 'resolveReviewThread',

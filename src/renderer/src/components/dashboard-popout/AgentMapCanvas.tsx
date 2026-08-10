@@ -28,6 +28,7 @@ import {
 import type { AgentMapViewport } from './agent-map-viewport-transition'
 import { useAgentMapContextMenus } from './useAgentMapContextMenus'
 import { useAgentMapCanvasSize } from './useAgentMapCanvasSize'
+import { useAgentMapMotionLayout } from './useAgentMapMotionLayout'
 import { useAgentMapSelectedFocus } from './useAgentMapSelectedFocus'
 import { useAgentMapViewportTransition } from './useAgentMapViewportTransition'
 
@@ -94,6 +95,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       zoom: 1
     })
     const prefersReducedMotion = usePrefersReducedMotion()
+    const motionLayout = useAgentMapMotionLayout(layout, prefersReducedMotion)
     const viewportRef = useRef(viewport)
     const { contextMenus, onOpenProjectContextMenu, onOpenWorkspaceContextMenu } =
       useAgentMapContextMenus({
@@ -110,6 +112,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       [allowAggregation, layout, selectedPaneKey, zoom]
     )
     const hasProjects = layout.projects.length > 0
+    const hasMotionProjects = motionLayout.projects.length > 0
     const aspect = size.width / Math.max(1, size.height)
     const baseWidth = Math.max(layout.width, layout.height * aspect)
     const baseHeight = baseWidth / aspect
@@ -298,7 +301,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
 
     return (
       <div ref={containerRef} className="agent-map-canvas relative min-h-0 flex-1 overflow-hidden">
-        {!hasProjects ? (
+        {!hasMotionProjects ? (
           <div className="absolute inset-0 grid place-items-center text-center text-xs text-muted-foreground">
             {translate('dashboardPopout.map.empty', 'No agents match the current filters.')}
           </div>
@@ -362,7 +365,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
             }}
           >
             <AgentMapScene
-              layout={layout}
+              layout={motionLayout}
               repoIconsByRepoId={repoIconsByRepoId}
               zoom={zoom}
               labelScale={labelScale}

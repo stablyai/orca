@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/ansi-escape-sequences'
 
 const MAX_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
+const OUTPUT_SNAPSHOT_COMPACTION_HEAD_THRESHOLD = 64
 
 export type AutomationRunOutputSnapshotBuffer = {
   append: (chunk: string) => void
@@ -45,6 +46,7 @@ function stripTerminalControls(value: string): string {
 
 export function createAutomationRunOutputSnapshotBuffer(): AutomationRunOutputSnapshotBuffer {
   const chunks: string[] = []
+  let firstChunkIndex = 0
   let totalChars = 0
   let truncated = false
 
@@ -56,19 +58,28 @@ export function createAutomationRunOutputSnapshotBuffer(): AutomationRunOutputSn
       chunks.push(chunk)
       totalChars += chunk.length
       let overflowChars = totalChars - MAX_OUTPUT_SNAPSHOT_CHARS
-      while (overflowChars > 0 && chunks.length > 0) {
-        const firstChunk = chunks[0]
+      while (overflowChars > 0 && firstChunkIndex < chunks.length) {
+        const firstChunk = chunks[firstChunkIndex]
         if (firstChunk.length <= overflowChars) {
-          chunks.shift()
+          chunks[firstChunkIndex] = ''
+          firstChunkIndex += 1
           totalChars -= firstChunk.length
           overflowChars -= firstChunk.length
           truncated = true
           continue
         }
-        chunks[0] = firstChunk.slice(overflowChars)
+        chunks[firstChunkIndex] = firstChunk.slice(overflowChars)
         totalChars -= overflowChars
         truncated = true
         overflowChars = 0
+      }
+      // Why: amortize front removal while bounding dead backing-array slots.
+      if (
+        firstChunkIndex >= OUTPUT_SNAPSHOT_COMPACTION_HEAD_THRESHOLD &&
+        firstChunkIndex * 2 >= chunks.length
+      ) {
+        chunks.splice(0, firstChunkIndex)
+        firstChunkIndex = 0
       }
     },
     snapshot() {
