@@ -249,37 +249,44 @@ describe('useComposerState host-context boundaries', () => {
     expect(submitSection).toContain('runtimeEnvironmentId: folderTargetRuntimeEnvironmentId')
   })
 
-  it('detects composer agents against the repo host: SSH, then runtime, then local (#7082)', () => {
-    // Why: a repo owned by a paired runtime must show the runtime's agents, not
-    // the local machine's. SSH stays first priority; runtime falls through before
-    // local so an SSH repo never double-detects. Regression guard for #7082.
+  it('detects composer agents against the resolved repo owner (#7082)', () => {
+    // Why: runtime-owned repositories can retain a nested SSH connection, so
+    // raw connectionId precedence would probe the runtime's private SSH target.
+    expect(HOOK_SOURCE).toContain('const selectedRepoAgentHost = resolveNewWorkspaceRepoAgentHost')
+    expect(HOOK_SOURCE).not.toContain(
+      'const selectedRepoConnectionId = selectedRepo?.connectionId ?? null'
+    )
     const selectorSection = sourceBetween(
       HOOK_SOURCE,
       'const detectedAgentList = useAppStore',
       'const ensureDetectedAgents = useAppStore'
     )
-    expect(selectorSection).toContain('if (isRemote) {')
+    expect(selectorSection).toContain('if (connectionId) {')
     expect(selectorSection).toContain('s.remoteDetectedAgentIds[connectionId]')
     expect(selectorSection).toContain('if (runtimeEnvironmentId) {')
     expect(selectorSection).toContain('s.runtimeDetectedAgentIds[runtimeEnvironmentId]')
     expect(selectorSection).toContain('return s.detectedAgentIds')
-    // SSH branch is checked before the runtime branch.
-    expect(selectorSection.indexOf('if (isRemote) {')).toBeLessThan(
+    // The resolved route is exclusive, so each store lookup has one owner.
+    expect(selectorSection.indexOf('if (connectionId) {')).toBeLessThan(
       selectorSection.indexOf('if (runtimeEnvironmentId) {')
     )
 
     expect(HOOK_SOURCE).toContain(
-      'const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null'
+      "selectedRepoAgentHost.kind === 'runtime' ? selectedRepoAgentHost.environmentId : null"
     )
 
     // Detection effect fans out to the same three hosts in the same order and
     // re-runs when the runtime environment changes.
-    const detectSection = sourceBetween(HOOK_SOURCE, 'const detect = isRemote', 'void detect.then')
+    const detectSection = sourceBetween(
+      HOOK_SOURCE,
+      'const detect = connectionId',
+      'void detect.then'
+    )
     expect(detectSection).toContain('ensureRemoteDetectedAgents(connectionId)')
     expect(detectSection).toContain('ensureRuntimeDetectedAgents(runtimeEnvironmentId)')
     expect(detectSection).toContain('ensureDetectedAgents()')
     expect(HOOK_SOURCE).toContain(
-      '}, [connectionId, runtimeEnvironmentId, isRemote, selectedRepoSshStatus, disabledTuiAgents])'
+      '}, [connectionId, runtimeEnvironmentId, selectedRepoSshStatus, disabledTuiAgents])'
     )
   })
 

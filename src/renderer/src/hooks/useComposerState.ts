@@ -116,6 +116,7 @@ import {
   getSelectedRepoSshGate,
   isSshConnectInProgress
 } from '@/lib/new-workspace-ssh-gate'
+import { resolveNewWorkspaceRepoAgentHost } from '@/lib/new-workspace-repo-agent-host'
 import {
   getComposerEligibleRepos,
   resolveComposerActiveRepoId
@@ -943,7 +944,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     projectGroupTarget: isProjectGroupTarget,
     initialRecipeId: initialEphemeralVmRecipeId
   })
-  const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
+  const selectedRepoAgentHost = resolveNewWorkspaceRepoAgentHost({
+    connectionId: selectedRepo?.connectionId,
+    executionHostId: selectedRepo?.executionHostId,
+    fallbackRuntimeEnvironmentId: selectedRepoSettings?.activeRuntimeEnvironmentId
+  })
+  const selectedRepoConnectionId =
+    selectedRepoAgentHost.kind === 'ssh' ? selectedRepoAgentHost.connectionId : null
   const selectedRepoSshState = selectedRepoConnectionId
     ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
     : null
@@ -1187,10 +1194,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
   // Why: for a repo on an SSH host or runtime env, read the per-host agent list so the dialog shows the host's installed agents, not local.
   const connectionId = selectedRepoConnectionId
-  const isRemote = typeof connectionId === 'string'
-  const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null
+  const runtimeEnvironmentId =
+    selectedRepoAgentHost.kind === 'runtime' ? selectedRepoAgentHost.environmentId : null
   const detectedAgentList = useAppStore((s) => {
-    if (isRemote) {
+    if (connectionId) {
       return s.remoteDetectedAgentIds[connectionId] ?? null
     }
     if (runtimeEnvironmentId) {
@@ -1759,11 +1766,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   // Why: re-detect agents when the selected repo changes so the list matches the correct host (local runs once, deduped by the store).
   useEffect(() => {
-    if (isRemote && selectedRepoSshStatus !== 'connected') {
+    if (connectionId && selectedRepoSshStatus !== 'connected') {
       return
     }
     let cancelled = false
-    const detect = isRemote
+    const detect = connectionId
       ? ensureRemoteDetectedAgents(connectionId)
       : runtimeEnvironmentId
         ? ensureRuntimeDetectedAgents(runtimeEnvironmentId)
@@ -1788,7 +1795,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     // Why: deps narrowed to host identity (connectionId/runtimeEnvironmentId); detection is a best-effort PATH snapshot, so draft/settings are excluded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionId, runtimeEnvironmentId, isRemote, selectedRepoSshStatus, disabledTuiAgents])
+  }, [connectionId, runtimeEnvironmentId, selectedRepoSshStatus, disabledTuiAgents])
 
   // Per-repo: load yaml hooks + issue command template.
   useEffect(() => {
