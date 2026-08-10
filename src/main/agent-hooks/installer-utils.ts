@@ -20,6 +20,7 @@ import { writeRollingFileBackup } from '../rolling-file-backup'
 export type HookCommandConfig = {
   type: 'command'
   command: string
+  args?: string[]
   timeout?: number
   async?: boolean
   statusMessage?: string
@@ -215,7 +216,8 @@ export function removeManagedCommands(
     const directManagedKeys = directCommandKeys.filter((key) => isManagedCommand(definition[key]))
     const hasNestedHooks = Array.isArray(definition.hooks)
     const hasManagedNestedHook =
-      hasNestedHooks && definition.hooks!.some((hook) => isManagedCommand(hook.command))
+      hasNestedHooks &&
+      definition.hooks!.some((hook) => hookHasManagedCommand(hook, isManagedCommand))
 
     if (directManagedKeys.length === 0 && !hasManagedNestedHook) {
       return [definition]
@@ -227,7 +229,9 @@ export function removeManagedCommands(
     }
 
     if (hasManagedNestedHook) {
-      const filteredHooks = definition.hooks!.filter((hook) => !isManagedCommand(hook.command))
+      const filteredHooks = definition.hooks!.filter(
+        (hook) => !hookHasManagedCommand(hook, isManagedCommand)
+      )
       if (filteredHooks.length > 0) {
         nextDefinition.hooks = filteredHooks
       } else {
@@ -246,6 +250,10 @@ export function removeManagedCommands(
   })
 }
 
+function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string) => boolean) {
+  return matches(hook.command) || hook.args?.some(matches) === true
+}
+
 export function hookDefinitionHasManagedCommand(
   definition: HookDefinition,
   isManagedCommand: (command: string | undefined) => boolean
@@ -255,7 +263,7 @@ export function hookDefinitionHasManagedCommand(
     isManagedCommand(definition.bash) ||
     isManagedCommand(definition.powershell) ||
     (Array.isArray(definition.hooks) &&
-      definition.hooks.some((hook) => isManagedCommand(hook.command)))
+      definition.hooks.some((hook) => hookHasManagedCommand(hook, isManagedCommand)))
   )
 }
 

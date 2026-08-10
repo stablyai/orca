@@ -320,6 +320,32 @@ describe('removeManagedCommands', () => {
 
     expect(cleaned).toEqual([{ hooks: [{ type: 'command', command: 'echo keep me' }] }])
   })
+
+  it('removes exec-form hooks whose managed script path is an argument', () => {
+    const cleaned = removeManagedCommands(
+      [
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: 'C:\\Windows\\System32\\conhost.exe',
+              args: [
+                '--headless',
+                'C:\\Windows\\System32\\cmd.exe',
+                '/d',
+                '/c',
+                'C:\\Users\\alice\\.orca\\agent-hooks\\copilot-hook.cmd'
+              ]
+            },
+            { type: 'command', command: 'echo keep me' }
+          ]
+        }
+      ],
+      match
+    )
+
+    expect(cleaned).toEqual([{ hooks: [{ type: 'command', command: 'echo keep me' }] }])
+  })
 })
 
 describe('hookDefinitionHasManagedCommand', () => {
@@ -335,6 +361,20 @@ describe('hookDefinitionHasManagedCommand', () => {
     expect(
       hookDefinitionHasManagedCommand(
         { hooks: [{ type: 'command', command: '/bin/sh "/path/agent-hooks/copilot-hook.sh"' }] },
+        match
+      )
+    ).toBe(true)
+    expect(
+      hookDefinitionHasManagedCommand(
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: 'C:\\Windows\\System32\\conhost.exe',
+              args: ['--headless', 'C:\\Users\\alice\\.orca\\agent-hooks\\copilot-hook.cmd']
+            }
+          ]
+        },
         match
       )
     ).toBe(true)

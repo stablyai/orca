@@ -5,9 +5,11 @@ import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   isPlainObject,
+  MANAGED_HOOK_TIMEOUT_SECONDS,
   removeManagedCommands,
   wrapPosixHookCommand,
   wrapWindowsGitBashHookCommand,
+  type HookCommandConfig,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
@@ -15,16 +17,19 @@ import {
 export type ClaudeCompatibleHookSettings = {
   configDirName: '.claude' | '.openclaude'
   scriptBaseName: 'claude-hook' | 'openclaude-hook'
+  supportsExecHookArgs: boolean
 }
 
 export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.claude',
-  scriptBaseName: 'claude-hook'
+  scriptBaseName: 'claude-hook',
+  supportsExecHookArgs: true
 }
 
 export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.openclaude',
-  scriptBaseName: 'openclaude-hook'
+  scriptBaseName: 'openclaude-hook',
+  supportsExecHookArgs: false
 }
 
 export const CLAUDE_EVENTS = [
@@ -110,13 +115,40 @@ export function getManagedCommand(scriptPath: string): string {
     : wrapPosixHookCommand(scriptPath)
 }
 
+export function getManagedLifecycleHook(
+  scriptPath: string,
+  settings = CLAUDE_HOOK_SETTINGS
+): HookCommandConfig {
+  if (process.platform !== 'win32' || !settings.supportsExecHookArgs) {
+    return buildManagedCommandHook(getManagedCommand(scriptPath))
+  }
+  const system32 = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
+  // Why: Claude's Windows shell form opens Git Bash consoles; exec form hosts cmd in a windowless console.
+  return {
+    type: 'command',
+    command: join(system32, 'conhost.exe'),
+    args: ['--headless', join(system32, 'cmd.exe'), '/d', '/c', scriptPath],
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+  }
+}
+
+export function hasSameManagedHookInvocation(
+  actual: HookCommandConfig,
+  expected: HookCommandConfig
+): boolean {
+  return (
+    actual.command === expected.command &&
+    JSON.stringify(actual.args ?? []) === JSON.stringify(expected.args ?? [])
+  )
+}
+
 export function getRemoteManagedCommand(scriptPath: string): string {
   return wrapPosixHookCommand(scriptPath)
 }
 
 export function applyManagedHooks(
   config: HooksConfig,
-  command: string,
+  hook: HookCommandConfig,
   scriptFileName = getManagedScriptFileName()
 ): HooksConfig {
   const nextHooks = { ...config.hooks }
@@ -127,7 +159,7 @@ export function applyManagedHooks(
     const cleaned = removeManagedCommands(current, isManagedCommand)
     const definition: HookDefinition = {
       ...event.definition,
-      hooks: [buildManagedCommandHook(command)]
+      hooks: [hook]
     }
     nextHooks[event.eventName] = [...cleaned, definition]
   }
