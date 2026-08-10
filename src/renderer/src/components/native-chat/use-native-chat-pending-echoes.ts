@@ -20,6 +20,7 @@ import {
   type NativeChatPendingSend
 } from './native-chat-pending'
 import { retainPendingSendsForConversation } from './native-chat-pending-conversation'
+import { dropNativeChatPendingOccurrences } from './native-chat-pending-occurrence'
 
 export type NativeChatPendingEchoes = {
   pending: NativeChatPendingSend[]
@@ -119,8 +120,12 @@ export function useNativeChatPendingEchoes(args: {
   const cancelSend = useCallback(
     (pendingId: string) => {
       // Why: detach/interrupt cancels the delayed Enter, so its optimistic echo
-      // must not come back from the pane cache as a prompt that was delivered.
-      const next = readPendingSendCache(pendingScope).filter((entry) => entry.id !== pendingId)
+      // must not come back from the pane cache as a prompt that was delivered,
+      // and a later repeat must stop waiting on the slot it would have taken.
+      const next = dropNativeChatPendingOccurrences(
+        readPendingSendCache(pendingScope),
+        (entry) => entry.id === pendingId
+      )
       setPending(writePendingSendCache(pendingScope, next))
     },
     [pendingScope]
