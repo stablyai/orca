@@ -56,10 +56,12 @@ export function recentQuickOpenPaths(params: {
     return []
   }
 
+  // Why: activeFileId is app-global and can point into another worktree; only an
+  // active file in THIS worktree should be excluded from its recents.
+  const activeFile =
+    activeFileId != null ? openFiles.find((file) => file.id === activeFileId) : undefined
   const activeRelativePath =
-    activeFileId != null
-      ? (openFiles.find((file) => file.id === activeFileId)?.relativePath ?? null)
-      : null
+    activeFile?.worktreeId === activeWorktreeId ? activeFile.relativePath : null
 
   // Only plain editor files in this worktree are reopenable recents.
   const openById = new Map(

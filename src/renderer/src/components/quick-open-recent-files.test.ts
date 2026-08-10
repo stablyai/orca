@@ -70,6 +70,25 @@ describe('recentQuickOpenPaths', () => {
     expect(result).toEqual(['b.ts', 'c.ts'])
   })
 
+  it('keeps a same-named file when the active file belongs to another worktree', () => {
+    // Why: activeFileId is app-global. An active a.ts in worktree 2 must not
+    // shadow this worktree's a.ts out of the recents.
+    const otherWorktreeActive = openFile({
+      relativePath: 'a.ts',
+      id: 'editor:wt-2:rt:/other/a.ts',
+      worktreeId: 'wt-2'
+    })
+    const local = openFile({ relativePath: 'a.ts' })
+    const result = recentQuickOpenPaths({
+      mruOpenFileIds: [local.id],
+      openFiles: [otherWorktreeActive, local],
+      recentlyClosed: [],
+      activeWorktreeId: WT,
+      activeFileId: otherWorktreeActive.id
+    })
+    expect(result).toEqual(['a.ts'])
+  })
+
   it('skips non-plain files (diffs, untitled) and other worktrees', () => {
     const files = [
       openFile({ relativePath: 'diff.ts', diffSource: {} as OpenFile['diffSource'] }),

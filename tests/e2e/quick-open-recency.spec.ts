@@ -9,6 +9,7 @@
  * MRU puts README first. Captures a screenshot for the PR demo.
  */
 
+import { join } from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import {
   waitForSessionReady,
@@ -29,28 +30,43 @@ test.describe('Quick Open recency', () => {
   }, testInfo) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
+    // Why: the e2e runner and the app share a host, so Node's path.join yields
+    // the separator the app itself would use — never hardcode '/'.
+    const base = await orcaPage.evaluate(
+      (wtId) =>
+        Object.values(window.__store!.getState().worktreesByRepo)
+          .flat()
+          .find((w) => w.id === wtId)!.path,
+      worktreeId
+    )
+    const filePathByRel = {
+      'README.md': join(base, 'README.md'),
+      'package.json': join(base, 'package.json'),
+      'CLAUDE.md': join(base, 'CLAUDE.md'),
+      'tsconfig.json': join(base, 'tsconfig.json')
+    }
+
     // Phase 1: open several editors and close one. tsconfig.json is opened last
     // and stays the active file (excluded from the recents list).
-    await orcaPage.evaluate((wtId) => {
-      const store = window.__store!
-      const state = store.getState()
-      const base = Object.values(state.worktreesByRepo)
-        .flat()
-        .find((w) => w.id === wtId)!.path
-      const open = (rel: string, language: string): void =>
-        state.openFile({
-          filePath: `${base}/${rel}`,
-          relativePath: rel,
-          worktreeId: wtId,
-          language,
-          mode: 'edit'
-        })
-      open('README.md', 'markdown')
-      open('package.json', 'json')
-      open('CLAUDE.md', 'markdown')
-      state.closeFile(`${base}/CLAUDE.md`)
-      open('tsconfig.json', 'json')
-    }, worktreeId)
+    await orcaPage.evaluate(
+      ({ wtId, files }) => {
+        const state = window.__store!.getState()
+        const open = (rel: keyof typeof files, language: string): void =>
+          state.openFile({
+            filePath: files[rel],
+            relativePath: rel,
+            worktreeId: wtId,
+            language,
+            mode: 'edit'
+          })
+        open('README.md', 'markdown')
+        open('package.json', 'json')
+        open('CLAUDE.md', 'markdown')
+        state.closeFile(files['CLAUDE.md'])
+        open('tsconfig.json', 'json')
+      },
+      { wtId: worktreeId, files: filePathByRel }
+    )
 
     // Phase 2: the editor tabs are materialized reactively — wait until all three
     // open editors have a unified tab before driving the MRU.
