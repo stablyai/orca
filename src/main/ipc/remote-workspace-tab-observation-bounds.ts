@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import type {
   RemoteWorkspaceObservedTab,
   RemoteWorkspaceObservedWorktree,
@@ -7,6 +8,15 @@ import type {
 
 export const MAX_REMOTE_WORKSPACE_OBSERVED_WORKTREES_PER_TARGET = 2_048
 export const MAX_REMOTE_WORKSPACE_OBSERVED_TABS_PER_TARGET = 4_096
+export const MAX_REMOTE_WORKSPACE_TARGET_ID_BYTES = 512
+
+export function isValidRemoteWorkspaceTargetId(targetId: unknown): targetId is string {
+  return (
+    typeof targetId === 'string' &&
+    targetId.length > 0 &&
+    Buffer.byteLength(targetId, 'utf8') <= MAX_REMOTE_WORKSPACE_TARGET_ID_BYTES
+  )
+}
 
 export function remoteWorkspaceTabSlotKey(
   worktreeInstanceId: string,
@@ -33,9 +43,7 @@ export function boundedRemoteWorkspaceObservedWorktrees(
   observation: RemoteWorkspaceTabObservation
 ): Map<string, RemoteWorkspaceObservedWorktree> | null {
   if (
-    typeof observation.targetId !== 'string' ||
-    !observation.targetId ||
-    observation.targetId.length > 512 ||
+    !isValidRemoteWorkspaceTargetId(observation.targetId) ||
     observation.hydrated !== true ||
     !Array.isArray(observation.worktrees) ||
     observation.worktrees.length > MAX_REMOTE_WORKSPACE_OBSERVED_WORKTREES_PER_TARGET

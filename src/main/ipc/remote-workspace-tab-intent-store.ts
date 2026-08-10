@@ -14,12 +14,17 @@ import {
 } from './remote-workspace-tab-intent-reconciliation'
 import {
   boundedRemoteWorkspaceObservedWorktrees,
+  isValidRemoteWorkspaceTargetId,
   remoteWorkspaceObservedTabMap
 } from './remote-workspace-tab-observation-bounds'
 import type {
   RemoteWorkspacePatchIntentCapture,
   RemoteWorkspaceTabObservationAuthority
 } from './remote-workspace-tab-intent-types'
+import {
+  MAX_REMOTE_WORKSPACE_UNTRACKED_INTENT_TARGETS,
+  RemoteWorkspaceUntrackedIntentFences
+} from './remote-workspace-untracked-intent-fences'
 
 type TargetState = {
   authority: RemoteWorkspaceTabObservationAuthority
@@ -32,12 +37,11 @@ type TargetState = {
 
 export const MAX_REMOTE_WORKSPACE_TAB_INTENTS_PER_TARGET = 2_048
 export const MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS = 64
-export const MAX_REMOTE_WORKSPACE_UNTRACKED_INTENT_TARGETS = 64
+export { MAX_REMOTE_WORKSPACE_UNTRACKED_INTENT_TARGETS }
 
 export class RemoteWorkspaceTabIntentStore {
   private readonly targets = new Map<string, TargetState>()
-  private readonly untrackedTargets = new Map<string, RemoteWorkspaceTabObservationAuthority>()
-  private untrackedOverflowed = false
+  private readonly untracked = new RemoteWorkspaceUntrackedIntentFences()
 
   observe(
     authority: RemoteWorkspaceTabObservationAuthority,
@@ -45,16 +49,16 @@ export class RemoteWorkspaceTabIntentStore {
   ): void {
     if (
       observation.hydrated !== true ||
-      observation.rendererGeneration !== authority.rendererGeneration
+      observation.rendererGeneration !== authority.rendererGeneration ||
+      !isValidRemoteWorkspaceTargetId(observation.targetId)
     ) {
       return
     }
     const existing = this.targets.get(observation.targetId)
-    const untrackedAuthority = this.untrackedTargets.get(observation.targetId)
     if (existing && !this.canObserve(existing.authority, authority)) {
       return
     }
-    if (untrackedAuthority && !this.canObserve(untrackedAuthority, authority)) {
+    if (!this.untracked.canObserve(observation.targetId, authority)) {
       return
     }
     const nextWorktrees = boundedRemoteWorkspaceObservedWorktrees(observation)
@@ -70,12 +74,8 @@ export class RemoteWorkspaceTabIntentStore {
           sequence: 0,
           worktrees: new Map()
         })
-      } else if (
-        typeof observation.targetId === 'string' &&
-        observation.targetId.length > 0 &&
-        observation.targetId.length <= 512
-      ) {
-        this.recordUntrackedTarget(observation.targetId, authority)
+      } else {
+        this.untracked.record(observation.targetId, authority)
       }
       return
     }
@@ -86,11 +86,11 @@ export class RemoteWorkspaceTabIntentStore {
           : false
       if (this.targets.size >= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS) {
         if (observation.authoritative !== true) {
-          this.recordUntrackedTarget(observation.targetId, authority)
+          this.untracked.record(observation.targetId, authority)
         }
         return
       }
-      this.untrackedTargets.delete(observation.targetId)
+      this.untracked.clear(observation.targetId)
       this.targets.set(observation.targetId, {
         authority,
         connected: observation.connected === true,
@@ -166,10 +166,7 @@ export class RemoteWorkspaceTabIntentStore {
   }
 
   forgetTarget(targetId: string, authority: RemoteWorkspaceTabObservationAuthority): void {
-    const untrackedAuthority = this.untrackedTargets.get(targetId)
-    if (untrackedAuthority && this.canObserve(untrackedAuthority, authority)) {
-      this.untrackedTargets.delete(targetId)
-    }
+    this.untracked.forget(targetId, authority)
     const state = this.targets.get(targetId)
     if (state && this.canObserve(state.authority, authority)) {
       this.targets.delete(targetId)
@@ -179,16 +176,13 @@ export class RemoteWorkspaceTabIntentStore {
   hasPending(targetId: string): boolean {
     const state = this.targets.get(targetId)
     return Boolean(
-      state?.overflowed ||
-      state?.intents.size ||
-      this.untrackedTargets.has(targetId) ||
-      (!state && this.untrackedOverflowed)
+      state?.overflowed || state?.intents.size || (!state && this.untracked.blocks(targetId))
     )
   }
 
   reconcile(targetId: string, snapshot: RemoteWorkspaceSnapshot): RemoteWorkspaceSnapshot | null {
     const state = this.targets.get(targetId)
-    if (!state && (this.untrackedTargets.has(targetId) || this.untrackedOverflowed)) {
+    if (!state && this.untracked.blocks(targetId)) {
       return null
     }
     if (state?.overflowed) {
@@ -209,7 +203,7 @@ export class RemoteWorkspaceTabIntentStore {
       return {
         fullSnapshot: false,
         sequences: new Map(),
-        untracked: this.untrackedTargets.has(targetId) || this.untrackedOverflowed
+        untracked: this.untracked.capture(targetId)
       }
     }
     return {
@@ -223,7 +217,7 @@ export class RemoteWorkspaceTabIntentStore {
           )
           .map(([slot, intent]) => [slot, intent.sequence])
       ),
-      untracked: false
+      untracked: null
     }
   }
 
@@ -235,9 +229,7 @@ export class RemoteWorkspaceTabIntentStore {
     if (!result.ok) {
       return
     }
-    if (capture.untracked) {
-      this.untrackedTargets.delete(targetId)
-    }
+    this.untracked.acknowledge(targetId, capture.untracked)
     const state = this.targets.get(targetId)
     if (!state) {
       return
@@ -266,19 +258,7 @@ export class RemoteWorkspaceTabIntentStore {
 
   resetForTests(): void {
     this.targets.clear()
-    this.untrackedTargets.clear()
-    this.untrackedOverflowed = false
-  }
-
-  private recordUntrackedTarget(
-    targetId: string,
-    authority: RemoteWorkspaceTabObservationAuthority
-  ): void {
-    if (this.untrackedTargets.size < MAX_REMOTE_WORKSPACE_UNTRACKED_INTENT_TARGETS) {
-      this.untrackedTargets.set(targetId, authority)
-      return
-    }
-    this.untrackedOverflowed = true
+    this.untracked.reset()
   }
 
   private evictBaseline(incomingConnected: boolean): boolean {
@@ -306,9 +286,18 @@ export class RemoteWorkspaceTabIntentStore {
   ): boolean {
     return (
       candidate.rendererGeneration > current.rendererGeneration ||
-      (candidate.rendererGeneration === current.rendererGeneration &&
-        candidate.processId === current.processId &&
-        candidate.senderId === current.senderId)
+      this.sameAuthority(current, candidate)
+    )
+  }
+
+  private sameAuthority(
+    left: RemoteWorkspaceTabObservationAuthority,
+    right: RemoteWorkspaceTabObservationAuthority
+  ): boolean {
+    return (
+      left.rendererGeneration === right.rendererGeneration &&
+      left.processId === right.processId &&
+      left.senderId === right.senderId
     )
   }
 }

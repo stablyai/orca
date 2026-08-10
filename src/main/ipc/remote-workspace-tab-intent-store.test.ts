@@ -473,9 +473,116 @@ describe('RemoteWorkspaceTabIntentStore', () => {
 
     const acknowledged = snapshot(3, [target65Tab])
     const capture = store.capturePatch('target-65', acknowledged.session)
-    expect(capture.untracked).toBe(true)
+    expect(capture.untracked).not.toBeNull()
     store.acknowledgePatch('target-65', capture, { ok: true, snapshot: acknowledged })
     expect(store.hasPending('target-65')).toBe(false)
     expect(store.reconcile('target-65', acknowledged)).toEqual(acknowledged)
+  })
+
+  it('keeps a newer untracked mutation pending when an older patch is acknowledged', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    for (let index = 1; index <= MAX_REMOTE_WORKSPACE_TAB_INTENT_TARGETS; index += 1) {
+      const retained = tab(`retained-${index}`, index)
+      store.observe(
+        authority(1),
+        observation({
+          authoritative: true,
+          generation: 1,
+          instance: `worktree-${index}`,
+          tabs: [],
+          targetId: `target-${index}`
+        })
+      )
+      store.observe(
+        authority(1),
+        observation({
+          generation: 1,
+          instance: `worktree-${index}`,
+          tabs: [retained],
+          targetId: `target-${index}`
+        })
+      )
+    }
+
+    const first = tab('first', 65)
+    const later = tab('later', 66)
+    store.observe(
+      authority(1),
+      observation({ generation: 1, instance: 'worktree-65', tabs: [first], targetId: 'target-65' })
+    )
+    const olderPatch = snapshot(2, [first])
+    const olderCapture = store.capturePatch('target-65', olderPatch.session)
+    expect(olderCapture.untracked).not.toBeNull()
+    store.observe(
+      authority(1),
+      observation({
+        generation: 1,
+        instance: 'worktree-65',
+        tabs: [first, later],
+        targetId: 'target-65'
+      })
+    )
+
+    store.acknowledgePatch('target-65', olderCapture, { ok: true, snapshot: olderPatch })
+
+    expect(store.hasPending('target-65')).toBe(true)
+    expect(store.reconcile('target-65', olderPatch)).toBeNull()
+
+    const laterPatch = snapshot(3, [first, later])
+    const laterCapture = store.capturePatch('target-65', laterPatch.session)
+    const afterRestart = tab('after-restart', 67)
+    store.observe(
+      authority(2, 2, 11),
+      observation({
+        generation: 2,
+        instance: 'worktree-65',
+        tabs: [first, later, afterRestart],
+        targetId: 'target-65'
+      })
+    )
+    store.acknowledgePatch('target-65', laterCapture, { ok: true, snapshot: laterPatch })
+    expect(store.hasPending('target-65')).toBe(true)
+  })
+
+  it('rejects oversized target ids before retaining fail-closed state', () => {
+    const store = new RemoteWorkspaceTabIntentStore()
+    const oversizedTargetId = 'x'.repeat(1024 * 1024)
+
+    store.observe(
+      authority(1),
+      observation({
+        generation: 1,
+        instance: 'worktree-oversized',
+        tabs: [],
+        targetId: oversizedTargetId
+      })
+    )
+
+    expect(store.stateForTests(oversizedTargetId)).toBeNull()
+    expect(store.hasPending(oversizedTargetId)).toBe(false)
+
+    const multibyteOversizedTargetId = '🦀'.repeat(129)
+    store.observe(
+      authority(1),
+      observation({
+        generation: 1,
+        instance: 'worktree-multibyte',
+        tabs: [],
+        targetId: multibyteOversizedTargetId
+      })
+    )
+    expect(store.stateForTests(multibyteOversizedTargetId)).toBeNull()
+
+    const boundaryTargetId = 'v'.repeat(512)
+    store.observe(
+      authority(1),
+      observation({
+        generation: 1,
+        instance: 'worktree-boundary',
+        tabs: [],
+        targetId: boundaryTargetId
+      })
+    )
+    expect(store.stateForTests(boundaryTargetId)).toEqual({ intents: 0, overflowed: false })
   })
 })

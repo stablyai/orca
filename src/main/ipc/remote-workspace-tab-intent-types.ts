@@ -4,8 +4,13 @@ export type RemoteWorkspaceTabObservationAuthority = {
   senderId: number
 }
 
+export type RemoteWorkspaceUntrackedIntentFence = {
+  authority: RemoteWorkspaceTabObservationAuthority
+  sequence: number
+}
+
 export type RemoteWorkspacePatchIntentCapture = {
   fullSnapshot: boolean
   sequences: Map<string, number>
-  untracked: boolean
+  untracked: RemoteWorkspaceUntrackedIntentFence | null
 }
