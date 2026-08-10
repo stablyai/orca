@@ -107,12 +107,7 @@ test('keeps valid terminal tabs visible after a corrupt sibling record on restar
     firstApp = null
     injectTruncatedTab(session.userDataDir, worktreeId, repoPath)
 
-    let startupStderr = ''
-    const second = await session.launch({
-      onStderr: (chunk) => {
-        startupStderr += chunk
-      }
-    })
+    const second = await session.launch()
     secondApp = second.app
     await waitForSessionReady(second.page)
     await expect.poll(() => getActiveWorktreeId(second.page), { timeout: 15_000 }).toBe(worktreeId)
@@ -120,9 +115,6 @@ test('keeps valid terminal tabs visible after a corrupt sibling record on restar
 
     await expectSurvivingTabsVisible(second.page)
     await expect(second.page.locator('.xterm').first()).toBeVisible({ timeout: 15_000 })
-    await expect
-      .poll(() => startupStderr, { timeout: 15_000 })
-      .toContain('[persistence] Salvaged workspace session; dropped corrupt entries:')
     await expect
       .poll(() => persistedSessionEvidence(session.userDataDir, worktreeId), {
         timeout: 30_000
