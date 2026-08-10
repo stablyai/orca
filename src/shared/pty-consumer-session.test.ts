@@ -32,7 +32,7 @@ function ownerHello(overrides: Partial<PtyConsumerSessionHello> = {}): PtyConsum
   }
 }
 
-function createSession(options: { now?: () => number } = {}): PtyConsumerSession {
+function createSession(options: { monotonicNow?: () => number } = {}): PtyConsumerSession {
   let lease = 0
   return new PtyConsumerSession({
     serverBuildId: 'relay-build',
@@ -225,7 +225,7 @@ describe('PtyConsumerSession', () => {
 
   it('expires a displaced owner restored after its connection already closed', () => {
     let now = 10
-    const session = createSession({ now: () => now })
+    const session = createSession({ monotonicNow: () => now })
     const first = session.admit(ownerHello(), auth('connection-1'))
     first.commitPublication()
 
@@ -358,7 +358,7 @@ describe('PtyConsumerSession', () => {
 
   it('separates a disconnected holder from the owner it belongs to', () => {
     let now = 10
-    const session = createSession({ now: () => now })
+    const session = createSession({ monotonicNow: () => now })
     const first = session.admit(ownerHello(), auth('connection-1'))
     first.commitPublication()
     session.close('connection-1')
@@ -389,7 +389,7 @@ describe('PtyConsumerSession', () => {
 
   it('clamps a refused disconnected holder to the shared grace floor', () => {
     let now = 10
-    const session = createSession({ now: () => now })
+    const session = createSession({ monotonicNow: () => now })
     const first = session.admit(ownerHello(), auth('connection-1'))
     first.commitPublication()
     // Why 'peer-closed': the floor is only for an owner the relay watched leave.
@@ -417,7 +417,7 @@ describe('PtyConsumerSession', () => {
 
   it('keeps the whole grace for an owner the relay tore down for backpressure', () => {
     let now = 1_000
-    const session = createSession({ now: () => now })
+    const session = createSession({ monotonicNow: () => now })
     const first = session.admit(ownerHello(), auth('connection-1'))
     first.commitPublication()
     // The relay destroyed this socket because its lane queue was full. That is the signature of an
@@ -497,7 +497,7 @@ describe('PtyConsumerSession', () => {
 
   it('elects a new owner after disconnected-owner grace expires', () => {
     let now = 10
-    const session = createSession({ now: () => now })
+    const session = createSession({ monotonicNow: () => now })
     const first = session.admit(ownerHello(), auth('connection-1'))
     first.commitPublication()
     session.close('connection-1')

@@ -15,7 +15,7 @@ type HeldOwner = {
 
 export type RefuseHeldPtyConsumerOwnerOptions = {
   ownerGraceMs: number
-  now: number
+  monotonicNow: number
   sameClient: boolean
   // Why a callback instead of mutating the record: the owner record is reachable from `replaces`
   // chains and from displaced-owner snapshots already handed to callers. Clamping in place would
@@ -76,7 +76,8 @@ function clampDisconnectedOwnerGrace(
     return
   }
   const floorStart =
-    options.now - Math.max(options.ownerGraceMs - PTY_CONSUMER_OWNER_HELD_GRACE_FLOOR_MS, 0)
+    options.monotonicNow -
+    Math.max(options.ownerGraceMs - PTY_CONSUMER_OWNER_HELD_GRACE_FLOOR_MS, 0)
   if ((owner.disconnectedAt ?? 0) <= floorStart) {
     return
   }

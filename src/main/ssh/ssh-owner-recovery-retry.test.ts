@@ -191,7 +191,7 @@ describe('SSH owner recovery retry', () => {
     const ownerSession = new PtyConsumerSession({
       serverBuildId: 'build-a',
       createLease: () => 'lease-a',
-      now: () => relayNow
+      monotonicNow: () => relayNow
     })
     const hello = { clientInstanceId: 'client-a', requestedRole: 'session-owner' as const }
     const incumbent = ownerSession.admit(hello, {

@@ -107,6 +107,20 @@ export async function retrySshOwnerRecoveryWhileBlocked<T>(
       }
       const remainingMs = deadline - performance.now()
       if (remainingMs <= 0) {
+        if (reason === 'disconnected-holder') {
+          try {
+            const result = await attempt()
+            if (!gate.isCurrent()) {
+              throw error
+            }
+            return result
+          } catch (probeError) {
+            if (gate.isCurrent() && retryReasonFor(probeError) === reason) {
+              gate.onRetryExhausted?.(reason)
+            }
+            throw probeError
+          }
+        }
         gate.onRetryExhausted?.(reason)
         throw error
       }

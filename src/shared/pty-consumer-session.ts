@@ -47,7 +47,7 @@ type OwnerRecord = {
 
 export class PtyConsumerSession {
   private readonly clients = new Map<string, ClientRecord>()
-  private readonly now: () => number
+  private readonly monotonicNow: () => number
   private readonly createLease: () => string
   private readonly ownerGraceMs: number
   private nextClientGeneration = 1
@@ -56,7 +56,7 @@ export class PtyConsumerSession {
 
   constructor(private readonly options: PtyConsumerSessionOptions) {
     assertPtyConsumerSessionOptions(options)
-    this.now = options.now ?? Date.now
+    this.monotonicNow = options.monotonicNow ?? (() => performance.now())
     this.createLease = options.createLease ?? randomUUID
     this.ownerGraceMs = options.ownerGraceMs ?? PTY_CONSUMER_OWNER_GRACE_MS
   }
@@ -125,7 +125,7 @@ export class PtyConsumerSession {
           replaces: {
             ...this.owner.replaces,
             state: 'disconnected',
-            disconnectedAt: this.now(),
+            disconnectedAt: this.monotonicNow(),
             disconnectCause: cause
           }
         }
@@ -139,7 +139,7 @@ export class PtyConsumerSession {
     this.owner = {
       ...this.owner,
       state: 'disconnected',
-      disconnectedAt: this.now(),
+      disconnectedAt: this.monotonicNow(),
       disconnectCause: cause
     }
   }
@@ -218,7 +218,7 @@ export class PtyConsumerSession {
     if (!matchesPtyConsumerOwnerClaim(hello, authentication, current)) {
       refuseHeldPtyConsumerOwner(current, {
         ownerGraceMs: this.ownerGraceMs,
-        now: this.now(),
+        monotonicNow: this.monotonicNow(),
         sameClient: isPtyConsumerOwnerSameClient(hello, authentication, current),
         clampGraceTo: (disconnectedAt) => {
           this.owner = { ...current, disconnectedAt }
@@ -281,7 +281,7 @@ export class PtyConsumerSession {
   private expireOwner(): void {
     if (
       this.owner?.state === 'disconnected' &&
-      this.now() - (this.owner.disconnectedAt ?? this.now()) >= this.ownerGraceMs
+      this.monotonicNow() - (this.owner.disconnectedAt ?? this.monotonicNow()) >= this.ownerGraceMs
     ) {
       this.owner = null
     }

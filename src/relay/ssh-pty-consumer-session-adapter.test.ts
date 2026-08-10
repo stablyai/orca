@@ -139,8 +139,8 @@ describe('SshPtyConsumerSessionAdapter', () => {
   it.each([['peer-closed'], ['local']] as const)(
     'shortens a refused owner grace only for a %s detach',
     async (cause) => {
-      // Why only Date: flushRequests rides setImmediate, which fake timers would otherwise capture.
-      vi.useFakeTimers({ toFake: ['Date'] })
+      // Why only the clocks: flushRequests rides setImmediate, which fake timers would otherwise capture.
+      vi.useFakeTimers({ toFake: ['Date', 'performance'] })
       dispatcher = new RelayDispatcher(
         (_data, onSettled) => {
           onSettled({ ok: true })
@@ -184,7 +184,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
         code: PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR
       })
 
-      vi.setSystemTime(Date.now() + PTY_CONSUMER_OWNER_HELD_GRACE_FLOOR_MS + 1)
+      vi.advanceTimersByTime(PTY_CONSUMER_OWNER_HELD_GRACE_FLOOR_MS + 1)
       const retryId = dispatcher.attachClient(
         (data, onSettled) => {
           rivalWrites.push(Buffer.from(data))
