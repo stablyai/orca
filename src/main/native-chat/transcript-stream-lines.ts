@@ -1,5 +1,10 @@
 import type { Readable } from 'node:stream'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
+import {
+  consumeCodexTextMirror,
+  isCodexTranscriptDecoder,
+  type CodexTextMirrorRecord
+} from './transcript-codex-mirror'
 import { transcriptFallbackId } from './transcript-fallback-id'
 
 type TranscriptDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
@@ -12,6 +17,8 @@ export async function decodeTranscriptStream(
   includeTrailingLine: boolean
 ): Promise<{ messages: NativeChatMessage[]; consumedBytes: number }> {
   const messages: NativeChatMessage[] = []
+  const deduplicateCodexMirrors = isCodexTranscriptDecoder(decode)
+  let previousCodexRecord: CodexTextMirrorRecord | null = null
   let pending = ''
   let consumedBytes = 0
 
@@ -40,7 +47,13 @@ export async function decodeTranscriptStream(
       return
     }
     const message = decode(line, transcriptFallbackId(filePath, start + relativeOffset))
-    if (message) {
+    const mirror = deduplicateCodexMirrors
+      ? consumeCodexTextMirror(previousCodexRecord, line)
+      : null
+    if (mirror) {
+      previousCodexRecord = mirror.current
+    }
+    if (message && !mirror?.duplicate) {
       messages.push(message)
     }
   }

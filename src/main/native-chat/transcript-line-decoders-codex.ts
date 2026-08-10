@@ -14,9 +14,55 @@ import {
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
 import { CODEX_EVENT_TURN_ABORTED } from './transcript-turn-markers'
 
+type CodexTranscriptLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
+
+type CodexTranscriptDecodeState = {
+  paginated: boolean
+}
+
+const codexTranscriptDecoderStates = new WeakMap<
+  CodexTranscriptLineDecoder,
+  CodexTranscriptDecodeState
+>()
+
 export function decodeCodexTranscriptLine(
   line: string,
   fallbackId: string
+): NativeChatMessage | null {
+  return decodeCodexTranscriptLineWithState(line, fallbackId)
+}
+
+/**
+ * Creates the stateful decoder used by file readers.
+ *
+ * Paginated Codex transcripts contain model-facing response copies followed by
+ * canonical `item_completed` records. Legacy response-only rollouts have no
+ * canonical copy, so their Response API text blocks remain a fallback until a
+ * paginated marker is observed.
+ */
+export function createCodexTranscriptLineDecoder(): CodexTranscriptLineDecoder {
+  const state: CodexTranscriptDecodeState = { paginated: false }
+  const decode: CodexTranscriptLineDecoder = (line, fallbackId) =>
+    decodeCodexTranscriptLineWithState(line, fallbackId, state)
+  codexTranscriptDecoderStates.set(decode, state)
+  return decode
+}
+
+export function isCodexTranscriptLineDecoder(decode: CodexTranscriptLineDecoder): boolean {
+  return decode === decodeCodexTranscriptLine || codexTranscriptDecoderStates.has(decode)
+}
+
+export function resetCodexTranscriptLineDecoder(decode: CodexTranscriptLineDecoder): void {
+  const state = codexTranscriptDecoderStates.get(decode)
+  if (state) {
+    state.paginated = false
+  }
+}
+
+function decodeCodexTranscriptLineWithState(
+  line: string,
+  fallbackId: string,
+  state?: CodexTranscriptDecodeState
 ): NativeChatMessage | null {
   const record = parseJsonObject(line)
   if (!record) {
@@ -30,8 +76,16 @@ export function decodeCodexTranscriptLine(
   const timestamp = parseTimestamp(record.timestamp)
   const baseId = extractString(payload.id) ?? fallbackId
 
+  if (
+    state &&
+    ((record.type === 'session_meta' && payload.history_mode === 'paginated') ||
+      (record.type === 'event_msg' && payload.type === 'item_completed'))
+  ) {
+    state.paginated = true
+  }
+
   if (record.type === 'response_item') {
-    return codexResponseItem(payload, baseId, timestamp)
+    return codexResponseItem(payload, baseId, timestamp, state !== undefined && !state.paginated)
   }
   if (record.type === 'event_msg') {
     return codexEventMessage(payload, baseId, timestamp)
@@ -55,7 +109,8 @@ function codexUnwrappedResponseItem(
 function codexResponseItem(
   payload: Record<string, unknown>,
   id: string,
-  timestamp: number | null
+  timestamp: number | null,
+  includeResponseApiText = false
 ): NativeChatMessage | null {
   if (payload.type === 'message') {
     const role =
@@ -63,7 +118,11 @@ function codexResponseItem(
     if (!role) {
       return null
     }
-    const blocks = claudeContentBlocks(payload.content)
+    const standardBlocks = claudeContentBlocks(payload.content)
+    const blocks =
+      standardBlocks.length > 0 || !includeResponseApiText
+        ? standardBlocks
+        : codexTurnItemBlocks(payload.content)
     if (blocks.length === 0) {
       return null
     }

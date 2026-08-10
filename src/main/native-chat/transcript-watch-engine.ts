@@ -11,6 +11,7 @@ import {
   type IncrementalTranscriptState
 } from './transcript-incremental-reader'
 import { createTranscriptNativeWatcher } from './transcript-native-watcher'
+import { resetCodexTranscriptLineDecoder } from './transcript-line-decoders-codex'
 import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
 import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-turn-lifecycle'
 import type {
@@ -66,7 +67,8 @@ export async function installTranscriptWatcher(
     pendingChunks: [],
     pendingStart: 0,
     pendingBytes: 0,
-    droppingOversizedRecord: false
+    droppingOversizedRecord: false,
+    previousCodexRecord: null
   }
   let watchedVersion: TranscriptFileVersion | null = null
   let watchedBoundary = ''
@@ -156,6 +158,7 @@ export async function installTranscriptWatcher(
     }
     if (contentReplaced) {
       resetIncrementalTranscriptState(state)
+      resetCodexTranscriptLineDecoder(decode)
     }
 
     const replacementSnapshot =
@@ -177,6 +180,7 @@ export async function installTranscriptWatcher(
     if (replacementSnapshot && onReplace) {
       state.offset = replacementSnapshot.consumedTo
       state.pendingStart = state.offset
+      state.previousCodexRecord = replacementSnapshot.lastCodexRecord ?? null
       onReplace(
         replacementSnapshot.messages,
         replacementSnapshot.hasMore,
@@ -207,6 +211,7 @@ export async function installTranscriptWatcher(
       if (initialSnapshot) {
         state.offset = initialSnapshot.consumedTo
         state.pendingStart = state.offset
+        state.previousCodexRecord = initialSnapshot.lastCodexRecord ?? null
         onInitialSnapshot(
           initialSnapshot.messages,
           initialSnapshot.hasMore,

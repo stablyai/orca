@@ -1,5 +1,10 @@
 import { open, stat } from 'node:fs/promises'
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import {
+  consumeCodexTextMirror,
+  isCodexTranscriptDecoder,
+  type CodexTextMirrorRecord
+} from './transcript-codex-mirror'
 import { transcriptFallbackId } from './transcript-fallback-id'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
@@ -14,6 +19,7 @@ export type IncrementalTranscriptState = {
   pendingStart: number
   pendingBytes: number
   droppingOversizedRecord: boolean
+  previousCodexRecord: CodexTextMirrorRecord | null
 }
 
 export function resetIncrementalTranscriptState(state: IncrementalTranscriptState): void {
@@ -22,6 +28,7 @@ export function resetIncrementalTranscriptState(state: IncrementalTranscriptStat
   state.pendingStart = 0
   state.pendingBytes = 0
   state.droppingOversizedRecord = false
+  state.previousCodexRecord = null
 }
 
 export async function readIncrementalTranscriptMessages(
@@ -37,6 +44,7 @@ export async function readIncrementalTranscriptMessages(
     return []
   }
   const messages: NativeChatMessage[] = []
+  const deduplicateCodexMirrors = isCodexTranscriptDecoder(decode)
   const handle = await open(filePath, 'r')
   try {
     const stream = handle.createReadStream({ start: state.offset, end: end - 1, autoClose: false })
@@ -49,6 +57,8 @@ export async function readIncrementalTranscriptMessages(
         retainPart(chunk.subarray(segmentStart, newline))
         if (!state.droppingOversizedRecord) {
           decodeLine()
+        } else if (deduplicateCodexMirrors) {
+          state.previousCodexRecord = null
         }
         resetPendingLine(absoluteOffset + newline + 1)
         segmentStart = newline + 1
@@ -99,7 +109,13 @@ export async function readIncrementalTranscriptMessages(
       onLifecycle?.(lifecycle)
     }
     const message = decode(line, fallbackId)
-    if (!message) {
+    const mirror = deduplicateCodexMirrors
+      ? consumeCodexTextMirror(state.previousCodexRecord, line)
+      : null
+    if (mirror) {
+      state.previousCodexRecord = mirror.current
+    }
+    if (!message || mirror?.duplicate) {
       return
     }
     messages.push(message)

@@ -9,7 +9,7 @@ import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
   decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
+  createCodexTranscriptLineDecoder,
   decodeGrokTranscriptLine,
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
@@ -51,7 +51,7 @@ export async function readNativeChatTranscript(
       return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
     }
     if (transcriptAgent === 'codex') {
-      return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
+      return { messages: await readTranscript(filePath, createCodexTranscriptLineDecoder()) }
     }
     if (transcriptAgent === 'grok') {
       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }

@@ -8,11 +8,17 @@ import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
   decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
+  createCodexTranscriptLineDecoder,
   decodeGrokTranscriptLine,
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { transcriptFallbackId } from './transcript-fallback-id'
+import {
+  codexTextMirrorRecord,
+  consumeCodexTextMirror,
+  isCodexTranscriptDecoder,
+  type CodexTextMirrorRecord
+} from './transcript-codex-mirror'
 import {
   nativeChatTurnLifecycleDecoderForAgent,
   type NativeChatTurnLifecycleDecoder
@@ -29,7 +35,7 @@ export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineD
     return decodeClaudeTranscriptLine
   }
   if (transcriptAgent === 'codex') {
-    return decodeCodexTranscriptLine
+    return createCodexTranscriptLineDecoder()
   }
   if (transcriptAgent === 'grok') {
     return decodeGrokTranscriptLine
@@ -56,8 +62,10 @@ export async function readNativeChatTranscriptTailFile(
   beforeOffset: number
   malformedRecordCount?: number
   oversizedRecordCount?: number
+  lastCodexRecord?: CodexTextMirrorRecord | null
 }> {
   signal?.throwIfAborted()
+  const deduplicateCodexMirrors = isCodexTranscriptDecoder(decode)
   const end = Math.min((await stat(filePath)).size, endOffset ?? Number.MAX_SAFE_INTEGER)
   signal?.throwIfAborted()
   if (end === 0) {
@@ -71,6 +79,9 @@ export async function readNativeChatTranscriptTailFile(
   let malformedRecordCount = 0
   let oversizedRecordCount = 0
   let ignoreNextMalformedRecord = false
+  let previousCodexRecord: CodexTextMirrorRecord | null = null
+  let capturedLastRecord = false
+  let lastCodexRecord: CodexTextMirrorRecord | null = null
   try {
     signal?.throwIfAborted()
     const consumedTo = includeTrailingLine
@@ -99,6 +110,11 @@ export async function readNativeChatTranscriptTailFile(
         retainPart(buffer.subarray(index + 1, segmentEnd))
         if (!lineOversized) {
           decodeLine(start + index + 1, newestFirst)
+        } else if (deduplicateCodexMirrors) {
+          previousCodexRecord = null
+          if (!capturedLastRecord) {
+            capturedLastRecord = true
+          }
         }
         resetLine()
         segmentEnd = index
@@ -122,7 +138,8 @@ export async function readNativeChatTranscriptTailFile(
       hasMore: limit > 0 && chronological.length > limit,
       beforeOffset: selected[0]?.offset ?? end,
       ...(malformedRecordCount > 0 ? { malformedRecordCount } : {}),
-      ...(oversizedRecordCount > 0 ? { oversizedRecordCount } : {})
+      ...(oversizedRecordCount > 0 ? { oversizedRecordCount } : {}),
+      ...(deduplicateCodexMirrors ? { lastCodexRecord } : {})
     }
   } finally {
     await handle.close()
@@ -159,9 +176,14 @@ export async function readNativeChatTranscriptTailFile(
     if (!line) {
       return
     }
+    if (deduplicateCodexMirrors && !capturedLastRecord) {
+      capturedLastRecord = true
+      lastCodexRecord = codexTextMirrorRecord(line)
+    }
     try {
       JSON.parse(line)
     } catch {
+      previousCodexRecord = null
       if (ignoreNextMalformedRecord) {
         ignoreNextMalformedRecord = false
         return
@@ -176,8 +198,20 @@ export async function readNativeChatTranscriptTailFile(
     // from the last visible assistant message.
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
     const message = decode(line, fallbackId)
-    if (message) {
+    const mirror = deduplicateCodexMirrors
+      ? consumeCodexTextMirror(previousCodexRecord, line)
+      : null
+    if (mirror) {
+      previousCodexRecord = mirror.current
+    }
+    if (message && !mirror?.duplicate) {
       messages.push({ message, offset: lineOffset })
+    } else if (mirror?.duplicate) {
+      // The pagination cursor must skip both physical records in the pair.
+      const retained = messages.at(-1)
+      if (retained) {
+        retained.offset = lineOffset
+      }
     }
   }
 }

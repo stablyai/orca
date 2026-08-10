@@ -70,11 +70,7 @@ export function claudeContentBlocks(content: unknown): NativeChatBlock[] {
 
 function claudeContentBlock(record: Record<string, unknown>): NativeChatBlock | null {
   switch (record.type) {
-    case 'text':
-    case 'input_text':
-    case 'output_text': {
-      // Codex response-item transcripts use the Response API text block names,
-      // while Claude and older Codex rollouts use `text` for the same payload.
+    case 'text': {
       const text = extractString(record.text)
       return text ? { type: 'text', text } : null
     }
