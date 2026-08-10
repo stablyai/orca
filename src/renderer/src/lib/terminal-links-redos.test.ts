@@ -9,7 +9,10 @@ import { extractTerminalFileLinks, extractTerminalFileLinkCandidates } from './t
 describe('terminal-links ReDoS guard (#5970)', () => {
   const cases: [string, string][] = [
     ['separator + space padding', `a/${' '.repeat(30_000)}`],
-    ['advertised url + space padding', `Web Interface http://127.0.0.1:4040${' '.repeat(30_000)}`]
+    ['advertised url + space padding', `Web Interface http://127.0.0.1:4040${' '.repeat(30_000)}`],
+    // The local-path class accepts Unicode letters/marks; keep that scan linear too.
+    ['non-latin separator + space padding', `한/${' '.repeat(30_000)}`],
+    ['non-latin run + space padding', `${'한글'.repeat(15_000)}/${' '.repeat(30_000)}`]
   ]
 
   for (const [name, line] of cases) {

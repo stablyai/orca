@@ -215,6 +215,45 @@ describe('terminal path helpers', () => {
       expect(links).toHaveLength(20_000)
       expect(links[0].pathText).toBe('/tmp/Foo Bar/file')
     }, 5_000)
+
+    // An ASCII-only character class truncated these at the first non-Latin
+    // character, so only the ASCII prefix was linkified and the filename sat
+    // outside every link range.
+    it.each([
+      ['Korean', '/Users/me/docs/한글폴더/파일.md'],
+      ['Japanese', '/Users/me/docs/日本語/ファイル.md'],
+      ['Chinese', '/Users/me/docs/中文目录/文件.md'],
+      ['Cyrillic', '/Users/me/docs/Документы/файл.md'],
+      ['Greek', '/Users/me/docs/έγγραφα/αρχείο.md']
+    ])('detects unspaced %s paths end to end', (_script, path) => {
+      const links = extractTerminalFileLinks(path)
+      expect(links).toHaveLength(1)
+      expect(links[0]).toMatchObject({ pathText: path, displayText: path })
+    })
+
+    it('detects relative paths that start with a non-Latin segment', () => {
+      const links = extractTerminalFileLinks('한글폴더/파일.md')
+      expect(links).toHaveLength(1)
+      expect(links[0]).toMatchObject({ pathText: '한글폴더/파일.md' })
+    })
+
+    it('keeps line and column suffixes on non-Latin paths', () => {
+      const links = extractTerminalFileLinks('/Users/me/docs/한글폴더/파일.ts:42:7')
+      expect(links).toHaveLength(1)
+      expect(links[0]).toMatchObject({
+        pathText: '/Users/me/docs/한글폴더/파일.ts',
+        line: 42,
+        column: 7
+      })
+    })
+
+    // macOS stores many names decomposed, while terminal output is composed.
+    it('detects NFD-decomposed non-Latin paths', () => {
+      const path = `/Users/me/docs/${'한글폴더'.normalize('NFD')}/${'파일.md'.normalize('NFD')}`
+      const links = extractTerminalFileLinks(path)
+      expect(links).toHaveLength(1)
+      expect(links[0]).toMatchObject({ pathText: path })
+    })
   })
 
   it('supports Windows cwd resolution for terminal file links', () => {
