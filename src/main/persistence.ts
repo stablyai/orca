@@ -954,6 +954,7 @@ function normalizeNotificationSettings(value: unknown): NotificationSettings {
   const rawSoundId = (candidate as { customSoundId?: unknown }).customSoundId
   const customSoundId =
     rawSoundId === 'system' ||
+    rawSoundId === 'none' ||
     rawSoundId === 'two-tone' ||
     rawSoundId === 'bong' ||
     rawSoundId === 'thump' ||

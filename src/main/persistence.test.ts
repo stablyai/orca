@@ -3358,6 +3358,25 @@ describe('Store', () => {
     })
   })
 
+  it('preserves silent notification sound selection from persisted settings', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        notifications: {
+          customSoundId: 'none'
+        }
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().notifications.customSoundId).toBe('none')
+  })
+
   it('clamps notification custom sound volume from persisted settings', async () => {
     writeDataFile({
       schemaVersion: 1,

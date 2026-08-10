@@ -80,14 +80,16 @@ export async function sendNotificationSettingsTestNotification(
     requireDisplayConfirmation: true
   })
   if (result.delivered) {
-    const soundResult =
-      notificationSettings.customSoundId !== 'system'
-        ? await window.api.notifications.playSound({
-            force: true,
-            volume: volumeDraft
-          })
-        : null
-    if (notificationSettings.customSoundId !== 'system' && soundResult && !soundResult.played) {
+    const shouldPlaySound =
+      notificationSettings.customSoundId !== 'system' &&
+      notificationSettings.customSoundId !== 'none'
+    const soundResult = shouldPlaySound
+      ? await window.api.notifications.playSound({
+          force: true,
+          volume: volumeDraft
+        })
+      : null
+    if (shouldPlaySound && soundResult && !soundResult.played) {
       toast.error(
         translate(
           'auto.components.settings.NotificationsPane.98d70fb261',

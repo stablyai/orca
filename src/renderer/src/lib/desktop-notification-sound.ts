@@ -2,7 +2,7 @@ export async function playDesktopNotificationSound(
   customSoundId: string | null | undefined,
   customSoundVolume?: number | null
 ): Promise<boolean> {
-  if (!customSoundId || customSoundId === 'system') {
+  if (!customSoundId || customSoundId === 'system' || customSoundId === 'none') {
     return false
   }
 

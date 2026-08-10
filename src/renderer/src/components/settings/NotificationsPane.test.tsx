@@ -23,7 +23,9 @@ vi.mock('sonner', () => ({
   }
 }))
 
-function createSettings(): GlobalSettings {
+function createSettings(
+  notificationOverrides: Partial<GlobalSettings['notifications']> = {}
+): GlobalSettings {
   return {
     notifications: {
       enabled: true,
@@ -32,7 +34,8 @@ function createSettings(): GlobalSettings {
       suppressWhenFocused: true,
       customSoundId: 'system',
       customSoundPath: null,
-      customSoundVolume: 50
+      customSoundVolume: 50,
+      ...notificationOverrides
     }
   } as GlobalSettings
 }
@@ -55,8 +58,19 @@ describe('NotificationsPane', () => {
 
     expect(html).toContain('Notification Sound')
     expect(getNotificationSoundOptions(null).map((option) => option.title)).toEqual(
-      expect.arrayContaining(['System Default', 'Two Tone', 'Bong', 'Ding'])
+      expect.arrayContaining(['System Default', 'None', 'Two Tone', 'Bong', 'Ding'])
     )
+  })
+
+  it('hides the volume control when notifications are silent', () => {
+    const html = renderToStaticMarkup(
+      <NotificationsPane
+        settings={createSettings({ customSoundId: 'none' })}
+        updateSettings={vi.fn()}
+      />
+    )
+
+    expect(html).not.toContain('Notification sound volume')
   })
 
   it('resets the volume draft only when the persisted volume changes', () => {
@@ -138,6 +152,37 @@ describe('NotificationsPane', () => {
     await sendNotificationSettingsTestNotification(createSettings().notifications, 50)
 
     expect(toastMessage).not.toHaveBeenCalled()
+    expect(toastError).not.toHaveBeenCalled()
+    expect(toastSuccess).toHaveBeenCalledWith('Test notification sent')
+  })
+
+  it('sends silent test notifications without playing renderer audio', async () => {
+    const notifications = {
+      getPermissionStatus: vi.fn(async () => ({
+        supported: true,
+        platform: 'win32' as NodeJS.Platform,
+        requested: true
+      })),
+      dispatch: vi.fn(async (_args: NotificationDispatchRequest) => ({ delivered: true })),
+      playSound: vi.fn(),
+      openSystemSettings: vi.fn(),
+      requestPermission: vi.fn()
+    }
+    vi.stubGlobal('window', {
+      Notification: { permission: 'granted' },
+      api: {
+        notifications,
+        shell: { pickAudio: vi.fn() }
+      }
+    })
+
+    await sendNotificationSettingsTestNotification(
+      createSettings({ customSoundId: 'none' }).notifications,
+      50
+    )
+
+    expect(notifications.dispatch).toHaveBeenCalledTimes(1)
+    expect(notifications.playSound).not.toHaveBeenCalled()
     expect(toastError).not.toHaveBeenCalled()
     expect(toastSuccess).toHaveBeenCalledWith('Test notification sent')
   })

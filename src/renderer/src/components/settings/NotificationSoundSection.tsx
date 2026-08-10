@@ -51,7 +51,7 @@ export function NotificationSoundSection({
   const previewSound = async (
     customSoundId: GlobalSettings['notifications']['customSoundId']
   ): Promise<void> => {
-    if (customSoundId === 'system') {
+    if (customSoundId === 'system' || customSoundId === 'none') {
       return
     }
     const result = await window.api.notifications.playSound({
@@ -163,7 +163,7 @@ export function NotificationSoundSection({
           {notificationSettings.customSoundPath}
         </p>
       ) : null}
-      {selectedSoundId !== 'system' ? (
+      {selectedSoundId !== 'system' && selectedSoundId !== 'none' ? (
         <div className="flex items-center gap-3 pt-1">
           <Volume2 className="size-4 text-muted-foreground" />
           <Slider

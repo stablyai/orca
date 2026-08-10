@@ -89,7 +89,7 @@ export function NotificationStep({
   const previewSound = async (
     customSoundId: GlobalSettings['notifications']['customSoundId']
   ): Promise<void> => {
-    if (customSoundId === 'system') {
+    if (customSoundId === 'system' || customSoundId === 'none') {
       return
     }
     const result = await window.api.notifications.playSound({

@@ -452,6 +452,34 @@ describe('registerNotificationHandlers', () => {
     }
   })
 
+  it('delivers silent native notifications when none is selected', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            customSoundId: 'none'
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(await handler({}, { source: 'test' })).toEqual({ delivered: true })
+      expect(notificationCtorMock).toHaveBeenCalledWith({
+        title: 'Orca notifications are on',
+        body: 'This is a test notification from Orca.',
+        silent: true
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+    }
+  })
+
   it('focuses the originating terminal pane when a notification with paneKey is clicked', async () => {
     const webContentsSend = vi.fn()
     const restore = vi.fn()
