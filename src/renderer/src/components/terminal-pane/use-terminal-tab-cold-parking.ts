@@ -36,6 +36,7 @@ import {
   disposeParkedTerminalWatchersForWorktree,
   syncParkedTerminalTabWatchers
 } from './terminal-parked-tab-watchers'
+import { useWorktreeParkTerminalTabs } from './use-worktree-park-terminal-tabs'
 
 type TerminalOverlayTabAssignment = {
   groupId: string
@@ -77,7 +78,7 @@ export function useTerminalTabColdParking(args: {
 }): ReadonlySet<string> {
   const {
     worktreeId,
-    terminalTabs,
+    terminalTabs: publishedTerminalTabs,
     assignments,
     isWorktreeActive,
     coldParkTerminalPanes,
@@ -86,6 +87,7 @@ export function useTerminalTabColdParking(args: {
     activityTerminalPortals,
     activationDeferredMountTabIds
   } = args
+  const terminalTabs = useWorktreeParkTerminalTabs(publishedTerminalTabs, coldParkTerminalPanes)
   const pendingStartupByTabId = useAppStore((state) => state.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore(
     (state) => state.settings?.terminalHiddenViewParking !== false
