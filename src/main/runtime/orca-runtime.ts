@@ -3612,7 +3612,7 @@ export class OrcaRuntimeService {
         return
       }
       await applyAgentStatusHooksEnabled(settings.agentStatusHooksEnabled !== false, settings, {
-        shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
+        shouldHydrateShellPath: app.isPackaged,
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
           const current = this.store?.getSettings()
