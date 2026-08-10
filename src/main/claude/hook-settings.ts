@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
@@ -9,6 +9,7 @@ import {
   removeManagedCommands,
   wrapPosixHookCommand,
   wrapWindowsGitBashHookCommand,
+  wrapWindowsHookCommand,
   type HookCommandConfig,
   type HookDefinition,
   type HooksConfig
@@ -122,12 +123,33 @@ export function getManagedLifecycleHook(
   if (process.platform !== 'win32' || !settings.supportsExecHookArgs) {
     return buildManagedCommandHook(getManagedCommand(scriptPath))
   }
-  const system32 = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
-  // Why: Claude's Windows shell form opens Git Bash consoles; exec form hosts cmd in a windowless console.
+  return getWindowsManagedLifecycleHook(scriptPath)
+}
+
+const WINDOWS_CMD_ARGUMENT_META = /[%!^&|<>()"\r\n]/
+
+export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandConfig {
+  const system32 = win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
+  let clientArgs = [win32.join(system32, 'cmd.exe'), '/d', '/c', scriptPath]
+  if (WINDOWS_CMD_ARGUMENT_META.test(scriptPath)) {
+    const encodedCommand = wrapWindowsHookCommand(scriptPath).match(/ -EncodedCommand (\S+)$/)?.[1]
+    if (!encodedCommand) {
+      throw new Error('Failed to encode managed Claude hook path')
+    }
+    clientArgs = [
+      win32.join(system32, 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-EncodedCommand',
+      encodedCommand
+    ]
+  }
+  // Why: Claude's Windows shell form opens Git Bash consoles; exec form hosts the client in a windowless console.
   return {
     type: 'command',
-    command: join(system32, 'conhost.exe'),
-    args: ['--headless', join(system32, 'cmd.exe'), '/d', '/c', scriptPath],
+    command: win32.join(system32, 'conhost.exe'),
+    args: ['--headless', ...clientArgs],
     timeout: MANAGED_HOOK_TIMEOUT_SECONDS
   }
 }

@@ -17,7 +17,7 @@ vi.mock('electron', () => ({
 import type { SFTPWrapper } from 'ssh2'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
 import { ClaudeHookService } from './hook-service'
-import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
+import { getWindowsManagedLifecycleHook, OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 
 const CLAUDE_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
 const STATUSLINE_SCRIPT_FILE_NAME =
@@ -32,6 +32,19 @@ type TestHook = { command: string; args?: string[] }
 function hasManagedCommand(hook: TestHook, matcher: (command: string | undefined) => boolean) {
   return matcher(hook.command) || hook.args?.some(matcher) === true
 }
+
+describe('getWindowsManagedLifecycleHook', () => {
+  it('keeps cmd metacharacters out of the headless client command line', () => {
+    const scriptPath = 'C:\\Users\\%name%\\a^b&c\\.orca\\agent-hooks\\claude-hook.cmd'
+    const hook = getWindowsManagedLifecycleHook(scriptPath)
+    const encodedCommand = hook.args?.at(-1)
+
+    expect(hook.args?.[0]).toBe('--headless')
+    expect(hook.args?.[1]).toMatch(/\\WindowsPowerShell\\v1\.0\\powershell\.exe$/i)
+    expect(hook.args).not.toContain(scriptPath)
+    expect(Buffer.from(encodedCommand!, 'base64').toString('utf16le')).toContain(scriptPath)
+  })
+})
 
 type FakeFs = {
   files: Map<string, string>

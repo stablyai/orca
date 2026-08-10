@@ -346,6 +346,27 @@ describe('removeManagedCommands', () => {
 
     expect(cleaned).toEqual([{ hooks: [{ type: 'command', command: 'echo keep me' }] }])
   })
+
+  it('preserves user hooks with malformed args fields', () => {
+    const definitions = [
+      {
+        hooks: [
+          {
+            type: 'command' as const,
+            command: 'echo keep me',
+            args: 'not-an-array' as unknown as string[]
+          },
+          {
+            type: 'command' as const,
+            command: 'echo keep me too',
+            args: [42] as unknown as string[]
+          }
+        ]
+      }
+    ]
+
+    expect(removeManagedCommands(definitions, match)).toEqual(definitions)
+  })
 })
 
 describe('hookDefinitionHasManagedCommand', () => {
@@ -378,6 +399,20 @@ describe('hookDefinitionHasManagedCommand', () => {
         match
       )
     ).toBe(true)
+    expect(
+      hookDefinitionHasManagedCommand(
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: 'echo no',
+              args: 'not-an-array' as unknown as string[]
+            }
+          ]
+        },
+        match
+      )
+    ).toBe(false)
     expect(hookDefinitionHasManagedCommand({ bash: 'echo no' }, match)).toBe(false)
   })
 })
