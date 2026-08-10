@@ -623,9 +623,10 @@ export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
     const remoteWorkspaceApi = window.api.remoteWorkspace
-    const tabIntentObserver = remoteWorkspaceApi
-      ? createDirectSshTabIntentObserver(remoteWorkspaceApi)
-      : null
+    const tabIntentObserver =
+      remoteWorkspaceApi && 'startTabStateObservation' in remoteWorkspaceApi
+        ? createDirectSshTabIntentObserver(remoteWorkspaceApi)
+        : null
     let unsubscribeTabIntentObserver = (): void => {}
     if (tabIntentObserver) {
       tabIntentObserver.observeState(useAppStore.getState())
