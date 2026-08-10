@@ -128,7 +128,26 @@ describe('spaces slice', () => {
     expect(setActiveWorktree).not.toHaveBeenCalled()
   })
 
-  it('does not restore a folder workspace whose group is outside the target Space', async () => {
+  it('does not restore a folder workspace whose group belongs to another Space', async () => {
+    const store = createTestAppStore()
+    store.setState({
+      // group-1 holds a project, and that project sits in Default — so the group is Default's.
+      repos: [{ ...makeRepo('repo-2', null), projectGroupId: 'group-1' }],
+      projectGroups: [makeGroup('group-1')],
+      folderWorkspaces: [makeFolderWorkspace('folder-1', 'group-1')]
+    })
+    await seedSpaces(store, [createDefaultSpace(), makeSpace(CUSTOM_SPACE_ID)])
+    store.getState().rememberSpaceWorkspaceKey(CUSTOM_SPACE_ID, 'folder:folder-1')
+
+    store.getState().setActiveSpace(CUSTOM_SPACE_ID)
+
+    expect(setActiveFolderWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('restores a folder workspace whose group no project claims', async () => {
+    // Why: a group holding only folder workspaces has no project to carry Space membership, and
+    // "Move to Space" is offered on project rows only — scoping it to Default would leave a
+    // folder-workspace-only setup with an empty sidebar and no way to reach it.
     const store = createTestAppStore()
     store.setState({
       repos: [makeRepo('repo-2', null)],
@@ -140,7 +159,7 @@ describe('spaces slice', () => {
 
     store.getState().setActiveSpace(CUSTOM_SPACE_ID)
 
-    expect(setActiveFolderWorkspace).not.toHaveBeenCalled()
+    expect(setActiveFolderWorkspace).toHaveBeenCalledWith('folder-1', 'local')
   })
 
   it('ignores another window`s Space on a sync broadcast but restores it on startup', async () => {

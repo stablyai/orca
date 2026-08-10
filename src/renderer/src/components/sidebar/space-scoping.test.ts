@@ -79,7 +79,7 @@ describe('active Space filtering', () => {
     ).toBe(false)
   })
 
-  it('inherits group membership through ancestors and assigns empty groups to Default', () => {
+  it('inherits group membership through ancestors and keeps unclaimed groups visible everywhere', () => {
     const groups = [
       group('parent'),
       group('child', { parentGroupId: 'parent' }),
@@ -91,12 +91,33 @@ describe('active Space filtering', () => {
       repo('default', { projectGroupId: 'default' })
     ]
 
+    // Why: 'empty' holds no Space-bearing project — a folder-workspace-only group looks the same,
+    // and hiding it outside Default would strand it with no way to move it into a Space.
     expect([...(getActiveSpaceProjectGroupIdSet(groups, repos, 'space-a') ?? [])].sort()).toEqual([
       'child',
+      'empty',
       'parent'
     ])
     expect(
       [...(getActiveSpaceProjectGroupIdSet(groups, repos, DEFAULT_SPACE_ID) ?? [])].sort()
     ).toEqual(['default', 'empty'])
+  })
+
+  it('exempts runtime-owned projects, which never carry Space membership', () => {
+    const runtime = repo('remote', { executionHostId: 'runtime:env-1', projectGroupId: 'remote' })
+    const local = repo('work', { spaceId: 'space-a', projectGroupId: 'work' })
+
+    // Under a runtime environment every row resolves to Default; scoping them would empty the sidebar.
+    expect(filterReposForActiveSpace([runtime, local], 'space-a').map((entry) => entry.id)).toEqual(
+      ['remote', 'work']
+    )
+
+    const byId = new Map([['remote', runtime]])
+    expect(isWorktreeInActiveSpace({ repoId: 'remote' }, byId, 'space-a')).toBe(true)
+
+    const groups = [group('remote'), group('work')]
+    expect(
+      [...(getActiveSpaceProjectGroupIdSet(groups, [runtime, local], 'space-a') ?? [])].sort()
+    ).toEqual(['remote', 'work'])
   })
 })
