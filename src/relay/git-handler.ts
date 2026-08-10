@@ -247,7 +247,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.branchDiff', (p, context) => this.branchDiff(p, context))
     this.dispatcher.onRequest('git.commitDiff', (p, context) => this.commitDiff(p, context))
     this.dispatcher.onRequest('git.listWorktrees', (p, context) => this.listWorktrees(p, context))
-    this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
+    this.dispatcher.onRequest('git.addWorktree', (p, context) => this.addWorktree(p, context))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
     this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
     this.dispatcher.onRequest('git.refreshLocalBaseRefForWorktreeCreate', (p) =>
@@ -1432,8 +1432,10 @@ export class GitHandler {
       .catch(() => [])
   }
 
-  private async addWorktree(params: Record<string, unknown>) {
-    return this.runWithGitReadCacheClear(() => addWorktreeOp(this.git.bind(this), params))
+  private async addWorktree(params: Record<string, unknown>, context: RequestContext) {
+    return this.runWithGitReadCacheClear(() =>
+      addWorktreeOp(this.git.bind(this), params, { signal: context.signal })
+    )
   }
 
   private async removeWorktree(params: Record<string, unknown>) {

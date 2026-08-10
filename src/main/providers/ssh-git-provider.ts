@@ -32,6 +32,7 @@ import {
 } from '../git/max-buffer-overflow'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
+import { resolveGitWorktreeCreateTimeoutMs } from '../../shared/git-worktree-create-timeout'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -717,15 +718,27 @@ export class SshGitProvider implements IGitProvider {
     repoPath: string,
     branchName: string,
     targetDir: string,
-    options?: { base?: string; checkoutExistingBranch?: boolean; noCheckout?: boolean }
+    options?: {
+      base?: string
+      checkoutExistingBranch?: boolean
+      noCheckout?: boolean
+      signal?: AbortSignal
+    }
   ): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.addWorktree', {
-        repoPath,
-        branchName,
-        targetDir,
-        ...options
-      })
+      const timeoutMs = resolveGitWorktreeCreateTimeoutMs()
+      const { signal, ...params } = options ?? {}
+      await this.mux.request(
+        'git.addWorktree',
+        {
+          repoPath,
+          branchName,
+          targetDir,
+          ...params,
+          timeoutMs
+        },
+        { signal, timeoutMs }
+      )
     })
   }
 

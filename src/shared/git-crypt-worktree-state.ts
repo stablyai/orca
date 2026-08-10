@@ -1,5 +1,9 @@
-import { cp, stat, symlink } from 'node:fs/promises'
+import { stat, symlink } from 'node:fs/promises'
 import * as path from 'node:path'
+import {
+  runWithinGitWorktreeDeadline,
+  type GitWorktreeCreateDeadline
+} from './git-worktree-create-timeout'
 
 export type GitCryptWorktreeExec = (
   args: string[],
@@ -19,9 +23,17 @@ function isMissingPathError(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
-async function isDirectory(pathValue: string): Promise<boolean> {
+async function isDirectory(
+  pathValue: string,
+  deadline?: GitWorktreeCreateDeadline
+): Promise<boolean> {
   try {
-    return (await stat(pathValue)).isDirectory()
+    const result = deadline
+      ? await runWithinGitWorktreeDeadline(deadline, `filesystem stat of "${pathValue}"`, () =>
+          stat(pathValue)
+        )
+      : await stat(pathValue)
+    return result.isDirectory()
   } catch (error) {
     if (isMissingPathError(error)) {
       return false
@@ -37,21 +49,26 @@ function resolvePathFromGit(cwd: string, outputPath: string): string {
 export async function findGitCryptStateDirectory(
   git: GitCryptWorktreeExec,
   repoPath: string,
-  resolveGitPath: ResolveGitOutputPath = resolvePathFromGit
+  resolveGitPath: ResolveGitOutputPath = resolvePathFromGit,
+  deadline?: GitWorktreeCreateDeadline
 ): Promise<string | null> {
   const dotGitPath = path.join(repoPath, '.git')
   try {
-    const dotGit = await stat(dotGitPath)
+    const dotGit = deadline
+      ? await runWithinGitWorktreeDeadline(deadline, `filesystem stat of "${dotGitPath}"`, () =>
+          stat(dotGitPath)
+        )
+      : await stat(dotGitPath)
     if (dotGit.isDirectory()) {
       const candidate = path.join(dotGitPath, 'git-crypt')
-      return (await isDirectory(candidate)) ? candidate : null
+      return (await isDirectory(candidate, deadline)) ? candidate : null
     }
     if (dotGit.isFile()) {
       // Why: linked worktrees and separate-git-dir checkouts use a .git file;
       // ask Git for the common dir instead of guessing its target layout.
       const { stdout } = await git(['rev-parse', '--git-common-dir'], repoPath)
       const candidate = path.join(resolveGitPath(repoPath, stdout), 'git-crypt')
-      return (await isDirectory(candidate)) ? candidate : null
+      return (await isDirectory(candidate, deadline)) ? candidate : null
     }
     return null
   } catch (error) {
@@ -62,32 +79,22 @@ export async function findGitCryptStateDirectory(
 
   // Why: a bare repository is its own Git dir and has no nested .git entry.
   const bareCandidate = path.join(repoPath, 'git-crypt')
-  return (await isDirectory(bareCandidate)) ? bareCandidate : null
-}
-
-function canFallBackFromDirectoryLink(error: unknown): boolean {
-  const code = getErrorCode(error)
-  return code === 'EPERM' || code === 'EACCES' || code === 'EINVAL' || code === 'ENOSYS'
+  return (await isDirectory(bareCandidate, deadline)) ? bareCandidate : null
 }
 
 export async function shareGitCryptStateWithWorktree(
   git: GitCryptWorktreeExec,
   gitCryptDir: string,
   worktreePath: string,
-  resolveGitPath: ResolveGitOutputPath = resolvePathFromGit
+  resolveGitPath: ResolveGitOutputPath = resolvePathFromGit,
+  deadline?: GitWorktreeCreateDeadline
 ): Promise<void> {
   const { stdout } = await git(['rev-parse', '--absolute-git-dir'], worktreePath)
   const destination = path.join(resolveGitPath(worktreePath, stdout), 'git-crypt')
-  try {
-    // Why: git-crypt treats its state as repository-wide; sharing it preserves
-    // lock/unlock semantics across linked worktrees instead of duplicating keys.
-    await symlink(gitCryptDir, destination, process.platform === 'win32' ? 'junction' : 'dir')
-  } catch (error) {
-    if (!canFallBackFromDirectoryLink(error)) {
-      throw error
-    }
-    // Why: some Windows/WSL filesystems disallow directory links; copying is
-    // the compatibility fallback that still makes the initial checkout usable.
-    await cp(gitCryptDir, destination, { recursive: true, force: false, errorOnExist: true })
-  }
+  // Why: one repository-wide authority preserves lock/unlock semantics and never duplicates raw keys.
+  const link = () =>
+    symlink(gitCryptDir, destination, process.platform === 'win32' ? 'junction' : 'dir')
+  await (deadline
+    ? runWithinGitWorktreeDeadline(deadline, `git-crypt state link at "${destination}"`, link)
+    : link())
 }

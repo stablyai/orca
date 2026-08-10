@@ -1437,13 +1437,18 @@ describe('SshGitProvider', () => {
       base: 'main',
       noCheckout: true
     })
-    expect(mux.request).toHaveBeenCalledWith('git.addWorktree', {
-      repoPath: '/home/user/repo',
-      branchName: 'feature',
-      targetDir: '/home/user/feat',
-      base: 'main',
-      noCheckout: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.addWorktree',
+      {
+        repoPath: '/home/user/repo',
+        branchName: 'feature',
+        targetDir: '/home/user/feat',
+        base: 'main',
+        noCheckout: true,
+        timeoutMs: 180_000
+      },
+      { signal: undefined, timeoutMs: 180_000 }
+    )
   })
 
   it('removeWorktree sends git.removeWorktree request', async () => {

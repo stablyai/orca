@@ -1,6 +1,6 @@
 import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock, translateWslOutputPathsMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
@@ -61,11 +61,17 @@ function finishRegularCreation(): void {
 
 describe('addWorktree on git-crypt repositories', () => {
   beforeEach(() => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
     gitExecFileAsyncMock.mockReset()
     translateWslOutputPathsMock.mockClear()
     statMock.mockReset()
     symlinkMock.mockReset().mockResolvedValue(undefined)
     cpMock.mockReset().mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('keeps plain repository creation on the normal checkout path', async () => {
@@ -174,7 +180,7 @@ describe('addWorktree on git-crypt repositories', () => {
     )
   })
 
-  it('uses a no-clobber copy when the filesystem cannot create directory links', async () => {
+  it('fails closed without copying key material when directory links are unavailable', async () => {
     mockUnlockedRepo()
     symlinkMock.mockRejectedValue(Object.assign(new Error('links unavailable'), { code: 'EPERM' }))
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
@@ -182,13 +188,10 @@ describe('addWorktree on git-crypt repositories', () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // checkout
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'true\n' })
 
-    await addWorktree(REPO, WORKTREE, BRANCH)
+    await expect(addWorktree(REPO, WORKTREE, BRANCH)).rejects.toThrow('links unavailable')
 
-    expect(cpMock).toHaveBeenCalledWith(REPO_GIT_CRYPT, join(WORKTREE_GIT_DIR, 'git-crypt'), {
-      recursive: true,
-      force: false,
-      errorOnExist: true
-    })
+    expect(cpMock).not.toHaveBeenCalled()
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual(['checkout'])
   })
 
   it('shares state but leaves checkout to sparse-worktree setup when requested', async () => {
@@ -232,6 +235,45 @@ describe('addWorktree on git-crypt repositories', () => {
       '--',
       BRANCH
     ])
+  })
+
+  it('owns rollback before worktree add can leave partial state', async () => {
+    mockUnlockedRepo()
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'worktree' && args[1] === 'add') {
+        throw new Error('partial add failure')
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return { stdout: '' }
+      }
+      if (args[0] === 'show-ref') {
+        throw Object.assign(new Error('missing branch'), { code: 1 })
+      }
+      return { stdout: '' }
+    })
+
+    await expect(addWorktree(REPO, WORKTREE, BRANCH)).rejects.toThrow('partial add failure')
+
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
+      'worktree',
+      'remove',
+      '--force',
+      WORKTREE
+    ])
+  })
+
+  it('bounds git-crypt filesystem discovery by the whole-operation deadline', async () => {
+    vi.useFakeTimers()
+    statMock.mockImplementation(() => new Promise(() => {}))
+
+    const creation = addWorktree(REPO, WORKTREE, BRANCH, undefined, false, false, {
+      timeout: 25
+    })
+    const rejection = expect(creation).rejects.toThrow('timed out during filesystem stat')
+    await vi.advanceTimersByTimeAsync(25)
+
+    await rejection
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('reports a cleanup failure when the fresh branch cannot be deleted', async () => {

@@ -29,7 +29,15 @@ import {
   findGitCryptStateDirectory,
   shareGitCryptStateWithWorktree
 } from '../../shared/git-crypt-worktree-state'
-import { GIT_WORKTREE_CREATE_TIMEOUT_MS } from '../../shared/git-worktree-create-timeout'
+import {
+  GIT_WORKTREE_CREATE_TIMEOUT_MAX_MS,
+  GIT_WORKTREE_CREATE_TIMEOUT_MS,
+  createGitWorktreeDeadline,
+  remainingGitWorktreeCreateMs,
+  resolveGitWorktreeCreateTimeoutMs,
+  withoutGitWorktreeCancellation,
+  type GitWorktreeCreateDeadline
+} from '../../shared/git-worktree-create-timeout'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedRevParsePathFormatError,
@@ -53,6 +61,7 @@ export type GitWorktreeExecOptions = {
   wslDistro?: string
   signal?: AbortSignal
   timeout?: number
+  deadline?: GitWorktreeCreateDeadline
 }
 
 type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
@@ -98,6 +107,8 @@ const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
 
 // Why: bound `git worktree add` so a OneDrive cloud-placeholder stall fails fast (STA-1292); generous enough for a legit large checkout (#7225).
 export const WORKTREE_ADD_TIMEOUT_MS = GIT_WORKTREE_CREATE_TIMEOUT_MS
+export const WORKTREE_ADD_TIMEOUT_MAX_MS = GIT_WORKTREE_CREATE_TIMEOUT_MAX_MS
+export const resolveWorktreeAddTimeoutMs = resolveGitWorktreeCreateTimeoutMs
 export const WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS = 30_000
 export const WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS = 30_000
 // Why: one wedged shared scan otherwise hangs every later list, including create's post-add re-list.
@@ -107,11 +118,14 @@ function gitExecOptions(
   cwd: string,
   options: GitWorktreeExecOptions = {}
 ): { cwd: string; wslDistro?: string; signal?: AbortSignal; timeout?: number } {
+  const timeout = options.deadline
+    ? remainingGitWorktreeCreateMs(options.deadline, 'Git command')
+    : options.timeout
   return {
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
-    ...(options.timeout ? { timeout: options.timeout } : {})
+    ...(timeout ? { timeout } : {})
   }
 }
 
@@ -917,25 +931,52 @@ function resolveGitOutputPath(
 async function rollbackDeferredWorktreeCreate(
   repoPath: string,
   worktreePath: string,
+  branch: string,
   options: AddWorktreeOptions,
   error: unknown
 ): Promise<never> {
   const wrapped: SparseWorktreeCreateError =
     error instanceof Error ? (error as SparseWorktreeCreateError) : new Error(String(error))
   try {
+    const cleanupOptions: AddWorktreeOptions = options.deadline
+      ? {
+          ...options,
+          signal: undefined,
+          deadline: withoutGitWorktreeCancellation(options.deadline)
+        }
+      : { ...options, signal: undefined }
     const result = await removeWorktree(repoPath, worktreePath, true, {
       deleteBranch: !options.checkoutExistingBranch,
       forceBranchDelete: !options.checkoutExistingBranch,
-      timeout: options.timeout ?? WORKTREE_ADD_TIMEOUT_MS,
+      ...cleanupOptions,
       ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
     })
     if (result.preservedBranch) {
       wrapped.cleanupFailed = true
       wrapped.message = `${wrapped.message} (cleanup also failed — the worktree was removed, but branch "${result.preservedBranch.branchName}" was preserved)`
+      throw wrapped
     }
-  } catch {
-    wrapped.cleanupFailed = true
-    wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${worktreePath}" may need manual removal)`
+    if (!options.checkoutExistingBranch) {
+      try {
+        await gitExecFileAsync(
+          ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`],
+          gitExecOptions(repoPath, cleanupOptions)
+        )
+        await gitExecFileAsync(
+          ['branch', '-D', '--', branch],
+          gitExecOptions(repoPath, cleanupOptions)
+        )
+      } catch (branchError) {
+        if ((branchError as { code?: unknown })?.code !== 1) {
+          throw branchError
+        }
+      }
+    }
+  } catch (cleanupError) {
+    if (cleanupError !== wrapped || !wrapped.cleanupFailed) {
+      wrapped.cleanupFailed = true
+      wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${worktreePath}" may need manual removal)`
+    }
   }
   throw wrapped
 }
@@ -987,21 +1028,22 @@ async function performAddWorktree(
 ): Promise<AddWorktreeResult> {
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
-  const worktreeCreateTimeout = options.timeout ?? WORKTREE_ADD_TIMEOUT_MS
+  const worktreeCreateTimeout = options.timeout ?? resolveWorktreeAddTimeoutMs()
+  const deadline = createGitWorktreeDeadline(worktreeCreateTimeout, options.signal)
+  const deadlineOptions: AddWorktreeOptions = { ...options, deadline }
   // Why: git-crypt resolves state through the per-worktree Git dir, so setup
   // must happen before checkout or its smudge filter aborts worktree creation.
   const runGitCryptCommand = (args: string[], cwd: string) =>
-    gitExecFileAsync(args, {
-      ...gitExecOptions(cwd, options),
-      timeout: worktreeCreateTimeout
-    })
+    gitExecFileAsync(args, gitExecOptions(cwd, deadlineOptions))
   const resolveGitCryptPath = (cwd: string, outputPath: string) =>
     resolveGitOutputPath(cwd, outputPath, options)
   const gitCryptDir = await findGitCryptStateDirectory(
     runGitCryptCommand,
     repoPath,
-    resolveGitCryptPath
+    resolveGitCryptPath,
+    deadline
   )
+  const createOptions = gitCryptDir ? deadlineOptions : options
   const deferCheckoutForGitCrypt = gitCryptDir !== null && !noCheckout
   const args = ['worktree', 'add']
   let effectiveBase: string | undefined
@@ -1016,7 +1058,7 @@ async function performAddWorktree(
     args.push('--no-track', '-b', branch, worktreePath)
     if (baseBranch) {
       effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
-        hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+        hasWorktreeBaseCommitRef(repoPath, qualifiedRef, createOptions)
       )
       // Why: resolve the creation base first to distinguish remote-tracking refs from slash-containing local branches (mutation gated behind the explicit setting).
       if (refreshLocalBaseRef) {
@@ -1025,7 +1067,7 @@ async function performAddWorktree(
           baseBranch,
           effectiveBase,
           options.remoteTrackingBase,
-          options
+          createOptions
         )
       } else if (options.suggestLocalBaseRefUpdate) {
         localBaseRefUpdateSuggestion = await getLocalBaseRefUpdateSuggestionForWorktreeCreate(
@@ -1033,35 +1075,34 @@ async function performAddWorktree(
           baseBranch,
           effectiveBase,
           options.remoteTrackingBase,
-          options
+          createOptions
         )
       }
       args.push(effectiveBase)
     }
   }
-  await gitExecFileAsync(args, {
-    ...gitExecOptions(repoPath, options),
-    // Why: bound the checkout so a OneDrive cloud-placeholder stall (STA-1292) fails fast instead of hanging.
-    timeout: worktreeCreateTimeout
-  })
-
   if (gitCryptDir) {
     try {
+      // Why: rollback ownership begins before Git can leave a branch or registration behind.
+      await gitExecFileAsync(args, gitExecOptions(repoPath, createOptions))
       await shareGitCryptStateWithWorktree(
         runGitCryptCommand,
         gitCryptDir,
         worktreePath,
-        resolveGitCryptPath
+        resolveGitCryptPath,
+        deadline
       )
       if (deferCheckoutForGitCrypt) {
-        await gitExecFileAsync(['checkout'], {
-          ...gitExecOptions(worktreePath, options),
-          timeout: worktreeCreateTimeout
-        })
+        await gitExecFileAsync(['checkout'], gitExecOptions(worktreePath, createOptions))
       }
     } catch (error) {
-      return rollbackDeferredWorktreeCreate(repoPath, worktreePath, options, error)
+      return rollbackDeferredWorktreeCreate(repoPath, worktreePath, branch, createOptions, error)
     }
+  } else {
+    await gitExecFileAsync(args, {
+      ...gitExecOptions(repoPath, createOptions),
+      timeout: worktreeCreateTimeout
+    })
   }
 
   if (options.checkoutExistingBranch) {
@@ -1069,7 +1110,7 @@ async function performAddWorktree(
   }
 
   if (effectiveBase) {
-    await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, options)
+    await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, createOptions)
   }
 
   // SSH parity: relay's addWorktreeOp (src/relay/git-handler-worktree-ops.ts) mirrors this — change both in lockstep.
@@ -1082,7 +1123,7 @@ async function performAddWorktree(
     let alreadySet = false
     try {
       await gitExecFileAsync(['config', '--get', 'push.autoSetupRemote'], {
-        ...gitExecOptions(worktreePath, options)
+        ...gitExecOptions(worktreePath, createOptions)
       })
       alreadySet = true
     } catch (readError) {
@@ -1094,7 +1135,7 @@ async function performAddWorktree(
     }
     if (!alreadySet) {
       await gitExecFileAsync(['config', '--local', 'push.autoSetupRemote', 'true'], {
-        ...gitExecOptions(worktreePath, options)
+        ...gitExecOptions(worktreePath, createOptions)
       })
     }
   } catch (error) {
