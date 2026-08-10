@@ -28,7 +28,7 @@ function mockGhFailure(stderr: string): void {
     queueMicrotask(() =>
       done(Object.assign(new Error(`Command failed: gh\n${stderr}`), { stderr }), '', stderr)
     )
-    return { once: vi.fn() }
+    return { off: vi.fn(), once: vi.fn() }
   })
 }
 
@@ -36,7 +36,7 @@ function mockGhSuccess(stdout: string): void {
   execFileMock.mockImplementation((_binary, _args, options, callback) => {
     const done = typeof options === 'function' ? options : callback
     queueMicrotask(() => done(null, stdout, ''))
-    return { once: vi.fn() }
+    return { off: vi.fn(), once: vi.fn() }
   })
 }
 
