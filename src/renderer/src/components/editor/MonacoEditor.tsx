@@ -117,6 +117,7 @@ export default function MonacoEditor({
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
+  const caretAccessibilityAnchorRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
   const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
   const modelKeyRef = useRef<string | null>(null)
@@ -139,6 +140,19 @@ export default function MonacoEditor({
   readOnlyRef.current = readOnly
   const contentSyncModeRef = useRef<MonacoContentSyncMode>('undoable')
   contentSyncModeRef.current = readOnly && liveTail ? 'read-only-live-tail' : 'undoable'
+  const caretAccessibilityAnchorId = useMemo(() => {
+    const stableId = [viewStateId, viewStateKey, fileId]
+      .filter(Boolean)
+      .join('-')
+      .replace(/[^A-Za-z0-9_-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+    return `orca-monaco-caret-anchor-${stableId || 'editor'}`
+  }, [fileId, viewStateId, viewStateKey])
+  const caretAccessibilityLabel = translate(
+    'auto.components.editor.MonacoEditor.caretAccessibilityLabel',
+    'Editor caret'
+  )
 
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
@@ -402,6 +416,45 @@ export default function MonacoEditor({
         propsRef.current.onSave(value)
       })
       const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+      let caretAccessibilityFrame: number | null = null
+      const updateCaretAccessibilityAnchor = (): void => {
+        if (caretAccessibilityFrame !== null) {
+          return
+        }
+        caretAccessibilityFrame = window.requestAnimationFrame(() => {
+          caretAccessibilityFrame = null
+          const anchor = caretAccessibilityAnchorRef.current
+          const position = editorInstance.getPosition()
+          if (!anchor || !position) {
+            return
+          }
+
+          const visiblePosition = editorInstance.getScrolledVisiblePosition(position)
+          if (!visiblePosition) {
+            anchor.style.display = 'none'
+            anchor.classList.remove('orca-monaco-caret-anchor-active')
+            return
+          }
+
+          anchor.style.display = 'block'
+          anchor.classList.toggle('orca-monaco-caret-anchor-active', editorInstance.hasTextFocus())
+          anchor.style.transform = `translate(${Math.round(visiblePosition.left)}px, ${Math.round(visiblePosition.top)}px)`
+          anchor.style.height = `${Math.max(1, Math.round(visiblePosition.height))}px`
+          anchor.dataset.line = String(position.lineNumber)
+          anchor.dataset.column = String(position.column)
+          anchor.setAttribute(
+            'aria-label',
+            translate(
+              'auto.components.editor.MonacoEditor.caretAccessibilityPositionLabel',
+              'Editor caret at line {{line}}, column {{column}}',
+              {
+                line: position.lineNumber,
+                column: position.column
+              }
+            )
+          )
+        })
+      }
       // Opens the same composer as the selection "+" button.
       const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
         // Why: keep an open draft instead of remounting, to avoid same-tick chord races before the composer guard runs.
@@ -477,16 +530,22 @@ export default function MonacoEditor({
       if (pos) {
         setEditorCursorLine(filePath, pos.lineNumber)
       }
+      updateCaretAccessibilityAnchor()
       const cursorPositionSub = editorInstance.onDidChangeCursorPosition((e) => {
         setEditorCursorLine(filePath, e.position.lineNumber)
         setWithLRU(cursorPositionCache, viewStateKey, {
           lineNumber: e.position.lineNumber,
           column: e.position.column
         })
+        updateCaretAccessibilityAnchor()
       })
+      const layoutSub = editorInstance.onDidLayoutChange(updateCaretAccessibilityAnchor)
+      const focusSub = editorInstance.onDidFocusEditorText(updateCaretAccessibilityAnchor)
+      const blurSub = editorInstance.onDidBlurEditorText(updateCaretAccessibilityAnchor)
 
       // Why: only the resting scroll position matters, so trailing-throttle writes (~150ms) instead of writing every 60fps frame.
       const scrollStateSub = editorInstance.onDidScrollChange((e) => {
+        updateCaretAccessibilityAnchor()
         if (scrollThrottleTimerRef.current !== null) {
           clearTimeout(scrollThrottleTimerRef.current)
         }
@@ -514,6 +573,9 @@ export default function MonacoEditor({
 
       editorInstance.onDidDispose(() => {
         cursorPositionSub.dispose()
+        layoutSub.dispose()
+        focusSub.dispose()
+        blurSub.dispose()
         scrollStateSub.dispose()
         gutterMouseDownSub.dispose()
         cleanupSaveShortcut()
@@ -525,6 +587,10 @@ export default function MonacoEditor({
         if (autoHeightFrame !== null) {
           window.cancelAnimationFrame(autoHeightFrame)
           autoHeightFrame = null
+        }
+        if (caretAccessibilityFrame !== null) {
+          window.cancelAnimationFrame(caretAccessibilityFrame)
+          caretAccessibilityFrame = null
         }
         conflictDecorationsRef.current?.clear()
         conflictDecorationsRef.current = null
@@ -834,6 +900,14 @@ export default function MonacoEditor({
           <Plus className="size-3" />
         </button>
       ) : null}
+      <div
+        ref={caretAccessibilityAnchorRef}
+        id={caretAccessibilityAnchorId}
+        className="orca-monaco-caret-anchor pointer-events-none absolute left-0 top-0 z-0 w-px"
+        role="note"
+        aria-label={caretAccessibilityLabel}
+        style={{ display: 'none', opacity: 0 }}
+      />
       <Editor
         height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
         language={language}
