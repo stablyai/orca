@@ -121,6 +121,41 @@ function resolveBaseColor(
   return null
 }
 
+// Why: a `<a:schemeClr>` names a theme slot instead of indexing it, and the names
+// do not follow the palette's index order — `tx1` is the body text colour, which
+// lives where `dk1` was declared. This is the mapping from name to theme index.
+const SCHEME_COLOR_INDEXES: Record<string, number> = {
+  lt1: 0,
+  bg1: 0,
+  dk1: 1,
+  tx1: 1,
+  lt2: 2,
+  bg2: 2,
+  dk2: 3,
+  tx2: 3,
+  accent1: 4,
+  accent2: 5,
+  accent3: 6,
+  accent4: 7,
+  accent5: 8,
+  accent6: 9,
+  hlink: 10,
+  folHlink: 11
+}
+
+/** Resolves a named theme slot, e.g. the `accent1` a chart series defaults to. */
+export function resolveXlsxSchemeColor(
+  schemeName: string,
+  themePalette: XlsxThemePalette
+): string | null {
+  const themeIndex = SCHEME_COLOR_INDEXES[schemeName]
+  if (themeIndex === undefined) {
+    return null
+  }
+  const color = themePalette[themeIndex]
+  return color === undefined ? null : (normalizeArgb(color) ?? null)
+}
+
 /**
  * Drops the alpha byte of an `AARRGGBB` value and normalizes to `#rrggbb`.
  *

@@ -3,10 +3,11 @@ import {
   resolveXlsxRelationshipTargetPath,
   resolveXlsxRelationshipsPartPath
 } from './xlsx-part-paths'
-import { parseXlsxCellStyles, type XlsxCellStyle, type XlsxCellStyles } from './xlsx-cell-styles'
+import { parseXlsxCellStyles, type XlsxCellStyle } from './xlsx-cell-styles'
 import { parseXlsxNumberFormats } from './xlsx-number-formats'
 import { parseXlsxSharedStrings } from './xlsx-shared-strings'
-import { readXlsxSheetImages, type XlsxSheetImage } from './xlsx-drawings'
+import { parseXlsxThemePalette } from './xlsx-theme-palette'
+import { readXlsxSheetDrawings, type XlsxSheetDrawing } from './xlsx-drawings'
 import { parseXlsxWorksheetGrid } from './xlsx-worksheet-grid'
 import { parseXlsxWorksheetLayout, type XlsxMergedRange } from './xlsx-worksheet-layout'
 import { forEachXlsxXmlElement } from './xlsx-xml-elements'
@@ -24,8 +25,8 @@ export type XlsxSheet = {
   /** Author-set row heights in pixels, by row index. */
   rowHeights: (number | undefined)[]
   mergedRanges: XlsxMergedRange[]
-  /** Images the sheet anchors into the grid. */
-  images: XlsxSheetImage[]
+  /** Charts and images the sheet anchors over its cells. */
+  drawings: XlsxSheetDrawing[]
   maxColumns: number
   truncated: boolean
 }
@@ -78,7 +79,20 @@ export async function parseXlsxWorkbook(
     'styles.xml'
   )
   const numberFormats = parseXlsxNumberFormats(stylesXml)
-  const cellStyles = await readCellStyles(archive, workbookPartPath, relationships, stylesXml)
+  // Why: one theme parse per workbook — cell fills, font colours and chart series
+  // all resolve their named colours against the same palette.
+  const themePalette = parseXlsxThemePalette(
+    stylesXml === ''
+      ? ''
+      : await readSupportingPartText(
+          archive,
+          workbookPartPath,
+          relationships,
+          THEME_RELATIONSHIP_TYPE,
+          'theme/theme1.xml'
+        )
+  )
+  const cellStyles = parseXlsxCellStyles(stylesXml, themePalette)
   const use1904DateSystem = readUse1904DateSystem(workbookXml)
 
   const sheets: XlsxSheet[] = []
@@ -100,13 +114,18 @@ export async function parseXlsxWorkbook(
       locale
     })
     const layout = parseXlsxWorksheetLayout(worksheetXml ?? '')
-    const images = await readXlsxSheetImages(archive, worksheetPartPath, worksheetXml ?? '')
+    const drawings = await readXlsxSheetDrawings(
+      archive,
+      worksheetPartPath,
+      worksheetXml ?? '',
+      themePalette
+    )
     sheets.push({
       name: descriptor.name,
       hidden: descriptor.hidden,
       ...grid,
       ...layout,
-      images
+      drawings
     })
   }
 
@@ -221,27 +240,6 @@ async function readSharedStrings(
     'sharedStrings.xml'
   )
   return xml === '' ? [] : parseXlsxSharedStrings(xml)
-}
-
-// Why: themed colours resolve against the theme part, so it is only worth
-// reading when the styles actually exist.
-async function readCellStyles(
-  archive: XlsxZipArchive,
-  workbookPartPath: string,
-  relationships: XlsxWorkbookRelationships,
-  stylesXml: string
-): Promise<XlsxCellStyles> {
-  const themeXml =
-    stylesXml === ''
-      ? ''
-      : await readSupportingPartText(
-          archive,
-          workbookPartPath,
-          relationships,
-          THEME_RELATIONSHIP_TYPE,
-          'theme/theme1.xml'
-        )
-  return parseXlsxCellStyles(stylesXml, themeXml)
 }
 
 // Why: workbooks saved by older Mac Excel count days from 1904-01-01 instead of

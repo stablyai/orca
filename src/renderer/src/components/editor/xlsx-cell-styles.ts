@@ -2,7 +2,7 @@ import { pickReadableCellTextColor } from './spreadsheet-cell-contrast'
 import { parseXlsxCellBorders, type XlsxCellBorders } from './xlsx-cell-borders'
 import { parseXlsxCellFormats } from './xlsx-cell-formats'
 import { resolveXlsxColor } from './xlsx-color'
-import { parseXlsxThemePalette, type XlsxThemePalette } from './xlsx-theme-palette'
+import type { XlsxThemePalette } from './xlsx-theme-palette'
 import { forEachXlsxXmlElement } from './xlsx-xml-elements'
 
 /** The visual styling the viewer renders for one cell. */
@@ -40,12 +40,14 @@ const EMPTY_CELL_STYLES: XlsxCellStyles = {
 // block would invent a colour the sheet does not have, so they are skipped.
 const SOLID_PATTERN_TYPE = 'solid'
 
-export function parseXlsxCellStyles(stylesXml: string, themeXml: string): XlsxCellStyles {
+export function parseXlsxCellStyles(
+  stylesXml: string,
+  themePalette: XlsxThemePalette
+): XlsxCellStyles {
   if (stylesXml === '') {
     return EMPTY_CELL_STYLES
   }
 
-  const themePalette = parseXlsxThemePalette(themeXml)
   const fills = parseFills(stylesXml, themePalette)
   const fonts = parseFonts(stylesXml, themePalette)
   const borders = parseXlsxCellBorders(stylesXml, themePalette)

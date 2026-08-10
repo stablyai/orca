@@ -11,6 +11,8 @@ import {
   buildSpreadsheetMergeIndex,
   planSpreadsheetMergePlacement
 } from './spreadsheet-merged-cells'
+import { SpreadsheetChart } from './SpreadsheetChart'
+import type { XlsxSheetDrawing } from './xlsx-drawings'
 import type { XlsxMergedRange } from './xlsx-worksheet-layout'
 import {
   SPREADSHEET_GRID_BASE_FONT_PX,
@@ -40,8 +42,8 @@ type SpreadsheetGridProps = {
   declaredRowHeights?: readonly (number | undefined)[]
   /** Merged ranges the file declares. */
   mergedRanges?: readonly XlsxMergedRange[]
-  /** Images the file anchors into the grid. */
-  images?: readonly SpreadsheetSheetImage[]
+  /** Charts and images the file anchors over its cells. */
+  drawings?: readonly XlsxSheetDrawing[]
   /**
    * `center` for the generated column letters of a workbook; `left` for a CSV,
    * whose heading row holds the file's own first row of text.
@@ -69,54 +71,44 @@ export type SpreadsheetCellStyle = {
 
 export type SpreadsheetCellBorderEdge = { width: string; style: string; color?: string }
 
-/** An image anchored over a cell range. */
-export type SpreadsheetSheetImage = {
-  source: string
-  fromRow: number
-  fromColumn: number
-  toRow: number
-  toColumn: number
-  description?: string
-}
-
-type SpreadsheetImagePlacement = {
-  image: SpreadsheetSheetImage
+type SpreadsheetDrawingPlacement = {
+  drawing: XlsxSheetDrawing
   left: number
   top: number
   width: number
   height: number
 }
 
-function placeSpreadsheetImages({
-  images,
+function placeSpreadsheetDrawings({
+  drawings,
   columnWidths,
   rowCount,
   getRowHeight,
   rowNumberColumnPx
 }: {
-  images: readonly SpreadsheetSheetImage[]
+  drawings: readonly XlsxSheetDrawing[]
   columnWidths: readonly number[]
   rowCount: number
   getRowHeight: (index: number) => number
   rowNumberColumnPx: number
-}): SpreadsheetImagePlacement[] {
+}): SpreadsheetDrawingPlacement[] {
   const columnOffsets = buildOffsets(columnWidths.length, (index) => columnWidths[index] ?? 0)
   const rowOffsets = buildOffsets(rowCount, getRowHeight)
   const offsetAt = (offsets: number[], index: number): number =>
     offsets[Math.min(Math.max(index, 0), offsets.length - 1)] ?? 0
 
-  return images.map((image) => {
-    const left = rowNumberColumnPx + offsetAt(columnOffsets, image.fromColumn)
-    const top = offsetAt(rowOffsets, image.fromRow)
+  return drawings.map((drawing) => {
+    const left = rowNumberColumnPx + offsetAt(columnOffsets, drawing.fromColumn)
+    const top = offsetAt(rowOffsets, drawing.fromRow)
     return {
-      image,
+      drawing,
       left,
       top,
       // Why: an anchor's end cell is exclusive of its own extent in Excel's model
       // only when it carries offsets we do not read, so span through it and keep a
       // minimum so a single-cell anchor is still visible.
-      width: Math.max(1, rowNumberColumnPx + offsetAt(columnOffsets, image.toColumn + 1) - left),
-      height: Math.max(1, offsetAt(rowOffsets, image.toRow + 1) - top)
+      width: Math.max(1, rowNumberColumnPx + offsetAt(columnOffsets, drawing.toColumn + 1) - left),
+      height: Math.max(1, offsetAt(rowOffsets, drawing.toRow + 1) - top)
     }
   })
 }
@@ -167,7 +159,7 @@ export function SpreadsheetGrid({
   declaredColumnWidths,
   declaredRowHeights,
   mergedRanges,
-  images,
+  drawings,
   headerAlignment = 'left'
 }: SpreadsheetGridProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -202,17 +194,17 @@ export function SpreadsheetGrid({
   // Why: only pay for the offset tables when the sheet actually anchors an image.
   const imagePlacements = useMemo(
     () =>
-      images === undefined || images.length === 0
+      drawings === undefined || drawings.length === 0
         ? []
-        : placeSpreadsheetImages({
-            images,
+        : placeSpreadsheetDrawings({
+            drawings,
             columnWidths,
             rowCount: rows.length,
             getRowHeight: (index) =>
               Math.round((declaredRowHeights?.[index] ?? SPREADSHEET_GRID_ROW_HEIGHT) * zoomScale),
             rowNumberColumnPx
           }),
-    [images, columnWidths, rows, declaredRowHeights, zoomScale, rowNumberColumnPx]
+    [drawings, columnWidths, rows, declaredRowHeights, zoomScale, rowNumberColumnPx]
   )
 
   const rowVirtualizer = useVirtualizer({
@@ -416,18 +408,30 @@ export function SpreadsheetGrid({
           // events so the cells underneath stay hoverable.
           <div aria-hidden={false} className="pointer-events-none absolute inset-0">
             {imagePlacements.map((placement, index) => (
-              <img
+              <div
                 key={index}
-                src={placement.image.source}
-                alt={placement.image.description ?? ''}
-                className="absolute object-contain"
+                className="absolute"
                 style={{
                   left: placement.left,
                   top: placement.top,
                   width: placement.width,
                   height: placement.height
                 }}
-              />
+              >
+                {placement.drawing.kind === 'chart' ? (
+                  <SpreadsheetChart
+                    chart={placement.drawing.chart}
+                    width={placement.width}
+                    height={placement.height}
+                  />
+                ) : (
+                  <img
+                    src={placement.drawing.source}
+                    alt={placement.drawing.description ?? ''}
+                    className="size-full object-contain"
+                  />
+                )}
+              </div>
             ))}
           </div>
         )}

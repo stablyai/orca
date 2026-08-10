@@ -7,7 +7,7 @@ function context(overrides: Partial<XlsxWorksheetContext> = {}): XlsxWorksheetCo
   return {
     sharedStrings: [],
     numberFormats: parseXlsxNumberFormats(''),
-    cellStyles: parseXlsxCellStyles('', ''),
+    cellStyles: parseXlsxCellStyles('', []),
     use1904DateSystem: false,
     maxRows: 1000,
     locale: 'en-US',
@@ -29,7 +29,7 @@ describe('parseXlsxWorksheetGrid cell styles', () => {
 
     const grid = parseXlsxWorksheetGrid(
       xml,
-      context({ cellStyles: parseXlsxCellStyles(FILL_STYLES_XML, '') })
+      context({ cellStyles: parseXlsxCellStyles(FILL_STYLES_XML, []) })
     )
 
     expect(grid.rows).toEqual([['filled', 'plain']])
@@ -50,7 +50,7 @@ describe('parseXlsxWorksheetGrid cell styles', () => {
 
     const grid = parseXlsxWorksheetGrid(
       xml,
-      context({ cellStyles: parseXlsxCellStyles(FILL_STYLES_XML, '') })
+      context({ cellStyles: parseXlsxCellStyles(FILL_STYLES_XML, []) })
     )
 
     expect(grid.rows).toHaveLength(3)
@@ -65,7 +65,7 @@ describe('parseXlsxWorksheetGrid cell styles', () => {
 
     const grid = parseXlsxWorksheetGrid(
       xml,
-      context({ cellStyles: parseXlsxCellStyles(FILL_STYLES_XML, '') })
+      context({ cellStyles: parseXlsxCellStyles(FILL_STYLES_XML, []) })
     )
 
     expect(grid.styles[0]?.[0]).toBe(grid.styles[0]?.[1])

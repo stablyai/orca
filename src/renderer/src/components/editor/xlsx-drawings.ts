@@ -1,5 +1,7 @@
 import { IMAGE_FILE_MIME_TYPES } from '../../../../shared/image-file-extensions'
+import { parseXlsxChart, type XlsxChart } from './xlsx-chart'
 import { resolveXlsxPartPath, resolveXlsxRelationshipsPartPath } from './xlsx-part-paths'
+import type { XlsxThemePalette } from './xlsx-theme-palette'
 import { forEachXlsxXmlElement } from './xlsx-xml-elements'
 import type { XlsxZipArchive } from './xlsx-zip-archive'
 
@@ -10,26 +12,36 @@ import type { XlsxZipArchive } from './xlsx-zip-archive'
  * cell it starts and ends on, so the viewer places it over the same cells rather
  * than at a coordinate that would drift once column widths or zoom change.
  */
-export type XlsxSheetImage = {
-  /** `data:` URL, so the image survives without a second round trip. */
-  source: string
+export type XlsxDrawingPosition = {
   fromRow: number
   fromColumn: number
   toRow: number
   toColumn: number
-  description?: string
 }
+
+/** Anything a worksheet anchors over its cells. */
+export type XlsxSheetDrawing = XlsxDrawingPosition &
+  (
+    | {
+        kind: 'image'
+        /** `data:` URL, so the image survives without a second round trip. */
+        source: string
+        description?: string
+      }
+    | { kind: 'chart'; chart: XlsxChart; description?: string }
+  )
 
 // Why: a workbook can embed a lot of media, and each image is inlined as base64
 // into renderer memory. Bound both the count and the size of what is inlined.
-const MAX_SHEET_IMAGES = 50
+const MAX_SHEET_DRAWINGS = 50
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
-export async function readXlsxSheetImages(
+export async function readXlsxSheetDrawings(
   archive: XlsxZipArchive,
   worksheetPartPath: string,
-  worksheetXml: string
-): Promise<XlsxSheetImage[]> {
+  worksheetXml: string,
+  themePalette: XlsxThemePalette
+): Promise<XlsxSheetDrawing[]> {
   const drawingPartPath = await resolveDrawingPartPath(archive, worksheetPartPath, worksheetXml)
   if (drawingPartPath === null) {
     return []
@@ -38,27 +50,39 @@ export async function readXlsxSheetImages(
   if (drawingXml === null) {
     return []
   }
-  const mediaTargets = await readDrawingImageTargets(archive, drawingPartPath)
-  if (mediaTargets.size === 0) {
+  const relatedParts = await readDrawingRelationships(archive, drawingPartPath)
+  if (relatedParts.size === 0) {
     return []
   }
 
-  const images: XlsxSheetImage[] = []
+  const drawings: XlsxSheetDrawing[] = []
   for (const anchor of readAnchors(drawingXml)) {
-    if (images.length >= MAX_SHEET_IMAGES) {
+    if (drawings.length >= MAX_SHEET_DRAWINGS) {
       break
     }
-    const partPath = mediaTargets.get(anchor.relationshipId)
+    const partPath = relatedParts.get(anchor.relationshipId)
     if (partPath === undefined) {
       continue
     }
-    const source = await readImageDataUrl(archive, partPath)
-    if (source === null) {
+    if (anchor.target === 'chart') {
+      const chartXml = await archive.readPartText(partPath)
+      const chart = chartXml === null ? null : parseXlsxChart(chartXml, themePalette)
+      if (chart !== null) {
+        drawings.push({
+          ...anchor.position,
+          kind: 'chart',
+          chart,
+          description: anchor.description
+        })
+      }
       continue
     }
-    images.push({ ...anchor.position, description: anchor.description, source })
+    const source = await readImageDataUrl(archive, partPath)
+    if (source !== null) {
+      drawings.push({ ...anchor.position, kind: 'image', source, description: anchor.description })
+    }
   }
-  return images
+  return drawings
 }
 
 async function resolveDrawingPartPath(
@@ -104,7 +128,7 @@ function stripRelsFolder(relationshipsPartPath: string): string {
   return [...segments, fileName.replace(/\.rels$/, '')].join('/')
 }
 
-async function readDrawingImageTargets(
+async function readDrawingRelationships(
   archive: XlsxZipArchive,
   drawingPartPath: string
 ): Promise<Map<string, string>> {
@@ -132,8 +156,10 @@ async function readDrawingImageTargets(
 
 type XlsxAnchor = {
   relationshipId: string
+  /** A picture embeds its media; a graphic frame references a chart part. */
+  target: 'image' | 'chart'
   description?: string
-  position: Pick<XlsxSheetImage, 'fromRow' | 'fromColumn' | 'toRow' | 'toColumn'>
+  position: XlsxDrawingPosition
 }
 
 // Why: a twoCellAnchor spans a range, a oneCellAnchor pins a corner. Both are
@@ -144,7 +170,9 @@ function readAnchors(drawingXml: string): XlsxAnchor[] {
 
   for (const anchorTag of ['xdr:twoCellAnchor', 'xdr:oneCellAnchor'] as const) {
     forEachXlsxXmlElement(drawingXml, anchorTag, (element) => {
-      const relationshipId = readBlipRelationshipId(element.inner)
+      const blipId = readBlipRelationshipId(element.inner)
+      const chartId = readChartRelationshipId(element.inner)
+      const relationshipId = blipId ?? chartId
       if (relationshipId === undefined) {
         return
       }
@@ -155,6 +183,7 @@ function readAnchors(drawingXml: string): XlsxAnchor[] {
       }
       anchors.push({
         relationshipId,
+        target: blipId === undefined ? 'chart' : 'image',
         description: readAnchorDescription(element.inner),
         position: {
           fromRow: from.row,
@@ -173,6 +202,17 @@ function readBlipRelationshipId(anchorXml: string): string | undefined {
   let relationshipId: string | undefined
   forEachXlsxXmlElement(anchorXml, 'a:blip', (element) => {
     relationshipId = element.attributes['r:embed']
+    return false
+  })
+  return relationshipId
+}
+
+// Why: a chart is anchored through a graphic frame rather than a picture, so it
+// carries no blip — the reference sits on `<c:chart r:id>` inside the frame.
+function readChartRelationshipId(anchorXml: string): string | undefined {
+  let relationshipId: string | undefined
+  forEachXlsxXmlElement(anchorXml, 'c:chart', (element) => {
+    relationshipId = element.attributes['r:id']
     return false
   })
   return relationshipId
