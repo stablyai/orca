@@ -1,6 +1,31 @@
 import type { GitExec } from './git-handler-ops'
 import { areRelayWorktreePathsEqual, readRelayWorktreeList } from './git-handler-worktree-ops'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
+import { WORKTREE_CREATE_TIMEOUT_MAX_MS } from '../shared/worktree-create-timeouts'
+
+class RelayWorktreeCreateRefreshTimeoutError extends Error {
+  constructor() {
+    super('Worktree base ref refresh timed out.')
+    this.name = 'RelayWorktreeCreateRefreshTimeoutError'
+  }
+}
+
+function getErrorText(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String((error as { message?: unknown }).message ?? '')
+  }
+  return String(error)
+}
+
+function isGitCommandTimeout(error: unknown): boolean {
+  return (
+    (typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      String((error as { code?: unknown }).code) === 'ETIMEDOUT') ||
+    /\btimed out\b/i.test(getErrorText(error))
+  )
+}
 
 export async function refreshLocalBaseRefForWorktreeCreateOp(
   git: GitExec,
@@ -12,6 +37,41 @@ export async function refreshLocalBaseRefForWorktreeCreateOp(
   const remoteTrackingRef = params.remoteTrackingRef as string
   const ownerWorktreePath = params.ownerWorktreePath as string | undefined
   const checkOnly = params.checkOnly === true
+  const timeoutValue = params.timeoutMs
+  if (
+    timeoutValue !== undefined &&
+    (typeof timeoutValue !== 'number' ||
+      !Number.isFinite(timeoutValue) ||
+      timeoutValue <= 0 ||
+      timeoutValue > WORKTREE_CREATE_TIMEOUT_MAX_MS)
+  ) {
+    throw new Error('Invalid local base ref refresh timeout.')
+  }
+  const timeout = timeoutValue as number | undefined
+  const deadlineAt = timeout === undefined ? undefined : Date.now() + timeout
+  const execute: GitExec = async (args, cwd, options) => {
+    const remaining = deadlineAt === undefined ? undefined : deadlineAt - Date.now()
+    if (remaining !== undefined && remaining <= 0) {
+      throw new RelayWorktreeCreateRefreshTimeoutError()
+    }
+    try {
+      if (remaining === undefined && options === undefined) {
+        return await git(args, cwd)
+      }
+      return await git(args, cwd, {
+        ...options,
+        ...(remaining === undefined ? {} : { timeout: remaining })
+      })
+    } catch (error) {
+      if (
+        error instanceof RelayWorktreeCreateRefreshTimeoutError ||
+        (deadlineAt !== undefined && (isGitCommandTimeout(error) || Date.now() >= deadlineAt))
+      ) {
+        throw new RelayWorktreeCreateRefreshTimeoutError()
+      }
+      throw error
+    }
+  }
 
   if (
     typeof repoPath !== 'string' ||
@@ -25,12 +85,12 @@ export async function refreshLocalBaseRefForWorktreeCreateOp(
     throw new Error('Invalid local base ref refresh refs.')
   }
 
-  await git(['check-ref-format', fullRef], repoPath)
-  await git(['check-ref-format', remoteTrackingRef], repoPath)
+  await execute(['check-ref-format', fullRef], repoPath)
+  await execute(['check-ref-format', remoteTrackingRef], repoPath)
 
-  const localOid = await revParseCommit(git, repoPath, fullRef, 'Local base ref is missing.')
+  const localOid = await revParseCommit(execute, repoPath, fullRef, 'Local base ref is missing.')
   const remoteOid = await revParseCommit(
-    git,
+    execute,
     repoPath,
     remoteTrackingRef,
     'Remote-tracking base ref is missing.'
@@ -39,18 +99,21 @@ export async function refreshLocalBaseRefForWorktreeCreateOp(
   // Why: this RPC mutates refs/worktrees, so the relay repeats main-process
   // safety checks at mutation time to close stale-preflight and direct-call gaps.
   try {
-    await git(['merge-base', '--is-ancestor', localOid, remoteOid], repoPath)
-  } catch {
+    await execute(['merge-base', '--is-ancestor', localOid, remoteOid], repoPath)
+  } catch (error) {
+    if (error instanceof RelayWorktreeCreateRefreshTimeoutError) {
+      throw error
+    }
     throw new Error('Local base ref is not a fast-forward update.')
   }
 
-  const worktrees = await readRelayWorktreeList(git, repoPath, capabilities)
+  const worktrees = await readRelayWorktreeList(execute, repoPath, capabilities)
   const ownerWorktree = worktrees.find((worktree) => worktree.branch === fullRef)
   if (ownerWorktree) {
     if (ownerWorktreePath && !areRelayWorktreePathsEqual(ownerWorktree.path, ownerWorktreePath)) {
       throw new Error('Local base ref is checked out in a different worktree.')
     }
-    const { stdout } = await git(
+    const { stdout } = await execute(
       ['status', '--porcelain', '--untracked-files=no'],
       ownerWorktree.path
     )
@@ -60,7 +123,7 @@ export async function refreshLocalBaseRefForWorktreeCreateOp(
     if (checkOnly) {
       return
     }
-    await git(['reset', '--hard', remoteOid], ownerWorktree.path)
+    await execute(['reset', '--hard', remoteOid], ownerWorktree.path)
     return
   }
 
@@ -70,7 +133,7 @@ export async function refreshLocalBaseRefForWorktreeCreateOp(
   if (checkOnly) {
     return
   }
-  await git(['update-ref', fullRef, remoteOid, localOid], repoPath)
+  await execute(['update-ref', fullRef, remoteOid, localOid], repoPath)
 }
 
 async function revParseCommit(

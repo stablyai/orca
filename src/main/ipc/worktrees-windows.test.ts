@@ -299,7 +299,12 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       'C:\\workspaces\\improve-dashboard',
       'improve-dashboard',
       'origin/main',
-      false
+      false,
+      false,
+      {
+        refreshTimeout: 60_000,
+        timeout: 180_000
+      }
     )
     expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
@@ -346,7 +351,12 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       'C:\\workspaces\\improve-dashboard',
       'octocat/improve-dashboard',
       'origin/main',
-      false
+      false,
+      false,
+      {
+        refreshTimeout: 60_000,
+        timeout: 180_000
+      }
     )
   })
 

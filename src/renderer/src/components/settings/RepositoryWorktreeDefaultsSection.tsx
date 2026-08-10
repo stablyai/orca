@@ -3,15 +3,18 @@ import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { BaseRefPicker } from './BaseRefPicker'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
+import { RepositoryWorktreeCreateTimeoutSettings } from './RepositoryWorktreeCreateTimeoutSettings'
 import { SearchableSetting } from './SearchableSetting'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
-type RepositoryWorktreeDefaultsUpdate = Pick<Repo, 'worktreeBasePath' | 'worktreeBaseRef'>
+type RepositoryWorktreeDefaultsUpdate = Pick<Repo, 'worktreeBasePath' | 'worktreeBaseRef'> & {
+  worktreeCreateTimeouts?: Repo['worktreeCreateTimeouts'] | null
+}
 
 type RepositoryWorktreeDefaultsSectionProps = {
   repo: Repo
-  settings: Pick<GlobalSettings, 'workspaceDir'> | null
+  settings: Pick<GlobalSettings, 'workspaceDir' | 'worktreeCreateTimeouts'> | null
   updateRepo: (repoId: string, updates: Partial<RepositoryWorktreeDefaultsUpdate>) => void
   forceVisible: boolean
 }
@@ -104,6 +107,13 @@ export function RepositoryWorktreeDefaultsSection({
           )}
         </p>
       </SearchableSetting>
+
+      <RepositoryWorktreeCreateTimeoutSettings
+        repo={repo}
+        settings={settings}
+        updateTimeouts={(worktreeCreateTimeouts) => updateRepo(repo.id, { worktreeCreateTimeouts })}
+        forceVisible={forceVisible}
+      />
     </>
   )
 }

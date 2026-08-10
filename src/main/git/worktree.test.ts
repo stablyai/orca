@@ -41,6 +41,7 @@ import {
   moveWorktree,
   parseWorktreeList,
   removeWorktree,
+  rollbackFailedWorktreeCreate,
   WORKTREE_ADD_TIMEOUT_MS,
   WORKTREE_LIST_TIMEOUT_MS
 } from './worktree'
@@ -782,6 +783,32 @@ describe('addWorktree', () => {
     ])
   })
 
+  it('does not reuse a cancelled create signal for post-add metadata', async () => {
+    const controller = new AbortController()
+    gitExecFileAsyncMock.mockImplementation(
+      async (args: string[], options?: { signal?: AbortSignal }) => {
+        if (args[0] === 'worktree' && args[1] === 'add') {
+          controller.abort()
+          return { stdout: '' }
+        }
+        if (options?.signal?.aborted) {
+          throw Object.assign(new Error('cancelled'), { name: 'AbortError' })
+        }
+        return { stdout: args[1] === '--get' ? 'true\n' : '' }
+      }
+    )
+
+    await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', false, false, {
+      signal: controller.signal
+    })
+
+    const postAddCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'config')
+    expect(postAddCalls).toHaveLength(2)
+    for (const [, options] of postAddCalls) {
+      expect(options.signal).toBeUndefined()
+    }
+  })
+
   it('checks out a selected existing local branch without creating a new branch', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
 
@@ -812,6 +839,20 @@ describe('addWorktree', () => {
     )
     expect(worktreeAddCall?.[1]).toMatchObject({ timeout: WORKTREE_ADD_TIMEOUT_MS })
     expect(WORKTREE_ADD_TIMEOUT_MS).toBeGreaterThan(0)
+  })
+
+  it('uses the caller timeout for worktree add and checkout commands', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+
+    await addWorktree('/repo', '/repo-feature', 'feature/test', 'feature/test', false, false, {
+      checkoutExistingBranch: true,
+      timeout: 420_000
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['worktree', 'add', '/repo-feature', 'feature/test'],
+      { cwd: '/repo', timeout: 420_000 }
+    )
   })
 
   it('does not write branch base config when no base branch is provided', async () => {
@@ -1027,6 +1068,70 @@ describe('addWorktree', () => {
     ])
   })
 
+  it('rolls back an exact worktree left registered after add times out', async () => {
+    resolveRemoteBase()
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('git timed out.'))
+      .mockResolvedValueOnce({
+        stdout:
+          'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
+      })
+      .mockResolvedValueOnce({ stdout: '' }) // worktree remove
+      .mockResolvedValueOnce({ stdout: '' }) // branch -D
+
+    await expect(
+      addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', false, false, {
+        timeout: 1_000
+      })
+    ).rejects.toThrow('git timed out.')
+
+    expect(gitExecFileAsyncMock.mock.calls.slice(2).map((call) => call[0])).toEqual([
+      ['worktree', 'list', '--porcelain', '-z'],
+      ['worktree', 'remove', '--force', '/repo-feature'],
+      ['branch', '-D', '--', 'feature/test']
+    ])
+  })
+
+  it('does not roll back a different branch at the requested path', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'worktree /repo-feature\nHEAD abc123\nbranch refs/heads/someone-else\n'
+    })
+
+    await expect(
+      rollbackFailedWorktreeCreate('/repo', '/repo-feature', 'feature/test', false)
+    ).resolves.toBe(false)
+
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'worktree',
+      'remove',
+      '--force',
+      '/repo-feature'
+    ])
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'branch',
+      '-D',
+      '--',
+      'feature/test'
+    ])
+  })
+
+  it('does not roll back the same branch from a different path', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'worktree /repo-other\nHEAD abc123\nbranch refs/heads/feature/test\n'
+    })
+
+    await expect(
+      rollbackFailedWorktreeCreate('/repo', '/repo-feature', 'feature/test', false)
+    ).resolves.toBe(false)
+
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'worktree',
+      'remove',
+      '--force',
+      '/repo-other'
+    ])
+  })
+
   it('fast-forwards with reset --hard when localBranch is checked out in primary worktree', async () => {
     const worktreeListOutput =
       'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-other\nHEAD def456\nbranch refs/heads/feature\n'
@@ -1158,6 +1263,169 @@ describe('addWorktree', () => {
       'reset',
       '--hard',
       'remote-main'
+    ])
+  })
+
+  it('shares the refresh timeout across base resolution, safety checks, and update', async () => {
+    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/develop\n'
+    let now = 1_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const results = [
+      { stdout: 'abc123\n' }, // resolve creation base
+      { stdout: '0\t3\n' }, // rev-list drift
+      { stdout: 'old-main\n' }, // local oid
+      { stdout: 'remote-main\n' }, // remote oid
+      { stdout: '' }, // merge-base
+      { stdout: worktreeListOutput }, // owner inspection
+      { stdout: '' }, // update-ref
+      { stdout: '' }, // worktree add
+      { stdout: '' }, // persist branch base
+      { stdout: 'true\n' } // push.autoSetupRemote already set
+    ]
+    gitExecFileAsyncMock.mockImplementation(async () => {
+      const result = results.shift() ?? { stdout: '' }
+      now += 1_000
+      return result
+    })
+
+    try {
+      await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true, false, {
+        refreshTimeout: 10_000
+      })
+    } finally {
+      nowSpy.mockRestore()
+    }
+
+    expect(
+      gitExecFileAsyncMock.mock.calls.slice(0, 7).map(([, options]) => options.timeout)
+    ).toEqual([10_000, 9_000, 8_000, 7_000, 6_000, 5_000, 4_000])
+  })
+
+  it('fails when a completed command has exhausted the refresh stage deadline', async () => {
+    let now = 1_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    gitExecFileAsyncMock.mockImplementationOnce(async () => {
+      now = 11_000
+      return { stdout: 'abc123\n' }
+    })
+
+    try {
+      await expect(
+        addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true, false, {
+          refreshTimeout: 10_000
+        })
+      ).rejects.toThrow('Worktree base ref refresh timed out.')
+    } finally {
+      nowSpy.mockRestore()
+    }
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a subprocess timeout as a refresh stage timeout', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('git timed out.'))
+
+    await expect(
+      addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true, false, {
+        refreshTimeout: 10_000
+      })
+    ).rejects.toThrow('Worktree base ref refresh timed out.')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves a Git exit failure that returns after the refresh deadline', async () => {
+    let now = 1_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // resolve creation base
+      .mockImplementationOnce(async () => {
+        now = 11_000
+        throw Object.assign(new Error('fatal: bad revision'), { code: 128 })
+      })
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // persist branch base
+      .mockResolvedValueOnce({ stdout: 'true\n' }) // push.autoSetupRemote already set
+
+    try {
+      await expect(
+        addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true, false, {
+          refreshTimeout: 10_000
+        })
+      ).resolves.toEqual({
+        localBaseRefRefresh: {
+          status: 'skipped_not_fast_forward',
+          baseRef: 'origin/main',
+          localBranch: 'main'
+        }
+      })
+    } finally {
+      nowSpy.mockRestore()
+    }
+
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toContainEqual([
+      'worktree',
+      'add',
+      '--no-track',
+      '-b',
+      'feature/test',
+      '/repo-feature',
+      'refs/remotes/origin/main'
+    ])
+  })
+
+  it('reports a killed subprocess as a refresh stage timeout', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('git was killed'), { killed: true, signal: 'SIGTERM' })
+    )
+
+    await expect(
+      addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true, false, {
+        refreshTimeout: 10_000
+      })
+    ).rejects.toThrow('Worktree base ref refresh timed out.')
+  })
+
+  it('uses normal probes after an advisory refresh timeout', async () => {
+    let now = 1_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    gitExecFileAsyncMock
+      .mockImplementationOnce(async () => {
+        now = 2_000
+        throw new Error('git timed out.')
+      })
+      .mockResolvedValueOnce({ stdout: '' }) // remote-tracking ref fallback probe
+      .mockResolvedValueOnce({ stdout: 'local-oid\n' }) // local branch fallback probe
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // persist branch base
+      .mockResolvedValueOnce({ stdout: 'true\n' }) // push.autoSetupRemote already set
+
+    try {
+      await expect(
+        addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', false, false, {
+          refreshTimeout: 1_000,
+          suggestLocalBaseRefUpdate: true
+        })
+      ).resolves.toEqual({})
+    } finally {
+      nowSpy.mockRestore()
+    }
+
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
+      ['rev-parse', '--verify', '--quiet', 'refs/heads/origin/main^{commit}'],
+      [
+        'worktree',
+        'add',
+        '--no-track',
+        '-b',
+        'feature/test',
+        '/repo-feature',
+        'refs/heads/origin/main'
+      ],
+      ['config', '--local', '--replace-all', 'branch.feature/test.base', 'refs/heads/origin/main'],
+      ['config', '--get', 'push.autoSetupRemote']
     ])
   })
 
@@ -1765,6 +2033,36 @@ describe('addWorktree', () => {
       '-D',
       '--',
       'feature/test'
+    ])
+  })
+
+  it('shares one timeout budget across sparse add and checkout commands', async () => {
+    const nowSpy = vi
+      .spyOn(Date, 'now')
+      .mockReturnValueOnce(1_000)
+      .mockReturnValueOnce(1_000)
+      .mockReturnValueOnce(4_000)
+      .mockReturnValueOnce(6_000)
+      .mockReturnValueOnce(9_000)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
+
+    try {
+      await addSparseWorktree('/repo', '/repo-feature', 'feature/test', ['src'], undefined, false, {
+        checkoutExistingBranch: true,
+        timeout: 10_000
+      })
+    } finally {
+      nowSpy.mockRestore()
+    }
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [
+        ['worktree', 'add', '--no-checkout', '/repo-feature', 'feature/test'],
+        { cwd: '/repo', timeout: 10_000 }
+      ],
+      [['sparse-checkout', 'init', '--cone'], { cwd: '/repo-feature', timeout: 7_000 }],
+      [['sparse-checkout', 'set', '--', 'src'], { cwd: '/repo-feature', timeout: 5_000 }],
+      [['checkout', 'feature/test'], { cwd: '/repo-feature', timeout: 2_000 }]
     ])
   })
 })

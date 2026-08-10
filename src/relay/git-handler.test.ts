@@ -25,7 +25,7 @@ type GitSpyTarget = {
   git(
     args: string[],
     cwd: string,
-    opts?: { signal?: AbortSignal }
+    opts?: { signal?: AbortSignal; timeout?: number }
   ): Promise<{ stdout: string; stderr: string }>
 }
 
@@ -119,6 +119,9 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.fetch')
     expect(methods).toContain('git.forkSync')
     expect(methods).toContain('git.fetchRemoteTrackingRef')
+    expect(methods).toContain('git.addPushTargetRemote')
+    expect(methods).toContain('git.removePushTargetRemote')
+    expect(methods).toContain('git.awaitPushTargetRemoteMutation')
     expect(methods).toContain('git.fetchGitHubPullRequestHead')
     expect(methods).toContain('git.fetchGitLabMergeRequestHead')
     expect(methods).toContain('git.fetchGitLabMergeRequestHeadRef')
@@ -137,6 +140,214 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.exec')
     expect(methods).toContain('git.clone')
     expect(methods).toContain('git.isGitRepo')
+  })
+
+  it('forwards remote-tracking fetch cancellation to every Git command', async () => {
+    const controller = new AbortController()
+    const gitSpy = vi
+      .spyOn(handler as unknown as GitSpyTarget, 'git')
+      .mockImplementation(async (args) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      })
+
+    await dispatcher.callRequest(
+      'git.fetchRemoteTrackingRef',
+      {
+        worktreePath: tmpDir,
+        remote: 'origin',
+        branch: 'main',
+        ref: 'refs/remotes/origin/main',
+        timeoutMs: 75_000
+      },
+      { isStale: () => false, signal: controller.signal }
+    )
+
+    expect(gitSpy).toHaveBeenLastCalledWith(
+      ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
+      tmpDir,
+      { signal: controller.signal, timeout: 75_000 }
+    )
+    for (const [, , options] of gitSpy.mock.calls) {
+      expect(options?.signal).toBe(controller.signal)
+    }
+  })
+
+  it('normalizes timed-out push-target remote additions for client reconciliation', async () => {
+    const gitSpy = vi
+      .spyOn(handler as unknown as GitSpyTarget, 'git')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed: git remote add fork url'), {
+          code: null,
+          killed: true,
+          signal: 'SIGTERM'
+        })
+      )
+      .mockResolvedValueOnce({
+        stdout: 'git@github.com:contributor/orca.git\n',
+        stderr: ''
+      })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(
+      dispatcher.callRequest('git.addPushTargetRemote', {
+        repoPath: tmpDir,
+        remoteName: 'fork',
+        remoteUrl: 'git@github.com:contributor/orca.git',
+        timeoutMs: 75_000
+      })
+    ).rejects.toThrow('Git command timed out after 75000ms.')
+
+    expect(gitSpy).toHaveBeenCalledWith(
+      ['remote', 'add', 'fork', 'git@github.com:contributor/orca.git'],
+      tmpDir,
+      { signal: undefined, timeout: 75_000 }
+    )
+    expect(gitSpy).toHaveBeenCalledWith(['config', '--get', 'remote.fork.url'], tmpDir, {
+      timeout: 30_000
+    })
+    expect(gitSpy).toHaveBeenCalledWith(['remote', 'remove', 'fork'], tmpDir, {
+      timeout: 30_000
+    })
+  })
+
+  it('removes an added push-target remote when its response is not delivered', async () => {
+    let responseSettled: ((result: { ok: boolean; error?: Error }) => void) | undefined
+    const gitSpy = vi
+      .spyOn(handler as unknown as GitSpyTarget, 'git')
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({
+        stdout: 'git@github.com:contributor/orca.git\n',
+        stderr: ''
+      })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await dispatcher.callRequest(
+      'git.addPushTargetRemote',
+      {
+        repoPath: tmpDir,
+        remoteName: 'fork',
+        remoteUrl: 'git@github.com:contributor/orca.git',
+        timeoutMs: 75_000
+      },
+      {
+        isStale: () => false,
+        onResponseSettled: (callback) => {
+          responseSettled = callback
+        }
+      } as never
+    )
+
+    responseSettled?.({ ok: false, error: new Error('connection lost') })
+    await dispatcher.callRequest('git.awaitPushTargetRemoteMutation', {
+      repoPath: tmpDir
+    })
+    expect(gitSpy).toHaveBeenCalledWith(['remote', 'remove', 'fork'], tmpDir, {
+      timeout: 30_000
+    })
+    expect(gitSpy).toHaveBeenCalledWith(['config', '--get', 'remote.fork.url'], tmpDir, {
+      timeout: 30_000
+    })
+  })
+
+  it('holds the push-target mutation until failed-response cleanup finishes', async () => {
+    let responseSettled: ((result: { ok: boolean; error?: Error }) => void) | undefined
+    let finishCleanup!: () => void
+    const cleanupBlocked = new Promise<void>((resolve) => {
+      finishCleanup = resolve
+    })
+    const gitSpy = vi
+      .spyOn(handler as unknown as GitSpyTarget, 'git')
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({
+        stdout: 'git@github.com:contributor/orca.git\n',
+        stderr: ''
+      })
+      .mockImplementationOnce(async () => {
+        await cleanupBlocked
+        return { stdout: '', stderr: '' }
+      })
+
+    await dispatcher.callRequest(
+      'git.addPushTargetRemote',
+      {
+        repoPath: tmpDir,
+        remoteName: 'fork',
+        remoteUrl: 'git@github.com:contributor/orca.git',
+        timeoutMs: 75_000
+      },
+      {
+        isStale: () => false,
+        onResponseSettled: (callback) => {
+          responseSettled = callback
+        }
+      } as never
+    )
+    responseSettled?.({ ok: false, error: new Error('connection lost') })
+    await waitForSpyCalls(gitSpy, 3)
+
+    const barrier = dispatcher.callRequest('git.awaitPushTargetRemoteMutation', {
+      repoPath: tmpDir
+    })
+    let barrierSettled = false
+    void barrier.then(() => {
+      barrierSettled = true
+    })
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    expect(barrierSettled).toBe(false)
+
+    finishCleanup()
+    await barrier
+    expect(barrierSettled).toBe(true)
+  })
+
+  it('releases a push-target mutation when response settlement never fires', async () => {
+    vi.useFakeTimers()
+    try {
+      let responseSettled: ((result: { ok: boolean; error?: Error }) => void) | undefined
+      const gitSpy = vi
+        .spyOn(handler as unknown as GitSpyTarget, 'git')
+        .mockResolvedValue({ stdout: '', stderr: '' })
+
+      await dispatcher.callRequest(
+        'git.addPushTargetRemote',
+        {
+          repoPath: tmpDir,
+          remoteName: 'fork',
+          remoteUrl: 'git@github.com:contributor/orca.git',
+          timeoutMs: 75_000
+        },
+        {
+          isStale: () => false,
+          onResponseSettled: (callback) => {
+            responseSettled = callback
+          }
+        } as never
+      )
+      const barrier = dispatcher.callRequest('git.awaitPushTargetRemoteMutation', {
+        repoPath: tmpDir
+      })
+      let barrierSettled = false
+      void barrier.then(() => {
+        barrierSettled = true
+      })
+
+      await vi.advanceTimersByTimeAsync(60_999)
+      expect(barrierSettled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      await barrier
+      expect(barrierSettled).toBe(true)
+
+      responseSettled?.({ ok: false, error: new Error('late connection loss') })
+      await vi.runAllTimersAsync()
+      expect(gitSpy).not.toHaveBeenCalledWith(['remote', 'remove', 'fork'], tmpDir, {
+        timeout: 30_000
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('runs remote worktree deletion inside the relay watcher fence', async () => {
@@ -2163,7 +2374,7 @@ describe('GitHandler', () => {
           (
             args: string[],
             cwd: string,
-            opts?: { maxBuffer?: number }
+            opts?: { maxBuffer?: number; signal?: AbortSignal }
           ) => Promise<{ stdout: string; stderr: string }>
         >()
       ;(localHandler as unknown as { git: typeof gitMock }).git = gitMock
@@ -2494,7 +2705,7 @@ describe('GitHandler', () => {
           (
             args: string[],
             cwd: string,
-            opts?: { maxBuffer?: number }
+            opts?: { maxBuffer?: number; signal?: AbortSignal }
           ) => Promise<{ stdout: string; stderr: string }>
         >()
       ;(handler as unknown as { git: typeof gitMock }).git = gitMock
@@ -2503,18 +2714,23 @@ describe('GitHandler', () => {
 
     it('passes --no-track and writes push.autoSetupRemote when unset', async () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
+      const controller = new AbortController()
       gitMock.mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' }) // rev-parse refs/remotes/origin/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // config --local --replace-all branch.<branch>.base
       gitMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // --get
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // --local set
 
-      await localDispatcher.callRequest('git.addWorktree', {
-        repoPath: '/relay/repo',
-        branchName: 'feature/test',
-        targetDir: '/relay/wt',
-        base: 'origin/main'
-      })
+      await localDispatcher.callRequest(
+        'git.addWorktree',
+        {
+          repoPath: '/relay/repo',
+          branchName: 'feature/test',
+          targetDir: '/relay/wt',
+          base: 'origin/main'
+        },
+        { isStale: () => false, signal: controller.signal }
+      )
 
       expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
         ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
@@ -2543,6 +2759,10 @@ describe('GitHandler', () => {
       expect(gitMock.mock.calls[2]?.[1]).toBe('/relay/wt')
       expect(gitMock.mock.calls[3]?.[1]).toBe('/relay/wt')
       expect(gitMock.mock.calls[4]?.[1]).toBe('/relay/wt')
+      expect(
+        gitMock.mock.calls.slice(0, 2).every((call) => call[2]?.signal === controller.signal)
+      ).toBe(true)
+      expect(gitMock.mock.calls.slice(2).every((call) => call[2]?.signal === undefined)).toBe(true)
     })
 
     it('checks out a selected existing local branch without creating a new branch', async () => {

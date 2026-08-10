@@ -102,6 +102,8 @@ describe('RepositoryPane search entries', () => {
     expect(matchesSettingsSearch('local settings scripts', entries)).toBe(true)
     expect(matchesSettingsSearch('../worktrees', entries)).toBe(true)
     expect(matchesSettingsSearch('worktree path', entries)).toBe(true)
+    expect(matchesSettingsSearch('git worktree add', entries)).toBe(true)
+    expect(matchesSettingsSearch('materialization', entries)).toBe(true)
   })
 
   it('includes each project search section once', () => {

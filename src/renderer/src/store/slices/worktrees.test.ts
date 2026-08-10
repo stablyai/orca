@@ -34,6 +34,7 @@ import {
   hasDismissedHugeRepoWarning,
   markHugeRepoWarningDismissed
 } from '@/lib/source-control-huge-repo-warning-dismissals'
+import { getMaximumWorktreeCreateTransportTimeoutMs } from '../../../../shared/worktree-create-timeouts'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
 
@@ -5740,6 +5741,7 @@ describe('worktree remote runtime mutations', () => {
     expect(result).toEqual({ worktree: wt })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
+      expectedEnvironmentPairingRevision: undefined,
       method: 'worktree.create',
       params: {
         repo: 'repo1',
@@ -5753,7 +5755,7 @@ describe('worktree remote runtime mutations', () => {
         linkedPR: 456,
         pushTarget: { remoteName: 'fork', branchName: 'feature' }
       },
-      timeoutMs: 10 * 60_000
+      timeoutMs: getMaximumWorktreeCreateTransportTimeoutMs()
     })
     expect(mockApi.worktrees.create).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1).toEqual([wt])

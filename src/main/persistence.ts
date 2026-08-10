@@ -261,6 +261,11 @@ import {
   normalizeFolderWorkspaces
 } from '../shared/folder-workspaces'
 import {
+  WORKTREE_CREATE_TIMEOUT_DEFAULTS,
+  normalizeWorktreeCreateTimeoutOverrides,
+  normalizeWorktreeCreateTimeouts
+} from '../shared/worktree-create-timeouts'
+import {
   folderWorkspaceKey,
   isWorkspaceKey,
   parseWorkspaceKey,
@@ -1467,7 +1472,9 @@ function sanitizeRepoUpdatesForPersistence<
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
     >
-  >
+  > & {
+    worktreeCreateTimeouts?: Repo['worktreeCreateTimeouts'] | null
+  }
 >(updates: T): T {
   const sanitized = { ...updates }
   if ('badgeColor' in sanitized) {
@@ -1510,6 +1517,16 @@ function sanitizeRepoUpdatesForPersistence<
       delete sanitized.worktreeBasePath
     }
   }
+  if ('worktreeCreateTimeouts' in sanitized && sanitized.worktreeCreateTimeouts !== null) {
+    const worktreeCreateTimeouts = normalizeWorktreeCreateTimeoutOverrides(
+      sanitized.worktreeCreateTimeouts
+    )
+    if (worktreeCreateTimeouts === undefined) {
+      delete sanitized.worktreeCreateTimeouts
+    } else {
+      sanitized.worktreeCreateTimeouts = worktreeCreateTimeouts
+    }
+  }
   if ('projectHostSetupMethod' in sanitized) {
     const setupMethod = sanitizeRepoProjectHostSetupMethod(sanitized.projectHostSetupMethod)
     if (setupMethod === undefined) {
@@ -1527,6 +1544,17 @@ function sanitizeRepoUpdatesForPersistence<
     }
   }
   return sanitized
+}
+
+function normalizeRepoWorktreeCreateTimeouts(repo: Repo): Repo {
+  const worktreeCreateTimeouts = normalizeWorktreeCreateTimeoutOverrides(
+    repo.worktreeCreateTimeouts
+  )
+  if (worktreeCreateTimeouts !== undefined) {
+    return { ...repo, worktreeCreateTimeouts }
+  }
+  const { worktreeCreateTimeouts: _invalidWorktreeCreateTimeouts, ...repoWithoutTimeouts } = repo
+  return repoWithoutTimeouts
 }
 
 function expandFloatingWorkspaceHomePath(input: string, home: string): string {
@@ -3388,9 +3416,17 @@ export class Store {
         ) {
           this.loadNeedsSave = true
         }
+        const worktreeCreateTimeouts = normalizeWorktreeCreateTimeouts(
+          parsed.settings?.worktreeCreateTimeouts,
+          defaults.settings.worktreeCreateTimeouts ?? WORKTREE_CREATE_TIMEOUT_DEFAULTS
+        )
+        const normalizedRepos = (parsed.repos ?? defaults.repos).map(
+          normalizeRepoWorktreeCreateTimeouts
+        )
         result = {
           ...defaults,
           ...parsed,
+          repos: normalizedRepos,
           featureInteractionTelemetryBuckets: normalizeFeatureInteractionTelemetryBuckets(
             parsed.featureInteractionTelemetryBuckets
           ),
@@ -3410,6 +3446,7 @@ export class Store {
             ...defaults.settings,
             // Why (#7977): keep persisted experimentalNewWorktreeCardStyle:true — v1.4.130's onboarding auto-wrote it as a plain boolean, so it's indistinguishable from a real opt-in; only the default changed.
             ...stripLegacyTerminalScrollbackBytes(parsed.settings),
+            worktreeCreateTimeouts,
             prBotAuthorOverrides: normalizePRBotAuthorOverrides(
               parsed.settings?.prBotAuthorOverrides
             ),
@@ -4653,7 +4690,7 @@ export class Store {
   }
 
   addRepo(repo: Repo): void {
-    this.state.repos.push(repo)
+    this.state.repos.push(normalizeRepoWorktreeCreateTimeouts(repo))
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
   }
@@ -4907,6 +4944,7 @@ export class Store {
       >
     > & {
       sourceControlAi?: Repo['sourceControlAi'] | null
+      worktreeCreateTimeouts?: Repo['worktreeCreateTimeouts'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
     },
     hostId?: ExecutionHostId
@@ -4952,6 +4990,13 @@ export class Store {
     if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
       delete repo.worktreeBasePath
       delete sanitizedUpdates.worktreeBasePath
+    }
+    if (
+      'worktreeCreateTimeouts' in sanitizedUpdates &&
+      sanitizedUpdates.worktreeCreateTimeouts === null
+    ) {
+      delete repo.worktreeCreateTimeouts
+      delete sanitizedUpdates.worktreeCreateTimeouts
     }
     if (
       'externalWorktreeVisibility' in sanitizedUpdates &&
@@ -5082,6 +5127,7 @@ export class Store {
       upstream: rawUpstream,
       gitRemoteIdentity: rawGitRemoteIdentity,
       sourceControlAi: rawSourceControlAi,
+      worktreeCreateTimeouts: rawWorktreeCreateTimeouts,
       projectHostSetupMethod: rawProjectHostSetupMethod,
       forkSyncMode: rawForkSyncMode,
       ...repoWithoutIcon
@@ -5090,6 +5136,8 @@ export class Store {
     const upstream = sanitizeRepoUpstream(rawUpstream)
     const gitRemoteIdentity = sanitizeGitRemoteIdentity(rawGitRemoteIdentity)
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
+    const worktreeCreateTimeouts =
+      normalizeWorktreeCreateTimeoutOverrides(rawWorktreeCreateTimeouts)
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
     // Why: never spawn git/gh username resolution in hydration — a stuck probe froze Windows startup for minutes (issue #7225); read only cache/persisted value.
@@ -5103,6 +5151,7 @@ export class Store {
       ...(upstream !== undefined ? { upstream } : {}),
       ...(gitRemoteIdentity !== undefined ? { gitRemoteIdentity } : {}),
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
+      ...(worktreeCreateTimeouts !== undefined ? { worktreeCreateTimeouts } : {}),
       ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
       ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
@@ -5903,6 +5952,12 @@ export class Store {
     if ('mobilePairingCustomAddresses' in updates) {
       sanitizedUpdates.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
         updates.mobilePairingCustomAddresses
+      )
+    }
+    if ('worktreeCreateTimeouts' in updates) {
+      sanitizedUpdates.worktreeCreateTimeouts = normalizeWorktreeCreateTimeouts(
+        updates.worktreeCreateTimeouts,
+        this.state.settings.worktreeCreateTimeouts ?? WORKTREE_CREATE_TIMEOUT_DEFAULTS
       )
     }
     if (

@@ -6,6 +6,7 @@ import type { FeatureInteractionState } from '../../../shared/feature-interactio
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../../shared/protocol-version'
+import { getMaximumWorktreeCreateTransportTimeoutMs } from '../../../shared/worktree-create-timeouts'
 
 const TEST_COMMIT_OID = '0123456789abcdef0123456789abcdef01234567'
 
@@ -37,11 +38,13 @@ class MemoryStorage implements Storage {
   }
 }
 
-function installBrowserGlobals(userAgent = 'Linux'): {
+function installBrowserGlobals(
+  userAgent = 'Linux',
+  storage = new MemoryStorage()
+): {
   window: Window & typeof globalThis
   storage: MemoryStorage
 } {
-  const storage = new MemoryStorage()
   const windowStub = {
     localStorage: storage,
     location: {
@@ -1030,6 +1033,48 @@ describe('web settings preload API', () => {
     expect(stored.autoRenameBranchFromWorkDefaultedOn).toBe(true)
   })
 
+  it('persists worktree creation timeouts without an active runtime environment', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    const timeouts = {
+      refreshBaseRefMs: 90_000,
+      addCheckoutMs: 240_000,
+      registrationMs: 45_000,
+      materializationMs: 360_000
+    }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          throw new Error('Unexpected runtime call')
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.settings.set({ worktreeCreateTimeouts: timeouts })
+    ).resolves.toMatchObject({ worktreeCreateTimeouts: timeouts })
+    expect(
+      JSON.parse(globals.storage.getItem('orca.web.settings.v1.runtime:browser-local') ?? '{}')
+    ).toMatchObject({ worktreeCreateTimeouts: timeouts })
+    expect(JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}')).not.toHaveProperty(
+      'worktreeCreateTimeouts'
+    )
+
+    vi.resetModules()
+    const reloadedGlobals = installBrowserGlobals('Linux', globals.storage)
+    const { installWebPreloadApi: installReloadedWebPreloadApi } = await import('./web-preload-api')
+    installReloadedWebPreloadApi()
+
+    expect(reloadedGlobals.window.api.settings.getSync()?.worktreeCreateTimeouts).toEqual(timeouts)
+    expect(runtimeCalls).toEqual([])
+  })
+
   it('hydrates compact worktree cards from paired runtime settings', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
@@ -1101,6 +1146,128 @@ describe('web settings preload API', () => {
     expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
     expect(stored.experimentalNewWorktreeCardStyle).toBe(true)
     expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+  })
+
+  it('hydrates worktree creation timeouts from a paired runtime', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    const timeouts = {
+      refreshBaseRefMs: 90_000,
+      addCheckoutMs: 240_000,
+      registrationMs: 45_000,
+      materializationMs: 360_000
+    }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { settings: { worktreeCreateTimeouts: timeouts } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+
+    expect(settings.worktreeCreateTimeouts).toEqual(timeouts)
+    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+  })
+
+  it('isolates worktree creation timeouts across paired runtimes', async () => {
+    const runtimeCalls: { host: string; method: string; params: unknown }[] = []
+    const hostATimeouts = {
+      refreshBaseRefMs: 90_000,
+      addCheckoutMs: 240_000,
+      registrationMs: 45_000,
+      materializationMs: 360_000
+    }
+    const hostBTimeouts = {
+      refreshBaseRefMs: 120_000,
+      addCheckoutMs: 300_000,
+      registrationMs: 60_000,
+      materializationMs: 420_000
+    }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        private readonly host: string
+
+        constructor(offer: { publicKeyB64: string }) {
+          this.host = offer.publicKeyB64
+        }
+
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ host: this.host, method, params })
+          const currentTimeouts = this.host === 'public-key' ? hostATimeouts : hostBTimeouts
+          const requestedTimeouts =
+            method === 'settings.update'
+              ? ((params as { worktreeCreateTimeouts?: Partial<typeof hostBTimeouts> })
+                  .worktreeCreateTimeouts ?? {})
+              : {}
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: {
+              settings: {
+                worktreeCreateTimeouts: { ...currentTimeouts, ...requestedTimeouts }
+              }
+            },
+            _meta: { runtimeId: `runtime-${this.host}` }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'host-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.settings.get()).resolves.toMatchObject({
+      worktreeCreateTimeouts: hostATimeouts
+    })
+    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Host B',
+      pairingCode: encodePairingCode({ publicKeyB64: 'server-b-key' })
+    })
+    await expect(globals.window.api.settings.get()).resolves.toMatchObject({
+      worktreeCreateTimeouts: hostBTimeouts
+    })
+    await globals.window.api.settings.set({
+      worktreeCreateTimeouts: { ...hostBTimeouts, addCheckoutMs: 480_000 }
+    })
+
+    expect(runtimeCalls.at(-1)).toEqual({
+      host: 'server-b-key',
+      method: 'settings.update',
+      params: {
+        worktreeCreateTimeouts: { ...hostBTimeouts, addCheckoutMs: 480_000 }
+      }
+    })
+    expect(
+      JSON.parse(globals.storage.getItem('orca.web.settings.v1.runtime:host-a') ?? '{}')
+    ).toMatchObject({ worktreeCreateTimeouts: hostATimeouts })
+    expect(
+      JSON.parse(
+        globals.storage.getItem(`orca.web.settings.v1.runtime:${paired.environment.id}`) ?? '{}'
+      )
+    ).toMatchObject({
+      worktreeCreateTimeouts: { ...hostBTimeouts, addCheckoutMs: 480_000 }
+    })
+    expect(JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}')).not.toHaveProperty(
+      'worktreeCreateTimeouts'
+    )
   })
 
   it('hydrates MiniMax usage settings from a paired runtime', async () => {
@@ -1247,6 +1414,96 @@ describe('web settings preload API', () => {
     expect(runtimeCalls).toEqual([
       { method: 'settings.update', params: { experimentalNewWorktreeCardStyle: true } }
     ])
+  })
+
+  it('forwards worktree creation timeout updates to a paired runtime', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    const timeouts = {
+      refreshBaseRefMs: 90_000,
+      addCheckoutMs: 240_000,
+      registrationMs: 45_000,
+      materializationMs: 360_000
+    }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { settings: { worktreeCreateTimeouts: timeouts } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.set({
+      worktreeCreateTimeouts: timeouts
+    })
+
+    expect(settings.worktreeCreateTimeouts).toEqual(timeouts)
+    expect(runtimeCalls).toEqual([
+      { method: 'settings.update', params: { worktreeCreateTimeouts: timeouts } }
+    ])
+  })
+
+  it('rolls back the host timeout shadow when a strict runtime rejects the update', async () => {
+    const originalTimeouts = {
+      refreshBaseRefMs: 90_000,
+      addCheckoutMs: 240_000,
+      registrationMs: 45_000,
+      materializationMs: 360_000
+    }
+    const rejectedTimeouts = { ...originalTimeouts, addCheckoutMs: 480_000 }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'settings.update') {
+            return Promise.resolve({
+              id: 'settings-update',
+              ok: false,
+              error: {
+                code: 'invalid_params',
+                message: 'Unrecognized key: worktreeCreateTimeouts'
+              },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: 'settings-get',
+            ok: true,
+            result: { settings: { worktreeCreateTimeouts: originalTimeouts } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    await globals.window.api.settings.get()
+
+    const settings = await globals.window.api.settings.set({
+      worktreeCreateTimeouts: rejectedTimeouts
+    })
+
+    expect(settings.worktreeCreateTimeouts).toEqual(originalTimeouts)
+    expect(globals.window.api.settings.getSync()?.worktreeCreateTimeouts).toEqual(originalTimeouts)
+    expect(
+      JSON.parse(globals.storage.getItem('orca.web.settings.v1.runtime:web-env-1') ?? '{}')
+    ).toMatchObject({ worktreeCreateTimeouts: originalTimeouts })
   })
 
   it('forwards MiniMax usage setting updates to a paired runtime', async () => {
@@ -3308,6 +3565,69 @@ describe('web worktree preload API', () => {
           targetBranch: 'release',
           isCrossRepository: false
         }
+      }
+    ])
+  })
+
+  it('uses the maximum compatible transport budget for new and legacy create requests', async () => {
+    const runtimeCalls: {
+      method: string
+      params: unknown
+      options: { timeoutMs?: number } | undefined
+    }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(
+          method: string,
+          params?: unknown,
+          options?: { timeoutMs?: number }
+        ): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params, options })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: {
+              worktree: { id: 'repo-1::/workspace/review', path: '/workspace/review' }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const timeouts = {
+      refreshBaseRefMs: 1_000,
+      addCheckoutMs: 2_000,
+      registrationMs: 3_000,
+      materializationMs: 4_000
+    }
+
+    await globals.window.api.worktrees.create({
+      repoId: 'repo-1',
+      name: 'new-host',
+      timeouts
+    })
+    await globals.window.api.worktrees.create({
+      repoId: 'repo-1',
+      name: 'legacy-host'
+    })
+
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'worktree.create',
+        params: expect.objectContaining({ repo: 'repo-1', name: 'new-host', timeouts }),
+        options: { timeoutMs: getMaximumWorktreeCreateTransportTimeoutMs() }
+      },
+      {
+        method: 'worktree.create',
+        params: expect.not.objectContaining({ timeouts: expect.anything() }),
+        options: { timeoutMs: getMaximumWorktreeCreateTransportTimeoutMs() }
       }
     ])
   })

@@ -107,6 +107,12 @@ import { RuntimeRpcFailureError } from './runtime-client'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../shared/pairing'
 
+function expectWorktreeCreateCall(callIndex: number, params: unknown): void {
+  expect(callMock).toHaveBeenNthCalledWith(callIndex, 'worktree.create', params, {
+    timeoutMs: 28_830_000
+  })
+}
+
 describe('COMMAND_SPECS collision check', () => {
   it('has no duplicate command or alias paths', () => {
     // Why: first-match resolution would silently shadow duplicate aliases.
@@ -481,7 +487,12 @@ describe('orca root help', () => {
 
     await main(['worktree', 'create', '--help'], '/tmp/repo')
 
-    expect(String(logSpy.mock.calls[0][0])).toContain('--linear-issue <identifier-or-url>')
+    const createHelp = String(logSpy.mock.calls[0][0])
+    expect(createHelp).toContain('--linear-issue <identifier-or-url>')
+    expect(createHelp).toContain('--refresh-timeout-ms <ms>')
+    expect(createHelp).toContain('--add-timeout-ms <ms>')
+    expect(createHelp).toContain('--registration-timeout-ms <ms>')
+    expect(createHelp).toContain('--materialization-timeout-ms <ms>')
 
     logSpy.mockClear()
     await main(['worktree', 'set', '--help'], '/tmp/repo')
@@ -1223,7 +1234,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+    expectWorktreeCreateCall(2, {
       repo: 'id:repo-1',
       name: 'feature',
       baseBranch: undefined,
@@ -1273,7 +1284,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenCalledWith('worktree.create', {
+    expectWorktreeCreateCall(1, {
       repo: 'id:repo-1',
       name: 'feature',
       baseBranch: undefined,
@@ -1398,7 +1409,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+    expectWorktreeCreateCall(2, {
       repo: 'id:repo-1',
       name: 'feature',
       baseBranch: undefined,
@@ -1412,6 +1423,54 @@ describe('orca cli worktree awareness', () => {
       callerTerminalHandle: undefined,
       cliProvenanceRequest: {}
     })
+  })
+
+  it('passes worktree create stage timeouts and their resolved transport budget', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create_timeouts', {
+        worktree: buildWorktree('/tmp/repo/feature', 'feature', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'feature',
+        '--no-parent',
+        '--refresh-timeout-ms',
+        '1000',
+        '--add-timeout-ms',
+        '2000',
+        '--registration-timeout-ms',
+        '3000',
+        '--materialization-timeout-ms',
+        '4000',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.create',
+      expect.objectContaining({
+        timeouts: {
+          refreshBaseRefMs: 1_000,
+          addCheckoutMs: 2_000,
+          registrationMs: 3_000,
+          materializationMs: 4_000
+        }
+      }),
+      { timeoutMs: 28_830_000 }
+    )
   })
 
   it('resolves project and host flags to the matching repo for worktree.create', async () => {
@@ -1470,7 +1529,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+    expectWorktreeCreateCall(2, {
       repo: 'id:repo-gpu',
       name: 'feature',
       baseBranch: undefined,
@@ -1526,11 +1585,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(
-      2,
-      'worktree.create',
-      expect.objectContaining({ repo: 'id:repo-gpu' })
-    )
+    expectWorktreeCreateCall(2, expect.objectContaining({ repo: 'id:repo-gpu' }))
   })
 
   it('rejects mixing repo and project target flags on worktree.create', async () => {
@@ -1610,7 +1665,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenCalledTimes(1)
-    expect(callMock).toHaveBeenCalledWith('worktree.create', {
+    expectWorktreeCreateCall(1, {
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -1656,7 +1711,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenCalledTimes(1)
-    expect(callMock).toHaveBeenCalledWith('worktree.create', {
+    expectWorktreeCreateCall(1, {
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -1723,7 +1778,7 @@ describe('orca cli worktree awareness', () => {
       )
 
       expect(callMock).toHaveBeenCalledTimes(1)
-      expect(callMock).toHaveBeenCalledWith('worktree.create', {
+      expectWorktreeCreateCall(1, {
         repo: 'id:repo-1',
         name: 'child',
         baseBranch: undefined,
@@ -1767,7 +1822,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+    expectWorktreeCreateCall(2, {
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -1812,7 +1867,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo/parent/src'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+    expectWorktreeCreateCall(2, {
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -1873,7 +1928,7 @@ describe('orca cli worktree awareness', () => {
         '/tmp/folder/src'
       )
 
-      expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      expectWorktreeCreateCall(2, {
         repo: 'id:repo-1',
         name: 'child',
         baseBranch: undefined,
@@ -2021,7 +2076,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     const output = String(logSpy.mock.calls[0][0])
-    expect(callMock).toHaveBeenCalledWith('worktree.create', {
+    expectWorktreeCreateCall(1, {
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -2063,7 +2118,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenCalledTimes(1)
-    expect(callMock).toHaveBeenCalledWith('worktree.create', {
+    expectWorktreeCreateCall(1, {
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -2098,7 +2153,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenCalledTimes(2)
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+    expectWorktreeCreateCall(2, {
       repo: 'id:repo-1',
       name: 'child',
       baseBranch: undefined,
@@ -2136,7 +2191,8 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenCalledWith(
       'worktree.create',
-      expect.objectContaining({ cliProvenanceRequest: {} })
+      expect.objectContaining({ cliProvenanceRequest: {} }),
+      { timeoutMs: 28_830_000 }
     )
   })
 
@@ -2871,7 +2927,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+    expectWorktreeCreateCall(2, {
       repo: 'id:repo-1',
       name: 'feature',
       baseBranch: undefined,
@@ -2918,7 +2974,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo/src'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+    expectWorktreeCreateCall(2, {
       repo: 'id:repo-1',
       name: 'agent-task',
       baseBranch: undefined,
@@ -2965,7 +3021,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo/src'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+    expectWorktreeCreateCall(2, {
       repo: 'id:repo-1',
       name: 'agent-task',
       baseBranch: undefined,

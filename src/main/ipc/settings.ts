@@ -33,6 +33,10 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
 } from '../../shared/computer-awake-mode'
+import {
+  WORKTREE_CREATE_TIMEOUT_DEFAULTS,
+  normalizeWorktreeCreateTimeouts
+} from '../../shared/worktree-create-timeouts'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -179,6 +183,12 @@ export function registerSettingsHandlers(
     if ('mobilePairingCustomAddresses' in args) {
       sanitizedArgs.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
         args.mobilePairingCustomAddresses
+      )
+    }
+    if ('worktreeCreateTimeouts' in args) {
+      sanitizedArgs.worktreeCreateTimeouts = normalizeWorktreeCreateTimeouts(
+        args.worktreeCreateTimeouts,
+        store.getSettings().worktreeCreateTimeouts ?? WORKTREE_CREATE_TIMEOUT_DEFAULTS
       )
     }
     if (args.theme) {

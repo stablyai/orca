@@ -487,6 +487,43 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
+  it('normalizes worktree create timeout settings before persistence', async () => {
+    const currentTimeouts = {
+      refreshBaseRefMs: 60_000,
+      addCheckoutMs: 180_000,
+      registrationMs: 30_000,
+      materializationMs: 300_000
+    }
+    store.getSettings.mockReturnValue({ worktreeCreateTimeouts: currentTimeouts })
+    store.updateSettings.mockReturnValue({ worktreeCreateTimeouts: currentTimeouts })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      worktreeCreateTimeouts: {
+        refreshBaseRefMs: 500,
+        addCheckoutMs: 8_000_000,
+        registrationMs: Number.NaN
+      }
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {
+        worktreeCreateTimeouts: {
+          refreshBaseRefMs: 1_000,
+          addCheckoutMs: 7_200_000,
+          registrationMs: 30_000,
+          materializationMs: 300_000
+        }
+      },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
   it('normalizes terminal line height updates before persistence', async () => {
     store.getSettings.mockReturnValue({ terminalLineHeight: 1 })
     store.updateSettings.mockReturnValue({ terminalLineHeight: 1 })

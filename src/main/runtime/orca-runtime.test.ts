@@ -140,6 +140,10 @@ const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'p
 const removeWorktreeLinkedPathsMock = vi.hoisted(() => vi.fn())
 const findExistingWorktreeSymlinkPathsMock = vi.hoisted(() => vi.fn())
 const resolveLocalGitUsernameMock = vi.hoisted(() => vi.fn(async () => ''))
+const listWorktreesMock = vi.hoisted(() => vi.fn())
+const listWorktreesStrictMock = vi.hoisted(() =>
+  vi.fn((...args: unknown[]) => listWorktreesMock(...args))
+)
 
 vi.mock('../ipc/worktree-symlinks', () => ({
   createWorktreeCopiedPaths: vi.fn(),
@@ -220,6 +224,7 @@ const {
   MOCK_GIT_WORKTREES,
   addWorktreeMock,
   removeWorktreeMock,
+  rollbackFailedWorktreeCreateMock,
   forceDeleteLocalBranchMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
@@ -315,6 +320,7 @@ const {
     ],
     addWorktreeMock: vi.fn(),
     removeWorktreeMock: vi.fn(),
+    rollbackFailedWorktreeCreateMock: vi.fn(),
     forceDeleteLocalBranchMock: vi.fn(),
     computeWorktreePathMock: vi.fn(),
     ensurePathWithinWorkspaceMock: vi.fn(),
@@ -409,11 +415,13 @@ const {
 })
 
 vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  listWorktreesStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+  listWorktrees: listWorktreesMock,
+  listWorktreesStrict: listWorktreesStrictMock,
+  WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS: 30_000,
   assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock,
+  rollbackFailedWorktreeCreate: rollbackFailedWorktreeCreateMock,
   forceDeleteLocalBranch: forceDeleteLocalBranchMock
 }))
 
@@ -659,7 +667,7 @@ function resetRuntimeTestMocks(): void {
   forgetLocalWatcherRemovalSnapshotMock.mockReset()
   forgetRemoteWatcherRemovalSnapshotMock.mockReset()
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
-  vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
+  vi.mocked(listWorktreesStrict).mockImplementation((...args) => listWorktreesMock(...args))
   scanLocalRepoWorktreesForResolutionMock
     .mockReset()
     .mockImplementation(async (repoPath: string, options: { wslDistro?: string }) => {
@@ -673,6 +681,7 @@ function resetRuntimeTestMocks(): void {
       }
     })
   vi.mocked(addWorktree).mockReset()
+  rollbackFailedWorktreeCreateMock.mockReset().mockResolvedValue(true)
   vi.mocked(assertWorktreeCleanForRemoval).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockResolvedValue(undefined)
   vi.mocked(removeWorktree).mockReset()
@@ -962,6 +971,10 @@ async function referenceStatusFrameLines(
 const TEST_WINDOW_ID = 1
 const TEST_REPO_ID = 'repo-1'
 const TEST_REPO_PATH = '/tmp/repo'
+const TEST_WORKTREE_CREATE_GIT_OPTIONS = {
+  refreshTimeout: 60_000,
+  timeout: 180_000
+}
 const TEST_WORKTREE_PATH = '/tmp/worktree-a'
 const TEST_WORKTREE_ID = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}`
 const TEST_FOLDER_PROJECT_GROUP_ID = 'folder-project-group-1'
@@ -1788,6 +1801,43 @@ describe('OrcaRuntimeService', () => {
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5'
     })
+  })
+
+  it('merges partial worktree timeout updates with the host settings', async () => {
+    let settings = {
+      ...store.getSettings(),
+      worktreeCreateTimeouts: {
+        refreshBaseRefMs: 90_000,
+        addCheckoutMs: 240_000,
+        registrationMs: 45_000,
+        materializationMs: 360_000
+      }
+    }
+    const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
+      settings = { ...settings, ...updates }
+      return settings
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => settings,
+      updateSettings
+    } as never)
+
+    await runtime.updateClientSettings({
+      worktreeCreateTimeouts: { addCheckoutMs: 420_000 }
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      {
+        worktreeCreateTimeouts: {
+          refreshBaseRefMs: 90_000,
+          addCheckoutMs: 420_000,
+          registrationMs: 45_000,
+          materializationMs: 360_000
+        }
+      },
+      { notifyListeners: true }
+    )
   })
 
   it('reconciles hooks only when paired-client hook settings change', async () => {
@@ -4038,6 +4088,159 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('rolls back the exact worktree when registration fails after add', async () => {
+    const createdPath = '/tmp/workspaces/registration-timeout'
+    const setWorktreeMeta = vi.fn(store.setWorktreeMeta)
+    const runtime = new OrcaRuntimeService({ ...store, setWorktreeMeta } as never)
+    computeWorktreePathMock.mockReturnValue(createdPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdPath)
+    listWorktreesStrictMock.mockRejectedValueOnce(new Error('git timed out.'))
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'registration-timeout'
+      })
+    ).rejects.toThrow('git timed out.')
+
+    expect(rollbackFailedWorktreeCreateMock).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      createdPath,
+      'registration-timeout',
+      false,
+      {}
+    )
+    expect(setWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('removes a runtime-created push remote after registration rollback', async () => {
+    const createdPath = '/tmp/workspaces/push-remote-registration-timeout'
+    const remoteName = 'pr-contributor-orca'
+    const remoteUrl = 'git@github.com:contributor/orca.git'
+    const runtime = new OrcaRuntimeService(store)
+    computeWorktreePathMock.mockReturnValue(createdPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdPath)
+    listWorktreesStrictMock.mockRejectedValueOnce(new Error('git timed out.'))
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'remote' && args.length === 1) {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return {
+          stdout: args[2] === remoteName ? `${remoteUrl}\n` : 'git@github.com:stablyai/orca.git\n',
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    try {
+      await expect(
+        runtime.createManagedWorktree({
+          repoSelector: 'id:repo-1',
+          name: 'push-remote-registration-timeout',
+          baseBranch: 'abc123',
+          pushTarget: {
+            remoteName,
+            branchName: 'contributor/runtime-timeout',
+            remoteUrl
+          }
+        })
+      ).rejects.toThrow('git timed out.')
+
+      expect(rollbackFailedWorktreeCreateMock).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdPath,
+        'push-remote-registration-timeout',
+        false,
+        {}
+      )
+      expect(gitSpy).toHaveBeenCalledWith(['remote', 'add', remoteName, remoteUrl], {
+        cwd: TEST_REPO_PATH,
+        timeout: expect.any(Number)
+      })
+      expect(gitSpy).toHaveBeenCalledWith(['remote', 'remove', remoteName], {
+        cwd: TEST_REPO_PATH
+      })
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
+  it('does not reuse an aborted create signal for local rollback', async () => {
+    const createdPath = '/tmp/workspaces/cancelled-registration'
+    const controller = new AbortController()
+    const runtime = new OrcaRuntimeService(store)
+    computeWorktreePathMock.mockReturnValue(createdPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdPath)
+    listWorktreesStrictMock.mockImplementationOnce(async (_repoPath, options) => {
+      expect((options as { signal?: AbortSignal } | undefined)?.signal).toBe(controller.signal)
+      controller.abort()
+      throw Object.assign(new Error('cancelled'), { name: 'AbortError' })
+    })
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'cancelled-registration',
+        signal: controller.signal
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      createdPath,
+      'cancelled-registration',
+      expect.any(String),
+      expect.any(Boolean),
+      false,
+      expect.objectContaining({ signal: controller.signal })
+    )
+    expect(rollbackFailedWorktreeCreateMock).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      createdPath,
+      'cancelled-registration',
+      false,
+      {}
+    )
+  })
+
+  it('does not bind a shared base refresh to one create caller signal', async () => {
+    const createdPath = '/tmp/workspaces/cancelled-refresh'
+    const controller = new AbortController()
+    const refresh = deferred<{ ok: true }>()
+    const runtime = new OrcaRuntimeService(store)
+    computeWorktreePathMock.mockReturnValue(createdPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdPath)
+    vi.spyOn(runtime, 'resolveRemoteTrackingBase').mockResolvedValue({
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    })
+    vi.spyOn(runtime, 'hasRemoteTrackingRef').mockResolvedValue(true)
+    const refreshSpy = vi
+      .spyOn(runtime, 'getOrStartRemoteTrackingBaseRefresh')
+      .mockReturnValue(refresh.promise)
+
+    const create = runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'cancelled-refresh',
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(refreshSpy).toHaveBeenCalledTimes(1))
+    controller.abort()
+
+    await expect(create).rejects.toMatchObject({ name: 'AbortError' })
+    expect(refreshSpy.mock.calls[0]?.[2]).toEqual({
+      timeout: expect.any(Number)
+    })
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+
+    refresh.resolve({ ok: true })
+    await expect(refresh.promise).resolves.toEqual({ ok: true })
+  })
+
   it('creates additional workspace metadata for folder-mode repos through runtime create', async () => {
     const folderRepo = {
       id: 'folder-repo',
@@ -4234,6 +4437,9 @@ describe('OrcaRuntimeService', () => {
         false,
         false,
         {
+          ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+          refreshTimeout: expect.any(Number),
+          timeout: expect.any(Number),
           suggestLocalBaseRefUpdate: true,
           remoteTrackingBase: {
             remote: 'origin',
@@ -4243,6 +4449,11 @@ describe('OrcaRuntimeService', () => {
           }
         }
       )
+      const addOptions = vi.mocked(addWorktree).mock.calls.at(-1)?.[6]
+      expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+      expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
+      expect(addOptions?.timeout).toBeGreaterThan(0)
+      expect(addOptions?.timeout).toBeLessThanOrEqual(180_000)
       expect(result.worktree).toMatchObject({
         path: createdWorktree.path,
         baseRef: 'refs/remotes/origin/main'
@@ -4352,6 +4563,8 @@ describe('OrcaRuntimeService', () => {
         false,
         false,
         {
+          ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+          refreshTimeout: expect.any(Number),
           remoteTrackingBase: {
             remote: 'origin',
             branch: 'main',
@@ -4361,6 +4574,9 @@ describe('OrcaRuntimeService', () => {
           suggestLocalBaseRefUpdate: true
         }
       )
+      const addOptions = vi.mocked(addWorktree).mock.calls.at(-1)?.[6]
+      expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+      expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
       expect(getBaseRefDefault).toHaveBeenCalled()
     } finally {
       getReposSpy.mockRestore()
@@ -4411,7 +4627,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'local-branch-base',
         'develop',
-        false
+        false,
+        false,
+        TEST_WORKTREE_CREATE_GIT_OPTIONS
       )
     } finally {
       getReposSpy.mockRestore()
@@ -4465,7 +4683,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'slash-local-base',
         'team/feature',
-        false
+        false,
+        false,
+        TEST_WORKTREE_CREATE_GIT_OPTIONS
       )
       expect(gitSpy).not.toHaveBeenCalledWith(
         [
@@ -4556,7 +4776,9 @@ describe('OrcaRuntimeService', () => {
       '/tmp/workspaces/feature-something',
       'feature/something',
       'origin/feature/something',
-      false
+      false,
+      false,
+      TEST_WORKTREE_CREATE_GIT_OPTIONS
     )
     expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
     expect(result.worktree).toMatchObject({
@@ -4621,7 +4843,7 @@ describe('OrcaRuntimeService', () => {
         'fix/bug-0',
         false,
         false,
-        { checkoutExistingBranch: true }
+        { ...TEST_WORKTREE_CREATE_GIT_OPTIONS, checkoutExistingBranch: true }
       )
       expect(result.worktree).toMatchObject({
         path: createdWorktree.path,
@@ -4676,11 +4898,19 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/fix',
         'abc123',
-        false
+        false,
+        false,
+        {
+          ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+          refreshTimeout: expect.any(Number)
+        }
       )
+      const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
+      expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+      expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
       expect(gitSpy).toHaveBeenCalledWith(
         ['branch', '--set-upstream-to', 'origin/feature/fix', 'feature/fix'],
-        { cwd: createdWorktree.path }
+        { cwd: createdWorktree.path, timeout: expect.any(Number) }
       )
       expect(result.worktree).toMatchObject({
         path: createdWorktree.path,
@@ -4732,7 +4962,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/fix',
         sha,
-        false
+        false,
+        false,
+        TEST_WORKTREE_CREATE_GIT_OPTIONS
       )
       expect(result.worktree).toMatchObject({
         path: createdWorktree.path,
@@ -4799,7 +5031,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/bitbucket',
         'abc123',
-        false
+        false,
+        false,
+        TEST_WORKTREE_CREATE_GIT_OPTIONS
       )
       expect(result.worktree).toMatchObject({
         path: createdWorktree.path,
@@ -4860,8 +5094,16 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/fix-2',
         'abc123',
-        false
+        false,
+        false,
+        {
+          ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+          refreshTimeout: expect.any(Number)
+        }
       )
+      const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
+      expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+      expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
     } finally {
       gitSpy.mockRestore()
     }
@@ -4907,8 +5149,16 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/fix-2',
         'abc123',
-        false
+        false,
+        false,
+        {
+          ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+          refreshTimeout: expect.any(Number)
+        }
       )
+      const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
+      expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+      expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
     } finally {
       gitSpy.mockRestore()
     }
@@ -4964,8 +5214,16 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/fix-2',
         'abc123',
-        false
+        false,
+        false,
+        {
+          ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+          refreshTimeout: expect.any(Number)
+        }
       )
+      const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
+      expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+      expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
     } finally {
       gitSpy.mockRestore()
     }
@@ -5013,7 +5271,9 @@ describe('OrcaRuntimeService', () => {
         createdWorktree.path,
         'feature/fix-2',
         'abc123',
-        false
+        false,
+        false,
+        TEST_WORKTREE_CREATE_GIT_OPTIONS
       )
     } finally {
       gitSpy.mockRestore()
@@ -5069,8 +5329,15 @@ describe('OrcaRuntimeService', () => {
         'abc123',
         false,
         false,
-        { checkoutExistingBranch: true }
+        {
+          ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+          checkoutExistingBranch: true,
+          refreshTimeout: expect.any(Number)
+        }
       )
+      const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
+      expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+      expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
     } finally {
       gitSpy.mockRestore()
     }
@@ -5136,7 +5403,7 @@ describe('OrcaRuntimeService', () => {
         'abc123',
         false,
         false,
-        { checkoutExistingBranch: true }
+        { ...TEST_WORKTREE_CREATE_GIT_OPTIONS, checkoutExistingBranch: true }
       )
     } finally {
       gitSpy.mockRestore()
@@ -5241,8 +5508,11 @@ describe('OrcaRuntimeService', () => {
       '/remote/repo',
       'mobile-feature',
       '/remote/repo-mobile-feature',
-      { base: 'origin/main' }
+      { base: 'origin/main', signal: undefined, timeoutMs: expect.any(Number) }
     )
+    const addOptions = provider.addWorktree.mock.calls[0]?.[3]
+    expect(addOptions?.timeoutMs).toBeGreaterThan(0)
+    expect(addOptions?.timeoutMs).toBeLessThanOrEqual(180_000)
     expect(result.worktree).toMatchObject({
       id: `${TEST_REPO_ID}::${created.path}`,
       path: created.path,
@@ -5282,7 +5552,7 @@ describe('OrcaRuntimeService', () => {
       isMainWorktree: false
     }
     const created = {
-      path: '/remote/child-feature',
+      path: '/remote/repo-child-feature',
       head: 'def',
       branch: 'refs/heads/child-feature',
       isBare: false,
@@ -5406,8 +5676,16 @@ describe('OrcaRuntimeService', () => {
       created.path,
       'folder-child',
       'origin/main',
-      false
+      false,
+      false,
+      {
+        ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+        refreshTimeout: expect.any(Number)
+      }
     )
+    const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
+    expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+    expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
     expect(result.lineage).toBeNull()
     expect(result.workspaceLineage).toMatchObject({
       childWorkspaceKey: `worktree:${childId}`,
@@ -5430,7 +5708,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
     const created = {
-      path: '/remote/agent-feature',
+      path: '/remote/repo-agent-feature',
       head: 'def',
       branch: 'refs/heads/agent-feature',
       isBare: false,
@@ -5527,7 +5805,7 @@ describe('OrcaRuntimeService', () => {
 
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
-          cwd: '/remote/agent-feature',
+          cwd: '/remote/repo-agent-feature',
           command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
           worktreeId: result.worktree.id
         })
@@ -5550,7 +5828,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
     const created = {
-      path: 'C:/remote/agent-feature',
+      path: 'C:/remote/repo-agent-feature',
       head: 'def',
       branch: 'refs/heads/agent-feature',
       isBare: false,
@@ -5638,7 +5916,7 @@ describe('OrcaRuntimeService', () => {
 
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
-          cwd: 'C:/remote/agent-feature',
+          cwd: 'C:/remote/repo-agent-feature',
           command: "codex '--dangerously-bypass-approvals-and-sandbox' 'fix Bob''s branch'"
         })
       )
@@ -5653,7 +5931,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
     const created = {
-      path: '/remote/mobile-setup',
+      path: '/remote/repo-mobile-setup',
       head: 'def',
       branch: 'refs/heads/mobile-setup',
       isBare: false,
@@ -5775,7 +6053,7 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({
-          cwd: '/remote/mobile-setup',
+          cwd: '/remote/repo-mobile-setup',
           env: expect.objectContaining({
             [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: expect.stringContaining('exec claude')
           }),
@@ -5785,7 +6063,7 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
-          cwd: '/remote/mobile-setup',
+          cwd: '/remote/repo-mobile-setup',
           command: expect.stringContaining(
             'bash /remote/repo/.git/worktrees/mobile-setup/orca/setup-runner.sh'
           ),
@@ -5825,7 +6103,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
     const created = {
-      path: '/remote/mobile-setup-split',
+      path: '/remote/repo-mobile-setup-split',
       head: 'def',
       branch: 'refs/heads/mobile-setup-split',
       isBare: false,
@@ -41143,8 +41421,16 @@ describe('OrcaRuntimeService', () => {
       '/tmp/workspaces/runtime-hook-test',
       'runtime-hook-test',
       'origin/main',
-      false
+      false,
+      false,
+      {
+        ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+        refreshTimeout: expect.any(Number)
+      }
     )
+    const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
+    expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+    expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
     expect(result).toEqual({
       worktree: expect.objectContaining({
         repoId: 'repo-1',
@@ -43310,7 +43596,7 @@ describe('OrcaRuntimeService', () => {
   it('detects agents on the SSH host before launching remote startup drafts', async () => {
     detectRemoteAgentsMock.mockResolvedValue(['claude'])
     const created = {
-      path: '/remote/mobile-startup-draft',
+      path: '/remote/repo-mobile-startup-draft',
       head: 'def',
       branch: 'refs/heads/mobile-startup-draft',
       isBare: false,
@@ -43393,7 +43679,7 @@ describe('OrcaRuntimeService', () => {
     expect(detectInstalledAgentsWithShellPathHydrationMock).not.toHaveBeenCalled()
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
-        cwd: '/remote/mobile-startup-draft',
+        cwd: '/remote/repo-mobile-startup-draft',
         command: `claude '--dangerously-skip-permissions' --prefill '${draftUrl}'`,
         connectionId: 'ssh-1',
         worktreeId: result.worktree.id
@@ -43406,7 +43692,7 @@ describe('OrcaRuntimeService', () => {
     detectRemoteAgentsMock.mockResolvedValue(['codex'])
     muxRequestMock.mockResolvedValue({ resolvedPath: '/home/dev' })
     const created = {
-      path: '/remote/mobile-codex-draft',
+      path: '/remote/repo-mobile-codex-draft',
       head: 'def',
       branch: 'refs/heads/mobile-codex-draft',
       isBare: false,
@@ -43468,7 +43754,7 @@ describe('OrcaRuntimeService', () => {
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
     const fsProvider = {
-      realpath: vi.fn().mockResolvedValue('/remote/mobile-codex-draft'),
+      realpath: vi.fn().mockResolvedValue('/remote/repo-mobile-codex-draft'),
       readFile: vi.fn().mockRejectedValue(new Error('missing config')),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
@@ -43496,7 +43782,7 @@ describe('OrcaRuntimeService', () => {
       expect(fsProvider.createDir).toHaveBeenCalledWith('/home/dev/.codex')
       expect(fsProvider.writeFile).toHaveBeenCalledWith(
         '/home/dev/.codex/config.toml',
-        expect.stringContaining('[projects."/remote/mobile-codex-draft"]')
+        expect.stringContaining('[projects."/remote/repo-mobile-codex-draft"]')
       )
       expect(fsProvider.writeFile).toHaveBeenCalledWith(
         '/home/dev/.codex/config.toml',
@@ -43504,7 +43790,7 @@ describe('OrcaRuntimeService', () => {
       )
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
-          cwd: '/remote/mobile-codex-draft',
+          cwd: '/remote/repo-mobile-codex-draft',
           command: "codex '--dangerously-bypass-approvals-and-sandbox'",
           connectionId: 'ssh-1',
           worktreeId: result.worktree.id
@@ -43523,7 +43809,7 @@ describe('OrcaRuntimeService', () => {
   it('pre-marks remote Codex workspaces trusted before explicit startup commands', async () => {
     muxRequestMock.mockResolvedValue({ resolvedPath: '/home/dev' })
     const created = {
-      path: '/remote/mobile-codex-command',
+      path: '/remote/repo-mobile-codex-command',
       head: 'def',
       branch: 'refs/heads/mobile-codex-command',
       isBare: false,
@@ -43581,7 +43867,7 @@ describe('OrcaRuntimeService', () => {
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
     const fsProvider = {
-      realpath: vi.fn().mockResolvedValue('/remote/mobile-codex-command'),
+      realpath: vi.fn().mockResolvedValue('/remote/repo-mobile-codex-command'),
       readFile: vi.fn().mockRejectedValue(new Error('missing config')),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
@@ -43609,7 +43895,7 @@ describe('OrcaRuntimeService', () => {
       expect(muxRequestMock).toHaveBeenCalledWith('session.resolveHome', { path: '~' })
       expect(fsProvider.writeFile).toHaveBeenCalledWith(
         '/home/dev/.codex/config.toml',
-        expect.stringContaining('[projects."/remote/mobile-codex-command"]')
+        expect.stringContaining('[projects."/remote/repo-mobile-codex-command"]')
       )
       expect(fsProvider.writeFile).toHaveBeenCalledWith(
         '/home/dev/.codex/config.toml',
@@ -43617,7 +43903,7 @@ describe('OrcaRuntimeService', () => {
       )
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
-          cwd: '/remote/mobile-codex-command',
+          cwd: '/remote/repo-mobile-codex-command',
           command: 'codex',
           connectionId: 'ssh-1',
           worktreeId: result.worktree.id
@@ -45324,6 +45610,8 @@ describe('OrcaRuntimeService', () => {
 
   it('routes runtime worktree creation through the selected WSL project runtime', async () => {
     setPlatform('win32')
+    let now = 1_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
     const runtimeStore = {
       ...store,
       getProjects: () => [
@@ -45339,7 +45627,13 @@ describe('OrcaRuntimeService', () => {
       ],
       getSettings: () => ({
         ...store.getSettings(),
-        localWindowsRuntimeDefault: { kind: 'windows-host' }
+        localWindowsRuntimeDefault: { kind: 'windows-host' },
+        worktreeCreateTimeouts: {
+          refreshBaseRefMs: 12_000,
+          addCheckoutMs: 24_000,
+          registrationMs: 30_000,
+          materializationMs: 300_000
+        }
       })
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -45371,6 +45665,9 @@ describe('OrcaRuntimeService', () => {
       }
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' }
+      }
+      if (args[0] === 'fetch' && args[1] === 'pr-contributor-orca') {
+        now += 6_000
       }
       return { stdout: '', stderr: '' }
     })
@@ -45417,6 +45714,9 @@ describe('OrcaRuntimeService', () => {
         false,
         false,
         {
+          ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+          refreshTimeout: 12_000,
+          timeout: 18_000,
           remoteTrackingBase: {
             base: 'origin/main',
             branch: 'main',
@@ -45427,9 +45727,12 @@ describe('OrcaRuntimeService', () => {
           wslDistro: 'Ubuntu'
         }
       )
+      const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
+      expect(addOptions?.refreshTimeout).toBe(12_000)
+      expect(addOptions?.timeout).toBe(18_000)
       expect(gitSpy).toHaveBeenCalledWith(
         ['check-ref-format', '--branch', 'contributor/runtime-wsl'],
-        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
+        { cwd: TEST_REPO_PATH, timeout: expect.any(Number), wslDistro: 'Ubuntu' }
       )
       expect(gitSpy).toHaveBeenCalledWith(
         [
@@ -45437,8 +45740,12 @@ describe('OrcaRuntimeService', () => {
           'pr-contributor-orca',
           '+refs/heads/contributor/runtime-wsl:refs/remotes/pr-contributor-orca/contributor/runtime-wsl'
         ],
-        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
+        { cwd: TEST_REPO_PATH, timeout: expect.any(Number), wslDistro: 'Ubuntu' }
       )
+      const pushTargetFetchOptions = gitSpy.mock.calls.find(
+        ([args]) => args[0] === 'fetch' && args[1] === 'pr-contributor-orca'
+      )?.[1]
+      expect(pushTargetFetchOptions?.timeout).toBe(24_000)
       expect(gitSpy).toHaveBeenCalledWith(
         [
           'branch',
@@ -45446,11 +45753,16 @@ describe('OrcaRuntimeService', () => {
           'pr-contributor-orca/contributor/runtime-wsl',
           'runtime-wsl'
         ],
-        { cwd: createdWorktree.path, wslDistro: 'Ubuntu' }
+        { cwd: createdWorktree.path, timeout: expect.any(Number), wslDistro: 'Ubuntu' }
       )
-      expect(listWorktrees).toHaveBeenCalledWith(TEST_REPO_PATH, { wslDistro: 'Ubuntu' })
+      expect(listWorktrees).toHaveBeenCalledWith(TEST_REPO_PATH, {
+        wslDistro: 'Ubuntu',
+        timeout: 30_000,
+        detectSparseCheckout: false
+      })
     } finally {
       gitSpy.mockRestore()
+      nowSpy.mockRestore()
     }
   })
 

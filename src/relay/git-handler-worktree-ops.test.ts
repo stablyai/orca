@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import * as path from 'node:path'
 import { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
-import { addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
+import { addWorktreeOp, removeWorktreeOp, worktreeIsCleanOp } from './git-handler-worktree-ops'
 
 function removeWorktreeWithCapabilityCache(
   git: GitExec,
@@ -88,6 +88,102 @@ describe('addWorktreeOp', () => {
     ])
   })
 
+  it('applies the requested timeout to git worktree add', async () => {
+    const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }))
+    const controller = new AbortController()
+
+    await addWorktreeOp(
+      git,
+      {
+        repoPath: '/repo',
+        branchName: 'feature/test',
+        targetDir: '/repo-feature',
+        checkoutExistingBranch: true,
+        timeoutMs: 420_000
+      },
+      { signal: controller.signal }
+    )
+
+    expect(git).toHaveBeenCalledWith(
+      ['worktree', 'add', '/repo-feature', 'feature/test'],
+      '/repo',
+      { signal: controller.signal, timeout: 420_000 }
+    )
+  })
+
+  it('does not reuse a cancelled request signal for post-add metadata', async () => {
+    const controller = new AbortController()
+    const git = vi.fn<GitExec>(async (args, _cwd, options) => {
+      if (args[0] === 'worktree' && args[1] === 'add') {
+        controller.abort()
+        return { stdout: '', stderr: '' }
+      }
+      if (options?.signal?.aborted) {
+        throw Object.assign(new Error('cancelled'), { name: 'AbortError' })
+      }
+      return { stdout: args[1] === '--get' ? 'true\n' : '', stderr: '' }
+    })
+
+    await addWorktreeOp(
+      git,
+      {
+        repoPath: '/repo',
+        branchName: 'feature/test',
+        targetDir: '/repo-feature',
+        base: 'origin/main',
+        timeoutMs: 420_000
+      },
+      { signal: controller.signal }
+    )
+
+    const postAddCalls = git.mock.calls.filter(([args]) => args[0] === 'config')
+    expect(postAddCalls).toHaveLength(2)
+    for (const [, , options] of postAddCalls) {
+      expect(options?.signal).toBeUndefined()
+    }
+  })
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, 7_200_001])(
+    'rejects an invalid worktree add timeout: %s',
+    async (timeoutMs) => {
+      const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }))
+
+      await expect(
+        addWorktreeOp(git, {
+          repoPath: '/repo',
+          branchName: 'feature/test',
+          targetDir: '/repo-feature',
+          checkoutExistingBranch: true,
+          timeoutMs
+        })
+      ).rejects.toThrow('Invalid worktree add timeout.')
+      expect(git).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not swallow a cancelled base-ref probe', async () => {
+    const controller = new AbortController()
+    const error = Object.assign(new Error('cancelled'), { name: 'AbortError' })
+    const git = vi.fn<GitExec>(async () => {
+      controller.abort()
+      throw error
+    })
+
+    await expect(
+      addWorktreeOp(
+        git,
+        {
+          repoPath: '/repo',
+          branchName: 'feature/test',
+          targetDir: '/repo-feature',
+          base: 'origin/main'
+        },
+        { signal: controller.signal }
+      )
+    ).rejects.toBe(error)
+    expect(git).toHaveBeenCalledTimes(1)
+  })
+
   it('does not write branch base config when SSH creation has no base', async () => {
     const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }))
 
@@ -132,6 +228,24 @@ describe('addWorktreeOp', () => {
       'branch.feature/test.base'
     ])
     warnSpy.mockRestore()
+  })
+})
+
+describe('worktreeIsCleanOp', () => {
+  it('applies the requested timeout to the status child process', async () => {
+    const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }))
+
+    await worktreeIsCleanOp(git, {
+      worktreePath: '/repo-feature',
+      includeUntracked: false,
+      timeoutMs: 75_000
+    })
+
+    expect(git).toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=no'],
+      '/repo-feature',
+      { timeout: 75_000 }
+    )
   })
 })
 
@@ -341,6 +455,117 @@ describe('removeWorktreeOp', () => {
 
     expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
     expect(git).not.toHaveBeenCalledWith(['branch', '-D', '--', 'feature/test'], expect.any(String))
+  })
+
+  it('propagates a branch deletion child-process timeout', async () => {
+    const interruption = Object.assign(new Error('git timed out.'), {
+      killed: true,
+      signal: 'SIGTERM'
+    })
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: worktreeList(
+            { path: '/repo', branch: 'main' },
+            { path: '/repo-feature', branch: 'feature/test' }
+          ),
+          stderr: ''
+        }
+      }
+      if (args[0] === 'branch' && args[1] === '-d') {
+        throw interruption
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).rejects.toBe(interruption)
+    expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
+  })
+
+  it('propagates branch deletion AbortSignal cancellation', async () => {
+    const controller = new AbortController()
+    const interruption = Object.assign(new Error('cancelled'), { name: 'AbortError' })
+    const git = vi.fn<GitExec>(async (args, _cwd, options) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: worktreeList(
+            { path: '/repo', branch: 'main' },
+            { path: '/repo-feature', branch: 'feature/test' }
+          ),
+          stderr: ''
+        }
+      }
+      if (args[0] === 'branch' && args[1] === '-d') {
+        expect(options?.signal).toBe(controller.signal)
+        controller.abort(interruption)
+        throw interruption
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeOp(git, { worktreePath: '/repo-feature' }, new GitCapabilityCache(), {
+        signal: controller.signal
+      })
+    ).rejects.toBe(interruption)
+    expect(git).not.toHaveBeenCalledWith(
+      ['config', '--get', 'branch.feature/test.base'],
+      expect.any(String)
+    )
+  })
+
+  it('propagates cancellation from the already-merged branch deletion fallback', async () => {
+    const controller = new AbortController()
+    const interruption = Object.assign(new Error('cancelled'), { name: 'AbortError' })
+    const git = vi.fn<GitExec>(async (args, _cwd, options) => {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list' && args.includes('-z')) {
+        return {
+          stdout: worktreeList(
+            { path: '/repo', branch: 'main' },
+            { path: '/repo-feature', branch: 'feature/test' }
+          ),
+          stderr: ''
+        }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return { stdout: worktreeList({ path: '/repo', branch: 'main' }), stderr: '' }
+      }
+      if (args[0] === 'branch' && args[1] === '-d') {
+        throw new Error('error: the branch feature/test is not fully merged')
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD^{commit}')) {
+        return { stdout: 'base123\n', stderr: '' }
+      }
+      if (args[0] === 'merge-tree') {
+        return { stdout: 'tree123\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('base123^{tree}')) {
+        return { stdout: 'tree123\n', stderr: '' }
+      }
+      if (args[0] === 'update-ref' && args[1] === '-d') {
+        expect(options?.signal).toBe(controller.signal)
+        controller.abort(interruption)
+        throw interruption
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeOp(git, { worktreePath: '/repo-feature' }, new GitCapabilityCache(), {
+        signal: controller.signal
+      })
+    ).rejects.toBe(interruption)
   })
 
   it('force-deletes the just-created branch during failed sparse setup rollback', async () => {

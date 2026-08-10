@@ -20,6 +20,7 @@ import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
   getKeepLocalMainUpToDateTitle
 } from './keep-local-main-up-to-date-setting'
+import { WorktreeCreateTimeoutSettings } from './WorktreeCreateTimeoutSettings'
 import { translate } from '@/i18n/i18n'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 
@@ -311,6 +312,12 @@ export function GitPane({
         updateSettings={updateSettings}
       />
     ) : null,
+    <WorktreeCreateTimeoutSettings
+      key="worktree-create-timeouts"
+      settings={settings}
+      updateSettings={updateSettings}
+      searchQuery={searchQuery}
+    />,
     shouldShowAutoRenameBranchSetting(searchQuery, hasUnsavedBranchPromptChanges) ? (
       <AutoRenameBranchFromWorkSetting
         key="auto-rename-branch-from-work"

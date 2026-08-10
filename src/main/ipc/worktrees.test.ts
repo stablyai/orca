@@ -10,6 +10,13 @@ import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/exec
 import * as localWorktreeFilesystem from '../local-worktree-filesystem'
 
 const ORIGINAL_PLATFORM = process.platform
+const DEFAULT_CREATE_REFRESH_TIMEOUT_MS = 60_000
+const DEFAULT_CREATE_ADD_TIMEOUT_MS = 180_000
+const DEFAULT_CREATE_REGISTRATION_TIMEOUT_MS = 30_000
+const DEFAULT_LOCAL_CREATE_OPTIONS = {
+  refreshTimeout: expect.any(Number),
+  timeout: DEFAULT_CREATE_ADD_TIMEOUT_MS
+}
 const removeWorktreeLinkedPathsMock = vi.hoisted(() => vi.fn())
 const findExistingWorktreeSymlinkPathsMock = vi.hoisted(() => vi.fn())
 
@@ -28,6 +35,7 @@ const {
   assertWorktreeCleanForRemovalMock,
   addWorktreeMock,
   addSparseWorktreeMock,
+  rollbackFailedWorktreeCreateMock,
   removeWorktreeMock,
   forceDeleteLocalBranchMock,
   resolveLocalGitUsernameMock,
@@ -79,6 +87,7 @@ const {
   assertWorktreeCleanForRemovalMock: vi.fn(),
   addWorktreeMock: vi.fn(),
   addSparseWorktreeMock: vi.fn(),
+  rollbackFailedWorktreeCreateMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
   forceDeleteLocalBranchMock: vi.fn(),
   resolveLocalGitUsernameMock: vi.fn(),
@@ -121,12 +130,14 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../git/worktree', () => ({
+  WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS: 30_000,
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock,
   parseWorktreeList: parseWorktreeListMock,
   assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
   addWorktree: addWorktreeMock,
   addSparseWorktree: addSparseWorktreeMock,
+  rollbackFailedWorktreeCreate: rollbackFailedWorktreeCreateMock,
   removeWorktree: removeWorktreeMock,
   forceDeleteLocalBranch: forceDeleteLocalBranchMock
 }))
@@ -351,6 +362,7 @@ describe('registerWorktreeHandlers', () => {
       assertWorktreeCleanForRemovalMock,
       addWorktreeMock,
       addSparseWorktreeMock,
+      rollbackFailedWorktreeCreateMock,
       removeWorktreeMock,
       forceDeleteLocalBranchMock,
       resolveLocalGitUsernameMock,
@@ -713,8 +725,18 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/pr-title',
       'feature/fix',
       sha,
-      false
+      false,
+      false,
+      {
+        refreshTimeout: expect.any(Number),
+        timeout: expect.any(Number)
+      }
     )
+    const addOptions = addWorktreeMock.mock.calls[0]?.[6]
+    expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+    expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
+    expect(addOptions?.timeout).toBeGreaterThan(0)
+    expect(addOptions?.timeout).toBeLessThanOrEqual(DEFAULT_CREATE_ADD_TIMEOUT_MS)
   })
 
   it('keeps the broad remote fetch fallback when a commit SHA base is missing locally', async () => {
@@ -742,7 +764,9 @@ describe('registerWorktreeHandlers', () => {
       branchNameOverride: 'feature/fix'
     })
 
-    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin')
+    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin', {
+      timeout: DEFAULT_CREATE_REFRESH_TIMEOUT_MS
+    })
     expect(addWorktreeMock).toHaveBeenCalled()
   })
 
@@ -765,7 +789,9 @@ describe('registerWorktreeHandlers', () => {
       branchNameOverride: 'slash-base'
     })
 
-    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin')
+    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin', {
+      timeout: DEFAULT_CREATE_REFRESH_TIMEOUT_MS
+    })
     expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalledWith('/workspace/repo', 'Jinwoo-H')
     expect(addWorktreeMock).toHaveBeenCalled()
   })
@@ -923,8 +949,16 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard-2',
       'improve-dashboard-2',
       'origin/main',
-      false
+      false,
+      false,
+      {
+        ...DEFAULT_LOCAL_CREATE_OPTIONS,
+        refreshTimeout: expect.any(Number)
+      }
     )
+    const addOptions = addWorktreeMock.mock.calls[0]?.[6]
+    expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+    expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
         path: '/workspace/improve-dashboard-2',
@@ -954,7 +988,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/rocket',
       'rocket',
       'origin/main',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/rocket',
@@ -996,7 +1032,9 @@ describe('registerWorktreeHandlers', () => {
       '../worktrees/feature',
       'feature',
       'origin/main',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::../worktrees/feature',
@@ -1069,7 +1107,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/feature-something',
       'feature/something',
       'origin/main',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
     expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
     expect(result).toMatchObject({
@@ -1078,6 +1118,142 @@ describe('registerWorktreeHandlers', () => {
         branch: 'feature/something'
       })
     })
+  })
+
+  it('uses per-call timeout overrides for local refresh, add, and registration', async () => {
+    const remoteBase = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/timeout-override',
+        head: 'abc123',
+        branch: 'refs/heads/timeout-override',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'timeout-override',
+      timeouts: {
+        refreshBaseRefMs: 12_000,
+        addCheckoutMs: 24_000,
+        registrationMs: 36_000
+      }
+    })
+
+    expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
+      '/workspace/repo',
+      remoteBase,
+      { timeout: 12_000 }
+    )
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/timeout-override',
+      'timeout-override',
+      'origin/main',
+      false,
+      false,
+      {
+        refreshTimeout: expect.any(Number),
+        timeout: 24_000,
+        suggestLocalBaseRefUpdate: true,
+        remoteTrackingBase: remoteBase
+      }
+    )
+    const addOptions = addWorktreeMock.mock.calls[0]?.[6]
+    expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+    expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(12_000)
+    expect(listWorktreesMock).toHaveBeenCalledWith('/workspace/repo', {
+      timeout: 36_000,
+      detectSparseCheckout: false
+    })
+  })
+
+  it('rolls back a local create when registration fails after add succeeds', async () => {
+    addWorktreeMock.mockResolvedValue({})
+    listWorktreesMock.mockRejectedValue(new Error('registration timed out'))
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard'
+      })
+    ).rejects.toThrow('registration timed out')
+
+    expect(rollbackFailedWorktreeCreateMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/improve-dashboard',
+      'improve-dashboard',
+      false,
+      {}
+    )
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('rolls back a local create when push-target registration fails', async () => {
+    const remoteUrl = 'git@github.com:contributor/orca.git'
+    let remoteExists = false
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args.length === 1) {
+        return { stdout: remoteExists ? 'contributor\n' : '', stderr: '' }
+      }
+      if (args[0] === 'remote' && args[1] === 'add') {
+        remoteExists = true
+        return { stdout: '', stderr: '' }
+      }
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return { stdout: `${remoteUrl}\n`, stderr: '' }
+      }
+      if (args[0] === 'remote' && args[1] === 'remove') {
+        remoteExists = false
+        return { stdout: '', stderr: '' }
+      }
+      if (args[0] === 'branch' && args.includes('--set-upstream-to')) {
+        throw new Error('upstream config failed')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard',
+        pushTarget: {
+          remoteName: 'contributor',
+          branchName: 'feature/fix',
+          remoteUrl
+        }
+      })
+    ).rejects.toThrow('upstream config failed')
+
+    expect(rollbackFailedWorktreeCreateMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/improve-dashboard',
+      'improve-dashboard',
+      false,
+      {}
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'remove', 'contributor'], {
+      cwd: '/workspace/repo'
+    })
+    expect(remoteExists).toBe(false)
   })
 
   it('creates an additional workspace for folder-mode repos without git worktree add', async () => {
@@ -1310,8 +1486,15 @@ describe('registerWorktreeHandlers', () => {
       'fix/bug-0',
       false,
       false,
-      { checkoutExistingBranch: true }
+      {
+        checkoutExistingBranch: true,
+        refreshTimeout: expect.any(Number),
+        timeout: DEFAULT_CREATE_ADD_TIMEOUT_MS
+      }
     )
+    const addOptions = addWorktreeMock.mock.calls[0]?.[6]
+    expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+    expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/fix-bug-0',
       expect.objectContaining({ preserveBranchOnDelete: true })
@@ -1368,7 +1551,7 @@ describe('registerWorktreeHandlers', () => {
       'fix/bug-0',
       false,
       false,
-      { checkoutExistingBranch: true }
+      { checkoutExistingBranch: true, ...DEFAULT_LOCAL_CREATE_OPTIONS }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/my-folder',
@@ -1423,7 +1606,7 @@ describe('registerWorktreeHandlers', () => {
       'fix/bug-0',
       false,
       false,
-      { checkoutExistingBranch: true }
+      { checkoutExistingBranch: true, ...DEFAULT_LOCAL_CREATE_OPTIONS }
     )
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
@@ -1462,7 +1645,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/feature-something-2',
       'feature/something-2',
       'origin/main',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
   })
 
@@ -1505,11 +1690,13 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/fix-title',
       'feature/fix',
       'abc123',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '--set-upstream-to', 'origin/feature/fix', 'feature/fix'],
-      { cwd: '/workspace/fix-title' }
+      { cwd: '/workspace/fix-title', timeout: expect.any(Number) }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/fix-title',
@@ -1598,7 +1785,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/bitbucket-title',
       'feature/bitbucket',
       'abc123',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/bitbucket-title',
@@ -1652,7 +1841,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/bitbucket-title-2',
       'feature/bitbucket-2',
       'abc123',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/bitbucket-title-2',
@@ -1687,7 +1878,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/fix-title-2',
       'feature/fix-2',
       'abc123',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
   })
 
@@ -1719,7 +1912,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/fix-title-2',
       'feature/fix-2',
       'abc123',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
   })
 
@@ -1761,7 +1956,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/fix-title-2',
       'feature/fix-2',
       'abc123',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
   })
 
@@ -1795,7 +1992,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/fix-title-2',
       'feature/fix-2',
       'abc123',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
   })
 
@@ -1851,7 +2050,7 @@ describe('registerWorktreeHandlers', () => {
       'abc123',
       false,
       false,
-      { checkoutExistingBranch: true }
+      { checkoutExistingBranch: true, ...DEFAULT_LOCAL_CREATE_OPTIONS }
     )
   })
 
@@ -1888,7 +2087,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/fix-title-2',
       'feature/fix-2',
       'abc123',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
   })
 
@@ -1995,6 +2196,14 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('configures a PR push target during local create', async () => {
+    let now = 1_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'fetch' && args[1] === 'pr-prateek-orca') {
+        now += 6_000
+      }
+      return { stdout: '', stderr: '' }
+    })
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -2006,19 +2215,27 @@ describe('registerWorktreeHandlers', () => {
     ])
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
 
-    await handlers['worktrees:create'](null, {
-      repoId: 'repo-1',
-      name: 'improve-dashboard',
-      pushTarget: {
-        remoteName: 'pr-prateek-orca',
-        branchName: 'prateek/fix-sidebar-agents-toggle',
-        remoteUrl: 'git@github.com:prateek/orca.git'
-      }
-    })
+    try {
+      await handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard',
+        pushTarget: {
+          remoteName: 'pr-prateek-orca',
+          branchName: 'prateek/fix-sidebar-agents-toggle',
+          remoteUrl: 'git@github.com:prateek/orca.git'
+        },
+        timeouts: {
+          refreshBaseRefMs: 12_000,
+          addCheckoutMs: 24_000
+        }
+      })
+    } finally {
+      nowSpy.mockRestore()
+    }
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['remote', 'add', 'pr-prateek-orca', 'git@github.com:prateek/orca.git'],
-      { cwd: '/workspace/repo' }
+      { cwd: '/workspace/repo', timeout: expect.any(Number) }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
@@ -2026,8 +2243,15 @@ describe('registerWorktreeHandlers', () => {
         'pr-prateek-orca',
         '+refs/heads/prateek/fix-sidebar-agents-toggle:refs/remotes/pr-prateek-orca/prateek/fix-sidebar-agents-toggle'
       ],
-      { cwd: '/workspace/repo' }
+      { cwd: '/workspace/repo', timeout: expect.any(Number) }
     )
+    const fetchOptions = gitExecFileAsyncMock.mock.calls.find(
+      ([args]) => args[0] === 'fetch' && args[1] === 'pr-prateek-orca'
+    )?.[1]
+    expect(fetchOptions?.timeout).toBe(24_000)
+    const addOptions = addWorktreeMock.mock.calls[0]?.[6]
+    expect(addOptions?.refreshTimeout).toBe(12_000)
+    expect(addOptions?.timeout).toBe(18_000)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'branch',
@@ -2035,7 +2259,7 @@ describe('registerWorktreeHandlers', () => {
         'pr-prateek-orca/prateek/fix-sidebar-agents-toggle',
         'improve-dashboard'
       ],
-      { cwd: '/workspace/improve-dashboard' }
+      { cwd: '/workspace/improve-dashboard', timeout: expect.any(Number) }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/improve-dashboard',
@@ -2244,8 +2468,15 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       false,
       false,
-      { wslDistro: 'Ubuntu' }
+      {
+        wslDistro: 'Ubuntu',
+        refreshTimeout: expect.any(Number),
+        timeout: DEFAULT_CREATE_ADD_TIMEOUT_MS
+      }
     )
+    const addOptions = addWorktreeMock.mock.calls[0]?.[6] as { refreshTimeout?: number }
+    expect(addOptions.refreshTimeout).toBeGreaterThan(0)
+    expect(addOptions.refreshTimeout).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
     expect(resolveDefaultBaseRefWithLocalGitMock).toHaveBeenCalledWith({
       cwd: '/workspace/repo',
       wslDistro: 'Ubuntu'
@@ -2256,7 +2487,11 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       { wslDistro: 'Ubuntu' }
     )
-    expect(listWorktreesMock).toHaveBeenCalledWith('/workspace/repo', { wslDistro: 'Ubuntu' })
+    expect(listWorktreesMock).toHaveBeenCalledWith('/workspace/repo', {
+      wslDistro: 'Ubuntu',
+      timeout: DEFAULT_CREATE_REGISTRATION_TIMEOUT_MS,
+      detectSparseCheckout: false
+    })
   })
 
   it('routes fork push target setup through the selected WSL project runtime', async () => {
@@ -2284,11 +2519,11 @@ describe('registerWorktreeHandlers', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['check-ref-format', '--branch', 'contributor/wsl-fork'],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+      { cwd: '/workspace/repo', timeout: expect.any(Number), wslDistro: 'Ubuntu' }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['remote', 'add', 'pr-contributor-orca', 'git@github.com:contributor/orca.git'],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+      { cwd: '/workspace/repo', timeout: expect.any(Number), wslDistro: 'Ubuntu' }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
@@ -2296,11 +2531,20 @@ describe('registerWorktreeHandlers', () => {
         'pr-contributor-orca',
         '+refs/heads/contributor/wsl-fork:refs/remotes/pr-contributor-orca/contributor/wsl-fork'
       ],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+      {
+        cwd: '/workspace/repo',
+        timeout: expect.any(Number),
+        wslDistro: 'Ubuntu'
+      }
     )
+    const fetchOptions = gitExecFileAsyncMock.mock.calls.find(
+      ([args]) => args[0] === 'fetch' && args[1] === 'pr-contributor-orca'
+    )?.[1]
+    expect(fetchOptions?.timeout).toBeGreaterThan(0)
+    expect(fetchOptions?.timeout).toBeLessThanOrEqual(DEFAULT_CREATE_ADD_TIMEOUT_MS)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/wsl-fork', 'wsl-fork'],
-      { cwd: '/workspace/wsl-fork', wslDistro: 'Ubuntu' }
+      { cwd: '/workspace/wsl-fork', timeout: expect.any(Number), wslDistro: 'Ubuntu' }
     )
   })
 
@@ -2350,7 +2594,7 @@ describe('registerWorktreeHandlers', () => {
       'abc123',
       false,
       false,
-      { wslDistro: 'Ubuntu' }
+      { wslDistro: 'Ubuntu', ...DEFAULT_LOCAL_CREATE_OPTIONS }
     )
   })
 
@@ -4784,15 +5028,31 @@ describe('registerWorktreeHandlers', () => {
 
     expect(provider.exec).toHaveBeenCalledWith(
       ['merge-base', '--is-ancestor', 'refs/heads/main', 'refs/remotes/origin/main'],
-      '/remote/repo'
+      '/remote/repo',
+      { timeoutMs: expect.any(Number) }
     )
     expect(provider.exec).toHaveBeenCalledWith(
       ['log', '--format=%H', 'refs/heads/main..refs/remotes/origin/main'],
-      '/remote/repo'
+      '/remote/repo',
+      { timeoutMs: expect.any(Number) }
     )
-    expect(provider.worktreeIsClean).toHaveBeenCalledWith('/remote/repo', {
-      includeUntracked: false
+    expect(provider.listWorktrees).toHaveBeenCalledWith('/remote/repo', {
+      timeoutMs: expect.any(Number)
     })
+    expect(provider.worktreeIsClean).toHaveBeenCalledWith('/remote/repo', {
+      includeUntracked: false,
+      timeoutMs: expect.any(Number)
+    })
+    const refreshTimeouts = [
+      provider.exec.mock.calls.find(([args]) => args[0] === 'merge-base')?.[2]?.timeoutMs,
+      provider.exec.mock.calls.find(([args]) => args[0] === 'log')?.[2]?.timeoutMs,
+      provider.listWorktrees.mock.calls[0]?.[1]?.timeoutMs,
+      provider.worktreeIsClean.mock.calls[0]?.[1]?.timeoutMs
+    ]
+    for (const timeoutMs of refreshTimeouts) {
+      expect(timeoutMs).toBeGreaterThan(0)
+      expect(timeoutMs).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
+    }
     expect(provider.exec).not.toHaveBeenCalledWith(
       ['reset', '--hard', 'refs/remotes/origin/main'],
       expect.any(String)
@@ -4810,7 +5070,7 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  it('refreshes SSH local base through the narrow relay RPC when the setting is on', async () => {
+  it('uses SSH request timeout overrides for refreshability, narrow refresh, add, and registration', async () => {
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -4876,22 +5136,60 @@ describe('registerWorktreeHandlers', () => {
 
     const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-ssh',
-      name: 'improve-dashboard'
+      name: 'improve-dashboard',
+      timeouts: {
+        refreshBaseRefMs: 12_000,
+        addCheckoutMs: 24_000,
+        registrationMs: 36_000
+      }
     })) as CreateWorktreeResult
 
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
+      '/remote/repo',
+      'origin',
+      'main',
+      'refs/remotes/origin/main',
+      {
+        skipAutoMaintenance: true,
+        timeoutMs: 12_000
+      }
+    )
     expect(provider.exec).toHaveBeenCalledWith(
       ['merge-base', '--is-ancestor', 'refs/heads/main', 'refs/remotes/origin/main'],
-      '/remote/repo'
+      '/remote/repo',
+      { timeoutMs: expect.any(Number) }
     )
     expect(provider.exec).toHaveBeenCalledWith(
       ['log', '--format=%H', 'refs/heads/main..refs/remotes/origin/main'],
-      '/remote/repo'
+      '/remote/repo',
+      { timeoutMs: expect.any(Number) }
     )
+    expect(provider.listWorktrees).toHaveBeenNthCalledWith(1, '/remote/repo', {
+      timeoutMs: expect.any(Number)
+    })
     expect(provider.refreshLocalBaseRefForWorktreeCreate).toHaveBeenCalledWith({
       repoPath: '/remote/repo',
       fullRef: 'refs/heads/main',
       remoteTrackingRef: 'refs/remotes/origin/main',
-      ownerWorktreePath: '/remote/repo'
+      ownerWorktreePath: '/remote/repo',
+      timeoutMs: expect.any(Number)
+    })
+    const refreshStageTimeouts = [
+      provider.exec.mock.calls.find(([args]) => args[0] === 'merge-base')?.[2]?.timeoutMs,
+      provider.exec.mock.calls.find(([args]) => args[0] === 'log')?.[2]?.timeoutMs,
+      provider.listWorktrees.mock.calls[0]?.[1]?.timeoutMs,
+      provider.refreshLocalBaseRefForWorktreeCreate.mock.calls[0]?.[0]?.timeoutMs
+    ]
+    for (const timeoutMs of refreshStageTimeouts) {
+      expect(timeoutMs).toBeGreaterThan(0)
+      expect(timeoutMs).toBeLessThanOrEqual(12_000)
+    }
+    const addOptions = provider.addWorktree.mock.calls[0]?.[3] as { timeoutMs?: number } | undefined
+    expect(addOptions?.timeoutMs).toBeGreaterThan(0)
+    expect(addOptions?.timeoutMs).toBeLessThanOrEqual(24_000)
+    expect(provider.listWorktrees).toHaveBeenNthCalledWith(2, '/remote/repo', {
+      timeoutMs: 36_000,
+      strict: true
     })
     expect(provider.exec).not.toHaveBeenCalledWith(
       ['reset', '--hard', 'refs/remotes/origin/main'],
@@ -4911,6 +5209,307 @@ describe('registerWorktreeHandlers', () => {
         }
       })
     )
+  })
+
+  it('does not reconcile a definite SSH add failure', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockRejectedValue(new Error('branch conflict')),
+      listWorktrees: vi.fn(),
+      removeWorktree: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue({
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    })
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-ssh',
+        name: 'improve-dashboard'
+      })
+    ).rejects.toThrow('branch conflict')
+
+    expect(provider.listWorktrees).not.toHaveBeenCalled()
+    expect(provider.removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('reconciles an uncertain SSH add timeout before removing the exact worktree', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const timeoutError = Object.assign(new Error('add request timed out'), {
+      code: 'SSH_MUX_REQUEST_TIMEOUT'
+    })
+    const provider = {
+      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockRejectedValue(timeoutError),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-improve-dashboard',
+          head: 'abc123',
+          branch: 'refs/heads/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockResolvedValue(undefined)
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue({
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    })
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-ssh',
+        name: 'improve-dashboard'
+      })
+    ).rejects.toThrow('add request timed out')
+
+    expect(provider.listWorktrees).toHaveBeenCalledWith('/remote/repo', {
+      timeoutMs: DEFAULT_CREATE_REGISTRATION_TIMEOUT_MS,
+      strict: true
+    })
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/repo-improve-dashboard', true, {
+      deleteBranch: true,
+      forceBranchDelete: true,
+      timeoutMs: 30_000
+    })
+  })
+
+  it('waits briefly for a cancelled SSH add to finish registering before rollback', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const timeoutError = Object.assign(new Error('add request timed out'), {
+      code: 'SSH_MUX_REQUEST_TIMEOUT'
+    })
+    const provider = {
+      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockRejectedValue(timeoutError),
+      listWorktrees: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            path: '/remote/repo-improve-dashboard',
+            head: 'abc123',
+            branch: 'refs/heads/improve-dashboard',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ]),
+      removeWorktree: vi.fn().mockResolvedValue(undefined)
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue({
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    })
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-ssh',
+        name: 'improve-dashboard'
+      })
+    ).rejects.toThrow('add request timed out')
+
+    expect(provider.listWorktrees).toHaveBeenCalledTimes(2)
+    for (const [, options] of provider.listWorktrees.mock.calls) {
+      expect(options).toEqual({
+        timeoutMs: DEFAULT_CREATE_REGISTRATION_TIMEOUT_MS,
+        strict: true
+      })
+    }
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/repo-improve-dashboard', true, {
+      deleteBranch: true,
+      forceBranchDelete: true,
+      timeoutMs: 30_000
+    })
+  })
+
+  it('does not reconcile an uncertain SSH add timeout to the same branch at another path', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const timeoutError = Object.assign(new Error('add request timed out'), {
+      code: 'SSH_MUX_REQUEST_TIMEOUT'
+    })
+    const provider = {
+      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockRejectedValue(timeoutError),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/concurrent-success',
+          head: 'abc123',
+          branch: 'refs/heads/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue({
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    })
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-ssh',
+        name: 'improve-dashboard'
+      })
+    ).rejects.toThrow('add request timed out')
+
+    expect(provider.removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('rolls back an SSH create when push-target registration fails', async () => {
+    let now = 1_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const remoteUrl = 'git@github.com:contributor/orca.git'
+    let remoteExists = false
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote' && args.length === 1) {
+          return { stdout: remoteExists ? 'origin\ncontributor\n' : 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'remote' && args[1] === 'add') {
+          remoteExists = true
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'remote' && args[1] === 'get-url') {
+          return {
+            stdout:
+              args[2] === 'contributor' ? `${remoteUrl}\n` : 'git@github.com:owner/orca.git\n',
+            stderr: ''
+          }
+        }
+        if (args[0] === 'remote' && args[1] === 'remove') {
+          remoteExists = false
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'branch' && args.includes('--set-upstream-to')) {
+          throw new Error('upstream config failed')
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockImplementation(async (_repoPath, remote) => {
+        if (remote === 'contributor') {
+          now += 6_000
+        }
+      }),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-improve-dashboard',
+          head: 'abc123',
+          branch: 'refs/heads/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockResolvedValue(undefined)
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue({
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    })
+
+    try {
+      await expect(
+        handlers['worktrees:create'](null, {
+          repoId: 'repo-ssh',
+          name: 'improve-dashboard',
+          pushTarget: {
+            remoteName: 'contributor',
+            branchName: 'feature/fix',
+            remoteUrl
+          },
+          timeouts: {
+            refreshBaseRefMs: 12_000,
+            addCheckoutMs: 24_000
+          }
+        })
+      ).rejects.toThrow('upstream config failed')
+    } finally {
+      nowSpy.mockRestore()
+    }
+
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/repo-improve-dashboard', true, {
+      deleteBranch: true,
+      forceBranchDelete: true,
+      timeoutMs: 30_000
+    })
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
+      '/remote/repo',
+      'contributor',
+      'feature/fix',
+      'refs/remotes/contributor/feature/fix',
+      { timeoutMs: expect.any(Number), signal: undefined }
+    )
+    const pushTargetFetchOptions = provider.fetchRemoteTrackingRef.mock.calls.find(
+      ([, remote]) => remote === 'contributor'
+    )?.[4]
+    expect(pushTargetFetchOptions?.timeoutMs).toBe(24_000)
+    expect(provider.addWorktree.mock.calls[0]?.[3]?.timeoutMs).toBe(18_000)
+    expect(provider.exec).toHaveBeenCalledWith(['remote', 'remove', 'contributor'], '/remote/repo')
+    expect(remoteExists).toBe(false)
   })
 
   it('returns SSH local base update suggestion when a full local base ref is safely behind', async () => {
@@ -4992,23 +5591,42 @@ describe('registerWorktreeHandlers', () => {
 
     expect(provider.exec).toHaveBeenCalledWith(
       ['merge-base', '--is-ancestor', 'refs/heads/main', 'refs/remotes/origin/main'],
-      '/remote/repo'
+      '/remote/repo',
+      { timeoutMs: expect.any(Number) }
     )
     expect(provider.exec).toHaveBeenCalledWith(
       ['log', '--format=%H', 'refs/heads/main..refs/remotes/origin/main'],
-      '/remote/repo'
+      '/remote/repo',
+      { timeoutMs: expect.any(Number) }
     )
-    expect(provider.listWorktrees).toHaveBeenCalledWith('/remote/repo')
+    expect(provider.listWorktrees).toHaveBeenCalledWith('/remote/repo', {
+      timeoutMs: expect.any(Number)
+    })
     expect(provider.worktreeIsClean).toHaveBeenCalledWith('/remote/repo', {
-      includeUntracked: false
+      includeUntracked: false,
+      timeoutMs: expect.any(Number)
     })
-    expect(provider.refreshLocalBaseRefForWorktreeCreate).toHaveBeenCalledWith({
-      repoPath: '/remote/repo',
-      fullRef: 'refs/heads/main',
-      remoteTrackingRef: 'refs/remotes/origin/main',
-      ownerWorktreePath: '/remote/repo',
-      checkOnly: true
-    })
+    expect(provider.refreshLocalBaseRefForWorktreeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: '/remote/repo',
+        fullRef: 'refs/heads/main',
+        remoteTrackingRef: 'refs/remotes/origin/main',
+        ownerWorktreePath: '/remote/repo',
+        checkOnly: true,
+        timeoutMs: expect.any(Number)
+      })
+    )
+    const refreshTimeouts = [
+      provider.exec.mock.calls.find(([args]) => args[0] === 'merge-base')?.[2]?.timeoutMs,
+      provider.exec.mock.calls.find(([args]) => args[0] === 'log')?.[2]?.timeoutMs,
+      provider.listWorktrees.mock.calls[0]?.[1]?.timeoutMs,
+      provider.worktreeIsClean.mock.calls[0]?.[1]?.timeoutMs,
+      provider.refreshLocalBaseRefForWorktreeCreate.mock.calls[0]?.[0]?.timeoutMs
+    ]
+    for (const timeoutMs of refreshTimeouts) {
+      expect(timeoutMs).toBeGreaterThan(0)
+      expect(timeoutMs).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
+    }
     expect(provider.exec).not.toHaveBeenCalledWith(
       ['reset', '--hard', 'refs/remotes/origin/main'],
       expect.any(String)
@@ -5096,8 +5714,12 @@ describe('registerWorktreeHandlers', () => {
       fullRef: 'refs/heads/main',
       remoteTrackingRef: 'refs/remotes/origin/main',
       ownerWorktreePath: '/remote/repo',
-      checkOnly: true
+      checkOnly: true,
+      timeoutMs: expect.any(Number)
     })
+    const refreshOptions = provider.refreshLocalBaseRefForWorktreeCreate.mock.calls[0]?.[0]
+    expect(refreshOptions?.timeoutMs).toBeGreaterThan(0)
+    expect(refreshOptions?.timeoutMs).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
     expect(result.localBaseRefUpdateSuggestion).toBeUndefined()
   })
 
@@ -5225,7 +5847,7 @@ describe('registerWorktreeHandlers', () => {
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([
         {
-          path: 'C:\\remote\\improve-dashboard',
+          path: 'C:\\remote\\repo-improve-dashboard',
           head: 'abc123',
           branch: 'refs/heads/improve-dashboard',
           isBare: false,
@@ -5270,7 +5892,7 @@ describe('registerWorktreeHandlers', () => {
 
     expect(provider.exec).toHaveBeenCalledWith(
       ['rev-parse', '--git-path', 'orca/setup-runner.cmd'],
-      'C:\\remote\\improve-dashboard'
+      'C:\\remote\\repo-improve-dashboard'
     )
     expect(fsProvider.writeFile).toHaveBeenCalledWith(
       'C:\\remote\\repo\\.git\\worktrees\\improve-dashboard\\orca\\setup-runner.cmd',
@@ -5284,7 +5906,7 @@ describe('registerWorktreeHandlers', () => {
             'C:\\remote\\repo\\.git\\worktrees\\improve-dashboard\\orca\\setup-runner.cmd',
           envVars: expect.objectContaining({
             ORCA_ROOT_PATH: 'C:\\remote\\repo',
-            ORCA_WORKTREE_PATH: 'C:\\remote\\improve-dashboard'
+            ORCA_WORKTREE_PATH: 'C:\\remote\\repo-improve-dashboard'
           })
         }
       })
@@ -5355,20 +5977,31 @@ describe('registerWorktreeHandlers', () => {
       '/remote/repo',
       'sparse-dashboard',
       '/remote/repo-sparse-dashboard',
-      { base: 'origin/main', noCheckout: true }
+      {
+        base: 'origin/main',
+        noCheckout: true,
+        timeoutMs: expect.any(Number)
+      }
     )
     expect(provider.exec).toHaveBeenCalledWith(
       ['sparse-checkout', 'init', '--cone'],
-      '/remote/repo-sparse-dashboard'
+      '/remote/repo-sparse-dashboard',
+      { timeoutMs: expect.any(Number) }
     )
     expect(provider.exec).toHaveBeenCalledWith(
       ['sparse-checkout', 'set', '--', 'apps/mobile', 'packages/shared'],
-      '/remote/repo-sparse-dashboard'
+      '/remote/repo-sparse-dashboard',
+      { timeoutMs: expect.any(Number) }
     )
     expect(provider.exec).toHaveBeenCalledWith(
       ['checkout', 'sparse-dashboard'],
-      '/remote/repo-sparse-dashboard'
+      '/remote/repo-sparse-dashboard',
+      { timeoutMs: expect.any(Number) }
     )
+    expect(provider.listWorktrees).toHaveBeenCalledWith('/remote/repo', {
+      timeoutMs: DEFAULT_CREATE_REGISTRATION_TIMEOUT_MS,
+      strict: true
+    })
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-ssh::/remote/repo-sparse-dashboard',
       expect.objectContaining({
@@ -5476,7 +6109,10 @@ describe('registerWorktreeHandlers', () => {
       '/remote/repo',
       'feature/fix',
       '/remote/repo-fix-title-2',
-      { checkoutExistingBranch: true }
+      {
+        checkoutExistingBranch: true,
+        timeoutMs: expect.any(Number)
+      }
     )
     expect(mux.request).toHaveBeenCalledWith('session.registerRoot', {
       rootPath: '/remote/repo-fix-title-2'
@@ -5544,7 +6180,7 @@ describe('registerWorktreeHandlers', () => {
       '/remote/repo',
       'feature/something-2',
       '/remote/repo-feature-something-2',
-      { base: 'origin/main' }
+      { base: 'origin/main', timeoutMs: expect.any(Number) }
     )
   })
 
@@ -5606,7 +6242,7 @@ describe('registerWorktreeHandlers', () => {
       '/remote/repo',
       'feature/something-2',
       '/remote/repo-feature-something-2',
-      { base: 'origin/main' }
+      { base: 'origin/main', timeoutMs: expect.any(Number) }
     )
   })
 
@@ -5634,7 +6270,15 @@ describe('registerWorktreeHandlers', () => {
       fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       removeWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn()
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-sparse-dashboard',
+          head: 'abc123',
+          branch: 'refs/heads/sparse-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
     }
     const mux = {
       request: vi.fn().mockResolvedValue(undefined),
@@ -5662,7 +6306,8 @@ describe('registerWorktreeHandlers', () => {
     )
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/repo-sparse-dashboard', true, {
       deleteBranch: true,
-      forceBranchDelete: true
+      forceBranchDelete: true,
+      timeoutMs: 30_000
     })
   })
 
@@ -5716,7 +6361,10 @@ describe('registerWorktreeHandlers', () => {
       'origin',
       'master',
       'refs/remotes/origin/master',
-      { skipAutoMaintenance: true }
+      {
+        skipAutoMaintenance: true,
+        timeoutMs: DEFAULT_CREATE_REFRESH_TIMEOUT_MS
+      }
     )
   })
 
@@ -5780,14 +6428,18 @@ describe('registerWorktreeHandlers', () => {
       'origin',
       'main',
       'refs/remotes/origin/main',
-      { skipAutoMaintenance: true }
+      {
+        skipAutoMaintenance: true,
+        timeoutMs: DEFAULT_CREATE_REFRESH_TIMEOUT_MS
+      }
     )
     expect(provider.addWorktree).toHaveBeenCalledWith(
       '/remote/repo',
       'improve-dashboard',
       '/remote/repo-improve-dashboard',
       {
-        base: 'origin/main'
+        base: 'origin/main',
+        timeoutMs: expect.any(Number)
       }
     )
   })
@@ -5859,7 +6511,8 @@ describe('registerWorktreeHandlers', () => {
       'local-branch-base',
       '/remote/repo-local-branch-base',
       {
-        base: 'develop'
+        base: 'develop',
+        timeoutMs: expect.any(Number)
       }
     )
   })
@@ -5941,7 +6594,8 @@ describe('registerWorktreeHandlers', () => {
       'slash-local-base',
       '/remote/repo-slash-local-base',
       {
-        base: 'team/feature'
+        base: 'team/feature',
+        timeoutMs: expect.any(Number)
       }
     )
     expect(result.baseFallback).toEqual({
@@ -6015,7 +6669,10 @@ describe('registerWorktreeHandlers', () => {
       'origin',
       'main',
       'refs/remotes/origin/main',
-      { skipAutoMaintenance: true }
+      {
+        skipAutoMaintenance: true,
+        timeoutMs: DEFAULT_CREATE_REFRESH_TIMEOUT_MS
+      }
     )
     expect(provider.addWorktree).toHaveBeenCalledTimes(2)
   })
@@ -6082,7 +6739,7 @@ describe('registerWorktreeHandlers', () => {
       '/remote/repo',
       'feature/fix',
       '/remote/repo-fix-title',
-      { base: sha }
+      { base: sha, timeoutMs: expect.any(Number) }
     )
   })
 
@@ -6225,7 +6882,8 @@ describe('registerWorktreeHandlers', () => {
       'prefetched-worktree',
       '/remote/repo-prefetched-worktree',
       {
-        base: 'origin/main'
+        base: 'origin/main',
+        timeoutMs: expect.any(Number)
       }
     )
   })
@@ -6300,7 +6958,8 @@ describe('registerWorktreeHandlers', () => {
       'slash-local-base',
       '/remote/repo-slash-local-base',
       {
-        base: 'team/feature'
+        base: 'team/feature',
+        timeoutMs: expect.any(Number)
       }
     )
   })
@@ -6585,7 +7244,8 @@ describe('registerWorktreeHandlers', () => {
 
     expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
       '/workspace/repo',
-      remoteBase
+      remoteBase,
+      { timeout: DEFAULT_CREATE_REFRESH_TIMEOUT_MS }
     )
     expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalled()
     resolveFetch()
@@ -6658,7 +7318,8 @@ describe('registerWorktreeHandlers', () => {
     )
     expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
       '/workspace/repo',
-      remoteBase
+      remoteBase,
+      { timeout: DEFAULT_CREATE_REFRESH_TIMEOUT_MS }
     )
     expect(result.worktree.id).toBe('repo-1::/workspace/improve-dashboard')
   })
@@ -6708,7 +7369,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard',
       'improve-dashboard',
       'develop',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
   })
 
@@ -6769,7 +7432,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/slash-local-base',
       'slash-local-base',
       'team/feature',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
   })
 
@@ -6821,7 +7486,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/offline-local-main',
       'offline-local-main',
       'main',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
   })
 
@@ -6888,7 +7555,8 @@ describe('registerWorktreeHandlers', () => {
 
     expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
       '/workspace/repo',
-      remoteBase
+      remoteBase,
+      { timeout: DEFAULT_CREATE_REFRESH_TIMEOUT_MS }
     )
     expect(result).toEqual(
       expect.objectContaining({
@@ -6943,7 +7611,8 @@ describe('registerWorktreeHandlers', () => {
           branch: 'main',
           ref: 'refs/remotes/origin/main',
           base: 'origin/main'
-        }
+        },
+        ...DEFAULT_LOCAL_CREATE_OPTIONS
       }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
@@ -7912,7 +8581,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard-3',
       'improve-dashboard-3',
       'origin/main',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
@@ -7993,7 +8664,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard',
       'improve-dashboard',
       'origin/main',
-      false
+      false,
+      false,
+      DEFAULT_LOCAL_CREATE_OPTIONS
     )
   })
 
@@ -8043,7 +8716,7 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       false,
       false,
-      { wslDistro: 'Ubuntu' }
+      { wslDistro: 'Ubuntu', ...DEFAULT_LOCAL_CREATE_OPTIONS }
     )
   })
 
@@ -8123,8 +8796,15 @@ describe('registerWorktreeHandlers', () => {
       'improve-dashboard',
       ['packages/web', 'apps/api'],
       'origin/main',
-      false
+      false,
+      {
+        ...DEFAULT_LOCAL_CREATE_OPTIONS,
+        refreshTimeout: expect.any(Number)
+      }
     )
+    const sparseOptions = addSparseWorktreeMock.mock.calls[0]?.[6]
+    expect(sparseOptions?.refreshTimeout).toBeGreaterThan(0)
+    expect(sparseOptions?.refreshTimeout).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/improve-dashboard',
       expect.objectContaining({

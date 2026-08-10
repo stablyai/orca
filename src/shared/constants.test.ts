@@ -6,6 +6,7 @@ import {
   getDefaultTerminalRightClickToPaste,
   getDefaultSettings
 } from './constants'
+import { WORKTREE_CREATE_TIMEOUT_DEFAULTS } from './worktree-create-timeouts'
 
 describe('getDefaultSettings', () => {
   it('uses platform-consistent separators for the default workspace directory', () => {
@@ -35,6 +36,12 @@ describe('getDefaultSettings', () => {
   it('keeps first-work branch auto-renaming on by default for new settings', () => {
     expect(getDefaultSettings('/tmp').autoRenameBranchFromWork).toBe(true)
     expect(getDefaultSettings('/tmp').autoRenameBranchFromWorkDefaultedOn).toBe(true)
+  })
+
+  it('uses the built-in worktree create timeouts', () => {
+    expect(getDefaultSettings('/tmp').worktreeCreateTimeouts).toEqual(
+      WORKTREE_CREATE_TIMEOUT_DEFAULTS
+    )
   })
 
   it('uses a block terminal cursor by default for new settings', () => {

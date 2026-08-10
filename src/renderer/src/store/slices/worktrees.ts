@@ -88,6 +88,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { getMaximumWorktreeCreateTransportTimeoutMs } from '../../../../shared/worktree-create-timeouts'
 import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteResult,
@@ -4112,7 +4113,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                         }
                       : {})
                   },
-                  { timeoutMs: 10 * 60_000 }
+                  { timeoutMs: getMaximumWorktreeCreateTransportTimeoutMs() }
                 )
           // Why: worktrees.onChanged can add this worktree before this callback runs; appending blindly would duplicate it (React key clash).
           set((s) => {

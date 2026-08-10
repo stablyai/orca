@@ -5421,6 +5421,98 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+    it('emits keepalive frames while worktree.create blocks without taking a long-poll slot', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      vi.spyOn(runtime, 'dedupeWorktreeCreate').mockImplementation(
+        async (_repoSelector, _clientMutationId, create) => create()
+      )
+      vi.spyOn(runtime, 'showRepo').mockResolvedValue({
+        id: 'repo-1',
+        path: '/tmp/repo',
+        displayName: 'Repo',
+        badgeColor: '#000000',
+        addedAt: 1
+      })
+      vi.spyOn(runtime, 'createManagedWorktree').mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve({} as never), 180))
+      )
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 30
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_create',
+          authToken: metadata!.authToken,
+          method: 'worktree.create',
+          params: { repo: 'repo-1', name: 'feature' }
+        })
+        await waitFor(() => session.frames.some((frame) => frame._keepalive === true))
+        expect(server['activeLongPolls']).toBe(0)
+        await session.done
+        expect(session.frames.filter((frame) => frame._keepalive === true).length).toBeGreaterThan(
+          0
+        )
+      } finally {
+        await server.stop()
+      }
+    })
+
+    it('aborts an unkeyed worktree.create when its Unix socket disconnects', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      let createSignal: AbortSignal | undefined
+      vi.spyOn(runtime, 'dedupeWorktreeCreate').mockImplementation(
+        async (_repoSelector, _clientMutationId, create) => create()
+      )
+      vi.spyOn(runtime, 'showRepo').mockResolvedValue({
+        id: 'repo-1',
+        path: '/tmp/repo',
+        displayName: 'Repo',
+        badgeColor: '#000000',
+        addedAt: 1
+      })
+      vi.spyOn(runtime, 'createManagedWorktree').mockImplementation(
+        (args) =>
+          new Promise((_resolve, reject) => {
+            createSignal = args.signal
+            args.signal?.addEventListener(
+              'abort',
+              () => reject(Object.assign(new Error('cancelled'), { name: 'AbortError' })),
+              { once: true }
+            )
+          })
+      )
+      const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_create_abort',
+          authToken: metadata!.authToken,
+          method: 'worktree.create',
+          params: { repo: 'repo-1', name: 'feature' }
+        })
+        await waitFor(() => createSignal !== undefined)
+        expect(server['activeLongPolls']).toBe(0)
+
+        session.socket.destroy()
+        await session.done
+        await waitFor(() => createSignal?.aborted === true)
+
+        expect(createSignal?.aborted).toBe(true)
+        expect(server['activeLongPolls']).toBe(0)
+      } finally {
+        await server.stop()
+      }
+    })
+
     it('does not emit keepalive frames for short RPCs', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()

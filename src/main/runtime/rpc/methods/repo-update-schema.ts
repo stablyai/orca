@@ -3,6 +3,7 @@ import { OptionalFiniteNumber, OptionalString } from '../schemas'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
+import { normalizeWorktreeCreateTimeoutOverrides } from '../../../../shared/worktree-create-timeouts'
 
 export const RepoSourceControlAiOverrides = z
   .unknown()
@@ -30,6 +31,17 @@ const RepoUpstream = z
   .nullable()
   .optional()
 
+const WorktreeCreateTimeoutOverrides = z
+  .unknown()
+  .optional()
+  .transform((value) =>
+    value === undefined
+      ? undefined
+      : value === null
+        ? null
+        : normalizeWorktreeCreateTimeoutOverrides(value)
+  )
+
 export function createRepoUpdateSchema<T extends z.ZodRawShape>(
   selectorShape: T
 ): z.ZodObject<T & { updates: z.ZodObject<z.ZodRawShape> }> {
@@ -46,6 +58,7 @@ export function createRepoUpdateSchema<T extends z.ZodRawShape>(
       hookSettings: z.unknown().optional(),
       worktreeBaseRef: OptionalString,
       worktreeBasePath: OptionalString,
+      worktreeCreateTimeouts: WorktreeCreateTimeoutOverrides,
       kind: z.enum(['git', 'folder']).optional(),
       symlinkPaths: z.array(z.string()).optional(),
       issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),

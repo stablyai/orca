@@ -96,6 +96,12 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
 } from '../../../shared/computer-awake-mode'
+import {
+  getMaximumWorktreeCreateTransportTimeoutMs,
+  normalizeWorktreeCreateTimeoutOverrides,
+  normalizeWorktreeCreateTimeouts,
+  type WorktreeCreateTimeoutOverrides
+} from '../../../shared/worktree-create-timeouts'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import { assertFileMutationOwnershipCapability } from '../../../shared/file-mutation-ownership'
@@ -156,6 +162,7 @@ import {
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
+const BROWSER_LOCAL_RUNTIME_SETTINGS_STORAGE_KEY = `${SETTINGS_STORAGE_KEY}.runtime:browser-local`
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
 const SESSION_STORAGE_KEY = 'orca.web.workspaceSession.v1'
 const ONBOARDING_STORAGE_KEY = 'orca.web.onboarding.v1'
@@ -705,11 +712,30 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         if ('autoRenameBranchFromWorkDefaultedOn' in sanitizedUpdates) {
           sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
         }
-        const next = mergeSettings(getStoredSettings(), sanitizedUpdates, {
+        const current = getStoredSettings()
+        const localUpdates =
+          sanitizedUpdates.worktreeCreateTimeouts === undefined
+            ? sanitizedUpdates
+            : {
+                ...sanitizedUpdates,
+                worktreeCreateTimeouts: normalizeWorktreeCreateTimeouts(
+                  sanitizedUpdates.worktreeCreateTimeouts,
+                  current.worktreeCreateTimeouts
+                )
+              }
+        const next = mergeSettings(current, localUpdates, {
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
         })
+        const environment = requireActiveEnvironmentOrNull()
+        const timeoutShadowSnapshot =
+          environment && sanitizedUpdates.worktreeCreateTimeouts !== undefined
+            ? captureStoredWorktreeCreateTimeoutShadow(environment.id)
+            : undefined
         writeStoredSettings(next)
-        return syncRuntimeBackedSettings(sanitizedUpdates, next)
+        if (sanitizedUpdates.worktreeCreateTimeouts !== undefined) {
+          writeStoredWorktreeCreateTimeouts(environment?.id ?? null, next.worktreeCreateTimeouts)
+        }
+        return syncRuntimeBackedSettings(sanitizedUpdates, next, timeoutShadowSnapshot)
       },
       setActiveRuntimeEnvironmentPreference: async ({ environmentId }) => {
         const requestedEnvironmentId = environmentId?.trim() || null
@@ -1762,46 +1788,52 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
       invalidateRuntimeWorktreeCaches()
-      const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.create', {
-        repo: args.repoId,
-        name: args.name,
-        baseBranch: args.baseBranch,
-        compareBaseRef: args.compareBaseRef,
-        branchNameOverride: args.branchNameOverride,
-        linkedIssue: args.linkedIssue,
-        linkedPR: args.linkedPR,
-        linkedLinearIssue: args.linkedLinearIssue,
-        linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId,
-        linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey,
-        linkedGitLabIssue: args.linkedGitLabIssue,
-        linkedGitLabMR: args.linkedGitLabMR,
-        linkedBitbucketPR: args.linkedBitbucketPR,
-        linkedAzureDevOpsPR: args.linkedAzureDevOpsPR,
-        linkedGiteaPR: args.linkedGiteaPR,
-        displayName: args.displayName,
-        sparseCheckout: args.sparseCheckout,
-        pushTarget: args.pushTarget,
-        setupDecision: args.setupDecision,
-        createdWithAgent: args.createdWithAgent,
-        pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
-        ...(args.startup
-          ? {
-              startupCommand: args.startup.command,
-              ...(args.startup.env ? { startupEnv: args.startup.env } : {}),
-              ...(args.startup.launchConfig
-                ? { startupLaunchConfig: args.startup.launchConfig }
-                : {}),
-              ...(args.startup.startupCommandDelivery
-                ? { startupCommandDelivery: args.startup.startupCommandDelivery }
-                : {}),
-              activate: true
-            }
-          : {}),
-        parentWorkspace: args.parentWorkspace,
-        workspaceStatus: args.workspaceStatus,
-        manualOrder: args.manualOrder,
-        automationProvenanceRequest: args.automationProvenanceRequest
-      })
+      const timeouts = normalizeWorktreeCreateTimeoutOverrides(args.timeouts)
+      const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>(
+        'worktree.create',
+        {
+          repo: args.repoId,
+          name: args.name,
+          ...(timeouts ? { timeouts } : {}),
+          baseBranch: args.baseBranch,
+          compareBaseRef: args.compareBaseRef,
+          branchNameOverride: args.branchNameOverride,
+          linkedIssue: args.linkedIssue,
+          linkedPR: args.linkedPR,
+          linkedLinearIssue: args.linkedLinearIssue,
+          linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId,
+          linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey,
+          linkedGitLabIssue: args.linkedGitLabIssue,
+          linkedGitLabMR: args.linkedGitLabMR,
+          linkedBitbucketPR: args.linkedBitbucketPR,
+          linkedAzureDevOpsPR: args.linkedAzureDevOpsPR,
+          linkedGiteaPR: args.linkedGiteaPR,
+          displayName: args.displayName,
+          sparseCheckout: args.sparseCheckout,
+          pushTarget: args.pushTarget,
+          setupDecision: args.setupDecision,
+          createdWithAgent: args.createdWithAgent,
+          pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
+          ...(args.startup
+            ? {
+                startupCommand: args.startup.command,
+                ...(args.startup.env ? { startupEnv: args.startup.env } : {}),
+                ...(args.startup.launchConfig
+                  ? { startupLaunchConfig: args.startup.launchConfig }
+                  : {}),
+                ...(args.startup.startupCommandDelivery
+                  ? { startupCommandDelivery: args.startup.startupCommandDelivery }
+                  : {}),
+                activate: true
+              }
+            : {}),
+          parentWorkspace: args.parentWorkspace,
+          workspaceStatus: args.workspaceStatus,
+          manualOrder: args.manualOrder,
+          automationProvenanceRequest: args.automationProvenanceRequest
+        },
+        getMaximumWorktreeCreateTransportTimeoutMs()
+      )
       return {
         ...owned.result,
         worktree: withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
@@ -3700,17 +3732,19 @@ function getStoredSettings(): GlobalSettings {
   const defaults = getDefaultSettings('~')
   const rawStoredSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
+  const { worktreeCreateTimeouts: _runtimeWorktreeCreateTimeouts, ...browserStored } = stored
   const migratedStored = {
-    ...stored,
-    ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
-    ...normalizeTerminalCursorStyleDefault(stored),
-    ...normalizeOsc52ClipboardDefaultOn(stored),
-    terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
-    uiLanguage: normalizeUiLanguage(stored.uiLanguage)
+    ...browserStored,
+    ...normalizeAutoRenameBranchFromWorkDefaultOn(browserStored),
+    ...normalizeTerminalCursorStyleDefault(browserStored),
+    ...normalizeOsc52ClipboardDefaultOn(browserStored),
+    terminalCustomThemes: normalizeTerminalCustomThemes(browserStored.terminalCustomThemes),
+    uiLanguage: normalizeUiLanguage(browserStored.uiLanguage)
   }
   if (
     rawStoredSettings &&
-    (stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
+    (stored.worktreeCreateTimeouts !== undefined ||
+      stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
       stored.autoRenameBranchFromWorkDefaultedOn !==
         migratedStored.autoRenameBranchFromWorkDefaultedOn ||
       stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
@@ -3741,6 +3775,7 @@ function getStoredSettings(): GlobalSettings {
       // Keep readJson's invalid-JSON fallback non-destructive.
     }
   }
+  const runtimeStored = readStoredWorktreeCreateTimeouts(activeEnvironment?.id ?? null)
   return mergeSettings(
     {
       ...defaults,
@@ -3748,7 +3783,10 @@ function getStoredSettings(): GlobalSettings {
       rightSidebarOpenByDefault: false,
       activeRuntimeEnvironmentId: null
     },
-    migratedStored
+    {
+      ...migratedStored,
+      ...(runtimeStored ? { worktreeCreateTimeouts: runtimeStored } : {})
+    }
   )
 }
 
@@ -3757,6 +3795,7 @@ function writeStoredSettings(
   explicitActiveRuntimeEnvironmentId?: string | null
 ): void {
   const durable = { ...settings }
+  delete durable.worktreeCreateTimeouts
   if (explicitActiveRuntimeEnvironmentId !== undefined) {
     durable.activeRuntimeEnvironmentId = explicitActiveRuntimeEnvironmentId
   } else {
@@ -3770,9 +3809,62 @@ function writeStoredSettings(
   writeJson(SETTINGS_STORAGE_KEY, durable)
 }
 
+function runtimeSettingsStorageKey(environmentId: string): string {
+  return `${SETTINGS_STORAGE_KEY}.runtime:${environmentId}`
+}
+
+function readStoredWorktreeCreateTimeouts(
+  environmentId: string | null
+): GlobalSettings['worktreeCreateTimeouts'] | undefined {
+  const storageKey = environmentId
+    ? runtimeSettingsStorageKey(environmentId)
+    : BROWSER_LOCAL_RUNTIME_SETTINGS_STORAGE_KEY
+  const stored = readJson<Partial<GlobalSettings>>(storageKey, {})
+  const normalized = normalizeWorktreeCreateTimeoutOverrides(stored.worktreeCreateTimeouts)
+  return normalized ? normalizeWorktreeCreateTimeouts(normalized) : undefined
+}
+
+function writeStoredWorktreeCreateTimeouts(
+  environmentId: string | null,
+  timeouts: GlobalSettings['worktreeCreateTimeouts']
+): void {
+  const storageKey = environmentId
+    ? runtimeSettingsStorageKey(environmentId)
+    : BROWSER_LOCAL_RUNTIME_SETTINGS_STORAGE_KEY
+  writeJson(storageKey, {
+    worktreeCreateTimeouts: normalizeWorktreeCreateTimeouts(timeouts)
+  })
+}
+
+type StoredWorktreeCreateTimeoutShadow = {
+  environmentId: string
+  rawValue: string | null
+}
+
+function captureStoredWorktreeCreateTimeoutShadow(
+  environmentId: string
+): StoredWorktreeCreateTimeoutShadow {
+  return {
+    environmentId,
+    rawValue: window.localStorage.getItem(runtimeSettingsStorageKey(environmentId))
+  }
+}
+
+function restoreStoredWorktreeCreateTimeoutShadow(
+  snapshot: StoredWorktreeCreateTimeoutShadow
+): void {
+  const storageKey = runtimeSettingsStorageKey(snapshot.environmentId)
+  if (snapshot.rawValue === null) {
+    window.localStorage.removeItem(storageKey)
+    return
+  }
+  window.localStorage.setItem(storageKey, snapshot.rawValue)
+}
+
 async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
   const local = getStoredSettings()
-  if (!requireActiveEnvironmentOrNull()) {
+  const environment = requireActiveEnvironmentOrNull()
+  if (!environment) {
     return local
   }
   try {
@@ -3788,6 +3880,11 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
     }
     if (typeof result.settings.compactWorktreeCards === 'boolean') {
       runtimeSettings.compactWorktreeCards = result.settings.compactWorktreeCards
+    }
+    if (result.settings.worktreeCreateTimeouts !== undefined) {
+      runtimeSettings.worktreeCreateTimeouts = normalizeWorktreeCreateTimeouts(
+        result.settings.worktreeCreateTimeouts
+      )
     }
     if (typeof result.settings.minimaxGroupId === 'string') {
       runtimeSettings.minimaxGroupId = result.settings.minimaxGroupId
@@ -3805,28 +3902,46 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
     if (typeof result.settings.artifactSharingEnabled === 'boolean') {
       runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled
     }
+    assertActiveEnvironment(environment.id)
     const next = mergeSettings(local, runtimeSettings)
     writeStoredSettings(next)
+    if (runtimeSettings.worktreeCreateTimeouts) {
+      writeStoredWorktreeCreateTimeouts(environment.id, runtimeSettings.worktreeCreateTimeouts)
+    }
     return next
   } catch {
     // Why: unpaired/offline web clients keep a local settings fallback.
-    return local
+    return getStoredSettings()
   }
 }
 
 async function syncRuntimeBackedSettings(
-  updates: Partial<GlobalSettings>,
-  localNext: GlobalSettings
+  updates: Omit<Partial<GlobalSettings>, 'worktreeCreateTimeouts'> & {
+    worktreeCreateTimeouts?: WorktreeCreateTimeoutOverrides
+  },
+  localNext: GlobalSettings,
+  timeoutShadowSnapshot?: StoredWorktreeCreateTimeoutShadow
 ): Promise<GlobalSettings> {
-  if (!requireActiveEnvironmentOrNull()) {
+  const environment = requireActiveEnvironmentOrNull()
+  if (!environment) {
     return localNext
   }
-  const runtimeUpdates: Partial<GlobalSettings> = {}
+  const runtimeUpdates: Omit<Partial<GlobalSettings>, 'worktreeCreateTimeouts'> & {
+    worktreeCreateTimeouts?: WorktreeCreateTimeoutOverrides
+  } = {}
   if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
     runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
   }
   if (typeof updates.compactWorktreeCards === 'boolean') {
     runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
+  }
+  if (updates.worktreeCreateTimeouts !== undefined) {
+    const normalizedTimeouts = normalizeWorktreeCreateTimeoutOverrides(
+      updates.worktreeCreateTimeouts
+    )
+    if (normalizedTimeouts) {
+      runtimeUpdates.worktreeCreateTimeouts = normalizedTimeouts
+    }
   }
   if (typeof updates.minimaxGroupId === 'string') {
     runtimeUpdates.minimaxGroupId = updates.minimaxGroupId
@@ -3850,12 +3965,32 @@ async function syncRuntimeBackedSettings(
     )
     const runtimeSettings = { ...result.settings }
     delete runtimeSettings.activeRuntimeEnvironmentId
-    const next = mergeSettings(localNext, runtimeSettings)
+    if (runtimeSettings.worktreeCreateTimeouts !== undefined) {
+      runtimeSettings.worktreeCreateTimeouts = normalizeWorktreeCreateTimeouts(
+        runtimeSettings.worktreeCreateTimeouts,
+        localNext.worktreeCreateTimeouts
+      )
+    } else if (timeoutShadowSnapshot) {
+      restoreStoredWorktreeCreateTimeoutShadow(timeoutShadowSnapshot)
+    }
+    assertActiveEnvironment(environment.id)
+    const next = mergeSettings(
+      timeoutShadowSnapshot && runtimeSettings.worktreeCreateTimeouts === undefined
+        ? getStoredSettings()
+        : localNext,
+      runtimeSettings
+    )
     writeStoredSettings(next)
+    if (runtimeSettings.worktreeCreateTimeouts) {
+      writeStoredWorktreeCreateTimeouts(environment.id, runtimeSettings.worktreeCreateTimeouts)
+    }
     return next
   } catch {
+    if (timeoutShadowSnapshot) {
+      restoreStoredWorktreeCreateTimeoutShadow(timeoutShadowSnapshot)
+    }
     // Why: unpaired/offline web clients still need local settings persistence.
-    return localNext
+    return getStoredSettings()
   }
 }
 

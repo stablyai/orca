@@ -30,6 +30,12 @@ describe('client UI RPC methods', () => {
       defaultRepoSelection: ['repo-1'],
       defaultLinearTeamSelection: ['team-1'],
       compactWorktreeCards: true,
+      worktreeCreateTimeouts: {
+        refreshBaseRefMs: 60_000,
+        addCheckoutMs: 180_000,
+        registrationMs: 30_000,
+        materializationMs: 300_000
+      },
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
       githubProjects: {
@@ -70,6 +76,12 @@ describe('client UI RPC methods', () => {
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      worktreeCreateTimeouts: {
+        refreshBaseRefMs: 60_000,
+        addCheckoutMs: 180_000,
+        registrationMs: 30_000,
+        materializationMs: 300_000
+      },
       githubProjects: {
         pinned: [],
         recent: [],
@@ -99,6 +111,10 @@ describe('client UI RPC methods', () => {
         defaultTaskViewPreset: 'my-prs',
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        worktreeCreateTimeouts: {
+          refreshBaseRefMs: 500,
+          addCheckoutMs: 8_000_000
+        },
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
         defaultRepoSelection: settings.defaultRepoSelection,
@@ -115,6 +131,10 @@ describe('client UI RPC methods', () => {
       defaultTaskViewPreset: 'my-prs',
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      worktreeCreateTimeouts: {
+        refreshBaseRefMs: 1_000,
+        addCheckoutMs: 7_200_000
+      },
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
       defaultRepoSelection: settings.defaultRepoSelection,

@@ -3487,6 +3487,29 @@ describe('Store', () => {
     expect(fetched!.gitUsername).toBe('')
   })
 
+  it('normalizes repo worktree create timeout overrides on add', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        worktreeCreateTimeouts: {
+          refreshBaseRefMs: 999,
+          addCheckoutMs: -1,
+          registrationMs: 7_200_001
+        }
+      })
+    )
+
+    expect(store.getRepo('r1')?.worktreeCreateTimeouts).toEqual({
+      refreshBaseRefMs: 1_000,
+      registrationMs: 7_200_000
+    })
+    store.flush()
+    expect((readDataFile() as PersistedState).repos[0].worktreeCreateTimeouts).toEqual({
+      refreshBaseRefMs: 1_000,
+      registrationMs: 7_200_000
+    })
+  })
+
   it('setResolvedRepoGitUsername persists the enriched username for hydration', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -4683,6 +4706,32 @@ describe('Store', () => {
     expect(reloaded.getRepo('r1')!.forkSyncMode).toBe('safe-auto')
   })
 
+  it('normalizes, persists, and clears repo worktree create timeout overrides', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      worktreeCreateTimeouts: {
+        addCheckoutMs: 250_000.4,
+        materializationMs: 8_000_000
+      }
+    })
+
+    expect(updated?.worktreeCreateTimeouts).toEqual({
+      addCheckoutMs: 250_000,
+      materializationMs: 7_200_000
+    })
+    store.flush()
+    expect((await createStore()).getRepo('r1')?.worktreeCreateTimeouts).toEqual({
+      addCheckoutMs: 250_000,
+      materializationMs: 7_200_000
+    })
+
+    store.updateRepo('r1', { worktreeCreateTimeouts: null })
+    store.flush()
+    expect((await createStore()).getRepo('r1')?.worktreeCreateTimeouts).toBeUndefined()
+  })
+
   it('updateRepo ignores invalid fork sync mode updates', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ forkSyncMode: 'ask' }))
@@ -5403,6 +5452,40 @@ describe('Store', () => {
     expect(updated.terminalFontWeight).toBe(600)
     // Other fields preserved
     expect(updated.branchPrefix).toBe('git-username')
+  })
+
+  it('normalizes worktree create timeouts on load and every settings write', async () => {
+    writeDataFile({
+      settings: {
+        worktreeCreateTimeouts: {
+          refreshBaseRefMs: 500,
+          addCheckoutMs: 8_000_000,
+          registrationMs: -1
+        }
+      }
+    })
+    const store = await createStore()
+
+    expect(store.getSettings().worktreeCreateTimeouts).toEqual({
+      refreshBaseRefMs: 1_000,
+      addCheckoutMs: 7_200_000,
+      registrationMs: 30_000,
+      materializationMs: 300_000
+    })
+
+    expect(
+      store.updateSettings({
+        worktreeCreateTimeouts: {
+          refreshBaseRefMs: 90_000,
+          addCheckoutMs: Number.NaN
+        } as never
+      }).worktreeCreateTimeouts
+    ).toEqual({
+      refreshBaseRefMs: 90_000,
+      addCheckoutMs: 7_200_000,
+      registrationMs: 30_000,
+      materializationMs: 300_000
+    })
   })
 
   it('normalizes bot-author overrides on load and every settings write', async () => {

@@ -105,6 +105,7 @@ describe('worktree RPC methods', () => {
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+    const signal = new AbortController().signal
 
     await dispatcher.dispatch(
       makeRequest('worktree.create', {
@@ -125,12 +126,14 @@ describe('worktree RPC methods', () => {
         sparseCheckout: { directories: ['src'], presetId: 'preset-1' },
         pushTarget: { remoteName: 'fork', branchName: 'feature' },
         parentWorktree: 'id:parent'
-      })
+      }),
+      { signal }
     )
 
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith({
       repoSelector: 'repo-1',
       name: 'feature',
+      signal,
       branchNameOverride: 'feature/something',
       baseBranch: 'origin/main',
       linkedIssue: 123,
@@ -164,6 +167,17 @@ describe('worktree RPC methods', () => {
         orchestrationContext: undefined
       }
     })
+
+    await dispatcher.dispatch(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'mobile-create',
+        clientMutationId: 'mutation-1'
+      }),
+      { signal }
+    )
+    const lastCreateOptions = vi.mocked(runtime.createManagedWorktree).mock.lastCall?.[0]
+    expect(lastCreateOptions).not.toHaveProperty('signal')
   })
 
   it('mints automation provenance from a valid dispatch request on worktree creation', async () => {

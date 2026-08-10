@@ -32,6 +32,7 @@ import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { normalizeRepoBadgeColor } from '../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../shared/repo-icon'
 import { normalizeRepoSourceControlAiOverrides } from '../../shared/source-control-ai'
+import { normalizeWorktreeCreateTimeoutOverrides } from '../../shared/worktree-create-timeouts'
 import {
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
@@ -2107,6 +2108,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           >
         > & {
           sourceControlAi?: Repo['sourceControlAi'] | null
+          worktreeCreateTimeouts?: Repo['worktreeCreateTimeouts'] | null
           externalWorktreeDiscoverySuppressedAt?:
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null
@@ -2147,6 +2149,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         } else {
           updates.worktreeBasePath = v.trim() || undefined
         }
+      }
+      if ('worktreeCreateTimeouts' in updates && updates.worktreeCreateTimeouts !== null) {
+        const worktreeCreateTimeouts = normalizeWorktreeCreateTimeoutOverrides(
+          updates.worktreeCreateTimeouts
+        )
+        updates.worktreeCreateTimeouts = worktreeCreateTimeouts
       }
       if ('repoIcon' in updates) {
         const repoIcon = sanitizeRepoIcon(updates.repoIcon)

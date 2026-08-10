@@ -54,6 +54,10 @@ import type { TaskSourceContext } from './task-source-context'
 import type { SetupRunnerShell } from './setup-runner-command'
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
 import type { ComputerAwakeMode } from './computer-awake-mode'
+import type {
+  WorktreeCreateTimeoutOverrides,
+  WorktreeCreateTimeouts
+} from './worktree-create-timeouts'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -261,6 +265,8 @@ export type Repo = {
   kind?: RepoKind
   gitUsername?: string
   worktreeBaseRef?: string
+  /** Repo-specific worktree-create timeout overrides. Missing fields inherit global settings. */
+  worktreeCreateTimeouts?: WorktreeCreateTimeoutOverrides
   /** Optional repo-scoped workspace root override. Relative paths resolve from `path`. */
   worktreeBasePath?: string
   hookSettings?: RepoHookSettings
@@ -2244,6 +2250,8 @@ export type SparsePreset = {
 export type CreateWorktreeArgs = {
   repoId: string
   name: string
+  /** Per-create timeout overrides. Missing fields inherit repo/global defaults. */
+  timeouts?: WorktreeCreateTimeoutOverrides
   /** Optional user-facing label to persist separately from the git-safe
    *  branch/path seed. Used when a workspace is created from a GitHub or
    *  Linear artifact whose title should remain readable in the sidebar. */
@@ -2745,6 +2753,7 @@ export type GlobalSettings = {
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
+  worktreeCreateTimeouts?: WorktreeCreateTimeouts
   /** Set once the user dismisses the "local main is behind" suggestion toast, so
    *  the nudge to enable refreshLocalBaseRefOnWorktreeCreate never shows again. */
   localBaseRefSuggestionDismissed: boolean

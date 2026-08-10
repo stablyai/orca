@@ -461,6 +461,10 @@ function longPollClassOf(request: RpcRequest): LongPollClass | null {
   return null
 }
 
+function requestNeedsKeepalive(request: RpcRequest, longPoll: LongPollClass | null): boolean {
+  return longPoll !== null || request.method === 'worktree.create'
+}
+
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
 function injectDeviceScope(response: string, scope: DeviceScope): string {
   try {
@@ -1534,14 +1538,15 @@ export class OrcaRuntimeRpcServer {
     if (rejection) {
       return this.buildError(request.id, 'runtime_busy', rejection)
     }
-    if (longPoll) {
-      // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
+    if (requestNeedsKeepalive(request, longPoll)) {
+      // Why: creates can legitimately run for minutes, but unlike waiters they
+      // do not consume long-poll admission capacity.
       context?.startKeepalive()
     }
 
     try {
       return await this.dispatcher.dispatch(request, {
-        signal: longPoll ? context?.signal : undefined
+        signal: longPoll || request.method === 'worktree.create' ? context?.signal : undefined
       })
     } finally {
       this.releaseLongPoll(longPoll)

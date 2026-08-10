@@ -233,6 +233,31 @@ describe('createWorktreeSymlinks', () => {
     expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
   })
 
+  it('does not report a deadline when the final materialization operation completed', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    let now = 100
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const onDeadlineExceeded = vi.fn()
+    const cloneWorktreePath = vi.fn(async (_source: string, target: string) => {
+      writeFileSync(target, 'SECRET=1\n')
+      now = 201
+    })
+
+    try {
+      await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+        platform: 'darwin',
+        cloneWorktreePath,
+        deadlineAt: 200,
+        onDeadlineExceeded
+      })
+    } finally {
+      nowSpy.mockRestore()
+    }
+
+    expect(onDeadlineExceeded).not.toHaveBeenCalled()
+    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('SECRET=1\n')
+  })
+
   it('does not overwrite a file target that appears before APFS clone-copy is published', async () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
     const target = join(worktree, '.env')

@@ -14,6 +14,7 @@ import {
 import { TaskSourceContextSchema } from '../../../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
+import { normalizeWorktreeCreateTimeoutOverrides } from '../../../../shared/worktree-create-timeouts'
 
 const OptionalTuiAgent = z
   .unknown()
@@ -38,6 +39,11 @@ const AutomationWorkspaceProvenanceRequest = z.object({
 const CliWorkspaceProvenanceRequest = z.object({
   callerTerminalHandle: OptionalString
 })
+
+const WorktreeCreateTimeoutOverrides = z
+  .unknown()
+  .optional()
+  .transform((value) => normalizeWorktreeCreateTimeoutOverrides(value))
 
 export const WorktreeListParams = z.object({
   repo: OptionalString,
@@ -104,6 +110,7 @@ export const WorktreeCreate = z
       .transform((v) => (typeof v === 'string' ? v : ''))
       .pipe(z.string().min(1, 'Missing repo selector')),
     name: OptionalString,
+    timeouts: WorktreeCreateTimeoutOverrides,
     baseBranch: OptionalString,
     compareBaseRef: OptionalString,
     branchNameOverride: OptionalString,

@@ -37,14 +37,6 @@ function fetchCallCount(): number {
   return gitExecFileAsyncMock.mock.calls.filter(([argv]) => isFetchArgs(argv)).length
 }
 
-function exactBaseRefreshOptions(cwd: string): {
-  cwd: string
-  timeout: number
-  useConfiguredSshCommandForNetwork: boolean
-} {
-  return { cwd, timeout: 60_000, useConfiguredSshCommandForNetwork: true }
-}
-
 function exactBaseRefreshArgs(branch = 'main'): string[] {
   return [
     '-c',
@@ -64,6 +56,11 @@ function exactBaseRefreshArgs(branch = 'main'): string[] {
 // credential-manager GUI hang can't wedge worktree creation forever.
 function fullRemoteFetchOptions(cwd: string): { cwd: string; timeout: number } {
   return { cwd, timeout: 60_000 }
+}
+
+function expectStageTimeout(options: { timeout: number }, maximum = 60_000): void {
+  expect(options.timeout).toBeGreaterThan(0)
+  expect(options.timeout).toBeLessThanOrEqual(maximum)
 }
 
 function mockFetchResults(results: (Promise<unknown> | unknown)[]): void {
@@ -211,10 +208,13 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       base: 'origin/main'
     })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      exactBaseRefreshArgs(),
-      exactBaseRefreshOptions('/repo/f')
-    )
+    const fetchCall = gitExecFileAsyncMock.mock.calls.find(([argv]) => isFetchArgs(argv))
+    expect(fetchCall?.[0]).toEqual(exactBaseRefreshArgs())
+    expect(fetchCall?.[1]).toMatchObject({
+      cwd: '/repo/f',
+      useConfiguredSshCommandForNetwork: true
+    })
+    expectStageTimeout(fetchCall?.[1] as { timeout: number })
   })
 
   it('keeps automatic maintenance enabled for ordinary full remote fetches', async () => {
@@ -334,10 +334,14 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       { ok: true }
     ])
     const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(([argv]) => isFetchArgs(argv))
-    expect(fetchCalls).toEqual([
-      [exactBaseRefreshArgs(), exactBaseRefreshOptions('/repo/h')],
-      [['fetch', 'origin'], fullRemoteFetchOptions('/repo/h')]
-    ])
+    expect(fetchCalls.map(([args]) => args)).toEqual([exactBaseRefreshArgs(), ['fetch', 'origin']])
+    expect(fetchCalls[0]?.[1]).toMatchObject({
+      cwd: '/repo/h',
+      useConfiguredSshCommandForNetwork: true
+    })
+    expectStageTimeout(fetchCalls[0]?.[1] as { timeout: number })
+    expectStageTimeout(fetchCalls[1]?.[1] as { timeout: number })
+    expect(fetchCalls[1]?.[1]).toMatchObject({ cwd: '/repo/h' })
   })
 
   it('runs a queued exact base refresh after an in-flight full remote fetch succeeds', async () => {
@@ -375,10 +379,13 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       { ok: true }
     ])
     const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(([argv]) => isFetchArgs(argv))
-    expect(fetchCalls).toEqual([
-      [['fetch', 'origin'], fullRemoteFetchOptions('/repo/i')],
-      [exactBaseRefreshArgs(), exactBaseRefreshOptions('/repo/i')]
-    ])
+    expect(fetchCalls.map(([args]) => args)).toEqual([['fetch', 'origin'], exactBaseRefreshArgs()])
+    expect(fetchCalls[0]?.[1]).toEqual(fullRemoteFetchOptions('/repo/i'))
+    expectStageTimeout(fetchCalls[1]?.[1] as { timeout: number })
+    expect(fetchCalls[1]?.[1]).toMatchObject({
+      cwd: '/repo/i',
+      useConfiguredSshCommandForNetwork: true
+    })
   })
 
   it('runs a queued exact base refresh when an in-flight full remote fetch fails', async () => {
@@ -416,9 +423,12 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       { ok: true }
     ])
     const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(([argv]) => isFetchArgs(argv))
-    expect(fetchCalls).toEqual([
-      [['fetch', 'origin'], fullRemoteFetchOptions('/repo/i-fail')],
-      [exactBaseRefreshArgs(), exactBaseRefreshOptions('/repo/i-fail')]
-    ])
+    expect(fetchCalls.map(([args]) => args)).toEqual([['fetch', 'origin'], exactBaseRefreshArgs()])
+    expect(fetchCalls[0]?.[1]).toEqual(fullRemoteFetchOptions('/repo/i-fail'))
+    expectStageTimeout(fetchCalls[1]?.[1] as { timeout: number })
+    expect(fetchCalls[1]?.[1]).toMatchObject({
+      cwd: '/repo/i-fail',
+      useConfiguredSshCommandForNetwork: true
+    })
   })
 })

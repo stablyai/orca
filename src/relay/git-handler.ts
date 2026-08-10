@@ -95,6 +95,42 @@ import { streamRelayGitStdout } from './git-stdout-stream'
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
 const BULK_CHUNK_SIZE = 100
+const PUSH_TARGET_REMOTE_CLEANUP_TIMEOUT_MS = 30_000
+const PUSH_TARGET_REMOTE_RECONCILIATION_GRACE_MS = 1_000
+const PUSH_TARGET_REMOTE_RECONCILIATION_POLL_MS = 100
+const PUSH_TARGET_REMOTE_SETTLEMENT_TIMEOUT_MS =
+  PUSH_TARGET_REMOTE_CLEANUP_TIMEOUT_MS * 2 + PUSH_TARGET_REMOTE_RECONCILIATION_GRACE_MS
+
+function normalizeRelayGitTimeout(error: unknown, timeout: number | undefined): never {
+  const details = error as Error & { code?: unknown; killed?: unknown; signal?: unknown }
+  if (
+    timeout !== undefined &&
+    error instanceof Error &&
+    error.name !== 'AbortError' &&
+    (details.code === 'ETIMEDOUT' ||
+      details.killed === true ||
+      details.signal === 'SIGTERM' ||
+      details.signal === 'SIGKILL')
+  ) {
+    throw new Error(`Git command timed out after ${timeout}ms.`)
+  }
+  throw error
+}
+
+function mayHaveCompletedRelayGitMutation(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const details = error as Error & { code?: unknown; killed?: unknown; signal?: unknown }
+  return (
+    error.name === 'AbortError' ||
+    error.message.toLowerCase().includes('timed out') ||
+    details.code === 'ETIMEDOUT' ||
+    details.killed === true ||
+    details.signal === 'SIGTERM' ||
+    details.signal === 'SIGKILL'
+  )
+}
 
 function resolveSubmoduleStatusArea(
   params: Record<string, unknown>
@@ -176,6 +212,7 @@ function execFileWithStdin(
 export class GitHandler {
   private dispatcher: RelayDispatcher
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<unknown>()
+  private readonly pushTargetRemoteMutationTails = new Map<string, Promise<void>>()
   private readonly gitCapabilities = new GitCapabilityCache()
   // Why: use the bulk lane so large responses do not block interactive PTY echo.
   private readonly responseStreams = new GitResponseStreamRegistry()
@@ -225,7 +262,18 @@ export class GitHandler {
     this.dispatcher.onRequest('git.upstreamStatus', (p) => this.upstreamStatus(p))
     this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
     this.dispatcher.onRequest('git.forkSync', (p, context) => this.forkSync(p, context))
-    this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
+    this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p, context) =>
+      this.fetchRemoteTrackingRef(p, context)
+    )
+    this.dispatcher.onRequest('git.addPushTargetRemote', (p, context) =>
+      this.addPushTargetRemote(p, context)
+    )
+    this.dispatcher.onRequest('git.removePushTargetRemote', (p, context) =>
+      this.removePushTargetRemote(p, context)
+    )
+    this.dispatcher.onRequest('git.awaitPushTargetRemoteMutation', (p) =>
+      this.awaitPushTargetRemoteMutation(p)
+    )
     this.dispatcher.onRequest('git.fetchGitHubPullRequestHead', (p) =>
       this.fetchGitHubPullRequestHead(p)
     )
@@ -247,8 +295,8 @@ export class GitHandler {
     this.dispatcher.onRequest('git.branchDiff', (p, context) => this.branchDiff(p, context))
     this.dispatcher.onRequest('git.commitDiff', (p, context) => this.commitDiff(p, context))
     this.dispatcher.onRequest('git.listWorktrees', (p, context) => this.listWorktrees(p, context))
-    this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
-    this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
+    this.dispatcher.onRequest('git.addWorktree', (p, context) => this.addWorktree(p, context))
+    this.dispatcher.onRequest('git.removeWorktree', (p, context) => this.removeWorktree(p, context))
     this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
     this.dispatcher.onRequest('git.refreshLocalBaseRefForWorktreeCreate', (p) =>
       this.refreshLocalBaseRefForWorktreeCreate(p)
@@ -311,6 +359,30 @@ export class GitHandler {
       return await run()
     } finally {
       this.clearGitMutationReadCaches()
+    }
+  }
+
+  private async acquirePushTargetRemoteMutation(repoPath: string): Promise<() => void> {
+    const previous = this.pushTargetRemoteMutationTails.get(repoPath) ?? Promise.resolve()
+    let releaseSlot!: () => void
+    const slot = new Promise<void>((resolve) => {
+      releaseSlot = resolve
+    })
+    const tail = previous.catch(() => {}).then(() => slot)
+    this.pushTargetRemoteMutationTails.set(repoPath, tail)
+    await previous.catch(() => {})
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      releaseSlot()
+      void tail.finally(() => {
+        if (this.pushTargetRemoteMutationTails.get(repoPath) === tail) {
+          this.pushTargetRemoteMutationTails.delete(repoPath)
+        }
+      })
     }
   }
 
@@ -902,13 +974,19 @@ export class GitHandler {
     })
   }
 
-  private async fetchRemoteTrackingRef(params: Record<string, unknown>) {
+  private async fetchRemoteTrackingRef(params: Record<string, unknown>, context?: RequestContext) {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
     const remote = params.remote
     const branch = params.branch
     const ref = params.ref
     const skipAutoMaintenance = params.skipAutoMaintenance
+    const timeout =
+      typeof params.timeoutMs === 'number' &&
+      Number.isFinite(params.timeoutMs) &&
+      params.timeoutMs > 0
+        ? params.timeoutMs
+        : undefined
     try {
       if (typeof remote !== 'string' || typeof branch !== 'string' || typeof ref !== 'string') {
         throw new Error('Invalid remote-tracking fetch request.')
@@ -924,7 +1002,16 @@ export class GitHandler {
       }
 
       try {
-        const { stdout } = await this.git(['remote'], worktreePath)
+        const requestGit = (args: string[], options?: { timeout?: number }) => {
+          if (!options && !context?.signal) {
+            return this.git(args, worktreePath)
+          }
+          return this.git(args, worktreePath, {
+            ...options,
+            ...(context?.signal ? { signal: context.signal } : {})
+          })
+        }
+        const { stdout } = await requestGit(['remote'])
         const remotes = stdout
           .split(/\r?\n/)
           .map((line) => line.trim())
@@ -932,18 +1019,16 @@ export class GitHandler {
         if (!remotes.includes(remote)) {
           throw new Error(`Remote "${remote}" is not configured.`)
         }
-        await this.git(['check-ref-format', `refs/heads/${branch}`], worktreePath)
-        await this.git(['check-ref-format', ref], worktreePath)
-        await this.git(
-          [
-            ...(skipAutoMaintenance ? GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS : []),
-            'fetch',
-            '--no-tags',
-            remote,
-            `+refs/heads/${branch}:${ref}`
-          ],
-          worktreePath
-        )
+        await requestGit(['check-ref-format', `refs/heads/${branch}`])
+        await requestGit(['check-ref-format', ref])
+        const fetchArgs = [
+          ...(skipAutoMaintenance ? GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS : []),
+          'fetch',
+          '--no-tags',
+          remote,
+          `+refs/heads/${branch}:${ref}`
+        ]
+        await requestGit(fetchArgs, timeout === undefined ? undefined : { timeout })
       } catch (error) {
         // Why: create-worktree needs a write-capable fetch that generic git.exec rejects; narrow RPC keeps the allowlist tight.
         throw new Error(normalizeGitErrorMessage(error, 'fetch'))
@@ -1011,6 +1096,137 @@ export class GitHandler {
     } finally {
       this.clearGitMutationReadCaches()
     }
+  }
+
+  private async addPushTargetRemote(params: Record<string, unknown>, context?: RequestContext) {
+    const repoPath = params.repoPath
+    const remoteName = params.remoteName
+    const remoteUrl = params.remoteUrl
+    const timeout =
+      typeof params.timeoutMs === 'number' &&
+      Number.isFinite(params.timeoutMs) &&
+      params.timeoutMs > 0
+        ? params.timeoutMs
+        : undefined
+    assertGitPushTargetShape({
+      remoteName,
+      branchName: 'push-target-validation',
+      remoteUrl
+    })
+    if (typeof repoPath !== 'string' || repoPath.length === 0) {
+      throw new Error('Invalid push-target repository path.')
+    }
+    const releaseMutation = await this.acquirePushTargetRemoteMutation(repoPath)
+    let releaseOnResponseSettlement = false
+    const cleanupAddedRemote = async (): Promise<void> => {
+      const deadlineAt = Date.now() + PUSH_TARGET_REMOTE_RECONCILIATION_GRACE_MS
+      do {
+        try {
+          const { stdout } = await this.git(
+            ['config', '--get', `remote.${remoteName as string}.url`],
+            repoPath,
+            { timeout: PUSH_TARGET_REMOTE_CLEANUP_TIMEOUT_MS }
+          )
+          if (stdout.trim() === remoteUrl) {
+            await this.runWithGitReadCacheClear(() =>
+              this.git(['remote', 'remove', remoteName as string], repoPath, {
+                timeout: PUSH_TARGET_REMOTE_CLEANUP_TIMEOUT_MS
+              })
+            )
+          }
+          return
+        } catch {
+          // The canceled add may still be settling; retry briefly before client reconciliation takes over.
+        }
+        await new Promise((resolve) =>
+          setTimeout(
+            resolve,
+            Math.min(PUSH_TARGET_REMOTE_RECONCILIATION_POLL_MS, deadlineAt - Date.now())
+          )
+        )
+      } while (Date.now() < deadlineAt)
+    }
+    try {
+      await this.runWithGitReadCacheClear(() =>
+        this.git(['remote', 'add', remoteName as string, remoteUrl as string], repoPath, {
+          signal: context?.signal,
+          timeout
+        })
+      )
+      if (context?.onResponseSettled) {
+        let settlementExpired = false
+        const settlementGuard = setTimeout(() => {
+          settlementExpired = true
+          releaseMutation()
+        }, PUSH_TARGET_REMOTE_SETTLEMENT_TIMEOUT_MS)
+        settlementGuard.unref?.()
+        context.onResponseSettled((result) => {
+          clearTimeout(settlementGuard)
+          if (settlementExpired) {
+            return
+          }
+          void (async () => {
+            try {
+              if (!result.ok) {
+                await cleanupAddedRemote()
+              }
+            } finally {
+              releaseMutation()
+            }
+          })()
+        })
+        releaseOnResponseSettlement = true
+      }
+    } catch (error) {
+      if (mayHaveCompletedRelayGitMutation(error)) {
+        await cleanupAddedRemote()
+      }
+      normalizeRelayGitTimeout(error, timeout)
+    } finally {
+      if (!releaseOnResponseSettlement) {
+        releaseMutation()
+      }
+    }
+  }
+
+  private async removePushTargetRemote(params: Record<string, unknown>, context?: RequestContext) {
+    const repoPath = params.repoPath
+    const remoteName = params.remoteName
+    const timeout =
+      typeof params.timeoutMs === 'number' &&
+      Number.isFinite(params.timeoutMs) &&
+      params.timeoutMs > 0
+        ? params.timeoutMs
+        : undefined
+    assertGitPushTargetShape({
+      remoteName,
+      branchName: 'push-target-validation'
+    })
+    if (typeof repoPath !== 'string' || repoPath.length === 0) {
+      throw new Error('Invalid push-target repository path.')
+    }
+    const releaseMutation = await this.acquirePushTargetRemoteMutation(repoPath)
+    try {
+      await this.runWithGitReadCacheClear(() =>
+        this.git(['remote', 'remove', remoteName as string], repoPath, {
+          signal: context?.signal,
+          timeout
+        })
+      )
+    } catch (error) {
+      normalizeRelayGitTimeout(error, timeout)
+    } finally {
+      releaseMutation()
+    }
+  }
+
+  private async awaitPushTargetRemoteMutation(params: Record<string, unknown>): Promise<void> {
+    const repoPath = params.repoPath
+    if (typeof repoPath !== 'string' || repoPath.length === 0) {
+      throw new Error('Invalid push-target repository path.')
+    }
+    const releaseMutation = await this.acquirePushTargetRemoteMutation(repoPath)
+    releaseMutation()
   }
 
   private async fetchGitHubPullRequestHead(params: Record<string, unknown>) {
@@ -1199,9 +1415,15 @@ export class GitHandler {
   private async exec(params: Record<string, unknown>, context?: RequestContext) {
     const args = params.args as string[]
     const cwd = params.cwd as string
+    const timeout =
+      typeof params.timeoutMs === 'number' &&
+      Number.isFinite(params.timeoutMs) &&
+      params.timeoutMs > 0
+        ? params.timeoutMs
+        : undefined
 
     validateGitExecArgs(args)
-    const run = () => this.git(args, cwd, { signal: context?.signal })
+    const run = () => this.git(args, cwd, { signal: context?.signal, timeout })
     const { stdout, stderr } = gitExecMutatesRepository(args)
       ? await this.runWithGitReadCacheClear(run)
       : await run()
@@ -1399,47 +1621,62 @@ export class GitHandler {
 
   private async listWorktrees(params: Record<string, unknown>, context?: RequestContext) {
     const repoPath = params.repoPath as string
-    return this.gitCapabilities
-      .runWithFallback(
-        'worktree-list-z',
-        async () => {
-          const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath, {
-            signal: context?.signal
+    const strict = params.strict === true
+    const timeout =
+      typeof params.timeoutMs === 'number' &&
+      Number.isFinite(params.timeoutMs) &&
+      params.timeoutMs > 0
+        ? params.timeoutMs
+        : undefined
+    const scan = this.gitCapabilities.runWithFallback(
+      'worktree-list-z',
+      async () => {
+        const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath, {
+          signal: context?.signal,
+          timeout
+        })
+        return this.normalizeMainWorktreePath(
+          repoPath,
+          parseWorktreeList(stdout, { nulDelimited: true })
+        )
+      },
+      async () => {
+        // Why: Git <2.36 lacks worktree-list `-z`, so fall back to the newline-block parser (loses newline-in-path safety).
+        try {
+          const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
+            signal: context?.signal,
+            timeout
           })
-          return this.normalizeMainWorktreePath(
+          const normalized = await this.normalizeMainWorktreePath(
             repoPath,
-            parseWorktreeList(stdout, { nulDelimited: true })
+            parseWorktreeList(stdout)
           )
-        },
-        async () => {
-          // Why: Git <2.36 lacks worktree-list `-z`, so fall back to the newline-block parser (loses newline-in-path safety).
-          try {
-            const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
-              signal: context?.signal
-            })
-            const normalized = await this.normalizeMainWorktreePath(
-              repoPath,
-              parseWorktreeList(stdout)
-            )
-            // Why: Git <2.31 emits no `prunable` annotation, so probe each linked worktree's existence instead of trusting stale registrations (issue #8389).
-            return annotatePrunableWorktreesByExistence(normalized)
-          } catch {
-            return []
+          // Why: Git <2.31 emits no `prunable` annotation, so probe each linked worktree's existence instead of trusting stale registrations (issue #8389).
+          return annotatePrunableWorktreesByExistence(normalized)
+        } catch (error) {
+          if (strict) {
+            throw error
           }
-        },
-        isUnsupportedWorktreeListZError
-      )
-      .catch(() => [])
+          return []
+        }
+      },
+      isUnsupportedWorktreeListZError
+    )
+    return strict ? scan : scan.catch(() => [])
   }
 
-  private async addWorktree(params: Record<string, unknown>) {
-    return this.runWithGitReadCacheClear(() => addWorktreeOp(this.git.bind(this), params))
+  private async addWorktree(params: Record<string, unknown>, context: RequestContext) {
+    return this.runWithGitReadCacheClear(() =>
+      addWorktreeOp(this.git.bind(this), params, { signal: context.signal })
+    )
   }
 
-  private async removeWorktree(params: Record<string, unknown>) {
+  private async removeWorktree(params: Record<string, unknown>, context?: RequestContext) {
     const remove = () =>
       this.runWithGitReadCacheClear(() =>
-        removeWorktreeOp(this.git.bind(this), params, this.gitCapabilities)
+        removeWorktreeOp(this.git.bind(this), params, this.gitCapabilities, {
+          signal: context?.signal
+        })
       )
     const worktreePath = params.worktreePath
     return this.watcherRegistry && typeof worktreePath === 'string'

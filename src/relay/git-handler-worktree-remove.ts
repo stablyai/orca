@@ -30,6 +30,37 @@ function isBranchCheckedOutInWorktreeError(error: unknown): boolean {
   )
 }
 
+function isWorktreeRemovalInterruption(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+  const details = error as {
+    name?: unknown
+    code?: unknown
+    killed?: unknown
+    signal?: unknown
+  }
+  return (
+    details.name === 'AbortError' ||
+    details.code === 'ABORT_ERR' ||
+    details.code === 'ETIMEDOUT' ||
+    details.killed === true ||
+    (typeof details.signal === 'string' && details.signal.length > 0) ||
+    ('message' in error &&
+      typeof error.message === 'string' &&
+      /\btimed out\b/i.test(error.message))
+  )
+}
+
+function createWorktreeRemovalAbortError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) {
+    return signal.reason
+  }
+  const error = new Error('Worktree removal aborted.')
+  error.name = 'AbortError'
+  return error
+}
+
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
@@ -125,25 +156,74 @@ async function deleteRelayBranchAfterWorktreeRemoval(
 export async function removeWorktreeOp(
   git: GitExec,
   params: Record<string, unknown>,
-  capabilities: GitCapabilityCache
+  capabilities: GitCapabilityCache,
+  options: { signal?: AbortSignal } = {}
 ): Promise<RemoveWorktreeResult> {
   const worktreePath = params.worktreePath as string
   const force = params.force as boolean | undefined
   const deleteBranch = params.deleteBranch !== false
   const forceBranchDelete = params.forceBranchDelete === true
+  const timeoutValue = params.timeoutMs
+  if (
+    timeoutValue !== undefined &&
+    (typeof timeoutValue !== 'number' || !Number.isFinite(timeoutValue) || timeoutValue <= 0)
+  ) {
+    throw new Error('Invalid worktree removal timeout.')
+  }
+  const deadlineAt = timeoutValue === undefined ? undefined : Date.now() + timeoutValue
+  let interruptionError: unknown
+  const stageGit: GitExec = async (args, cwd, childOptions) => {
+    const remaining = deadlineAt === undefined ? undefined : deadlineAt - Date.now()
+    if (remaining !== undefined && remaining <= 0) {
+      interruptionError = new Error('Worktree removal timed out.')
+      throw interruptionError
+    }
+    const signal = childOptions?.signal ?? options.signal
+    try {
+      return await (remaining === undefined && !signal && childOptions === undefined
+        ? git(args, cwd)
+        : git(args, cwd, {
+            ...childOptions,
+            ...(signal ? { signal } : {}),
+            ...(remaining === undefined ? {} : { timeout: remaining })
+          }))
+    } catch (error) {
+      if (isWorktreeRemovalInterruption(error)) {
+        interruptionError = error
+      }
+      throw error
+    }
+  }
+  const throwIfInterrupted = (error?: unknown): void => {
+    if (isWorktreeRemovalInterruption(error)) {
+      throw error
+    }
+    if (interruptionError !== undefined) {
+      throw interruptionError
+    }
+    if (options.signal?.aborted) {
+      throw createWorktreeRemovalAbortError(options.signal)
+    }
+  }
 
   let repoPath = worktreePath
   try {
-    const { stdout } = await git(['rev-parse', '--git-common-dir'], worktreePath)
+    const { stdout } = await stageGit(['rev-parse', '--git-common-dir'], worktreePath)
     const commonDir = stdout.trim()
     if (commonDir && commonDir !== '.git') {
       repoPath = resolveRelayRepoPath(worktreePath, commonDir)
     }
-  } catch {
+  } catch (error) {
+    throwIfInterrupted(error)
     // fall through with worktreePath as repo
   }
 
-  const worktreesBeforeRemoval = await listRelayWorktreesForRemoval(git, repoPath, capabilities)
+  const worktreesBeforeRemoval = await listRelayWorktreesForRemoval(
+    stageGit,
+    repoPath,
+    capabilities
+  )
+  throwIfInterrupted()
   const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
     areRelayWorktreePathsEqual(worktree.path, worktreePath)
   )
@@ -158,7 +238,7 @@ export async function removeWorktreeOp(
   }
   args.push(worktreePath)
   try {
-    await git(args, repoPath)
+    await stageGit(args, repoPath)
   } catch (error) {
     if (force || !isSubmoduleWorktreeRemovalRefusal(error)) {
       throw error
@@ -166,13 +246,16 @@ export async function removeWorktreeOp(
     // Why: Git refuses non-force removal of any worktree with an initialised
     // submodule even when everything is clean. Re-prove cleanliness (parent
     // status reports dirty submodule content as ` M <sub>`), then --force.
-    const { stdout } = await git(['status', '--porcelain', '--untracked-files=all'], worktreePath)
+    const { stdout } = await stageGit(
+      ['status', '--porcelain', '--untracked-files=all'],
+      worktreePath
+    )
     if (stdout.trim()) {
       const dirtyError = new Error('Worktree has uncommitted or untracked changes.')
       ;(dirtyError as Error & { stdout?: string }).stdout = stdout
       throw dirtyError
     }
-    await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+    await stageGit(['worktree', 'remove', '--force', worktreePath], repoPath)
   }
 
   if (!branchName) {
@@ -188,30 +271,34 @@ export async function removeWorktreeOp(
   try {
     // Why: use `-d` (not `-D`) to mirror the local removeWorktree fix.
     const branchDeleteResult = await deleteRelayBranchAfterWorktreeRemoval(
-      git,
+      stageGit,
       repoPath,
       branchName,
       forceBranchDelete
     )
+    throwIfInterrupted()
     if (branchDeleteResult === 'checked-out') {
       return {}
     }
     return {}
   } catch (error) {
+    throwIfInterrupted(error)
     if (!forceBranchDelete && branchHead) {
       try {
         if (
           await deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
-            git,
+            stageGit,
             repoPath,
             branchName,
             branchHead,
             capabilities
           )
         ) {
+          throwIfInterrupted()
           return {}
         }
       } catch (alreadyMergedDeleteError) {
+        throwIfInterrupted(alreadyMergedDeleteError)
         // Why: worktree is gone; preserve branch recovery on cleanup races.
         console.warn(
           `relay removeWorktree: failed to delete already-merged local branch "${branchName}" after removing worktree`,
@@ -219,6 +306,7 @@ export async function removeWorktreeOp(
         )
       }
     }
+    throwIfInterrupted()
     // Expected when the branch still has unmerged/unpublished commits: keep it.
     console.warn(
       `relay removeWorktree: preserved local branch "${branchName}" after removing worktree (not fully merged)`,

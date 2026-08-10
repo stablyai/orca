@@ -96,7 +96,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.create',
     params: WorktreeCreate,
-    handler: async (params, { runtime }) =>
+    handler: async (params, { runtime, signal }) =>
       // Why: a mobile create interrupted by a connection migration is retried with
       // the same clientMutationId; dedupe so the host returns the in-flight/created
       // worktree instead of spawning a duplicate. No key (desktop/CLI) runs plainly.
@@ -114,6 +114,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
           const result = await runtime.createManagedWorktree({
             repoSelector: params.repo,
             name: params.name ?? '',
+            ...(!params.clientMutationId && signal ? { signal } : {}),
+            timeouts: params.timeouts,
             baseBranch: params.baseBranch,
             compareBaseRef: params.compareBaseRef,
             branchNameOverride: params.branchNameOverride,

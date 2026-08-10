@@ -3,7 +3,7 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { GlobalSettings, Repo } from '../../../../shared/types'
 import { RepositoryWorktreeDefaultsSection } from './RepositoryWorktreeDefaultsSection'
 
 vi.mock('../../store', () => ({
@@ -39,12 +39,16 @@ afterEach(() => {
   container.remove()
 })
 
-function render(repo: Repo, updateRepo: (repoId: string, updates: object) => void): void {
+function render(
+  repo: Repo,
+  updateRepo: (repoId: string, updates: object) => void,
+  settings: Pick<GlobalSettings, 'workspaceDir' | 'worktreeCreateTimeouts'> | null = null
+): void {
   act(() => {
     root.render(
       React.createElement(RepositoryWorktreeDefaultsSection, {
         repo,
-        settings: null,
+        settings,
         updateRepo,
         forceVisible: true
       })
@@ -80,6 +84,10 @@ function blurInput(input: HTMLInputElement): void {
   act(() => {
     input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
   })
+}
+
+function getTimeoutInputs(): HTMLInputElement[] {
+  return Array.from(container.querySelectorAll<HTMLInputElement>('input[type="number"]'))
 }
 
 describe('RepositoryWorktreeDefaultsSection — worktree path', () => {
@@ -139,5 +147,109 @@ describe('RepositoryWorktreeDefaultsSection — worktree path', () => {
     blurInput(input)
 
     expect(updateRepo).toHaveBeenCalledWith('repo-1', { worktreeBasePath: undefined })
+  })
+})
+
+describe('RepositoryWorktreeDefaultsSection — creation timeouts', () => {
+  it('shows the execution host global values as inherited placeholders', () => {
+    render(BASE_REPO, vi.fn(), {
+      workspaceDir: '/tmp',
+      worktreeCreateTimeouts: {
+        refreshBaseRefMs: 11_000,
+        addCheckoutMs: 22_000,
+        registrationMs: 33_000,
+        materializationMs: 44_000
+      }
+    })
+
+    expect(getTimeoutInputs().map((input) => input.placeholder)).toEqual(['11', '22', '33', '44'])
+  })
+
+  it('converts seconds to milliseconds and preserves rapid field edits', () => {
+    const updateRepo = vi.fn()
+    render(BASE_REPO, updateRepo)
+    const [refreshInput, addInput] = getTimeoutInputs()
+
+    typeText(refreshInput, '12')
+    blurInput(refreshInput)
+    typeText(addInput, '34')
+    blurInput(addInput)
+
+    expect(updateRepo).toHaveBeenNthCalledWith(1, 'repo-1', {
+      worktreeCreateTimeouts: { refreshBaseRefMs: 12_000 }
+    })
+    expect(updateRepo).toHaveBeenNthCalledWith(2, 'repo-1', {
+      worktreeCreateTimeouts: { refreshBaseRefMs: 12_000, addCheckoutMs: 34_000 }
+    })
+  })
+
+  it('clamps an override to the supported range', () => {
+    const updateRepo = vi.fn()
+    render(BASE_REPO, updateRepo)
+    const [refreshInput] = getTimeoutInputs()
+
+    typeText(refreshInput, '9999')
+    blurInput(refreshInput)
+
+    expect(updateRepo).toHaveBeenCalledWith('repo-1', {
+      worktreeCreateTimeouts: { refreshBaseRefMs: 7_200_000 }
+    })
+  })
+
+  it('clears the final field back to global inheritance', () => {
+    const updateRepo = vi.fn()
+    render(
+      {
+        ...BASE_REPO,
+        worktreeCreateTimeouts: { registrationMs: 45_000 }
+      },
+      updateRepo
+    )
+    const registrationInput = getTimeoutInputs()[2]
+
+    typeText(registrationInput, '')
+    blurInput(registrationInput)
+
+    expect(updateRepo).toHaveBeenCalledWith('repo-1', { worktreeCreateTimeouts: null })
+  })
+
+  it('clears every project override from Use Global', () => {
+    const updateRepo = vi.fn()
+    render(
+      {
+        ...BASE_REPO,
+        worktreeCreateTimeouts: { registrationMs: 45_000 }
+      },
+      updateRepo
+    )
+
+    const useGlobalButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Use Global'
+    )
+    expect(useGlobalButton).toBeDefined()
+    act(() => {
+      useGlobalButton?.click()
+    })
+
+    expect(updateRepo).toHaveBeenCalledWith('repo-1', { worktreeCreateTimeouts: null })
+  })
+
+  it('does not claim a desktop global value for a runtime-owned project', () => {
+    render({ ...BASE_REPO, executionHostId: 'runtime:builder' }, vi.fn(), {
+      workspaceDir: '/tmp',
+      worktreeCreateTimeouts: {
+        refreshBaseRefMs: 11_000,
+        addCheckoutMs: 22_000,
+        registrationMs: 33_000,
+        materializationMs: 44_000
+      }
+    })
+
+    expect(getTimeoutInputs().map((input) => input.placeholder)).toEqual([
+      'Host default',
+      'Host default',
+      'Host default',
+      'Host default'
+    ])
   })
 })

@@ -36,8 +36,12 @@ import { getProjectRuntimeSessionSummary } from './repository-runtime-session-su
 export { getRepositoryPaneSearchEntries }
 export { matchesRepositoryIdentitySearch } from './repository-identity-search'
 
-type RepositoryPaneRepoUpdate = Omit<Partial<Repo>, 'sourceControlAi'> & {
+type RepositoryPaneRepoUpdate = Omit<
+  Partial<Repo>,
+  'sourceControlAi' | 'worktreeCreateTimeouts'
+> & {
   sourceControlAi?: Repo['sourceControlAi'] | null
+  worktreeCreateTimeouts?: Repo['worktreeCreateTimeouts'] | null
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
@@ -170,6 +174,10 @@ export function RepositoryPane({
     ),
     translate('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
     translate('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
+    translate(
+      'auto.components.settings.repository.search.worktreeCreationTimeouts',
+      'Worktree Creation Timeouts'
+    ),
     translate('auto.components.settings.repository.search.projectRuntime', 'Project Runtime'),
     translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
   ])

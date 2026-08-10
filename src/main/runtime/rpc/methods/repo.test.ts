@@ -303,6 +303,47 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('normalizes worktree create timeout overrides and preserves clear requests', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({
+        id: 'repo-1',
+        path: '/srv/repo',
+        worktreeCreateTimeouts: { addCheckoutMs: 7_200_000 }
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: {
+          worktreeCreateTimeouts: {
+            refreshBaseRefMs: 500,
+            addCheckoutMs: 8_000_000,
+            registrationMs: -1
+          }
+        }
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { worktreeCreateTimeouts: null }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenNthCalledWith(1, 'repo-1', {
+      worktreeCreateTimeouts: {
+        refreshBaseRefMs: 1_000,
+        addCheckoutMs: 7_200_000
+      }
+    })
+    expect(runtime.updateRepo).toHaveBeenNthCalledWith(2, 'repo-1', {
+      worktreeCreateTimeouts: null
+    })
+  })
+
   it('persists resolved GitHub upstream metadata updates', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

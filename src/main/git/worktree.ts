@@ -48,6 +48,7 @@ export type GitWorktreeExecOptions = {
   wslDistro?: string
   signal?: AbortSignal
   timeout?: number
+  detectSparseCheckout?: boolean
 }
 
 type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
@@ -55,6 +56,8 @@ type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
 }
 
 export type AddWorktreeOptions = GitWorktreeExecOptions & {
+  refreshTimeout?: number
+  addCheckoutDeadline?: { at?: number }
   checkoutExistingBranch?: boolean
   suggestLocalBaseRefUpdate?: boolean
   remoteTrackingBase?: {
@@ -69,6 +72,8 @@ export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   forceBranchDelete?: boolean
   knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'>
 }
+
+type FailedWorktreeCreateRollbackOptions = Pick<GitWorktreeExecOptions, 'wslDistro'>
 
 type LocalBaseRefRefreshability =
   | {
@@ -86,6 +91,27 @@ type LocalBaseRefRefreshability =
       refreshable: false
       result: LocalBaseRefRefreshResult
     }
+
+type WorktreeGitCommand = (args: string[], cwd: string) => ReturnType<typeof gitExecFileAsync>
+
+type WorktreeCreateRefreshStage = {
+  execute: WorktreeGitCommand
+  options: GitWorktreeExecOptions
+}
+
+class WorktreeCreateRefreshTimeoutError extends Error {
+  constructor() {
+    super('Worktree base ref refresh timed out.')
+    this.name = 'WorktreeCreateRefreshTimeoutError'
+  }
+}
+
+class WorktreeCreateAddCheckoutTimeoutError extends Error {
+  constructor() {
+    super('Worktree add and checkout timed out.')
+    this.name = 'WorktreeCreateAddCheckoutTimeoutError'
+  }
+}
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
@@ -182,14 +208,61 @@ function parseRevListDrift(output: string): { ahead: number; behind: number } | 
   return counts.status === 'ok' ? { ahead: counts.ahead, behind: counts.behind } : null
 }
 
+function isGitCommandTimeout(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+  const details = error as { killed?: unknown; signal?: unknown }
+  return (
+    getErrorCode(error) === 'ETIMEDOUT' ||
+    details.killed === true ||
+    details.signal === 'SIGTERM' ||
+    details.signal === 'SIGKILL' ||
+    /\btimed out\b/i.test(getErrorText(error))
+  )
+}
+
+function createWorktreeRefreshStage(options: GitWorktreeExecOptions): WorktreeCreateRefreshStage {
+  const timeout =
+    typeof options.timeout === 'number' && Number.isFinite(options.timeout) && options.timeout > 0
+      ? options.timeout
+      : undefined
+  const deadlineAt = timeout === undefined ? undefined : Date.now() + timeout
+  const execute: WorktreeGitCommand = async (args, cwd) => {
+    const remaining = deadlineAt === undefined ? undefined : deadlineAt - Date.now()
+    if (remaining !== undefined && remaining <= 0) {
+      throw new WorktreeCreateRefreshTimeoutError()
+    }
+    try {
+      return await gitExecFileAsync(
+        args,
+        gitExecOptions(cwd, {
+          ...options,
+          ...(remaining === undefined ? {} : { timeout: remaining })
+        })
+      )
+    } catch (error) {
+      if (
+        error instanceof WorktreeCreateRefreshTimeoutError ||
+        (deadlineAt !== undefined && isGitCommandTimeout(error))
+      ) {
+        throw new WorktreeCreateRefreshTimeoutError()
+      }
+      throw error
+    }
+  }
+  return { execute, options }
+}
+
 async function evaluateLocalBaseRefRefreshability(
   repoPath: string,
   baseBranch: string,
   remoteTrackingRef: string,
   remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase'],
-  options: GitWorktreeExecOptions = {},
+  stage: WorktreeCreateRefreshStage = createWorktreeRefreshStage({}),
   shouldInspectOwner: (behind: number) => boolean = () => true
 ): Promise<LocalBaseRefRefreshability | undefined> {
+  const { execute, options } = stage
   const parsed = parseRemoteTrackingLocalBaseRef(baseBranch, remoteTrackingRef, remoteTrackingBase)
   if (!parsed) {
     return undefined
@@ -202,9 +275,9 @@ async function evaluateLocalBaseRefRefreshability(
   let remoteOid = ''
   try {
     // Why: advisory and mutating paths must agree on "safe to fast-forward"; `rev-list A...B` proves no local-only commits and how far behind.
-    const { stdout } = await gitExecFileAsync(
+    const { stdout } = await execute(
       ['rev-list', '--left-right', '--count', `${parsed.fullRef}...${remoteTrackingRef}`],
-      gitExecOptions(repoPath, options)
+      repoPath
     )
     const parsedDrift = parseRevListDrift(stdout)
     if (!parsedDrift || parsedDrift.ahead !== 0) {
@@ -214,36 +287,36 @@ async function evaluateLocalBaseRefRefreshability(
       // Why: a current local ref yields no update suggestion, so the advisory path skips OID resolution and owner inspection.
       return undefined
     }
-    const { stdout: localOidOutput } = await gitExecFileAsync(
+    const { stdout: localOidOutput } = await execute(
       ['rev-parse', '--verify', `${parsed.fullRef}^{commit}`],
-      gitExecOptions(repoPath, options)
+      repoPath
     )
     localOid = localOidOutput.trim()
     if (!localOid) {
       return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
     }
-    const { stdout: remoteOidOutput } = await gitExecFileAsync(
+    const { stdout: remoteOidOutput } = await execute(
       ['rev-parse', '--verify', `${remoteTrackingRef}^{commit}`],
-      gitExecOptions(repoPath, options)
+      repoPath
     )
     remoteOid = remoteOidOutput.trim()
     if (!remoteOid) {
       return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
     }
-    await gitExecFileAsync(
-      ['merge-base', '--is-ancestor', localOid, remoteOid],
-      gitExecOptions(repoPath, options)
-    )
+    await execute(['merge-base', '--is-ancestor', localOid, remoteOid], repoPath)
     drift = parsedDrift
-  } catch {
+  } catch (error) {
+    if (error instanceof WorktreeCreateRefreshTimeoutError) {
+      throw error
+    }
     return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
   }
 
   try {
     // Why: if the local base branch is checked out, only update it when that owner worktree is clean.
-    const { stdout: worktreeListOutput } = await gitExecFileAsync(
+    const { stdout: worktreeListOutput } = await execute(
       ['worktree', 'list', '--porcelain'],
-      gitExecOptions(repoPath, options)
+      repoPath
     )
     const worktrees = parseWorktreeList(
       translateWslOutputPaths(worktreeListOutput, repoPath, options)
@@ -251,9 +324,9 @@ async function evaluateLocalBaseRefRefreshability(
     const ownerWorktree = worktrees.find((wt) => wt.branch === parsed.fullRef)
 
     if (ownerWorktree) {
-      const { stdout: status } = await gitExecFileAsync(
+      const { stdout: status } = await execute(
         ['status', '--porcelain', '--untracked-files=no'],
-        gitExecOptions(ownerWorktree.path, options)
+        ownerWorktree.path
       )
       if (status.trim()) {
         return {
@@ -287,7 +360,10 @@ async function evaluateLocalBaseRefRefreshability(
       remoteOid,
       behind: drift.behind
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof WorktreeCreateRefreshTimeoutError) {
+      throw error
+    }
     return { refreshable: false, result: { ...resultBase, status: 'skipped_error' } }
   }
 }
@@ -297,14 +373,15 @@ async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
   baseBranch: string,
   remoteTrackingRef: string,
   remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase'],
-  options: GitWorktreeExecOptions = {}
+  options: GitWorktreeExecOptions = {},
+  stage = createWorktreeRefreshStage(options)
 ): Promise<LocalBaseRefUpdateSuggestion | undefined> {
   const evaluation = await evaluateLocalBaseRefRefreshability(
     repoPath,
     baseBranch,
     remoteTrackingRef,
     remoteTrackingBase,
-    options,
+    stage,
     (behind) => behind > 0
   )
   if (!evaluation?.refreshable || evaluation.behind <= 0) {
@@ -801,7 +878,71 @@ export async function listWorktreesStrict(
     const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
     return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
   })
-  return annotateSparseCheckoutStatus(worktrees)
+  return options.detectSparseCheckout === false
+    ? worktrees
+    : annotateSparseCheckoutStatus(worktrees)
+}
+
+function remainingStageTimeout(
+  deadlineAt: number | undefined,
+  fallback: number | undefined
+): number | undefined {
+  if (deadlineAt === undefined) {
+    return fallback
+  }
+  const remaining = deadlineAt - Date.now()
+  if (remaining <= 0) {
+    throw new WorktreeCreateAddCheckoutTimeoutError()
+  }
+  return remaining
+}
+
+function mayHaveCompletedWorktreeAdd(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const details = error as Error & {
+    code?: unknown
+    killed?: unknown
+    signal?: unknown
+  }
+  return (
+    error.name === 'AbortError' ||
+    error.message.toLowerCase().includes('timed out') ||
+    details.code === 'ETIMEDOUT' ||
+    details.killed === true ||
+    details.signal === 'SIGTERM'
+  )
+}
+
+export async function rollbackFailedWorktreeCreate(
+  repoPath: string,
+  worktreePath: string,
+  branch: string,
+  checkoutExistingBranch: boolean,
+  options: FailedWorktreeCreateRollbackOptions = {}
+): Promise<boolean> {
+  const cleanupOptions = {
+    ...options,
+    timeout: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
+    detectSparseCheckout: false
+  }
+  const created = (await listWorktreesStrict(repoPath, cleanupOptions)).find(
+    (worktree) =>
+      areWorktreePathsEqual(worktree.path, worktreePath) &&
+      normalizeLocalBranchRef(worktree.branch ?? '') === branch
+  )
+  if (!created) {
+    return false
+  }
+  await removeWorktree(repoPath, created.path, true, {
+    ...options,
+    timeout: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
+    knownRemovedWorktree: created,
+    deleteBranch: !checkoutExistingBranch,
+    forceBranchDelete: !checkoutExistingBranch
+  })
+  return true
 }
 
 async function annotateSparseCheckoutStatus(
@@ -836,14 +977,15 @@ async function refreshLocalBaseRefForWorktreeCreate(
   baseBranch: string,
   remoteTrackingRef: string,
   remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase'],
-  options: GitWorktreeExecOptions = {}
+  options: GitWorktreeExecOptions = {},
+  stage = createWorktreeRefreshStage(options)
 ): Promise<LocalBaseRefRefreshResult | undefined> {
   const evaluation = await evaluateLocalBaseRefRefreshability(
     repoPath,
     baseBranch,
     remoteTrackingRef,
     remoteTrackingBase,
-    options
+    stage
   )
   if (!evaluation) {
     return undefined
@@ -855,9 +997,9 @@ async function refreshLocalBaseRefForWorktreeCreate(
   const resultBase = { baseRef: evaluation.baseRef, localBranch: evaluation.localBranch }
   try {
     if (evaluation.ownerWorktreePath) {
-      const { stdout: worktreeListOutput } = await gitExecFileAsync(
+      const { stdout: worktreeListOutput } = await stage.execute(
         ['worktree', 'list', '--porcelain'],
-        gitExecOptions(repoPath, options)
+        repoPath
       )
       const worktrees = parseWorktreeList(
         translateWslOutputPaths(worktreeListOutput, repoPath, options)
@@ -866,9 +1008,9 @@ async function refreshLocalBaseRefForWorktreeCreate(
       if (!currentOwner || currentOwner.path !== evaluation.ownerWorktreePath) {
         return { ...resultBase, status: 'skipped_error' }
       }
-      const { stdout: status } = await gitExecFileAsync(
+      const { stdout: status } = await stage.execute(
         ['status', '--porcelain', '--untracked-files=no'],
-        gitExecOptions(currentOwner.path, options)
+        currentOwner.path
       )
       if (status.trim()) {
         return {
@@ -877,20 +1019,20 @@ async function refreshLocalBaseRefForWorktreeCreate(
           ownerWorktreePath: currentOwner.path
         }
       }
-      await gitExecFileAsync(
-        ['reset', '--hard', evaluation.remoteOid],
-        gitExecOptions(currentOwner.path, options)
-      )
+      await stage.execute(['reset', '--hard', evaluation.remoteOid], currentOwner.path)
       return { ...resultBase, status: 'updated', ownerWorktreePath: currentOwner.path }
     }
 
     // Why: no owner worktree — fast-forward the bare ref; the expected-old-OID form is a no-op-safe CAS if the ref moved since evaluation.
-    await gitExecFileAsync(
+    await stage.execute(
       ['update-ref', evaluation.fullRef, evaluation.remoteOid, evaluation.localOid],
-      gitExecOptions(repoPath, options)
+      repoPath
     )
     return { ...resultBase, status: 'updated' }
-  } catch {
+  } catch (error) {
+    if (error instanceof WorktreeCreateRefreshTimeoutError) {
+      throw error
+    }
     // update-ref/reset can fail on locked refs or odd worktree states; worktree creation should still proceed.
     return { ...resultBase, status: 'skipped_error' }
   }
@@ -955,9 +1097,34 @@ async function performAddWorktree(
     // Why: --no-track avoids inheriting the base's upstream so `git status` won't misreport "behind by N" pre-publish; first push sets it (see push.autoSetupRemote below).
     args.push('--no-track', '-b', branch, worktreePath)
     if (baseBranch) {
-      effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
-        hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
-      )
+      const refreshOptions = {
+        ...options,
+        timeout: options.refreshTimeout ?? options.timeout
+      }
+      const refreshStage =
+        refreshLocalBaseRef || options.suggestLocalBaseRefUpdate
+          ? createWorktreeRefreshStage(refreshOptions)
+          : undefined
+      effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, async (qualifiedRef) => {
+        if (!refreshStage) {
+          return hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+        }
+        try {
+          await refreshStage.execute(
+            ['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`],
+            repoPath
+          )
+          return true
+        } catch (error) {
+          if (error instanceof WorktreeCreateRefreshTimeoutError) {
+            if (refreshLocalBaseRef) {
+              throw error
+            }
+            return hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+          }
+          return false
+        }
+      })
       // Why: resolve the creation base first to distinguish remote-tracking refs from slash-containing local branches (mutation gated behind the explicit setting).
       if (refreshLocalBaseRef) {
         localBaseRefRefresh = await refreshLocalBaseRefForWorktreeCreate(
@@ -965,32 +1132,77 @@ async function performAddWorktree(
           baseBranch,
           effectiveBase,
           options.remoteTrackingBase,
-          options
+          refreshOptions,
+          refreshStage
         )
       } else if (options.suggestLocalBaseRefUpdate) {
-        localBaseRefUpdateSuggestion = await getLocalBaseRefUpdateSuggestionForWorktreeCreate(
-          repoPath,
-          baseBranch,
-          effectiveBase,
-          options.remoteTrackingBase,
-          options
-        )
+        try {
+          localBaseRefUpdateSuggestion = await getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+            repoPath,
+            baseBranch,
+            effectiveBase,
+            options.remoteTrackingBase,
+            refreshOptions,
+            refreshStage
+          )
+        } catch (error) {
+          if (!(error instanceof WorktreeCreateRefreshTimeoutError)) {
+            throw error
+          }
+        }
       }
       args.push(effectiveBase)
     }
   }
-  await gitExecFileAsync(args, {
-    ...gitExecOptions(repoPath, options),
-    // Why: bound the checkout so a OneDrive cloud-placeholder stall (STA-1292) fails fast instead of hanging.
-    timeout: WORKTREE_ADD_TIMEOUT_MS
+  const addDeadlineAt = options.timeout ? Date.now() + options.timeout : undefined
+  if (options.addCheckoutDeadline) {
+    options.addCheckoutDeadline.at = addDeadlineAt
+  }
+  const addStageOptions = (): AddWorktreeOptions => ({
+    ...options,
+    timeout: remainingStageTimeout(addDeadlineAt, options.timeout)
   })
+  const worktreeAddOptions = options.addCheckoutDeadline ? addStageOptions() : options
+  try {
+    await gitExecFileAsync(args, {
+      ...gitExecOptions(repoPath, worktreeAddOptions),
+      // Why: bound the checkout so a OneDrive cloud-placeholder stall (STA-1292) fails fast instead of hanging.
+      timeout: worktreeAddOptions.timeout ?? WORKTREE_ADD_TIMEOUT_MS
+    })
+  } catch (error) {
+    if (!mayHaveCompletedWorktreeAdd(error)) {
+      throw error
+    }
+    try {
+      await rollbackFailedWorktreeCreate(
+        repoPath,
+        worktreePath,
+        branch,
+        options.checkoutExistingBranch === true,
+        options.wslDistro ? { wslDistro: options.wslDistro } : {}
+      )
+    } catch (cleanupError) {
+      const wrapped = error instanceof Error ? error : new Error(String(error))
+      wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${worktreePath}" may need manual removal)`
+      console.warn(
+        `[git/worktree] Failed to reconcile timed-out create at "${worktreePath}"`,
+        cleanupError
+      )
+      throw wrapped
+    }
+    throw error
+  }
 
   if (options.checkoutExistingBranch) {
     return localBaseRefRefresh ? { localBaseRefRefresh } : {}
   }
 
   if (effectiveBase) {
-    await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, options)
+    const remaining = addDeadlineAt === undefined ? options.timeout : addDeadlineAt - Date.now()
+    await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, {
+      ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+      timeout: remaining === undefined ? undefined : Math.max(1_000, remaining)
+    })
   }
 
   // SSH parity: relay's addWorktreeOp (src/relay/git-handler-worktree-ops.ts) mirrors this — change both in lockstep.
@@ -1003,7 +1215,10 @@ async function performAddWorktree(
     let alreadySet = false
     try {
       await gitExecFileAsync(['config', '--get', 'push.autoSetupRemote'], {
-        ...gitExecOptions(worktreePath, options)
+        ...gitExecOptions(worktreePath, {
+          ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+          timeout: remainingStageTimeout(addDeadlineAt, options.timeout)
+        })
       })
       alreadySet = true
     } catch (readError) {
@@ -1015,7 +1230,10 @@ async function performAddWorktree(
     }
     if (!alreadySet) {
       await gitExecFileAsync(['config', '--local', 'push.autoSetupRemote', 'true'], {
-        ...gitExecOptions(worktreePath, options)
+        ...gitExecOptions(worktreePath, {
+          ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+          timeout: remainingStageTimeout(addDeadlineAt, options.timeout)
+        })
       })
     }
   } catch (error) {
@@ -1038,6 +1256,11 @@ export async function addSparseWorktree(
 ): Promise<AddWorktreeResult> {
   let created = false
   let addResult: AddWorktreeResult = {}
+  const addCheckoutDeadline: { at?: number } = {}
+  const stageOptions = (): AddWorktreeOptions => ({
+    ...options,
+    timeout: remainingStageTimeout(addCheckoutDeadline.at, options.timeout)
+  })
   try {
     addResult = await addWorktree(
       repoPath,
@@ -1046,18 +1269,18 @@ export async function addSparseWorktree(
       baseBranch,
       refreshLocalBaseRef,
       true,
-      options
+      { ...options, addCheckoutDeadline }
     )
     created = true
     await gitExecFileAsync(
       ['sparse-checkout', 'init', '--cone'],
-      gitExecOptions(worktreePath, options)
+      gitExecOptions(worktreePath, stageOptions())
     )
     await gitExecFileAsync(
       ['sparse-checkout', 'set', '--', ...directories],
-      gitExecOptions(worktreePath, options)
+      gitExecOptions(worktreePath, stageOptions())
     )
-    await gitExecFileAsync(['checkout', branch], gitExecOptions(worktreePath, options))
+    await gitExecFileAsync(['checkout', branch], gitExecOptions(worktreePath, stageOptions()))
     return addResult
   } catch (error) {
     const wrapped: SparseWorktreeCreateError =

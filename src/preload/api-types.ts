@@ -1273,6 +1273,7 @@ export type PreloadApi = {
         >
       > & {
         sourceControlAi?: Repo['sourceControlAi'] | null
+        worktreeCreateTimeouts?: Repo['worktreeCreateTimeouts'] | null
         externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       }
     }) => Promise<Repo>

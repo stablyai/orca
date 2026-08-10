@@ -32,6 +32,7 @@ import {
   assertCreateParentFlagsCompatible,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
+import { getWorktreeCreateTimeoutConfig } from './worktree-create-timeouts'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
 
 type HookWarningResult = {
@@ -198,6 +199,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree create': async ({ flags, client, cwd, json }) => {
     assertCreateParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
+    const timeoutConfig = getWorktreeCreateTimeoutConfig(flags)
     const callerTerminalHandle =
       typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
       process.env.ORCA_TERMINAL_HANDLE.length > 0
@@ -229,32 +231,37 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
-    const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
-      repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
-      name: getRequiredStringFlag(flags, 'name'),
-      baseBranch: getOptionalStringFlag(flags, 'base-branch'),
-      linkedIssue: getOptionalNumberFlag(flags, 'issue'),
-      ...linearIssueLink,
-      comment: getOptionalStringFlag(flags, 'comment'),
-      runHooks: flags.get('run-hooks') === true,
-      activate: flags.get('activate') === true || flags.get('run-hooks') === true,
-      ...(setupDecision ? { setupDecision } : {}),
-      parentWorktree: explicitParentWorktree,
-      ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
-      ...(envParentWorkspace ? { envParentWorkspace } : {}),
-      ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
-      noParent,
-      callerTerminalHandle,
-      // Why: marks the workspace as CLI-created so the sidebar can badge and
-      // filter it. Sent on every `worktree create` — hand-typed or agent-run.
-      cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {},
-      ...(startupAgent
-        ? {
-            startupAgent,
-            startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? ''
-          }
-        : {})
-    })
+    const result = await client.call<RuntimeWorktreeCreateResult>(
+      'worktree.create',
+      {
+        repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
+        name: getRequiredStringFlag(flags, 'name'),
+        baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+        linkedIssue: getOptionalNumberFlag(flags, 'issue'),
+        ...linearIssueLink,
+        comment: getOptionalStringFlag(flags, 'comment'),
+        runHooks: flags.get('run-hooks') === true,
+        activate: flags.get('activate') === true || flags.get('run-hooks') === true,
+        ...(setupDecision ? { setupDecision } : {}),
+        ...(timeoutConfig.timeouts ? { timeouts: timeoutConfig.timeouts } : {}),
+        parentWorktree: explicitParentWorktree,
+        ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
+        ...(envParentWorkspace ? { envParentWorkspace } : {}),
+        ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
+        noParent,
+        callerTerminalHandle,
+        // Why: marks the workspace as CLI-created so the sidebar can badge and
+        // filter it. Sent on every `worktree create` — hand-typed or agent-run.
+        cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {},
+        ...(startupAgent
+          ? {
+              startupAgent,
+              startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? ''
+            }
+          : {})
+      },
+      { timeoutMs: timeoutConfig.transportTimeoutMs }
+    )
     printHookWarning(result.result, json)
     printLineageSummary(result.result, json)
     printResult(result, json, formatWorktreeShow)

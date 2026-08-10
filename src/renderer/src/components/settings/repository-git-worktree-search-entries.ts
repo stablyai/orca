@@ -58,6 +58,36 @@ export function getRepositoryGitWorktreeSearchEntries(repo: Repo): SettingsSearc
     },
     {
       title: translate(
+        'auto.components.settings.repository.search.worktreeCreationTimeouts',
+        'Worktree Creation Timeouts'
+      ),
+      description: translate(
+        'auto.components.settings.repository.search.worktreeCreationTimeoutsDescription',
+        'Override worktree creation stage timeouts for this project.'
+      ),
+      keywords: [
+        repo.displayName,
+        ...translateSearchKeyword('auto.components.settings.repository.search.timeout', 'timeout'),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.slowNetwork',
+          'slow network'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.gitWorktreeAdd',
+          'git worktree add'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.registration',
+          'registration'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.materialization',
+          'materialization'
+        )
+      ]
+    },
+    {
+      title: translate(
         'auto.components.settings.repository.search.1f0f20bbb6',
         'Sparse Checkout Presets'
       ),

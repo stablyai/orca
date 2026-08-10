@@ -6319,6 +6319,73 @@
           "compareBaseRepositoryDefault": "Repository default",
           "compareBaseBranchUpstream": "Branch upstream"
         },
+        "WorktreeCreateTimeoutSettings": {
+          "refreshBaseRefMs": {
+            "label": "Refresh base reference",
+            "description": "Fetching the remote base branch before creating the checkout."
+          },
+          "addCheckoutMs": {
+            "label": "Add checkout",
+            "description": "Running git worktree add and creating the checkout."
+          },
+          "registrationMs": {
+            "label": "Workspace registration",
+            "description": "Waiting for the new workspace to appear in Orca."
+          },
+          "materializationMs": {
+            "label": "Workspace materialization",
+            "description": "Waiting for checkout files and workspace metadata to become ready."
+          },
+          "title": "Worktree Creation Timeouts",
+          "description": "Set how long Orca waits for each worktree creation stage before reporting a timeout.",
+          "advanced": "Advanced",
+          "seconds": "seconds",
+          "keyword": {
+            "advanced": "advanced",
+            "timeout": "timeout",
+            "seconds": "seconds",
+            "slowNetwork": "slow network",
+            "remoteHost": "remote host",
+            "refreshBase": "refresh base",
+            "gitWorktreeAdd": "git worktree add",
+            "registration": "registration",
+            "materialization": "materialization"
+          }
+        },
+        "RepositoryWorktreeCreateTimeoutSettings": {
+          "refreshBaseRefMs": {
+            "label": "Refresh base reference",
+            "description": "Fetching the remote base branch before creating the checkout."
+          },
+          "addCheckoutMs": {
+            "label": "Add checkout",
+            "description": "Running git worktree add and creating the checkout."
+          },
+          "registrationMs": {
+            "label": "Workspace registration",
+            "description": "Waiting for the new workspace to appear in Orca."
+          },
+          "materializationMs": {
+            "label": "Workspace materialization",
+            "description": "Waiting for checkout files and workspace metadata to become ready."
+          },
+          "title": "Worktree Creation Timeouts",
+          "description": "Override worktree creation stage timeouts for this project.",
+          "inheritance": "Leave a field empty to inherit the global setting on the execution host.",
+          "useGlobal": "Use Global",
+          "hostDefault": "Host default",
+          "seconds": "seconds",
+          "keyword": {
+            "advanced": "advanced",
+            "timeout": "timeout",
+            "seconds": "seconds",
+            "slowNetwork": "slow network",
+            "refreshBase": "refresh base",
+            "gitWorktreeAdd": "git worktree add",
+            "registration": "registration",
+            "materialization": "materialization"
+          }
+        },
         "HiddenExperimentalGroup": {
           "d0f914a528": "Placeholder toggle",
           "1014ddbfaf": "Does nothing today. Reserved as the first slot for hidden experimental options.",
@@ -9041,6 +9108,14 @@
             "f41cef5083": "base ref",
             "f571081ec4": "Default base branch or ref when creating worktrees.",
             "094adbe930": "Default Worktree Base",
+            "worktreeCreationTimeouts": "Worktree Creation Timeouts",
+            "worktreeCreationTimeoutsDescription": "Override worktree creation stage timeouts for this project.",
+            "timeout": "timeout",
+            "slowNetwork": "slow network",
+            "refreshBase": "refresh base",
+            "gitWorktreeAdd": "git worktree add",
+            "registration": "registration",
+            "materialization": "materialization",
             "27733eb6c1": "favicon",
             "1e73e840ff": "emoji",
             "cb4b4de666": "avatar",

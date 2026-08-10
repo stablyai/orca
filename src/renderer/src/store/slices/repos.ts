@@ -42,6 +42,7 @@ import {
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
+import { normalizeWorktreeCreateTimeoutOverrides } from '../../../../shared/worktree-create-timeouts'
 import { applyManualRepoOrder, getManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
@@ -136,6 +137,7 @@ export type RepoUpdate = Partial<
   >
 > & {
   sourceControlAi?: Repo['sourceControlAi'] | null
+  worktreeCreateTimeouts?: Repo['worktreeCreateTimeouts'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
 }
 
@@ -259,6 +261,12 @@ function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   }
   if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
     sanitized.worktreeBasePath = sanitized.worktreeBasePath.trim() || undefined
+  }
+  if ('worktreeCreateTimeouts' in sanitized && sanitized.worktreeCreateTimeouts !== null) {
+    const worktreeCreateTimeouts = normalizeWorktreeCreateTimeoutOverrides(
+      sanitized.worktreeCreateTimeouts
+    )
+    sanitized.worktreeCreateTimeouts = worktreeCreateTimeouts
   }
   if (
     'forkSyncMode' in sanitized &&
@@ -3571,6 +3579,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             let mergedRepo: Repo = r
             const {
               sourceControlAi,
+              worktreeCreateTimeouts,
               externalWorktreeDiscoverySuppressedAt,
               ...updatesWithoutClearSentinels
             } = sanitizedUpdates
@@ -3581,6 +3590,15 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               mergedRepo = repoWithoutSourceControlAi
             } else if (sourceControlAi !== undefined) {
               mergedRepo = { ...mergedRepo, sourceControlAi }
+            }
+            if (worktreeCreateTimeouts === null) {
+              const {
+                worktreeCreateTimeouts: _worktreeCreateTimeouts,
+                ...repoWithoutWorktreeCreateTimeouts
+              } = mergedRepo
+              mergedRepo = repoWithoutWorktreeCreateTimeouts
+            } else if (worktreeCreateTimeouts !== undefined) {
+              mergedRepo = { ...mergedRepo, worktreeCreateTimeouts }
             }
             if (externalWorktreeDiscoverySuppressedAt === null) {
               const {

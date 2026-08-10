@@ -23,6 +23,9 @@ type WorktreeLinkedPathOptions = {
   platform?: NodeJS.Platform
   cloneWorktreePath?: (source: string, target: string, sourceIsDirectory: boolean) => Promise<void>
   apfsCloneDeps?: ApfsCloneDeps
+  /** Stop before starting another path once this deadline has passed. */
+  deadlineAt?: number
+  onDeadlineExceeded?: () => void
   /** Copy-mode only. Overridable so tests can trip the bound without writing
    *  gigabytes to disk. */
   copyBudget?: WorktreeCopyBudget
@@ -203,8 +206,13 @@ async function materializeWorktreePaths(
   // are refused for the same reason one `node_modules` entry is.
   const copyBudget = createWorktreeCopyBudgetTracker(options.copyBudget)
   const skipped: SkippedWorktreeCopyPath[] = []
+  let stoppedEarly = false
 
   for (const rawPath of paths) {
+    if (effectiveOptions.deadlineAt !== undefined && Date.now() >= effectiveOptions.deadlineAt) {
+      stoppedEarly = true
+      break
+    }
     const safePath = getSafeRelativePath(rawPath)
     if (!safePath.safe) {
       // Users can only configure paths relative to the repo root; absolute
@@ -302,6 +310,9 @@ async function materializeWorktreePaths(
         error
       )
     }
+  }
+  if (stoppedEarly) {
+    effectiveOptions.onDeadlineExceeded?.()
   }
   return skipped
 }

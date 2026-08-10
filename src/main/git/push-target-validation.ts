@@ -4,6 +4,8 @@ import { gitExecFileAsync } from './runner'
 
 type GitExecOptions = {
   wslDistro?: string
+  signal?: AbortSignal
+  timeout?: number
 }
 
 export async function validateGitPushTarget(
