@@ -282,8 +282,8 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity.
-const SCHEMA_VERSION = 26
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 Run lineage.
+const SCHEMA_VERSION = 27
 
 function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -326,6 +326,7 @@ export class OrchestrationDb {
         home_database         TEXT NOT NULL DEFAULT 'this_database',
         coordinator_handle    TEXT,
         coordinator_pane_key  TEXT,
+        parent_run_id         TEXT,
         consumer_generation   INTEGER NOT NULL DEFAULT 0,
         legacy                INTEGER NOT NULL DEFAULT 0,
         created_at            TEXT NOT NULL DEFAULT (datetime('now')),
@@ -986,6 +987,17 @@ export class OrchestrationDb {
       }
       if (current < 26) {
         migrateMutationReceiptCapacity(this.db)
+      }
+      // Why: the index lives here, not in createTables — createTables runs first and would fail on a
+      // pre-v27 database whose runs table has no parent_run_id column yet.
+      if (current < 27) {
+        if (!this.hasColumn('runs', 'parent_run_id')) {
+          this.db.exec('ALTER TABLE runs ADD COLUMN parent_run_id TEXT')
+        }
+        this.db.exec(`
+          CREATE INDEX IF NOT EXISTS idx_runs_parent
+            ON runs(parent_run_id) WHERE parent_run_id IS NOT NULL;
+        `)
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
@@ -2206,10 +2218,13 @@ export class OrchestrationDb {
 
   // ── Runs ──
 
+  // Why: the parent is fixed when the child id is minted and never rewritten, so no Run can
+  // become its own ancestor and no cycle check is needed.
   createRun(params: {
     objective: string
     coordinatorHandle: string
     coordinatorPaneKey: string
+    parentRunId?: string | null
   }): RunRow {
     const id = generateId('run')
     this.db.exec('BEGIN IMMEDIATE')
@@ -2218,17 +2233,35 @@ export class OrchestrationDb {
       this.db
         .prepare(
           `INSERT INTO runs (
-             id, objective, coordinator_handle, coordinator_pane_key,
+             id, objective, coordinator_handle, coordinator_pane_key, parent_run_id,
              consumer_generation, legacy
-           ) VALUES (?, ?, ?, ?, 1, 0)`
+           ) VALUES (?, ?, ?, ?, ?, 1, 0)`
         )
-        .run(id, params.objective, params.coordinatorHandle, params.coordinatorPaneKey)
+        .run(
+          id,
+          params.objective,
+          params.coordinatorHandle,
+          params.coordinatorPaneKey,
+          params.parentRunId ?? null
+        )
       this.db.exec('COMMIT')
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error
     }
     return this.getRun(id) as RunRow
+  }
+
+  listChildRunIds(runId: string): string[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT id FROM runs
+           WHERE parent_run_id = ? AND legacy = 0
+           ORDER BY created_at ASC, id ASC`
+        )
+        .all(runId) as { id: string }[]
+    ).map((row) => row.id)
   }
 
   bindRun(params: {
@@ -2381,11 +2414,17 @@ export class OrchestrationDb {
     return run ? exposeRunTimestamps(run) : undefined
   }
 
-  listRuns(params: { limit?: number; cursor?: string } = {}): RunListPage {
+  listRuns(params: { limit?: number; cursor?: string; parentRunId?: string } = {}): RunListPage {
+    const parentClause = params.parentRunId ? 'parent_run_id = ?' : undefined
+    const parentArgs = params.parentRunId ? [params.parentRunId] : []
     if (params.limit === undefined && params.cursor === undefined) {
       const rows = this.db
-        .prepare('SELECT * FROM runs ORDER BY created_at DESC, id DESC')
-        .all() as RunRow[]
+        .prepare(
+          `SELECT * FROM runs
+           ${parentClause ? `WHERE ${parentClause}` : ''}
+           ORDER BY created_at DESC, id DESC`
+        )
+        .all(...parentArgs) as RunRow[]
       return { runs: rows.map(exposeRunTimestamps), nextCursor: null }
     }
     const limit = Math.min(
@@ -2398,14 +2437,19 @@ export class OrchestrationDb {
         ? this.db
             .prepare(
               `SELECT * FROM runs
-             WHERE created_at < ? OR (created_at = ? AND id < ?)
+             WHERE ${parentClause ? `${parentClause} AND ` : ''}
+                   (created_at < ? OR (created_at = ? AND id < ?))
              ORDER BY created_at DESC, id DESC
              LIMIT ?`
             )
-            .all(cursor.createdAt, cursor.createdAt, cursor.id, limit + 1)
+            .all(...parentArgs, cursor.createdAt, cursor.createdAt, cursor.id, limit + 1)
         : this.db
-            .prepare('SELECT * FROM runs ORDER BY created_at DESC, id DESC LIMIT ?')
-            .all(limit + 1)
+            .prepare(
+              `SELECT * FROM runs
+               ${parentClause ? `WHERE ${parentClause}` : ''}
+               ORDER BY created_at DESC, id DESC LIMIT ?`
+            )
+            .all(...parentArgs, limit + 1)
     ) as RunRow[]
     const hasMore = rows.length > limit
     const pageRows = hasMore ? rows.slice(0, limit) : rows

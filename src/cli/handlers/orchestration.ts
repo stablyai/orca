@@ -471,13 +471,27 @@ function safeJson(value: unknown): string {
 export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration run-create': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const parent = getOptionalStringFlag(flags, 'parent')
     const result = await callMutation<{
-      run: { id: string; objective: string; consumer_generation: number }
+      run: {
+        id: string
+        objective: string
+        consumer_generation: number
+        parent_run_id: string | null
+      }
     }>(client, flags, 'orchestration.runCreate', {
       objective: getRequiredStringFlag(flags, 'objective'),
-      from
+      from,
+      ...(parent ? { parent } : {})
     })
-    printResult(result, json, (r) => `Run ${r.run.id} created and bound: ${r.run.objective}`)
+    printResult(
+      result,
+      json,
+      (r) =>
+        `Run ${r.run.id} created and bound: ${r.run.objective}${
+          r.run.parent_run_id ? `\nparent Run ${r.run.parent_run_id}` : ''
+        }`
+    )
   },
 
   'orchestration run-use': async ({ flags, client, cwd, json }) => {
@@ -503,12 +517,14 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration run-list': async ({ flags, client, json }) => {
+    const parent = getOptionalStringFlag(flags, 'parent')
     const result = await client.call<{
-      runs: { id: string; objective: string; legacy: number }[]
+      runs: { id: string; objective: string; legacy: number; parent_run_id: string | null }[]
       nextCursor: string | null
     }>('orchestration.runList', {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit') ?? ORCHESTRATION_RUN_PAGE_LIMIT,
-      cursor: getOptionalStringFlag(flags, 'cursor')
+      cursor: getOptionalStringFlag(flags, 'cursor'),
+      ...(parent ? { parent } : {})
     })
     printResult(result, json, (r) => {
       const rows =
@@ -516,7 +532,10 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
           ? 'No Runs found.'
           : r.runs
               .map(
-                (run) => `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`
+                (run) =>
+                  `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}${
+                    run.parent_run_id ? ` (parent ${run.parent_run_id})` : ''
+                  }`
               )
               .join('\n')
       return r.nextCursor ? `${rows}\nMore Runs: --cursor ${r.nextCursor}` : rows
@@ -530,15 +549,19 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         objective: string
         consumer_generation: number
         legacy: number
+        parent_run_id: string | null
         created_at: string
       }
+      childRunIds?: string[]
     }>('orchestration.runShow', { id: getRequiredStringFlag(flags, 'id') })
     printResult(
       result,
       json,
       (r) =>
         `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}\n` +
-        `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}`
+        `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}\n` +
+        `parentRunId: ${r.run.parent_run_id ?? 'null'}\n` +
+        `childRunIds: ${r.childRunIds?.length ? r.childRunIds.join(',') : '[]'}`
     )
   },
 

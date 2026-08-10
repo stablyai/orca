@@ -98,6 +98,81 @@ describe('lightweight Run CLI handlers', () => {
     })
   })
 
+  it('passes an explicit parent Run and prints the lineage it got back', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        run: {
+          id: 'run_child',
+          objective: 'Alpha lane',
+          consumer_generation: 1,
+          parent_run_id: 'run_parent'
+        }
+      }
+    })
+    vi.mocked(printResult).mockClear()
+
+    await ORCHESTRATION_HANDLERS['orchestration run-create']({
+      flags: new Map<string, string | boolean>([
+        ['objective', 'Alpha lane'],
+        ['parent', 'run_parent']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: false
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.runCreate', {
+      objective: 'Alpha lane',
+      from: 'term_coord',
+      parent: 'run_parent'
+    })
+    const format = vi.mocked(printResult).mock.calls.at(-1)?.[2] as (value: unknown) => string
+    expect(
+      format({
+        run: { id: 'run_child', objective: 'Alpha lane', parent_run_id: 'run_parent' }
+      })
+    ).toBe('Run run_child created and bound: Alpha lane\nparent Run run_parent')
+  })
+
+  it('filters run-list by parent and shows both ends of the lineage in run-show', async () => {
+    callMock.mockResolvedValue({ result: { runs: [], nextCursor: null } })
+    vi.mocked(printResult).mockClear()
+
+    await ORCHESTRATION_HANDLERS['orchestration run-list']({
+      flags: new Map([['parent', 'run_parent']]),
+      client: { call: callMock },
+      json: true
+    } as never)
+    expect(callMock).toHaveBeenCalledWith('orchestration.runList', {
+      limit: 100,
+      cursor: undefined,
+      parent: 'run_parent'
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration run-show']({
+      flags: new Map([['id', 'run_parent']]),
+      client: { call: callMock },
+      json: false
+    } as never)
+    const format = vi.mocked(printResult).mock.calls.at(-1)?.[2] as (value: unknown) => string
+    expect(
+      format({
+        run: {
+          id: 'run_parent',
+          objective: 'Wave',
+          consumer_generation: 1,
+          legacy: 0,
+          parent_run_id: null,
+          created_at: '2026-08-10T00:00:00Z'
+        },
+        childRunIds: ['run_child']
+      })
+    ).toBe(
+      'run_parent Wave\nconsumer generation 1; created 2026-08-10T00:00:00Z\n' +
+        'parentRunId: null\nchildRunIds: run_child'
+    )
+  })
+
   it('passes explicit legacy takeover only when requested', async () => {
     callMock.mockResolvedValue({
       result: { run: { id: 'run_adopted', objective: 'Recovered work' } }

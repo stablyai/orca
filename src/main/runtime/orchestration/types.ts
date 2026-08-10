@@ -45,6 +45,7 @@ export type RunRow = {
   home_database: string
   coordinator_handle: string | null
   coordinator_pane_key: string | null
+  parent_run_id: string | null
   consumer_generation: number
   legacy: number
   created_at: string

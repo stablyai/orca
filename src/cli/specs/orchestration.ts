@@ -6,10 +6,12 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'run-create'],
     summary: 'Create and bind a lightweight orchestration Run',
-    usage: 'orca orchestration run-create --objective <text> [--from <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'objective', 'from', 'retry-request'],
+    usage:
+      'orca orchestration run-create --objective <text> [--parent <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'objective', 'parent', 'from', 'retry-request'],
     notes: [
       'A Run is a namespace and home inbox. It never schedules or places workers.',
+      '--parent records the Run this one nests under; a dispatched coordinator infers its own Dispatch Run when --parent is omitted.',
       '--retry-request is only for exact recovery after an unknown mutation result.'
     ]
   },
@@ -32,8 +34,10 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'run-list'],
     summary: 'List lightweight orchestration Runs',
-    usage: 'orca orchestration run-list [--limit <n>] [--cursor <cursor>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'cursor']
+    usage:
+      'orca orchestration run-list [--parent <run_id>] [--limit <n>] [--cursor <cursor>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'cursor', 'parent'],
+    notes: ['--parent lists only the Runs nested directly under that Run.']
   },
   {
     path: ['orchestration', 'run-show'],

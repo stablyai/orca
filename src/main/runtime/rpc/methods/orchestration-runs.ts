@@ -11,7 +11,8 @@ import { assertCallerHandleMatchesEvidence } from './orchestration-run-scope'
 
 const RunCreateParams = z.object({
   objective: requiredString('Missing --objective'),
-  from: requiredString('Missing coordinator terminal')
+  from: requiredString('Missing coordinator terminal'),
+  parent: OptionalString
 })
 
 const RunUseParams = z.object({
@@ -23,7 +24,8 @@ const RunUseParams = z.object({
 const RunCurrentParams = z.object({ from: requiredString('Missing coordinator terminal') })
 const RunListParams = z.object({
   limit: z.number().int().min(1).max(ORCHESTRATION_RUN_PAGE_LIMIT).optional(),
-  cursor: z.string().min(1).optional()
+  cursor: z.string().min(1).optional(),
+  parent: OptionalString
 })
 const RunShowParams = z.object({ id: requiredString('Missing --id'), from: OptionalString })
 
@@ -45,6 +47,31 @@ function requireCallerPane(
   return paneKey
 }
 
+// Why: a coordinator dispatched by another coordinator is a child by construction, so its own
+// Dispatch names the parent Run without anyone passing an id through a prompt.
+function resolveParentRun(
+  runtime: OrcaRuntimeService,
+  declaredParent: string | undefined,
+  callerHandle: string,
+  callerPaneKey: string
+): string | null {
+  const db = runtime.getOrchestrationDb()
+  if (declaredParent) {
+    const parent = db.getRun(declaredParent)
+    if (!parent || parent.legacy === 1) {
+      throw new OrchestrationError(
+        'run_not_found',
+        `Parent Run ${declaredParent} was not found. No effects were applied.`,
+        { effectsApplied: false }
+      )
+    }
+    return parent.id
+  }
+  const dispatchRunId = db.getActiveDispatchForIdentity(callerHandle, callerPaneKey)?.run_id
+  const inferred = dispatchRunId ? db.getRun(dispatchRunId) : undefined
+  return inferred && inferred.legacy === 0 ? inferred.id : null
+}
+
 export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.runCreate',
@@ -57,7 +84,8 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
       const run = db.createRun({
         objective: params.objective,
         coordinatorHandle: params.from,
-        coordinatorPaneKey: paneKey
+        coordinatorPaneKey: paneKey,
+        parentRunId: resolveParentRun(runtime, params.parent, params.from, paneKey)
       })
       if (priorRun) {
         runtime.cancelMessageWaiters(`run:${priorRun.id}`)
@@ -123,17 +151,23 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.runList',
     params: RunListParams,
-    handler: (params, { runtime }) => runtime.getOrchestrationDb().listRuns(params)
+    handler: (params, { runtime }) =>
+      runtime.getOrchestrationDb().listRuns({
+        limit: params.limit,
+        cursor: params.cursor,
+        parentRunId: params.parent
+      })
   }),
   defineMethod({
     name: 'orchestration.runShow',
     params: RunShowParams,
     handler: (params, { runtime }) => {
-      const run = runtime.getOrchestrationDb().getRun(params.id)
+      const db = runtime.getOrchestrationDb()
+      const run = db.getRun(params.id)
       if (!run) {
         throw new OrchestrationError('run_not_found', `Run ${params.id} was not found.`)
       }
-      return { run }
+      return { run, childRunIds: db.listChildRunIds(run.id) }
     }
   })
 ]

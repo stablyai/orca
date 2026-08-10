@@ -499,6 +499,12 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'worktree create' && flag === 'parent-worktree') {
     return '--parent-worktree <selector> Parent selector such as active/current, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, folder:<id>, or worktree:<worktreeId>'
   }
+  if (command === 'orchestration run-create' && flag === 'parent') {
+    return '--parent <run_id>     Run this one nests under; inferred from an active Dispatch when omitted'
+  }
+  if (command === 'orchestration run-list' && flag === 'parent') {
+    return '--parent <run_id>     List only the Runs nested directly under that Run'
+  }
   if (command === 'orchestration task-create' && flag === 'task-title') {
     return '--task-title <text>  Concise title for the orchestration task'
   }
