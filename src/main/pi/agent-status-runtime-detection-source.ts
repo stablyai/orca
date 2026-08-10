@@ -1,6 +1,20 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
 export function getPiAgentStatusRuntimeDetectionSourceLines(kind: PiAgentKind): string[] {
+  if (kind === 'prime-agent') {
+    return [
+      `const CONFIGURED_HOOK_PATH = '/hook/${kind}'`,
+      '',
+      'function isOmpRuntime(): boolean {',
+      '  return false',
+      '}',
+      '',
+      'function resolveHookPath(_ompRuntime: boolean): string {',
+      '  return CONFIGURED_HOOK_PATH',
+      '}'
+    ]
+  }
+
   return [
     'function processName(value: unknown): string {',
     "  return String(value || '').split(/[\\\\/]/).pop()?.toLowerCase() || ''",

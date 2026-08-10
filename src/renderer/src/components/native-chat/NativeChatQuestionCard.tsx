@@ -1,7 +1,6 @@
 import { useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-prompt'
 
@@ -32,7 +31,6 @@ export function NativeChatQuestionCard({
   onCancel,
   answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
-  const imeEnter = useImeEnterGestureOwnership()
   const [index, setIndex] = useState(0)
   // Keep option identity by index: labels are display text and are not guaranteed
   // unique, while Claude's selector commits the numbered row (STA-1860).
@@ -195,18 +193,11 @@ export function NativeChatQuestionCard({
                 value={otherText[index]}
                 onChange={(e) => setOther(index, e.target.value)}
                 onKeyDown={(e) => {
-                  if (imeEnter.ownsKeyDown(e)) {
-                    return
-                  }
                   if (e.key === 'Enter') {
                     e.preventDefault()
                     confirm(true)
                   }
                 }}
-                onKeyUp={imeEnter.onKeyUp}
-                onBlur={imeEnter.reset}
-                onCompositionStart={() => imeEnter.setComposing(true)}
-                onCompositionEnd={() => imeEnter.setComposing(false)}
                 placeholder={translate(
                   'components.native-chat.question.otherPlaceholder',
                   'Type your answer'

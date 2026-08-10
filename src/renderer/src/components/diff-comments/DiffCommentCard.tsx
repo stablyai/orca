@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 
 // Why: the saved-note card lives inside a Monaco view zone's DOM node.
 // useDiffCommentDecorator creates a React root per zone and renders this
@@ -53,7 +52,6 @@ export function DiffCommentCard({
   headerActions
 }: Props): React.JSX.Element {
   const [editing, setEditing] = useState(false)
-  const imeEnter = useImeEnterGestureOwnership()
   const [draft, setDraft] = useState(body)
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
@@ -288,20 +286,13 @@ export function DiffCommentCard({
                 el.style.height = `${Math.min(el.scrollHeight, 240)}px`
                 onContentResizeRef.current?.()
               }}
-              onBlur={imeEnter.reset}
-              onCompositionStart={() => imeEnter.setComposing(true)}
-              onCompositionEnd={() => imeEnter.setComposing(false)}
-              onKeyUp={imeEnter.onKeyUp}
               onKeyDown={(e) => {
-                if (imeEnter.ownsKeyDown(e)) {
-                  return
-                }
                 if (e.key === 'Escape') {
                   e.preventDefault()
                   handleCancel()
                   return
                 }
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
                   e.preventDefault()
                   if (!canSubmit) {
                     return

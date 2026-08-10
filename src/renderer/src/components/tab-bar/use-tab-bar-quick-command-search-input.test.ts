@@ -17,6 +17,7 @@ function setup(onRun = vi.fn()): {
       commandListRef: createRef<HTMLDivElement>(),
       commandValue: command.id,
       filteredCommands: [command],
+      getCommandId: (item) => item.id,
       onCommandValueChange: () => {},
       onRun,
       selectedCommand: command
@@ -46,6 +47,26 @@ function keyEvent(init: {
 
 // Why: Enter here RUNS a terminal command, so a stray Enter is not recoverable.
 describe('useTabBarQuickCommandSearchInput IME Enter ownership', () => {
+  it('navigates hosted commands by the caller-provided composite key', () => {
+    const entries = [{ key: 'local\0shared' }, { key: 'runtime:build\0shared' }]
+    const onCommandValueChange = vi.fn()
+    const { result } = renderHook(() =>
+      useTabBarQuickCommandSearchInput({
+        commandListRef: createRef<HTMLDivElement>(),
+        commandValue: entries[0].key,
+        filteredCommands: entries,
+        getCommandId: (entry) => entry.key,
+        onCommandValueChange,
+        onRun: vi.fn(),
+        selectedCommand: entries[0]
+      })
+    )
+
+    result.current.onKeyDown(keyEvent({ key: 'ArrowDown', keyCode: 40 }))
+
+    expect(onCommandValueChange).toHaveBeenCalledWith(entries[1].key)
+  })
+
   it('does not run the command on the bare redispatch after a confirm', () => {
     const { onRun, result } = setup()
     result.result.current.onCompositionStart()

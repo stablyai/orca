@@ -108,6 +108,21 @@ describe('createPtySlaveEchoProbe', () => {
     expect(execFileMock).toHaveBeenCalledTimes(5)
   })
 
+  it('shares one in-flight stty process per PTY', async () => {
+    const probe = createPtySlaveEchoProbe('/dev/ttys048', 'darwin')
+    const pending: { finish?: () => void } = {}
+    execFileMock.mockImplementationOnce((_cmd, _args, _opts, callback) => {
+      pending.finish = () => callback(null, RAW, '')
+    })
+
+    const first = probe?.()
+    const second = probe?.()
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    pending.finish?.()
+    await expect(first).resolves.toBe('quiet')
+    await expect(second).resolves.toBe('quiet')
+  })
+
   it('passes the device with the flag its own platform understands', async () => {
     answerStty(RAW)
     await createPtySlaveEchoProbe('/dev/ttys048', 'darwin')?.()

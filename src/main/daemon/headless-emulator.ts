@@ -18,6 +18,7 @@ import {
   installTerminalViewAttributeResponder,
   type TerminalViewAttributeResponder
 } from './terminal-view-attribute-responder'
+import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 
@@ -100,21 +101,24 @@ export class HeadlessEmulator {
     }
   }
 
-  /** ConPTY 1.22+ blocks at spawn awaiting a DA1 reply; answers `CSI ?61;4c` and consumes the query so xterm's default `?1;2c` can't double-reply. */
+  /** ConPTY 1.22+ blocks at spawn awaiting a DA1 reply. See startup-device-attributes-responder. */
   installConptyPrimaryDeviceAttributesOverride(): void {
     // Why idempotent: installed at creation and again at spawn-mark time (which can land later), so it's never stacked.
     if (this.conptyDa1OverrideInstalled) {
       return
     }
     this.conptyDa1OverrideInstalled = true
-    this.terminal.parser.registerCsiHandler({ final: 'c' }, (params) => {
-      const isPrimaryQuery = params.length === 0 || (params.length === 1 && params[0] === 0)
-      if (!isPrimaryQuery) {
-        return false
-      }
-      this.emitQueryReply(CONPTY_DA1_RESPONSE)
-      return true
+    installDeviceAttributesResponder({
+      parser: this.terminal.parser,
+      response: CONPTY_DA1_RESPONSE,
+      reply: (data) => this.emitQueryReply(data)
     })
+  }
+
+  /** Why exposed: responder modules install handlers here (see the view-attribute and
+   *  device-attributes responders); the caller owns disposal. */
+  get responderParser(): Terminal['parser'] {
+    return this.terminal.parser
   }
 
   /** Headless core has no theme service, so OSC 4/10/11/12 and DSR ?996n answer from the renderer's pushed attributes; daemon Session must never call this. */

@@ -801,7 +801,8 @@ describe('createIpcPtyTransport', () => {
       await vi.runOnlyPendingTimersAsync()
 
       expect(vi.getTimerCount()).toBe(0)
-      expect(onTitleChange).not.toHaveBeenCalled()
+      // Why: the literal is the pane's identity once (#10258); the redraw repeats stay ignored.
+      expect(onTitleChange.mock.calls).toEqual([['Cursor Agent', 'Cursor Agent']])
     } finally {
       vi.useRealTimers()
     }

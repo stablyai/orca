@@ -56,7 +56,6 @@ describe('MobileOnboardingScreen', () => {
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     mocks.params = { hostId: 'paired-host', steps: 'session-view,notifications' }
     mocks.replace.mockReset()
     mocks.reducedMotionEnabled = false

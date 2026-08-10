@@ -38,7 +38,6 @@ describe('MobileMarkdown file links', () => {
   const onOpenFile = vi.fn()
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     onOpenFile.mockClear()
     openURL.mockClear()
   })

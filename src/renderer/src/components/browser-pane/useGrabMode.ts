@@ -183,34 +183,6 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     }
   }, [mountedRef])
 
-  const toggle = useCallback(() => {
-    if ((state === 'idle' || state === 'error') && grabTabIdRef.current === null) {
-      setError(null)
-      setPayload(null)
-      setContextMenu(false)
-      void armAndAwait()
-    } else {
-      // Disable grab mode
-      const targetTabId = grabTabIdRef.current ?? browserTabIdRef.current
-      armGenerationRef.current += 1
-      void window.api.browser.setGrabMode({
-        browserPageId: targetTabId,
-        enabled: false
-      })
-      if (activeOpIdRef.current) {
-        void window.api.browser.cancelGrab({
-          browserPageId: targetTabId
-        })
-        activeOpIdRef.current = null
-      }
-      grabTabIdRef.current = null
-      setState('idle')
-      setPayload(null)
-      setError(null)
-      setContextMenu(false)
-    }
-  }, [state, armAndAwait])
-
   const cancel = useCallback(() => {
     const targetTabId = grabTabIdRef.current ?? browserTabIdRef.current
     armGenerationRef.current += 1
@@ -230,6 +202,17 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     setError(null)
     setContextMenu(false)
   }, [])
+
+  const toggle = useCallback(() => {
+    if ((state === 'idle' || state === 'error') && grabTabIdRef.current === null) {
+      setError(null)
+      setPayload(null)
+      setContextMenu(false)
+      void armAndAwait()
+    } else {
+      cancel()
+    }
+  }, [state, armAndAwait, cancel])
 
   // Why: Copy re-arms so the user can quickly pick another element without
   // re-clicking the toolbar button. Attach to AI exits because the user's

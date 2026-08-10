@@ -1,17 +1,11 @@
 import { isAiVaultDeletableAgent } from '../../../../shared/ai-vault-session-deletion'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import { translate } from '@/i18n/i18n'
 import { agentLabel } from './ai-vault-session-filters'
 import {
   canUseLocalAiVaultSessionPathActions,
   isSyntheticAiVaultSessionPath
 } from './ai-vault-session-path-actions'
-
-// Matches the active-dot rule in ai-vault-session-row-display.
-function isSessionLive(liveState: AgentStatusState | null | undefined): boolean {
-  return liveState != null && liveState !== 'done'
-}
 
 /**
  * Why Delete is unavailable for this session, as the tooltip text to show — or
@@ -25,8 +19,7 @@ function isSessionLive(liveState: AgentStatusState | null | undefined): boolean 
  * it does: both consult the same shared agent set and host/synthetic predicates.
  */
 export function aiVaultSessionDeleteBlockedReason(
-  session: Pick<AiVaultSession, 'agent' | 'executionHostId' | 'filePath'>,
-  liveState?: AgentStatusState | null
+  session: Pick<AiVaultSession, 'agent' | 'executionHostId' | 'filePath'>
 ): string | null {
   if (!canUseLocalAiVaultSessionPathActions(session.executionHostId)) {
     return translate(
@@ -45,15 +38,6 @@ export function aiVaultSessionDeleteBlockedReason(
       'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonUnsupportedAgent',
       "{{value0}} sessions can't be deleted from Orca.",
       { value0: agentLabel(session.agent) }
-    )
-  }
-  // Last, so an otherwise-deletable session reads as "wait for it to finish"
-  // rather than a permanent reason. Trashing a live transcript would drop the
-  // writes the agent is still appending.
-  if (isSessionLive(liveState)) {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonSessionLive',
-      'This session is still running — wait for it to finish before deleting.'
     )
   }
   return null

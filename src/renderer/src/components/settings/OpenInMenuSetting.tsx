@@ -14,7 +14,6 @@ import {
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { cn } from '@/lib/utils'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   getOpenInAppPreset,
   isOpenInAppPresetAdded,
@@ -187,10 +186,6 @@ function OpenInMenuRow({
                 }
                 onBlur={onCommit}
                 onKeyDown={(event) => {
-                  // Why: an Enter confirming a CJK IME candidate must not commit a half-composed label.
-                  if (isImeCompositionKeyDown(event)) {
-                    return
-                  }
                   if (event.key === 'Enter') {
                     onCommit()
                     event.currentTarget.blur()
@@ -219,10 +214,6 @@ function OpenInMenuRow({
               }
               onBlur={onCommit}
               onKeyDown={(event) => {
-                // Why: an Enter confirming a CJK IME candidate must not commit a half-composed command.
-                if (isImeCompositionKeyDown(event)) {
-                  return
-                }
                 if (event.key === 'Enter') {
                   onCommit()
                   event.currentTarget.blur()

@@ -49,7 +49,6 @@ import type {
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 
 type JiraIssueWorkspaceProps = {
   issue: JiraIssue | null
@@ -100,41 +99,6 @@ async function copyTextToClipboard(text: string, label: string): Promise<void> {
       })
     )
   }
-}
-
-export function JiraIssueTitleInput({
-  value,
-  onChange,
-  onSubmit,
-  disabled
-}: {
-  value: string
-  onChange: (value: string) => void
-  onSubmit: (value: string) => void
-  disabled: boolean
-}): React.JSX.Element {
-  const imeEnter = useImeEnterGestureOwnership()
-  return (
-    <Input
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      onBlur={imeEnter.reset}
-      onCompositionStart={() => imeEnter.setComposing(true)}
-      onCompositionEnd={() => imeEnter.setComposing(false)}
-      onKeyUp={imeEnter.onKeyUp}
-      onKeyDown={(event) => {
-        if (imeEnter.ownsKeyDown(event)) {
-          return
-        }
-        if (event.key === 'Enter') {
-          event.preventDefault()
-          onSubmit(event.currentTarget.value)
-        }
-      }}
-      disabled={disabled}
-      className="h-8 text-xs"
-    />
-  )
 }
 
 export default function JiraIssueWorkspace({
@@ -628,11 +592,16 @@ export default function JiraIssueWorkspace({
                       {translate('auto.components.JiraIssueWorkspace.444865b4a8', 'Title')}
                     </label>
                     <div className="flex gap-2">
-                      <JiraIssueTitleInput
+                      <Input
                         value={titleDraft}
-                        onChange={setTitleDraft}
-                        onSubmit={() => handleSaveTitle()}
-                        disabled={pendingField === 'title'}
+                        onChange={(event) => setTitleDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                            event.preventDefault()
+                            handleSaveTitle()
+                          }
+                        }}
+                        className="h-8 text-xs"
                       />
                       <Button
                         size="sm"

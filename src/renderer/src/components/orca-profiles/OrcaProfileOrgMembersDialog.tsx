@@ -18,7 +18,6 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { translate } from '@/i18n/i18n'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import type {
   OrcaOrgMember,
   OrcaOrgMembersRoster,
@@ -60,7 +59,6 @@ export function OrcaProfileOrgMembersDialog({
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<OrcaOrgRole>('member')
   const [inviting, setInviting] = useState(false)
-  const inviteImeEnter = useImeEnterGestureOwnership()
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -259,15 +257,6 @@ export function OrcaProfileOrgMembersDialog({
                     type="email"
                     value={inviteEmail}
                     onChange={(event) => setInviteEmail(event.target.value)}
-                    onCompositionStart={() => inviteImeEnter.setComposing(true)}
-                    onCompositionEnd={() => inviteImeEnter.setComposing(false)}
-                    onKeyDown={(event) => {
-                      if (inviteImeEnter.ownsKeyDown(event)) {
-                        event.preventDefault()
-                      }
-                    }}
-                    onKeyUp={inviteImeEnter.onKeyUp}
-                    onBlur={inviteImeEnter.reset}
                     disabled={inviting}
                     placeholder={translate(
                       'auto.components.orca.profiles.org.members.invite.placeholder',

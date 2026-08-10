@@ -32,7 +32,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { VisuallyHidden } from 'radix-ui'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
@@ -169,8 +168,6 @@ export function LinearIssueEditSection({
     labels: localLabels
   } = editState
   const [estimateInput, setEstimateInput] = useState(() => formatLinearEstimateInput(localEstimate))
-  const propertiesEstimateImeEnter = useImeEnterGestureOwnership()
-  const chipsEstimateImeEnter = useImeEnterGestureOwnership()
 
   const teamId = issue.team?.id || null
   const states = useTeamStates(teamId, providerSettings, issue.workspaceId)
@@ -641,19 +638,12 @@ export function LinearIssueEditSection({
                   <Input
                     value={estimateInput}
                     onChange={(event) => setEstimateInput(event.target.value)}
-                    onCompositionStart={() => propertiesEstimateImeEnter.setComposing(true)}
-                    onCompositionEnd={() => propertiesEstimateImeEnter.setComposing(false)}
                     onKeyDown={(event) => {
-                      if (propertiesEstimateImeEnter.ownsKeyDown(event)) {
-                        return
-                      }
                       if (event.key === 'Enter') {
                         event.preventDefault()
                         handleEstimateSubmit()
                       }
                     }}
-                    onKeyUp={propertiesEstimateImeEnter.onKeyUp}
-                    onBlur={propertiesEstimateImeEnter.reset}
                     inputMode="numeric"
                     placeholder={translate(
                       'auto.components.LinearItemDrawer.fbb90300e2',
@@ -894,19 +884,12 @@ export function LinearIssueEditSection({
             <Input
               value={estimateInput}
               onChange={(event) => setEstimateInput(event.target.value)}
-              onCompositionStart={() => chipsEstimateImeEnter.setComposing(true)}
-              onCompositionEnd={() => chipsEstimateImeEnter.setComposing(false)}
               onKeyDown={(event) => {
-                if (chipsEstimateImeEnter.ownsKeyDown(event)) {
-                  return
-                }
                 if (event.key === 'Enter') {
                   event.preventDefault()
                   handleEstimateSubmit()
                 }
               }}
-              onKeyUp={chipsEstimateImeEnter.onKeyUp}
-              onBlur={chipsEstimateImeEnter.reset}
               inputMode="numeric"
               placeholder={translate(
                 'auto.components.LinearItemDrawer.fbb90300e2',

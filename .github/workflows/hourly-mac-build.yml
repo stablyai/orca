@@ -380,24 +380,52 @@ jobs:
             echo "::warning::Could not discard draft $TAG; remove it manually."
 
       - name: Prune old hourly releases
-        if: steps.freshness.outputs.should_build == 'true'
+        # Only after a live publish: $TAG is then a non-draft we must not delete,
+        # and failed runs should not reshuffle retention around a draft that the
+        # failure path is about to discard.
+        if: steps.publish_live.outcome == 'success'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
+          # Protect the tag this run just shipped; at the retain cap, a bad sort
+          # can otherwise mark the newest release as stale and delete it.
+          TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
           # Why: --cleanup-tag so pruning does not leave orphan tags behind that
           # keep showing up in tag lists with no release or assets attached.
           # Drafts are excluded so retention counts shipped builds only; a stale
           # draft is handled by the failure path, not by the retention window.
-          stale="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json tagName,createdAt,isDraft \
-            --jq "map(select(.isDraft | not)) | sort_by(.createdAt) | reverse | .[${HOURLY_RETAIN_COUNT}:] | .[].tagName")"
+          #
+          # Sort by publishedAt (not createdAt). Many non-draft hourlies share one
+          # createdAt (bulk import / re-create), so createdAt ranking is unstable:
+          # reverse of a stable sort then drops the just-published tag past the
+          # retain window. publishedAt is real recency; tagName (...YYYYMMDDHHMM)
+          # is the deterministic tie-break.
+          #
+          # Why force $TAG to the front before slicing: a hard retain-window seat
+          # for this run's release. Dropping $TAG from the list *before* the slice
+          # would permanently keep retain+1 releases; skipping it only in the
+          # delete loop would under-prune when the sort is still wrong. Partition
+          # keeps relative order of every other tag.
+          jq_filter='map(select(.isDraft | not)) | sort_by(.publishedAt // "", .tagName) | reverse'
+          if [[ -n "${TAG:-}" ]]; then
+            jq_filter+=" | (map(select(.tagName == \"${TAG//\"/\\\"}\")) + map(select(.tagName != \"${TAG//\"/\\\"}\")))"
+          fi
+          jq_filter+=" | .[${HOURLY_RETAIN_COUNT}:] | .[].tagName"
+          stale="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json tagName,publishedAt,isDraft \
+            --jq "$jq_filter")"
           if [[ -z "$stale" ]]; then
             echo "Nothing to prune; at or under $HOURLY_RETAIN_COUNT retained builds."
             exit 0
           fi
           while read -r tag; do
             [[ -n "$tag" ]] || continue
+            # Belt-and-suspenders: partition above should already exclude $TAG.
+            if [[ -n "${TAG:-}" && "$tag" == "$TAG" ]]; then
+              echo "::warning::Prune list still included just-published $tag after protect; skipping delete."
+              continue
+            fi
             echo "Pruning $tag"
             gh release delete "$tag" --repo "$HOURLY_REPO" --yes --cleanup-tag || \
               echo "::warning::Could not prune $tag"

@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { basename, normalizeRelativePath } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
@@ -110,7 +110,6 @@ export default function EditorFileTab({
   const [isRenaming, setIsRenaming] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
   const renameFocusFrameRef = useRef<number | null>(null)
-  const renameImeEnter = useImeEnterGestureOwnership()
   const skipMenuFocusRestoreRef = useRef(false)
   // Escape fires setIsRenaming(false), which unmounts the input. The browser
   // still fires focusout as the focused node is removed, so onBlur can invoke
@@ -303,10 +302,10 @@ export default function EditorFileTab({
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
-            onCompositionStart={() => renameImeEnter.setComposing(true)}
-            onCompositionEnd={() => renameImeEnter.setComposing(false)}
             onKeyDown={(e) => {
-              if (renameImeEnter.ownsKeyDown(e)) {
+              // Why: an Enter that only confirms a CJK IME candidate must not
+              // commit the rename; wait for a non-composition Enter.
+              if (isImeCompositionKeyDown(e)) {
                 return
               }
               if (e.key === 'Enter') {
@@ -320,11 +319,7 @@ export default function EditorFileTab({
                 setIsRenaming(false)
               }
             }}
-            onKeyUp={renameImeEnter.onKeyUp}
-            onBlur={() => {
-              renameImeEnter.reset()
-              commitRename()
-            }}
+            onBlur={commitRename}
           />
         ) : (
           <span

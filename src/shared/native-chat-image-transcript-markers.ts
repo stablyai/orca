@@ -20,19 +20,23 @@ export function stripImagePromptMarker(text: string): string {
 function stripImagePromptMarkersFromFirstText(
   blocks: readonly NativeChatBlock[]
 ): NativeChatBlock[] {
-  let stripped = false
-  const next: NativeChatBlock[] = []
-  for (const block of blocks) {
-    if (!stripped && isTextBlock(block)) {
-      stripped = true
-      const text = stripImagePromptMarker(block.text)
-      if (text.trim().length > 0) {
-        next.push({ ...block, text })
-      }
-      continue
-    }
-    next.push(block)
+  const textIndex = blocks.findIndex(isTextBlock)
+  if (textIndex < 0) {
+    return blocks as NativeChatBlock[]
   }
+  const block = blocks[textIndex]
+  if (!block || !isTextBlock(block)) {
+    return blocks as NativeChatBlock[]
+  }
+  const text = stripImagePromptMarker(block.text)
+  if (text.trim().length === 0) {
+    return blocks.filter((_, index) => index !== textIndex)
+  }
+  if (text === block.text) {
+    return blocks as NativeChatBlock[]
+  }
+  const next = [...blocks]
+  next[textIndex] = { ...block, text }
   return next
 }
 
@@ -46,15 +50,16 @@ function imagePromptMarkerStartsMessage(message: NativeChatMessage): boolean {
 export function normalizeImageTranscriptMessages(
   messages: readonly NativeChatMessage[]
 ): NativeChatMessage[] {
-  const normalized: NativeChatMessage[] = []
+  let normalized: NativeChatMessage[] | null = null
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index]!
     if (message.role !== 'user') {
-      normalized.push(message)
+      normalized?.push(message)
       continue
     }
     const imagePath = imageSourcePathFromText(soleText(message) ?? '')
     if (imagePath) {
+      normalized ??= messages.slice(0, index)
       const imagePaths = [imagePath]
       let nextIndex = index + 1
       while (nextIndex < messages.length) {
@@ -88,10 +93,13 @@ export function normalizeImageTranscriptMessages(
       })
       continue
     }
-    normalized.push({
-      ...message,
-      blocks: stripImagePromptMarkersFromFirstText(message.blocks)
-    })
+    const blocks = stripImagePromptMarkersFromFirstText(message.blocks)
+    if (blocks === message.blocks) {
+      normalized?.push(message)
+    } else {
+      normalized ??= messages.slice(0, index)
+      normalized.push({ ...message, blocks })
+    }
   }
-  return normalized
+  return normalized ?? (messages as NativeChatMessage[])
 }

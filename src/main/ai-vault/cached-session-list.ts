@@ -1,5 +1,8 @@
 import { join } from 'node:path'
-import { scanAiVaultSessions } from './session-scanner'
+import {
+  resetAiVaultScannerWorkerForTests,
+  scanAiVaultSessionsInWorker
+} from './session-scanner-worker-spawn'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -74,19 +77,19 @@ export async function listAiVaultSessions(
     start: async (scanSignal) => {
       const additionalCodexSessionsDirs =
         sources.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ?? []
-      const result = await scanAiVaultSessions({
-        limit: args?.limit,
-        unlimited: args?.unlimited,
-        scopePaths: args?.scopePaths,
-        additionalCodexSessionsDirs,
-        wslHomeDirs: await getAiVaultWslHomeDirs(),
-        // Cancelled/superseded callers must stop the parse, not just stop
-        // waiting for it — the scan owns hundreds of transcript reads.
-        signal: scanSignal,
-        // Why: this scan is always host-local; callers addressing this host by a
-        // runtime id get the result restamped at the RPC edge, never rescanned.
-        executionHostId: LOCAL_EXECUTION_HOST_ID
-      })
+      const result = await scanAiVaultSessionsInWorker(
+        {
+          limit: args?.limit,
+          unlimited: args?.unlimited,
+          scopePaths: args?.scopePaths,
+          additionalCodexSessionsDirs,
+          wslHomeDirs: await getAiVaultWslHomeDirs(),
+          // Why: this scan is always host-local; callers addressing this host by a
+          // runtime id get the result restamped at the RPC edge, never rescanned.
+          executionHostId: LOCAL_EXECUTION_HOST_ID
+        },
+        scanSignal
+      )
       // A delete (or other invalidation) landed while this scan was running:
       // its result predates the delete, so caching it would resurrect the
       // deleted session for the TTL. Return it to this caller but don't cache.
@@ -139,4 +142,5 @@ export function resetAiVaultSessionListCacheForTests(): void {
   invalidateAiVaultSessionListCache()
   scanCoordinator = new AiVaultScanCoordinator()
   sources = {}
+  resetAiVaultScannerWorkerForTests()
 }

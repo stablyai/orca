@@ -4,7 +4,6 @@ import { Github, Gitlab, LayoutGrid, List } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
-import { getTaskPresetQuery } from '@/lib/new-workspace'
 import {
   LINEAR_DISPLAY_PROPERTIES,
   LINEAR_GROUP_BY_OPTIONS,
@@ -15,6 +14,7 @@ import {
   type LinearOrderBy,
   type LinearViewMode
 } from '../../../shared/linear-issue-view-resume-state'
+import { getTaskPresetQuery } from '../../../shared/task-preset-query'
 import type { TaskProvider, TaskViewPresetId } from '../../../shared/types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'

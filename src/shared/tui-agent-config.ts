@@ -13,6 +13,7 @@ export type DraftPasteReadySignal =
   | 'render-quiet-after-bracketed-paste'
   | 'codex-composer-prompt'
   | 'render-cursor-after-bracketed-paste'
+  | 'grok-composer-prompt'
 
 export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
 
@@ -142,6 +143,18 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'omp',
     promptInjectionMode: 'argv',
     draftPromptEnvVar: 'ORCA_OMP_PREFILL'
+  },
+  'prime-agent': {
+    detectCmd: 'prime-agent',
+    launchCmd: 'prime-agent',
+    expectedProcess: 'prime-agent',
+    // Why: `prime-agent [options] [@files...] [message...]` takes the task as positional argv.
+    promptInjectionMode: 'argv',
+    // Why: separator so prompts starting with `help`/`agents`/`-…` aren't parsed as a
+    // subcommand or flag — its help documents `--` as "treat all following arguments as messages".
+    argvPromptSeparator: '--',
+    // Why: Prime Agent embeds Pi's TUI and decodes CSI-u the same way (see pi above).
+    windowsShiftEnterEncoding: 'csi-u'
   },
   gemini: {
     detectCmd: 'gemini',
@@ -302,6 +315,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'argv',
     // Why: separator so prompts like `help`/`--version` aren't parsed as Grok CLI syntax.
     argvPromptSeparator: '--',
+    // Why: grok shimmers its startup logo until the session opens, so the quiet
+    // window never settles and launch drafts waited out the full 8s hard
+    // timeout; its composer glyph lands ~0.6s in.
+    draftPasteReadySignal: 'grok-composer-prompt',
     ctrlEnterEncoding: 'csi-u'
   },
   devin: {

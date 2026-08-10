@@ -128,6 +128,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://omp.sh'
   },
   {
+    id: 'prime-agent',
+    label: translate('auto.lib.agent.catalog.d443a47995', 'Prime Agent'),
+    cmd: 'prime-agent',
+    faviconDomain: 'primeintellect.ai',
+    homepageUrl: 'https://github.com/PrimeIntellect-ai/prime-agent'
+  },
+  {
     id: 'gemini',
     label: translate('auto.lib.agent.catalog.12e6baa4f7', 'Gemini'),
     cmd: 'gemini',

@@ -63,23 +63,7 @@ export const JsonRpcErrorCode = {
  * 256KB raw → ~340KB base64, well under MAX_MESSAGE_SIZE. */
 export const STREAM_CHUNK_SIZE = 256 * 1024
 
-/** Cap on concurrent in-flight streams per relay; mirrors fs.watch's
- * 20-watcher cap idiom. Prevents file-descriptor exhaustion from a buggy
- * client. */
-export const MAX_CONCURRENT_STREAMS = 16
-
 // ── Git response streaming (see docs/relay-git-response-stream-design.md) ──
-
-/** Serialized-JSON size above which the relay chunks a streamable git response
- * (diff family + exec) onto the bulk lane instead of one JSON-RPC frame. Mirror
- * of the relay-side constant; the client only opts in — the relay owns the
- * decision — so this is documentation of the shared contract. */
-export const GIT_RESPONSE_STREAM_THRESHOLD = 256 * 1024
-
-/** Per-chunk size (serialized-result UTF-8 bytes) for git response streaming.
- * The client reassembles by concatenation and does not depend on this value,
- * so it stays cross-version safe. */
-export const GIT_RESPONSE_CHUNK_SIZE = 128 * 1024
 
 /** Sentinel the relay returns as the RPC result when the real payload streams
  * as git.responseChunk frames. Absent from old relays, so a new client falls
@@ -131,6 +115,13 @@ export type JsonRpcNotification = {
 
 export type JsonRpcMessage = JsonRpcRequest | JsonRpcResponse | JsonRpcNotification
 
+const JSON_RPC_PAYLOAD_BYTES = Symbol('jsonRpcPayloadBytes')
+
+export type PreparedJsonRpcPayload = Readonly<{
+  byteLength: number
+  [JSON_RPC_PAYLOAD_BYTES]: Buffer
+}>
+
 // ── Framing: encode / decode ────────────────────────────────────────
 
 /**
@@ -157,11 +148,23 @@ export function encodeFrame(
 }
 
 export function encodeJsonRpcFrame(msg: JsonRpcMessage, id: number, ack: number): Buffer {
+  return encodePreparedJsonRpcFrame(prepareJsonRpcPayload(msg), id, ack)
+}
+
+export function prepareJsonRpcPayload(msg: JsonRpcMessage): PreparedJsonRpcPayload {
   const payload = Buffer.from(JSON.stringify(msg), 'utf-8')
   if (payload.length > MAX_MESSAGE_SIZE) {
     throw new Error(`Message too large: ${payload.length} bytes (max ${MAX_MESSAGE_SIZE})`)
   }
-  return encodeFrame(MessageType.Regular, id, ack, payload)
+  return Object.freeze({ byteLength: payload.length, [JSON_RPC_PAYLOAD_BYTES]: payload })
+}
+
+export function encodePreparedJsonRpcFrame(
+  payload: PreparedJsonRpcPayload,
+  id: number,
+  ack: number
+): Buffer {
+  return encodeFrame(MessageType.Regular, id, ack, payload[JSON_RPC_PAYLOAD_BYTES])
 }
 
 export function encodeKeepAliveFrame(id: number, ack: number): Buffer {

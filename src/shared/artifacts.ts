@@ -1,5 +1,9 @@
 export const ARTIFACT_CLI_MAX_RPC_BYTES = 800 * 1024
 
+export function artifactWriteRequestByteLength(request: ArtifactWriteRequest): number {
+  return new TextEncoder().encode(JSON.stringify(request)).byteLength
+}
+
 export type ArtifactMetadata = {
   version: 1
   slug: string
@@ -32,6 +36,15 @@ export type ArtifactWriteRequest = {
   title?: string
   apiUrl?: string
   authToken?: string
+}
+
+export type ArtifactPublishResult = {
+  change: 'created' | 'updated'
+  item: ArtifactListItem
+}
+
+export type ArtifactPublishedLink = {
+  shareUrl: string
 }
 
 export type ArtifactCloudOptions = {

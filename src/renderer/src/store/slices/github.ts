@@ -17,6 +17,7 @@ import type {
   PRRefreshErrorType,
   PRRefreshOutcome,
   GitHubCommentResult,
+  GitHubReactionContent,
   IssueInfo,
   PRCheckDetail,
   PRCheckRunDetails,
@@ -74,6 +75,7 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github-pr-for-branch-outcome'
+import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment-reactions'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: separate from CacheEntry<T> — project-view has a single GraphQL source (no issue/PR fallback) and a distinct error union.
@@ -1890,6 +1892,14 @@ export type GitHubSlice = {
       line?: number
     }
   ) => Promise<GitHubCommentResult>
+  setPRCommentReaction: (
+    repoPath: string,
+    prNumber: number,
+    reactionSubjectId: string,
+    content: GitHubReactionContent,
+    reacted: boolean,
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+  ) => Promise<boolean>
   resolveReviewThread: (
     repoPath: string,
     prNumber: number,
@@ -3837,6 +3847,115 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       }
     })
     return { ok: true, comment }
+  },
+
+  setPRCommentReaction: async (
+    repoPath,
+    prNumber,
+    reactionSubjectId,
+    content,
+    reacted,
+    options
+  ) => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = getGitHubRepoSourceSettings(
+      get().settings,
+      repo,
+      options?.sourceContext
+    )
+    const cacheKey = sourceScopedRepoCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo),
+      requestSettings,
+      repo?.connectionId,
+      repo?.executionHostId,
+      options?.sourceContext,
+      repo !== undefined
+    )
+    const previousComment = get().commentsCache[cacheKey]?.data?.find(
+      (comment) => comment.reactionSubjectId === reactionSubjectId
+    )
+    const previousReaction = previousComment?.reactions?.find(
+      (reaction) => reaction.content === content
+    )
+    set((state) => {
+      const entry = state.commentsCache[cacheKey]
+      if (!entry?.data) {
+        return state
+      }
+      return {
+        commentsCache: {
+          ...state.commentsCache,
+          [cacheKey]: {
+            ...entry,
+            data: setReactionOnSubject(entry.data, reactionSubjectId, content, reacted)
+          }
+        }
+      }
+    })
+
+    const requestContext = getGitHubWorkItemRequestContext(
+      get(),
+      requestSettings,
+      repoId ?? repoPath,
+      repoPath,
+      options?.sourceContext
+    )
+    let ok = false
+    try {
+      ok =
+        requestContext.target.kind === 'environment'
+          ? await callRuntimeRpc<boolean>(
+              { kind: 'environment', environmentId: requestContext.target.environmentId },
+              'github.setPRCommentReaction',
+              {
+                repo: requestContext.target.runtimeRepoId,
+                reactionSubjectId,
+                content,
+                reacted,
+                prRepo: options?.prRepo ?? null
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.setPRCommentReaction({
+              repoPath,
+              repoId,
+              reactionSubjectId,
+              content,
+              reacted,
+              prRepo: options?.prRepo ?? null,
+              sourceContext: options?.sourceContext
+            })
+    } catch (err) {
+      console.error('Failed to update PR comment reaction:', err)
+    }
+    if (!ok && previousComment) {
+      set((state) => {
+        const entry = state.commentsCache[cacheKey]
+        if (!entry?.data) {
+          return state
+        }
+        return {
+          commentsCache: {
+            ...state.commentsCache,
+            [cacheKey]: {
+              ...entry,
+              data: restoreReactionOnSubject(
+                entry.data,
+                reactionSubjectId,
+                content,
+                previousReaction
+              )
+            }
+          }
+        }
+      })
+    }
+    return ok
   },
 
   resolveReviewThread: async (repoPath, prNumber, threadId, resolve, options) => {

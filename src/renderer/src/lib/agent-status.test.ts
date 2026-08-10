@@ -864,6 +864,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('trae')).toBe('Trae')
   })
 
+  it("maps 'prime-agent' to 'Prime Agent'", () => {
+    expect(formatAgentTypeLabel('prime-agent')).toBe('Prime Agent')
+  })
+
   it('passes through arbitrary custom agent names as-is', () => {
     expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
   })
@@ -889,6 +893,7 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
     expect(agentTypeToIconAgent('ante')).toBe('ante')
     expect(agentTypeToIconAgent('trae')).toBe('trae')
+    expect(agentTypeToIconAgent('prime-agent')).toBe('prime-agent')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {
