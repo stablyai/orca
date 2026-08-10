@@ -26,13 +26,15 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
   const [loadState, setLoadState] = useState<WorkbookLoadState>({ status: 'loading' })
   const [sheetSelection, setSheetSelection] = useState({ filePath, index: 0 })
 
+  const locale = getIntlLocale()
+
   useEffect(() => {
     let cancelled = false
     setLoadState({ status: 'loading' })
     // Why: decoding and inflating a multi-MB workbook is the expensive part, so
     // it runs off the render pass and its result is dropped if the tab moved on.
     Promise.resolve()
-      .then(() => parseXlsxWorkbook(decodeBase64ToBytes(content)))
+      .then(() => parseXlsxWorkbook(decodeBase64ToBytes(content), { locale }))
       .then((workbook) => {
         if (!cancelled) {
           setLoadState({ status: 'ready', workbook })
@@ -49,7 +51,7 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
     return () => {
       cancelled = true
     }
-  }, [content])
+  }, [content, locale])
 
   const sheets = loadState.status === 'ready' ? loadState.workbook.sheets : []
   // Why: derive the active tab instead of resetting it in an Effect — opening a

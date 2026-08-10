@@ -47,7 +47,15 @@ const EXTERNAL_TARGET_MODE = 'External'
 // a wide sheet is already several hundred MB of strings.
 export const MAX_XLSX_SHEET_ROWS = 200_000
 
-export async function parseXlsxWorkbook(bytes: Uint8Array): Promise<XlsxWorkbook> {
+export type ParseXlsxWorkbookOptions = {
+  /** Locale for number formatting; defaults to English separators. */
+  locale?: string
+}
+
+export async function parseXlsxWorkbook(
+  bytes: Uint8Array,
+  { locale = 'en-US' }: ParseXlsxWorkbookOptions = {}
+): Promise<XlsxWorkbook> {
   const archive = openXlsxZipArchive(bytes)
   const workbookPartPath = await resolveWorkbookPartPath(archive)
   const workbookXml = await archive.readPartText(workbookPartPath)
@@ -83,7 +91,8 @@ export async function parseXlsxWorkbook(bytes: Uint8Array): Promise<XlsxWorkbook
       numberFormats,
       cellStyles,
       use1904DateSystem,
-      maxRows: MAX_XLSX_SHEET_ROWS
+      maxRows: MAX_XLSX_SHEET_ROWS,
+      locale
     })
     const layout = parseXlsxWorksheetLayout(worksheetXml ?? '')
     sheets.push({ name: descriptor.name, hidden: descriptor.hidden, ...grid, ...layout })

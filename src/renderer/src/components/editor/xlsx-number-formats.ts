@@ -12,6 +12,8 @@ import { forEachXlsxXmlElement } from './xlsx-xml-elements'
  */
 export type XlsxNumberFormats = {
   isDateStyle(styleIndex: number | undefined): boolean
+  /** The format code a style applies, or undefined for General. */
+  getFormatCode(styleIndex: number | undefined): string | undefined
 }
 
 // Built-in date and time formats from the SpreadsheetML spec (18.8.30). Excel
@@ -47,7 +49,17 @@ export function parseXlsxNumberFormats(stylesXml: string): XlsxNumberFormats {
   const styleNumberFormatIds = parseXlsxCellFormats(stylesXml).map(
     (cellFormat) => cellFormat.numberFormatId
   )
+  const formatCodesById = parseFormatCodesById(stylesXml)
   return {
+    getFormatCode: (styleIndex) => {
+      if (styleIndex === undefined) {
+        return undefined
+      }
+      const numberFormatId = styleNumberFormatIds[styleIndex]
+      return numberFormatId === undefined
+        ? undefined
+        : (formatCodesById.get(numberFormatId) ?? BUILTIN_FORMAT_CODES[numberFormatId])
+    },
     isDateStyle: (styleIndex) => {
       if (styleIndex === undefined) {
         return false
@@ -69,6 +81,41 @@ const DATE_FORMAT_TOKEN_PATTERN = /[ymdhs]/i
 // bracketed unit tells Excel not to wrap at 24h. Rendering serial 1.5 as a date
 // would be wrong (it means 36 hours), so those cells keep their stored number.
 const ELAPSED_TIME_SECTION_PATTERN = /\[(?:h+|m+|s+)\]/i
+
+// Why: Excel never writes the built-in codes into `<numFmts>`, so a cell using
+// one carries only its id. These are the numeric built-ins worth rendering; the
+// date ids are handled by the date path instead.
+const BUILTIN_FORMAT_CODES: Record<number, string> = {
+  1: '0',
+  2: '0.00',
+  3: '#,##0',
+  4: '#,##0.00',
+  9: '0%',
+  10: '0.00%',
+  11: '0.00E+00',
+  37: '#,##0 ;(#,##0)',
+  38: '#,##0 ;[Red](#,##0)',
+  39: '#,##0.00;(#,##0.00)',
+  40: '#,##0.00;[Red](#,##0.00)',
+  48: '##0.0E+0'
+}
+
+function parseFormatCodesById(stylesXml: string): Map<number, string> {
+  const formatCodes = new Map<number, string>()
+
+  forEachXlsxXmlElement(stylesXml, 'numFmts', (numberFormatsBlock) => {
+    forEachXlsxXmlElement(numberFormatsBlock.inner, 'numFmt', (element) => {
+      const numberFormatId = Number.parseInt(element.attributes.numFmtId ?? '', 10)
+      const formatCode = element.attributes.formatCode
+      if (Number.isInteger(numberFormatId) && formatCode !== undefined) {
+        formatCodes.set(numberFormatId, formatCode)
+      }
+    })
+    return false
+  })
+
+  return formatCodes
+}
 
 export function isXlsxDateFormatCode(formatCode: string): boolean {
   if (ELAPSED_TIME_SECTION_PATTERN.test(formatCode)) {

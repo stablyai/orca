@@ -1,5 +1,10 @@
 import { parseXlsxCellReference } from './xlsx-cell-reference'
 import type { XlsxCellStyle, XlsxCellStyles } from './xlsx-cell-styles'
+import {
+  formatXlsxNumericValue,
+  parseXlsxNumberFormatCode,
+  type XlsxNumericFormat
+} from './xlsx-number-format'
 import type { XlsxNumberFormats } from './xlsx-number-formats'
 import { formatXlsxSerialDate } from './xlsx-serial-date'
 import { decodeXlsxXmlText, forEachXlsxXmlElement, readXlsxXmlTextRuns } from './xlsx-xml-elements'
@@ -22,6 +27,11 @@ export type XlsxWorksheetContext = {
   cellStyles: XlsxCellStyles
   use1904DateSystem: boolean
   maxRows: number
+  /**
+   * Locale for number formatting. A format code implies the viewer's group and
+   * decimal separators, not the file's.
+   */
+  locale: string
 }
 
 const BOOLEAN_CELL_TEXT = { true: 'TRUE', false: 'FALSE' } as const
@@ -155,14 +165,44 @@ function formatNumericCellText(
   styleIndexAttribute: string | undefined,
   context: XlsxWorksheetContext
 ): string {
-  if (!context.numberFormats.isDateStyle(readStyleIndex(styleIndexAttribute))) {
-    return rawValue
-  }
+  const styleIndex = readStyleIndex(styleIndexAttribute)
   const serial = Number(rawValue)
   if (!Number.isFinite(serial)) {
     return rawValue
   }
-  return formatXlsxSerialDate(serial, { use1904DateSystem: context.use1904DateSystem }) ?? rawValue
+  if (context.numberFormats.isDateStyle(styleIndex)) {
+    return (
+      formatXlsxSerialDate(serial, { use1904DateSystem: context.use1904DateSystem }) ?? rawValue
+    )
+  }
+  const numericFormat = getNumericFormat(context, styleIndex)
+  if (numericFormat === null) {
+    return rawValue
+  }
+  return formatXlsxNumericValue(serial, numericFormat, context.locale).text
+}
+
+// Why: parsing a format code is pure and a sheet reuses a handful of styles
+// across every cell, so the parsed form is cached per style index.
+const numericFormatCache = new WeakMap<XlsxNumberFormats, Map<number, XlsxNumericFormat | null>>()
+
+function getNumericFormat(
+  context: XlsxWorksheetContext,
+  styleIndex: number | undefined
+): XlsxNumericFormat | null {
+  if (styleIndex === undefined) {
+    return null
+  }
+  let cache = numericFormatCache.get(context.numberFormats)
+  if (cache === undefined) {
+    cache = new Map()
+    numericFormatCache.set(context.numberFormats, cache)
+  }
+  if (!cache.has(styleIndex)) {
+    const formatCode = context.numberFormats.getFormatCode(styleIndex)
+    cache.set(styleIndex, formatCode === undefined ? null : parseXlsxNumberFormatCode(formatCode))
+  }
+  return cache.get(styleIndex) ?? null
 }
 
 function readFirstElementText(xml: string, tagName: string): string | null {

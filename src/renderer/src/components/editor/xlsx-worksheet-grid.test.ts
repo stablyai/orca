@@ -10,6 +10,7 @@ function context(overrides: Partial<XlsxWorksheetContext> = {}): XlsxWorksheetCo
     cellStyles: parseXlsxCellStyles('', ''),
     use1904DateSystem: false,
     maxRows: 1000,
+    locale: 'en-US',
     ...overrides
   }
 }
@@ -208,6 +209,30 @@ describe('parseXlsxWorksheetGrid', () => {
     const grid = parseXlsxWorksheetGrid(xml, context({ numberFormats: DATE_STYLES }))
 
     expect(grid.rows).toEqual([['not-a-serial']])
+  })
+
+  it('applies a number format to a styled numeric cell', () => {
+    // Why: a currency cell showing 1000 where the file says 1,000 € is the most
+    // visible way a viewer can misrepresent a sheet.
+    const currencyStyles = parseXlsxNumberFormats(
+      '<styleSheet><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0\\ &quot;€&quot;"/></numFmts><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="164"/></cellXfs></styleSheet>'
+    )
+    const xml = '<row r="1"><c r="A1" s="1"><v>1000</v></c><c r="B1" s="0"><v>1000</v></c></row>'
+
+    const grid = parseXlsxWorksheetGrid(xml, context({ numberFormats: currencyStyles }))
+
+    expect(grid.rows).toEqual([['1,000 €', '1000']])
+  })
+
+  it('uses the negative section of a format code', () => {
+    const accountingStyles = parseXlsxNumberFormats(
+      '<styleSheet><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0;(#,##0)"/></numFmts><cellXfs count="1"><xf numFmtId="164"/></cellXfs></styleSheet>'
+    )
+    const xml = '<row r="1"><c r="A1" s="0"><v>-50</v></c></row>'
+
+    const grid = parseXlsxWorksheetGrid(xml, context({ numberFormats: accountingStyles }))
+
+    expect(grid.rows).toEqual([['(50)']])
   })
 
   it('renders a number as stored without reformatting its precision', () => {
