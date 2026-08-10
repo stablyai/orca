@@ -2839,6 +2839,19 @@
             "cc5a2dc706": "Edit pane title: {{value0}}",
             "7dbbfcbecc": "Pane title"
           },
+          "TerminalLinkActionPopover": {
+            "openLink": "Open link",
+            "openFile": "Open file",
+            "switchWorkspace": "Switch workspace",
+            "openInFinder": "Open in Finder",
+            "openFolder": "Open folder",
+            "openWithDefaultApp": "Open with default app",
+            "switchTerminal": "Switch terminal",
+            "openTaskTerminal": "Open task terminal",
+            "systemBrowser": "System Browser",
+            "orcaBrowser": "Orca Browser",
+            "terminalLinkSettings": "Terminal link settings"
+          },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Open Disk Space Analyzer",
             "ae20d0ffc2": "Dismiss",
@@ -8110,6 +8123,14 @@
               "invert": "invert",
               "opposite": "opposite"
             },
+            "terminalLinkActions": {
+              "terminal": "terminal",
+              "click": "click",
+              "actions": "actions",
+              "popover": "popover",
+              "menu": "menu",
+              "disable": "disable"
+            },
             "72c58f7792": "webview",
             "82ba1c80ea": "localhost",
             "bea27bac4b": "links",
@@ -10023,6 +10044,10 @@
           "descriptionSystem": "Links open in Orca, so {{chord}}+click sends one to your system browser instead.",
           "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
         },
+        "BrowserTerminalLinkActionsSetting": {
+          "title": "Show terminal link actions",
+          "description": "Show available actions when you click a terminal link. Turn this off to require {{modifier}}-click."
+        },
         "PluginConsentDialog": {
           "workerTrust": "Background worker — runs its own process",
           "instructionalTrust": "Instructional content — runs later under user or agent authority",
@@ -10389,6 +10414,7 @@
           "devOnly": "Dev only",
           "channelAriaLabel": "Update channel",
           "hourlyWarning": "Hourly builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.",
+          "dailyWarning": "Daily builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.",
           "adhocWarning": "Adhoc builds are macOS-only and come from a branch that has not landed. Whoever cut one may abandon it — keep a stable build handy.",
           "loadingBuilds": "Loading builds…",
           "noBuilds": "No builds found",
@@ -11738,8 +11764,7 @@
             "delete": "Delete",
             "deleteReasonNonLocalHost": "Only sessions on this device can be deleted.",
             "deleteReasonSyntheticPath": "This session can't be deleted from Orca.",
-            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca.",
-            "deleteReasonSessionLive": "This session is still running — wait for it to finish before deleting."
+            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca."
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Delete this session?",

@@ -20,21 +20,32 @@ const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
 // swap them over an installed Orca and macOS treats each build as a new app.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
+const isMacDaily = process.env.ORCA_MAC_DAILY === '1'
 const isMacAdhoc = process.env.ORCA_MAC_ADHOC === '1'
-const isMacRelease = process.env.ORCA_MAC_RELEASE === '1' || isMacHourly || isMacAdhoc
+const isMacRelease =
+  process.env.ORCA_MAC_RELEASE === '1' || isMacHourly || isMacDaily || isMacAdhoc
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
 const localBuildVersion = isMacRelease ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
 const devChannelBuildVersion = isMacHourly
   ? process.env.ORCA_HOURLY_BUILD_VERSION
-  : isMacAdhoc
-    ? process.env.ORCA_ADHOC_BUILD_VERSION
-    : undefined
+  : isMacDaily
+    ? process.env.ORCA_DAILY_BUILD_VERSION
+    : isMacAdhoc
+      ? process.env.ORCA_ADHOC_BUILD_VERSION
+      : undefined
 // Why each dev channel gets its own repo rather than tagging into the main one:
 // the releases atom feed exposes only the 10 newest entries, so 24 hourly tags a
 // day would evict every stable/RC entry and strand users on a feed with nothing
-// to install. Keeping adhoc separate from hourly too means a branch build cannot
-// be picked up by someone who only meant to ride main.
-const devChannelRepo = isMacHourly ? 'orca-hourly' : isMacAdhoc ? 'orca-adhoc' : null
+// to install. Keeping adhoc/daily separate from hourly too means a branch build
+// or a once-a-day cut cannot be picked up by someone who only meant to ride
+// main's hourlies.
+const devChannelRepo = isMacHourly
+  ? 'orca-hourly'
+  : isMacDaily
+    ? 'orca-daily'
+    : isMacAdhoc
+      ? 'orca-adhoc'
+      : null
 const appId = 'com.stablyai.orca'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',

@@ -172,7 +172,7 @@ export function registerSettingsHandlers(
     if (hookSettingChanged) {
       try {
         await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {
-          shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
+          shouldHydrateShellPath: app.isPackaged,
           onInstallError: recordManagedHookInstallFailure,
           shouldContinue: (agent) => {
             const settings = store.getSettings()

@@ -11318,8 +11318,7 @@
             "delete": "削除",
             "deleteReasonNonLocalHost": "このデバイス上のセッションのみ削除できます。",
             "deleteReasonSyntheticPath": "このセッションは Orca では削除できません。",
-            "deleteReasonUnsupportedAgent": "{{value0}} のセッションは Orca では削除できません。",
-            "deleteReasonSessionLive": "このセッションはまだ実行中です — 削除する前に完了を待ってください。"
+            "deleteReasonUnsupportedAgent": "{{value0}} のセッションは Orca では削除できません。"
           },
           "AiVaultSessionDeleteDialog": {
             "title": "このセッションを削除しますか?",

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-07",
+  "updatedAt": "2026-08-09",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -10,103 +10,6 @@
     }
   },
   "gates": [
-    {
-      "id": "ai-vault.live-session-delete-authority",
-      "title": "AI Vault deletion fails closed against owning-runtime session liveness",
-      "maturity": "experimental",
-      "protection": "partial",
-      "owner": "ai-vault-runtime",
-      "layer": "main-process-filesystem-mutation",
-      "surfaces": [
-        "AI Vault transcript deletion",
-        "local and WSL agent sessions",
-        "paired-client-owned host sessions"
-      ],
-      "platforms": ["macos", "linux", "windows"],
-      "providers": ["local", "wsl", "ssh", "paired-runtime"],
-      "coveredPlatforms": ["macos", "linux", "windows"],
-      "coveredProviders": ["local", "wsl", "ssh", "paired-runtime"],
-      "coverageNotes": "Platform-independent contracts cover local and WSL authority, paired-owned and unmanaged live sessions absent from renderer or managed-PTY state, identity retention across UI dismissal, inventory and foreground-inspection ordering, SSH exclusion, unavailable and ambiguous inventory, bounded inspection concurrency, oversized inventories, returned rejection, and real temporary-file survival. Live headed/headless paired-runtime, physical Windows/WSL, and Docker SSH journeys remain uncollected.",
-      "motivatingLinks": ["https://github.com/stablyai/orca/releases/tag/v1.4.177-rc.0"],
-      "invariant": "Main may delete a local AI transcript only after the owning runtime freshly proves that no live local or WSL provider-session identity exists, including exact hook identities absent from managed PTY inventory; live and unknown liveness preserve the transcript regardless of renderer freshness.",
-      "oracle": "Open confirmation against a stale empty renderer snapshot, transition the authoritative session to live before main authorization and during a controlled foreground-inspection barrier, and separately model paired and unmanaged local owners absent from renderer or managed-PTY state. Dismiss a live row and require its identity-only authority to remain. Require session-live or session-liveness-unknown rejection and the real temporary transcript to survive. Make process inventory unavailable or ambiguous and require unknown with the file preserved; prove known other sessions permit deletion and inspection concurrency stays at or below eight.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ai-vault/session-delete-liveness.repro.test.ts src/main/ai-vault/session-liveness.test.ts src/main/agent-hooks/server-ai-vault-liveness.test.ts --reporter=dot"
-      ],
-      "testFiles": [
-        "src/main/ai-vault/session-delete-liveness.repro.test.ts",
-        "src/main/ai-vault/session-liveness.test.ts",
-        "src/main/agent-hooks/server-ai-vault-liveness.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/main/ai-vault/session-delete-liveness.repro.test.ts",
-          "assertions": [
-            "confirmation TOCTOU returns session-live and preserves the real transcript",
-            "paired ownership missing from the renderer snapshot returns session-live and preserves the real transcript",
-            "exact live local hook identity missing from managed PTY inventory returns unknown and preserves the real transcript",
-            "dismissed live status retained as identity-only authority returns unknown and preserves the real transcript",
-            "unknown authoritative liveness fails closed and preserves the real transcript"
-          ]
-        },
-        {
-          "file": "src/main/ai-vault/session-liveness.test.ts",
-          "assertions": [
-            "local, WSL, paired-runtime, and SSH host partitions resolve without local fallback",
-            "renderer session identity must match the identity parsed from the validated transcript",
-            "hook identity is captured after the controlled process-inventory barrier",
-            "hook identity is captured after the controlled foreground-inspection barrier",
-            "missing identity, unavailable inventory, unattributed ownership, and oversized inventory remain unknown",
-            "foreground inspection concurrency never exceeds eight and stops scheduling at the shared deadline"
-          ]
-        },
-        {
-          "file": "src/main/agent-hooks/server-ai-vault-liveness.test.ts",
-          "assertions": [
-            "user dismissal retains provider identity without retaining a visible turn-status row",
-            "restart hydration preserves dismissed identity as unconfirmed liveness-only authority"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-08-07",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ai-vault/session-delete-liveness.repro.test.ts src/main/ai-vault/session-liveness.test.ts src/main/agent-hooks/server-ai-vault-liveness.test.ts --reporter=dot",
-          "result": "passed",
-          "durationSeconds": 1,
-          "summary": "Twenty deterministic deletion, identity-binding, inventory/inspection-ordering, dismissal/restart-retention, unmanaged-ownership, unknown-state, filesystem-survival, host-partition, deadline, and bounded-concurrency assertions passed."
-        }
-      ],
-      "runtimeBudget": {
-        "p95Seconds": 2,
-        "scope": "focused main-process liveness and temporary-filesystem contracts"
-      },
-      "flakeHistory": {
-        "status": "unknown",
-        "evidence": "One local deterministic run is recorded; CI and soak history have not started."
-      },
-      "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "The byte-identical two-scenario oracle failed on v1.4.177-rc.0 (9e948fbdf4) and latest main (7a867f12aa): both returned deleted and both real transcripts were removed. On PR commit 8e2fcfd681, an exact live local hook identity absent from empty managed-PTY inventory returned deleted and removed the real transcript. Independent review then proved a session-other to session-live transition during foreground inspection returned not-live, and live-row dismissal erased the only external identity. The corrected candidate passed all 20 assertions, including restart hydration of dismissed identity; temporarily disabling only the original liveness decision made all three original deletion-safety tests red again."
-      },
-      "performanceBudget": {
-        "required": true,
-        "evidence": "Deletion parses only the validated target through the incremental parse cache, performs one local-provider process listing, makes no SSH or paired-runtime request, caps inventory at 512 PTYs, bounds foreground inspections to eight concurrent calls under one shared three-second fail-closed deadline, and adds no polling or background work."
-      },
-      "promotionCriteria": [
-        "Collect CI soak history for the deterministic gate.",
-        "Collect headed and headless paired-runtime deletion-refusal evidence.",
-        "Collect physical Windows/WSL and Docker SSH host-partition evidence."
-      ],
-      "knownGaps": [
-        "No live headed/headless paired-runtime journey was run.",
-        "No physical Windows/WSL or Docker SSH journey was run.",
-        "The authorization check cannot make an external provider process start atomic with filesystem trashing; it closes the reported renderer-confirmation window at the main mutation boundary."
-      ],
-      "demotionRule": "Keep experimental or demote if live or unknown ownership can reach trashing, remote ownership falls back locally, process inspection becomes unbounded, or the deterministic filesystem oracle flakes without a product or harness defect."
-    },
     {
       "id": "editor.restored-sibling-owner-reparent",
       "title": "Restored sibling tabs migrate filesystem authority before becoming editable",
