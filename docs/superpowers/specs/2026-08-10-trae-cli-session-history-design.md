@@ -151,7 +151,6 @@ Follow red-green-refactor for each behavior.
 
 - Discover a Trae fixture through an injected local root.
 - Ignore non-rollout JSONL files and avoid traversing `*.artifacts` directories.
-- Include older in-scope Trae sessions despite the global recency cap.
 - Resolve WSL roots under `.trae/cli/sessions`.
 - Verify workspace, project, and all filters through the existing shared path logic.
 
