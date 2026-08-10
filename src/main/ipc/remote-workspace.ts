@@ -12,9 +12,10 @@ import type {
   RemoteWorkspaceSession,
   RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
-import type { SshTarget } from '../../shared/ssh-types'
+import type { DirectSshAuthority, SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
+import { isAdmissibleDirectSshAuthority } from '../../shared/ssh-retained-payload-admission'
 import { adoptOrphanedWorkspaceSessionPartition } from '../../shared/workspace-session-partition-adoption'
 import {
   findAmbiguousWorkspaceSessionKeys,
@@ -26,6 +27,10 @@ import {
   exportExplicitSessionForTarget,
   exportSessionForTarget
 } from './remote-workspace-explicit-session-authority'
+import {
+  getSshProviderAuthority,
+  isCurrentSshProviderAuthority
+} from '../ssh/ssh-provider-authority'
 
 const CLIENT_ID = randomUUID()
 const CLIENT_NAME = hostname() || 'This device'
@@ -403,6 +408,7 @@ export function registerRemoteWorkspaceHandlers(
       args: {
         session?: WorkspaceSessionState
         sessionTargetId?: unknown
+        sessionAuthority?: unknown
         hydratedTargetIds?: unknown
       }
     ) => {
@@ -416,7 +422,17 @@ export function registerRemoteWorkspaceHandlers(
         typeof args.sessionTargetId === 'string' && args.sessionTargetId.length > 0
           ? args.sessionTargetId
           : null
-      if (args.session && (!sessionTargetId || !hydratedTargetIds.has(sessionTargetId))) {
+      const sessionAuthority = isAdmissibleDirectSshAuthority(args.sessionAuthority)
+        ? ({ ...args.sessionAuthority } as DirectSshAuthority)
+        : null
+      if (
+        args.session &&
+        (!sessionTargetId ||
+          !sessionAuthority ||
+          sessionAuthority.targetId !== sessionTargetId ||
+          !hydratedTargetIds.has(sessionTargetId) ||
+          !isCurrentSshProviderAuthority(sessionAuthority))
+      ) {
         return []
       }
       const targets =
@@ -434,8 +450,12 @@ export function registerRemoteWorkspaceHandlers(
         targets.map(async (target) => {
           // Boot owns persistence; export only overlays stranded SSH state.
           let session: RemoteWorkspaceSession | null
+          const authority = args.session ? sessionAuthority : getSshProviderAuthority(target.id)
+          if (!authority || !isCurrentSshProviderAuthority(authority)) {
+            return null
+          }
           if (args.session) {
-            session = exportExplicitSessionForTarget(store, target.id, args.session)
+            session = exportExplicitSessionForTarget(store, authority, args.session)
           } else {
             const targetPartition = store.getWorkspaceSession(toSshExecutionHostId(target.id))
             const ambiguousKeys = findAmbiguousWorkspaceSessionKeys([
@@ -452,7 +472,7 @@ export function registerRemoteWorkspaceHandlers(
             }
             session = exportSessionForTarget(
               store,
-              target.id,
+              authority,
               adoptOrphanedWorkspaceSessionPartition(fallbackSession, targetPartition).session
             )
           }

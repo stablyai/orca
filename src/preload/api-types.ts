@@ -63,6 +63,7 @@ import type { RuntimePairingReach } from '../shared/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../shared/mobile-relay-mint-failure'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../shared/remote-pairing-verification'
 import type {
+  DirectSshAuthority,
   SshMutationExpectation,
   SshConnectionState,
   SshConfigHostListArgs,
@@ -2752,6 +2753,7 @@ export type PreloadApi = {
     setForConnectedTargets: (args: {
       session?: WorkspaceSessionState
       sessionTargetId?: string
+      sessionAuthority?: DirectSshAuthority
       hydratedTargetIds?: string[]
     }) => Promise<{ targetId: string; result: RemoteWorkspacePatchResult }[]>
     listEnabledConnectedTargets: () => Promise<string[]>

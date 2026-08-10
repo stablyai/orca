@@ -13,6 +13,7 @@ import {
 } from './direct-ssh-reconnect-coordinator'
 import { directSshAuthoritiesEqual } from './direct-ssh-reconnect-tokens'
 import {
+  directSshTerminalTabKey,
   mergeDirectSshRemoteWorkspaceSession,
   uniqueWorktreeIdByPath
 } from './remote-workspace-session-merge'
@@ -50,26 +51,32 @@ function exactTargetWorktreeIds(state: AppState, authority: DirectSshAuthority):
   }).gitWorktreeIds
 }
 
-function currentRecoveryTabIds(
+function currentRecoveryTabKeys(
   state: AppState,
   authority: DirectSshAuthority,
   worktreeIds: ReadonlySet<string>
 ): Set<string> {
-  const targetTabIds = new Set(
-    [...worktreeIds].flatMap((worktreeId) =>
-      (state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
-    )
-  )
-  return new Set(
+  const ownerByTabId = new Map<string, string | null>()
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    for (const tab of tabs) {
+      ownerByTabId.set(tab.id, ownerByTabId.has(tab.id) ? null : worktreeId)
+    }
+  }
+  const recoveryTabIds = new Set(
     [
       ...Object.entries(state.directSshPaneRetryByTabId),
       ...Object.entries(state.directSshLivePtyBindingByTabId)
     ]
-      .filter(
-        ([tabId, entry]) =>
-          targetTabIds.has(tabId) && directSshAuthoritiesEqual(entry.authority, authority)
-      )
+      .filter(([, entry]) => directSshAuthoritiesEqual(entry.authority, authority))
       .map(([tabId]) => tabId)
+  )
+  return new Set(
+    [...recoveryTabIds].flatMap((tabId) => {
+      const worktreeId = ownerByTabId.get(tabId)
+      return worktreeId && worktreeIds.has(worktreeId)
+        ? [directSshTerminalTabKey(worktreeId, tabId)]
+        : []
+    })
   )
 }
 
@@ -116,9 +123,23 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     remoteSession,
     worktreeIds,
     state.tabsByWorktree,
-    currentRecoveryTabIds(state, authority, worktreeIds),
-    state.pendingReconnectPtyIdByTabId ?? {}
+    currentRecoveryTabKeys(state, authority, worktreeIds),
+    state.pendingReconnectPtyIdByTabId ?? {},
+    authority
   )
+  if (!merged) {
+    state.setRemoteWorkspaceSyncStatus(authority.targetId, {
+      phase: 'conflict',
+      direction: 'pull',
+      revision: snapshot.revision,
+      updatedAt: snapshot.updatedAt,
+      message: translate(
+        'auto.hooks.useIpcEvents.workspaceChangedOnAnotherDevice',
+        'Workspace changed on another device'
+      )
+    })
+    return
+  }
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return
   }

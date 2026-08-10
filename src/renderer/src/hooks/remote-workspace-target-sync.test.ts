@@ -275,7 +275,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
           {
             id: 'stable-tab',
             worktreeId: 'repo-a::/remote/work',
-            ptyId: 'local-pty',
+            ptyId: 'ssh:target-a@@local-pty',
             generation: 7,
             pendingActivationSpawn: { requestedAt: 10 }
           }
@@ -285,7 +285,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
         calls.push('hydrate')
         expect(session.tabsByWorktree['repo-a::/remote/work'][0]).toMatchObject({
           id: 'stable-tab',
-          ptyId: 'local-pty',
+          ptyId: 'ssh:target-a@@local-pty',
           generation: 7,
           pendingActivationSpawn: { requestedAt: 10 }
         })
@@ -304,7 +304,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
         {
           id: 'stable-tab',
           worktreePath: '/remote/work',
-          ptyId: 'remote-pty',
+          ptyId: 'ssh:target-a@@remote-pty',
           generation: 99
         } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
       ]
@@ -337,7 +337,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
           {
             id: 'stable-tab',
             worktreeId: 'repo-a::/remote/work',
-            ptyId: 'local-pty',
+            ptyId: 'ssh:target-a@@local-pty',
             generation: 7
           }
         ]
@@ -346,10 +346,10 @@ describe('createRemoteWorkspaceTargetSync', () => {
         'stable-tab': {
           root: { type: 'leaf', leafId: 'leaf-local' },
           activeLeafId: 'leaf-local',
-          ptyIdsByLeafId: { 'leaf-local': 'local-pty' }
+          ptyIdsByLeafId: { 'leaf-local': 'ssh:target-a@@local-pty' }
         }
       },
-      ptyIdsByTabId: { 'stable-tab': ['local-pty'] },
+      ptyIdsByTabId: { 'stable-tab': ['ssh:target-a@@local-pty'] },
       hydrateTabsSession
     })
     const harness = createHarness(state, async () => null)
@@ -358,7 +358,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
         {
           id: 'stable-tab',
           worktreePath: '/remote/work',
-          ptyId: 'old-remote-pty',
+          ptyId: 'ssh:target-a@@old-remote-pty',
           generation: 1
         } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
       ]
@@ -368,7 +368,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
     expect(
       hydrateTabsSession.mock.calls[0][0].tabsByWorktree['repo-a::/remote/work'][0]
-    ).toMatchObject({ generation: 7, ptyId: 'local-pty' })
+    ).toMatchObject({ generation: 7, ptyId: 'ssh:target-a@@local-pty' })
 
     state.tabsByWorktree['repo-a::/remote/work'][0].ptyId = null
     state.pendingReconnectPtyIdByTabId = {}
@@ -389,15 +389,15 @@ describe('createRemoteWorkspaceTargetSync', () => {
     const merged = hydrateTabsSession.mock.calls[1][0]
     expect(merged.tabsByWorktree['repo-a::/remote/work'][0]).toMatchObject({
       generation: 7,
-      ptyId: 'local-pty'
+      ptyId: 'ssh:target-a@@local-pty'
     })
     expect(merged.terminalLayoutsByTabId['stable-tab']).toEqual({
       root: { type: 'leaf', leafId: 'leaf-local' },
       activeLeafId: 'leaf-local',
-      ptyIdsByLeafId: { 'leaf-local': 'local-pty' }
+      ptyIdsByLeafId: { 'leaf-local': 'ssh:target-a@@local-pty' }
     })
     expect(merged.remoteSessionIdsByTabId).toEqual({
-      'stable-tab': 'local-pty'
+      'stable-tab': 'ssh:target-a@@local-pty'
     })
     expect(merged.activeWorktreeIdsOnShutdown).toEqual(['repo-a::/remote/work'])
   })
@@ -410,7 +410,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
           {
             id: 'stable-tab',
             worktreeId: 'repo-a::/remote/work',
-            ptyId: 'local-pty',
+            ptyId: 'ssh:target-a@@local-pty',
             generation: 1
           }
         ]
@@ -423,7 +423,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
         {
           id: 'stable-tab',
           worktreePath: '/remote/work',
-          ptyId: 'new-remote-pty',
+          ptyId: 'ssh:target-a@@new-remote-pty',
           generation: 8
         } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
       ]
@@ -433,7 +433,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
     expect(
       hydrateTabsSession.mock.calls[0][0].tabsByWorktree['repo-a::/remote/work'][0]
-    ).toMatchObject({ generation: 8, ptyId: 'new-remote-pty' })
+    ).toMatchObject({ generation: 8, ptyId: 'ssh:target-a@@new-remote-pty' })
   })
 
   it('does not preserve recovery evidence from another authority', async () => {
@@ -444,7 +444,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
           {
             id: 'stable-tab',
             worktreeId: 'repo-a::/remote/work',
-            ptyId: 'local-pty',
+            ptyId: 'ssh:target-a@@local-pty',
             generation: 1
           }
         ]
@@ -457,7 +457,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
             connectionGeneration: 2
           },
           tabGeneration: 1,
-          ptyId: 'local-pty'
+          ptyId: 'ssh:target-a@@local-pty'
         }
       },
       hydrateTabsSession
@@ -468,7 +468,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
         {
           id: 'stable-tab',
           worktreePath: '/remote/work',
-          ptyId: 'new-remote-pty',
+          ptyId: 'ssh:target-a@@new-remote-pty',
           generation: 8
         } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
       ]
@@ -478,7 +478,63 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
     expect(
       hydrateTabsSession.mock.calls[0][0].tabsByWorktree['repo-a::/remote/work'][0]
-    ).toMatchObject({ generation: 8, ptyId: 'new-remote-pty' })
+    ).toMatchObject({ generation: 8, ptyId: 'ssh:target-a@@new-remote-pty' })
+  })
+
+  it('rejects a target snapshot whose tab id is already owned by another worktree', async () => {
+    const targetWorktreeId = 'repo-a::/remote/work'
+    const otherWorktreeId = 'repo-b::/local/work'
+    const state = appState({
+      repos: [
+        repo(),
+        {
+          id: 'repo-b',
+          path: '/local',
+          projectGroupId: null,
+          connectionId: null,
+          executionHostId: 'local'
+        }
+      ],
+      worktreesByRepo: {
+        'repo-a': [worktree()],
+        'repo-b': [{ id: otherWorktreeId, repoId: 'repo-b', hostId: 'local' }]
+      },
+      tabsByWorktree: {
+        [targetWorktreeId]: [
+          {
+            id: 'shared-tab',
+            worktreeId: targetWorktreeId,
+            ptyId: 'ssh:target-a@@local',
+            generation: 1
+          }
+        ],
+        [otherWorktreeId]: [
+          { id: 'shared-tab', worktreeId: otherWorktreeId, ptyId: 'local-pty', generation: 9 }
+        ]
+      }
+    })
+    const harness = createHarness(state, async () => null)
+
+    await harness.sync.applyUnsolicitedSnapshot(
+      'target-a',
+      snapshot(8, {
+        '/remote/work': [
+          {
+            id: 'shared-tab',
+            worktreePath: '/remote/work',
+            ptyId: 'ssh:target-a@@remote',
+            generation: 2
+          } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
+        ]
+      })
+    )
+
+    expect(state.hydrateWorkspaceSession).not.toHaveBeenCalled()
+    expect(state.hydrateTabsSession).not.toHaveBeenCalled()
+    expect(state.setRemoteWorkspaceSyncStatus).toHaveBeenLastCalledWith(
+      'target-a',
+      expect.objectContaining({ phase: 'conflict', revision: 8 })
+    )
   })
 
   it('does not finalize an older snapshot superseded during terminal reattach', async () => {

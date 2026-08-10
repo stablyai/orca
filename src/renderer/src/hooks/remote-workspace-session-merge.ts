@@ -1,4 +1,6 @@
 import type { TerminalTab, WorkspaceSessionState } from '../../../shared/types'
+import type { DirectSshAuthority } from '../../../shared/ssh-types'
+import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree-id'
 import type { AppState } from '../store/types'
@@ -19,19 +21,85 @@ function preserveNewerLocalTerminalFields(
     : preserved
 }
 
+export function directSshTerminalTabKey(worktreeId: string, tabId: string): string {
+  return JSON.stringify([worktreeId, tabId])
+}
+
+function isTargetPtyId(ptyId: string | null | undefined, targetId: string): ptyId is string {
+  return Boolean(ptyId && parseAppSshPtyId(ptyId)?.connectionId === targetId)
+}
+
+function hasAmbiguousResultTabIds(
+  current: WorkspaceSessionState,
+  remote: WorkspaceSessionState,
+  replaceWorktreeIds: ReadonlySet<string>,
+  targetId: string
+): boolean {
+  const ownerByTabId = new Map<string, { worktreeId: string; targetOwned: boolean }>()
+  const addOwner = (worktreeId: string, tab: TerminalTab): boolean => {
+    const targetOwned = isTargetPtyId(tab.ptyId, targetId)
+    const tabId = tab.id
+    const owner = ownerByTabId.get(tabId)
+    if (owner && owner.worktreeId !== worktreeId && (!owner.targetOwned || !targetOwned)) {
+      return false
+    }
+    ownerByTabId.set(tabId, { worktreeId, targetOwned })
+    return true
+  }
+  for (const [worktreeId, tabs] of Object.entries(current.tabsByWorktree)) {
+    if (!replaceWorktreeIds.has(worktreeId)) {
+      for (const tab of tabs) {
+        if (!addOwner(worktreeId, tab)) {
+          return true
+        }
+      }
+    }
+  }
+  for (const [worktreeId, tabs] of Object.entries(remote.tabsByWorktree)) {
+    for (const tab of tabs) {
+      if (!addOwner(worktreeId, tab)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function targetLayout(
+  session: WorkspaceSessionState,
+  tabId: string,
+  targetId: string
+): WorkspaceSessionState['terminalLayoutsByTabId'][string] | undefined {
+  const layout = session.terminalLayoutsByTabId[tabId]
+  if (
+    !layout ||
+    Object.values(layout.ptyIdsByLeafId ?? {}).some((ptyId) => !isTargetPtyId(ptyId, targetId))
+  ) {
+    return undefined
+  }
+  return layout
+}
+
 function retainedLocalPtyId(
   current: WorkspaceSessionState,
   reconnectPtyIdByTabId: Readonly<Record<string, string>>,
-  tabId: string
+  tabId: string,
+  targetId: string,
+  allowTabKeyedRecovery: boolean
 ): string | undefined {
-  const layout = current.terminalLayoutsByTabId[tabId]
+  const layout = targetLayout(current, tabId, targetId)
   const mountedLeafIds = collectLeafIdsInOrder(layout?.root)
   const primaryLeafId =
     layout?.activeLeafId && mountedLeafIds.includes(layout.activeLeafId)
       ? layout.activeLeafId
       : mountedLeafIds[0]
   const layoutPtyId = primaryLeafId ? layout?.ptyIdsByLeafId?.[primaryLeafId] : undefined
-  return reconnectPtyIdByTabId[tabId] ?? layoutPtyId
+  const reconnectPtyId = allowTabKeyedRecovery ? reconnectPtyIdByTabId[tabId] : undefined
+  return isTargetPtyId(reconnectPtyId, targetId)
+    ? reconnectPtyId
+    : isTargetPtyId(layoutPtyId, targetId)
+      ? layoutPtyId
+      : undefined
 }
 
 export function mergeDirectSshRemoteWorkspaceSession(
@@ -39,34 +107,56 @@ export function mergeDirectSshRemoteWorkspaceSession(
   remote: WorkspaceSessionState,
   replaceWorktreeIds: ReadonlySet<string>,
   liveTabsByWorktree: AppState['tabsByWorktree'],
-  preserveLocalTerminalTabIds: ReadonlySet<string>,
-  reconnectPtyIdByTabId: Readonly<Record<string, string>>
-): WorkspaceSessionState {
-  const currentTabsById = new Map(
-    [...replaceWorktreeIds]
-      .flatMap((worktreeId) => liveTabsByWorktree[worktreeId] ?? [])
-      .map((tab) => [tab.id, tab])
-  )
+  preserveLocalTerminalTabKeys: ReadonlySet<string>,
+  reconnectPtyIdByTabId: Readonly<Record<string, string>>,
+  authority: DirectSshAuthority
+): WorkspaceSessionState | null {
+  if (hasAmbiguousResultTabIds(current, remote, replaceWorktreeIds, authority.targetId)) {
+    return null
+  }
+  const { targetId } = authority
   const locallyPreservedTabIds = new Set<string>()
   const locallyPreservedWorktreeIds = new Set<string>()
+  const locallyPreservedPtyByTabId = new Map<string, string>()
   const tabsByWorktree = Object.fromEntries(
     Object.entries(remote.tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
       tabs.map((tab) => {
-        const local = currentTabsById.get(tab.id)
-        const retainedPtyId = retainedLocalPtyId(current, reconnectPtyIdByTabId, tab.id)
+        const local = (liveTabsByWorktree[worktreeId] ?? []).find(
+          (candidate) => candidate.id === tab.id
+        )
+        const tabKey = directSshTerminalTabKey(worktreeId, tab.id)
+        const hasCurrentAuthority = preserveLocalTerminalTabKeys.has(tabKey)
+        const retainedPtyId = retainedLocalPtyId(
+          current,
+          reconnectPtyIdByTabId,
+          tab.id,
+          targetId,
+          hasCurrentAuthority
+        )
+        const localPtyId = isTargetPtyId(local?.ptyId, targetId) ? local.ptyId : retainedPtyId
+        const remoteTab =
+          isTargetPtyId(tab.ptyId, targetId) || !tab.ptyId ? tab : { ...tab, ptyId: null }
         if (
           !local ||
-          ((local.generation ?? 0) <= (tab.generation ?? 0) &&
-            !((local.ptyId || retainedPtyId) && !tab.ptyId) &&
+          (!localPtyId && !hasCurrentAuthority) ||
+          ((local.generation ?? 0) <= (remoteTab.generation ?? 0) &&
+            !(localPtyId && !remoteTab.ptyId) &&
             !local.pendingActivationSpawn &&
-            !preserveLocalTerminalTabIds.has(tab.id))
+            !hasCurrentAuthority)
         ) {
-          return tab
+          return remoteTab
         }
         locallyPreservedTabIds.add(tab.id)
         locallyPreservedWorktreeIds.add(worktreeId)
-        return preserveNewerLocalTerminalFields(tab, local, retainedPtyId)
+        if (localPtyId) {
+          locallyPreservedPtyByTabId.set(tab.id, localPtyId)
+        }
+        return preserveNewerLocalTerminalFields(
+          remoteTab,
+          { ...local, ptyId: localPtyId ?? null },
+          retainedPtyId
+        )
       })
     ])
   )
@@ -86,12 +176,14 @@ export function mergeDirectSshRemoteWorkspaceSession(
   const terminalLayoutsByTabId = {
     ...Object.fromEntries(
       Object.entries(current.terminalLayoutsByTabId).filter(
-        ([tabId]) => !replacedTabIds.has(tabId) || locallyPreservedTabIds.has(tabId)
+        ([tabId]) =>
+          !replacedTabIds.has(tabId) ||
+          (locallyPreservedTabIds.has(tabId) && targetLayout(current, tabId, targetId))
       )
     ),
     ...Object.fromEntries(
       Object.entries(remote.terminalLayoutsByTabId).filter(
-        ([tabId]) => !locallyPreservedTabIds.has(tabId)
+        ([tabId]) => !locallyPreservedTabIds.has(tabId) && targetLayout(remote, tabId, targetId)
       )
     )
   }
@@ -128,19 +220,19 @@ export function mergeDirectSshRemoteWorkspaceSession(
     remoteSessionIdsByTabId: {
       ...Object.fromEntries(
         Object.entries(current.remoteSessionIdsByTabId ?? {}).filter(
-          ([tabId]) => !replacedTabIds.has(tabId) || locallyPreservedTabIds.has(tabId)
+          ([tabId, ptyId]) =>
+            !replacedTabIds.has(tabId) ||
+            (locallyPreservedTabIds.has(tabId) && isTargetPtyId(ptyId, targetId))
         )
       ),
       ...Object.fromEntries(
         Object.entries(remote.remoteSessionIdsByTabId ?? {}).filter(
-          ([tabId]) => !locallyPreservedTabIds.has(tabId)
+          ([tabId, ptyId]) => !locallyPreservedTabIds.has(tabId) && isTargetPtyId(ptyId, targetId)
         )
       ),
       ...Object.fromEntries(
         [...locallyPreservedTabIds]
-          .map(
-            (tabId) => [tabId, retainedLocalPtyId(current, reconnectPtyIdByTabId, tabId)] as const
-          )
+          .map((tabId) => [tabId, locallyPreservedPtyByTabId.get(tabId)] as const)
           .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
       )
     },

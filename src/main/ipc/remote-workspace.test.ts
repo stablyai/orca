@@ -5,16 +5,24 @@ import type {
   RemoteWorkspaceSession,
   RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
-import type { SshTarget } from '../../shared/ssh-types'
+import type { DirectSshAuthority, SshProviderEpoch, SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/types'
 
 const {
   getActiveMultiplexerMock,
   getSshConnectionStoreMock,
+  getSshProviderAuthorityMock,
+  isCurrentSshProviderAuthorityMock,
   registerRemoteWorkspaceNotificationHandlerMock
 } = vi.hoisted(() => ({
   getActiveMultiplexerMock: vi.fn(),
   getSshConnectionStoreMock: vi.fn(),
+  getSshProviderAuthorityMock: vi.fn((targetId: string) => ({
+    targetId,
+    providerEpoch: `epoch-${targetId}`,
+    connectionGeneration: 1
+  })),
+  isCurrentSshProviderAuthorityMock: vi.fn(() => true),
   registerRemoteWorkspaceNotificationHandlerMock: vi.fn(() => vi.fn())
 }))
 
@@ -32,6 +40,11 @@ vi.mock('./ssh', () => ({
 
 vi.mock('./remote-workspace-events', () => ({
   registerRemoteWorkspaceNotificationHandler: registerRemoteWorkspaceNotificationHandlerMock
+}))
+
+vi.mock('../ssh/ssh-provider-authority', () => ({
+  getSshProviderAuthority: getSshProviderAuthorityMock,
+  isCurrentSshProviderAuthority: isCurrentSshProviderAuthorityMock
 }))
 
 import {
@@ -74,6 +87,14 @@ const targets: SshTarget[] = [
     username: 'alice'
   }
 ]
+
+function authority(targetId: string): DirectSshAuthority {
+  return {
+    targetId,
+    providerEpoch: `epoch-${targetId}` as SshProviderEpoch,
+    connectionGeneration: 1
+  }
+}
 
 describe('remoteWorkspaceSessionMatchesSnapshot', () => {
   it('matches normalized equivalent sessions', () => {
@@ -174,6 +195,9 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
       listTargets: () => targets
     })
     getRepoMock.mockReset()
+    getSshProviderAuthorityMock.mockClear()
+    isCurrentSshProviderAuthorityMock.mockReset()
+    isCurrentSshProviderAuthorityMock.mockReturnValue(true)
     getWorkspaceSessionMock.mockReset()
     getWorkspaceSessionMock.mockReturnValue(baseSession)
     patchWorkspaceSessionMock.mockReset()
@@ -228,6 +252,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
   async function callSetForConnectedTargets(args: {
     session?: WorkspaceSessionState
     sessionTargetId?: string
+    sessionAuthority?: DirectSshAuthority
     hydratedTargetIds?: unknown
   }): Promise<unknown> {
     const handler = handlers.get('remoteWorkspace:setForConnectedTargets')
@@ -259,10 +284,40 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     expect(getActiveMultiplexerMock).not.toHaveBeenCalled()
   })
 
+  it('rejects missing, conflicting, and stale explicit provider authority', async () => {
+    await expect(
+      callSetForConnectedTargets({
+        session: baseSession,
+        sessionTargetId: 'target-1',
+        hydratedTargetIds: ['target-1']
+      })
+    ).resolves.toEqual([])
+    await expect(
+      callSetForConnectedTargets({
+        session: baseSession,
+        sessionTargetId: 'target-1',
+        sessionAuthority: authority('target-2'),
+        hydratedTargetIds: ['target-1']
+      })
+    ).resolves.toEqual([])
+    isCurrentSshProviderAuthorityMock.mockReturnValue(false)
+    await expect(
+      callSetForConnectedTargets({
+        session: baseSession,
+        sessionTargetId: 'target-1',
+        sessionAuthority: authority('target-1'),
+        hydratedTargetIds: ['target-1']
+      })
+    ).resolves.toEqual([])
+
+    expect(getSshConnectionStoreMock).not.toHaveBeenCalled()
+  })
+
   it('writes only to explicitly hydrated connected targets', async () => {
     const result = await callSetForConnectedTargets({
       session: baseSession,
       sessionTargetId: 'target-1',
+      sessionAuthority: authority('target-1'),
       hydratedTargetIds: ['target-1', 'missing-target']
     })
 
@@ -288,7 +343,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
           {
             id: 'tab-store',
             title: 'Store shell',
-            ptyId: 'pty-store',
+            ptyId: 'ssh:target-1@@pty-store',
             worktreeId: 'repo-target-1::/repo'
           } as never
         ]
@@ -447,13 +502,18 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
         ...baseSession,
         tabsByWorktree: {
           [worktreeId]: [
-            { id: 'tab-explicit', title: 'Shell', ptyId: 'pty-durable', worktreeId } as never
+            {
+              id: 'tab-explicit',
+              title: 'Shell',
+              ptyId: 'ssh:target-1@@pty-durable',
+              worktreeId
+            } as never
           ]
         },
         terminalLayoutsByTabId: {
           'tab-explicit': {
             root: { type: 'leaf', id: 'leaf-1' },
-            ptyIdsByLeafId: { 'leaf-1': 'pty-durable' }
+            ptyIdsByLeafId: { 'leaf-1': 'ssh:target-1@@pty-durable' }
           } as never
         }
       }
@@ -474,6 +534,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
           }
         },
         sessionTargetId: 'target-1',
+        sessionAuthority: authority('target-1'),
         hydratedTargetIds: ['target-1']
       })
     ).resolves.toEqual([])
@@ -488,7 +549,12 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
       ...baseSession,
       tabsByWorktree: {
         [worktreeId]: [
-          { id: 'tab-explicit', title: 'Shell', ptyId: 'pty-durable', worktreeId } as never
+          {
+            id: 'tab-explicit',
+            title: 'Shell',
+            ptyId: 'ssh:target-1@@pty-durable',
+            worktreeId
+          } as never
         ]
       }
     }
@@ -499,6 +565,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     await callSetForConnectedTargets({
       session,
       sessionTargetId: 'target-1',
+      sessionAuthority: authority('target-1'),
       hydratedTargetIds: ['target-1']
     })
 
@@ -530,11 +597,55 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
           }
         },
         sessionTargetId: 'target-1',
+        sessionAuthority: authority('target-1'),
         hydratedTargetIds: ['target-2']
       })
     ).resolves.toEqual([])
 
     expect(getRepoMock).not.toHaveBeenCalled()
     expect(requestByTargetId.get('target-2')).toBeUndefined()
+  })
+
+  it('rejects cross-target PTYs and duplicate tab ownership before explicit export', async () => {
+    const worktreeId = 'repo-target-1::/repo'
+    const localWorktreeId = 'local::/local'
+    const targetTab = {
+      id: 'shared-tab',
+      title: 'Target A',
+      ptyId: 'ssh:target-2@@foreign',
+      worktreeId
+    }
+    await expect(
+      callSetForConnectedTargets({
+        session: {
+          ...baseSession,
+          tabsByWorktree: { [worktreeId]: [targetTab as never] },
+          remoteSessionIdsByTabId: { 'shared-tab': 'ssh:target-2@@foreign' }
+        },
+        sessionTargetId: 'target-1',
+        sessionAuthority: authority('target-1'),
+        hydratedTargetIds: ['target-1']
+      })
+    ).resolves.toEqual([])
+
+    await expect(
+      callSetForConnectedTargets({
+        session: {
+          ...baseSession,
+          tabsByWorktree: {
+            [worktreeId]: [{ ...targetTab, ptyId: 'ssh:target-1@@owned', worktreeId } as never],
+            [localWorktreeId]: [{ ...targetTab, ptyId: null, worktreeId: localWorktreeId } as never]
+          }
+        },
+        sessionTargetId: 'target-1',
+        sessionAuthority: authority('target-1'),
+        hydratedTargetIds: ['target-1']
+      })
+    ).resolves.toEqual([])
+
+    expect(requestByTargetId.get('target-1')).not.toHaveBeenCalledWith(
+      'workspace.patch',
+      expect.anything()
+    )
   })
 })

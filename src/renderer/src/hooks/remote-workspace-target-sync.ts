@@ -25,6 +25,7 @@ type RemoteWorkspaceApi = {
   setForConnectedTargets: (args: {
     session?: WorkspaceSessionState
     sessionTargetId?: string
+    sessionAuthority?: DirectSshAuthority
     hydratedTargetIds?: string[]
   }) => Promise<{ targetId: string; result: RemoteWorkspacePatchResult }[]>
 }
@@ -202,6 +203,7 @@ export function createRemoteWorkspaceTargetSync(
     const results = await deps.remoteWorkspace.setForConnectedTargets({
       session: buildWorkspaceSessionPayload(deps.store.getState()),
       sessionTargetId: authority.targetId,
+      sessionAuthority: authority,
       hydratedTargetIds: [authority.targetId]
     })
     if (!deps.isPreparationTokenCurrent(token)) {
