@@ -194,7 +194,8 @@
           "51f15c37d3": "No se puede abrir la carpeta: {{value0}}",
           "f2e00db373": "No se encontró el archivo: {{value0}}",
           "checkRunDetailsUnavailable": "No hay detalles disponibles para este check.",
-          "checkRunDetailsLoadFailed": "No se pudieron cargar los detalles del check."
+          "checkRunDetailsLoadFailed": "No se pudieron cargar los detalles del check.",
+          "985bc00bf0": "No se pudo crear el archivo sin título."
         },
         "github": {
           "f129c42773": "GitHub no devolvió el comentario nuevo.",
@@ -2981,7 +2982,8 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "No se pudo generar el comando de inicio para {{value0}}.",
             "7a9b4af2af": "Desplazar pestañas a la izquierda",
-            "232e075b07": "Desplazar pestañas a la derecha"
+            "232e075b07": "Desplazar pestañas a la derecha",
+            "5f5c8cc8de": "Nuevo archivo"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Crear archivo",
@@ -3057,7 +3059,10 @@
                   "1baeb07c17": "simulador de iOS",
                   "8a580f88cf": "iPhone",
                   "7ecdc5ef08": "iPad",
-                  "14965cc123": "móvil"
+                  "14965cc123": "móvil",
+                  "e6e405fd9b": "archivo",
+                  "0e9a01f0a2": "sin título",
+                  "2b3e677f7e": "archivo en blanco"
                 }
               }
             }
@@ -10099,6 +10104,10 @@
           "setupRecipe": "Configura una receta de entorno para tu proveedor de nube.",
           "createWorkspace": "Crea un espacio de trabajo y selecciona esa receta en Ejecutar en.",
           "openSetup": "Configurar recetas de entorno"
+        },
+        "EditorGitGutterSetting": {
+          "0d6a6bc1e3": "Indicadores de cambios de Git",
+          "68bbcab1b6": "Muestra marcadores de líneas añadidas, modificadas y eliminadas en el margen del editor, comparado con el último commit."
         }
       },
       "right": {
