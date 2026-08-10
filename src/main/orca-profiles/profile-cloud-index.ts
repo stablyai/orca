@@ -11,6 +11,7 @@ import {
   loadOrCreateProfileIndex,
   writeProfileIndex
 } from './profile-index-store'
+import { clearArtifactShareRecords } from '../artifacts/artifact-share-record-store'
 
 export type CreateCloudLinkedOrcaProfileRecordResult = OrcaProfileListState & {
   profile: OrcaProfileSummary
@@ -93,15 +94,24 @@ export function linkOrcaProfileToCloud(
   const index = loadOrCreateProfileIndex(userDataPath)
   const now = Date.now()
   let found = false
+  let cloudIdentityChanged = false
   const profiles = index.profiles.map((profile) => {
     if (profile.id !== profileId) {
       return profile
     }
     found = true
+    cloudIdentityChanged = Boolean(
+      profile.cloud &&
+      (profile.cloud.userId !== cloud.userId ||
+        profile.cloud.cloudProfileId !== cloud.cloudProfileId)
+    )
     return toCloudLinkedProfile(profile, cloud, now)
   })
   if (!found) {
     throw new Error('unknown_orca_profile')
+  }
+  if (cloudIdentityChanged) {
+    clearArtifactShareRecords(profileId, userDataPath)
   }
   const nextIndex = {
     ...index,
@@ -131,6 +141,7 @@ export function unlinkOrcaProfileFromCloud(
   if (!found) {
     throw new Error('unknown_orca_profile')
   }
+  clearArtifactShareRecords(profileId, userDataPath)
   const nextIndex = {
     ...index,
     profiles

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as browserSessionUaModule from './browser-session-ua'
 
 const USER_DATA = '/user-data'
 const META_PATH = `${USER_DATA}/browser-session-meta.json`
@@ -118,10 +119,15 @@ function installModuleMocks(
     hasSystemMediaAccess: vi.fn(() => true),
     requestSystemMediaAccess: requestSystemMediaAccessMock
   }))
-  vi.doMock('./browser-session-ua', () => ({
-    cleanElectronUserAgent: vi.fn((ua: string) => ua.replace(/\s*Electron\/\S+/, '')),
-    setupClientHintsOverride: setupClientHintsOverrideMock
-  }))
+  vi.doMock('./browser-session-ua', async () => {
+    // Why: the version gate is the behavior under test, so use the real predicate here.
+    const actual = await vi.importActual<typeof browserSessionUaModule>('./browser-session-ua')
+    return {
+      cleanElectronUserAgent: vi.fn((ua: string) => ua.replace(/\s*Electron\/\S+/, '')),
+      isUnadvertisableChromeUserAgent: actual.isUnadvertisableChromeUserAgent,
+      setupClientHintsOverride: setupClientHintsOverrideMock
+    }
+  })
 
   return {
     sessionFromPartitionMock,
@@ -403,6 +409,39 @@ describe('BrowserSessionRegistry persistence', () => {
         (session) => getBrowserSessionUserAgentMode(session as never) === 'native'
       )
     ).toBe(true)
+  })
+
+  it('drops a persisted fork product-version UA instead of replaying Chrome/1.x', async () => {
+    const brokenUa =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/1.158.1 Safari/537.36'
+    const fsState = createFsState()
+    seedMeta(fsState, {
+      defaultSource: { browserFamily: 'arc', importedAt: 1 },
+      userAgent: brokenUa,
+      userAgentByPartition: { 'persist:orca-browser': brokenUa },
+      pendingCookieDbPath: null,
+      pendingCookieImports: {},
+      profiles: []
+    })
+
+    const { sessionFromPartitionMock, setupClientHintsOverrideMock } = installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+
+    browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
+
+    const appliedUas = sessionFromPartitionMock.mock.results.flatMap((r) =>
+      r.value.setUserAgent.mock.calls.map((c: unknown[]) => c[0])
+    )
+    expect(appliedUas).not.toContain(brokenUa)
+    // Why: with the broken UA gone the profile must fall back to Orca's own cleaned engine UA.
+    expect(appliedUas).toContain('Mozilla/5.0 Orca')
+    expect(setupClientHintsOverrideMock.mock.calls.some((c: unknown[]) => c[1] === brokenUa)).toBe(
+      false
+    )
+
+    const persisted = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
+    expect(persisted.userAgentByPartition).toEqual({})
+    expect(persisted.userAgent).toBeNull()
   })
 
   it('preserves native mode across hydration when no source UA was imported', async () => {

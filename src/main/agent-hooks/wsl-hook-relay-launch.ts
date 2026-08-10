@@ -264,6 +264,11 @@ export async function launchWslRelayWithInstall(options: {
       await options.connect(transport, child)
       return
     } catch (err) {
+      // Why before the failure triage: once disposed, the guest install and retries below are
+      // work the caller no longer wants — the "failure" is usually our own teardown kill.
+      if (options.isDisposed()) {
+        return
+      }
       const failure = (err as { startup?: WslRelayStartupFailure }).startup
       if (!failure) {
         throw err

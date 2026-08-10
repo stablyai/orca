@@ -15,6 +15,25 @@ export type GitHubProjectRepoMatch = {
 export type GitHubRepoSlugCacheEntry = {
   path: string
   repository: { owner: string; repo: string; host?: string } | null
+  /** Resolution failed rather than resolving to "no repository". Cached so the
+   *  board stops waiting on it, but dropped on refresh so it is retried. */
+  failed?: boolean
+}
+
+/** Why: a transient `github.repoSlug` error would otherwise be cached forever as
+ *  an unresolved repo, filtering its rows out of every future board render. */
+export function dropFailedGitHubRepoSlugEntries(
+  slugsByRepoId: Record<string, GitHubRepoSlugCacheEntry | undefined>
+): Record<string, GitHubRepoSlugCacheEntry | undefined> {
+  const retryable = Object.entries(slugsByRepoId).filter(([, entry]) => entry?.failed === true)
+  if (retryable.length === 0) {
+    return slugsByRepoId
+  }
+  const next = { ...slugsByRepoId }
+  for (const [repoId] of retryable) {
+    delete next[repoId]
+  }
+  return next
 }
 
 type CachedSlugState =

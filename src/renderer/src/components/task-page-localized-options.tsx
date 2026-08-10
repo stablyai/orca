@@ -4,7 +4,17 @@ import { Github, Gitlab, LayoutGrid, List } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
-import { getTaskPresetQuery } from '@/lib/new-workspace'
+import {
+  LINEAR_DISPLAY_PROPERTIES,
+  LINEAR_GROUP_BY_OPTIONS,
+  LINEAR_ORDER_BY_OPTIONS,
+  LINEAR_VIEW_MODES,
+  type LinearDisplayProperty,
+  type LinearGroupBy,
+  type LinearOrderBy,
+  type LinearViewMode
+} from '../../../shared/linear-issue-view-resume-state'
+import { getTaskPresetQuery } from '../../../shared/task-preset-query'
 import type { TaskProvider, TaskViewPresetId } from '../../../shared/types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
@@ -30,17 +40,13 @@ export type JiraPreset = { id: JiraPresetId; label: string }
 
 export type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
 
-export type LinearViewMode = 'list' | 'board'
 export type LinearMode = 'issues' | 'projects' | 'views' | 'in-orca'
-export type LinearGroupBy = 'none' | 'status' | 'assignee' | 'priority' | 'team'
-export type LinearOrderBy = 'priority' | 'updated' | 'identifier'
-export type LinearDisplayProperty =
-  | 'state'
-  | 'priority'
-  | 'assignee'
-  | 'team'
-  | 'labels'
-  | 'updated'
+export type {
+  LinearDisplayProperty,
+  LinearGroupBy,
+  LinearOrderBy,
+  LinearViewMode
+} from '../../../shared/linear-issue-view-resume-state'
 
 export function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -157,43 +163,51 @@ export const getLinearViewOptions = createLocalizedCatalog(
     id: LinearViewMode
     label: string
     Icon: typeof List
-  }[] => [
-    { id: 'list', label: translate('auto.components.TaskPage.a6f7e93d7f', 'List'), Icon: List },
-    {
-      id: 'board',
-      label: translate('auto.components.TaskPage.d747aed72f', 'Board'),
-      Icon: LayoutGrid
+  }[] => {
+    const entries: Record<LinearViewMode, { label: string; Icon: typeof List }> = {
+      list: { label: translate('auto.components.TaskPage.a6f7e93d7f', 'List'), Icon: List },
+      board: { label: translate('auto.components.TaskPage.d747aed72f', 'Board'), Icon: LayoutGrid }
     }
-  ]
+    return LINEAR_VIEW_MODES.map((id) => ({ id, ...entries[id] }))
+  }
 )
 
 export const getLinearGroupOptions = createLocalizedCatalog(
-  (): { id: LinearGroupBy; label: string }[] => [
-    { id: 'none', label: translate('auto.components.TaskPage.50387522d7', 'No grouping') },
-    { id: 'status', label: translate('auto.components.TaskPage.154b0fa623', 'Status') },
-    { id: 'assignee', label: translate('auto.components.TaskPage.d2a876ca53', 'Assignee') },
-    { id: 'priority', label: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority') },
-    { id: 'team', label: translate('auto.components.TaskPage.a98cbe7664', 'Team') }
-  ]
+  (): { id: LinearGroupBy; label: string }[] => {
+    const labels: Record<LinearGroupBy, string> = {
+      none: translate('auto.components.TaskPage.50387522d7', 'No grouping'),
+      status: translate('auto.components.TaskPage.154b0fa623', 'Status'),
+      assignee: translate('auto.components.TaskPage.d2a876ca53', 'Assignee'),
+      priority: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority'),
+      team: translate('auto.components.TaskPage.a98cbe7664', 'Team')
+    }
+    return LINEAR_GROUP_BY_OPTIONS.map((id) => ({ id, label: labels[id] }))
+  }
 )
 
 export const getLinearOrderOptions = createLocalizedCatalog(
-  (): { id: LinearOrderBy; label: string }[] => [
-    { id: 'priority', label: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority') },
-    { id: 'updated', label: translate('auto.components.TaskPage.f362667d55', 'Updated') },
-    { id: 'identifier', label: translate('auto.components.TaskPage.d8a517ad89', 'Identifier') }
-  ]
+  (): { id: LinearOrderBy; label: string }[] => {
+    const labels: Record<LinearOrderBy, string> = {
+      priority: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority'),
+      updated: translate('auto.components.TaskPage.f362667d55', 'Updated'),
+      identifier: translate('auto.components.TaskPage.d8a517ad89', 'Identifier')
+    }
+    return LINEAR_ORDER_BY_OPTIONS.map((id) => ({ id, label: labels[id] }))
+  }
 )
 
 export const getLinearDisplayProperties = createLocalizedCatalog(
-  (): { id: LinearDisplayProperty; label: string }[] => [
-    { id: 'state', label: translate('auto.components.TaskPage.154b0fa623', 'Status') },
-    { id: 'priority', label: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority') },
-    { id: 'assignee', label: translate('auto.components.TaskPage.d2a876ca53', 'Assignee') },
-    { id: 'team', label: translate('auto.components.TaskPage.a98cbe7664', 'Team') },
-    { id: 'labels', label: translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels') },
-    { id: 'updated', label: translate('auto.components.TaskPage.f362667d55', 'Updated') }
-  ]
+  (): { id: LinearDisplayProperty; label: string }[] => {
+    const labels: Record<LinearDisplayProperty, string> = {
+      state: translate('auto.components.TaskPage.154b0fa623', 'Status'),
+      priority: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority'),
+      assignee: translate('auto.components.TaskPage.d2a876ca53', 'Assignee'),
+      team: translate('auto.components.TaskPage.a98cbe7664', 'Team'),
+      labels: translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels'),
+      updated: translate('auto.components.TaskPage.f362667d55', 'Updated')
+    }
+    return LINEAR_DISPLAY_PROPERTIES.map((id) => ({ id, label: labels[id] }))
+  }
 )
 
 export const getLinearPriorityLabels = createLocalizedCatalog(

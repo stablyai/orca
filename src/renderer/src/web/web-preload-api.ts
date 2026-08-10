@@ -12,6 +12,10 @@ import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import type {
+  AiVaultSessionTitlesArgs,
+  AiVaultSessionTitlesResult
+} from '../../../shared/ai-vault-session-title'
+import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault-resume-preparation'
@@ -1533,6 +1537,19 @@ function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
         executionHostId
       })
     },
+    resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => {
+      const environment = requireActiveEnvironment()
+      const executionHostId = toRuntimeExecutionHostId(environment.id)
+      if (
+        args.executionHostScope &&
+        normalizeExecutionHostScope(args.executionHostScope) !== executionHostId
+      ) {
+        return Promise.resolve({ titles: [] })
+      }
+      return callRuntimeResult<AiVaultSessionTitlesResult>('aiVault.resolveSessionTitles', {
+        requests: args.requests
+      }).catch(() => ({ titles: [] }))
+    },
     // Why: the runtime RPC transport has no cancel verb, so the in-flight scan
     // settles on its own timeout. The renderer's refreshId guard already drops
     // the late result; this only means web pays for a scan nobody reads.
@@ -2679,8 +2696,12 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     performNativePaste: () => {
       document.execCommand?.('paste')
     },
+    performNativeSelectionAction: (action) => {
+      document.execCommand?.(action === 'copy' ? 'copy' : 'selectAll')
+    },
     onExportPdfRequested: () => noopUnsubscribe,
     onAppMenuPaste: () => noopUnsubscribe,
+    onAppMenuSelectionAction: () => noopUnsubscribe,
     onEditableContextPaste: () => noopUnsubscribe,
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
@@ -3735,6 +3756,11 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
       runtimeSettings.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
         result.settings.prBotAuthorOverrides
       )
+    }
+    // Read-only mirror: the host owns this capability and `syncRuntimeBackedSettings` never
+    // sends it back, so web shows what the host enforces instead of a local value it ignores.
+    if (typeof result.settings.artifactSharingEnabled === 'boolean') {
+      runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled
     }
     const next = mergeSettings(local, runtimeSettings)
     writeStoredSettings(next)

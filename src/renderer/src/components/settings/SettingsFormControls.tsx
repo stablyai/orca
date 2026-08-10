@@ -108,6 +108,7 @@ type SettingsSwitchRowProps = {
   onChange: () => void
   className?: string
   ariaLabel?: string
+  disabled?: boolean
 }
 
 export function SettingsSwitchRow({
@@ -116,7 +117,8 @@ export function SettingsSwitchRow({
   checked,
   onChange,
   className,
-  ariaLabel
+  ariaLabel,
+  disabled
 }: SettingsSwitchRowProps): React.JSX.Element {
   return (
     <SettingsRow
@@ -127,6 +129,7 @@ export function SettingsSwitchRow({
         <SettingsSwitch
           checked={checked}
           onChange={onChange}
+          disabled={disabled}
           ariaLabel={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
         />
       }

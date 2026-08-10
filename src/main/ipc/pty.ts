@@ -58,14 +58,17 @@ import {
 } from '../../shared/command-token-scanner'
 import { agentHookServer } from '../agent-hooks/server'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import { ensureWslHookRelayForReattach } from '../agent-hooks/wsl-hook-relay-reattach'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType,
+  PRIMARY_AGENT_DIR_ENV_BY_KIND,
+  SOURCE_AGENT_DIR_ENV_BY_KIND,
   type PiAgentKind
 } from '../../shared/pi-agent-kind'
-import { isPwshAvailable } from '../pwsh'
+import { isPwshAvailableAsync } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { isPtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
@@ -1100,6 +1103,7 @@ function finishPtyShutdown(
 
 export type BuildPtyHostEnvOptions = {
   isPackaged: boolean
+  resourcesPath?: string
   userDataPath: string
   selectedCodexHomePath: string | null
   skipCodexHomeEnv?: boolean
@@ -1456,16 +1460,29 @@ function resolvePiAgentSourceDir(
   baseEnv: Record<string, string>,
   kind: PiAgentKind
 ): string | undefined {
-  const sourceKey = kind === 'omp' ? 'ORCA_OMP_SOURCE_AGENT_DIR' : 'ORCA_PI_SOURCE_AGENT_DIR'
-  const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
-  const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
+  const sourceKey = SOURCE_AGENT_DIR_ENV_BY_KIND[kind]
+  const primaryKey = PRIMARY_AGENT_DIR_ENV_BY_KIND[kind]
 
   const sourceDir = readEnvWithProcessFallback(baseEnv, sourceKey)
   if (sourceDir) {
     return sourceDir
   }
 
-  const publicDir = readEnvWithProcessFallback(baseEnv, 'PI_CODING_AGENT_DIR')
+  if (kind === 'prime-agent') {
+    return (
+      readEnvWithProcessFallback(baseEnv, primaryKey) ??
+      readShellStartupEnvVar(
+        primaryKey,
+        baseEnv.HOME ?? process.env.HOME,
+        baseEnv.SHELL ?? process.env.SHELL
+      )
+    )
+  }
+
+  const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
+  const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
+
+  const publicDir = readEnvWithProcessFallback(baseEnv, primaryKey)
   const ownOverlayDir = readEnvWithProcessFallback(baseEnv, overlayKey)
   const otherOverlayDir = readEnvWithProcessFallback(baseEnv, otherOverlayKey)
   // Why: if PI_CODING_AGENT_DIR is a restored Orca overlay with no source shadow, remirroring leaks another agent's overlay tree; fall through to defaults.
@@ -1474,7 +1491,7 @@ function resolvePiAgentSourceDir(
   }
 
   return readShellStartupEnvVar(
-    'PI_CODING_AGENT_DIR',
+    primaryKey,
     baseEnv.HOME ?? process.env.HOME,
     baseEnv.SHELL ?? process.env.SHELL
   )
@@ -1484,8 +1501,7 @@ function resolveScopedPiAgentSourceDir(
   baseEnv: Record<string, string>,
   kind: PiAgentKind
 ): string | undefined {
-  const sourceKey = kind === 'omp' ? 'ORCA_OMP_SOURCE_AGENT_DIR' : 'ORCA_PI_SOURCE_AGENT_DIR'
-  return readEnvWithProcessFallback(baseEnv, sourceKey)
+  return readEnvWithProcessFallback(baseEnv, SOURCE_AGENT_DIR_ENV_BY_KIND[kind])
 }
 
 function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKind): void {
@@ -1493,6 +1509,10 @@ function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKin
     delete baseEnv.ORCA_OMP_CODING_AGENT_DIR
     delete baseEnv.ORCA_OMP_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    return
+  }
+  if (kind === 'prime-agent') {
+    delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     return
   }
   delete baseEnv.ORCA_PI_CODING_AGENT_DIR
@@ -1515,6 +1535,14 @@ function exposePiManagedExtensionEnv(
       baseEnv.ORCA_OMP_STATUS_EXTENSION = managedEnv.ORCA_OMP_STATUS_EXTENSION
     } else {
       delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    }
+    return
+  }
+  if (kind === 'prime-agent') {
+    if (managedEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR) {
+      baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = managedEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
+    } else {
+      delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     }
     return
   }
@@ -1664,6 +1692,10 @@ export function buildPtyHostEnv(
     piAgentKind === 'omp'
       ? resolvePiAgentSourceDir(baseEnv, 'omp')
       : resolveScopedPiAgentSourceDir(baseEnv, 'omp')
+  const preexistingPrimeAgentDir =
+    piAgentKind === 'prime-agent'
+      ? resolvePiAgentSourceDir(baseEnv, 'prime-agent')
+      : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
 
   if (opts.agentStatusHooksEnabled) {
     // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
@@ -1736,6 +1768,7 @@ export function buildPtyHostEnv(
   if (opts.agentStatusHooksEnabled) {
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
+    clearPiAgentShadowEnv(baseEnv, 'prime-agent')
     // Why: bare shells historically defaulted to Pi + OMP shadow prep and
     // created ~/.<agent>/agent even when the user never launches those agents
     // (#10196). Only create default homes on an explicit Pi/OMP launch;
@@ -1756,8 +1789,19 @@ export function buildPtyHostEnv(
       Object.assign(baseEnv, ompEnv)
       exposePiManagedExtensionEnv(baseEnv, 'omp', ompEnv)
     }
+
+    if (piAgentKind === 'prime-agent' && !opts.isWsl) {
+      const primeEnv = piTitlebarExtensionService.buildPtyEnv(
+        id,
+        preexistingPrimeAgentDir,
+        'prime-agent',
+        { materializeDefaultHome: explicitPiAgentKind === 'prime-agent' }
+      )
+      Object.assign(baseEnv, primeEnv)
+      exposePiManagedExtensionEnv(baseEnv, 'prime-agent', primeEnv)
+    }
   } else {
-    // Why: strip BOTH kinds' shadow vars so a nested PTY can't inherit a stale overlay from either agent.
+    // Why: nested PTYs must not inherit stale source or overlay state from another agent.
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'PI_CODING_AGENT_DIR',
       overlay: 'ORCA_PI_CODING_AGENT_DIR',
@@ -1769,6 +1813,7 @@ export function buildPtyHostEnv(
       source: 'ORCA_OMP_SOURCE_AGENT_DIR'
     })
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
   }
 
   // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.
@@ -1811,6 +1856,16 @@ export function buildPtyHostEnv(
         .filter((entry) => entry.length > 0 && entry !== shimDir)
       baseEnv.PATH = [shimDir, ...inheritedEntries].join(delimiter)
     }
+  } else if (
+    opts.resourcesPath &&
+    (process.platform === 'darwin' || process.platform === 'win32')
+  ) {
+    // Why: global CLI registration is optional, but agents in Orca-managed PTYs must always reach this app's bundled CLI.
+    const bundledCliBin = join(opts.resourcesPath, 'bin')
+    const inheritedPath = readInheritedPath(baseEnv)
+    baseEnv[resolvePathEnvKey(baseEnv, process.platform)] = inheritedPath
+      ? `${bundledCliBin}${delimiter}${inheritedPath}`
+      : bundledCliBin
   }
 
   // Why: PATH shims keep GitHub attribution scoped to Orca's own PTYs without rewriting user git config.
@@ -2347,7 +2402,7 @@ export function registerPtyHandlers(
         getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined,
-      pwshAvailable: () => isPwshAvailable(),
+      pwshAvailable: () => isPwshAvailableAsync(),
       buildSpawnEnv: (id, baseEnv, ctx) => {
         const codexSelectionTarget: CodexAccountSelectionTarget =
           ctx?.isWsl === true
@@ -2365,6 +2420,7 @@ export function registerPtyHandlers(
         const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
         const env = buildPtyHostEnv(id, baseEnv, {
           isPackaged: app.isPackaged,
+          resourcesPath: process.resourcesPath,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
           skipCodexHomeEnv,
@@ -4358,6 +4414,10 @@ export function registerPtyHandlers(
             leafId: preAdoptedStablePane.owner.leafId
           }
         }
+        ensureWslHookRelayForReattach(
+          { isReattach: true, wslDistro: preAdoptedStablePane.result.wslDistro },
+          args.connectionId
+        )
         if (!args.connectionId) {
           options?.onCodexHomePtySpawned?.({
             id: result.id,
@@ -4574,6 +4634,7 @@ export function registerPtyHandlers(
         }
         env = buildPtyHostEnv(sessionId, env ?? {}, {
           isPackaged: app.isPackaged,
+          resourcesPath: process.resourcesPath,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
           skipCodexHomeEnv,
@@ -4936,6 +4997,7 @@ export function registerPtyHandlers(
               sequenceBeforeProviderSpawn
             )
           }
+          ensureWslHookRelayForReattach(result, args.connectionId)
           runtime?.preparePtyExecutionContext?.(
             result.id,
             args.connectionId
@@ -5307,7 +5369,15 @@ export function registerPtyHandlers(
         return false
       }
       try {
-        await provider.attach(ptyId)
+        const sequenceBeforeProviderAttach = runtime?.getPtyOutputSequence?.(ptyId) ?? 0
+        const attachResult = await provider.attach(ptyId)
+        if (attachResult?.providerSequence) {
+          runtime?.synchronizePtyOutputSequenceFromProvider?.(
+            ptyId,
+            attachResult.providerSequence,
+            sequenceBeforeProviderAttach
+          )
+        }
         return true
       } catch {
         return false
@@ -6070,6 +6140,7 @@ export function registerPtyHandlers(
           try {
             buildPtyHostEnv(sessionIdForEnv, env, {
               isPackaged: app.isPackaged,
+              resourcesPath: process.resourcesPath,
               userDataPath: app.getPath('userData'),
               selectedCodexHomePath,
               skipCodexHomeEnv,
@@ -6301,6 +6372,7 @@ export function registerPtyHandlers(
               sequenceBeforeProviderSpawn
             )
           }
+          ensureWslHookRelayForReattach(result, args.connectionId)
           runtime?.preparePtyExecutionContext?.(
             result.id,
             args.connectionId

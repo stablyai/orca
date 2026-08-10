@@ -3,6 +3,7 @@ import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
+import { needsCookedEchoSafeQueryReply } from '../../../../shared/terminal-query-reply'
 
 // Why: 4096 UTF-16 code units encode to at most ~12KB UTF-8, safely under the
 // 16KB TERMINAL_INPUT_CHUNK_MAX_BYTES cap without paying byte measurement on
@@ -30,7 +31,10 @@ export type PtyInputWriteQueueDeps = {
 }
 
 function isCoalescibleText(text: string): boolean {
-  return text.length <= TERMINAL_INPUT_COALESCE_MAX_CODE_UNITS
+  // Echo-risk replies stay atomic so host classifiers cannot miss them (#13137).
+  return (
+    text.length <= TERMINAL_INPUT_COALESCE_MAX_CODE_UNITS && !needsCookedEchoSafeQueryReply(text)
+  )
 }
 
 export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInputWriteQueue {

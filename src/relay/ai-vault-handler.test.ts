@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult } from '../shared/ai-vault-types'
-import { SSH_AI_VAULT_LIST_SESSIONS_METHOD } from '../shared/ssh-ai-vault-relay'
+import {
+  SSH_AI_VAULT_LIST_SESSIONS_METHOD,
+  SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD
+} from '../shared/ssh-ai-vault-relay'
 import { getRemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { AiVaultHandler } from './ai-vault-handler'
@@ -19,6 +22,49 @@ afterEach(async () => {
 })
 
 describe('AiVaultHandler', () => {
+  it('resolves an exact transcript title without invoking the broad scanner', async () => {
+    const remoteHome = await makeTemporaryHome()
+    const transcriptPath = join(remoteHome, 'session.jsonl')
+    await writeFile(
+      transcriptPath,
+      [
+        JSON.stringify({
+          timestamp: '2026-07-26T01:00:00.000Z',
+          type: 'session_meta',
+          payload: { id: 'ssh-session', cwd: join(remoteHome, 'repo') }
+        }),
+        JSON.stringify({
+          timestamp: '2026-07-26T01:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'text', text: 'Resolve only this transcript' }]
+          }
+        })
+      ].join('\n')
+    )
+    const scanRemoteSessions = vi.fn().mockResolvedValue(emptyResult())
+    const dispatcher = createMockDispatcher()
+    new AiVaultHandler(dispatcher.value, {
+      remoteHome,
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      scanRemoteSessions
+    })
+
+    await expect(
+      dispatcher.call(SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD, {
+        requests: [
+          { agent: 'codex', sessionId: 'ssh-session', transcriptPath },
+          { agent: 'codex', sessionId: 'other', transcriptPath: '' }
+        ]
+      })
+    ).resolves.toEqual({
+      titles: [{ agent: 'codex', sessionId: 'ssh-session', title: 'Resolve only this transcript' }]
+    })
+    expect(scanRemoteSessions).not.toHaveBeenCalled()
+  })
+
   it('discovers and parses sessions entirely on the relay host', async () => {
     const remoteHome = await makeTemporaryHome()
     const transcriptPath = join(

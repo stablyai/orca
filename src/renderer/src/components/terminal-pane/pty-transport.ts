@@ -4,7 +4,9 @@ import {
   clearWorkingIndicators,
   createAgentStatusTracker,
   normalizeTerminalTitle,
-  extractAllOscTitles
+  extractAllOscTitles,
+  isCursorNativeAgentTitle,
+  shouldSuppressCursorNativeTitle
 } from '../../../../shared/agent-detection'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
@@ -112,27 +114,27 @@ type PendingPtySideEffect = {
   suppressAttentionEvents: boolean
 }
 
-function isIgnoredCursorNativeTitle(title: string): boolean {
-  return title.trim().toLowerCase() === 'cursor agent'
-}
-
-function removeIgnoredCursorNativeTitles(titles: string[]): boolean {
+// Why: mirrors main's applyObservedTitle — the literal survives whenever the title before it
+// is not already Cursor-owned, which is how a pane re-establishes Cursor identity after the
+// shell prompt repaints the title (#10258). Only the redraw repeats are dropped, so they cost
+// neither an allocation nor a drain slot; `processObservedTitles` re-checks and stays
+// authoritative, so this must never drop a title that gate would have emitted.
+function removeSuppressedCursorNativeTitles(
+  titles: string[],
+  precedingTitle: string | null
+): boolean {
   let writeIndex = 0
-  let removed = false
-  for (let readIndex = 0; readIndex < titles.length; readIndex += 1) {
-    const title = titles[readIndex]
-    if (isIgnoredCursorNativeTitle(title)) {
-      removed = true
+  let previousTitle = precedingTitle
+  for (const title of titles) {
+    if (isCursorNativeAgentTitle(title) && shouldSuppressCursorNativeTitle(previousTitle)) {
       continue
     }
-    if (writeIndex !== readIndex) {
-      titles[writeIndex] = title
-    }
+    previousTitle = normalizeTerminalTitle(title)
+    titles[writeIndex] = title
     writeIndex += 1
   }
-  if (removed) {
-    titles.length = writeIndex
-  }
+  const removed = writeIndex < titles.length
+  titles.length = writeIndex
   return removed
 }
 
@@ -176,6 +178,10 @@ export function createPtyOutputProcessor({
     retained: () => pendingSideEffects.length
   }
   const disposePendingSideEffectGauge = registerPtySideEffectPendingGauge(pendingSideEffectGauge)
+  const initialAgentStatusTitle =
+    initialAgentTitle !== undefined && !isCursorNativeAgentTitle(initialAgentTitle)
+      ? initialAgentTitle
+      : undefined
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -184,7 +190,7 @@ export function createPtyOutputProcessor({
           },
           onAgentBecameWorking,
           onAgentExited,
-          initialAgentTitle
+          initialAgentStatusTitle
         )
       : null
 
@@ -288,7 +294,13 @@ export function createPtyOutputProcessor({
     const scannedForTitles = Boolean(onTitleChange && data.includes('\x1b]'))
     const titles = scannedForTitles ? extractAllOscTitles(data) : []
     // Why: Cursor emits this ignored title every redraw; keep one queue fact instead of an allocation and drain slot per frame.
-    const ignoredCursorNativeTitle = removeIgnoredCursorNativeTitles(titles)
+    // Why the drained check: `lastEmittedTitle` only advances on drain, so while facts are
+    // still queued it is not the predecessor the drain will see — leave that call to the gate.
+    const drained = pendingSideEffectIndex >= pendingSideEffects.length
+    const ignoredCursorNativeTitle = removeSuppressedCursorNativeTitles(
+      titles,
+      drained ? lastEmittedTitle : null
+    )
     const deliveredPayloads =
       onAgentStatus && !suppressAttentionEvents && payloads.length > 0 ? payloads : []
     const containsBell = Boolean(
@@ -436,6 +448,14 @@ export function createPtyOutputProcessor({
     if (titles.length > 0) {
       clearStaleTitleTimer()
       for (const title of titles) {
+        if (isCursorNativeAgentTitle(title)) {
+          // Why: identity for a hookless Cursor pane (#10258), never activity — the literal's
+          // null status would read as an agent exit, and a repeat must not stomp hook state.
+          if (!shouldSuppressCursorNativeTitle(lastEmittedTitle)) {
+            applyObservedTerminalTitle(title, true)
+          }
+          continue
+        }
         applyObservedTerminalTitle(title, suppressAgentTracker)
       }
     } else if (titleScanEffect === 'ignored-cursor-native') {

@@ -21,7 +21,7 @@ const SAVE_DEBOUNCE_MS = 1_500
 const PRIVATE_DIRECTORY_MODE = 0o700
 const PRIVATE_FILE_MODE = 0o600
 
-type SessionParseCachePersistenceOptions = {
+export type SessionParseCachePersistenceOptions = {
   filePath: string
   appVersion: string
 }
@@ -34,6 +34,10 @@ let lastSave: Promise<void> = Promise.resolve()
 /** Enable persistence. Called only from the composition root; every export is a no-op until then. */
 export function initSessionParseCachePersistence(next: SessionParseCachePersistenceOptions): void {
   options = next
+}
+
+export function getSessionParseCachePersistenceOptions(): SessionParseCachePersistenceOptions | null {
+  return options ? { ...options } : null
 }
 
 export function resetSessionParseCachePersistenceForTests(): void {

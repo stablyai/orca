@@ -40,6 +40,7 @@ export function useAiVaultSessionDeleteAction({
       try {
         const result = await window.api.aiVault.deleteSession({
           agent: session.agent,
+          sessionId: session.sessionId,
           filePath: session.filePath,
           executionHostId: session.executionHostId
         })

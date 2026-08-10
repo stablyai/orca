@@ -2,14 +2,16 @@ import { lstat, realpath } from 'node:fs/promises'
 import { shell } from 'electron'
 import type {
   AiVaultDeleteSessionResult,
-  AiVaultSessionDeleteRemoval
+  AiVaultSessionDeleteRemoval,
+  AiVaultSessionLiveness
 } from '../../shared/ai-vault-session-deletion'
+import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import {
   validateAiVaultSessionDeleteTarget,
   type ValidateAiVaultSessionDeleteTargetArgs
 } from './session-delete-target'
-import { tryDeleteWslUncPath } from '../wsl-unc-delete'
+import { tryDeleteWslUncPath, WslDeleteValidationError } from '../wsl-unc-delete'
 import { isENOENT } from '../ipc/filesystem-auth'
 
 // Trashes a validated session's paths, companions first so a part-way failure
@@ -17,13 +19,38 @@ import { isENOENT } from '../ipc/filesystem-auth'
 // Never throws: IPC payloads are untyped at runtime, so a bad input and an fs
 // error both resolve to a discriminated result the handler can render.
 export async function deleteAiVaultSessionFile(
-  args: ValidateAiVaultSessionDeleteTargetArgs
+  args: ValidateAiVaultSessionDeleteTargetArgs & { sessionId?: string },
+  deps: {
+    getSessionLiveness: (target: {
+      agent: AiVaultAgent
+      sessionId: string | undefined
+      filePath: string
+    }) => Promise<AiVaultSessionLiveness>
+  }
 ): Promise<AiVaultDeleteSessionResult> {
   const validation = validateAiVaultSessionDeleteTarget(args)
   if (!validation.allowed) {
     return { outcome: 'rejected', agent: validation.agent, reason: validation.reason }
   }
   const { agent, removals } = validation
+
+  let liveness: AiVaultSessionLiveness = 'unknown'
+  try {
+    liveness = await deps.getSessionLiveness({
+      agent,
+      sessionId: args.sessionId,
+      filePath: validation.resolvedPath
+    })
+  } catch {
+    // Inspection failure is unknown, never permission to delete.
+  }
+  if (liveness !== 'not-live') {
+    return {
+      outcome: 'rejected',
+      agent,
+      reason: liveness === 'live' ? 'session-live' : 'session-liveness-unknown'
+    }
+  }
 
   try {
     for (const removal of removals) {
@@ -48,11 +75,22 @@ export async function deleteAiVaultSessionFile(
 async function removeOne(
   removal: AiVaultSessionDeleteRemoval
 ): Promise<'unexpected-target-kind' | 'path-outside-known-roots' | null> {
-  // First, because a WSL UNC path defeats both guards below: 9P's stat is
-  // unreliable and the volume has no Recycle Bin for trashItem. Its own
-  // `rm -f`/`-rf` is idempotent and never follows a symlink.
-  if (await tryDeleteWslUncPath(removal.path, { recursive: removal.kind === 'directory' })) {
-    return null
+  // WSL validates and removes inside the distro because 9P stat is unreliable
+  // and its virtual volume has no Recycle Bin for trashItem.
+  try {
+    if (
+      await tryDeleteWslUncPath(removal.path, {
+        recursive: removal.kind === 'directory',
+        approvedRoots: removal.roots
+      })
+    ) {
+      return null
+    }
+  } catch (error) {
+    if (error instanceof WslDeleteValidationError) {
+      return error.reason
+    }
+    throw error
   }
 
   let stats
