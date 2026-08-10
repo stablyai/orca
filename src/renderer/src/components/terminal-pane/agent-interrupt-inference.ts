@@ -42,7 +42,12 @@ function requiresDoubleEscapeForAgent(
   agentType: AgentStatusEntry['agentType'],
   intent: AgentInterruptInputIntent
 ): boolean {
-  return (agentType === 'opencode' || agentType === 'copilot') && intent === 'plain-escape'
+  // Why: Claude's /btw composer and similar TUI surfaces cancel on the first
+  // Escape without stopping the turn; only a second Escape is interrupt (#13547).
+  return (
+    (agentType === 'opencode' || agentType === 'copilot' || agentType === 'claude') &&
+    intent === 'plain-escape'
+  )
 }
 
 function shouldFlushInterruptImmediately(
