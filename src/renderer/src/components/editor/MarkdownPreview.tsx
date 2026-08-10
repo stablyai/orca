@@ -1748,9 +1748,7 @@ export default function MarkdownPreview({
       },
       blockquote: ({ node, children, className, ...props }) => {
         const alertType = getGithubAlertType(className)
-        return wrapAnnotatedBlock(
-          'blockquote',
-          node as MarkdownPreviewPositionNode,
+        const rendered = (
           <blockquote className={className} {...props}>
             {alertType ? (
               <p className="markdown-alert-title">
@@ -1761,6 +1759,14 @@ export default function MarkdownPreview({
             {children}
           </blockquote>
         )
+        // Why: a blockquote (incl. alerts) always wraps block children that are
+        // themselves annotatable; annotating the blockquote too would show a second
+        // "+" and render a comment twice (both ranges match the note). Defer to the
+        // inner blocks, mirroring the list-item renderer.
+        if (hasMarkdownPreviewNestedBlock(node as MarkdownPreviewPositionNode)) {
+          return rendered
+        }
+        return wrapAnnotatedBlock('blockquote', node as MarkdownPreviewPositionNode, rendered)
       },
       table: ({ node, children, ...props }) =>
         wrapAnnotatedBlock(
