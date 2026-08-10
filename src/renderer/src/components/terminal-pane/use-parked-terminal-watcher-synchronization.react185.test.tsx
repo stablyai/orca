@@ -17,6 +17,7 @@ const NEW_SECOND_PTY_ID = `${WORKTREE_ID}@@session-3`
 const harness = vi.hoisted(() => ({
   syncCalls: 0,
   disposeCalls: 0,
+  reconciliationPtyReads: 0,
   watchedPtyIds: new Set<string>()
 }))
 
@@ -71,6 +72,13 @@ import { useParkedTerminalWatcherSynchronization } from './use-parked-terminal-w
 
 const terminalTabs = [{ id: TAB_ID, ptyId: FIRST_PTY_ID }] as TerminalTab[]
 const parkedTabIds = new Set([TAB_ID])
+const EMPTY_PARKED_TAB_IDS = new Set<string>()
+const firstUnparkedTabs = ['tab-a', 'tab-b', 'tab-c'].map(
+  (id) => ({ id, ptyId: `${WORKTREE_ID}@@${id}` }) as TerminalTab
+)
+const secondUnparkedTabs = ['tab-d', 'tab-e', 'tab-f'].map(
+  (id) => ({ id, ptyId: `${WORKTREE_ID}@@${id}` }) as TerminalTab
+)
 
 function splitLayout(secondPtyId: string): TerminalLayoutSnapshot {
   return {
@@ -102,6 +110,23 @@ function WatcherSynchronizationHarness(): null {
   return null
 }
 
+function UnparkedWatcherSynchronizationHarness({
+  worktreeId,
+  tabs
+}: {
+  worktreeId: string
+  tabs: readonly TerminalTab[]
+}): null {
+  useParkedTerminalWatcherSynchronization({
+    worktreeId,
+    terminalTabs: tabs,
+    inputsKey: worktreeId,
+    assignmentsKey: worktreeId,
+    parkedTabIds: EMPTY_PARKED_TAB_IDS
+  })
+  return null
+}
+
 describe('parked terminal watcher synchronization', () => {
   let container: HTMLDivElement
   let root: Root | undefined
@@ -109,6 +134,7 @@ describe('parked terminal watcher synchronization', () => {
   beforeEach(() => {
     harness.syncCalls = 0
     harness.disposeCalls = 0
+    harness.reconciliationPtyReads = 0
     harness.watchedPtyIds.clear()
     useAppStore.setState({
       ptyIdsByTabId: { [TAB_ID]: [FIRST_PTY_ID, OLD_SECOND_PTY_ID] },
@@ -184,5 +210,41 @@ describe('parked terminal watcher synchronization', () => {
       root?.render(<WatcherSynchronizationHarness />)
     })
     expect(harness.syncCalls).toBe(4)
+  })
+
+  it('does not scan unparked worktrees on an unrelated store write', () => {
+    const ptyIdsByTabId = new Proxy({} as Record<string, string[]>, {
+      get(target, property, receiver) {
+        if (typeof property === 'string') {
+          harness.reconciliationPtyReads += 1
+        }
+        return Reflect.get(target, property, receiver)
+      }
+    })
+    useAppStore.setState({ ptyIdsByTabId })
+    root = createRoot(container)
+    act(() => {
+      root?.render(
+        <>
+          <UnparkedWatcherSynchronizationHarness
+            worktreeId="repo::/unparked-a"
+            tabs={firstUnparkedTabs}
+          />
+          <UnparkedWatcherSynchronizationHarness
+            worktreeId="repo::/unparked-b"
+            tabs={secondUnparkedTabs}
+          />
+        </>
+      )
+    })
+    harness.reconciliationPtyReads = 0
+    const syncCallsAfterMount = harness.syncCalls
+
+    act(() => {
+      useAppStore.setState({ sortEpoch: 1 })
+    })
+
+    expect(harness.reconciliationPtyReads).toBe(0)
+    expect(harness.syncCalls).toBe(syncCallsAfterMount)
   })
 })

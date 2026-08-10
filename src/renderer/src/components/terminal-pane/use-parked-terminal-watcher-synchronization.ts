@@ -15,12 +15,14 @@ type TerminalParkingAssignment = {
 
 const EMPTY_PTY_IDS: readonly string[] = []
 
-type WatcherReconciliationStoreInputs = (
+type WatcherReconciliationStoreInputs = readonly (
   | readonly string[]
   | TerminalLayoutSnapshot
   | string
   | null
 )[]
+
+const EMPTY_WATCHER_RECONCILIATION_INPUTS: WatcherReconciliationStoreInputs = Object.freeze([])
 
 export function getTerminalParkingInputsKey(terminalTabs: readonly TerminalTab[]): string {
   return JSON.stringify(terminalTabs.map((tab) => [tab.id, tab.ptyId, tab.pendingActivationSpawn]))
@@ -107,11 +109,14 @@ export function useParkedTerminalWatcherSynchronization(args: {
   } = args
   const reconciliationStoreInputs = useAppStore(
     useShallow((state) =>
-      terminalTabs.flatMap((tab) => [
-        state.ptyIdsByTabId[tab.id] ?? EMPTY_PTY_IDS,
-        state.terminalLayoutsByTabId[tab.id] ?? null,
-        Object.keys(state.runtimePaneTitlesByTabId[tab.id] ?? {}).join(',')
-      ])
+      // Why: an empty committed park set has no live watcher state for store writes to reconcile.
+      parkedTabIds.size === 0
+        ? EMPTY_WATCHER_RECONCILIATION_INPUTS
+        : terminalTabs.flatMap((tab) => [
+            state.ptyIdsByTabId[tab.id] ?? EMPTY_PTY_IDS,
+            state.terminalLayoutsByTabId[tab.id] ?? null,
+            Object.keys(state.runtimePaneTitlesByTabId[tab.id] ?? {}).join(',')
+          ])
     )
   ) as WatcherReconciliationStoreInputs
   const reconciliationKey = getWatcherReconciliationKey(terminalTabs, reconciliationStoreInputs)
