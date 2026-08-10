@@ -40,6 +40,7 @@ type CommitMessageGenerationOverride = {
 
 // Why: generateCommitMessage and generatePullRequestFields share the same optional
 // override fields; returning undefined when none are set keeps the no-override call path.
+/** Builds an optional commit-message generation override from RPC params. */
 function buildCommitMessageGenerationOverride(params: {
   commitMessageAi?: unknown
   sourceControlAi?: unknown

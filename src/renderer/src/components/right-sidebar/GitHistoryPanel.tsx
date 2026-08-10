@@ -36,6 +36,7 @@ type GitHistoryResizeSession = {
   previousUserSelect: string
 }
 
+/** Clamps the resizable history panel height to configured bounds. */
 function clampGitHistoryPanelHeight(height: number): number {
   return Math.min(MAX_GIT_HISTORY_PANEL_HEIGHT, Math.max(MIN_GIT_HISTORY_PANEL_HEIGHT, height))
 }

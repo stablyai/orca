@@ -102,6 +102,7 @@ type RuntimeCommitMessageSettingsOverride = Partial<
   sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
 }
 
+/** Merges per-call generation settings over the worktree's global settings. */
 function getRuntimeGitGenerationSettings(
   settings: GlobalSettings,
   settingsOverride: RuntimeCommitMessageSettingsOverride | undefined,
@@ -124,6 +125,7 @@ function getRuntimeGitGenerationSettings(
   return mergedSettings
 }
 
+/** Converts a runtime path to a safe worktree-relative path. */
 function normalizeRuntimeGitRelativePath(filePath: string): string {
   const relativePath = normalizeRuntimeRelativePath(filePath)
   if (relativePath === '') {
@@ -151,10 +153,12 @@ type RuntimeGitTarget = {
   localGitOptions?: GitRuntimeOptions
 }
 
+/** Returns local git options for a target, suppressing SSH-specific overrides. */
 function localGitOptionsForTarget(target: RuntimeGitTarget): GitRuntimeOptions {
   return target.connectionId ? {} : (target.localGitOptions ?? {})
 }
 
+/** Resolves the local agent runtime target, including WSL when configured. */
 function localAgentRuntimeTargetForTarget(
   target: RuntimeGitTarget
 ): CommitMessageAgentRuntimeTarget {
@@ -162,6 +166,7 @@ function localAgentRuntimeTargetForTarget(
   return wslDistro ? { runtime: 'wsl', wslDistro } : { runtime: 'host' }
 }
 
+/** Builds the local text-generation target for a worktree. */
 function localTextGenerationTargetForTarget(
   target: RuntimeGitTarget,
   env?: NodeJS.ProcessEnv

@@ -18,6 +18,7 @@ export type GitHistoryCommitFilesState =
   | { status: 'error'; error: string }
   | { status: 'ready'; entries: GitBranchChangeEntry[] }
 
+/** Renders one commit file row with open and optional history actions. */
 function CommitFileRow({
   entry,
   onOpen,
@@ -81,6 +82,7 @@ function CommitFileRow({
   )
 }
 
+/** Renders loading, error, empty, or populated commit file states. */
 function CommitFilesBody({
   state,
   onOpenFile,
