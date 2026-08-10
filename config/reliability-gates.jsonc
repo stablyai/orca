@@ -2788,7 +2788,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "On origin/main 9060a88dde, the held-snapshot oracle erases the post-request tab and drops its pending write. The rebased published implementation 7de4d2d86b preserves that tab but fails authoritative deletion by resurrecting any attached pre-request PTY, and continuous mutations postpone its retry ceiling. The corrected temporal fence passes all four focused oracles and both real-SSH Electron journeys."
+        "evidence": "On latest origin/main bbcf89e221, the held-snapshot oracle erases the post-request tab and drops its pending write. The rebased published implementation 7daf37968d preserves that tab but fails authoritative deletion by resurrecting any attached pre-request PTY, and continuous mutations postpone its retry ceiling. The corrected temporal fence passes all four focused oracles and both real-SSH Electron journeys."
       },
       "performanceBudget": {
         "required": true,
