@@ -327,6 +327,8 @@ import { createRuntimeAutomationRunTerminalObserver } from './automations/runtim
 import { AgentAwakeService } from './agent-awake-service'
 import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
+import { registerRuntimeEnvironmentStoreWatcher } from './ipc/runtime-environment-store-watcher'
+import { invalidateRuntimeEnvironmentTransport } from './ipc/runtime-environments'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { beginSshShutdown } from './ipc/ssh-shutdown-drain'
@@ -422,6 +424,7 @@ let agentAwakeService: AgentAwakeService | null = null
 let crashReports: CrashReportStore | null = null
 let unsubscribeAgentAwakeStatusChanges: (() => void) | null = null
 let unsubscribeSystemResumeBroadcast: (() => void) | null = null
+let unsubscribeRuntimeEnvironmentStoreWatcher: (() => void) | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
@@ -2448,6 +2451,13 @@ void app.whenReady().then(async () => {
     }
   })
   unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
+  // Why: `orca environment add` writes the store from outside the app; without this
+  // the new remote server stays invisible until Settings → Remote Orca Servers.
+  unsubscribeRuntimeEnvironmentStoreWatcher = registerRuntimeEnvironmentStoreWatcher({
+    userDataPath: app.getPath('userData'),
+    getWindows: () => BrowserWindow.getAllWindows(),
+    invalidateTransport: invalidateRuntimeEnvironmentTransport
+  })
   agentAwakeService = new AgentAwakeService()
   agentAwakeService.setMode(
     normalizeComputerAwakeMode(
@@ -3480,6 +3490,8 @@ app.on('will-quit', (e) => {
   }
   unsubscribeSystemResumeBroadcast?.()
   unsubscribeSystemResumeBroadcast = null
+  unsubscribeRuntimeEnvironmentStoreWatcher?.()
+  unsubscribeRuntimeEnvironmentStoreWatcher = null
   // Why: renderer guards can still cancel before this committed phase; `log stream` must survive those vetoes.
   stopTccPromptNotice()
   const updateQuitInProgress = isQuittingForUpdate()
