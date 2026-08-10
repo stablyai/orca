@@ -9,7 +9,7 @@ export const MAX_REMOTE_WORKSPACE_UNTRACKED_INTENT_TARGETS = 64
 export class RemoteWorkspaceUntrackedIntentFences {
   private readonly targets = new Map<string, RemoteWorkspaceUntrackedIntentFence>()
   private nextSequence = 0
-  private overflowed = false
+  private overflowAuthority: RemoteWorkspaceTabObservationAuthority | null = null
 
   canObserve(targetId: string, authority: RemoteWorkspaceTabObservationAuthority): boolean {
     const fence = this.targets.get(targetId)
@@ -31,7 +31,9 @@ export class RemoteWorkspaceUntrackedIntentFences {
       this.targets.set(targetId, fence)
       return
     }
-    this.overflowed = true
+    if (!this.overflowAuthority || this.canReplace(this.overflowAuthority, authority)) {
+      this.overflowAuthority = { ...authority }
+    }
   }
 
   forget(targetId: string, authority: RemoteWorkspaceTabObservationAuthority): void {
@@ -45,8 +47,19 @@ export class RemoteWorkspaceUntrackedIntentFences {
     this.targets.delete(targetId)
   }
 
+  forgetAll(authority: RemoteWorkspaceTabObservationAuthority): void {
+    for (const [targetId, fence] of this.targets) {
+      if (this.canReplace(fence.authority, authority)) {
+        this.targets.delete(targetId)
+      }
+    }
+    if (this.overflowAuthority && this.canReplace(this.overflowAuthority, authority)) {
+      this.overflowAuthority = null
+    }
+  }
+
   blocks(targetId: string): boolean {
-    return this.targets.has(targetId) || this.overflowed
+    return this.targets.has(targetId) || this.overflowAuthority !== null
   }
 
   capture(targetId: string): RemoteWorkspaceUntrackedIntentFence | null {
@@ -69,7 +82,7 @@ export class RemoteWorkspaceUntrackedIntentFences {
   reset(): void {
     this.targets.clear()
     this.nextSequence = 0
-    this.overflowed = false
+    this.overflowAuthority = null
   }
 
   private canReplace(

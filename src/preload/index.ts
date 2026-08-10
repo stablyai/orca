@@ -3081,6 +3081,7 @@ const api = {
     startTabStateObservation: () => ipcRenderer.invoke('remoteWorkspace:startTabStateObservation'),
     observeTabState: (observation) =>
       ipcRenderer.invoke('remoteWorkspace:observeTabState', observation),
+    forgetAllTabState: (args) => ipcRenderer.invoke('remoteWorkspace:forgetAllTabState', args),
     forgetTabState: (args) => ipcRenderer.invoke('remoteWorkspace:forgetTabState', args),
     flushTabState: () => ipcRenderer.invoke('remoteWorkspace:flushTabState'),
     reconcileSnapshot: (args) => ipcRenderer.invoke('remoteWorkspace:reconcileSnapshot', args),

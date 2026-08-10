@@ -173,6 +173,15 @@ export class RemoteWorkspaceTabIntentStore {
     }
   }
 
+  forgetAll(authority: RemoteWorkspaceTabObservationAuthority): void {
+    this.untracked.forgetAll(authority)
+    for (const [targetId, state] of this.targets) {
+      if (this.canObserve(state.authority, authority)) {
+        this.targets.delete(targetId)
+      }
+    }
+  }
+
   hasPending(targetId: string): boolean {
     const state = this.targets.get(targetId)
     return Boolean(
