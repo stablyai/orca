@@ -18,6 +18,10 @@ export function registerSessionHandlers(store: Store): void {
     store.patchWorkspaceSession(args, hostId)
   })
 
+  ipcMain.handle('session:adopt-ssh-partition', (_event, hostId: string) => {
+    return store.adoptSshWorkspaceSessionPartition(hostId)
+  })
+
   ipcMain.handle('session:flush', () => {
     // Why: durable lifecycle RPCs must propagate disk failures instead of
     // returning success through Store.flush(), which intentionally only logs.

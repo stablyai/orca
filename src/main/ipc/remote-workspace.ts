@@ -424,17 +424,7 @@ export function registerRemoteWorkspaceHandlers(
       const fallbackSession = args.session ?? store.getWorkspaceSession()
       const results = await Promise.all(
         targets.map(async (target) => {
-          // Why: the local-partition fallback cannot see session state the
-          // runtime persisted into the target's ssh partition; exporting
-          // without it round-trips those worktrees as empty, and the next
-          // remote-authoritative pull deletes their tabs on every client.
-          // Adoption here is deliberately read-only: the renderer owns the
-          // local partition and replaces its worktree map wholesale on every
-          // debounced write, so a store-side move would be silently undone —
-          // with the only durable copy already pruned. The move happens at
-          // boot hydration, where the adopted tabs enter the renderer's own
-          // state; deliberate closes are fenced by surface tombstones, which
-          // adoption honors.
+          // Boot owns persistence; export only overlays stranded SSH state.
           const workspaceSession = args.session
             ? args.session
             : adoptOrphanedWorkspaceSessionPartition(

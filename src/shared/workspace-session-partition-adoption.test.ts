@@ -3,7 +3,6 @@ import { getDefaultWorkspaceSession } from './constants'
 import type { TerminalTab, WorkspaceSessionState } from './types'
 import {
   adoptOrphanedWorkspaceSessionPartition,
-  buildAdoptedWorkspaceSessionOwnerPatch,
   pruneAdoptedWorkspaceSessionPartitionEntries
 } from './workspace-session-partition-adoption'
 
@@ -131,88 +130,6 @@ describe('adoptOrphanedWorkspaceSessionPartition', () => {
     expect(adoption.session.terminalLayoutsByTabId['tab-1']).toBeDefined()
     expect(adoption.session.terminalLayoutsByTabId['unrelated-tab']).toBeUndefined()
     expect(adoption.session.remoteSessionIdsByTabId).toEqual({ 'tab-1': 'session-1' })
-  })
-})
-
-describe('buildAdoptedWorkspaceSessionOwnerPatch', () => {
-  it('returns null when nothing was adopted', () => {
-    expect(buildAdoptedWorkspaceSessionOwnerPatch(session({}), session({}), {})).toBeNull()
-  })
-
-  it('lands every adopted field on top of a fresh owner read without dropping newer entries', () => {
-    const partition = session({
-      tabsByWorktree: { [WORKTREE_ID]: [tab('tab-1')] },
-      terminalLayoutsByTabId: { 'tab-1': { root: null } as never },
-      remoteSessionIdsByTabId: { 'tab-1': 'session-1' },
-      activeTabIdByWorktree: { [WORKTREE_ID]: 'tab-1' },
-      lastVisitedAtByWorktreeId: { [WORKTREE_ID]: 42 },
-      defaultTerminalTabsAppliedByWorktreeId: { [WORKTREE_ID]: true }
-    })
-    const adoption = adoptOrphanedWorkspaceSessionPartition(session({}), partition)
-    // A concurrent write landed on the owner partition after adoption started.
-    const freshOwner = session({
-      tabsByWorktree: { [OTHER_WORKTREE_ID]: [tab('new-tab', OTHER_WORKTREE_ID)] }
-    })
-
-    const owner = buildAdoptedWorkspaceSessionOwnerPatch(
-      freshOwner,
-      adoption.session,
-      adoption.adoptedTabIdsByWorktreeId
-    )
-    const patch = owner?.patch
-
-    expect(owner?.landedTabIdsByWorktreeId).toEqual({ [WORKTREE_ID]: ['tab-1'] })
-    expect(patch?.tabsByWorktree?.[WORKTREE_ID]).toHaveLength(1)
-    expect(patch?.tabsByWorktree?.[OTHER_WORKTREE_ID]).toHaveLength(1)
-    expect(patch?.terminalLayoutsByTabId?.['tab-1']).toBeDefined()
-    expect(patch?.remoteSessionIdsByTabId).toEqual({ 'tab-1': 'session-1' })
-    expect(patch?.activeTabIdByWorktree?.[WORKTREE_ID]).toBe('tab-1')
-    expect(patch?.lastVisitedAtByWorktreeId?.[WORKTREE_ID]).toBe(42)
-    expect(patch?.defaultTerminalTabsAppliedByWorktreeId?.[WORKTREE_ID]).toBe(true)
-  })
-
-  it('keeps an owner entry a concurrent write populated after adoption started', () => {
-    const partition = session({
-      tabsByWorktree: { [WORKTREE_ID]: [tab('stale-tab')] },
-      terminalLayoutsByTabId: { 'stale-tab': { root: null } as never },
-      remoteSessionIdsByTabId: { 'stale-tab': 'session-1' },
-      activeTabIdByWorktree: { [WORKTREE_ID]: 'stale-tab' }
-    })
-    const adoption = adoptOrphanedWorkspaceSessionPartition(session({}), partition)
-    const freshOwner = session({ tabsByWorktree: { [WORKTREE_ID]: [tab('live-tab')] } })
-
-    const owner = buildAdoptedWorkspaceSessionOwnerPatch(
-      freshOwner,
-      adoption.session,
-      adoption.adoptedTabIdsByWorktreeId
-    )
-
-    expect(owner).toBeNull()
-  })
-
-  it('lands only the worktrees the fresh owner read left empty', () => {
-    const partition = session({
-      tabsByWorktree: {
-        [WORKTREE_ID]: [tab('stale-tab')],
-        [OTHER_WORKTREE_ID]: [tab('orphan-tab', OTHER_WORKTREE_ID)]
-      },
-      activeTabIdByWorktree: { [WORKTREE_ID]: 'stale-tab' },
-      lastVisitedAtByWorktreeId: { [WORKTREE_ID]: 42 }
-    })
-    const adoption = adoptOrphanedWorkspaceSessionPartition(session({}), partition)
-    const freshOwner = session({ tabsByWorktree: { [WORKTREE_ID]: [tab('live-tab')] } })
-
-    const owner = buildAdoptedWorkspaceSessionOwnerPatch(
-      freshOwner,
-      adoption.session,
-      adoption.adoptedTabIdsByWorktreeId
-    )
-
-    expect(owner?.landedTabIdsByWorktreeId).toEqual({ [OTHER_WORKTREE_ID]: ['orphan-tab'] })
-    expect(owner?.patch.tabsByWorktree?.[WORKTREE_ID]).toEqual([tab('live-tab')])
-    expect(owner?.patch.tabsByWorktree?.[OTHER_WORKTREE_ID]).toHaveLength(1)
-    expect(owner?.patch.activeTabIdByWorktree?.[WORKTREE_ID]).toBeUndefined()
-    expect(owner?.patch.lastVisitedAtByWorktreeId?.[WORKTREE_ID]).toBeUndefined()
   })
 })
 

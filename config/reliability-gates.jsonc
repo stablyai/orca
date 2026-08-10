@@ -5874,7 +5874,7 @@
       "providers": ["ssh", "remote-runtime", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh", "remote-runtime"],
-      "coverageNotes": "Deterministic renderer coverage proves startup publishes the state returned by ssh.connect, retained native and runtime SSH payloads are admitted through production routes only with valid complete authority, stale cleanup cannot unregister a replacement runtime terminal, direct SSH Git and folder panes clear and retry by exact authority, one authority chain stops after two automatic attempts even when each timeout exceeds the rolling window, rejected acknowledgements mutate no store maps, and one shared exact attempt admits every concurrent split-pane spawn and reattach while preserving the first PTY as the tab fallback. A later sibling failure rotates the tab once, stale callbacks from the prior attempt mutate no state, split remount activity suppression is counted per leaf, primary PTY exit promotes a bound survivor or preserves an empty continuation gap for a late sibling, and primary, non-primary, or null-PTY detach preserves exact authority on both resulting tabs. Intentional pane disposal cancels its settlement timer without breaking StrictMode remount timeout ownership. Target snapshot hydration/reconnect preserves sibling SSH/local/WSL/runtime state, and a mounted remote-runtime terminal survives repeated transport partitions without changing PTY identity. A real encrypted-WebSocket oracle proves a successful reachability probe can replace a pre-ready shared-control socket without rejecting or duplicating the waiting RPC. Direct SSH coordinator tests cover immediate terminal finalization, hydration correction, damping, bounded retry, and telemetry non-interference. Client/server heartbeat tests cover timer suspension, socket generations fence stale callbacks, cold restored-terminal attachment retries, cached pixels remain unhealthy until authoritative replay, automatic retries stop after one minute, manual reconnect preserves the PTY, and pane closure releases recovery UI state. Current macOS Electron journeys against an ephemeral Linux Docker SSH target cover exact-authority repo/worktree hydration, live terminal recovery after disconnect/reconnect, and eager six-terminal remount after renderer reload. A Windows remote-runtime smoke covers reachability and PTY round-trip. Multi-target live fanout, paired-close, WSL, and patched live partition journeys remain gaps.",
+      "coverageNotes": "Deterministic renderer coverage proves startup publishes the state returned by ssh.connect, retained native and runtime SSH payloads are admitted through production routes only with valid complete authority, stale cleanup cannot unregister a replacement runtime terminal, direct SSH Git and folder panes clear and retry by exact authority, one authority chain stops after two automatic attempts even when each timeout exceeds the rolling window, rejected acknowledgements mutate no store maps, and one shared exact attempt admits every concurrent split-pane spawn and reattach while preserving the first PTY as the tab fallback. A later sibling failure rotates the tab once, stale callbacks from the prior attempt mutate no state, split remount activity suppression is counted per leaf, primary PTY exit promotes a bound survivor or preserves an empty continuation gap for a late sibling, and primary, non-primary, or null-PTY detach preserves exact authority on both resulting tabs. Intentional pane disposal cancels its settlement timer without breaking StrictMode remount timeout ownership. Target snapshot hydration/reconnect preserves sibling SSH/local/WSL/runtime state, and a mounted remote-runtime terminal survives repeated transport partitions without changing PTY identity. A real encrypted-WebSocket oracle proves a successful reachability probe can replace a pre-ready shared-control socket without rejecting or duplicating the waiting RPC. Direct SSH coordinator tests cover immediate terminal finalization, hydration correction, damping, bounded retry, and telemetry non-interference. Client/server heartbeat tests cover timer suspension, socket generations fence stale callbacks, cold restored-terminal attachment retries, cached pixels remain unhealthy until authoritative replay, automatic retries stop after one minute, manual reconnect preserves the PTY, and pane closure releases recovery UI state. Current macOS Electron journeys against an ephemeral Linux Docker SSH target cover exact-authority repo/worktree hydration, live terminal recovery after disconnect/reconnect, eager six-terminal remount after renderer reload, and two full restarts after a live session is stranded in its SSH partition. A Windows remote-runtime smoke covers reachability and PTY round-trip. Multi-target live fanout, paired-close, and WSL remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
@@ -5897,6 +5897,7 @@
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_SSH_TARGET_HOST=<non-loopback-host> SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-session-partition-adoption.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
@@ -5948,6 +5949,7 @@
         "src/shared/ssh-types.test.ts",
         "tests/e2e/terminal-cold-activation-deferral.spec.ts",
         "tests/e2e/ssh-cold-activation-restore.spec.ts",
+        "tests/e2e/ssh-session-partition-adoption.spec.ts",
         "tests/e2e/ssh-docker-relay-perf.spec.ts"
       ],
       "assertionRefs": [
@@ -6242,6 +6244,14 @@
             "repo and worktree setup fails closed unless the exact direct SSH host and complete authority are returned",
             "a reconnected terminal accepts input and writes a proof file visible inside the Linux SSH target"
           ]
+        },
+        {
+          "file": "tests/e2e/ssh-session-partition-adoption.spec.ts",
+          "assertions": [
+            "a live Git terminal stranded in an SSH partition retains its exact tab and PTY identity across two full app restarts",
+            "the atomic boot adoption prunes the source partition and remote export remains non-empty",
+            "the restored shell retains its environment and writes proof through a non-loopback Linux SSH target"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -6316,6 +6326,15 @@
           "result": "passed",
           "durationSeconds": 12.5,
           "summary": "One Electron journey passed on the final implementation after exact-authority hydration; six restored SSH terminal managers remounted after renderer reload and remote input reached the Linux target."
+        },
+        {
+          "date": "2026-08-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_SSH_TARGET_HOST=<non-loopback-host> SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-session-partition-adoption.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 19.4,
+          "summary": "A headed macOS client created a live terminal in a throwaway Docker Linux Git repository over non-loopback SSH, moved its persisted tab into the SSH host partition, and completed two full restarts with the same tab and PTY identities, a pruned source partition, a non-empty remote snapshot, and a shell-environment proof file."
         }
       ],
       "runtimeBudget": {
@@ -6332,7 +6351,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Direct SSH terminal invalidation and retry each use one exact-target store publication and execute before provider discovery; another target's five occupied provider slots cannot delay terminal finalization. Each split-pane completion or delayed mount adds constant-time pending/live lease lookups and no provider listing, polling, subprocess, cross-tab scan, or new fanout; two mounted leaves still perform exactly their two existing provider operations. The scheduler caps locally unsettled detected-worktree work at five with a two-call late-work allowance. Remote-runtime recovery allocates at most one backoff timer and one one-minute deadline per detached pane, then stops all PTY retry work until explicit user action. Timers, accepted-snapshot listeners, stale streams, and pane UI entries are released on health, cutoff, rebind, removal, detach, or destroy; ten-cycle tests prove one unsubscribe per epoch. Common terminal input/output paths add only constant-time state checks. No live large-terminal-map direct SSH timing is claimed."
+        "evidence": "Direct SSH terminal invalidation and retry each use one exact-target store publication and execute before provider discovery; another target's five occupied provider slots cannot delay terminal finalization. Each split-pane completion or delayed mount adds constant-time pending/live lease lookups and no provider listing, polling, subprocess, cross-tab scan, or new fanout; two mounted leaves still perform exactly their two existing provider operations. Startup adoption adds one sequential in-memory main-process transaction per known SSH target, while remote export adds one in-memory partition overlay per target only when no explicit session is supplied; neither path adds polling, subprocesses, listeners, or provider calls. The scheduler caps locally unsettled detected-worktree work at five with a two-call late-work allowance. Remote-runtime recovery allocates at most one backoff timer and one one-minute deadline per detached pane, then stops all PTY retry work until explicit user action. Timers, accepted-snapshot listeners, stale streams, and pane UI entries are released on health, cutoff, rebind, removal, detach, or destroy; ten-cycle tests prove one unsubscribe per epoch. Common terminal input/output paths add only constant-time state checks. No live large-terminal-map direct SSH timing is claimed."
       },
       "promotionCriteria": [
         "Use deterministic fake providers for failure and unknown-liveness cases.",

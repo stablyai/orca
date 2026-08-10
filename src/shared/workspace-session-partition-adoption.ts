@@ -1,27 +1,6 @@
 import type { TerminalTab, WorkspaceSessionPatch, WorkspaceSessionState } from './types'
 
-/**
- * Adopt terminal-session state that exists only in another host partition.
- *
- * The main-process runtime persists SSH-owned worktree session state into
- * `ssh:<targetId>` partitions (persistence.ts workspaceSessionsByHostId), while
- * renderer persistence keeps SSH worktrees in the 'local' partition
- * (workspace-session-host-persistence.ts buildHostIdByWorktreeId). Readers that
- * only consult one side see the other side's worktrees as empty — and both the
- * boot hydration merge and the remote-workspace export treat "empty" as
- * authoritative, which turns the invisible copy into a permanent deletion once
- * a remote snapshot round-trips it.
- *
- * Adoption is the read-side bridge: a worktree whose base entry holds no tabs
- * takes the partition's populated entry, together with the tab-scoped records
- * of exactly the adopted tabs. Entries the base already populates always win —
- * the partition copy may be a stale fork. Tabs fenced by a surface tombstone on
- * either side stay retired. Nothing is ever removed from the base.
- *
- * The adopted field set deliberately mirrors the terminal-session surface of
- * remote-workspace-session-projection.ts — when a worktree/tab-scoped field is
- * added there it must be considered here too.
- */
+/** Adopt orphaned terminal state while preserving base authority and tombstones. */
 
 export type WorkspaceSessionPartitionAdoption = {
   session: WorkspaceSessionState
@@ -126,88 +105,7 @@ export function adoptOrphanedWorkspaceSessionPartition(
   return { session, adoptedTabIdsByWorktreeId, retiredTabIds: [...retiredTabIds] }
 }
 
-export type AdoptedWorkspaceSessionOwnerPatch = {
-  patch: WorkspaceSessionPatch
-  /** Tab ids the patch lands, per worktree — the exact set the source may shed. */
-  landedTabIdsByWorktreeId: Record<string, string[]>
-}
-
-/**
- * Build the owner-partition patch that lands every adopted field durably.
- * `ownerSession` must be a fresh read of the owning partition — the patch
- * replaces whole fields, so building it from a stale snapshot would clobber
- * writes that landed in between. Worktrees the fresh read already populates
- * drop out of the patch, so only what this patch lands may later be pruned
- * from the source. Returns null when nothing is left to land.
- */
-export function buildAdoptedWorkspaceSessionOwnerPatch(
-  ownerSession: WorkspaceSessionState,
-  adoptedSession: WorkspaceSessionState,
-  adoptedTabIdsByWorktreeId: Record<string, string[]>
-): AdoptedWorkspaceSessionOwnerPatch | null {
-  // Why: base-wins holds against the fresh read too — a concurrent write can
-  // populate an adopted worktree after the boot snapshot, and this patch
-  // replaces the whole field, so keeping the snapshot would drop those tabs.
-  const adoptedWorktreeIds = Object.keys(adoptedTabIdsByWorktreeId).filter(
-    (worktreeId) => (ownerSession.tabsByWorktree?.[worktreeId] ?? []).length === 0
-  )
-  if (adoptedWorktreeIds.length === 0) {
-    return null
-  }
-  const landedTabIdsByWorktreeId = Object.fromEntries(
-    adoptedWorktreeIds.map((worktreeId) => [
-      worktreeId,
-      adoptedTabIdsByWorktreeId[worktreeId] ?? []
-    ])
-  )
-  const adoptedTabIds = new Set(Object.values(landedTabIdsByWorktreeId).flat())
-  const adoptedTabsByWorktree = Object.fromEntries(
-    adoptedWorktreeIds.map((worktreeId) => [
-      worktreeId,
-      adoptedSession.tabsByWorktree[worktreeId] ?? []
-    ])
-  )
-  const patch: WorkspaceSessionPatch = {
-    tabsByWorktree: { ...ownerSession.tabsByWorktree, ...adoptedTabsByWorktree },
-    terminalLayoutsByTabId: {
-      ...ownerSession.terminalLayoutsByTabId,
-      ...pickTabKeyed(adoptedSession.terminalLayoutsByTabId, adoptedTabIds)
-    }
-  }
-  const adoptedRemoteSessionIds = pickTabKeyed(
-    adoptedSession.remoteSessionIdsByTabId,
-    adoptedTabIds
-  )
-  if (Object.keys(adoptedRemoteSessionIds).length > 0) {
-    patch.remoteSessionIdsByTabId = {
-      ...ownerSession.remoteSessionIdsByTabId,
-      ...adoptedRemoteSessionIds
-    }
-  }
-  const scalarFields = [
-    'activeTabIdByWorktree',
-    'lastVisitedAtByWorktreeId',
-    'defaultTerminalTabsAppliedByWorktreeId'
-  ] as const
-  for (const field of scalarFields) {
-    ;(patch as Record<string, unknown>)[field] = adoptWorktreeKeyed(
-      ownerSession[field] as Record<string, unknown> | undefined,
-      adoptedSession[field] as Record<string, unknown> | undefined,
-      adoptedWorktreeIds
-    )
-  }
-  return { patch, landedTabIdsByWorktreeId }
-}
-
-/**
- * Build the partition patch that completes an adoption as a move. Leaving the
- * adopted tabs behind would re-adopt them on every read once the base's own
- * copy empties again — resurrecting tabs the user deliberately closed.
- * `partition` must be a fresh read of the source. Returns null when nothing was
- * adopted. An adopted worktree sheds the tabs the owner took plus the ones a
- * tombstone retired; every other tab stays, including one a concurrent write
- * added to that worktree after the adoption read.
- */
+/** Remove only tabs the owner transaction accepted or rejected. */
 export function pruneAdoptedWorkspaceSessionPartitionEntries(
   partition: WorkspaceSessionState,
   adoptedTabIdsByWorktreeId: Record<string, string[]>,

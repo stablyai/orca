@@ -34,6 +34,7 @@ export type HostPersistenceState = {
 type SessionApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
   patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+  adoptSshPartition?: (hostId: `ssh:${string}`) => Promise<WorkspaceSessionState>
   setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
 }
 
@@ -310,7 +311,7 @@ export async function fetchWorkspaceSessionFromHosts(
 }
 
 export async function fetchWorkspaceSessionWithRuntimeHostOwners(
-  api: Pick<SessionApi, 'get'> & Partial<Pick<SessionApi, 'patch'>>,
+  api: Pick<SessionApi, 'get' | 'adoptSshPartition'>,
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[],
   additionalRuntimeHostIds: readonly ExecutionHostId[] = []
 ): Promise<WorkspaceSessionHostRead> {

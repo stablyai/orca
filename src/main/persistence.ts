@@ -135,6 +135,10 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSessionSalvaging } from '../shared/workspace-session-salvage'
+import {
+  adoptOrphanedWorkspaceSessionPartition,
+  pruneAdoptedWorkspaceSessionPartitionEntries
+} from '../shared/workspace-session-partition-adoption'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
@@ -6276,6 +6280,43 @@ export class Store {
       return this.state.workspaceSession ?? getDefaultWorkspaceSession()
     }
     return this.state.workspaceSessionsByHostId?.[resolved] ?? getDefaultWorkspaceSession()
+  }
+
+  adoptSshWorkspaceSessionPartition(hostId: string): WorkspaceSessionState {
+    const parsed = parseExecutionHostId(hostId)
+    if (parsed?.kind !== 'ssh' || !this.state.workspaceSessionsByHostId?.[hostId]) {
+      return this.getWorkspaceSession()
+    }
+    const owner = this.getWorkspaceSession()
+    const source = this.getWorkspaceSession(hostId)
+    const adoption = adoptOrphanedWorkspaceSessionPartition(owner, source)
+    const movedTabIdsByWorktreeId: Record<string, string[]> = {}
+    for (const [worktreeId, sourceTabs] of Object.entries(source.tabsByWorktree ?? {})) {
+      if (sourceTabs.length > 0) {
+        // Local is authoritative once it either accepts or rejects this stale fork.
+        movedTabIdsByWorktreeId[worktreeId] = sourceTabs.map((tab) => tab.id)
+      }
+    }
+    const sourcePatch = pruneAdoptedWorkspaceSessionPartitionEntries(
+      source,
+      movedTabIdsByWorktreeId,
+      adoption.retiredTabIds
+    )
+    if (adoption.session === owner && !sourcePatch) {
+      return owner
+    }
+
+    if (adoption.session !== owner) {
+      this.setLocalWorkspaceSession(adoption.session)
+    }
+    if (sourcePatch) {
+      this.state.workspaceSessionsByHostId = {
+        ...this.state.workspaceSessionsByHostId,
+        [hostId]: { ...source, ...sourcePatch }
+      }
+      this.scheduleSave()
+    }
+    return this.getWorkspaceSession()
   }
 
   /** Whether a partition was ever written; `getWorkspaceSession` defaults absent ones and cannot tell them apart. */

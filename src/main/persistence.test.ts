@@ -11815,6 +11815,95 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(store.getWorkspaceSession('local').activeRepoId).toBe('repo-local')
   })
 
+  it('atomically moves stranded ssh tabs into the local partition', async () => {
+    const store = await createStore()
+    const source = makeBoundHostSession('ssh:ssh-1@@remote-pty')
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { 'repo-1::/worktree': [] }
+    })
+    store.setWorkspaceSession(source, 'ssh:ssh-1')
+
+    const adopted = store.adoptSshWorkspaceSessionPartition('ssh:ssh-1')
+
+    expect(adopted.tabsByWorktree['repo-1::/worktree']).toEqual(
+      source.tabsByWorktree['repo-1::/worktree']
+    )
+    expect(adopted.terminalLayoutsByTabId['tab-1']).toEqual(source.terminalLayoutsByTabId['tab-1'])
+    expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree).toEqual({})
+  })
+
+  it('finishes cleanup when an earlier move left the same tab in both partitions', async () => {
+    const store = await createStore()
+    const session = makeBoundHostSession('ssh:ssh-1@@remote-pty')
+    store.setWorkspaceSession(session)
+    store.setWorkspaceSession(structuredClone(session), 'ssh:ssh-1')
+
+    const adopted = store.adoptSshWorkspaceSessionPartition('ssh:ssh-1')
+
+    expect(adopted.tabsByWorktree['repo-1::/worktree']).toEqual(
+      session.tabsByWorktree['repo-1::/worktree']
+    )
+    expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree).toEqual({})
+  })
+
+  it('keeps populated local state and removes the rejected ssh fork', async () => {
+    const store = await createStore()
+    const local = makeBoundHostSession('ssh:ssh-1@@local-pty')
+    const source = makeBoundHostSession('ssh:ssh-1@@stale-pty')
+    source.tabsByWorktree['repo-1::/worktree'][0].id = 'stale-tab'
+    store.setWorkspaceSession(local)
+    store.setWorkspaceSession(source, 'ssh:ssh-1')
+
+    const adopted = store.adoptSshWorkspaceSessionPartition('ssh:ssh-1')
+
+    expect(adopted.tabsByWorktree['repo-1::/worktree']).toEqual(
+      local.tabsByWorktree['repo-1::/worktree']
+    )
+    expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree).toEqual({})
+  })
+
+  it('ignores non-ssh adoption requests without mutating their partition', async () => {
+    const store = await createStore()
+    const local = makeBoundHostSession('local-pty')
+    const runtime = makeBoundHostSession('runtime:env-1@@runtime-pty')
+    store.setWorkspaceSession(local)
+    store.setWorkspaceSession(runtime, 'runtime:env-1')
+
+    const adopted = store.adoptSshWorkspaceSessionPartition('runtime:env-1')
+
+    expect(adopted).toEqual(local)
+    expect(store.getWorkspaceSession('runtime:env-1')).toEqual(runtime)
+  })
+
+  it('prunes tombstoned ssh tabs without resurrecting them locally', async () => {
+    const source = makeBoundHostSession('ssh:ssh-1@@remote-pty')
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: { 'repo-1::/worktree': [] },
+        terminalSurfaceTombstonesByPaneKey: {
+          [`tab-1:${TEST_LEAF_1}`]: {
+            worktreeId: 'repo-1::/worktree',
+            parentTabId: 'tab-1',
+            leafId: TEST_LEAF_1,
+            ptyId: 'ssh:ssh-1@@remote-pty',
+            incarnationId: 'inc-1',
+            retiredAt: 1
+          }
+        }
+      },
+      workspaceSessionsByHostId: { 'ssh:ssh-1': source }
+    })
+    const store = await createStore()
+
+    const adopted = store.adoptSshWorkspaceSessionPartition('ssh:ssh-1')
+
+    expect(adopted.tabsByWorktree['repo-1::/worktree']).toEqual([])
+    expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree).toEqual({})
+  })
+
   it('preserves and enforces equal repo-id topology authority independently per host', async () => {
     const store = await createStore()
     const worktreeId = 'duplicate::/worktree'

@@ -790,6 +790,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           })
         )
       },
+      adoptSshPartition: async () => getStoredWorkspaceSession(),
       // localStorage writes synchronously, so there is no deferred web flush.
       flush: async () => {},
       readTerminalScrollback: () => null,
