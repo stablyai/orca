@@ -51,4 +51,18 @@ describe('clearGitReadCachesForPaths', () => {
 
     expect(getSubmodulePathsCacheCountForTests()).toBe(1)
   })
+
+  // Why: a naive startsWith would also clear `/worktrees/repo-ab` and `/worktrees/repo-a/sub`
+  // when clearing `/worktrees/repo-a`. The boundary check (exact match OR path-separator
+  // boundary) must reject the sibling (`/worktrees/repo-ab`) and keep the descendant
+  // (`/worktrees/repo-a/sub`).
+  it('distinguishes siblings from descendants when clearing by path', () => {
+    primeGitReadCachesForTests(['/worktrees/repo-a', '/worktrees/repo-ab', '/worktrees/repo-a/sub'])
+
+    clearGitReadCachesForPaths(['/worktrees/repo-a'])
+
+    // /worktrees/repo-a (exact) and /worktrees/repo-a/sub (descendant) removed;
+    // /worktrees/repo-ab (sibling) preserved.
+    expect(getSubmodulePathsCacheCountForTests()).toBe(1)
+  })
 })

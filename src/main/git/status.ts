@@ -125,8 +125,21 @@ export function clearGitReadCachesForPaths(paths: readonly string[]): void {
     return
   }
   const matches = (key: string): boolean => {
+    // Why: cache keys are `[path, wslDistro].join('\0')`. A naive startsWith matches
+    // siblings (`/worktrees/repo-a` would also clear `/worktrees/repo-ab`). Compare the
+    // path component up to the first `\0`, then require either an exact match or a path
+    // separator so descendants match and siblings do not.
+    const separatorIdx = key.indexOf('\0')
+    const keyPath = separatorIdx === -1 ? key : key.slice(0, separatorIdx)
     for (const path of paths) {
-      if (key.startsWith(path)) {
+      if (keyPath === path) {
+        return true
+      }
+      if (
+        keyPath.length > path.length &&
+        (keyPath[path.length] === '/' || keyPath[path.length] === '\\') &&
+        keyPath.startsWith(path)
+      ) {
         return true
       }
     }
