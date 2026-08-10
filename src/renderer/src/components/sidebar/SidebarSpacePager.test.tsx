@@ -6,18 +6,36 @@ import type { Swiper as SwiperInstance } from 'swiper'
 import type { AppState } from '@/store'
 import type { Space } from '../../../../shared/types'
 
-const mocks = vi.hoisted(() => ({
-  setActiveSpace: vi.fn(),
-  state: {} as Partial<AppState>,
-  swiperProps: {} as Record<string, unknown>
-}))
+const mocks = vi.hoisted(() => {
+  const listeners = new Set<() => void>()
+  return {
+    listeners,
+    prefersReducedMotion: false,
+    setActiveSpace: vi.fn(),
+    state: {} as Partial<AppState>,
+    swiperProps: {} as Record<string, unknown>,
+    notify: (): void => {
+      listeners.forEach((listener) => listener())
+    }
+  }
+})
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: Partial<AppState>) => unknown) => selector(mocks.state)
-}))
+vi.mock('@/store', async () => {
+  const react = await import('react')
+  return {
+    useAppStore: (selector: (state: Partial<AppState>) => unknown) =>
+      react.useSyncExternalStore(
+        (listener: () => void) => {
+          mocks.listeners.add(listener)
+          return () => mocks.listeners.delete(listener)
+        },
+        () => selector(mocks.state)
+      )
+  }
+})
 
 vi.mock('@/hooks/usePrefersReducedMotion', () => ({
-  usePrefersReducedMotion: () => false
+  usePrefersReducedMotion: () => mocks.prefersReducedMotion
 }))
 
 vi.mock('swiper/react', () => ({
@@ -37,24 +55,18 @@ vi.mock('./WorktreeList', () => ({
 import SidebarSpacePager from './SidebarSpacePager'
 import { requestAnimatedSpaceTransition } from './space-transition-controller'
 
-const SPACES: Space[] = ['a', 'b', 'c', 'd'].map((id) => ({
-  id,
-  name: id.toUpperCase(),
-  emoji: null,
-  createdAt: 0,
-  updatedAt: 0
-}))
+function makeSpaces(ids: string[]): Space[] {
+  return ids.map((id) => ({ id, name: id.toUpperCase(), emoji: null, createdAt: 0, updatedAt: 0 }))
+}
+
+const SPACES = makeSpaces(['a', 'b', 'c', 'd'])
+const SIX_SPACES = makeSpaces(['a', 'b', 'c', 'd', 'e', 'f'])
 
 type CapturedSwiperProps = {
+  loop: boolean
+  mousewheel: { forceToAxis: boolean; thresholdDelta: number }
   onActiveIndexChange: (swiper: SwiperInstance) => void
   onSwiper: (swiper: SwiperInstance) => void
-  onTouchEnd: () => void
-  onTouchStart: (swiper: SwiperInstance) => void
-  mousewheel: {
-    forceToAxis: boolean
-    releaseOnEdges: boolean
-    thresholdDelta: number
-  }
   simulateTouch: boolean
   slidesPerGroup: number
   slidesPerView: number
@@ -65,130 +77,316 @@ function swiperProps(): CapturedSwiperProps {
   return mocks.swiperProps as unknown as CapturedSwiperProps
 }
 
-function setStore(activeSpaceId: string): void {
+function setStore(activeSpaceId: string, spaces: Space[] = SPACES): void {
   mocks.state = {
-    spaces: SPACES,
+    spaces,
     activeSpaceId,
     setActiveSpace: mocks.setActiveSpace
   } as unknown as Partial<AppState>
+  mocks.notify()
 }
 
-function renderPager(activeSpaceId = 'b'): ReturnType<typeof render> {
-  setStore(activeSpaceId)
+function renderPager(activeSpaceId = 'b', spaces: Space[] = SPACES): ReturnType<typeof render> {
+  setStore(activeSpaceId, spaces)
   return render(
     <SidebarSpacePager scrollOffsetRef={{ current: 0 }} scrollAnchorRef={{ current: null }} />
   )
 }
 
-function renderedPages(): { id: string | null; inert: string | null }[] {
-  return Array.from(document.querySelectorAll('[data-space-id]')).map((element) => ({
-    id: element.getAttribute('data-space-id'),
-    inert: element.getAttribute('data-inert')
-  }))
+/** The Space rendered in each Swiper slot, in slot order; null where nothing is mounted. */
+function slotContents(): (string | null)[] {
+  return Array.from(document.querySelectorAll('[data-slide]')).map(
+    (slide) => slide.querySelector('[data-space-id]')?.getAttribute('data-space-id') ?? null
+  )
 }
 
-function swiper(activeIndex = 1): SwiperInstance {
-  return {
-    activeIndex,
+function inertBySpaceId(): Record<string, string | null> {
+  return Object.fromEntries(
+    Array.from(document.querySelectorAll('[data-space-id]')).map((element) => [
+      element.getAttribute('data-space-id'),
+      element.getAttribute('data-inert')
+    ])
+  )
+}
+
+type StatefulSwiper = SwiperInstance & { path: number[] }
+
+/** Mirrors Swiper's loop stepping so tests can assert the route actually taken. */
+function swiper(realIndex = 1, count = SPACES.length): StatefulSwiper {
+  const instance = {
+    activeIndex: realIndex,
+    realIndex,
     destroyed: false,
-    slideTo: vi.fn()
-  } as unknown as SwiperInstance
+    path: [realIndex],
+    slideToLoop: vi.fn((index: number) => {
+      instance.realIndex = index
+      instance.activeIndex = index
+      instance.path.push(index)
+    }),
+    slideNext: vi.fn(() => {
+      instance.realIndex = (instance.realIndex + 1) % count
+      instance.activeIndex = instance.realIndex
+      instance.path.push(instance.realIndex)
+    }),
+    slidePrev: vi.fn(() => {
+      instance.realIndex = (instance.realIndex - 1 + count) % count
+      instance.activeIndex = instance.realIndex
+      instance.path.push(instance.realIndex)
+    })
+  }
+  return instance as unknown as StatefulSwiper
+}
+
+function attach(instance: StatefulSwiper): void {
+  act(() => swiperProps().onSwiper(instance))
+}
+
+function transitionTo(spaceId: string): boolean {
+  let handled = false
+  act(() => {
+    handled = requestAnimatedSpaceTransition(spaceId)
+  })
+  return handled
 }
 
 describe('SidebarSpacePager', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.useFakeTimers()
+    mocks.prefersReducedMotion = false
+    mocks.setActiveSpace.mockImplementation((spaceId: string) => {
+      setStore(spaceId, (mocks.state.spaces ?? SPACES) as Space[])
+    })
   })
 
   afterEach(() => {
     cleanup()
+    mocks.listeners.clear()
+    vi.useRealTimers()
   })
 
-  it('uses one-page snapping for trackpad movement', () => {
+  it('uses one-page snapping with circular navigation', () => {
     renderPager()
 
     expect(swiperProps()).toEqual(
       expect.objectContaining({
+        loop: true,
         slidesPerGroup: 1,
         slidesPerView: 1,
         speed: 180,
         simulateTouch: false,
-        mousewheel: {
-          forceToAxis: true,
-          releaseOnEdges: true,
-          thresholdDelta: 6
-        }
+        mousewheel: { forceToAxis: true, thresholdDelta: 6 }
       })
     )
   })
 
-  it('caps a direct swipe at the adjacent Space', () => {
-    renderPager()
-    const instance = swiper()
-    swiperProps().onTouchStart(instance)
-    instance.activeIndex = 3
-
-    act(() => swiperProps().onActiveIndexChange(instance))
-
-    expect(instance.slideTo).toHaveBeenCalledWith(2, 180, false)
-    expect(mocks.setActiveSpace).toHaveBeenCalledWith('c')
-    expect(mocks.setActiveSpace).not.toHaveBeenCalledWith('d')
-  })
-
-  it('mounts only the active Space and its neighbours', () => {
-    renderPager()
+  it('mounts the active Space and both circular neighbours', () => {
+    renderPager('a')
 
     expect(document.querySelectorAll('[data-slide]')).toHaveLength(4)
-    expect(renderedPages()).toEqual([
-      { id: 'a', inert: 'true' },
-      { id: 'b', inert: 'false' },
-      { id: 'c', inert: 'true' }
-    ])
+    expect(slotContents()).toEqual(['a', 'b', null, 'd'])
+    expect(inertBySpaceId()).toEqual({ a: 'false', b: 'true', d: 'true' })
   })
 
-  it('activates a Space as soon as Swiper crosses into its slide', () => {
+  it('activates the Space its Swiper slot is showing', () => {
     renderPager()
+    attach(swiper())
 
     act(() => swiperProps().onActiveIndexChange(swiper(2)))
 
     expect(mocks.setActiveSpace).toHaveBeenCalledWith('c')
   })
 
-  it('slides adjacent switcher and shortcut transitions', () => {
-    renderPager()
-    const instance = swiper()
-    act(() => swiperProps().onSwiper(instance))
+  it('wraps from the last Space to the first', () => {
+    renderPager('d')
+    attach(swiper(3))
 
-    expect(requestAnimatedSpaceTransition('c')).toBe(true)
-    expect(instance.slideTo).toHaveBeenCalledWith(2, 180)
+    act(() => swiperProps().onActiveIndexChange(swiper(0)))
+
+    expect(mocks.setActiveSpace).toHaveBeenCalledWith('a')
   })
 
-  it('switches distant Spaces immediately instead of sweeping through empty slides', () => {
-    renderPager()
-    const instance = swiper()
-    act(() => swiperProps().onSwiper(instance))
+  it('slides forward to a Space that sits further right', () => {
+    // Why: c -> d is one step forward; slideToLoop used to run it backwards through b and a.
+    renderPager('c')
+    const instance = swiper(2)
+    attach(instance)
 
-    expect(requestAnimatedSpaceTransition('d')).toBe(true)
-    expect(instance.slideTo).toHaveBeenCalledWith(3, 0)
+    expect(transitionTo('d')).toBe(true)
+    expect(instance.slideNext).toHaveBeenCalledWith(180)
+    expect(instance.slidePrev).not.toHaveBeenCalled()
+    expect(instance.path).toEqual([2, 3])
+    expect(instance.slideToLoop).not.toHaveBeenCalled()
   })
 
-  it('declines a transition to the active slide', () => {
+  it('slides back to the first Space rather than wrapping forward past the end', () => {
+    // Why: the strip shows a as the leftmost dot, so reaching it has to travel left even from d.
+    renderPager('d')
+    const instance = swiper(3)
+    attach(instance)
+
+    expect(transitionTo('a')).toBe(true)
+    expect(instance.slidePrev).toHaveBeenCalledWith(180)
+    expect(instance.slideNext).not.toHaveBeenCalled()
+    expect(instance.path).toEqual([3, 2])
+    expect(slotContents()).toEqual([null, null, 'a', 'd'])
+  })
+
+  it('reaches a distant Space in a single slide, showing only the two Spaces involved', () => {
+    renderPager('b', SIX_SPACES)
+    const instance = swiper(1, SIX_SPACES.length)
+    attach(instance)
+
+    expect(transitionTo('e')).toBe(true)
+
+    // One slide: b holds still in its own slot while e — three Spaces away — slides in next to it.
+    expect(instance.slideNext).toHaveBeenCalledTimes(1)
+    expect(instance.slideNext).toHaveBeenCalledWith(180)
+    expect(instance.path).toEqual([1, 2])
+    expect(slotContents()).toEqual([null, 'b', 'e', 'f', null, null])
+    expect(mocks.setActiveSpace).toHaveBeenCalledTimes(1)
+    expect(mocks.setActiveSpace).toHaveBeenCalledWith('e')
+  })
+
+  it('slides backwards when the target Space sits to the left', () => {
+    renderPager('e', SIX_SPACES)
+    const instance = swiper(4, SIX_SPACES.length)
+    attach(instance)
+
+    expect(transitionTo('b')).toBe(true)
+
+    expect(instance.slidePrev).toHaveBeenCalledTimes(1)
+    expect(instance.slideNext).not.toHaveBeenCalled()
+    expect(instance.path).toEqual([4, 3])
+    expect(slotContents()).toEqual([null, null, 'a', 'b', 'e', null])
+  })
+
+  it('follows the strip rather than the shorter way round the loop', () => {
+    // Why: b -> f is one step backwards around the loop, but f is the rightmost dot in the strip.
+    renderPager('b', SIX_SPACES)
+    const instance = swiper(1, SIX_SPACES.length)
+    attach(instance)
+
+    expect(transitionTo('f')).toBe(true)
+
+    expect(instance.slideNext).toHaveBeenCalledTimes(1)
+    expect(instance.slidePrev).not.toHaveBeenCalled()
+    expect(instance.path).toEqual([1, 2])
+    expect(slotContents()).toEqual([null, 'b', 'f', 'a', null, null])
+  })
+
+  it('releases the outgoing Space once the slide has finished', () => {
+    renderPager('b', SIX_SPACES)
+    const instance = swiper(1, SIX_SPACES.length)
+    attach(instance)
+    expect(transitionTo('e')).toBe(true)
+
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+
+    // The slot that held b during the slide falls back into place as e's circular predecessor.
+    expect(slotContents()).toEqual([null, 'd', 'e', 'f', null, null])
+    expect(instance.path).toEqual([1, 2])
+  })
+
+  it('keeps mapping Swiper slots to Spaces after a jump has re-anchored them', () => {
+    renderPager('b', SIX_SPACES)
+    const instance = swiper(1, SIX_SPACES.length)
+    attach(instance)
+    expect(transitionTo('e')).toBe(true)
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+
+    act(() => swiperProps().onActiveIndexChange(swiper(3, SIX_SPACES.length)))
+
+    expect(mocks.setActiveSpace).toHaveBeenLastCalledWith('f')
+  })
+
+  it('reaches every other Space in exactly one slide, in the direction the strip reads', () => {
+    const count = SIX_SPACES.length
+
+    for (let from = 0; from < count; from++) {
+      for (let to = 0; to < count; to++) {
+        if (from === to) {
+          continue
+        }
+        cleanup()
+        renderPager(SIX_SPACES[from].id, SIX_SPACES)
+        const instance = swiper(from, count)
+        attach(instance)
+
+        expect(transitionTo(SIX_SPACES[to].id)).toBe(true)
+
+        const step = to < from ? -1 : 1
+        const destination = (from + step + count) % count
+        expect({ from, to, path: instance.path }).toEqual({ from, to, path: [from, destination] })
+        expect(slotContents()[destination]).toBe(SIX_SPACES[to].id)
+        act(() => {
+          vi.advanceTimersByTime(500)
+        })
+      }
+    }
+  })
+
+  it('shows the outgoing Space once when the hop spans the whole strip', () => {
+    // Why: f -> a rotates f onto a second slot next to the target while its pin still holds it.
+    renderPager('f', SIX_SPACES)
+    const instance = swiper(5, SIX_SPACES.length)
+    attach(instance)
+
+    expect(transitionTo('a')).toBe(true)
+
+    expect(instance.path).toEqual([5, 4])
+    expect(slotContents()).toEqual([null, null, null, null, 'a', 'f'])
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+    expect(slotContents()).toEqual([null, null, null, 'f', 'a', 'b'])
+  })
+
+  it('chains a second jump without stranding the first', () => {
+    renderPager('a', SIX_SPACES)
+    const instance = swiper(0, SIX_SPACES.length)
+    attach(instance)
+
+    expect(transitionTo('c')).toBe(true)
+    expect(transitionTo('e')).toBe(true)
+
+    expect(instance.path).toEqual([0, 1, 2])
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+    expect(slotContents()[2]).toBe('e')
+    expect(mocks.setActiveSpace).toHaveBeenLastCalledWith('e')
+  })
+
+  it('leaves the switch to the caller when reduced motion is preferred', () => {
+    mocks.prefersReducedMotion = true
     renderPager()
-    act(() => swiperProps().onSwiper(swiper()))
+    const instance = swiper()
+    attach(instance)
+
+    expect(requestAnimatedSpaceTransition('d')).toBe(false)
+    expect(instance.slideNext).not.toHaveBeenCalled()
+    expect(instance.slidePrev).not.toHaveBeenCalled()
+  })
+
+  it('declines a transition to the active Space', () => {
+    renderPager()
+    attach(swiper())
 
     expect(requestAnimatedSpaceTransition('b')).toBe(false)
   })
 
-  it('synchronizes an externally activated Space without another animation', () => {
-    const view = renderPager()
+  it('synchronizes an externally activated Space without animation', () => {
+    renderPager()
     const instance = swiper()
-    act(() => swiperProps().onSwiper(instance))
+    attach(instance)
 
-    setStore('d')
-    view.rerender(
-      <SidebarSpacePager scrollOffsetRef={{ current: 0 }} scrollAnchorRef={{ current: null }} />
-    )
+    act(() => setStore('d'))
 
-    expect(instance.slideTo).toHaveBeenCalledWith(3, 0, false)
+    expect(instance.slideToLoop).toHaveBeenCalledWith(3, 0, false)
   })
 })

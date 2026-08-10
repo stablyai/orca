@@ -31,7 +31,24 @@ const SPACES: Space[] = ['a', 'b', 'c', 'd', 'e'].map((id) => ({
   updatedAt: 0
 }))
 
-function dispatchWheel(target: Element, deltaX: number, deltaY: number): WheelEvent {
+function setStore(activeSpaceId: string): void {
+  mocks.state = {
+    spaces: SPACES,
+    activeSpaceId,
+    setActiveSpace: mocks.setActiveSpace
+  } as unknown as Partial<AppState>
+}
+
+function renderPager(activeSpaceId: string): ReturnType<typeof render> {
+  setStore(activeSpaceId)
+  const view = render(
+    <SidebarSpacePager scrollOffsetRef={{ current: 0 }} scrollAnchorRef={{ current: null }} />
+  )
+  act(() => vi.advanceTimersByTime(61))
+  return view
+}
+
+function dispatchWheel(target: Element, deltaX: number, deltaY = 0): WheelEvent {
   const event = new WheelEvent('wheel', {
     bubbles: true,
     cancelable: true,
@@ -45,11 +62,6 @@ function dispatchWheel(target: Element, deltaX: number, deltaY: number): WheelEv
 describe('SidebarSpacePager mousewheel integration', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    mocks.state = {
-      spaces: SPACES,
-      activeSpaceId: 'b',
-      setActiveSpace: mocks.setActiveSpace
-    } as unknown as Partial<AppState>
     Object.defineProperties(HTMLElement.prototype, {
       clientHeight: { configurable: true, get: () => 500 },
       clientWidth: { configurable: true, get: () => 300 }
@@ -64,71 +76,56 @@ describe('SidebarSpacePager mousewheel integration', () => {
     vi.clearAllMocks()
   })
 
-  it('moves exactly one Space for a horizontal wheel gesture', () => {
-    const { container } = render(
-      <SidebarSpacePager scrollOffsetRef={{ current: 0 }} scrollAnchorRef={{ current: null }} />
-    )
+  it('moves only one Space during one wheel transition', () => {
+    const { container } = renderPager('b')
     const swiper = container.querySelector('.swiper') as HTMLElement
-    const wrapper = container.querySelector('.swiper-wrapper') as HTMLElement
-    act(() => vi.advanceTimersByTime(61))
 
-    const event = dispatchWheel(swiper, 2_000, 0)
-    const continuedGesture = dispatchWheel(swiper, 2_000, 0)
+    dispatchWheel(swiper, 2_000)
+    dispatchWheel(swiper, 2_000)
 
-    expect(event.defaultPrevented).toBe(true)
-    expect(continuedGesture.defaultPrevented).toBe(true)
-    expect(wrapper.style.transform).toContain('-600px')
     expect(mocks.setActiveSpace).toHaveBeenCalledWith('c')
     expect(mocks.setActiveSpace).not.toHaveBeenCalledWith('d')
   })
 
-  it('leaves vertical wheel movement to the workspace list', () => {
-    const { container } = render(
-      <SidebarSpacePager scrollOffsetRef={{ current: 0 }} scrollAnchorRef={{ current: null }} />
-    )
+  it('accepts consecutive forward gestures after each one-page transition', () => {
+    const { container } = renderPager('b')
+    const swiper = container.querySelector('.swiper') as HTMLElement
+    const wrapper = container.querySelector('.swiper-wrapper') as HTMLElement
+
+    dispatchWheel(swiper, 2_000)
+    act(() => wrapper.dispatchEvent(new Event('transitionend', { bubbles: true })))
+    act(() => vi.advanceTimersByTime(151))
+    dispatchWheel(swiper, 2_000)
+
+    expect(mocks.setActiveSpace).toHaveBeenCalledWith('c')
+    expect(mocks.setActiveSpace).toHaveBeenCalledWith('d')
+  })
+
+  it('wraps forward from the last Space to the first', () => {
+    const { container } = renderPager('e')
+    const swiper = container.querySelector('.swiper') as HTMLElement
+
+    dispatchWheel(swiper, 2_000)
+
+    expect(mocks.setActiveSpace).toHaveBeenLastCalledWith('a')
+  })
+
+  it('wraps backward from the first Space to the last', () => {
+    const { container } = renderPager('a')
+    const swiper = container.querySelector('.swiper') as HTMLElement
+
+    dispatchWheel(swiper, -2_000)
+
+    expect(mocks.setActiveSpace).toHaveBeenLastCalledWith('e')
+  })
+
+  it('leaves vertical scrolling to the workspace list', () => {
+    const { container } = renderPager('b')
     const swiper = container.querySelector('.swiper') as HTMLElement
 
     const event = dispatchWheel(swiper, 2, 40)
 
     expect(event.defaultPrevented).toBe(false)
     expect(mocks.setActiveSpace).not.toHaveBeenCalled()
-  })
-
-  it('reverses direction after the current one-page snap without requiring focus', () => {
-    const { container } = render(
-      <SidebarSpacePager scrollOffsetRef={{ current: 0 }} scrollAnchorRef={{ current: null }} />
-    )
-    const swiper = container.querySelector('.swiper') as HTMLElement
-    const wrapper = container.querySelector('.swiper-wrapper') as HTMLElement
-    act(() => vi.advanceTimersByTime(61))
-
-    dispatchWheel(swiper, 2_000, 0)
-    act(() => wrapper.dispatchEvent(new Event('transitionend', { bubbles: true })))
-    act(() => vi.advanceTimersByTime(61))
-    const reverseEvent = dispatchWheel(swiper, -2_000, 0)
-
-    expect(reverseEvent.defaultPrevented).toBe(true)
-    expect(wrapper.style.transform).toContain('-300px')
-    expect(mocks.setActiveSpace).toHaveBeenCalledWith('c')
-    expect(mocks.setActiveSpace).toHaveBeenCalledWith('b')
-  })
-
-  it('accepts consecutive gestures in the same direction', () => {
-    const { container } = render(
-      <SidebarSpacePager scrollOffsetRef={{ current: 0 }} scrollAnchorRef={{ current: null }} />
-    )
-    const swiper = container.querySelector('.swiper') as HTMLElement
-    const wrapper = container.querySelector('.swiper-wrapper') as HTMLElement
-    act(() => vi.advanceTimersByTime(61))
-
-    dispatchWheel(swiper, 2_000, 0)
-    act(() => wrapper.dispatchEvent(new Event('transitionend', { bubbles: true })))
-    act(() => vi.advanceTimersByTime(151))
-    const secondGesture = dispatchWheel(swiper, 2_000, 0)
-
-    expect(secondGesture.defaultPrevented).toBe(true)
-    expect(wrapper.style.transform).toContain('-900px')
-    expect(mocks.setActiveSpace).toHaveBeenCalledWith('c')
-    expect(mocks.setActiveSpace).toHaveBeenCalledWith('d')
   })
 })

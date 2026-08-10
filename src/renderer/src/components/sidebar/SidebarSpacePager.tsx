@@ -10,6 +10,24 @@ import WorktreeList from './WorktreeList'
 import { registerSpaceTransitionHandler } from './space-transition-controller'
 
 const SPACE_SWIPE_SPEED_MS = 180
+// Why: the pinned slot has to outlive the CSS transition, not expire on the frame it finishes.
+const SPACE_SWIPE_SETTLE_MS = 40
+const SPACE_SLIDE_CLASS = '!flex !h-full !flex-col'
+
+type SpaceSlideTravel = {
+  id: number
+  direction: 'next' | 'prev'
+  /** Slots frozen on the Space they showed when the jump began, so nothing swaps mid-slide. */
+  pinned: ReadonlyMap<number, string>
+}
+
+/**
+ * Where the target sits in the strip, not the shorter way round the loop: a Space to the left
+ * always enters from the left, so the slide matches the dot the user aimed at.
+ */
+function spaceSlideDirection(from: number, to: number): 'next' | 'prev' {
+  return to < from ? 'prev' : 'next'
+}
 
 type SidebarSpacePagerProps = {
   scrollOffsetRef: React.MutableRefObject<number>
@@ -20,6 +38,11 @@ type SidebarSpacePagerProps = {
   onWorkspaceBoardDragPreviewCancel?: () => void
 }
 
+/**
+ * Swiper's slides are slots, not Spaces: slot `i` shows the Space `rotation` places further along
+ * the list. Re-anchoring the rotation puts any Space next to the visible one, so switching to a
+ * distant Space is one slide of the two Spaces involved rather than a trip past everything between.
+ */
 function SidebarSpacePager({
   scrollOffsetRef,
   scrollAnchorRef,
@@ -30,32 +53,49 @@ function SidebarSpacePager({
   const setActiveSpace = useAppStore((state) => state.setActiveSpace)
   const prefersReducedMotion = usePrefersReducedMotion()
   const swiperRef = React.useRef<SwiperInstance | null>(null)
-  const touchGestureStartIndexRef = React.useRef<number | null>(null)
-  const latestRef = React.useRef({ activeSpaceId, prefersReducedMotion, setActiveSpace, spaces })
-  latestRef.current = { activeSpaceId, prefersReducedMotion, setActiveSpace, spaces }
+  const travellingRef = React.useRef(false)
+  const travelIdRef = React.useRef(0)
+  const [rotation, setRotation] = React.useState(0)
+  const [travel, setTravel] = React.useState<SpaceSlideTravel | null>(null)
 
+  const count = spaces.length
   const activeIndex = Math.max(
     0,
     spaces.findIndex((space) => space.id === activeSpaceId)
   )
-  const mountedSpaceIds = React.useMemo(
-    () =>
-      new Set(spaces.slice(Math.max(0, activeIndex - 1), activeIndex + 2).map((space) => space.id)),
-    [activeIndex, spaces]
+  // The visible slot is whichever one the rotation currently points at the active Space.
+  const activeSlot = count === 0 ? 0 : (activeIndex - rotation + count) % count
+
+  const latestRef = React.useRef({
+    activeSpaceId,
+    prefersReducedMotion,
+    rotation,
+    setActiveSpace,
+    spaces,
+    travel
+  })
+  latestRef.current = {
+    activeSpaceId,
+    prefersReducedMotion,
+    rotation,
+    setActiveSpace,
+    spaces,
+    travel
+  }
+
+  const slotSpaceIds = React.useMemo(
+    () => getSlotSpaceIds(spaces, rotation, travel?.pinned),
+    [rotation, spaces, travel]
   )
+  const mountedSlots = React.useMemo(() => getMountedSlots(activeSlot, count), [activeSlot, count])
   const scrollStateBySpaceId = useSpaceScrollState(scrollOffsetRef, scrollAnchorRef, activeSpaceId)
 
   const handleActiveIndexChange = React.useCallback((swiper: SwiperInstance): void => {
     const latest = latestRef.current
-    const gestureStartIndex = touchGestureStartIndexRef.current
-    const limitedIndex =
-      gestureStartIndex === null
-        ? swiper.activeIndex
-        : Math.max(gestureStartIndex - 1, Math.min(gestureStartIndex + 1, swiper.activeIndex))
-    if (limitedIndex !== swiper.activeIndex) {
-      swiper.slideTo(limitedIndex, latest.prefersReducedMotion ? 0 : SPACE_SWIPE_SPEED_MS, false)
+    if (travellingRef.current || latest.spaces.length === 0) {
+      return
     }
-    const target = latest.spaces[limitedIndex]
+    const target = latest.spaces[(swiper.realIndex + latest.rotation) % latest.spaces.length]
     if (!target || target.id === latest.activeSpaceId) {
       return
     }
@@ -65,25 +105,60 @@ function SidebarSpacePager({
 
   React.useLayoutEffect(() => {
     const swiper = swiperRef.current
-    if (swiper && !swiper.destroyed && swiper.activeIndex !== activeIndex) {
-      swiper.slideTo(activeIndex, 0, false)
+    if (travel || !swiper || swiper.destroyed || swiper.realIndex === activeSlot) {
+      return
     }
-  }, [activeIndex])
+    swiper.slideToLoop(activeSlot, 0, false)
+  }, [activeSlot, travel])
+
+  React.useLayoutEffect(() => {
+    if (!travel) {
+      return
+    }
+    const settle = (): void => {
+      travellingRef.current = false
+      setTravel((current) => (current?.id === travel.id ? null : current))
+    }
+    const swiper = swiperRef.current
+    if (!swiper || swiper.destroyed) {
+      settle()
+      return
+    }
+    if (travel.direction === 'next') {
+      swiper.slideNext(SPACE_SWIPE_SPEED_MS)
+    } else {
+      swiper.slidePrev(SPACE_SWIPE_SPEED_MS)
+    }
+    const timer = setTimeout(settle, SPACE_SWIPE_SPEED_MS + SPACE_SWIPE_SETTLE_MS)
+    return () => clearTimeout(timer)
+  }, [travel])
 
   React.useEffect(
     () =>
       registerSpaceTransitionHandler((spaceId) => {
         const swiper = swiperRef.current
         const latest = latestRef.current
+        const total = latest.spaces.length
         const targetIndex = latest.spaces.findIndex((space) => space.id === spaceId)
-        if (!swiper || swiper.destroyed || targetIndex < 0 || targetIndex === swiper.activeIndex) {
+        // Why: reduced motion has nothing to animate, so let the caller switch and the sync effect cut.
+        if (!swiper || swiper.destroyed || total < 2 || latest.prefersReducedMotion) {
           return false
         }
-        const adjacent = Math.abs(targetIndex - swiper.activeIndex) === 1
-        swiper.slideTo(
-          targetIndex,
-          adjacent && !latest.prefersReducedMotion ? SPACE_SWIPE_SPEED_MS : 0
-        )
+        const slot = swiper.realIndex % total
+        const fromIndex = (slot + latest.rotation) % total
+        if (targetIndex < 0 || targetIndex === fromIndex) {
+          return false
+        }
+        const direction = spaceSlideDirection(fromIndex, targetIndex)
+        const destination = (slot + (direction === 'next' ? 1 : -1) + total) % total
+        const pinned = new Map(latest.travel?.pinned)
+        pinned.set(slot, latest.spaces[fromIndex].id)
+        travellingRef.current = true
+        // Anchor the rotation so the slide being swiped into already holds the target Space.
+        setRotation((targetIndex - destination + total) % total)
+        setTravel({ direction, id: (travelIdRef.current += 1), pinned })
+        latest.activeSpaceId = spaceId
+        latest.setActiveSpace(spaceId)
         return true
       }),
     []
@@ -94,21 +169,15 @@ function SidebarSpacePager({
       modules={[Mousewheel]}
       className="min-h-0 w-full flex-1 overscroll-x-contain"
       direction="horizontal"
+      loop={count > 1}
       slidesPerView={1}
       slidesPerGroup={1}
-      initialSlide={activeIndex}
+      initialSlide={activeSlot}
       speed={prefersReducedMotion ? 0 : SPACE_SWIPE_SPEED_MS}
       simulateTouch={false}
+      loopPreventsSliding={false}
       resistanceRatio={0.35}
-      mousewheel={{ forceToAxis: true, releaseOnEdges: true, thresholdDelta: 6 }}
-      onTouchStart={(swiper) => {
-        touchGestureStartIndexRef.current = swiper.activeIndex
-      }}
-      onTouchEnd={() => {
-        queueMicrotask(() => {
-          touchGestureStartIndexRef.current = null
-        })
-      }}
+      mousewheel={{ forceToAxis: true, thresholdDelta: 6 }}
       onSwiper={(swiper) => {
         swiperRef.current = swiper
       }}
@@ -117,26 +186,59 @@ function SidebarSpacePager({
         swiperRef.current = null
       }}
     >
-      {spaces.map((space) => {
-        const active = space.id === activeSpaceId
-        const mounted = active || mountedSpaceIds.has(space.id)
-        const scroll = scrollStateBySpaceId(space.id)
+      {spaces.map((slotSpace, slot) => {
+        const spaceId = slotSpaceIds[slot]
+        const mounted = mountedSlots.has(slot) || travel?.pinned.has(slot) === true
+        if (spaceId === null || !mounted) {
+          return <SwiperSlide key={slotSpace.id} className={SPACE_SLIDE_CLASS} />
+        }
+        const active = spaceId === activeSpaceId
+        const scroll = scrollStateBySpaceId(spaceId)
         return (
-          <SwiperSlide key={space.id} className="!flex !h-full !flex-col">
-            {mounted ? (
-              <WorktreeList
-                spaceId={space.id}
-                inert={!active}
-                scrollOffsetRef={scroll.offsetRef}
-                scrollAnchorRef={scroll.anchorRef}
-                {...(active ? listProps : {})}
-              />
-            ) : null}
+          <SwiperSlide key={slotSpace.id} className={SPACE_SLIDE_CLASS}>
+            <WorktreeList
+              key={spaceId}
+              spaceId={spaceId}
+              inert={!active}
+              scrollOffsetRef={scroll.offsetRef}
+              scrollAnchorRef={scroll.anchorRef}
+              {...(active ? listProps : {})}
+            />
           </SwiperSlide>
         )
       })}
     </Swiper>
   )
+}
+
+/** Null where a slot has nothing of its own to show, because a pin is holding its Space elsewhere. */
+function getSlotSpaceIds(
+  spaces: readonly { id: string }[],
+  rotation: number,
+  pinned: ReadonlyMap<number, string> | undefined
+): (string | null)[] {
+  const known = new Set(spaces.map((space) => space.id))
+  const held = new Set(Array.from(pinned?.values() ?? []).filter((id) => known.has(id)))
+  return spaces.map((_, slot) => {
+    const pinnedId = pinned?.get(slot)
+    if (pinnedId !== undefined && known.has(pinnedId)) {
+      return pinnedId
+    }
+    // Why: a full-length hop rotates the outgoing Space onto a second slot while its pin still holds it.
+    const rotated = spaces[(slot + rotation) % spaces.length].id
+    return held.has(rotated) ? null : rotated
+  })
+}
+
+function getMountedSlots(activeSlot: number, count: number): Set<number> {
+  if (count <= 3) {
+    return new Set(spaceSlotRange(count))
+  }
+  return new Set([activeSlot, (activeSlot - 1 + count) % count, (activeSlot + 1) % count])
+}
+
+function spaceSlotRange(count: number): number[] {
+  return Array.from({ length: count }, (_, slot) => slot)
 }
 
 function useSpaceScrollState(
