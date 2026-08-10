@@ -4,7 +4,10 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ terminalLayoutsByTabId: {}, runtimePaneTitlesByTabId: {} }) }
 }))
 
-import { selectEvictionExemptTerminalTabLayoutKey } from './terminal-eviction-exempt-tabs'
+import {
+  selectEvictionExemptTerminalTabAuthorityEnvironmentKey,
+  selectEvictionExemptTerminalTabLayoutKey
+} from './terminal-eviction-exempt-tabs'
 
 const TAB_ID = 'tab-1'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -45,5 +48,23 @@ describe('selectEvictionExemptTerminalTabLayoutKey', () => {
     expect(selectEvictionExemptTerminalTabLayoutKey({ terminalLayoutsByTabId: {} }, TABS)).toBe(
       `${TAB_ID}=`
     )
+  })
+})
+
+describe('selectEvictionExemptTerminalTabAuthorityEnvironmentKey', () => {
+  it('scopes local mirror authority to remote split owners', () => {
+    const state = layoutState({
+      [LEAF_ID]: PTY_ID,
+      [SECOND_LEAF_ID]: 'remote:env-split@@pty-2'
+    })
+    expect(
+      selectEvictionExemptTerminalTabAuthorityEnvironmentKey(state, TABS, { kind: 'local' })
+    ).toBe('env-split')
+    expect(
+      selectEvictionExemptTerminalTabAuthorityEnvironmentKey(state, TABS, {
+        kind: 'runtime',
+        environmentId: 'env-split'
+      })
+    ).toBe('')
   })
 })

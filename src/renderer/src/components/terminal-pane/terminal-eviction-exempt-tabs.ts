@@ -6,8 +6,10 @@
  * owner authority must stay mounted so eviction cannot orphan a shell.
  */
 import { useAppStore } from '@/store'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { isEvictionExemptTerminalPty } from './terminal-hidden-worktree-retention'
 import { getTerminalParkWorktreeOwner } from './terminal-park-worktree-owner'
+import type { TerminalParkWorktreeOwner } from './terminal-park-pty-restore-eligibility'
 import {
   resolveParkedTerminalPaneCandidates,
   type ParkableTerminalTabModel
@@ -32,10 +34,11 @@ import {
  */
 export function isEvictionExemptTerminalTab(
   tab: ParkableTerminalTabModel,
-  worktreeId: string
+  worktreeId: string,
+  resolvedWorktreeOwner?: TerminalParkWorktreeOwner
 ): boolean {
   const state = useAppStore.getState()
-  const worktreeOwner = getTerminalParkWorktreeOwner(state, worktreeId)
+  const worktreeOwner = resolvedWorktreeOwner ?? getTerminalParkWorktreeOwner(state, worktreeId)
   const panes = resolveParkedTerminalPaneCandidates(tab, state)
   const isExempt = (ptyId: string | null, leafId: string | null): boolean =>
     isEvictionExemptTerminalPty(ptyId, worktreeId, worktreeOwner, {
@@ -57,11 +60,12 @@ export function isEvictionExemptTerminalTab(
  */
 export function selectEvictionExemptTerminalTabIds(
   worktreeId: string,
-  tabs: readonly ParkableTerminalTabModel[]
+  tabs: readonly ParkableTerminalTabModel[],
+  resolvedWorktreeOwner?: TerminalParkWorktreeOwner
 ): ReadonlySet<string> {
   const exemptTabIds = new Set<string>()
   for (const tab of tabs) {
-    if (isEvictionExemptTerminalTab(tab, worktreeId)) {
+    if (isEvictionExemptTerminalTab(tab, worktreeId, resolvedWorktreeOwner)) {
       exemptTabIds.add(tab.id)
     }
   }
@@ -91,4 +95,30 @@ export function selectEvictionExemptTerminalTabLayoutKey(
       return `${tab.id}=${leafPtys}`
     })
     .join('|')
+}
+
+/** Exact paired sessions whose mirror evidence can change a local-owner exemption. */
+export function selectEvictionExemptTerminalTabAuthorityEnvironmentKey(
+  state: EvictionExemptTabLayoutState,
+  tabs: readonly ParkableTerminalTabModel[],
+  worktreeOwner: TerminalParkWorktreeOwner
+): string {
+  if (worktreeOwner.kind !== 'local') {
+    return ''
+  }
+  const environmentIds = new Set<string>()
+  const addPty = (ptyId: string | null | undefined): void => {
+    const environmentId = ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null
+    if (environmentId) {
+      environmentIds.add(environmentId)
+    }
+  }
+  for (const tab of tabs) {
+    addPty(tab.ptyId)
+    const ptyIdsByLeafId = state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}
+    for (const ptyId of Object.values(ptyIdsByLeafId)) {
+      addPty(ptyId)
+    }
+  }
+  return Array.from(environmentIds).sort().join('\u0000')
 }

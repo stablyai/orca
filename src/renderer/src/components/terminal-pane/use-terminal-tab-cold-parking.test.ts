@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   },
   exemptTabIds: new Set<string>(),
   exemptSelectCalls: 0,
+  webMirrorAuthorityPtyIds: new Set<string>(),
+  webMirrorAuthorityRevision: 0,
   /** Toggled to churn the park verdict the way the crash cluster does. */
   watcherCoverage: true
 }))
@@ -33,9 +35,30 @@ vi.mock('../../store', () => ({
 }))
 
 vi.mock('./terminal-eviction-exempt-tabs', () => ({
-  selectEvictionExemptTerminalTabIds: (_worktreeId: string, tabs: readonly { id: string }[]) => {
+  selectEvictionExemptTerminalTabIds: (
+    _worktreeId: string,
+    tabs: readonly { id: string; ptyId: string | null }[]
+  ) => {
     mocks.exemptSelectCalls += 1
-    return new Set(tabs.filter((tab) => mocks.exemptTabIds.has(tab.id)).map((tab) => tab.id))
+    const ownerRecords = mocks.storeState.worktreesByRepo.repo ?? []
+    const ownerIds = new Set(ownerRecords.map((record) => record.hostId))
+    return new Set(
+      tabs
+        .filter((tab) => {
+          if (mocks.exemptTabIds.has(tab.id)) {
+            return true
+          }
+          const match = tab.ptyId?.match(/^remote:([^@]+)@@/)
+          if (!match) {
+            return false
+          }
+          return (
+            !mocks.webMirrorAuthorityPtyIds.has(tab.ptyId as string) &&
+            (ownerIds.size !== 1 || !ownerIds.has(`runtime:${match[1]}`))
+          )
+        })
+        .map((tab) => tab.id)
+    )
   },
   selectEvictionExemptTerminalTabLayoutKey: (
     state: typeof mocks.storeState,
@@ -45,7 +68,13 @@ vi.mock('./terminal-eviction-exempt-tabs', () => ({
       .map(
         (tab) => `${tab.id}=${JSON.stringify(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId)}`
       )
-      .join('|')
+      .join('|'),
+  selectEvictionExemptTerminalTabAuthorityEnvironmentKey: () =>
+    String(mocks.webMirrorAuthorityRevision)
+}))
+
+vi.mock('@/runtime/web-session-terminal-park-authority', () => ({
+  useWebSessionTerminalParkAuthorityRevisionKey: (_worktreeId: string, key: string) => key
 }))
 
 vi.mock('./terminal-parked-tab-watchers', () => ({
@@ -106,6 +135,8 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     vi.useRealTimers()
     mocks.exemptTabIds = new Set()
     mocks.exemptSelectCalls = 0
+    mocks.webMirrorAuthorityPtyIds = new Set()
+    mocks.webMirrorAuthorityRevision = 0
     mocks.watcherCoverage = true
     mocks.storeState.terminalLayoutsByTabId = {}
     mocks.storeState.sleepingAgentSessionsByPaneKey = {}
@@ -297,6 +328,73 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
       rerender(stableArgs)
     })
     expect(result.current).toEqual(new Set(['tab-2']))
+  })
+
+  it('re-resolves stable tabs and layouts across owner authority loss and recovery', () => {
+    const environmentId = 'env-owner'
+    const stableArgs = {
+      ...hookArgs(false),
+      terminalTabs: [
+        { ...terminalTab('tab-1'), ptyId: `remote:${environmentId}@@term-1` },
+        terminalTab('tab-2')
+      ],
+      coldParkTerminalPanes: true,
+      isForceParked: true
+    }
+    setWorktreeOwner({ hostId: `runtime:${environmentId}` })
+    const { result, rerender } = renderHook(
+      (args: typeof stableArgs) => useTerminalTabColdParking(args),
+      { initialProps: stableArgs }
+    )
+    expect(result.current).toEqual(new Set(['tab-1', 'tab-2']))
+
+    setWorktreeOwner(null)
+    act(() => rerender(stableArgs))
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    mocks.storeState.worktreesByRepo = {
+      repo: [
+        { id: WORKTREE_ID, repoId: 'repo', hostId: `runtime:${environmentId}` },
+        { id: WORKTREE_ID, repoId: 'repo', hostId: 'runtime:env-other' }
+      ]
+    }
+    act(() => rerender(stableArgs))
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    setWorktreeOwner({ hostId: 'runtime:env-foreign' })
+    act(() => rerender(stableArgs))
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    setWorktreeOwner({ hostId: `runtime:${environmentId}` })
+    act(() => rerender(stableArgs))
+    expect(result.current).toEqual(new Set(['tab-1', 'tab-2']))
+  })
+
+  it('re-resolves stable tabs and layouts when exact web-mirror authority changes', () => {
+    const remotePtyId = 'remote:env-owner@@term-1'
+    const stableArgs = {
+      ...hookArgs(false),
+      terminalTabs: [{ ...terminalTab('tab-1'), ptyId: remotePtyId }, terminalTab('tab-2')],
+      coldParkTerminalPanes: true,
+      isForceParked: true
+    }
+    setWorktreeOwner({ hostId: 'local' })
+    mocks.webMirrorAuthorityPtyIds.add(remotePtyId)
+    const { result, rerender } = renderHook(
+      (args: typeof stableArgs) => useTerminalTabColdParking(args),
+      { initialProps: stableArgs }
+    )
+    expect(result.current).toEqual(new Set(['tab-1', 'tab-2']))
+
+    mocks.webMirrorAuthorityPtyIds.delete(remotePtyId)
+    mocks.webMirrorAuthorityRevision += 1
+    act(() => rerender(stableArgs))
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    mocks.webMirrorAuthorityPtyIds.add(remotePtyId)
+    mocks.webMirrorAuthorityRevision += 1
+    act(() => rerender(stableArgs))
+    expect(result.current).toEqual(new Set(['tab-1', 'tab-2']))
   })
 
   // Why: resolving an exemption re-reads the store and walks the layout tree per

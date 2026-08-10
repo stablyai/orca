@@ -27,12 +27,9 @@ import {
 } from './terminal-park-verdict-flip-telemetry'
 import { withholdUnparkableTerminalTabs } from './terminal-cold-park-withheld-tabs'
 import { getTerminalParkingPolicyOverrides } from './terminal-parking-e2e-overrides'
-import {
-  selectEvictionExemptTerminalTabIds,
-  selectEvictionExemptTerminalTabLayoutKey
-} from './terminal-eviction-exempt-tabs'
 import { selectSleepingRecordParkExemptTabIds } from './sleeping-record-park-exemption'
 import { canWatcherCoverParkedTerminalTab } from './terminal-parked-tab-watchers'
+import { useTerminalForceParkExemptTabIds } from './use-terminal-force-park-exempt-tabs'
 import {
   getTerminalParkingAssignmentsKey,
   getTerminalParkingInputsKey,
@@ -43,8 +40,6 @@ type TerminalOverlayTabAssignment = {
   groupId: string
   isActiveInGroup: boolean
 }
-
-const EMPTY_TAB_IDS: ReadonlySet<string> = new Set()
 
 function haveSameTerminalTabIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
   if (left.size !== right.size) {
@@ -283,22 +278,12 @@ export function useTerminalTabColdParking(args: {
     worktreeOwner
   ])
 
-  // Why subscribed: the exemption also reads layout leaf PTYs, which change
-  // without a terminalTabs change (split added, pty re-minted); gated on
-  // isForceParked so only force-parked worktrees build the key per store change.
-  const evictionExemptLayoutKey = useAppStore((state) =>
-    isForceParked ? selectEvictionExemptTerminalTabLayoutKey(state, terminalTabs) : ''
-  )
-  // Why memoized: resolving an exemption re-reads the store and walks the
-  // layout tree per tab, so recompute only when the force-park verdict, the
-  // tabs, or their layout PTYs change — not on every assignment/park-set change
-  // below.
-  const evictionExemptTerminalTabIds = useMemo(
-    () =>
-      isForceParked ? selectEvictionExemptTerminalTabIds(worktreeId, terminalTabs) : EMPTY_TAB_IDS,
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the layout key encodes the store fields the selector re-reads internally.
-    [evictionExemptLayoutKey, isForceParked, terminalTabs, worktreeId]
-  )
+  const evictionExemptTerminalTabIds = useTerminalForceParkExemptTabIds({
+    isForceParked,
+    tabs: terminalTabs,
+    worktreeId,
+    worktreeOwner
+  })
 
   // Why: the rendered park verdict — worktree-level park (prop from
   // Terminal.tsx) or per-tab cold park, never portal-hosted tabs. Render and

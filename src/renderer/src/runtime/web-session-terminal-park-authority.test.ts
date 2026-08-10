@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
@@ -6,7 +8,8 @@ import {
   getWebSessionTerminalParkAuthorityCountForTests,
   hasWebSessionTerminalParkAuthority,
   replaceWebSessionTerminalParkAuthority,
-  resetWebSessionTerminalParkAuthorityForTests
+  resetWebSessionTerminalParkAuthorityForTests,
+  useWebSessionTerminalParkAuthorityRevisionKey
 } from './web-session-terminal-park-authority'
 import {
   resetWebSessionTabsSnapshotFreshnessForTests,
@@ -107,5 +110,24 @@ describe('web session terminal park authority', () => {
     clearWebSessionTerminalParkAuthorityForEnvironment('env-a')
     expect(has('env-a', 'pty-1')).toBe(false)
     expect(has('env-b', 'pty-1')).toBe(true)
+  })
+
+  it('publishes only matching session authority loss and recovery', () => {
+    const { result, unmount } = renderHook(() =>
+      useWebSessionTerminalParkAuthorityRevisionKey(WORKTREE_ID, 'env-a')
+    )
+    const emptyRevision = result.current
+    act(() => replaceWebSessionTerminalParkAuthority(snapshot(), 'env-b'))
+    expect(result.current).toBe(emptyRevision)
+
+    act(() => replaceWebSessionTerminalParkAuthority(snapshot(), 'env-a'))
+    const exactRevision = result.current
+    expect(exactRevision).not.toBe(emptyRevision)
+    act(() => clearWebSessionTerminalParkAuthorityForEnvironment('env-a'))
+    expect(result.current).not.toBe(exactRevision)
+    const revokedRevision = result.current
+    act(() => replaceWebSessionTerminalParkAuthority(snapshot(), 'env-a'))
+    expect(result.current).not.toBe(revokedRevision)
+    unmount()
   })
 })
