@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: this suite covers the SSH git provider's one-RPC-per-method contract; splitting it would duplicate the shared mux fixture. */
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshGitProvider } from './ssh-git-provider'
 
 type MockMultiplexer = {
@@ -48,8 +48,13 @@ describe('SshGitProvider', () => {
   let provider: SshGitProvider
 
   beforeEach(() => {
+    vi.stubEnv('ORCA_WORKTREE_ADD_TIMEOUT_MS', undefined)
     mux = createMockMux()
     provider = new SshGitProvider('conn-1', mux as never)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('returns the connectionId', () => {
@@ -1448,6 +1453,26 @@ describe('SshGitProvider', () => {
         timeoutMs: 180_000
       },
       { signal: undefined, timeoutMs: 180_000 }
+    )
+  })
+
+  it('aligns cancellation and the slow-checkout override with the relay deadline', async () => {
+    vi.stubEnv('ORCA_WORKTREE_ADD_TIMEOUT_MS', '600000')
+    const controller = new AbortController()
+
+    await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
+      signal: controller.signal
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.addWorktree',
+      {
+        repoPath: '/home/user/repo',
+        branchName: 'feature',
+        targetDir: '/home/user/feat',
+        timeoutMs: 600_000
+      },
+      { signal: controller.signal, timeoutMs: 600_000 }
     )
   })
 
