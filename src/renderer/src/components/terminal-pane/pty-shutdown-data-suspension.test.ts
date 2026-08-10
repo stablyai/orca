@@ -32,16 +32,27 @@ it('does not remove handlers installed by a remount while sleep is pending', () 
 
 it('replays rollback output in its original replay and live arrival order', () => {
   const ptyId = 'pty-shutdown-output-order'
-  const delivered: string[] = []
-  ptyDataHandlers.set(ptyId, (data) => delivered.push(`data:${data}`))
-  ptyReplayHandlers.set(ptyId, (data) => delivered.push(`replay:${data}`))
+  const delivered: unknown[] = []
+  ptyDataHandlers.set(ptyId, (data) => delivered.push({ kind: 'data', data }))
+  ptyReplayHandlers.set(ptyId, (data, meta) => delivered.push({ kind: 'replay', data, meta }))
 
   const [snapshot] = unregisterPtyDataHandlers([ptyId])
-  bufferPtyShutdownReplayData(ptyId, 'old')
+  bufferPtyShutdownReplayData(ptyId, 'old', {
+    snapshotCols: 80,
+    snapshotRows: 24,
+    pendingEscapeTailAnsi: '\x1b[3'
+  })
   bufferPtyShutdownData(ptyId, 'new')
   snapshot.rollback()
 
-  expect(delivered).toEqual(['replay:old', 'data:new'])
+  expect(delivered).toEqual([
+    {
+      kind: 'replay',
+      data: 'old',
+      meta: { snapshotCols: 80, snapshotRows: 24, pendingEscapeTailAnsi: '\x1b[3' }
+    },
+    { kind: 'data', data: 'new' }
+  ])
   ptyDataHandlers.delete(ptyId)
   ptyReplayHandlers.delete(ptyId)
 })

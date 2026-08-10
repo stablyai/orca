@@ -60,7 +60,10 @@ type TerminalMultiplexEvent =
 
 export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onData: (data: string, meta?: { seq?: number; rawLength?: number; transformed?: boolean }) => void
-  onSnapshot: (data: string, meta?: { pendingEscapeTailAnsi?: string }) => void
+  onSnapshot: (
+    data: string,
+    meta?: { cols?: number; rows?: number; pendingEscapeTailAnsi?: string }
+  ) => void
   onSubscribed?: () => void
   onOutputPauseCapability?: () => void
   onEnd?: () => void
@@ -885,6 +888,8 @@ class RemoteRuntimeTerminalMultiplexer {
           clearPendingSnapshotRequest(stream)
         } else if (target === 'initial') {
           stream.callbacks.onSnapshot(data ?? '', {
+            cols: info?.cols,
+            rows: info?.rows,
             pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
           })
         } else if (target === 'recovery') {
@@ -893,6 +898,8 @@ class RemoteRuntimeTerminalMultiplexer {
           // An empty snapshot is still applied so stale dropped output does
           // not linger on a terminal the model says is blank.
           stream.callbacks.onSnapshot(`\x1b[2J\x1b[3J\x1b[H${data ?? ''}`, {
+            cols: info?.cols,
+            rows: info?.rows,
             pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
           })
         }

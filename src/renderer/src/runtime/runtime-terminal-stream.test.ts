@@ -572,6 +572,8 @@ describe('remote runtime terminal multiplex ACK gate', () => {
 
     injectSnapshot({ kind: 'scrollback', cols: 120, rows: 40, truncated: false }, 'initial state')
     expect(onSnapshot).toHaveBeenCalledWith('initial state', {
+      cols: 120,
+      rows: 40,
       pendingEscapeTailAnsi: undefined
     })
     expect(onSubscribed).toHaveBeenCalledTimes(1)
@@ -590,6 +592,8 @@ describe('remote runtime terminal multiplex ACK gate', () => {
     // clears screen and scrollback first and must not replay the subscribe
     // lifecycle.
     expect(onSnapshot).toHaveBeenCalledWith(`\x1b[2J\x1b[3J\x1b[H${'recovered state'}`, {
+      cols: 120,
+      rows: 40,
       pendingEscapeTailAnsi: undefined
     })
     expect(onSubscribed).toHaveBeenCalledTimes(1)
@@ -607,6 +611,8 @@ describe('remote runtime terminal multiplex ACK gate', () => {
       ''
     )
     expect(onSnapshot).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', {
+      cols: 120,
+      rows: 40,
       pendingEscapeTailAnsi: undefined
     })
     expect(onSubscribed).toHaveBeenCalledTimes(1)

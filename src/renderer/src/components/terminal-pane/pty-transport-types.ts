@@ -14,6 +14,7 @@ import type { TerminalOscColorQueryReplyColors } from '../../../../shared/termin
 import type { TuiAgent } from '../../../../shared/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
+import type { PtyReplayDataMeta } from './pty-shutdown-data-suspension'
 import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
 
 export type PtyBufferSnapshot = {
@@ -78,10 +79,7 @@ type PtyCallbacks = {
   onConnect?: () => void
   onDisconnect?: () => void
   onData?: (data: string, meta?: PtyDataMeta) => void
-  onReplayData?: (
-    data: string,
-    meta?: { clearBeforeReplay?: boolean; pendingEscapeTailAnsi?: string }
-  ) => void
+  onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
   onExit?: (code: number) => void

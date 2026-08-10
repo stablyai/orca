@@ -124,13 +124,17 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   }
 
-  function emitSnapshot(streamId: number, data: string): void {
+  function emitSnapshot(
+    streamId: number,
+    data: string,
+    info: { cols?: number; rows?: number } = {}
+  ): void {
     subscriptionCallbacks?.onBinary?.(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.SnapshotStart,
         streamId,
         seq: 1,
-        payload: encodeTerminalStreamJson({ kind: 'scrollback' })
+        payload: encodeTerminalStreamJson({ kind: 'scrollback', ...info })
       })
     )
     subscriptionCallbacks?.onBinary?.(
@@ -385,6 +389,37 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.isConnected()).toBe(false)
     emitSnapshot(latestSubscribePayload().streamId, 'authoritative state')
     expect(transport.isConnected()).toBe(true)
+    transport.destroy?.()
+  })
+
+  it('preserves the authoritative snapshot grid through shutdown rollback', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const { unregisterPtyDataHandlers } = await import('./pty-shutdown-data-suspension')
+    const onReplayData = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+
+    transport.attach({
+      existingPtyId: 'remote:terminal-1',
+      callbacks: { onReplayData }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const ptyId = transport.getPtyId()
+    if (!ptyId) {
+      throw new Error('missing remote PTY id')
+    }
+    const [shutdown] = unregisterPtyDataHandlers([ptyId])
+
+    emitSnapshot(latestSubscribePayload().streamId, 'authoritative state', {
+      cols: 80,
+      rows: 24
+    })
+
+    expect(onReplayData).not.toHaveBeenCalled()
+    shutdown.rollback()
+    expect(onReplayData).toHaveBeenCalledWith('authoritative state', {
+      snapshotCols: 80,
+      snapshotRows: 24
+    })
     transport.destroy?.()
   })
 

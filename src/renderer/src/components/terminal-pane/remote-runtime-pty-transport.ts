@@ -80,7 +80,8 @@ import {
   isPtyDataHandlerShutdownPending,
   ptyDataHandlers,
   ptyReplayHandlers,
-  ptyShutdownLifecycleHandlers
+  ptyShutdownLifecycleHandlers,
+  type PtyReplayDataMeta
 } from './pty-shutdown-data-suspension'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 
@@ -372,10 +373,11 @@ export function createRemoteRuntimePtyTransport(
   ): void => {
     outputProcessor.processData(data, storedCallbacks, undefined, meta)
   }
-  const shutdownReplayHandler = (data: string): void => {
+  const shutdownReplayHandler = (data: string, meta?: PtyReplayDataMeta): void => {
     outputProcessor.processData(data, storedCallbacks, {
       replayingBufferedData: true,
-      suppressAttentionEvents: true
+      suppressAttentionEvents: true,
+      ...meta
     })
   }
   const shutdownLifecycle = {
@@ -1760,15 +1762,20 @@ export function createRemoteRuntimePtyTransport(
         onSnapshot: (data, meta) => {
           // Why: an empty snapshot can still carry a pending mid-escape tail that must replay so the next live chunk completes it.
           if ((data || meta?.pendingEscapeTailAnsi) && isCurrentSubscription()) {
-            if (subscribedPtyId && bufferPtyShutdownReplayData(subscribedPtyId, data)) {
+            const replayMeta: PtyReplayDataMeta = {
+              ...(meta?.cols !== undefined ? { snapshotCols: meta.cols } : {}),
+              ...(meta?.rows !== undefined ? { snapshotRows: meta.rows } : {}),
+              ...(meta?.pendingEscapeTailAnsi
+                ? { pendingEscapeTailAnsi: meta.pendingEscapeTailAnsi }
+                : {})
+            }
+            if (subscribedPtyId && bufferPtyShutdownReplayData(subscribedPtyId, data, replayMeta)) {
               return
             }
             outputProcessor.processData(data, storedCallbacks, {
               replayingBufferedData: true,
               suppressAttentionEvents: true,
-              ...(meta?.pendingEscapeTailAnsi
-                ? { pendingEscapeTailAnsi: meta.pendingEscapeTailAnsi }
-                : {})
+              ...replayMeta
             })
           }
         },
