@@ -16,24 +16,27 @@
       "maturity": "experimental",
       "protection": "partial",
       "owner": "source-control",
-      "layer": "local-and-ssh-git-mutation",
+      "layer": "renderer-to-authoritative-git-owner",
       "surfaces": [
         "single-file discard",
         "bulk discard",
+        "atomic staged discard",
+        "paired-runtime version skew",
         "Source Control confirmation",
         "direct SSH Git mutations"
       ],
       "platforms": ["macos", "linux", "windows"],
-      "providers": ["local", "ssh"],
+      "providers": ["local", "ssh", "paired-runtime", "web"],
       "coveredPlatforms": ["macos", "linux"],
-      "coveredProviders": ["local", "ssh"],
-      "coverageNotes": "A real macOS Git oracle covers tracked staged-only, staged plus unstaged, added, intent-to-add, renamed, deleted, untracked, conflicted, partial-index, bulk, linked-worktree, and non-Git folder cases. Headed Electron covers the visible Source Control action, Git 2.25.5 covers the baseline command contract, and a macOS client against an ephemeral Linux Docker SSH target covers the authoritative relay mutation and remote index/worktree state. Physical Windows and WSL UI journeys remain gaps; deterministic WSL pathspec tests cover separator handling.",
+      "coveredProviders": ["local", "ssh", "paired-runtime", "web"],
+      "coverageNotes": "A real macOS Git oracle covers tracked staged-only, staged plus unstaged, added, intent-to-add, renamed, deleted, untracked, conflicted, partial-index, bulk, linked-worktree, and non-Git folder cases. Byte-identical skew oracles reject absent, malformed, unsupported, mismatched, and falsely advertised capability before mutation; web and mobile authorization contracts pin paired callers. Headed Electron covers both visible discard paths, Git 2.25.5 covers both restore commands, and a macOS client against an ephemeral Linux Docker SSH target covers the authoritative relay mutation and remote index/worktree state. Physical Windows and WSL UI journeys remain gaps; deterministic WSL argv tests cover separator handling.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/5880"],
-      "invariant": "Discarding unstaged Source Control content must restore tracked paths from the current index without changing staged blobs, delete genuine untracked and intent-to-add paths as promised by the confirmation UI, refuse conflicted paths without mutation, and apply the same semantics on local, linked-worktree, folder-workspace, WSL, and direct-SSH execution owners.",
-      "oracle": "Snapshot the index entry, cached diff, worktree bytes, and porcelain status before discard, then require the exact staged blob to survive for tracked staged-only, staged-plus-unstaged, added, renamed, deleted, partial-index, bulk, and linked-worktree cases. Require intent-to-add and untracked content to disappear, conflicts and non-Git folders to remain byte-identical after an error, the headed UI to retain the staged row, and a real Docker SSH relay to produce the same remote index/worktree state.",
+      "invariant": "Unstaged discard must preserve the authoritative index, while staged Discard all must negotiate the exact operation version before one host-owned combined index/worktree restore. Any absent, malformed, unsupported, mismatched, or falsely advertised capability must fail closed without invoking legacy unstage, changing cached status/diff, or changing index/worktree bytes across paired-runtime and direct-SSH owners.",
+      "oracle": "Snapshot the raw index, cached diff, porcelain status, and worktree bytes before discard. Require the unstaged matrix to preserve staged blobs, the staged matrix to restore index and worktree from HEAD including expanded rename sources, conflicts and non-Git folders to remain byte-identical after refusal, every rejected skew path to make zero mutation calls, the headed UI to exercise both actions, and a real Docker SSH relay to produce the same authoritative state.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/git/discard-index-semantics.test.ts src/main/git/status-discard-symlink.test.ts src/main/git/status-wsl-pathspecs.test.ts src/main/git/status.test.ts src/shared/git-discard-status.test.ts src/shared/git-binary-compatibility.test.ts src/relay/git-handler.test.ts src/relay/integration.test.ts src/renderer/src/components/right-sidebar/discard-all-sequence.test.ts src/renderer/src/components/right-sidebar/source-control-discard-confirmation.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/git/discard-index-semantics.test.ts src/main/git/status-discard-symlink.test.ts src/main/git/status-wsl-pathspecs.test.ts src/main/git/status.test.ts src/shared/git-discard-status.test.ts src/shared/git-binary-compatibility.test.ts src/relay/git-handler.test.ts src/relay/integration.test.ts src/renderer/src/components/right-sidebar/discard-all-sequence.test.ts src/renderer/src/components/right-sidebar/source-control-discard-confirmation.test.ts src/renderer/src/components/right-sidebar/SourceControl.preview-open.test.tsx --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/git.test.ts src/main/runtime/rpc/methods/status-git-discard-capability.test.ts src/renderer/src/runtime/runtime-git-client.test.ts src/shared/git-index-preserving-discard-capability.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/git-staged-discard-operation.test.ts src/main/providers/ssh-git-staged-discard-capability.test.ts src/main/providers/ssh-git-provider.test.ts src/main/ipc/filesystem.test.ts src/main/runtime/mobile-rpc-allowlist.test.ts src/renderer/src/runtime/runtime-git-staged-discard-client.test.ts src/renderer/src/runtime/runtime-git-staged-discard-skew.test.ts src/renderer/src/web/web-preload-api.test.ts --reporter=dot",
         "pnpm --dir mobile exec vitest run src/source-control/mobile-git-index-preserving-discard.test.ts --reporter=dot",
         "pnpm exec playwright test tests/e2e/source-control-discard-confirmation.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-source-control-discard.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
@@ -49,10 +52,19 @@
         "src/relay/integration.test.ts",
         "src/renderer/src/components/right-sidebar/discard-all-sequence.test.ts",
         "src/renderer/src/components/right-sidebar/source-control-discard-confirmation.test.ts",
+        "src/renderer/src/components/right-sidebar/SourceControl.preview-open.test.tsx",
         "src/main/runtime/rpc/methods/git.test.ts",
         "src/main/runtime/rpc/methods/status-git-discard-capability.test.ts",
         "src/renderer/src/runtime/runtime-git-client.test.ts",
         "src/shared/git-index-preserving-discard-capability.test.ts",
+        "src/shared/git-staged-discard-operation.test.ts",
+        "src/main/providers/ssh-git-staged-discard-capability.test.ts",
+        "src/main/providers/ssh-git-provider.test.ts",
+        "src/main/ipc/filesystem.test.ts",
+        "src/main/runtime/mobile-rpc-allowlist.test.ts",
+        "src/renderer/src/runtime/runtime-git-staged-discard-client.test.ts",
+        "src/renderer/src/runtime/runtime-git-staged-discard-skew.test.ts",
+        "src/renderer/src/web/web-preload-api.test.ts",
         "tests/e2e/source-control-discard-confirmation.spec.ts",
         "tests/e2e/ssh-source-control-discard.spec.ts"
       ],
@@ -84,11 +96,31 @@
         },
         {
           "file": "tests/e2e/source-control-discard-confirmation.spec.ts",
-          "assertions": ["preserves staged content when discarding through the headed UI"]
+          "assertions": [
+            "preserves staged content when discarding through the headed UI",
+            "discards staged content through one headed Discard all action"
+          ]
         },
         {
           "file": "tests/e2e/ssh-source-control-discard.spec.ts",
-          "assertions": ["preserves the remote index and deletes intent-to-add content"]
+          "assertions": ["preserves remote staged content and atomically discards staged content"]
+        },
+        {
+          "file": "src/renderer/src/runtime/runtime-git-staged-discard-skew.test.ts",
+          "assertions": [
+            "fails closed for absent, malformed, unsupported, and mismatched owner capabilities",
+            "preserves all Git bytes when a claimed operation is rejected"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/right-sidebar/SourceControl.preview-open.test.tsx",
+          "assertions": ["quiesces staged Discard all before the owner mutation and reloads after"]
+        },
+        {
+          "file": "src/main/providers/ssh-git-provider.test.ts",
+          "assertions": [
+            "bulkDiscardStagedChanges proves relay support before one mutation request"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -98,8 +130,8 @@
           "platform": "macos",
           "command": "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-source-control-discard.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "result": "passed",
-          "durationSeconds": 37,
-          "summary": "One macOS Electron client connected through real OpenSSH to an ephemeral Linux Docker target; the relay preserved the staged blob and removed intent-to-add content from both the remote index and worktree."
+          "durationSeconds": 35,
+          "summary": "One macOS Electron client connected through real OpenSSH to an ephemeral Linux Docker target; the relay preserved the staged blob, removed intent-to-add content, then atomically discarded the staged index and worktree bytes."
         }
       ],
       "runtimeBudget": {
@@ -112,11 +144,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "On current main, the byte-identical 12-case Git oracle fails 10 cases because --source=HEAD overwrites or deletes staged worktree content and conflict state. The candidate passes all 12; restoring the HEAD source reproduces the same 10 failures."
+        "evidence": "The identical five-case real-Git oracle is base 1/5, published 4/5, rejected candidate 5/5, corrected 5/5, and disabled 1/5. In the additional new-client/old-host skew oracle, the rejected and disabled sequences mutate the index before rejection while the corrected sequence makes zero mutation calls and preserves raw index, cached diff, status, and worktree bytes."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Each single discard adds one bounded porcelain-status subprocess before one mutation, while each bulk chunk replaces the prior classification subprocess with one bounded porcelain-status subprocess. There is no polling, retry, provider fanout, wire field, listener, retained payload, or additional subprocess per selected path."
+        "evidence": "Each staged operation adds one tracked-status preflight with untracked scanning disabled and one combined restore per 100 expanded pathspecs. Paired runtimes add one status proof; direct SSH caches one positive capability probe per provider, re-probes only negative results after upgrade, and sends one mutation request. There is no polling, per-path subprocess, provider fanout, listener, or retained payload."
       },
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",

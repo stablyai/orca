@@ -796,6 +796,44 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('bulkDiscardStagedChanges proves relay support before one mutation request', async () => {
+    mux.request
+      .mockResolvedValueOnce({ stagedDiscardOperationVersion: 1 })
+      .mockResolvedValueOnce(undefined)
+
+    await provider.bulkDiscardStagedChanges('/home/user/repo', ['a.ts', 'b.ts'])
+
+    expect(mux.request.mock.calls).toEqual([
+      ['git.getCapabilities', undefined, { timeoutMs: 5_000 }],
+      [
+        'git.bulkDiscardStaged',
+        {
+          worktreePath: '/home/user/repo',
+          filePaths: ['a.ts', 'b.ts'],
+          stagedDiscardOperationVersion: 1
+        }
+      ]
+    ])
+  })
+
+  it.each([
+    undefined,
+    {},
+    { stagedDiscardOperationVersion: '1' },
+    { stagedDiscardOperationVersion: 2 }
+  ])('bulkDiscardStagedChanges fails closed for relay proof %#', async (capabilities) => {
+    mux.request.mockResolvedValue(capabilities)
+
+    await expect(provider.bulkDiscardStagedChanges('/home/user/repo', ['a.ts'])).rejects.toThrow(
+      'latest SSH relay'
+    )
+
+    expect(mux.request).toHaveBeenCalledTimes(1)
+    expect(mux.request).toHaveBeenCalledWith('git.getCapabilities', undefined, {
+      timeoutMs: 5_000
+    })
+  })
+
   it('discardChanges sends git.discard request', async () => {
     await provider.discardChanges('/home/user/repo', 'src/file.ts')
     expect(mux.request).toHaveBeenCalledWith('git.discard', {

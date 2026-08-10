@@ -133,6 +133,12 @@ describe('mobile RPC allowlist', () => {
     expect(missing).toEqual([])
   })
 
+  it('authorizes paired web staged discard without adding a mobile caller', () => {
+    expect(mobileRpcAllowlist()).toContain('git.bulkDiscardStaged')
+    expect(registeredRuntimeMethods()).toContain('git.bulkDiscardStaged')
+    expect(mobileRpcMethods()).not.toContain('git.bulkDiscardStaged')
+  })
+
   it('does not grant mobile credentials control over host updates', () => {
     const allowed = mobileRpcAllowlist()
     expect(

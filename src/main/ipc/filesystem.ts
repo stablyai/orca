@@ -53,6 +53,7 @@ import {
   bulkStageFiles,
   bulkUnstageFiles,
   bulkDiscardChanges,
+  bulkDiscardStagedChanges,
   discardChanges,
   getStagedCommitContext,
   getBranchCompare,
@@ -2221,6 +2222,30 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       await bulkDiscardChanges(worktreePath, filePaths, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:bulkDiscardStaged',
+    async (
+      _event,
+      args: { worktreePath: string; filePaths: string[]; connectionId?: string }
+    ): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.bulkDiscardStagedChanges(args.worktreePath, args.filePaths)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await bulkDiscardStagedChanges(worktreePath, filePaths, gitOptions)
     }
   )
 

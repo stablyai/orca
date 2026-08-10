@@ -10,6 +10,8 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { parseHostAccessLink } from '../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing-verification'
 import { assertGitIndexPreservingDiscardCapability } from '../../../shared/git-index-preserving-discard-capability'
+import { assertGitStagedDiscardCapability } from '../../../shared/git-staged-discard-operation'
+import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../../../shared/protocol-version'
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import type {
@@ -2250,6 +2252,15 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     bulkDiscard: async ({ worktreePath, filePaths }) => {
       assertGitIndexPreservingDiscardCapability(await callRuntimeResult('status.get'))
       await mutateGitPaths('git.bulkDiscardFromIndex', worktreePath, filePaths)
+    },
+    bulkDiscardStaged: async ({ worktreePath, filePaths }) => {
+      assertGitStagedDiscardCapability(await callRuntimeResult('status.get'))
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.bulkDiscardStaged', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        filePaths,
+        stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+      })
     },
     remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)

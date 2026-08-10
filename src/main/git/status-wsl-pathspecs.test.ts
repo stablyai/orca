@@ -16,6 +16,7 @@ vi.mock('./runner', () => ({
 
 import {
   bulkDiscardChanges,
+  bulkDiscardStagedChanges,
   bulkStageFiles,
   bulkUnstageFiles,
   discardChanges,
@@ -93,6 +94,28 @@ describe('WSL git pathspecs', () => {
     } finally {
       await rm(repo, { recursive: true, force: true })
     }
+  })
+
+  it('uses one POSIX pathspec for the combined staged WSL restore', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'R  tests/breakgit\0tests/old-breakgit\0',
+      stderr: ''
+    })
+
+    await bulkDiscardStagedChanges(worktreePath, [windowsRelativePath], wslOptions)
+
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+      ['status', '--porcelain=v1', '-z', '--untracked-files=no', '--renames'],
+      [
+        'restore',
+        '--source=HEAD',
+        '--staged',
+        '--worktree',
+        '--',
+        ':(literal)tests/breakgit',
+        ':(literal)tests/old-breakgit'
+      ]
+    ])
   })
 
   it('preserves backslashes for host Git where they can be literal filename characters', async () => {

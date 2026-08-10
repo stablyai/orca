@@ -6,6 +6,7 @@ import {
   GitBranchCompare,
   GitBranchDiff,
   GitBulkPaths,
+  GitBulkStagedDiscard,
   GitCheckIgnored,
   GitCheckout,
   GitCommit,
@@ -370,6 +371,12 @@ export const GIT_METHODS: RpcMethod[] = [
     params: GitBulkPaths,
     handler: async (params, { runtime }) =>
       runtime.bulkDiscardRuntimeGitPaths(params.worktree, params.filePaths)
+  }),
+  defineMethod({
+    name: 'git.bulkDiscardStaged',
+    params: GitBulkStagedDiscard,
+    handler: async (params, { runtime }) =>
+      runtime.bulkDiscardStagedRuntimeGitPaths(params.worktree, params.filePaths)
   }),
   defineMethod({
     name: 'git.remoteFileUrl',

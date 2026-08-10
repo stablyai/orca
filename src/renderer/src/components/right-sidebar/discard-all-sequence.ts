@@ -64,8 +64,8 @@ export function getUnstageAllPaths(entries: readonly GitStatusEntry[]): string[]
 }
 
 export type DiscardAllDeps = {
-  /** Unstage the given paths in one IPC round-trip. Only called for 'staged'. */
-  bulkUnstage: (paths: string[]) => Promise<void>
+  /** Discard staged index and worktree content through one authoritative operation. */
+  discardStaged: (paths: string[]) => Promise<void>
   /**
    * Discard the given paths in one IPC round-trip. Callers may omit this to
    * keep the legacy per-file sequence in tests or older surfaces.
@@ -74,7 +74,7 @@ export type DiscardAllDeps = {
   /** Discard a single path (restore working-tree from the index, or rm if untracked). */
   discardOne: (path: string) => Promise<void>
   /**
-   * Called when either the pre-step (bulkUnstage) rejects OR an individual
+   * Called when either the staged operation rejects OR an individual
    * `discardOne` rejects. Invoked once per failure so callers can surface
    * each error (e.g. a toast per stuck file) rather than swallowing them.
    */
@@ -87,7 +87,7 @@ export type DiscardAllResult = {
   /** Paths whose `discardOne` call rejected. Best-effort: the loop continues past these. */
   failed: string[]
   /**
-   * True only when the pre-step (bulk unstage for the 'staged' area) failed
+   * True only when the host-authoritative staged operation failed
    * and we never entered the per-file discard loop. Per-file failures do
    * NOT set this flag — they are reported via `failed`.
    */
@@ -97,13 +97,9 @@ export type DiscardAllResult = {
 /**
  * Run the "Discard all" sequence for a given area.
  *
- * For 'staged', this first bulk-unstages the paths. `discardOne` restores the
- * working tree from the index (`git restore --worktree`), so a staged-only
- * change (worktree already equals the index) would not be reverted at all
- * without unstaging first. Unstaging moves the staged delta into the working
- * tree so the subsequent restore actually discards it. If the unstage fails we
- * MUST skip the discard loop entirely: a partially-applied state is worse than
- * the one the user started in.
+ * For 'staged', one capability-negotiated owner operation updates the index
+ * and worktree together. The renderer must never expose the legacy unstage
+ * pre-step across a mixed-version boundary.
  *
  * Per-file `discardOne` failures are best-effort: we continue past a failed
  * file so a single stuck path does not block the rest of the bulk action.
@@ -121,7 +117,8 @@ export async function runDiscardAllForArea(
 
   if (area === 'staged') {
     try {
-      await deps.bulkUnstage([...paths])
+      await deps.discardStaged([...paths])
+      return { discarded: [...paths], failed: [], aborted: false }
     } catch (error) {
       deps.onError?.(error)
       return { discarded: [], failed: [], aborted: true }

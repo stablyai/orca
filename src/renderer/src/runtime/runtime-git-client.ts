@@ -24,6 +24,8 @@ import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/c
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree-id'
 import { assertGitIndexPreservingDiscardCapability } from '../../../shared/git-index-preserving-discard-capability'
+import { assertGitStagedDiscardCapability } from '../../../shared/git-staged-discard-operation'
+import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../../../shared/protocol-version'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -888,6 +890,33 @@ export async function bulkUnstageRuntimeGitPaths(
     target,
     'git.bulkUnstage',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePaths },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function bulkDiscardStagedRuntimeGitPaths(
+  context: RuntimeGitContext,
+  filePaths: string[]
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.bulkDiscardStaged({
+      worktreePath: resolveLocalWorktreePath(context),
+      filePaths,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  const status = await getRuntimeEnvironmentStatus(target.environmentId, 15_000)
+  assertGitStagedDiscardCapability(status)
+  await callRuntimeRpc(
+    target,
+    'git.bulkDiscardStaged',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      filePaths,
+      stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+    },
     { timeoutMs: 15_000 }
   )
 }

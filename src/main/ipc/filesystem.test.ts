@@ -32,6 +32,7 @@ const {
   unstageFileMock,
   bulkUnstageFilesMock,
   bulkDiscardChangesMock,
+  bulkDiscardStagedChangesMock,
   discardChangesMock,
   checkIgnoredPathsMock,
   listWorktreesMock,
@@ -78,6 +79,7 @@ const {
   unstageFileMock: vi.fn(),
   bulkUnstageFilesMock: vi.fn(),
   bulkDiscardChangesMock: vi.fn(),
+  bulkDiscardStagedChangesMock: vi.fn(),
   discardChangesMock: vi.fn(),
   checkIgnoredPathsMock: vi.fn(),
   listWorktreesMock: vi.fn(),
@@ -152,6 +154,7 @@ vi.mock('../git/status', () => ({
   unstageFile: unstageFileMock,
   bulkUnstageFiles: bulkUnstageFilesMock,
   bulkDiscardChanges: bulkDiscardChangesMock,
+  bulkDiscardStagedChanges: bulkDiscardStagedChangesMock,
   discardChanges: discardChangesMock
 }))
 
@@ -304,6 +307,7 @@ describe('registerFilesystemHandlers', () => {
       unstageFileMock,
       bulkUnstageFilesMock,
       bulkDiscardChangesMock,
+      bulkDiscardStagedChangesMock,
       discardChangesMock,
       listWorktreesMock,
       resolveCommitMessageSettingsMock,
@@ -1725,6 +1729,24 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
+  it('routes staged discard to one local owner operation', async () => {
+    bulkDiscardStagedChangesMock.mockResolvedValue(undefined)
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:bulkDiscardStaged')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      filePaths: ['./src/../src/file.ts', 'nested//child.ts']
+    })
+
+    expect(bulkDiscardStagedChangesMock).toHaveBeenCalledWith(
+      WORKTREE_FEATURE_PATH,
+      [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
+      {}
+    )
+    expect(bulkUnstageFilesMock).not.toHaveBeenCalled()
+    expect(bulkDiscardChangesMock).not.toHaveBeenCalled()
+  })
+
   it('rejects bulk unstage requests that escape the selected worktree', async () => {
     registerFilesystemHandlers(store as never)
 
@@ -1749,6 +1771,19 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow('Access denied: git file path escapes the selected worktree')
 
     expect(bulkDiscardChangesMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects staged discard paths that escape before reaching the owner', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:bulkDiscardStaged')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        filePaths: ['src/file.ts', '../outside.txt']
+      })
+    ).rejects.toThrow('Access denied: git file path escapes the selected worktree')
+
+    expect(bulkDiscardStagedChangesMock).not.toHaveBeenCalled()
   })
 
   it('lists markdown documents recursively for a registered worktree', async () => {
@@ -2887,6 +2922,23 @@ describe('registerFilesystemHandlers', () => {
 
     expect(sshBulkDiscardMock).toHaveBeenCalledWith('/remote/repo', ['a.ts', 'b.ts'])
     expect(bulkDiscardChangesMock).not.toHaveBeenCalled()
+  })
+
+  it('routes staged discard to one SSH owner operation', async () => {
+    const sshBulkDiscardStagedMock = vi.fn().mockResolvedValue(undefined)
+    getSshGitProviderMock.mockReturnValue({
+      bulkDiscardStagedChanges: sshBulkDiscardStagedMock
+    })
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:bulkDiscardStaged')!(null, {
+      worktreePath: '/remote/repo',
+      filePaths: ['a.ts', 'b.ts'],
+      connectionId: 'conn-1'
+    })
+
+    expect(sshBulkDiscardStagedMock).toHaveBeenCalledWith('/remote/repo', ['a.ts', 'b.ts'])
+    expect(bulkDiscardStagedChangesMock).not.toHaveBeenCalled()
   })
 
   it('routes ssh git:fastForward through the SSH provider', async () => {

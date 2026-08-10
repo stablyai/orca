@@ -10898,7 +10898,7 @@
             "c07b236287": "Select a workspace to view changes",
             "dc5a6465fc": "{{value0}} (e.g. {{value1}}{{value2}})",
             "8eb3782a0c": "Failed to discard {{value0}} file{{value1}}",
-            "a5e5a11090": "Discard all failed — unable to unstage files before discard",
+            "a5e5a11090": "Discard all failed before staged changes were modified",
             "8a5ba6a988": "Failed to load commit diff",
             "fe5bd1a610": "Creating {{value0}}...",
             "812cb992ee": "Open on {{value0}}",

@@ -186,4 +186,39 @@ test.describe('Source Control discard confirmation', () => {
       )
       .toBe('staged content\n')
   })
+
+  test('discards staged content through one headed Discard all action @headful', async ({
+    orcaPage
+  }) => {
+    const seededFile = await seedPartiallyStagedFile(orcaPage)
+    await openSourceControl(orcaPage)
+    const stagedHeader = orcaPage.getByRole('button', { name: /Staged Changes/ })
+    await expect(stagedHeader).toBeVisible()
+    const discardAll = stagedHeader.locator('..').getByRole('button', { name: 'Discard all' })
+    await discardAll.focus()
+    await discardAll.press('Enter')
+
+    await expect(
+      orcaPage.getByRole('dialog', { name: 'Discard all staged changes?' })
+    ).toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Discard all', exact: true }).last().click()
+
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(async (filePath) => {
+          try {
+            await window.api.fs.readFile({ filePath })
+            return true
+          } catch {
+            return false
+          }
+        }, seededFile.filePath)
+      )
+      .toBe(false)
+    await expect(
+      orcaPage.locator('[data-testid="source-control-entry"]').filter({
+        hasText: seededFile.fileName
+      })
+    ).toHaveCount(0)
+  })
 })

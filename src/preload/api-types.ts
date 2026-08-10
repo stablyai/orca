@@ -3158,6 +3158,11 @@ export type PreloadApi = {
       filePaths: string[]
       connectionId?: string
     }) => Promise<void>
+    bulkDiscardStaged: (args: {
+      worktreePath: string
+      filePaths: string[]
+      connectionId?: string
+    }) => Promise<void>
     remoteFileUrl: (args: {
       worktreePath: string
       relativePath: string

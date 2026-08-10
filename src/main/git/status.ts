@@ -50,6 +50,11 @@ import {
   gitDiscardStatusArgs,
   type GitDiscardPathKind
 } from '../../shared/git-discard-status'
+import {
+  gitStagedDiscardArgs,
+  gitStagedDiscardStatusArgs,
+  resolveGitStagedDiscardPaths
+} from '../../shared/git-staged-discard-operation'
 import { readBranchCompareHead } from '../../shared/git-branch-compare-head'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
@@ -2212,6 +2217,47 @@ async function cleanUntrackedPaths(
         }
       )
     }
+  }
+}
+
+/** Discard staged and working-tree changes through one Git operation per bounded batch. */
+export async function bulkDiscardStagedChanges(
+  worktreePath: string,
+  filePaths: string[],
+  options: GitRuntimeOptions = {}
+): Promise<void> {
+  invalidateGitReadCaches()
+  if (filePaths.length === 0) {
+    return
+  }
+  try {
+    const resolvedWorktree = path.resolve(worktreePath)
+    for (const filePath of filePaths) {
+      const resolvedTarget = path.resolve(worktreePath, filePath)
+      if (!isWithinWorktree(path, resolvedWorktree, resolvedTarget)) {
+        throw new Error(`Path "${filePath}" resolves outside the worktree`)
+      }
+    }
+    const { stdout: status } = await gitExecFileAsync(
+      gitStagedDiscardStatusArgs(),
+      gitOptionsForWorktree(worktreePath, options)
+    )
+    const selection = resolveGitStagedDiscardPaths(status, filePaths, (filePath) =>
+      options.wslDistro || path.sep === '\\' ? filePath.replaceAll('\\', '/') : filePath
+    )
+    if (selection.hasConflict) {
+      throw new Error('Cannot discard staged changes for conflicted paths')
+    }
+    const pathspecs = selection.paths.map((filePath) => literalPathspec(filePath, options))
+    for (let i = 0; i < pathspecs.length; i += BULK_CHUNK_SIZE) {
+      const chunk = pathspecs.slice(i, i + BULK_CHUNK_SIZE)
+      await gitExecFileAsync(
+        gitStagedDiscardArgs(chunk),
+        gitOptionsForWorktree(worktreePath, options)
+      )
+    }
+  } finally {
+    invalidateGitReadCaches()
   }
 }
 

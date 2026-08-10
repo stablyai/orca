@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY,
+  GIT_STAGED_DISCARD_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { STATUS_METHODS } from './status'
 
@@ -33,5 +36,19 @@ describe('Git discard runtime capability', () => {
     })) as { capabilities: string[] }
 
     expect(result.capabilities).not.toContain(GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY)
+  })
+
+  it('advertises staged discard only when its authoritative handler is registered', async () => {
+    const capable = (await handler(undefined, {
+      runtime: runtime(),
+      registeredMethods: new Set(['git.bulkDiscardStaged'])
+    })) as { capabilities: string[] }
+    const legacy = (await handler(undefined, {
+      runtime: runtime(),
+      registeredMethods: new Set()
+    })) as { capabilities: string[] }
+
+    expect(capable.capabilities).toContain(GIT_STAGED_DISCARD_RUNTIME_CAPABILITY)
+    expect(legacy.capabilities).not.toContain(GIT_STAGED_DISCARD_RUNTIME_CAPABILITY)
   })
 })

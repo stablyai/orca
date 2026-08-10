@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../../../../shared/protocol-version'
 
 export const WorktreeSelector = z.object({
   worktree: z
@@ -201,6 +202,10 @@ export const GitGeneratePullRequestFields = GitGenerateCommitMessage.extend({
 
 export const GitBulkPaths = WorktreeSelector.extend({
   filePaths: z.array(z.string().min(1, 'Missing file path'))
+})
+
+export const GitBulkStagedDiscard = GitBulkPaths.extend({
+  stagedDiscardOperationVersion: z.literal(GIT_STAGED_DISCARD_OPERATION_VERSION)
 })
 
 const GitPushTargetParam = z.object({

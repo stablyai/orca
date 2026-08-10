@@ -228,6 +228,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'git.abortRebase',
   'git.bulkStage',
   'git.bulkDiscardFromIndex',
+  'git.bulkDiscardStaged',
   'git.bulkUnstage',
   'git.branchCompare',
   'git.branchDiff',

@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => {
     openBranchDiff: vi.fn(),
     createEmptySplitGroup: vi.fn(),
     discardRuntimeGitPath: vi.fn(),
+    bulkDiscardStagedRuntimeGitPaths: vi.fn(),
     bulkStageRuntimeGitPaths: vi.fn(),
     refreshGitStatusForWorktree: vi.fn(),
     requestEditorSaveQuiesce: vi.fn(),
@@ -87,6 +88,7 @@ vi.mock('@/runtime/runtime-git-client', async (importOriginal) => {
   return {
     ...actual,
     discardRuntimeGitPath: mocks.calls.discardRuntimeGitPath,
+    bulkDiscardStagedRuntimeGitPaths: mocks.calls.bulkDiscardStagedRuntimeGitPaths,
     bulkStageRuntimeGitPaths: mocks.calls.bulkStageRuntimeGitPaths
   }
 })
@@ -142,6 +144,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
   vi.clearAllMocks()
   mocks.calls.createEmptySplitGroup.mockReturnValue('group-2')
   mocks.calls.discardRuntimeGitPath.mockResolvedValue(undefined)
+  mocks.calls.bulkDiscardStagedRuntimeGitPaths.mockResolvedValue(undefined)
   mocks.calls.bulkStageRuntimeGitPaths.mockResolvedValue(undefined)
   mocks.calls.refreshGitStatusForWorktree.mockResolvedValue(undefined)
   mocks.calls.requestEditorSaveQuiesce.mockResolvedValue(undefined)
@@ -423,6 +426,58 @@ describe('SourceControl preview row opens', () => {
       relativePath: 'src/file.ts',
       runtimeEnvironmentId: 'runtime-remote'
     })
+  })
+
+  it('quiesces staged Discard all before the owner mutation and reloads after', async () => {
+    resetState({
+      settings: { activeRuntimeEnvironmentId: 'runtime-remote' },
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({ path: 'src/staged.ts', area: 'staged', status: 'modified' })
+        ]
+      }
+    })
+    renderSourceControl()
+
+    const discardAll = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Discard all"]'
+    )
+    expect(discardAll).not.toBeNull()
+    act(() => discardAll?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    const confirmButton = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Discard all'
+    )
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(mocks.calls.requestEditorSaveQuiesce).toHaveBeenCalledWith({
+      worktreeId: mocks.activeWorktree.id,
+      worktreePath: '/repo/wt',
+      relativePath: 'src/staged.ts',
+      runtimeEnvironmentId: 'runtime-remote'
+    })
+    expect(mocks.calls.bulkDiscardStagedRuntimeGitPaths).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: { activeRuntimeEnvironmentId: 'runtime-remote' },
+        worktreeId: mocks.activeWorktree.id,
+        worktreePath: '/repo/wt'
+      }),
+      ['src/staged.ts']
+    )
+    expect(mocks.calls.notifyEditorExternalFileChange).toHaveBeenCalledWith({
+      worktreeId: mocks.activeWorktree.id,
+      worktreePath: '/repo/wt',
+      relativePath: 'src/staged.ts',
+      runtimeEnvironmentId: 'runtime-remote'
+    })
+    expect(mocks.calls.requestEditorSaveQuiesce.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.calls.bulkDiscardStagedRuntimeGitPaths.mock.invocationCallOrder[0]
+    )
+    expect(mocks.calls.bulkDiscardStagedRuntimeGitPaths.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.calls.notifyEditorExternalFileChange.mock.invocationCallOrder[0]
+    )
   })
 
   it('keeps nested-only submodule rows non-stageable from the parent repo', () => {

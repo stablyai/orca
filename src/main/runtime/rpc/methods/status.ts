@@ -1,6 +1,9 @@
 import { defineMethod, type RpcMethod } from '../core'
 import { getRemoteServerUpdaterSnapshot } from '../../remote-server-updater'
-import { GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY,
+  GIT_STAGED_DISCARD_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 
 const INDEX_PRESERVING_DISCARD_METHODS = [
   'git.discardFromIndex',
@@ -20,6 +23,9 @@ export const STATUS_METHODS: RpcMethod[] = [
         INDEX_PRESERVING_DISCARD_METHODS.every((method) => registeredMethods.has(method))
       ) {
         capabilities.push(GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY)
+      }
+      if (registeredMethods?.has('git.bulkDiscardStaged')) {
+        capabilities.push(GIT_STAGED_DISCARD_RUNTIME_CAPABILITY)
       }
       return {
         ...status,

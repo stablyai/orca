@@ -31,6 +31,7 @@ import {
   abortMerge,
   abortRebase,
   bulkDiscardChanges,
+  bulkDiscardStagedChanges,
   bulkStageFiles,
   bulkUnstageFiles,
   commitChanges,
@@ -953,6 +954,28 @@ export class RuntimeGitCommands {
       return { ok: true }
     }
     await bulkDiscardChanges(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
+    return { ok: true }
+  }
+
+  async bulkDiscardStagedRuntimeGitPaths(
+    worktreeSelector: string,
+    filePaths: string[]
+  ): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      await provider.bulkDiscardStagedChanges(target.worktree.path, relativePaths)
+      return { ok: true }
+    }
+    await bulkDiscardStagedChanges(
+      target.worktree.path,
+      relativePaths,
+      localGitOptionsForTarget(target)
+    )
     return { ok: true }
   }
 

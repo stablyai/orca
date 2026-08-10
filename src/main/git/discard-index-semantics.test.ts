@@ -10,7 +10,12 @@ import {
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { bulkDiscardChanges, discardChanges } from './status'
+import {
+  bulkDiscardChanges,
+  bulkDiscardStagedChanges,
+  bulkUnstageFiles,
+  discardChanges
+} from './status'
 
 type Snapshot = {
   cachedDiff: string
@@ -210,6 +215,79 @@ describe('discard index/worktree semantics', () => {
     expect(git(repo, 'status', '--porcelain=v1')).toBe('M  file.txt\nA  new.txt\n')
   })
 
+  it('atomically discards staged, unstaged, added, and renamed content', async () => {
+    const repo = initRepo()
+    writeFileSync(path.join(repo, 'file.txt'), 'staged\n')
+    git(repo, 'add', 'file.txt')
+    appendFileSync(path.join(repo, 'file.txt'), 'unstaged\n')
+    writeFileSync(path.join(repo, 'new.txt'), 'new\n')
+    git(repo, 'add', 'new.txt')
+
+    await bulkDiscardStagedChanges(repo, ['file.txt', 'new.txt'])
+
+    expect(readFileSync(path.join(repo, 'file.txt'), 'utf8')).toBe('base-1\nbase-2\nbase-3\n')
+    expect(existsSync(path.join(repo, 'new.txt'))).toBe(false)
+    expect(git(repo, 'status', '--porcelain=v1')).toBe('')
+
+    git(repo, 'mv', 'file.txt', 'renamed.txt')
+    await bulkDiscardStagedChanges(repo, ['file.txt', 'renamed.txt'])
+    expect(existsSync(path.join(repo, 'renamed.txt'))).toBe(false)
+    expect(readFileSync(path.join(repo, 'file.txt'), 'utf8')).toBe('base-1\nbase-2\nbase-3\n')
+    expect(git(repo, 'status', '--porcelain=v1')).toBe('')
+  })
+
+  it('restores rename sources expanded beyond one bounded batch', async () => {
+    const repo = initRepo()
+    const renamedPaths: string[] = []
+    for (let index = 0; index < 101; index += 1) {
+      const original = `original-${index}.txt`
+      const renamed = `renamed-${index}.txt`
+      writeFileSync(path.join(repo, original), `${index}\n`)
+      renamedPaths.push(renamed)
+    }
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-qm', 'rename fixtures')
+    for (let index = 0; index < 101; index += 1) {
+      git(repo, 'mv', `original-${index}.txt`, renamedPaths[index])
+    }
+
+    await bulkDiscardStagedChanges(repo, renamedPaths)
+
+    expect(git(repo, 'status', '--porcelain=v1')).toBe('')
+    expect(existsSync(path.join(repo, 'original-100.txt'))).toBe(true)
+    expect(existsSync(path.join(repo, 'renamed-100.txt'))).toBe(false)
+  })
+
+  it('keeps the legacy old-client/new-host two-step behavior safe', async () => {
+    const repo = initRepo()
+    writeFileSync(path.join(repo, 'file.txt'), 'staged\n')
+    git(repo, 'add', 'file.txt')
+    appendFileSync(path.join(repo, 'file.txt'), 'unstaged\n')
+
+    await bulkUnstageFiles(repo, ['file.txt'])
+    await bulkDiscardChanges(repo, ['file.txt'])
+
+    expect(readFileSync(path.join(repo, 'file.txt'), 'utf8')).toBe('base-1\nbase-2\nbase-3\n')
+    expect(git(repo, 'status', '--porcelain=v1')).toBe('')
+  })
+
+  it('rejects a conflicted staged discard without changing index or worktree state', async () => {
+    const repo = initRepo()
+    const baseBranch = git(repo, 'branch', '--show-current').trim()
+    git(repo, 'checkout', '-qb', 'side')
+    writeFileSync(path.join(repo, 'file.txt'), 'side\n')
+    git(repo, 'commit', '-qam', 'side')
+    git(repo, 'checkout', '-q', baseBranch)
+    writeFileSync(path.join(repo, 'file.txt'), 'main\n')
+    git(repo, 'commit', '-qam', 'main')
+    expect(() => git(repo, 'merge', 'side')).toThrow()
+    const before = snapshot(repo, 'file.txt')
+
+    await expect(bulkDiscardStagedChanges(repo, ['file.txt'])).rejects.toThrow('conflicted')
+
+    expect(snapshot(repo, 'file.txt')).toEqual(before)
+  })
+
   it('works from a linked worktree without changing the main checkout', async () => {
     const repo = initRepo()
     const linked = `${repo}-linked`
@@ -222,6 +300,9 @@ describe('discard index/worktree semantics', () => {
     await discardChanges(linked, 'file.txt')
 
     expect(readFileSync(path.join(linked, 'file.txt'), 'utf8')).toBe('linked-staged\n')
+    await bulkDiscardStagedChanges(linked, ['file.txt'])
+    expect(readFileSync(path.join(linked, 'file.txt'), 'utf8')).toBe('base-1\nbase-2\nbase-3\n')
+    expect(git(linked, 'status', '--porcelain=v1')).toBe('')
     expect(readFileSync(path.join(repo, 'file.txt'), 'utf8')).toBe('base-1\nbase-2\nbase-3\n')
   })
 
@@ -231,6 +312,7 @@ describe('discard index/worktree semantics', () => {
     writeFileSync(path.join(folder, 'file.txt'), 'folder content\n')
 
     await expect(discardChanges(folder, 'file.txt')).rejects.toThrow()
+    await expect(bulkDiscardStagedChanges(folder, ['file.txt'])).rejects.toThrow()
 
     expect(readFileSync(path.join(folder, 'file.txt'), 'utf8')).toBe('folder content\n')
   })

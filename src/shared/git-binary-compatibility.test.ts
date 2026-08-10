@@ -16,6 +16,11 @@ import {
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
 import { classifyGitDiscardPaths, gitDiscardStatusArgs } from './git-discard-status'
 import {
+  gitStagedDiscardArgs,
+  gitStagedDiscardStatusArgs,
+  resolveGitStagedDiscardPaths
+} from './git-staged-discard-operation'
+import {
   githubPullRequestHeadLocalRef,
   gitlabMergeRequestHeadLocalRef,
   reviewHeadRemoteRefComponent
@@ -226,6 +231,27 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     ).resolves.toMatchObject({
       stdout: 'A  discard-staged.txt\n'
     })
+  })
+
+  it('atomically restores staged index and worktree content from HEAD', async () => {
+    await writeFile(join(repoPath, 'tracked.txt'), 'staged\n')
+    await runGit(['add', 'tracked.txt'])
+    await writeFile(join(repoPath, 'tracked.txt'), 'staged\nunstaged\n')
+
+    await runGit(gitStagedDiscardArgs(['tracked.txt']))
+
+    await expect(readFile(join(repoPath, 'tracked.txt'), 'utf8')).resolves.toBe('compatibility\n')
+    await expect(runGit(['status', '--porcelain=v1', '--', 'tracked.txt'])).resolves.toMatchObject({
+      stdout: ''
+    })
+
+    await runGit(['mv', 'tracked.txt', 'renamed.txt'])
+    const { stdout } = await runGit(gitStagedDiscardStatusArgs())
+    const selection = resolveGitStagedDiscardPaths(stdout, ['renamed.txt'])
+    expect(selection).toEqual({ paths: ['renamed.txt', 'tracked.txt'], hasConflict: false })
+    await runGit(gitStagedDiscardArgs(selection.paths))
+    await expect(readFile(join(repoPath, 'tracked.txt'), 'utf8')).resolves.toBe('compatibility\n')
+    await expect(readFile(join(repoPath, 'renamed.txt'), 'utf8')).rejects.toThrow()
   })
 
   it('degrades indexed credential config safely at the Git 2.31 boundary', async () => {

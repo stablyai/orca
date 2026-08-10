@@ -98,6 +98,7 @@ describe('GitHandler', () => {
 
   it('registers all expected handlers', () => {
     const methods = Array.from(dispatcher._requestHandlers.keys())
+    expect(methods).toContain('git.getCapabilities')
     expect(methods).toContain('git.status')
     expect(methods).toContain('git.checkIgnored')
     expect(methods).toContain('git.history')
@@ -113,6 +114,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.localBranches')
     expect(methods).toContain('git.discard')
     expect(methods).toContain('git.bulkDiscard')
+    expect(methods).toContain('git.bulkDiscardStaged')
     expect(methods).toContain('git.conflictOperation')
     expect(methods).toContain('git.branchCompare')
     expect(methods).toContain('git.upstreamStatus')
@@ -137,6 +139,12 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.exec')
     expect(methods).toContain('git.clone')
     expect(methods).toContain('git.isGitRepo')
+  })
+
+  it('reports the staged discard owner capability', async () => {
+    await expect(dispatcher.callRequest('git.getCapabilities')).resolves.toEqual({
+      stagedDiscardOperationVersion: 1
+    })
   })
 
   it('runs remote worktree deletion inside the relay watcher fence', async () => {
@@ -896,6 +904,79 @@ describe('GitHandler', () => {
       await expect(fs.readFile(path.join(tmpDir, 'b.txt'), 'utf-8')).resolves.toBe('b')
       await expect(fs.access(path.join(tmpDir, 'new.txt'))).rejects.toThrow()
     })
+
+    it('discards staged and unstaged bytes through one versioned owner operation', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'base\n')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'staged\n')
+      execFileSync('git', ['add', 'file.txt'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'staged\nunstaged\n')
+      writeFileSync(path.join(tmpDir, 'new.txt'), 'new\n')
+      execFileSync('git', ['add', 'new.txt'], { cwd: tmpDir, stdio: 'pipe' })
+
+      await dispatcher.callRequest('git.bulkDiscardStaged', {
+        worktreePath: tmpDir,
+        filePaths: ['file.txt', 'new.txt'],
+        stagedDiscardOperationVersion: 1
+      })
+
+      await expect(fs.readFile(path.join(tmpDir, 'file.txt'), 'utf8')).resolves.toBe('base\n')
+      await expect(fs.access(path.join(tmpDir, 'new.txt'))).rejects.toThrow()
+      expect(
+        execFileSync('git', ['status', '--porcelain=v1', '-z'], {
+          cwd: tmpDir,
+          encoding: 'utf8'
+        })
+      ).toBe('')
+    })
+
+    it.each([undefined, '1', 2])(
+      'rejects staged discard version %s before changing any Git bytes',
+      async (stagedDiscardOperationVersion) => {
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'file.txt'), 'base\n')
+        gitCommit(tmpDir, 'initial')
+        writeFileSync(path.join(tmpDir, 'file.txt'), 'staged\n')
+        execFileSync('git', ['add', 'file.txt'], { cwd: tmpDir, stdio: 'pipe' })
+        writeFileSync(path.join(tmpDir, 'file.txt'), 'staged\nunstaged\n')
+        const before = {
+          index: await fs.readFile(path.join(tmpDir, '.git', 'index')),
+          cachedDiff: execFileSync('git', ['diff', '--cached', '--binary'], {
+            cwd: tmpDir,
+            encoding: 'utf8'
+          }),
+          status: execFileSync('git', ['status', '--porcelain=v1', '-z'], {
+            cwd: tmpDir,
+            encoding: 'utf8'
+          }),
+          worktree: await fs.readFile(path.join(tmpDir, 'file.txt'))
+        }
+
+        await expect(
+          dispatcher.callRequest('git.bulkDiscardStaged', {
+            worktreePath: tmpDir,
+            filePaths: ['file.txt'],
+            stagedDiscardOperationVersion
+          })
+        ).rejects.toThrow('unsupported_staged_discard_operation')
+
+        await expect(fs.readFile(path.join(tmpDir, '.git', 'index'))).resolves.toEqual(before.index)
+        expect(
+          execFileSync('git', ['diff', '--cached', '--binary'], {
+            cwd: tmpDir,
+            encoding: 'utf8'
+          })
+        ).toBe(before.cachedDiff)
+        expect(
+          execFileSync('git', ['status', '--porcelain=v1', '-z'], {
+            cwd: tmpDir,
+            encoding: 'utf8'
+          })
+        ).toBe(before.status)
+        await expect(fs.readFile(path.join(tmpDir, 'file.txt'))).resolves.toEqual(before.worktree)
+      }
+    )
 
     it('preserves staged additions and deletes intent-to-add paths in bulk', async () => {
       gitInit(tmpDir)

@@ -174,6 +174,7 @@ import {
   abortRuntimeGitMerge,
   abortRuntimeGitRebase,
   bulkDiscardRuntimeGitPaths,
+  bulkDiscardStagedRuntimeGitPaths,
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
   cancelRuntimeGenerateCommitMessage,
@@ -5381,6 +5382,45 @@ function SourceControlInner(): React.JSX.Element {
     [activeRepoSettings, activeWorktreeId, worktreePath]
   )
 
+  const discardStagedMany = useCallback(
+    async (filePaths: string[]) => {
+      if (!worktreePath || !activeWorktreeId) {
+        return
+      }
+      const runtimeEnvironmentId =
+        useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+      await Promise.all(
+        filePaths.map((relativePath) =>
+          requestEditorSaveQuiesce({
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            relativePath,
+            runtimeEnvironmentId
+          })
+        )
+      )
+      await bulkDiscardStagedRuntimeGitPaths(
+        {
+          // Why: capability proof and both Git mutations belong to the repo owner.
+          settings: activeRepoSettings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId: getConnectionId(activeWorktreeId) ?? undefined
+        },
+        filePaths
+      )
+      for (const relativePath of filePaths) {
+        notifyEditorExternalFileChange({
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          relativePath,
+          runtimeEnvironmentId
+        })
+      }
+    },
+    [activeRepoSettings, activeWorktreeId, worktreePath]
+  )
+
   const handleDiscard = useCallback(
     async (filePath: string) => {
       try {
@@ -5394,7 +5434,7 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   // Why: "Discard all" skips unresolved/resolved_locally rows (discarding can re-create the conflict or lose the resolution; no v1 UX for it).
-  // Why: sequencing/filter rules live in discard-all-sequence.ts for independent unit tests, with per-file fallback when an older SSH relay lacks bulk discard.
+  // Why: staged discard is one owner operation; unstaged areas retain the per-file fallback.
   const handleRevertAllInArea = useCallback(
     async (area: DiscardAllArea, confirmedPaths?: readonly string[]) => {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
@@ -5406,21 +5446,10 @@ function SourceControlInner(): React.JSX.Element {
       }
       setIsExecutingBulk(true)
       try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
         // Why: onError fires per failure; aggregate into one toast so a partial failure across N files doesn't spam N toasts.
         const errors: unknown[] = []
         const result = await runDiscardAllForArea(area, paths, {
-          bulkUnstage: (filePaths) =>
-            bulkUnstageRuntimeGitPaths(
-              {
-                // Why: route unstaging by the repo OWNER host, not the focused runtime.
-                settings: activeRepoSettings,
-                worktreeId: activeWorktreeId,
-                worktreePath,
-                connectionId
-              },
-              filePaths
-            ),
+          discardStaged: discardStagedMany,
           discardMany,
           discardOne: discardSingle,
           onError: (error) => {
@@ -5432,7 +5461,7 @@ function SourceControlInner(): React.JSX.Element {
           toast.error(
             translate(
               'auto.components.right.sidebar.SourceControl.a5e5a11090',
-              'Discard all failed — unable to unstage files before discard'
+              'Discard all failed before staged changes were modified'
             ),
             {
               description: errors[0] instanceof Error ? errors[0].message : undefined
@@ -5469,12 +5498,12 @@ function SourceControlInner(): React.JSX.Element {
       }
     },
     [
-      activeRepoSettings,
       worktreePath,
       activeWorktreeId,
       grouped,
       isExecutingBulk,
       clearSelection,
+      discardStagedMany,
       discardMany,
       discardSingle,
       refreshActiveGitStatusAfterMutation

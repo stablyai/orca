@@ -32,6 +32,8 @@ import {
 } from '../git/max-buffer-overflow'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
+import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../../shared/protocol-version'
+import { SshGitStagedDiscardCapability } from './ssh-git-staged-discard-capability'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -85,6 +87,7 @@ function filterUntrackedPorcelainStatus(stdout: string | undefined): string | un
 
 export class SshGitProvider implements IGitProvider {
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult | GitDiffResult[]>()
+  private readonly stagedDiscardCapability: SshGitStagedDiscardCapability
 
   private connectionId: string
   private mux: SshChannelMultiplexer
@@ -109,6 +112,7 @@ export class SshGitProvider implements IGitProvider {
   ) {
     this.connectionId = connectionId
     this.mux = mux
+    this.stagedDiscardCapability = new SshGitStagedDiscardCapability(mux)
   }
 
   getConnectionId(): string {
@@ -443,6 +447,24 @@ export class SshGitProvider implements IGitProvider {
     this.gitDiffReadDedupe.clear()
     try {
       await this.mux.request('git.bulkUnstage', { worktreePath, filePaths })
+    } finally {
+      this.gitDiffReadDedupe.clear()
+    }
+  }
+
+  async bulkDiscardStagedChanges(worktreePath: string, filePaths: string[]): Promise<void> {
+    if (!(await this.stagedDiscardCapability.supports())) {
+      throw new Error(
+        'Discarding staged changes requires the latest SSH relay. Reconnect and try again.'
+      )
+    }
+    this.gitDiffReadDedupe.clear()
+    try {
+      await this.mux.request('git.bulkDiscardStaged', {
+        worktreePath,
+        filePaths,
+        stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+      })
     } finally {
       this.gitDiffReadDedupe.clear()
     }

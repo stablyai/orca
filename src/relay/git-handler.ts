@@ -72,6 +72,12 @@ import {
   gitDiscardStatusArgs,
   type GitDiscardPathKind
 } from '../shared/git-discard-status'
+import {
+  gitStagedDiscardArgs,
+  gitStagedDiscardStatusArgs,
+  resolveGitStagedDiscardPaths
+} from '../shared/git-staged-discard-operation'
+import { GIT_STAGED_DISCARD_OPERATION_VERSION } from '../shared/protocol-version'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
 import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../shared/in-flight-promise-dedupe'
@@ -206,6 +212,9 @@ export class GitHandler {
   }
 
   private registerHandlers(): void {
+    this.dispatcher.onRequest('git.getCapabilities', async () => ({
+      stagedDiscardOperationVersion: GIT_STAGED_DISCARD_OPERATION_VERSION
+    }))
     this.dispatcher.onRequest('git.status', (p, context) => this.getStatus(p, context))
     this.dispatcher.onRequest('git.submoduleStatus', (p, context) =>
       this.getSubmoduleStatus(p, context)
@@ -224,6 +233,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.localBranches', (p) => this.localBranches(p))
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
     this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
+    this.dispatcher.onRequest('git.bulkDiscardStaged', (p) => this.bulkDiscardStaged(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
     this.dispatcher.onRequest('git.branchCompare', (p) => this.branchCompare(p))
     this.dispatcher.onRequest('git.commitCompare', (p) => this.commitCompare(p))
@@ -569,6 +579,39 @@ export class GitHandler {
           ['restore', '--staged', '--', ...chunk.map((filePath) => this.literalPathspec(filePath))],
           worktreePath
         )
+      }
+    } finally {
+      this.clearGitMutationReadCaches()
+    }
+  }
+
+  private async bulkDiscardStaged(params: Record<string, unknown>) {
+    if (params.stagedDiscardOperationVersion !== GIT_STAGED_DISCARD_OPERATION_VERSION) {
+      throw new Error('unsupported_staged_discard_operation')
+    }
+    const worktreePath = params.worktreePath as string
+    const filePaths = params.filePaths as string[]
+    if (!Array.isArray(filePaths) || filePaths.length === 0) {
+      return
+    }
+    for (const filePath of filePaths) {
+      if (typeof filePath !== 'string') {
+        throw new Error('invalid_staged_discard_path')
+      }
+      this.assertInWorktree(worktreePath, filePath)
+    }
+    const { stdout: status } = await this.git(gitStagedDiscardStatusArgs(), worktreePath)
+    const selection = resolveGitStagedDiscardPaths(status, filePaths, (filePath) =>
+      path.sep === '\\' ? filePath.replaceAll('\\', '/') : filePath
+    )
+    if (selection.hasConflict) {
+      throw new Error('Cannot discard staged changes for conflicted paths')
+    }
+    const pathspecs = selection.paths.map((filePath) => this.literalPathspec(filePath))
+    this.clearGitMutationReadCaches()
+    try {
+      for (let i = 0; i < pathspecs.length; i += BULK_CHUNK_SIZE) {
+        await this.git(gitStagedDiscardArgs(pathspecs.slice(i, i + BULK_CHUNK_SIZE)), worktreePath)
       }
     } finally {
       this.clearGitMutationReadCaches()

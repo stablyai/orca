@@ -2,6 +2,7 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY,
+  GIT_STAGED_DISCARD_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION
@@ -26,7 +27,11 @@ export function createCompatibleRuntimeStatusResponse(
       liveLeafCount: 0,
       runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-      capabilities: [...RUNTIME_CAPABILITIES, GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY]
+      capabilities: [
+        ...RUNTIME_CAPABILITIES,
+        GIT_INDEX_PRESERVING_DISCARD_RUNTIME_CAPABILITY,
+        GIT_STAGED_DISCARD_RUNTIME_CAPABILITY
+      ]
     },
     _meta: { runtimeId }
   }
