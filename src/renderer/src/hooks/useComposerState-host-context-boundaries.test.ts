@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canResolveFolderSmartGitHubSubmit,
   getInitialAutoManagedWorkspaceName,
+  getInitialGitHubPrStartPointSelection,
   getMatchingLinkedTaskSourceContext,
   isExplicitWorkspaceNameInput,
   resolveSmartGitHubCreateNames,
@@ -25,6 +26,52 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 }
 
 describe('useComposerState host-context boundaries', () => {
+  it('seeds TaskPage pull requests as submit-time PR start points', () => {
+    const item = {
+      id: 'pr-42',
+      type: 'pr' as const,
+      number: 42,
+      title: 'Fix PR workspace creation',
+      state: 'open' as const,
+      url: 'https://github.com/stablyai/orca/pull/42',
+      labels: [],
+      updatedAt: '2026-08-04T00:00:00.000Z',
+      author: 'octocat',
+      branchName: 'fix-pr-workspace',
+      baseRefName: 'main',
+      isCrossRepository: true,
+      repoId: 'repo-1'
+    }
+
+    expect(
+      getInitialGitHubPrStartPointSelection({
+        item,
+        linkedWorkItem: {
+          provider: 'github',
+          type: 'pr',
+          number: 42,
+          title: item.title,
+          url: item.url,
+          repoId: item.repoId
+        },
+        repoId: 'repo-1'
+      })
+    ).toEqual({ repoId: 'repo-1', item })
+    expect(
+      getInitialGitHubPrStartPointSelection({
+        item,
+        linkedWorkItem: {
+          provider: 'github',
+          type: 'pr',
+          number: 43,
+          title: item.title,
+          url: 'https://github.com/stablyai/orca/pull/43'
+        },
+        repoId: 'repo-1'
+      })
+    ).toBeNull()
+  })
+
   it('treats typed workspace names as user-authored, not auto-managed', () => {
     expect(isExplicitWorkspaceNameInput({ name: 'keep-my-name', lastAutoName: '' })).toBe(true)
     expect(
@@ -376,13 +423,13 @@ describe('useComposerState host-context boundaries', () => {
       'const submit = useCallback',
       'const submitQuick = useCallback'
     )
-    const fullPolicySave = fullSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const fullPolicySave = fullSubmit.indexOf('persistSetupAgentStartupPolicy()')
     const fullCreate = fullSubmit.indexOf('const result = await createWorktree(')
     expect(fullPolicySave).toBeGreaterThanOrEqual(0)
     expect(fullCreate).toBeGreaterThan(fullPolicySave)
 
     const quickSubmit = sourceBetween(HOOK_SOURCE, 'const submitQuick = useCallback', 'return {')
-    const quickPolicySave = quickSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const quickPolicySave = quickSubmit.indexOf('persistSetupAgentStartupPolicy()')
     const quickCreate = quickSubmit.indexOf('const request: WorktreeCreationRequest = {')
     expect(quickPolicySave).toBeGreaterThanOrEqual(0)
     expect(quickCreate).toBeGreaterThan(quickPolicySave)
@@ -417,8 +464,9 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(section).toContain('canResolveFolderSmartGitHubSubmit')
     expect(section).toContain('hasFolderSourceRepos: folderSourceRepos.length > 0')
-    expect(section).toContain('? await resolvePendingSmartGitHubSubmit()')
-    expect(section).toContain(': null')
+    expect(section).toContain('? resolvePendingSmartGitHubSubmit()')
+    expect(section).toContain("Promise.resolve({ kind: 'none' } as const)")
+    expect(section).toContain("smartGitHubSettlement.status === 'cancelled'")
     expect(section).not.toContain('folderSourceRequiresConnection')
   })
 
@@ -702,6 +750,7 @@ describe('useComposerState host-context boundaries', () => {
       'const submitQuick = useCallback'
     )
     expect(fullSubmit).toContain('platform: selectedRepoAgentLaunchPlatform')
+    expect(fullSubmit).toContain('startupDraft: startupPlan.draftPrompt')
     expect(fullSubmit).not.toContain('platform: CLIENT_PLATFORM')
 
     const quickSubmit = sourceBetween(
@@ -723,6 +772,7 @@ describe('useComposerState host-context boundaries', () => {
     )
 
     expect(activation).toContain('...(startupPlan && !backendSpawnedStartup')
+    expect(activation).toContain('backendStartupTerminalSpawned: true')
     expect(activation).toContain('command: startupPlan.launchCommand')
     expect(activation).toContain('launchAgent: tuiAgent')
     // The removed activation-time fallback must not come back through this caller.

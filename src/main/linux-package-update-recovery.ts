@@ -242,6 +242,29 @@ async function validateArtifact(artifact: LinuxPackageArtifact): Promise<Validat
 }
 
 /**
+ * Hashes the artifact, joining an identical pass already in flight. `fresh` opts out of that reuse:
+ * a verdict that reaches a root installer must cover the bytes as of this call, not as of whenever
+ * some earlier Copy/Show click started streaming.
+ */
+function runValidation(
+  artifact: LinuxPackageArtifact,
+  options?: { fresh?: boolean }
+): Promise<ValidationResult> {
+  const key = `${artifact.packageType}:${artifact.version}:${artifact.path}:${artifact.sha512}`
+  if (!options?.fresh && inFlightValidation?.key === key) {
+    return inFlightValidation.promise
+  }
+  const promise: Promise<ValidationResult> = validateArtifact(artifact).finally(() => {
+    // Why: identity, not key — a fresh install pass may already have replaced this entry.
+    if (inFlightValidation?.promise === promise) {
+      inFlightValidation = null
+    }
+  })
+  inFlightValidation = { key, promise }
+  return promise
+}
+
+/**
  * Revalidates the retained package against the digest captured from the release metadata. This is
  * an integrity check against that HTTPS metadata, not a package signature and not a privilege
  * boundary — a same-user process can still replace the file after this returns.
@@ -257,17 +280,7 @@ async function validateTrackedArtifact(
   ) {
     return { ok: false, reason: 'missing' }
   }
-  const key = `${artifact.packageType}:${artifact.version}:${artifact.path}:${artifact.sha512}`
-  if (inFlightValidation?.key === key) {
-    return inFlightValidation.promise
-  }
-  const promise = validateArtifact(artifact).finally(() => {
-    if (inFlightValidation?.key === key) {
-      inFlightValidation = null
-    }
-  })
-  inFlightValidation = { key, promise }
-  return promise
+  return runValidation(artifact)
 }
 
 export async function resolveLinuxPackageInstallInstructions(
@@ -287,6 +300,23 @@ export async function resolveLinuxPackageInstallInstructions(
     command: command.command,
     packageFileName: path.basename(artifact.path)
   }
+}
+
+/**
+ * Re-proves the retained package immediately before the privileged installer consumes it.
+ *
+ * The cache path is user-writable, so a digest checked when the download finished says nothing
+ * about the bytes `dpkg -i` will read minutes later. Re-hashing here does not close the race —
+ * only an immutable handoff would — but it shrinks the window from "since the download" to
+ * "since this call", and it catches the artifact being swapped or deleted outright. Takes the
+ * artifact rather than a recovery so both the retry and the plain "Restart to Update" install
+ * are covered.
+ */
+export async function revalidateLinuxPackageForInstall(
+  artifact: LinuxPackageArtifact
+): Promise<{ ok: true } | { ok: false; reason: LinuxPackageRecoveryUnavailableReason }> {
+  const validation = await runValidation(artifact, { fresh: true })
+  return validation.ok ? { ok: true } : { ok: false, reason: validation.reason }
 }
 
 export async function revealLinuxPackage(

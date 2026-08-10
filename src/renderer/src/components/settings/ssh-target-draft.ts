@@ -3,6 +3,7 @@ import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  type SshConfigHostResolution,
   type SshTarget
 } from '../../../../shared/ssh-types'
 
@@ -13,6 +14,7 @@ export type EditingTarget = {
   port: string
   username: string
   identityFile: string
+  gssapiAuthentication: boolean
   proxyCommand: string
   jumpHost: string
   systemSshConnectionReuse: boolean
@@ -27,6 +29,7 @@ export const EMPTY_FORM: EditingTarget = {
   port: '22',
   username: '',
   identityFile: '',
+  gssapiAuthentication: false,
   proxyCommand: '',
   jumpHost: '',
   systemSshConnectionReuse: true,
@@ -45,6 +48,7 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     port: String(target.port),
     username: target.username,
     identityFile: target.identityFile ?? '',
+    gssapiAuthentication: target.gssapiAuthentication === true,
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
     systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
@@ -55,6 +59,26 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     ),
     relayKeepAliveUntilReset:
       (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS) === 0
+  }
+}
+
+/** Prefill the add-host form from a ~/.ssh/config Host entry (does not save). */
+export function getEditingTargetFromSshConfigHost(host: SshConfigHostResolution): EditingTarget {
+  const configHost = host.alias !== host.hostname ? host.alias : ''
+  return {
+    ...EMPTY_FORM,
+    label: host.alias,
+    configHost,
+    // Why: keep the config alias in Host when there is no HostName so OpenSSH
+    // still resolves User/Port/Identity from ~/.ssh/config on connect.
+    host: host.hostname,
+    port: String(host.port),
+    username: host.username,
+    // Why: no scalar override lets connection-time ssh -G retain every IdentityFile.
+    identityFile: '',
+    gssapiAuthentication: host.gssapiAuthentication === true,
+    proxyCommand: host.proxyCommand ?? '',
+    jumpHost: host.jumpHost ?? ''
   }
 }
 
@@ -153,6 +177,7 @@ export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTa
     current.port !== baseline.port ||
     current.username !== baseline.username ||
     current.identityFile !== baseline.identityFile ||
+    current.gssapiAuthentication !== baseline.gssapiAuthentication ||
     current.proxyCommand !== baseline.proxyCommand ||
     current.jumpHost !== baseline.jumpHost ||
     current.systemSshConnectionReuse !== baseline.systemSshConnectionReuse ||

@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import {
   isLockedWorktreeRemovalError,
+  isProvenLivePtyRemovalError,
   type WorktreeForceDeleteReason
 } from '../../../../shared/worktree-removal'
 export type DeleteWorktreeToastCopy = {
@@ -58,10 +59,18 @@ export function getDeleteWorktreeToastCopy(
           'Failed to delete workspace {{value0}}',
           { value0: worktreeName }
         ),
-        description: translate(
-          'auto.components.sidebar.delete.worktree.toast.unstoppedPty',
-          'Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.'
-        ),
+        // Why: Force Delete proceeds either way, so the copy must say which case this is.
+        // Telling a user "could not confirm" about terminals Orca watched stay alive asks
+        // them to waive a doubt that does not exist, and any running agent's work dies with it.
+        description: isProvenLivePtyRemovalError(error)
+          ? translate(
+              'auto.components.sidebar.delete.worktree.toast.unstoppedPtyLive',
+              'This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold.'
+            )
+          : translate(
+              'auto.components.sidebar.delete.worktree.toast.unstoppedPty',
+              'Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.'
+            ),
         isDestructive: false
       }
     }

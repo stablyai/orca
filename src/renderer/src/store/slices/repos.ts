@@ -66,6 +66,7 @@ import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
   getActiveRuntimeTarget,
+  hasRuntimeRpcErrorCode,
   settingsForRuntimeOwner
 } from '../../runtime/runtime-rpc-client'
 import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
@@ -1719,7 +1720,11 @@ export type RepoSlice = {
     order?: number
   ) => Promise<boolean>
   // options.hostId disambiguates which host's row to remove when the id exists on multiple hosts; else the focused host is assumed.
-  removeProject: (projectId: string, options?: { hostId?: ExecutionHostId }) => Promise<void>
+  // options.errorFeedback defaults to 'silent' so bulk/background callers keep their own aggregate reporting.
+  removeProject: (
+    projectId: string,
+    options?: { hostId?: ExecutionHostId; errorFeedback?: 'toast' | 'silent' }
+  ) => Promise<void>
   updateProject: (projectId: string, updates: ProjectUpdate) => Promise<boolean>
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the focused host is assumed.
   updateRepo: (
@@ -3307,11 +3312,18 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const idExistsOnOtherHost = get().repos.some(
         (repo) => repo.id === projectId && getRepoExecutionHostId(repo) !== ownerHostId
       )
-      await (target.kind === 'local'
-        ? idExistsOnOtherHost
-          ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
-          : window.api.repos.remove({ repoId: projectId })
-        : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
+      try {
+        await (target.kind === 'local'
+          ? idExistsOnOtherHost
+            ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
+            : window.api.repos.remove({ repoId: projectId })
+          : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
+      } catch (err) {
+        // Why: the owner already dropped this project, so purge the local ghost row instead of aborting (#11994).
+        if (!hasRuntimeRpcErrorCode(err, 'repo_not_found')) {
+          throw err
+        }
+      }
 
       get().clearOrcaHookTrustForRepo(projectId)
       const repoPath = get().repos.find((repo) =>
@@ -3454,6 +3466,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       })
     } catch (err) {
       console.error('Failed to remove repo:', err)
+      // Why: bulk and background callers aggregate their own failures, so only opted-in single-project entry points toast (#11994).
+      if (options?.errorFeedback === 'toast') {
+        toast.error(
+          translate('auto.store.slices.repos.removeProjectFailed', 'Failed to remove project'),
+          {
+            description: err instanceof Error ? err.message : String(err),
+            duration: ERROR_TOAST_DURATION
+          }
+        )
+      }
     }
   },
 

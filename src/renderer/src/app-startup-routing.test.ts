@@ -139,6 +139,10 @@ describe('renderer startup runtime routing', () => {
       'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
       servicesIndex
     )
+    const capabilityRefreshIndex = source.indexOf(
+      'refreshTerminalProviderSnapshotCapabilities(',
+      preReconnectRecoveryIndex
+    )
     const reconnectIndex = source.indexOf(
       'actions.reconnectPersistedTerminals(abortController.signal)',
       preReconnectRecoveryIndex
@@ -150,8 +154,38 @@ describe('renderer startup runtime routing', () => {
 
     expect(servicesIndex).toBeGreaterThanOrEqual(0)
     expect(preReconnectRecoveryIndex).toBeGreaterThan(servicesIndex)
-    expect(reconnectIndex).toBeGreaterThan(preReconnectRecoveryIndex)
+    expect(capabilityRefreshIndex).toBeGreaterThan(preReconnectRecoveryIndex)
+    expect(reconnectIndex).toBeGreaterThan(capabilityRefreshIndex)
     expect(postReconnectRecoveryIndex).toBeGreaterThan(reconnectIndex)
+  })
+
+  it('refreshes terminal snapshot capability before degraded reconnect', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const degradedStart = source.indexOf(
+      '[startup] Workspace session hydration failed; leaving disk state untouched:'
+    )
+    const servicesIndex = source.indexOf(
+      'await window.api.app.awaitFirstWindowStartupServices()',
+      degradedStart
+    )
+    const recoveryIndex = source.indexOf(
+      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
+      servicesIndex
+    )
+    const capabilityRefreshIndex = source.indexOf(
+      'refreshTerminalProviderSnapshotCapabilities(',
+      recoveryIndex
+    )
+    const reconnectIndex = source.indexOf(
+      'actions.reconnectPersistedTerminals(abortController.signal)',
+      recoveryIndex
+    )
+
+    expect(degradedStart).toBeGreaterThanOrEqual(0)
+    expect(servicesIndex).toBeGreaterThan(degradedStart)
+    expect(recoveryIndex).toBeGreaterThan(servicesIndex)
+    expect(capabilityRefreshIndex).toBeGreaterThan(recoveryIndex)
+    expect(reconnectIndex).toBeGreaterThan(capabilityRefreshIndex)
   })
 
   it('keeps the persisted Automations view from starting its own bootstrap worktree scan', () => {

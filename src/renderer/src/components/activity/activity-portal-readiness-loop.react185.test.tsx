@@ -1,7 +1,7 @@
 /** @vitest-environment happy-dom */
 import { act, useLayoutEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -46,10 +46,17 @@ const PANE_C = thread(OTHER_TAB_ID, LEAF_C)
 
 let root: Root
 
+// Freeze Date (not timers/rAF) so the latch's flip window cannot expire between two drains on a
+// loaded CI machine; the readiness frames are still driven by the controllers below.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+})
+
 afterEach(() => {
   act(() => {
     root?.unmount()
   })
+  vi.useRealTimers()
   document.body.replaceChildren()
   vi.unstubAllGlobals()
 })
@@ -81,6 +88,33 @@ function installAnimationFrameController(): {
       })
     },
     pending: () => callbacks.size
+  }
+}
+
+function installMutationObserverController(): { notify: () => void } {
+  const callbacks = new Map<MutationObserver, MutationCallback>()
+  class ControlledMutationObserver implements MutationObserver {
+    constructor(callback: MutationCallback) {
+      callbacks.set(this, callback)
+    }
+
+    observe(): void {}
+
+    disconnect(): void {
+      callbacks.delete(this)
+    }
+
+    takeRecords(): MutationRecord[] {
+      return []
+    }
+  }
+  vi.stubGlobal('MutationObserver', ControlledMutationObserver)
+  return {
+    notify() {
+      for (const [observer, callback] of callbacks) {
+        callback([], observer)
+      }
+    }
   }
 }
 
@@ -347,6 +381,7 @@ describe('Activity portal pane switching', () => {
 
   it('releases a latched readiness once the terminal attaches', async () => {
     const frames = installAnimationFrameController()
+    const mutations = installMutationObserverController()
     const target = document.createElement('div')
     document.body.append(target)
     const buildRoot = (mode: 'hidden' | 'sibling' | 'ready'): void => {
@@ -402,7 +437,7 @@ describe('Activity portal pane switching', () => {
       const statusesBefore = statuses.length
       await act(async () => {
         buildRoot(mode)
-        await Promise.resolve()
+        mutations.notify()
       })
       expect(await flushPortalReadiness(frames)).toBe(true)
       if (mode !== 'sibling') {
@@ -426,7 +461,7 @@ describe('Activity portal pane switching', () => {
     for (let attempt = 0; attempt < PORTAL_READY_REAPPLY_ATTEMPTS && !sawReady; attempt += 1) {
       await act(async () => {
         buildRoot('ready')
-        await Promise.resolve()
+        mutations.notify()
       })
       expect(await flushPortalReadiness(frames)).toBe(true)
       await flushPortalFramesUntil(frames, () => statuses.at(-1) === 'ready')

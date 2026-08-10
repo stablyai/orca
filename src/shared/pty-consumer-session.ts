@@ -2,24 +2,33 @@ import { randomUUID } from 'node:crypto'
 import {
   PTY_CONSUMER_OWNER_GRACE_MS,
   PTY_CONSUMER_SESSION_PROTOCOL_VERSION,
-  PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR,
   type PtyConsumerAuthentication,
+  type PtyConsumerCloseCause,
+  type PtyConsumerDisplacedOwner,
   type PtyConsumerSessionAdmission,
   type PtyConsumerSessionGrant,
   type PtyConsumerSessionHello,
   type PtyConsumerSessionOptions
 } from './pty-consumer-session-contract'
+import { assertNonEmptyString, validateHello } from './pty-consumer-session-hello'
+import {
+  assertPtyConsumerSessionOptions,
+  intersectPtyConsumerCapabilities
+} from './pty-consumer-session-capabilities'
+import {
+  assertPtyConsumerOwnerRecovery,
+  isPtyConsumerOwnerSameClient,
+  matchesPtyConsumerOwnerClaim
+} from './pty-consumer-owner-recovery'
+import { refuseHeldPtyConsumerOwner } from './pty-consumer-owner-admission'
 
 export * from './pty-consumer-session-contract'
 
-const MAX_CAPABILITY_VERSIONS = 8
-
 type ClientRecord = {
-  fingerprint: string
   principal: string
   clientInstanceId: string
   grant: Readonly<PtyConsumerSessionGrant>
-  state: 'pending' | 'active'
+  state: 'pending' | 'active' | 'displaced'
   publicationState: 'pending' | 'committed' | 'rolled-back'
 }
 
@@ -29,57 +38,11 @@ type OwnerRecord = {
   clientInstanceId: string
   generation: number
   lease: string
+  resumed: boolean
   state: 'pending' | 'active' | 'disconnected'
   disconnectedAt?: number
+  disconnectCause?: PtyConsumerCloseCause
   replaces?: OwnerRecord
-}
-
-function assertNonEmptyString(value: unknown, name: string): asserts value is string {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 512) {
-    throw new Error(`${name} must be a non-empty string of at most 512 characters`)
-  }
-}
-
-function validateHello(hello: PtyConsumerSessionHello): void {
-  assertNonEmptyString(hello.clientInstanceId, 'clientInstanceId')
-  if (hello.requestedRole !== 'session-owner' && hello.requestedRole !== 'subscriber') {
-    throw new Error('requestedRole must be session-owner or subscriber')
-  }
-  if (hello.resume) {
-    if (!Number.isSafeInteger(hello.resume.ownerGeneration) || hello.resume.ownerGeneration <= 0) {
-      throw new Error('resume.ownerGeneration must be a positive safe integer')
-    }
-    assertNonEmptyString(hello.resume.ownerLease, 'resume.ownerLease')
-  }
-  const flow = hello.capabilities?.outputFlowControl
-  if (!flow) {
-    return
-  }
-  if (
-    !Array.isArray(flow.versions) ||
-    flow.versions.length > MAX_CAPABILITY_VERSIONS ||
-    flow.versions.some((version) => !Number.isSafeInteger(version) || version <= 0)
-  ) {
-    throw new Error('outputFlowControl.versions must contain positive safe integers')
-  }
-  if (!Number.isSafeInteger(flow.requestedWindowSu) || flow.requestedWindowSu <= 0) {
-    throw new Error('outputFlowControl.requestedWindowSu must be a positive safe integer')
-  }
-}
-
-function helloFingerprint(hello: PtyConsumerSessionHello): string {
-  const flow = hello.capabilities?.outputFlowControl
-  return JSON.stringify({
-    clientInstanceId: hello.clientInstanceId,
-    requestedRole: hello.requestedRole,
-    resume: hello.resume,
-    outputFlowControl: flow
-      ? {
-          versions: [...flow.versions].sort((a, b) => a - b),
-          requestedWindowSu: flow.requestedWindowSu
-        }
-      : undefined
-  })
 }
 
 export class PtyConsumerSession {
@@ -92,24 +55,7 @@ export class PtyConsumerSession {
   private owner: OwnerRecord | null = null
 
   constructor(private readonly options: PtyConsumerSessionOptions) {
-    assertNonEmptyString(options.serverBuildId, 'serverBuildId')
-    if (
-      options.outputFlowControl &&
-      (!Number.isSafeInteger(options.outputFlowControl.maxWindowSu) ||
-        options.outputFlowControl.maxWindowSu <= 0 ||
-        options.outputFlowControl.versions.length > MAX_CAPABILITY_VERSIONS ||
-        options.outputFlowControl.versions.some(
-          (version) => !Number.isSafeInteger(version) || version <= 0
-        ))
-    ) {
-      throw new Error('outputFlowControl support is invalid')
-    }
-    if (
-      options.ownerGraceMs !== undefined &&
-      (!Number.isSafeInteger(options.ownerGraceMs) || options.ownerGraceMs < 0)
-    ) {
-      throw new Error('ownerGraceMs must be a non-negative safe integer')
-    }
+    assertPtyConsumerSessionOptions(options)
     this.now = options.now ?? Date.now
     this.createLease = options.createLease ?? randomUUID
     this.ownerGraceMs = options.ownerGraceMs ?? PTY_CONSUMER_OWNER_GRACE_MS
@@ -127,16 +73,11 @@ export class PtyConsumerSession {
     }
     this.expireOwner()
 
-    const fingerprint = helloFingerprint(hello)
-    const duplicate = this.clients.get(authentication.connectionId)
-    if (duplicate) {
-      if (
-        duplicate.fingerprint !== fingerprint ||
-        duplicate.principal !== authentication.principal
-      ) {
-        throw new Error('pty.openClient may be used only once per transport connection')
-      }
-      return this.admissionFor(duplicate)
+    // Why even an identical repeat is rejected: the two responses settle their publications
+    // independently, so one shared admission cannot make one response's rollback and the other's
+    // commit atomic. A client recovering from an RPC timeout opens a new connection instead.
+    if (this.clients.has(authentication.connectionId)) {
+      throw new Error('pty.openClient may be used only once per transport connection')
     }
 
     const owner = this.selectOwner(hello, authentication)
@@ -145,11 +86,12 @@ export class PtyConsumerSession {
       serverBuildId: this.options.serverBuildId,
       clientGeneration: this.nextClientGeneration++,
       role: owner ? ('session-owner' as const) : ('subscriber' as const),
-      ...(owner ? { ownerGeneration: owner.generation, ownerLease: owner.lease } : {}),
-      ...this.intersectCapabilities(hello)
+      ...(owner
+        ? { ownerGeneration: owner.generation, ownerLease: owner.lease, resumed: owner.resumed }
+        : {}),
+      ...intersectPtyConsumerCapabilities(hello, this.options.outputFlowControl)
     })
     const client: ClientRecord = {
-      fingerprint,
       principal: authentication.principal,
       clientInstanceId: hello.clientInstanceId,
       grant,
@@ -160,16 +102,34 @@ export class PtyConsumerSession {
     if (owner) {
       this.owner = owner
     }
-    return this.admissionFor(client)
+    return this.admissionFor(client, this.displacedOwnerFor(owner))
   }
 
-  close(connectionId: string): void {
+  // Why the cause defaults to 'local': it only ever widens the grace this record keeps, so a caller
+  // that cannot prove the peer's transport ended gets the answer that costs a live owner nothing.
+  close(connectionId: string, cause: PtyConsumerCloseCause = 'local'): void {
     const client = this.clients.get(connectionId)
     if (!client) {
       return
     }
     this.clients.delete(connectionId)
     if (this.owner?.connectionId !== connectionId) {
+      // Why: a pending replacement can still roll back onto the owner it is displacing; restoring an
+      // 'active' record whose connection has since closed would wedge an owner that can never expire.
+      if (
+        this.owner?.replaces?.connectionId === connectionId &&
+        this.owner.replaces.state === 'active'
+      ) {
+        this.owner = {
+          ...this.owner,
+          replaces: {
+            ...this.owner.replaces,
+            state: 'disconnected',
+            disconnectedAt: this.now(),
+            disconnectCause: cause
+          }
+        }
+      }
       return
     }
     if (this.owner.state === 'pending') {
@@ -179,7 +139,8 @@ export class PtyConsumerSession {
     this.owner = {
       ...this.owner,
       state: 'disconnected',
-      disconnectedAt: this.now()
+      disconnectedAt: this.now(),
+      disconnectCause: cause
     }
   }
 
@@ -192,9 +153,13 @@ export class PtyConsumerSession {
     return client?.state === 'active' ? client.grant : null
   }
 
-  private admissionFor(client: ClientRecord): PtyConsumerSessionAdmission {
+  private admissionFor(
+    client: ClientRecord,
+    displacedOwner?: Readonly<PtyConsumerDisplacedOwner>
+  ): PtyConsumerSessionAdmission {
     return {
       grant: client.grant,
+      ...(displacedOwner ? { displacedOwner } : {}),
       commitPublication: () => {
         if (client.publicationState !== 'pending') {
           return
@@ -206,6 +171,7 @@ export class PtyConsumerSession {
         client.state = 'active'
         const owner = this.owner
         if (owner?.connectionId === this.connectionIdFor(client) && owner.state === 'pending') {
+          this.retireDisplacedOwner(owner.replaces)
           this.owner = { ...owner, state: 'active', replaces: undefined }
         }
       },
@@ -243,35 +209,54 @@ export class PtyConsumerSession {
       return null
     }
     const current = this.owner
+    // Why resume proof for a vacant record is not an error: the relay simply no longer has the record
+    // the client is naming. Minting a fresh claim here resolves it in one round trip, and `resumed:
+    // false` tells the client its checkpoints are void without making it delete its identity first.
     if (!current) {
-      if (hello.resume) {
-        throw Object.assign(new Error('Owner recovery lease is stale'), {
-          code: PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR
-        })
-      }
       return this.newOwner(hello, authentication, null)
     }
-    if (!hello.resume) {
-      return null
+    if (!matchesPtyConsumerOwnerClaim(hello, authentication, current)) {
+      refuseHeldPtyConsumerOwner(current, {
+        ownerGraceMs: this.ownerGraceMs,
+        now: this.now(),
+        sameClient: isPtyConsumerOwnerSameClient(hello, authentication, current),
+        clampGraceTo: (disconnectedAt) => {
+          this.owner = { ...current, disconnectedAt }
+        }
+      })
     }
-    const recoveryMatches =
-      hello.resume.ownerGeneration === current.generation &&
-      hello.resume.ownerLease === current.lease &&
-      hello.clientInstanceId === current.clientInstanceId &&
-      authentication.principal === current.principal
-    if (!recoveryMatches) {
-      throw Object.assign(
-        new Error('Owner recovery lease is stale or belongs to another principal'),
-        { code: PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR }
-      )
-    }
-    if (current.state === 'pending') {
-      throw new Error('Owner grant publication is still pending')
-    }
-    if (current.state !== 'disconnected') {
-      throw new Error('Active owner cannot be replaced by recovery')
-    }
+    assertPtyConsumerOwnerRecovery(hello, authentication, current)
+    // Why an active owner is displaced rather than refused: the resume proof matched this owner's
+    // generation, lease, client instance, and principal on a *different* transport, so the requester is
+    // the same logical owner reconnecting. Waiting for the incumbent's socket to close is unbounded —
+    // a half-open connection after sleep/resume or NAT loss never gets there.
     return this.newOwner(hello, authentication, current)
+  }
+
+  private displacedOwnerFor(
+    owner: OwnerRecord | null
+  ): Readonly<PtyConsumerDisplacedOwner> | undefined {
+    const replaced = owner?.replaces
+    if (replaced?.state !== 'active') {
+      return undefined
+    }
+    const client = this.clients.get(replaced.connectionId)
+    if (client?.state !== 'active') {
+      return undefined
+    }
+    return Object.freeze({ connectionId: replaced.connectionId, grant: client.grant })
+  }
+
+  // Why: the displaced connection may still be writable (half-open), so revoke its grant the moment the
+  // replacement is published — a stale owner must not keep driving deliveries under the old generation.
+  private retireDisplacedOwner(replaced: OwnerRecord | undefined): void {
+    if (replaced?.state !== 'active') {
+      return
+    }
+    const client = this.clients.get(replaced.connectionId)
+    if (client?.state === 'active') {
+      client.state = 'displaced'
+    }
   }
 
   private newOwner(
@@ -279,7 +264,7 @@ export class PtyConsumerSession {
     authentication: PtyConsumerAuthentication,
     replaces: OwnerRecord | null
   ): OwnerRecord {
-    const lease = this.createLease()
+    const lease = replaces?.lease ?? this.createLease()
     assertNonEmptyString(lease, 'ownerLease')
     return {
       connectionId: authentication.connectionId,
@@ -287,26 +272,9 @@ export class PtyConsumerSession {
       clientInstanceId: hello.clientInstanceId,
       generation: this.nextOwnerGeneration++,
       lease,
+      resumed: replaces !== null,
       state: 'pending',
       ...(replaces ? { replaces } : {})
-    }
-  }
-
-  private intersectCapabilities(
-    hello: PtyConsumerSessionHello
-  ): Pick<PtyConsumerSessionGrant, 'capabilities'> {
-    const offer = hello.capabilities?.outputFlowControl
-    const support = this.options.outputFlowControl
-    if (!offer || !support || !offer.versions.includes(1) || !support.versions.includes(1)) {
-      return {}
-    }
-    return {
-      capabilities: {
-        outputFlowControl: {
-          version: 1,
-          windowSu: Math.min(offer.requestedWindowSu, support.maxWindowSu)
-        }
-      }
     }
   }
 

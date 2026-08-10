@@ -30,6 +30,9 @@ jobs:
     # (@MainActor isolation). Xcode 16.x (macos-15) can't even parse it
     # ("unknown attribute 'MainActor'"), so we need Xcode 26.x → macos-26.
     runs-on: macos-26
+    # Archive + upload is ~30–40m when healthy; 90m leaves margin without
+    # sitting multi-hour on ASC processing polls (see Fastfile pilot wait).
+    timeout-minutes: 90
 
     defaults:
       run:

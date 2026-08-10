@@ -221,6 +221,26 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     })
   })
 
+  it('activates a runtime-owned checkout even when its physical host is private SSH', async () => {
+    const runtimeMain = makeWorktree({
+      id: 'repo-1::runtime-ssh',
+      hostId: 'ssh:private-target',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
+    mocks.state.worktreesByRepo = { 'repo-1': [runtimeMain] }
+
+    await openProjectDefaultCheckout({
+      repoId: 'repo-1',
+      source: 'runtime_server_path',
+      executionHostId: 'runtime:env-1',
+      setHideDefaultBranchWorkspace: vi.fn()
+    })
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(runtimeMain.id, {
+      executionHostId: 'runtime:env-1'
+    })
+  })
+
   it('passes a contained selected path through as the initial terminal cwd', async () => {
     mocks.state.worktreesByRepo = {
       'repo-1': [makeWorktree()]

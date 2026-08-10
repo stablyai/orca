@@ -23,6 +23,35 @@ export type ListDetectedWorktreesArgs =
   | LocalDetectedWorktreeRequest
   | DirectSshDetectedWorktreeRequest
 
+export type ListKnownWorktreesForExecutionHostArgs = {
+  repoId: string
+  executionHostId: SshExecutionHostId
+}
+
+export type HostQualifiedKnownWorktreeResult =
+  | {
+      status: 'complete'
+      repoId: string
+      executionHostId: SshExecutionHostId
+      result: DetectedWorktreeListResult
+    }
+  | {
+      status: 'rejected'
+      repoId: string
+      executionHostId: SshExecutionHostId
+    }
+
+export type ForgetRemovedWorktreesForExecutionHostArgs = {
+  repoId: string
+  executionHostId: SshExecutionHostId
+  /** Ids an authoritative scan of this host proved gone — the only evidence that retires persisted metadata. */
+  worktreeIds: readonly string[]
+}
+
+export type ForgetRemovedWorktreesForExecutionHostResult = {
+  forgottenWorktreeIds: string[]
+}
+
 export type AuthoritativeDetectedWorktreeHost =
   | {
       kind: 'local'

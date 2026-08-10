@@ -14,7 +14,9 @@ import { getTrustedUIRendererWindow, isTrustedUIRenderer, sendToTrustedUIRendere
 import {
   admitDashboardSnapshot,
   isDashboardPaneKey,
-  isDashboardRevealAgentArgs
+  isDashboardRevealAgentArgs,
+  isDashboardSleepWorkspaceArgs,
+  isDashboardSpawnAgentArgs
 } from './dashboard-payload-validation'
 
 // The most recent snapshot the main renderer published, replayed to the popout
@@ -36,6 +38,8 @@ export function registerDashboardPopoutHandlers(
   ipcMain.removeHandler('dashboard:getPopoutOpen')
   ipcMain.removeHandler('dashboardPopout:revealAgent')
   ipcMain.removeHandler('dashboardPopout:ackAgent')
+  ipcMain.removeHandler('dashboardPopout:spawnAgent')
+  ipcMain.removeHandler('dashboardPopout:sleepWorkspace')
 
   onDashboardPopoutOpenChanged((open) => {
     if (!open) {
@@ -52,11 +56,14 @@ export function registerDashboardPopoutHandlers(
     }
   })
 
-  ipcMain.handle('dashboardPopout:open', (event): void => {
+  ipcMain.handle('dashboardPopout:open', (event, view: unknown): void => {
     if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
-    createOrFocusDashboardPopout(store, undefined, {
+    if (view !== undefined && view !== 'board' && view !== 'map') {
+      return
+    }
+    createOrFocusDashboardPopout(store, view, {
       getKeybindings: () => keybindings?.getOverrides()
     })
   })
@@ -140,5 +147,27 @@ export function registerDashboardPopoutHandlers(
     } catch {
       // Best-effort; the per-window focus above may still bring it forward.
     }
+  })
+
+  ipcMain.handle('dashboardPopout:spawnAgent', (event, args: unknown): void => {
+    if (
+      !isDashboardPopoutRenderer(event.sender) ||
+      !isDashboardEnabled(store) ||
+      !isDashboardSpawnAgentArgs(args)
+    ) {
+      return
+    }
+    sendToTrustedUIRenderer('ui:spawnDashboardAgent', args)
+  })
+
+  ipcMain.handle('dashboardPopout:sleepWorkspace', (event, args: unknown): void => {
+    if (
+      !isDashboardPopoutRenderer(event.sender) ||
+      !isDashboardEnabled(store) ||
+      !isDashboardSleepWorkspaceArgs(args)
+    ) {
+      return
+    }
+    sendToTrustedUIRenderer('ui:sleepDashboardWorkspace', args)
   })
 }

@@ -1608,7 +1608,8 @@ describe('web runtime session tab actions', () => {
         worktree: `id:${WORKTREE_ID}`,
         tabId: 'host-browser-unified',
         notifyClients: false,
-        navigation: 'caller'
+        navigation: 'caller',
+        intent: 'user'
       },
       timeoutMs: 15_000
     })

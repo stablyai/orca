@@ -4,6 +4,7 @@ const {
   removeHandlerMock,
   handleMock,
   registerGuestMock,
+  attachGuestPoliciesMock,
   unregisterGuestMock,
   getGuestWebContentsIdMock,
   getWebContentsIdByTabIdMock,
@@ -20,6 +21,7 @@ const {
   removeHandlerMock: vi.fn(),
   handleMock: vi.fn(),
   registerGuestMock: vi.fn(),
+  attachGuestPoliciesMock: vi.fn(),
   unregisterGuestMock: vi.fn(),
   getGuestWebContentsIdMock: vi.fn(),
   getWebContentsIdByTabIdMock: vi.fn(() => new Map()),
@@ -53,6 +55,7 @@ vi.mock('../browser/browser-manager', () => ({
   },
   browserManager: {
     registerGuest: registerGuestMock,
+    attachGuestPolicies: attachGuestPoliciesMock,
     unregisterGuest: unregisterGuestMock,
     getGuestWebContentsId: getGuestWebContentsIdMock,
     getWebContentsIdByTabId: getWebContentsIdByTabIdMock,
@@ -80,6 +83,7 @@ describe('registerBrowserHandlers', () => {
     handleMock.mockReset()
     registerGuestMock.mockReset()
     registerGuestMock.mockReturnValue(true)
+    attachGuestPoliciesMock.mockReset()
     unregisterGuestMock.mockReset()
     getGuestWebContentsIdMock.mockReset()
     getWebContentsIdByTabIdMock.mockReset()
@@ -160,6 +164,93 @@ describe('registerBrowserHandlers', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('validates exact live guest registration only for the trusted renderer', () => {
+    getGuestWebContentsIdMock.mockReturnValue(123)
+    registerBrowserHandlers()
+    const validateHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:isGuestRegistered'
+    )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => boolean
+    const trustedSender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+
+    expect(
+      validateHandler({ sender: trustedSender }, { browserPageId: 'page-1', webContentsId: 123 })
+    ).toBe(true)
+    expect(
+      validateHandler({ sender: trustedSender }, { browserPageId: 'page-1', webContentsId: 124 })
+    ).toBe(false)
+
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => true })
+    expect(
+      validateHandler({ sender: trustedSender }, { browserPageId: 'page-1', webContentsId: 123 })
+    ).toBe(false)
+    expect(
+      validateHandler(
+        {
+          sender: {
+            id: 92,
+            isDestroyed: () => false,
+            getType: () => 'webview',
+            getURL: () => 'https://example.com'
+          } as Electron.WebContents
+        },
+        { browserPageId: 'page-1', webContentsId: 123 }
+      )
+    ).toBe(false)
+  })
+
+  it('repairs only a live webview owned by the trusted renderer', () => {
+    registerBrowserHandlers()
+    const repairHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:repairGuestRegistration'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: {
+        browserPageId: string
+        workspaceId: string
+        worktreeId: string
+        webContentsId: number
+      }
+    ) => boolean
+    const trustedSender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+    const guest = {
+      id: 123,
+      hostWebContents: trustedSender,
+      isDestroyed: () => false,
+      getType: () => 'webview'
+    } as Electron.WebContents
+    webContentsFromIdMock.mockReturnValue(guest)
+    const args = {
+      browserPageId: 'page-1',
+      workspaceId: 'workspace-1',
+      worktreeId: 'worktree-1',
+      webContentsId: 123
+    }
+
+    expect(repairHandler({ sender: trustedSender }, args)).toBe(true)
+    expect(attachGuestPoliciesMock).toHaveBeenCalledWith(guest)
+    expect(registerGuestMock).toHaveBeenCalledWith({
+      ...args,
+      rendererWebContentsId: trustedSender.id
+    })
+
+    webContentsFromIdMock.mockReturnValue({
+      ...guest,
+      hostWebContents: { id: 92 }
+    })
+    expect(repairHandler({ sender: trustedSender }, args)).toBe(false)
+    expect(registerGuestMock).toHaveBeenCalledTimes(1)
   })
 
   it('authorizes browser download cancellation through the owning renderer', () => {

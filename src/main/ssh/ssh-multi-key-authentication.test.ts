@@ -127,6 +127,29 @@ describe('ordered SSH private-key authentication', () => {
     expect(unresolvedImport.authHandler).toBeUndefined()
   })
 
+  it('offers every resolved key for a manually owned config-picker target', () => {
+    const config = buildConnectConfig(
+      makeTarget({
+        source: 'manual',
+        configHost: 'prod',
+        host: 'prod.internal',
+        identityFile: undefined
+      }),
+      makeResolved(),
+      { includeAgent: false, includePrivateKey: true }
+    )
+
+    expect(nextAuth(config, true)).toMatchObject({ type: 'none' })
+    expect(nextAuth(config, false)).toMatchObject({
+      type: 'publickey',
+      key: Buffer.from('/keys/unauthorized-first')
+    })
+    expect(nextAuth(config, false)).toMatchObject({
+      type: 'publickey',
+      key: Buffer.from('/keys/authorized-second')
+    })
+  })
+
   it('resets ordered authentication for credential retries without extra key reads', () => {
     const config = buildConnectConfig(makeTarget(), makeResolved(), {
       includeAgent: false,

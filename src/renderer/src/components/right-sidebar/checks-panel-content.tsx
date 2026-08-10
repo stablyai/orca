@@ -55,6 +55,8 @@ import {
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { CommentReactions } from '@/components/github/CommentReactions'
+import { CheckJobLogTail } from './check-job-log-tail'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
@@ -79,11 +81,13 @@ import {
   getPRCommentGroupSurfaceClasses,
   type PRCommentPresentationClasses
 } from './pr-comment-presentation'
+import type { GitLabProjectRef } from '../../../../shared/gitlab-types'
 import type {
   PRInfo,
   PRCheckDetail,
   PRCheckRunDetails,
   PRComment,
+  GitHubReactionContent,
   PRConflictSummary,
   PRMergeableState
 } from '../../../../shared/types'
@@ -541,6 +545,8 @@ type CheckDetailsLoadState = {
   loading: boolean
   details: PRCheckRunDetails | null
   error: string | null
+  /** Check state when the load failed or returned nothing, so a later state change can retry it. */
+  errorAt?: { status: PRCheckDetail['status']; conclusion: PRCheckDetail['conclusion'] }
 }
 
 function getCheckIdentityKey(check: PRCheckDetail, index: number): string {
@@ -549,6 +555,11 @@ function getCheckIdentityKey(check: PRCheckDetail, index: number): string {
   }
   if (check.workflowRunId) {
     return `workflow-run:${check.workflowRunId}`
+  }
+  // Why: manual/created GitLab jobs have no web_url, so they would otherwise key on
+  // the list index and lose their cached log whenever the pipeline re-sorts.
+  if (check.gitlabJobId) {
+    return `gitlab-job:${check.gitlabJobId}`
   }
   if (check.url) {
     return `url:${check.url}`
@@ -661,13 +672,16 @@ function CheckRunDetails({
   state,
   checkDetailsContextKey,
   worktreeId,
-  detailsStickySurface = 'sidebar'
+  detailsStickySurface = 'sidebar',
+  getGitLabProjectRef
 }: {
   check: PRCheckDetail
   state: CheckDetailsLoadState | undefined
   checkDetailsContextKey: string
   worktreeId: string | null
   detailsStickySurface?: CheckDetailsStickySurface
+  /** Why: a getter, not a value — the source ref is filled by an async fetch and would read stale during render. */
+  getGitLabProjectRef?: () => GitLabProjectRef | null
 }): React.JSX.Element {
   const openCheckRunDetails = useAppStore((s) => s.openCheckRunDetails)
   const details = state?.details
@@ -706,7 +720,8 @@ function CheckRunDetails({
     openCheckRunDetails(worktreeId, checkDetailsContextKey, check, {
       details: state?.details ?? null,
       loading: state?.loading ?? false,
-      error: state?.error ?? null
+      error: state?.error ?? null,
+      gitlabProjectRef: getGitLabProjectRef?.() ?? null
     })
   }
 
@@ -914,6 +929,7 @@ function CheckRunDetails({
                           ))}
                       </div>
                     )}
+                    {job.logTail && <CheckJobLogTail logTail={job.logTail} />}
                   </div>
                 ))}
               </div>
@@ -924,15 +940,6 @@ function CheckRunDetails({
                     'Showing first 100 jobs'
                   )}
                 </div>
-              )}
-            </div>
-          )}
-
-          {hasLogTail && (
-            <div className="text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.2524d1fb83',
-                'Log tail available in full details.'
               )}
             </div>
           )}
@@ -965,7 +972,8 @@ export function ChecksList({
   checkDetailsContextKey,
   onLoadCheckDetails,
   worktreeId: worktreeIdOverride,
-  detailsStickySurface = 'sidebar'
+  detailsStickySurface = 'sidebar',
+  getGitLabProjectRef
 }: {
   checks: PRCheckDetail[]
   checksLoading: boolean
@@ -974,6 +982,8 @@ export function ChecksList({
   /** Why: folder-workspace PR checks render rows for attached worktrees, not the active one. */
   worktreeId?: string
   detailsStickySurface?: CheckDetailsStickySurface
+  /** Why: a getter, not a value — the source ref is filled by an async fetch and would read stale during render. */
+  getGitLabProjectRef?: () => GitLabProjectRef | null
 }): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
   const resolvedWorktreeId = worktreeIdOverride ?? activeWorktree?.id ?? null
@@ -1041,13 +1051,20 @@ export function ChecksList({
       const next: Record<string, CheckDetailsLoadState> = { ...current }
       for (const row of rows) {
         const cached = next[row.key]
-        if (!cached?.details) {
+        if (!cached || cached.loading) {
           continue
         }
-        if (
-          cached.details.status !== row.check.status ||
-          cached.details.conclusion !== row.check.conclusion
-        ) {
+        // Why: a failed load (GitLab auth blip, 404, offline) otherwise pins its error
+        // forever — there is no retry affordance — so re-arm it once the job moves on.
+        const stale = cached.details
+          ? cached.details.status !== row.check.status ||
+            cached.details.conclusion !== row.check.conclusion
+          : Boolean(
+              cached.errorAt &&
+              (cached.errorAt.status !== row.check.status ||
+                cached.errorAt.conclusion !== row.check.conclusion)
+            )
+        if (stale) {
           delete next[row.key]
           changed = true
         }
@@ -1061,7 +1078,12 @@ export function ChecksList({
       if (detailsByCheckKey[row.key]?.loading || detailsByCheckKey[row.key]?.details) {
         return
       }
-      if (!row.check.checkRunId && !row.check.workflowRunId && !row.check.url) {
+      if (
+        !row.check.checkRunId &&
+        !row.check.workflowRunId &&
+        !row.check.url &&
+        !row.check.gitlabJobId
+      ) {
         setDetailsByCheckKey((current) => ({
           ...current,
           [row.key]: {
@@ -1104,7 +1126,16 @@ export function ChecksList({
             [row.key]: {
               loading: false,
               details,
-              error: details ? null : 'No inline details are available for this check.'
+              error: details
+                ? null
+                : translate(
+                    'auto.components.right.sidebar.checks.panel.content.e15a8b77ef',
+                    'No inline details are available for this check.'
+                  ),
+              // Why: a detail-less result is only final for this status — re-arm the retry once the job moves on.
+              errorAt: details
+                ? undefined
+                : { status: row.check.status, conclusion: row.check.conclusion }
             }
           }))
         })
@@ -1117,7 +1148,14 @@ export function ChecksList({
             [row.key]: {
               loading: false,
               details: null,
-              error: err instanceof Error ? err.message : 'Failed to load check details.'
+              error:
+                err instanceof Error
+                  ? err.message
+                  : translate(
+                      'auto.components.right.sidebar.checks.panel.content.checkDetailsLoadFailed',
+                      'Failed to load check details.'
+                    ),
+              errorAt: { status: row.check.status, conclusion: row.check.conclusion }
             }
           }))
         })
@@ -1148,12 +1186,14 @@ export function ChecksList({
       patchOpenCheckRunDetails(resolvedWorktreeId, checkDetailsContextKey, row.check, {
         details: detailsState.details ?? null,
         loading: detailsState.loading ?? false,
-        error: detailsState.error ?? null
+        error: detailsState.error ?? null,
+        gitlabProjectRef: getGitLabProjectRef?.() ?? null
       })
     }
   }, [
     checkDetailsContextKey,
     detailsByCheckKey,
+    getGitLabProjectRef,
     patchOpenCheckRunDetails,
     resolvedWorktreeId,
     rows
@@ -1329,6 +1369,7 @@ export function ChecksList({
                       checkDetailsContextKey={checkDetailsContextKey}
                       worktreeId={resolvedWorktreeId}
                       detailsStickySurface={detailsStickySurface}
+                      getGitLabProjectRef={getGitLabProjectRef}
                     />
                   )}
                 </div>
@@ -1693,6 +1734,7 @@ function CommentRow({
   onReply,
   onEditComment,
   onDeleteComment,
+  onSetReaction,
   onQueueForAgent
 }: {
   comment: PRComment
@@ -1710,6 +1752,11 @@ function CommentRow({
   onReply?: (comment: PRComment) => void
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
+  onSetReaction?: (
+    comment: PRComment,
+    content: GitHubReactionContent,
+    reacted: boolean
+  ) => Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element {
   const automated = isBotPRComment(comment, botAuthorOverrides)
@@ -1968,13 +2015,17 @@ function CommentRow({
             </div>
           </div>
         ) : (
-          <CommentMarkdown
-            content={comment.body}
-            className={cn(
-              isReply ? presentation.commentBodyReply : presentation.commentBody,
-              presentation.commentBodyMarkdown
-            )}
-          />
+          <div className={isReply ? presentation.commentBodyReply : presentation.commentBody}>
+            <CommentMarkdown content={comment.body} className={presentation.commentBodyMarkdown} />
+            <CommentReactions
+              reactions={comment.reactions}
+              onReactionChange={
+                comment.reactionSubjectId && onSetReaction
+                  ? (content, reacted) => onSetReaction(comment, content, reacted)
+                  : undefined
+              }
+            />
+          </div>
         )}
       </div>
     </div>
@@ -1997,6 +2048,7 @@ function PRCommentGroupView({
   onReply,
   onEditComment,
   onDeleteComment,
+  onSetReaction,
   onQueueForAgent
 }: {
   group: PRCommentGroup
@@ -2014,13 +2066,25 @@ function PRCommentGroupView({
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
+  onSetReaction?: (
+    comment: PRComment,
+    content: GitHubReactionContent,
+    reacted: boolean
+  ) => Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element {
   // Reply targets a specific comment id so any comment in a thread — root or
   // nested reply — can be replied to, not just the thread root.
-  const renderReplyComposer = (comment: PRComment): React.ReactNode =>
+  const renderReplyComposer = (comment: PRComment, nested = false): React.ReactNode =>
     replyingCommentId === comment.id && onReply ? (
-      <div className={cn('px-3 pb-2', group.kind === 'thread' && 'pl-6')}>
+      <div
+        className={cn(
+          'px-3 pb-2',
+          // Why: nest the composer under the parent the same way GitHub nests thread replies —
+          // the replies container already draws that rail, so only the root composer adds one.
+          group.kind === 'thread' && !nested && 'ml-3 border-l-2 border-border/50 pl-3'
+        )}
+      >
         <RightPanelCommentComposer
           placeholder={translate(
             'auto.components.right.sidebar.checks.panel.content.ba20d1a896',
@@ -2053,6 +2117,7 @@ function PRCommentGroupView({
     onResolve,
     onEditComment,
     onDeleteComment,
+    onSetReaction,
     onQueueForAgent
   }
 
@@ -2095,7 +2160,7 @@ function PRCommentGroupView({
                   isQueued={false}
                   onReply={startReply}
                 />
-                {renderReplyComposer(reply)}
+                {renderReplyComposer(reply, true)}
               </React.Fragment>
             ))}
           </div>
@@ -2135,7 +2200,8 @@ function ResolvedCommentGroupsSection({
   onCancelReply,
   onReply,
   onEditComment,
-  onDeleteComment
+  onDeleteComment,
+  onSetReaction
 }: {
   groups: PRCommentGroup[]
   botAuthorOverrides: ReadonlySet<string>
@@ -2149,6 +2215,11 @@ function ResolvedCommentGroupsSection({
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
+  onSetReaction?: (
+    comment: PRComment,
+    content: GitHubReactionContent,
+    reacted: boolean
+  ) => Promise<void>
 }): React.JSX.Element | null {
   if (groups.length === 0) {
     return null
@@ -2184,6 +2255,7 @@ function ResolvedCommentGroupsSection({
                 onReply={onReply}
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}
+                onSetReaction={onSetReaction}
               />
             ))}
           </AccordionContent>
@@ -2250,7 +2322,8 @@ export function PRCommentsList({
   onReply,
   onResolve,
   onEditComment,
-  onDeleteComment
+  onDeleteComment,
+  onSetReaction
 }: {
   comments: PRComment[]
   commentsLoading: boolean
@@ -2267,6 +2340,11 @@ export function PRCommentsList({
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
+  onSetReaction?: (
+    comment: PRComment,
+    content: GitHubReactionContent,
+    reacted: boolean
+  ) => Promise<void>
 }): React.JSX.Element {
   const presentation = React.useMemo(() => getPRCommentPresentationClasses(), [])
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
@@ -2389,6 +2467,7 @@ export function PRCommentsList({
         onReply={onReply}
         onEditComment={onEditComment}
         onDeleteComment={onDeleteComment}
+        onSetReaction={onSetReaction}
         onQueueForAgent={canQueue ? () => addGroupToSelection(groupId) : undefined}
       />
     )
@@ -2719,6 +2798,7 @@ export function PRCommentsList({
                 onReply={onReply}
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}
+                onSetReaction={onSetReaction}
               />
             </>
           )}

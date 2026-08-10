@@ -119,7 +119,7 @@ describe('mobile relay RPC session', () => {
     })
     expect(confirmationRequest.params).not.toHaveProperty('relayDeviceId')
     expect(confirmationRequest.params).not.toHaveProperty('acceptedCredentialVersion')
-    expect(session.getLeaseExpiresAt()).toEqual(expect.any(Number))
+    expect(session.getAttachDeadlineAt()).toEqual(expect.any(Number))
   })
 
   it('rejects a mismatched outer credential version and closes the physical link', () => {

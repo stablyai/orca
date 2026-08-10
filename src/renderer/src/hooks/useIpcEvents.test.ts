@@ -16,9 +16,16 @@ import {
   loadIpcEventsHarness,
   type HarnessStoreState
 } from './ipc-events-test-harness'
+import {
+  createTestStore,
+  makeTab,
+  makeWorktree,
+  TEST_REPO
+} from '../store/slices/store-test-helpers'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../shared/types'
+import type * as CmdJRowIndexJump from '@/lib/cmd-j-row-index-jump'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 import {
@@ -3382,7 +3389,10 @@ describe('useIpcEvents browser tab close routing', () => {
 
     closeTerminalListenerRef.current?.({ tabId: 'terminal-1' })
 
-    expect(closeTerminalTabMock).toHaveBeenCalledWith('terminal-1')
+    // The CLI/RPC caller is answered immediately, so this close must never raise a modal.
+    expect(closeTerminalTabMock).toHaveBeenCalledWith('terminal-1', {
+      skipRunningProcessConfirm: true
+    })
   })
 
   it('acknowledges whole-tab close only after the fresh session is durably persisted', async () => {
@@ -4946,6 +4956,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     toolInput?: string
     lastAssistantMessage?: string
     interrupted?: boolean
+    sessionBoundary?: boolean
     terminalHandle?: string
     launchToken?: string
     providerSession?: { key: 'session_id'; id: string }
@@ -6158,6 +6169,202 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expectWorktreeRouting('wt-1'),
       undefined
     )
+  })
+
+  it('applies a burst leading-edge first, then coalesces the rest into one deferred batch', async () => {
+    // Why: each live status event is its own IPC task, so N events used to pay
+    // N full render passes (STA-3328 mechanism 2). The leading event must stay
+    // synchronous (zero added latency); followers within the burst window must
+    // apply together on one later task, in arrival order.
+    vi.useFakeTimers()
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    try {
+      const { useIpcEvents } = await import('./useIpcEvents')
+      useIpcEvents()
+      if (typeof onSetListenerRef.current !== 'function') {
+        throw new Error('Expected agentStatus.onSet listener to be registered')
+      }
+      const emit = (receivedAt: number, prompt: string): void => {
+        onSetListenerRef.current!({
+          paneKey: FUTURE_PANE_KEY,
+          state: 'working',
+          prompt,
+          agentType: 'claude',
+          receivedAt,
+          stateStartedAt: receivedAt
+        })
+      }
+
+      emit(1_700_000_000_000, 'first')
+      expect(setAgentStatus).toHaveBeenCalledTimes(1)
+
+      emit(1_700_000_000_001, 'second')
+      emit(1_700_000_000_002, 'third')
+      expect(setAgentStatus).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(40)
+      expect(setAgentStatus).toHaveBeenCalledTimes(3)
+      expect(setAgentStatus.mock.calls[1][1]).toEqual(expect.objectContaining({ prompt: 'second' }))
+      expect(setAgentStatus.mock.calls[2][1]).toEqual(expect.objectContaining({ prompt: 'third' }))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves queued set-clear order for working removal and done retention', async () => {
+    vi.useFakeTimers()
+    let storeState: StoreLike
+    const setAgentStatus = vi.fn(
+      (
+        paneKey: string,
+        payload: { state: string },
+        _title: unknown,
+        timing: { updatedAt: number }
+      ) => {
+        storeState.agentStatusByPaneKey = {
+          ...(storeState.agentStatusByPaneKey as Record<string, unknown>),
+          [paneKey]: { ...payload, updatedAt: timing.updatedAt }
+        }
+      }
+    )
+    const removeAgentStatus = vi.fn((paneKey: string) => {
+      const next = { ...(storeState.agentStatusByPaneKey as Record<string, unknown>) }
+      delete next[paneKey]
+      storeState.agentStatusByPaneKey = next
+    })
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const onClearListenerRef: { current: ((data: { paneKey: string }) => void) | null } = {
+      current: null
+    }
+    storeState = buildStoreState({
+      setAgentStatus,
+      removeAgentStatus,
+      workspaceSessionReady: true,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        },
+        onClear: (cb) => {
+          onClearListenerRef.current = cb as (data: { paneKey: string }) => void
+          return () => {}
+        }
+      })
+    )
+
+    try {
+      const { useIpcEvents } = await import('./useIpcEvents')
+      useIpcEvents()
+      if (
+        typeof onSetListenerRef.current !== 'function' ||
+        typeof onClearListenerRef.current !== 'function'
+      ) {
+        throw new Error('Expected agentStatus listeners to be registered')
+      }
+      const emit = (
+        receivedAt: number,
+        prompt: string,
+        state: AgentStatusSetData['state'] = 'working'
+      ): void => {
+        onSetListenerRef.current!({
+          paneKey: FUTURE_PANE_KEY,
+          state,
+          prompt,
+          agentType: 'claude',
+          receivedAt,
+          stateStartedAt: receivedAt
+        })
+      }
+
+      emit(1_700_000_000_000, 'leading')
+      emit(1_700_000_000_001, 'queued')
+      expect(setAgentStatus).toHaveBeenCalledTimes(1)
+
+      onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
+      expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY)
+      expect(storeState.agentStatusByPaneKey).toEqual({})
+
+      vi.advanceTimersByTime(40)
+      expect(setAgentStatus).toHaveBeenCalledTimes(2)
+      expect(storeState.agentStatusByPaneKey).toEqual({})
+
+      emit(1_700_000_000_002, 'task')
+      emit(1_700_000_000_003, 'task', 'done')
+      expect(setAgentStatus).toHaveBeenCalledTimes(3)
+
+      onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
+
+      expect(setAgentStatus).toHaveBeenCalledTimes(4)
+      expect(setAgentStatus.mock.calls[3][1]).toEqual(expect.objectContaining({ state: 'done' }))
+      expect(removeAgentStatus).toHaveBeenCalledTimes(1)
+      expect(storeState.agentStatusByPaneKey).toEqual({
+        [FUTURE_PANE_KEY]: expect.objectContaining({ state: 'done' })
+      })
+      vi.advanceTimersByTime(40)
+      expect(setAgentStatus).toHaveBeenCalledTimes(4)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not recurse when flushing a pending status re-enters via the store subscriber', async () => {
@@ -7643,6 +7850,96 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
+  it('preserves a SessionStart boundary from snapshot IPC without completion side effects', async () => {
+    const now = Date.now()
+    const refreshGitHubForWorktreeIfStale = vi.fn()
+    const observeAgentHookCompletionForNotification = vi.fn()
+    const store = createTestStore()
+    store.setState({
+      workspaceSessionReady: true,
+      repos: [{ ...TEST_REPO, connectionId: null, executionHostId: 'local' }],
+      worktreesByRepo: {
+        [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id })]
+      },
+      tabsByWorktree: {
+        'wt-1': [
+          makeTab({
+            id: 'tab-future',
+            ptyId: 'pty-1',
+            worktreeId: 'wt-1',
+            title: 'Claude'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      refreshGitHubForWorktreeIfStale
+    })
+    store
+      .getState()
+      .setAgentStatus(
+        FUTURE_PANE_KEY,
+        { state: 'working', prompt: 'resumed task', agentType: 'claude' },
+        'Claude',
+        { updatedAt: now - 2, stateStartedAt: now - 2 },
+        { tabId: 'tab-future', worktreeId: 'wt-1' }
+      )
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: store.subscribe,
+        getState: store.getState
+      }
+    }))
+    vi.doMock('./agent-hook-completion-notifications', () => ({
+      observeAgentHookCompletionForNotification,
+      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
+      syncAgentHookCompletionNotificationSettings: vi.fn(),
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot: () =>
+          Promise.resolve([
+            {
+              paneKey: FUTURE_PANE_KEY,
+              tabId: 'tab-future',
+              worktreeId: 'wt-1',
+              state: 'done',
+              prompt: '',
+              agentType: 'claude',
+              sessionBoundary: true,
+              receivedAt: now,
+              stateStartedAt: now
+            }
+          ]),
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+
+    await vi.waitFor(() => {
+      expect(store.getState().agentStatusByPaneKey[FUTURE_PANE_KEY]).toMatchObject({
+        state: 'done',
+        sessionBoundary: true
+      })
+    })
+    await Promise.resolve()
+
+    expect(refreshGitHubForWorktreeIfStale).not.toHaveBeenCalled()
+    expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
+  })
+
   it('queues replayed startup snapshots until the pane hydrates', async () => {
     const setAgentStatus = vi.fn()
     const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
@@ -8990,5 +9287,77 @@ describe('useIpcEvents silent terminal adoption (surfaceOwner: false)', () => {
     expect(storeState.setActiveWorktree).not.toHaveBeenCalled()
     expect(storeState.setActiveTabType).not.toHaveBeenCalled()
     expect(storeState.setActiveTab).not.toHaveBeenCalled()
+  })
+})
+
+type CmdJRowIndexJumpModule = typeof CmdJRowIndexJump
+
+describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
+  function createPaletteState(activeModal: string | null): HarnessStoreState {
+    return createHarnessStoreState({
+      tabsByWorktree: {},
+      activeModal,
+      activeView: 'terminal'
+    })
+  }
+
+  // Why imported after the harness: it resets the module registry, so the bus the hook publishes on
+  // is only the same instance when it's loaded on the far side of that reset.
+  async function loadRowJumpBus(): Promise<CmdJRowIndexJumpModule> {
+    return import('@/lib/cmd-j-row-index-jump')
+  }
+
+  it('routes the workspace digit chord to the palette instead of switching workspaces', async () => {
+    const harness = await loadIpcEventsHarness(createPaletteState('worktree-palette'))
+    harness.useIpcEvents()
+    const rowJumps: number[] = []
+    const unsubscribe = (await loadRowJumpBus()).subscribeCmdJRowIndexJump((index) =>
+      rowJumps.push(index)
+    )
+
+    harness.jumpToWorktreeIndex(2)
+    unsubscribe()
+
+    expect(rowJumps).toEqual([2])
+  })
+
+  it('leaves the workspace jump alone when the palette is closed', async () => {
+    const harness = await loadIpcEventsHarness(createPaletteState(null), {
+      visibleWorktreeIds: ['wt-a', 'wt-b', 'wt-c']
+    })
+    harness.useIpcEvents()
+    const rowJumps: number[] = []
+    const unsubscribe = (await loadRowJumpBus()).subscribeCmdJRowIndexJump((index) =>
+      rowJumps.push(index)
+    )
+
+    harness.jumpToWorktreeIndex(2)
+    unsubscribe()
+
+    expect(rowJumps).toEqual([])
+    // Why assert the activation and not just the silent bus: a premature return would also emit nothing.
+    expect(harness.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-c')
+  })
+
+  it('drops the tab digit chord rather than switching tabs behind the overlay', async () => {
+    const storeState = createPaletteState('worktree-palette')
+    const harness = await loadIpcEventsHarness(storeState)
+    harness.useIpcEvents()
+
+    harness.jumpToTabIndex(1)
+
+    expect(storeState.setActiveTab).not.toHaveBeenCalled()
+  })
+
+  it('stops delivering row jumps after unsubscribe', async () => {
+    const { emitCmdJRowIndexJump, subscribeCmdJRowIndexJump } = await loadRowJumpBus()
+    const seen: number[] = []
+    const unsubscribe = subscribeCmdJRowIndexJump((index) => seen.push(index))
+
+    emitCmdJRowIndexJump(0)
+    unsubscribe()
+    emitCmdJRowIndexJump(1)
+
+    expect(seen).toEqual([0])
   })
 })

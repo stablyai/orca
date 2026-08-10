@@ -31,6 +31,8 @@ export type WorktreeBaseWatchTarget = {
   path: string
   connectionId?: string
   repos: Map<string, WorktreeBaseRepoWatchConfig>
+  /** Exact upstream leaf selected by accepted active-worktree status. */
+  gitStatusRefPaths?: ReadonlySet<string>
 }
 
 export function pathRelativeToWorktreeWatchRoot(
@@ -93,12 +95,16 @@ function matchingBaseRepoIds(
 
 // Why: branch switches and commits in the primary checkout rewrite these
 // top-level common-dir files; matching them keeps root-checkout branch/status
-// as fresh as linked worktrees. Deeper churn (objects, refs, logs) is ignored.
+// as fresh as linked worktrees. Deeper churn (objects, refs/heads, logs) is
+// ignored.
 // `config.worktree` is structural because it is the only file whose write
 // flips `git worktree list`'s sparse flag, and no status/commit path touches
 // it — so it cannot re-open the index-churn fanout this classifier closes.
 const GIT_COMMON_PRIMARY_STRUCTURAL_FILES = new Set(['HEAD', 'packed-refs', 'config.worktree'])
-const GIT_COMMON_PRIMARY_STATUS_FILES = new Set(['index'])
+// `config` is status-tier: an external `git push -u` writes only
+// branch.<name>.remote/merge there, and a config write can move neither HEAD
+// nor the worktree listing.
+const GIT_COMMON_PRIMARY_STATUS_FILES = new Set(['index', 'config'])
 const GIT_COMMON_LINKED_STRUCTURAL_FILES = new Set(['HEAD', 'gitdir', 'locked', 'config.worktree'])
 const GIT_COMMON_LINKED_STATUS_FILES = new Set(['index'])
 
@@ -108,6 +114,21 @@ const GIT_COMMON_LINKED_STATUS_FILES = new Set(['index'])
 // kept separate from index churn so only these events re-read head identities.
 function isHeadLogParts(parts: string[], offset: number): boolean {
   return parts.length === offset + 2 && parts[offset] === 'logs' && parts[offset + 1] === 'HEAD'
+}
+
+// Only the active status result's exact upstream ref crosses the refs/** cutoff.
+function isBoundUpstreamRef(
+  target: WorktreeBaseWatchTarget,
+  eventPath: string,
+  parts: string[]
+): boolean {
+  if (parts.length < 2 || parts[0] !== 'refs' || parts.at(-1)?.endsWith('.lock')) {
+    return false
+  }
+  const eventKey = normalizeRuntimePathForComparison(eventPath)
+  return [...(target.gitStatusRefPaths ?? [])].some(
+    (path) => normalizeRuntimePathForComparison(path) === eventKey
+  )
 }
 
 function allRepoIds(target: WorktreeBaseWatchTarget): string[] {
@@ -170,6 +191,9 @@ function classifyGitCommonEvent(
   if (parts[0] !== 'worktrees') {
     if (isHeadLogParts(parts, 0)) {
       return headIdentityChange(repoIds)
+    }
+    if (isBoundUpstreamRef(target, event.path, parts)) {
+      return gitStatusChange(repoIds)
     }
     return NO_CHANGE
   }

@@ -41,6 +41,10 @@ vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: mocks.isWorktreeConnectionResolved
 }))
 
+vi.mock('@/lib/runtime-workspace-file-route', () => ({
+  findWorkspaceFileRoute: vi.fn(() => null)
+}))
+
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: mocks.getState

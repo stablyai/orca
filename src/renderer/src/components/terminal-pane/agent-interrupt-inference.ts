@@ -11,7 +11,11 @@ import { isAskUserQuestionTool } from '../../../../shared/agent-question-answere
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 
 export type AgentInterruptInference = {
-  observeInputIntent(intent: AgentInterruptInputIntent): void
+  observeInputIntent(
+    intent: AgentInterruptInputIntent,
+    entry?: AgentStatusEntry | null,
+    baselineSequence?: number
+  ): void
   flushPending(): boolean | Promise<boolean>
   dispose(): void
 }
@@ -112,10 +116,12 @@ export function createAgentInterruptInference({
   setTimer = (callback, ms) => setTimeout(callback, ms),
   clearTimer = (timer) => clearTimeout(timer)
 }: AgentInterruptInferenceDeps): AgentInterruptInference {
+  let disposed = false
   let pendingTimer: ReturnType<typeof setTimeout> | null = null
   let pendingBaseline: CapturedInterruptBaseline | null = null
   let doubleEscapeBaseline: CapturedInterruptBaseline | null = null
   let doubleEscapeTimer: ReturnType<typeof setTimeout> | null = null
+  let latestBaselineSequence = 0
 
   const clearPendingTimer = (): void => {
     if (pendingTimer !== null) {
@@ -159,6 +165,9 @@ export function createAgentInterruptInference({
   }
 
   const flushPending = (): boolean | Promise<boolean> => {
+    if (disposed) {
+      return false
+    }
     const baseline = pendingBaseline
     pendingTimer = null
     pendingBaseline = null
@@ -199,8 +208,22 @@ export function createAgentInterruptInference({
   }
 
   return {
-    observeInputIntent(intent) {
-      const entry = getStatusEntry()
+    observeInputIntent(intent, capturedEntry, baselineSequence) {
+      if (disposed) {
+        return
+      }
+      if (baselineSequence !== undefined) {
+        if (baselineSequence < latestBaselineSequence) {
+          return
+        }
+        latestBaselineSequence = baselineSequence
+      }
+      const currentEntry = getStatusEntry()
+      // Why: an older acknowledged write must not replace a newer turn's pending inference.
+      if (capturedEntry !== undefined && currentEntry && currentEntry !== capturedEntry) {
+        return
+      }
+      const entry = capturedEntry === undefined ? currentEntry : capturedEntry
       if (!entry) {
         clearPending()
         return
@@ -247,6 +270,7 @@ export function createAgentInterruptInference({
     },
     flushPending,
     dispose() {
+      disposed = true
       clearPending()
     }
   }

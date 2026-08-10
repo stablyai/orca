@@ -124,6 +124,39 @@ test.describe('PR comments sidebar cards view', () => {
     expect(positions[1]).toBeLessThan(positions[2])
   })
 
+  test('adds reactions to conversation and review-thread comments', async ({ orcaPage }) => {
+    const { worktreeId } = await seedPRCommentsSidebarFixture(orcaPage)
+    await openChecks(orcaPage, worktreeId)
+    await expect(orcaPage.getByText('Needs review · 1')).toBeVisible({ timeout: 10_000 })
+
+    const conversationCard = orcaPage.getByTestId('pr-comment-group').filter({
+      hasText: 'LGTM on the overall approach.'
+    })
+    const conversationReactionButton = conversationCard.getByRole('button', {
+      name: 'Add reaction'
+    })
+    await conversationReactionButton.evaluate((element) => (element as HTMLElement).click())
+    const heartReactionButton = orcaPage.getByRole('button', { name: 'Add heart reaction' })
+    await expect(heartReactionButton).toBeVisible()
+    await heartReactionButton.evaluate((element) => (element as HTMLElement).click())
+    await expect(
+      conversationCard.getByRole('button', { name: '1 heart reaction' })
+    ).toHaveAttribute('aria-pressed', 'true')
+    await expect(orcaPage.getByRole('button', { name: 'Add rocket reaction' })).toHaveCount(0)
+
+    const reviewThreadCard = orcaPage.getByTestId('pr-comment-group').filter({
+      hasText: 'Please update this handler before merge.'
+    })
+    const threadReactionButton = reviewThreadCard.getByRole('button', { name: 'Add reaction' })
+    await threadReactionButton.evaluate((element) => (element as HTMLElement).click())
+    await orcaPage
+      .getByRole('button', { name: 'Add rocket reaction' })
+      .evaluate((element) => (element as HTMLElement).click())
+    await expect(
+      reviewThreadCard.getByRole('button', { name: '1 rocket reaction' })
+    ).toHaveAttribute('aria-pressed', 'true')
+  })
+
   test('queues an open thread for the agent from the visible row action and menu fallback', async ({
     orcaPage
   }) => {

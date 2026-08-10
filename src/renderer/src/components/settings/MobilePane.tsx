@@ -24,6 +24,7 @@ import {
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 import { useMobilePairingConnectionMode } from '../mobile/use-mobile-pairing-connection-mode'
 import { useMobilePairingAddressPreference } from '../mobile/use-mobile-pairing-address-preference'
+import { shouldOpenMobilePairingAddress } from './mobile-pane-search'
 export { getMobilePaneSearchEntries } from './mobile-pane-search'
 
 export function MobilePane(): React.JSX.Element {
@@ -41,6 +42,7 @@ export function MobilePane(): React.JSX.Element {
   const [codeCopied, setCodeCopied] = useState(false)
   const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
+  const settingsSearchQuery = useAppStore((state) => state.settingsSearchQuery)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
   const [rotateNextQr, setRotateNextQr] = useState(false)
   const codeCopiedResetTimerRef = useRef<number | null>(null)
@@ -386,6 +388,7 @@ export function MobilePane(): React.JSX.Element {
       <MobilePairingSetupSection
         connectionMode={connectionMode}
         canGenerate={canMintMobilePairingOffer({ connectionMode, signedIn })}
+        addressDisclosureForcedOpen={shouldOpenMobilePairingAddress(settingsSearchQuery)}
         connectionPathControl={
           <MobilePairingConnectionOptions
             value={connectionMode}
@@ -439,7 +442,11 @@ export function MobilePane(): React.JSX.Element {
         onClearCodeCopiedTimer={clearCodeCopiedResetTimer}
       />
 
-      <WindowsFirewallNotice pairingReady={pairingUrl != null} address={selectedAddress} />
+      <WindowsFirewallNotice
+        pairingReady={pairingUrl != null}
+        address={selectedAddress}
+        usingRelay={connectionMode === 'automatic'}
+      />
 
       <MobilePairedDevicesSection
         devices={devices}

@@ -261,6 +261,25 @@ describe('buildActivityEvents', () => {
     expect(threads[0].events[0].entry.prompt).toBe('First prompt')
   })
 
+  it('does not turn a session boundary into an Agent finished event', () => {
+    const result = makeActivityResult({
+      entries: {
+        [PANE_KEY]: {
+          ...makeWorkingEntryWithoutHistory(),
+          state: 'done',
+          prompt: '',
+          sessionBoundary: true,
+          stateHistory: [{ state: 'done', prompt: 'Real turn', startedAt: 1_000 }]
+        }
+      }
+    })
+
+    // Why: the displaced real completion stays visible; the idle SessionStart does not add a second finish.
+    expect(result.events).toHaveLength(1)
+    expect(result.events[0]).toMatchObject({ state: 'done', timestamp: 1_000 })
+    expect(result.events[0].entry.prompt).toBe('Real turn')
+  })
+
   it('does not keep showing a stale live agent as running', () => {
     const result = makeActivityResult({
       entries: {

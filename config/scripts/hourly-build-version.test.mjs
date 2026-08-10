@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createHourlyBuildVersion, formatHourlyReleaseName } from './hourly-build-version.mjs'
+import {
+  createHourlyBuildVersion,
+  formatHourlyReleaseName,
+  nextHourlyBuildNumber
+} from './hourly-build-version.mjs'
 import { compareAppVersions } from '../../src/shared/app-version'
 
 describe('createHourlyBuildVersion', () => {
@@ -34,21 +38,28 @@ describe('formatHourlyReleaseName', () => {
     formatHourlyReleaseName('1.4.163-hourly.x', buildNumber, commit, new Date(iso))
 
   it('renders version, number, Pacific timestamp, and short sha', () => {
-    expect(name('2026-07-31T20:54:00Z')).toBe('1.4.163 • 01 • 07-31 13:54 • e698241')
+    expect(name('2026-07-31T20:54:00Z')).toBe('1.4.163 • 01 • Jul 31, 1:54PM • e698241')
   })
 
   // Why both sides of DST: the tag's stamp is UTC and the title is Pacific, so
   // the offset between them is not a constant. A test pinned to one season would
   // pass all summer and start failing in November.
   it('follows the Pacific offset across DST', () => {
-    expect(name('2026-01-15T02:30:00Z')).toBe('1.4.163 • 01 • 01-14 18:30 • e698241')
-    expect(name('2026-07-31T07:00:00Z')).toBe('1.4.163 • 01 • 07-31 00:00 • e698241')
+    expect(name('2026-01-15T02:30:00Z')).toBe('1.4.163 • 01 • Jan 14, 6:30PM • e698241')
+    expect(name('2026-07-31T07:00:00Z')).toBe('1.4.163 • 01 • Jul 31, 12:00AM • e698241')
   })
 
-  // Why: hour12: false renders midnight as "24" on some ICU builds, which would
-  // read as an hour that does not exist and sort oddly beside 00:xx.
-  it('renders midnight as 00, never 24', () => {
-    expect(name('2026-07-31T07:00:00Z')).toContain(' 00:00 ')
+  // Why pinned: 12-hour clocks are where off-by-twelve bugs live, and midnight in
+  // particular renders as 0:00 or 24:00 on a formatter set up carelessly.
+  it('renders both noon and midnight as 12', () => {
+    expect(name('2026-07-31T07:00:00Z')).toContain('12:00AM')
+    expect(name('2026-07-31T19:00:00Z')).toContain('12:00PM')
+  })
+
+  // Recent ICU puts U+202F before AM/PM; the title must carry no separator at all.
+  it('joins the meridiem with no whitespace of any kind', () => {
+    expect(name('2026-07-31T20:54:00Z')).toMatch(/\d:\d{2}(AM|PM) •/)
+    expect(name('2026-07-31T20:54:00Z')).not.toMatch(/\s[AP]M/u)
   })
 
   it('pads to two digits and grows past them', () => {
@@ -68,5 +79,44 @@ describe('formatHourlyReleaseName', () => {
     expect(() => formatHourlyReleaseName('1.4.163', 1, 'abcdefg', new Date('nope'))).toThrow(
       /invalid/
     )
+  })
+})
+
+describe('nextHourlyBuildNumber', () => {
+  const titles = [
+    '1.4.163 • 01 • Jul 31, 1:54PM • e698241',
+    '1.4.163 • 02 • Jul 31, 2:54PM • aaaaaaa',
+    '1.4.163 • 37 • Aug 01, 9:00AM • bbbbbbb'
+  ]
+
+  it('continues the series for the version being built', () => {
+    expect(nextHourlyBuildNumber('1.4.163', titles)).toBe(38)
+  })
+
+  // The point of the change: 1.4.164 opens its own series at 01 rather than
+  // inheriting 1.4.163's count, which said nothing about 1.4.164.
+  it('restarts at 1 when the base version moves', () => {
+    expect(nextHourlyBuildNumber('1.4.164', titles)).toBe(1)
+    expect(
+      nextHourlyBuildNumber('1.4.164', [...titles, '1.4.164 • 01 • Aug 02, 8:00AM • ccccccc'])
+    ).toBe(2)
+  })
+
+  // Why max and not count: pruning trims to HOURLY_RETAIN_COUNT, so counting
+  // would roll backwards and reissue a number already used.
+  it('takes the highest number, not the count', () => {
+    expect(nextHourlyBuildNumber('1.4.163', ['1.4.163 • 09 • Jul 31, 1:54PM • e698241'])).toBe(10)
+  })
+
+  it('starts at 1 with no history at all', () => {
+    expect(nextHourlyBuildNumber('1.4.163')).toBe(1)
+    expect(nextHourlyBuildNumber('1.4.163', [])).toBe(1)
+  })
+
+  // Legacy titles were the raw tag, and a prefix match must not treat 1.4.16 as
+  // a prefix of 1.4.163's series.
+  it('ignores titles that are not this version', () => {
+    expect(nextHourlyBuildNumber('1.4.16', ['1.4.163 • 37 • Aug 01, 9:00AM • bbbbbbb'])).toBe(1)
+    expect(nextHourlyBuildNumber('1.4.163', ['v1.4.163-hourly.202607311354', null, ''])).toBe(1)
   })
 })

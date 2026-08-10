@@ -10,13 +10,11 @@ import {
 import { diffFromText, diffFromToolCall, type DiffLine } from './native-chat-diff'
 import {
   countToolCalls,
-  formatToolInput,
-  summarizeToolInput,
-  summarizeToolRun
+  createToolInputDisplay,
+  summarizeToolRun,
+  truncateToolDetail
 } from './native-chat-tool-summary'
 import { NativeChatDiffView } from './NativeChatDiffView'
-
-const MAX_TOOL_RESULT_CHARS = 4000
 
 /** A single inline tool line — `▸ ToolName  preview` — that expands in place to
  *  show the call's diff/input or the result's body. Tool calls read as flat
@@ -30,27 +28,26 @@ function ToolLine({ block }: { block: NativeChatBlock }): React.JSX.Element | nu
   let preview: string
   let diff: DiffLine[] | null = null
   let body: { output: string; isError?: boolean } | null = null
-  // Full, formatted input shown when a diff-less tool call is expanded.
   let detail: string | null = null
+  let inputHasDetail = false
 
   if (isToolCallBlock(block)) {
     name = block.name
-    preview = summarizeToolInput(block.input)
-    diff = diffFromToolCall(block.name, block.input)
-    detail = diff ? null : formatToolInput(block.input)
+    const inputDisplay = createToolInputDisplay(block.input)
+    preview = inputDisplay.label
+    inputHasDetail = inputDisplay.hasDetail
+    diff = expanded ? diffFromToolCall(block.name, block.input) : null
+    detail = expanded && !diff ? inputDisplay.formatDetail() : null
   } else if (isToolResultBlock(block)) {
     name = translate('components.native-chat.tool.result', 'Result')
     preview = block.output.split('\n')[0]?.slice(0, 80) ?? ''
-    diff = diffFromText(block.output)
+    diff = expanded ? diffFromText(block.output) : null
     body = { output: block.output, isError: block.isError }
   } else {
     return null
   }
 
-  // Only offer expansion when there's more than the inline preview already shows —
-  // avoids re-rendering the same truncated string in a box below it.
-  const detailAddsInfo = detail !== null && detail.replace(/\s+/g, ' ').trim() !== preview
-  const hasDetail = diff !== null || body !== null || detailAddsInfo
+  const hasDetail = diff !== null || body !== null || inputHasDetail
 
   return (
     <div>
@@ -94,16 +91,12 @@ function ToolLine({ block }: { block: NativeChatBlock }): React.JSX.Element | nu
                 body.isError ? 'text-destructive' : 'text-foreground/80'
               )}
             >
-              {body.output.length > MAX_TOOL_RESULT_CHARS
-                ? `${body.output.slice(0, MAX_TOOL_RESULT_CHARS)}…`
-                : body.output}
+              {truncateToolDetail(body.output)}
             </pre>
           ) : null}
           {!diff && !body && detail ? (
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-accent p-2 font-mono text-[11px] text-foreground/80 scrollbar-sleek">
-              {detail.length > MAX_TOOL_RESULT_CHARS
-                ? `${detail.slice(0, MAX_TOOL_RESULT_CHARS)}…`
-                : detail}
+              {detail}
             </pre>
           ) : null}
         </div>

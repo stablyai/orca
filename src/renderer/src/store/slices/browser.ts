@@ -9,6 +9,7 @@ import type {
   BrowserLoadError,
   BrowserPage,
   BrowserSessionProfile,
+  BrowserSessionProfileCreateOptions,
   BrowserViewportPresetId,
   BrowserWorkspace,
   WorkspaceSessionState
@@ -86,6 +87,10 @@ type BrowserTabPageState = {
   loadError?: BrowserLoadError | null
 }
 
+type SetBrowserPageUrlOptions = {
+  preserveLoadError?: boolean
+}
+
 type ClosedBrowserWorkspaceSnapshot = {
   workspace: BrowserWorkspace
   pages: BrowserPage[]
@@ -156,7 +161,7 @@ export type BrowserSlice = {
     failure: BrowserCertificateFailure | null
   ) => void
   setBrowserTabUrl: (pageId: string, url: string) => void
-  setBrowserPageUrl: (pageId: string, url: string) => void
+  setBrowserPageUrl: (pageId: string, url: string, options?: SetBrowserPageUrlOptions) => void
   setRemoteBrowserPageHandle: (pageId: string, handle: RemoteBrowserPageHandle) => void
   removeRemoteBrowserPageHandle: (
     pageId: string,
@@ -191,7 +196,8 @@ export type BrowserSlice = {
   fetchBrowserSessionProfiles: () => Promise<void>
   createBrowserSessionProfile: (
     scope: 'isolated' | 'imported',
-    label: string
+    label: string,
+    options?: BrowserSessionProfileCreateOptions
   ) => Promise<BrowserSessionProfile | null>
   deleteBrowserSessionProfile: (profileId: string) => Promise<boolean>
   importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportResult>
@@ -1452,7 +1458,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
   setBrowserTabUrl: (pageId, url) => get().setBrowserPageUrl(pageId, url),
 
-  setBrowserPageUrl: (pageId, url) => {
+  setBrowserPageUrl: (pageId, url, options) => {
     const nextUrl = normalizeUrl(url)
     if (nextUrl !== 'about:blank' && nextUrl !== ORCA_BROWSER_BLANK_URL) {
       const currentPage = findPage(get().browserPagesByWorkspace, pageId)
@@ -1478,7 +1484,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               url: nextUrl,
               title: normalizeBrowserTitle(entry.title, nextUrl),
               loading: true,
-              loadError: null
+              loadError: options?.preserveLoadError ? entry.loadError : null
             }
           : entry
       )
@@ -1645,21 +1651,25 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         }
         const hydratedTabs: BrowserWorkspace[] = []
         for (const tab of tabs) {
-          const persistedPages = persistedPagesByWorkspace[tab.id] ?? [
-            {
-              id: createBrowserUuid(),
-              workspaceId: tab.id,
-              worktreeId,
-              url: normalizeUrl(tab.url),
-              title: tab.title,
-              loading: false,
-              faviconUrl: tab.faviconUrl ?? null,
-              canGoBack: tab.canGoBack,
-              canGoForward: tab.canGoForward,
-              loadError: tab.loadError ?? null,
-              createdAt: tab.createdAt
-            } satisfies BrowserPage
-          ]
+          // Salvage can leave an empty page array; hydrate it like a missing array.
+          const storedPages = persistedPagesByWorkspace[tab.id]
+          const persistedPages = storedPages?.length
+            ? storedPages
+            : [
+                {
+                  id: createBrowserUuid(),
+                  workspaceId: tab.id,
+                  worktreeId,
+                  url: normalizeUrl(tab.url),
+                  title: tab.title,
+                  loading: false,
+                  faviconUrl: tab.faviconUrl ?? null,
+                  canGoBack: tab.canGoBack,
+                  canGoForward: tab.canGoForward,
+                  loadError: tab.loadError ?? null,
+                  createdAt: tab.createdAt
+                } satisfies BrowserPage
+              ]
           const nextPages = persistedPages.map((page) => {
             // Why: in-memory hydration callers can bypass the persistence schema's unknown-key stripping.
             const { allowWindowClose: _legacyAllowWindowClose, ...persistedPage } =
@@ -1837,7 +1847,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
   },
 
-  createBrowserSessionProfile: async (scope, label) => {
+  createBrowserSessionProfile: async (scope, label, options) => {
     const hostId = getBrowserSettingsHostId(get())
     const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
     if (runtimeEnvironmentId) {
@@ -1845,7 +1855,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         const result = await callRuntimeRpc<BrowserProfileCreateResult>(
           { kind: 'environment', environmentId: runtimeEnvironmentId },
           'browser.profileCreate',
-          { scope, label },
+          { scope, label, ...options },
           { timeoutMs: 15_000 }
         )
         const profile = result.profile
@@ -1866,7 +1876,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     try {
       const profile = (await window.api.browser.sessionCreateProfile({
         scope,
-        label
+        label,
+        ...options
       })) as BrowserSessionProfile | null
       if (profile) {
         set((s) => ({

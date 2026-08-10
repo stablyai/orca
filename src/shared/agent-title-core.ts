@@ -130,3 +130,10 @@ export function isCursorAgentTitle(title: string | null | undefined): boolean {
   // treat the controlled synthetic Cursor spinner title as Cursor identity.
   return /^[\u2800-\u28ff] Cursor Agent$/u.test(trimmed)
 }
+
+// Why: cursor-agent re-emits its bare native title every redraw, which would stomp
+// Orca's hook-synthesized spinner state, but only once a Cursor-owned title already
+// owns the pane. A hookless Cursor pane still needs the literal once, for identity.
+export function shouldSuppressCursorNativeTitle(lastEmittedTitle: string | null): boolean {
+  return lastEmittedTitle !== null && isCursorAgentTitle(lastEmittedTitle)
+}

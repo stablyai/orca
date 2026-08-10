@@ -1,5 +1,4 @@
 export const HERMES_RUN_REF_MAX_ENTRIES = 10_000
-export const HERMES_RUN_REF_ID_MAX_BYTES = 4 * 1024
 
 export type HermesSortableRunRef = {
   id: string

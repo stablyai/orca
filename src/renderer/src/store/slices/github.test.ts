@@ -45,6 +45,7 @@ const mockApi = {
     prComments: vi.fn().mockResolvedValue([]),
     addIssueComment: vi.fn(),
     addPRReviewCommentReply: vi.fn(),
+    setPRCommentReaction: vi.fn(),
     resolveReviewThread: vi.fn(),
     listWorkItems: vi.fn(),
     countWorkItems: vi.fn().mockResolvedValue(0),
@@ -1503,6 +1504,7 @@ describe('createGitHubSlice PR comment mutations', () => {
         url: ''
       }
     })
+    mockApi.gh.setPRCommentReaction.mockResolvedValue(true)
   })
 
   it('deduplicates merged PR comments and preserves existing thread metadata', () => {
@@ -1664,6 +1666,153 @@ describe('createGitHubSlice PR comment mutations', () => {
       store.getState().commentsCache[`runtime:env-1::${repoId}::pr-comments::acme/widgets::12`]
         ?.data?.[0]
     ).toMatchObject({ body: 'reply', threadId: 'PRRT_1', path: 'src/a.ts', line: 8 })
+  })
+
+  it('updates cached reactions through local GitHub IPC', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const cacheKey = `${repoId}::pr-comments::acme/widgets::12`
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      commentsCache: {
+        [cacheKey]: {
+          data: [
+            {
+              id: 10,
+              reactionSubjectId: 'IC_10',
+              author: 'reviewer',
+              authorAvatarUrl: '',
+              body: 'Nice',
+              createdAt: '2026-03-28T00:00:00Z',
+              url: ''
+            }
+          ],
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().setPRCommentReaction(repoPath, 12, 'IC_10', 'heart', true, {
+      repoId,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+
+    expect(mockApi.gh.setPRCommentReaction).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      reactionSubjectId: 'IC_10',
+      content: 'heart',
+      reacted: true,
+      prRepo: { owner: 'Acme', repo: 'Widgets' },
+      sourceContext: undefined
+    })
+    expect(store.getState().commentsCache[cacheKey]?.data?.[0].reactions).toEqual([
+      { content: 'heart', count: 1, viewerHasReacted: true }
+    ])
+  })
+
+  it('rolls back an optimistic reaction when GitHub rejects it', async () => {
+    let resolveReaction!: (ok: boolean) => void
+    mockApi.gh.setPRCommentReaction.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => (resolveReaction = resolve))
+    )
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const cacheKey = `${repoId}::pr-comments::acme/widgets::12`
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      commentsCache: {
+        [cacheKey]: {
+          data: [
+            {
+              id: 10,
+              reactionSubjectId: 'IC_10',
+              author: 'reviewer',
+              authorAvatarUrl: '',
+              body: 'Nice',
+              createdAt: '2026-03-28T00:00:00Z',
+              url: '',
+              reactions: [{ content: 'heart', count: 2, viewerHasReacted: false }]
+            }
+          ],
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    const pending = store.getState().setPRCommentReaction(repoPath, 12, 'IC_10', 'heart', true, {
+      repoId,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+    const optimisticEntry = store.getState().commentsCache[cacheKey]
+    store.setState({
+      commentsCache: {
+        ...store.getState().commentsCache,
+        [cacheKey]: {
+          ...optimisticEntry,
+          data: (optimisticEntry?.data ?? []).map((comment) => ({
+            ...comment,
+            reactions: [
+              ...(comment.reactions ?? []),
+              { content: 'eyes' as const, count: 1, viewerHasReacted: false }
+            ]
+          }))
+        }
+      }
+    })
+    resolveReaction(false)
+    const ok = await pending
+
+    expect(ok).toBe(false)
+    expect(store.getState().commentsCache[cacheKey]?.data?.[0].reactions).toEqual([
+      { content: 'heart', count: 2, viewerHasReacted: false },
+      { content: 'eyes', count: 1, viewerHasReacted: false }
+    ])
+  })
+
+  it('routes reaction mutations through the workspace runtime', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-pr-reaction',
+      ok: true,
+      result: true,
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().setPRCommentReaction(repoPath, 12, 'PRRC_10', 'rocket', true, {
+      repoId,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.setPRCommentReaction',
+      params: {
+        repo: repoId,
+        reactionSubjectId: 'PRRC_10',
+        content: 'rocket',
+        reacted: true,
+        prRepo: { owner: 'Acme', repo: 'Widgets' }
+      },
+      timeoutMs: 30_000
+    })
+    expect(mockApi.gh.setPRCommentReaction).not.toHaveBeenCalled()
   })
 
   it('does not mutate the PR comments cache when GitHub omits the comment payload', async () => {
@@ -5655,6 +5804,26 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
   })
 
+  it('rejects provider-side partial results when completeness is required', async () => {
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      items: [],
+      sources: {
+        issues: { owner: 'up', repo: 'r' },
+        prs: { owner: 'fork', repo: 'r' },
+        originCandidate: { owner: 'fork', repo: 'r' },
+        upstreamCandidate: { owner: 'up', repo: 'r' }
+      },
+      errors: { issues: { type: 'permission_denied', message: 'no access' } }
+    })
+
+    await expect(
+      store
+        .getState()
+        .fetchWorkItems('repo-id', '/repo', 24, '', { force: true, requireComplete: true })
+    ).rejects.toThrow('partial result')
+  })
+
   it('force-retry invalidates a still-failing in-flight request instead of deduping onto it', async () => {
     // Why: parent design doc §2 acceptance criterion 4 — the [Retry] button
     // must re-invoke the fetch with force=true and clear the banner on
@@ -6454,6 +6623,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         }
       })
       .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
 
     try {
       const repos = [{ repoId: 'github-repo', path: '/server/github-repo' }]
@@ -6466,7 +6636,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       expect(result.items).toEqual([{ ...item, repoId: 'github-repo' }])
       expect(result.failedCount).toBe(0)
       expect(result.githubUnavailable).toBe(true)
-      expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
+      expect(result.requestFailureCount).toBe(1)
+
+      const completeOnly = await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '', {
+        force: true,
+        requireComplete: true,
+        allowStaleFallback: false
+      })
+      expect(completeOnly.items).toEqual([])
+      expect(completeOnly.failedCount).toBe(1)
+      expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3)
     } finally {
       consoleWarn.mockRestore()
     }
@@ -6604,6 +6783,73 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     }
   })
 
+  it('reports skipped SSH repos when a complete first page is required', async () => {
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockRejectedValueOnce(
+      new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
+    )
+
+    const result = await store
+      .getState()
+      .fetchWorkItemsAcrossRepos([{ repoId: 'ssh-repo', path: '/server/ssh-repo' }], 24, 100, '', {
+        requireComplete: true
+      })
+
+    expect(result.failedCount).toBe(1)
+    expect(result.requestFailureCount).toBe(1)
+  })
+
+  it('reports skipped SSH repos when a complete later page is required', async () => {
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockRejectedValueOnce(
+      new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
+    )
+
+    const result = await store
+      .getState()
+      .fetchWorkItemsNextPage([{ repoId: 'ssh-repo', path: '/server/ssh-repo' }], 24, 100, '', 1, {
+        requireComplete: true
+      })
+
+    expect(result.failedCount).toBe(1)
+  })
+
+  it('rejects provider-side partial data from a complete later-page result', async () => {
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      items: [
+        {
+          id: 'issue:1',
+          type: 'issue',
+          number: 1,
+          title: 'Partial',
+          state: 'open',
+          url: 'https://github.com/o/r/issues/1',
+          labels: [],
+          updatedAt: '2026-05-22T00:00:00Z',
+          author: 'author'
+        }
+      ],
+      sources: {
+        issues: { owner: 'o', repo: 'r' },
+        prs: { owner: 'o', repo: 'r' },
+        originCandidate: { owner: 'o', repo: 'r' },
+        upstreamCandidate: null
+      },
+      errors: { issues: { type: 'permission_denied', message: 'no access' } }
+    })
+
+    const result = await store
+      .getState()
+      .fetchWorkItemsNextPage([{ repoId: 'repo-1', path: '/repo' }], 24, 100, '', 2, {
+        requireComplete: true
+      })
+
+    expect(result.items).toEqual([])
+    expect(result.failedCount).toBe(1)
+    expect(result.errorTypes).toEqual(['permission_denied'])
+  })
+
   it('routes work-item next-page fetches through the active runtime environment', async () => {
     const item = {
       type: 'pr',
@@ -6639,7 +6885,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         24,
         100,
         'is:open',
-        1
+        1,
+        { noCache: true }
       )
 
     expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
@@ -6650,7 +6897,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         repo: 'runtime-repo-id',
         limit: 24,
         query: 'is:open',
-        page: 1
+        page: 1,
+        noCache: true
       },
       timeoutMs: 30_000
     })

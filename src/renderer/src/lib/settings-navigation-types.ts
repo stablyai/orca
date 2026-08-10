@@ -38,6 +38,9 @@ const SETTINGS_NAV_TARGETS = [
   'plugins',
   'agents',
   'orchestration',
+  'artifacts',
+  'automations',
+  'orca-account',
   'linear',
   'setup-guide',
   'servers',
@@ -57,6 +60,7 @@ const SETTINGS_NAV_INTENT_SET: ReadonlySet<string> = new Set(SETTINGS_NAV_INTENT
 
 export type SettingsNavTarget = (typeof SETTINGS_NAV_TARGETS)[number]
 export const FULL_DISK_ACCESS_SETTINGS_TARGET_ID = 'developer-permissions-full-disk-access'
+export const BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID = 'browser-terminal-link-actions'
 
 export type SettingsNavigationTarget = {
   pane: SettingsNavTarget

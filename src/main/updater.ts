@@ -13,7 +13,10 @@ import type {
   RemoteServerUpdaterSnapshot,
   RemoteServerUpdateSupport
 } from '../shared/remote-server-update'
-import { isWindowsSignatureCheckUnavailableFailure } from '../shared/updater-windows-signature-check'
+import {
+  isWindowsSignatureCheckUnavailableFailure,
+  isWindowsSignatureMismatchFailure
+} from '../shared/updater-windows-signature-check'
 import { killAllPty } from './ipc/pty'
 import { withUpdaterSpan } from './observability/instrumentation'
 import { loadElectronAutoUpdater, type ElectronAutoUpdater } from './electron-updater-loader'
@@ -45,7 +48,9 @@ import {
   clearTrackedLinuxPackageArtifact,
   getTrackedLinuxPackageArtifact,
   resolveLinuxPackageInstallInstructions,
+  revalidateLinuxPackageForInstall,
   revealLinuxPackage,
+  type LinuxPackageArtifact,
   type LinuxPackageRecoveryUnavailableReason
 } from './linux-package-update-recovery'
 import {
@@ -124,6 +129,9 @@ let autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
 let nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
 let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
 let quitAndInstallInProgress = false
+// Why: the pre-install digest re-proof streams the whole package, so a second install request can
+// arrive while it runs — after the quit timer was cleared but before the handoff owns the process.
+let linuxPackageRevalidationInFlight = false
 let updateInstallMode: UpdateInstallMode = 'interactive'
 let lastInstallDeferralVersion = { download: null as string | null, install: null as string | null }
 // Why: once install has committed, late 'error' events must not clear quittingForUpdate — that would re-enable dock activate mid-installer.
@@ -693,7 +701,7 @@ function clearPrereleaseFallbackContextIfSettled(): void {
 }
 
 async function performQuitAndInstall(): Promise<void> {
-  if (quitAndInstallInProgress) {
+  if (quitAndInstallInProgress || linuxPackageRevalidationInFlight) {
     recordUpdaterLifecycle('quit_and_install_ignored', { reason: 'already-in-progress' })
     return
   }
@@ -705,6 +713,17 @@ async function performQuitAndInstall(): Promise<void> {
 
   const pendingVersion = getPendingInstallVersion()
   if (deferHeadlessServeInstall('install', pendingVersion)) {
+    return
+  }
+  // Why: the retained .deb/.rpm sits on a user-writable path that a root package manager is about
+  // to read, and nothing re-checks it after download. Re-prove it here — before any teardown — so a
+  // swapped or vanished package aborts instead of being installed as root. The synchronous guard
+  // keeps every non-Linux install on its existing timing.
+  if (getTrackedLinuxPackageArtifact() && !(await proveRetainedLinuxPackage(pendingVersion))) {
+    // Why: the renderer armed its restart before invoking, and it infers the abort from the error
+    // status — which a stale-cycle verdict deliberately withholds. Signal the abandon here, where
+    // it cannot depend on that decision, or the window keeps skipping its unsaved-work prompt.
+    mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
     return
   }
   quitAndInstallInProgress = true
@@ -747,6 +766,8 @@ async function performQuitAndInstall(): Promise<void> {
           true
         )
         resetQuitForUpdateState()
+        // Why: a bare return would exit this span Success and hide the aborted install from tracing.
+        span.fail('Could not persist the supervised serve update handoff')
         return
       }
 
@@ -774,6 +795,12 @@ async function performQuitAndInstall(): Promise<void> {
 
       // Why: quitAndInstall can synchronously clear quitAndInstallInProgress via recovery (Win/Linux dispatchError); skip destructive prep if it already ran.
       if (!quitAndInstallInProgress) {
+        // Why: recovery already wrote the reason to currentStatus; a bare return would exit this span Success.
+        span.fail(
+          currentStatus.state === 'error'
+            ? currentStatus.message
+            : 'quitAndInstall returned without invoking the installer'
+        )
         return
       }
 
@@ -837,8 +864,9 @@ async function performQuitAndInstall(): Promise<void> {
       recoveryStatus ?? {
         state: 'error',
         // Why: past the native invoke this is the same pre-commit failure the event path reports, so it gets the same copy; only a pre-native exception can be helped by a restart.
+        // A synchronous throw out of quitAndInstall carries the same installer text the 'error' event would have.
         message: quitAndInstallNativeInvokedBeforeReset
-          ? getPreCommitInstallFailureMessage()
+          ? withInstallFailureCause(getPreCommitInstallFailureMessage(), error)
           : 'Could not restart to install the update. Quit and reopen Orca, then try again.'
       }
     )
@@ -872,6 +900,33 @@ function getPreCommitInstallFailureMessage(): string {
  */
 function sendInstallFailureStatus(status: UpdateStatus): void {
   sendStatus(status, { force: true })
+}
+
+const INSTALL_FAILURE_CAUSE_MAX_LENGTH = 200
+
+/**
+ * Appends the updater's own text to the generic install-failure copy. Without it the only record of
+ * why the install never started is destroyed — on Linux that text carries the exact `dpkg -i <path>`
+ * command the user has to run by hand, and remote clients get nothing but "it didn't come back".
+ */
+function withInstallFailureCause(baseMessage: string, error: unknown): string {
+  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  // Why: the retained-package card runs its text through this same sanitizer, so a home directory,
+  // user name, or terminal escape must not reach the card merely because no artifact was tracked.
+  const redacted =
+    redactLinuxPackageInstallText(raw, getTrackedLinuxPackageArtifact()?.path ?? null) ?? ''
+  const cause = redacted.slice(0, INSTALL_FAILURE_CAUSE_MAX_LENGTH)
+  if (!cause || cause === 'Unknown error') {
+    return baseMessage
+  }
+  // Why: UpdateCard picks the whole card off this string, so a signature verdict must not be prefixed by contradictory restart advice.
+  if (
+    isWindowsSignatureCheckUnavailableFailure(cause) ||
+    isWindowsSignatureMismatchFailure(cause)
+  ) {
+    return cause
+  }
+  return `${baseMessage} (${cause})`
 }
 
 /**
@@ -929,14 +984,19 @@ function handleQuitAndInstallFailure(error?: unknown): boolean {
   const recoveryStatus = buildLinuxPackageInstallFailureStatus(error)
   failServeUpdateHandoff('The native updater rejected the install request.')
   resetQuitForUpdateState()
-  recordUpdaterLifecycle('quit_and_install_failed_via_event', undefined, {
-    level: 'warn',
-    message: 'Update install could not start; recovered app state'
-  })
+  // Durable data carries classification only — the cause text stays on the status the user can read.
+  recordUpdaterLifecycle(
+    'quit_and_install_failed_via_event',
+    { errorType: error instanceof Error ? error.name : typeof error },
+    {
+      level: 'warn',
+      message: 'Update install could not start; recovered app state'
+    }
+  )
   sendInstallFailureStatus(
     recoveryStatus ?? {
       state: 'error',
-      message: getPreCommitInstallFailureMessage()
+      message: withInstallFailureCause(getPreCommitInstallFailureMessage(), error)
     }
   )
   return true
@@ -1801,6 +1861,108 @@ function failLinuxPackageRecovery(
   throw new Error(message)
 }
 
+/**
+ * Identifies the update cycle an install belongs to, so a verdict produced by a multi-second hash
+ * can be dropped when a newer cycle already replaced the card it would otherwise overwrite.
+ */
+function getInstallCycleSignature(): string {
+  const recovery = getActiveLinuxPackageRecovery()
+  if (recovery) {
+    return `recovery:${recovery.packageType}:${recovery.version}`
+  }
+  return currentStatus.state === 'downloaded'
+    ? `downloaded:${currentStatus.version}`
+    : `state:${currentStatus.state}`
+}
+
+/**
+ * Re-proves the retained package before the install starts. Returns false when the install must be
+ * abandoned; the artifact is only re-read here, so callers still own every teardown decision.
+ */
+async function proveRetainedLinuxPackage(pendingVersion: string): Promise<boolean> {
+  const artifact = getTrackedLinuxPackageArtifact()
+  if (!artifact) {
+    return true
+  }
+  // Why: an artifact retained from another cycle says nothing about the file electron-updater is
+  // about to install, so proving it would block a legitimate install on an unrelated digest.
+  if (pendingVersion && pendingVersion !== artifact.version) {
+    return true
+  }
+  const recovery = getActiveLinuxPackageRecovery()
+  const cycle = getInstallCycleSignature()
+  const reason = await revalidateRetainedLinuxPackage(artifact)
+  if (!reason) {
+    return true
+  }
+  reportLinuxPackageRevalidationFailure({ artifact, recovery, reason, cycle })
+  return false
+}
+
+/** The failing reason, or null when the retained package still matches its release digest. */
+async function revalidateRetainedLinuxPackage(
+  artifact: LinuxPackageArtifact
+): Promise<LinuxPackageRecoveryUnavailableReason | null> {
+  linuxPackageRevalidationInFlight = true
+  try {
+    const verdict = await revalidateLinuxPackageForInstall(artifact)
+    return verdict.ok ? null : verdict.reason
+  } catch (error) {
+    recordUpdaterLifecycle(
+      'linux_package_revalidation_errored',
+      { errorType: error instanceof Error ? error.name : typeof error },
+      { level: 'warn', message: 'Could not re-verify the retained update package' }
+    )
+    // Why: fail closed — bytes we could not read are bytes we cannot hand to a root installer.
+    return 'read-failed'
+  } finally {
+    // Why: the invariant every install path depends on — a wedged flag would make quitAndInstall
+    // early-return for the rest of the session.
+    linuxPackageRevalidationInFlight = false
+  }
+}
+
+function reportLinuxPackageRevalidationFailure({
+  artifact,
+  recovery,
+  reason,
+  cycle
+}: {
+  artifact: LinuxPackageArtifact
+  recovery: LinuxPackageInstallRecovery | null
+  reason: LinuxPackageRecoveryUnavailableReason
+  cycle: string
+}): void {
+  recordUpdaterLifecycle(
+    'linux_package_revalidation_failed',
+    {
+      action: recovery ? 'retry-automatic' : 'restart-to-install',
+      packageType: artifact.packageType,
+      version: artifact.version,
+      reason
+    },
+    { level: 'warn', message: 'Retained update package failed its pre-install digest check' }
+  )
+  // Why: a package proven bad must not stay tracked, but a download that landed during the hash
+  // owns the slot now and destroying it would force a needless 160 MB redownload.
+  const clearsArtifact = RECOVERY_CLEARING_REASONS.includes(reason)
+  if (clearsArtifact && getTrackedLinuxPackageArtifact() === artifact) {
+    clearTrackedLinuxPackageArtifact()
+  }
+  // Why: same reasoning as failLinuxPackageRecovery — a verdict from a cycle that has since been
+  // replaced must not clobber whatever card the user is looking at now.
+  if (getInstallCycleSignature() !== cycle) {
+    return
+  }
+  sendInstallFailureStatus({
+    state: 'error',
+    message: LINUX_PACKAGE_RECOVERY_MESSAGES[reason],
+    // Why: an unreadable file is not evidence the bytes changed, so the recovery card and its
+    // Copy/Show actions survive a transient I/O failure exactly as they do elsewhere.
+    ...(recovery && !clearsArtifact ? { recovery } : {})
+  })
+}
+
 export async function getLinuxPackageInstallInstructions(): Promise<LinuxPackageInstallInstructions> {
   const recovery = getActiveLinuxPackageRecovery()
   if (!recovery) {
@@ -1849,7 +2011,10 @@ export function quitAndInstall(): void {
     localBuildSelectionInProgress ||
     pinnedBuildSelectionInProgress ||
     pendingQuitAndInstallTimer ||
-    quitAndInstallInProgress
+    quitAndInstallInProgress ||
+    // Why: the quit timer is already cleared while the pre-install digest re-proof streams, so
+    // without this a second click would schedule a parallel install of the same package.
+    linuxPackageRevalidationInFlight
   ) {
     return
   }

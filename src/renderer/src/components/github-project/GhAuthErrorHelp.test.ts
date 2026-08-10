@@ -1,11 +1,16 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GhAuthDiagnostic } from '../../../../shared/github-auth-types'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-import { buildRemediation } from './GhAuthErrorHelp'
+import { buildRemediation, reloadOrcaRenderer } from './GhAuthErrorHelp'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 function diagnostic(overrides: Partial<GhAuthDiagnostic> = {}): GhAuthDiagnostic {
   return {
@@ -56,5 +61,21 @@ describe('GitHub Project auth remediation host routing', () => {
         command: 'gh auth refresh --hostname ghe.acme.test:8443 -s project -s read:org -s repo'
       }
     ])
+  })
+
+  it('does not force navigation when the checkpointed reload is refused', async () => {
+    const reload = vi.fn(() => Promise.reject(new Error('checkpoint failed')))
+    const locationReload = vi.fn()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('window', {
+      api: { app: { reload } },
+      location: { reload: locationReload }
+    })
+
+    reloadOrcaRenderer()
+    await vi.waitFor(() => expect(errors).toHaveBeenCalledTimes(1))
+
+    expect(reload).toHaveBeenCalledTimes(1)
+    expect(locationReload).not.toHaveBeenCalled()
   })
 })

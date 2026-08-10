@@ -1,3 +1,8 @@
+import {
+  translatablePluginChrome,
+  translatablePluginChromeContainer
+} from './plugin-translatable-chrome'
+
 export const PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES = 20_000
 export const PLUGIN_LANGUAGE_CATALOG_MAX_DEPTH = 16
 
@@ -5,6 +10,8 @@ const DANGEROUS_CATALOG_KEYS = new Set(['__proto__', 'prototype', 'constructor']
 // Why: every plugin-facing security surface lives under this namespace, so
 // protecting the whole subtree keeps a new dialog from silently becoming
 // plugin-writable the way PluginConsentProvenance did when it was extracted.
+// The subtree also holds copy with no security meaning; those exact paths are
+// listed in plugin-translatable-chrome.ts and stay translatable.
 const PROTECTED_TRANSLATION_ROOT = 'auto.components.settings.'
 const PROTECTED_TRANSLATION_MODULE = /^plugin/i
 
@@ -43,6 +50,9 @@ function isCatalogObject(value: unknown): value is Record<string, unknown> {
 
 function protectedTranslation(path: string): boolean {
   if (!path.startsWith(PROTECTED_TRANSLATION_ROOT)) {
+    return false
+  }
+  if (translatablePluginChrome(path)) {
     return false
   }
   return PROTECTED_TRANSLATION_MODULE.test(path.slice(PROTECTED_TRANSLATION_ROOT.length))
@@ -88,7 +98,12 @@ export function parsePluginLanguagePackArtifact(raw: string): PluginLanguagePack
         return { ok: false, error: `catalog key ${key || '(empty)'} is not safe` }
       }
       const path = frame.path ? `${frame.path}.${key}` : key
-      if (protectedTranslation(path)) {
+      // A protected container stays walkable only when exempt chrome sits below
+      // it; every leaf inside is still matched against its own full path.
+      if (
+        protectedTranslation(path) &&
+        !(isCatalogObject(value) && translatablePluginChromeContainer(path))
+      ) {
         return { ok: false, error: `catalog cannot replace protected security copy at ${path}` }
       }
       if (typeof value === 'string') {

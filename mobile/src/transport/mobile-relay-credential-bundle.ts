@@ -7,6 +7,7 @@ import {
   readPairingKeychainItem,
   writePairingKeychainItem
 } from './pairing-keychain'
+import { markHostCredentialWrite } from './host-credential-write-revision'
 
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 const ResumeCredentialSchema = z
@@ -91,6 +92,7 @@ export async function writeMobileRelayCredentialBundle(
 ): Promise<void> {
   requireNativeSecretStore()
   const validated = MobileRelayCredentialBundleSchema.parse(bundle)
+  markHostCredentialWrite(validated.hostId)
   await writePairingKeychainItem(credentialKey(validated.hostId), JSON.stringify(validated))
 }
 

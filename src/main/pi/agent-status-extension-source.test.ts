@@ -55,7 +55,7 @@ const BASE_ENV = {
 const SELF_PID = 4242
 
 function createHarness(args: {
-  kind: 'pi' | 'omp'
+  kind: 'pi' | 'omp' | 'prime-agent'
   env?: Record<string, string | undefined>
   pid?: number
   title?: string
@@ -110,6 +110,7 @@ function createHarness(args: {
   const processMock = {
     env: {
       ...BASE_ENV,
+      ...(args.kind === 'prime-agent' ? { PRIME_AGENT_INTERNAL_DAEMON_WORKER: '1' } : {}),
       ...args.env
     },
     pid: args.pid ?? SELF_PID,
@@ -181,6 +182,48 @@ function createHarness(args: {
 }
 
 describe('getPiAgentStatusExtensionSource', () => {
+  it('registers Prime hooks only in the event-emitting daemon worker', () => {
+    const frontend = createHarness({
+      kind: 'prime-agent',
+      env: { PRIME_AGENT_INTERNAL_DAEMON_WORKER: undefined }
+    })
+    const worker = createHarness({
+      kind: 'prime-agent',
+      env: { ORCA_PI_STATUS_OWNED: String(SELF_PID - 1) }
+    })
+
+    expect(frontend.handlers).toEqual({})
+    expect(frontend.processEnv.ORCA_PI_STATUS_OWNED).toBeUndefined()
+    expect(worker.handlers.agent_start).toBeTypeOf('function')
+    expect(worker.processEnv.ORCA_PRIME_AGENT_STATUS_OWNED).toBe(String(SELF_PID))
+  })
+
+  it('posts persisted Prime session metadata to the Prime route', async () => {
+    const harness = createHarness({
+      kind: 'prime-agent',
+      existsSync: (path) => path === '/tmp/prime-session-1.jsonl'
+    })
+
+    await harness.callHook(
+      'session_start',
+      { reason: 'startup' },
+      {
+        sessionManager: {
+          getSessionId: () => 'prime-session-1',
+          getSessionFile: () => '/tmp/prime-session-1.jsonl'
+        }
+      }
+    )
+
+    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+    expect(harness.fetchMock.mock.calls[0]?.[0]).toBe('http://127.0.0.1:4321/hook/prime-agent')
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'session_start',
+      session_id: 'prime-session-1',
+      session_file: '/tmp/prime-session-1.jsonl'
+    })
+  })
+
   it('includes the session id and file path in Pi status posts after session_start', async () => {
     const harness = createHarness({
       kind: 'pi',
@@ -403,7 +446,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     }
   )
 
-  it.each(['pi', 'omp'] as const)(
+  it.each(['pi', 'omp', 'prime-agent'] as const)(
     'registers no status handlers for a nested %s subagent process',
     (kind) => {
       // Why: inheriting the lead's owner PID must disable the extension as a
@@ -414,8 +457,10 @@ describe('getPiAgentStatusExtensionSource', () => {
 
       expect(child.handlers).toEqual({})
       expect(grandchild.handlers).toEqual({})
-      expect(child.processEnv.ORCA_PI_STATUS_OWNED).toBe(String(SELF_PID))
-      expect(grandchild.processEnv.ORCA_PI_STATUS_OWNED).toBe(String(SELF_PID))
+      const ownerKey =
+        kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
+      expect(child.processEnv[ownerKey]).toBe(String(SELF_PID))
+      expect(grandchild.processEnv[ownerKey]).toBe(String(SELF_PID))
       expect(child.fetchMock).not.toHaveBeenCalled()
       expect(child.spawnMock).not.toHaveBeenCalled()
     }
@@ -748,10 +793,10 @@ describe('getPiAgentStatusExtensionSource', () => {
     }
   })
 
-  it('keeps reporting legacy Pi and OMP once their agent_end handlers settle', async () => {
+  it('keeps reporting Pi-compatible agents once their agent_end handlers settle', async () => {
     vi.useFakeTimers()
     try {
-      for (const kind of ['pi', 'omp'] as const) {
+      for (const kind of ['pi', 'omp', 'prime-agent'] as const) {
         const harness = createHarness({ kind })
         let idle = false
         const context = { isIdle: vi.fn(() => idle) }
@@ -763,6 +808,7 @@ describe('getPiAgentStatusExtensionSource', () => {
         idle = true
         await vi.advanceTimersByTimeAsync(100)
         expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+        expect(harness.handlers.agent_settled).toBeTypeOf('function')
       }
     } finally {
       vi.useRealTimers()

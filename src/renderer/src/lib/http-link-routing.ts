@@ -10,6 +10,8 @@ export type OpenHttpLinkOptions = {
   worktreeId?: string | null
   /** Unconditional: always use the system browser regardless of settings. */
   forceSystemBrowser?: boolean
+  /** Unconditional for local sources: open inside Orca regardless of settings. */
+  forceInApp?: boolean
   /** The Shift escape-hatch modifier was held; resolveModifierRouting decides what it means. */
   modifierHeld?: boolean
   sourceOwner?: HttpLinkSourceOwner
@@ -91,7 +93,7 @@ export function resolveModifierRouting(
 }
 
 export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void {
-  const { worktreeId, forceSystemBrowser, modifierHeld, sourceOwner } = opts
+  const { worktreeId, forceSystemBrowser, forceInApp, modifierHeld, sourceOwner } = opts
   if (sourceOwner?.kind === 'unknown') {
     return
   }
@@ -109,7 +111,7 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     !forceSystemBrowser &&
     !modifier.wantsSystemBrowser &&
     Boolean(worktreeId) &&
-    (openLinksInApp || modifier.wantsOrca)
+    (forceInApp || openLinksInApp || modifier.wantsOrca)
 
   if (routeToOrca && worktreeId && state) {
     // Why: http clicks from inside a worktree should not push a worktree-switch

@@ -18,7 +18,6 @@ export function buildLinearIssueListReadArgs(options: {
   limit: number
   attributeFilter: LinearIssueAttributeFilter
   searchActive: boolean
-  /** Concrete workspace only; `all` must never send workspace-scoped facet ids. */
   allowAttributeFilter?: boolean
 }): LinearIssueListReadArgs {
   const attributeFilter =
@@ -54,23 +53,41 @@ export function buildLinearIssueListRequestSignature(options: {
   return `${sourceScope}::${workspace}::list::${options.filter ?? 'all'}::${options.limit}::${signature}`
 }
 
+export type LinearIssueListFilterRead = { workspaceId: string | null; signature: string }
+
 export function shouldForceLinearIssueListRead(options: {
-  previousFilterSignature: string
-  nextFilterSignature: string
+  previousFilterRead: LinearIssueListFilterRead | null
+  nextFilterRead: LinearIssueListFilterRead
   refreshForced: boolean
 }): boolean {
   if (options.refreshForced) {
     return true
   }
-  // Why: filter signature changes always need a current server read, even when
-  // returning to a previously cached signature that is still warm.
-  return options.previousFilterSignature !== options.nextFilterSignature
+  if (options.previousFilterRead === null) {
+    return false
+  }
+  if (options.previousFilterRead.workspaceId !== options.nextFilterRead.workspaceId) {
+    return false
+  }
+  return options.previousFilterRead.signature !== options.nextFilterRead.signature
+}
+
+export type LinearPrimaryTeamObservation = { workspaceId: string | null; teamId: string }
+
+export function shouldClearTeamDerivedFacets(options: {
+  previous: LinearPrimaryTeamObservation | null
+  next: LinearPrimaryTeamObservation
+}): boolean {
+  const { previous, next } = options
+  if (!previous) {
+    return false
+  }
+  return previous.workspaceId === next.workspaceId && previous.teamId !== next.teamId
 }
 
 export function teamDerivedFacetsForPrimaryTeamChange(
   current: LinearIssueAttributeFilter
 ): LinearIssueAttributeFilter {
-  // Why: status/assignee/labels are team-scoped ids; priority is global 0..4.
   return {
     stateIds: [],
     priorities: current.priorities,

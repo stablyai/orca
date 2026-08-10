@@ -1,5 +1,5 @@
 import type { GitHubWorkItem, Worktree } from '../../../shared/types'
-import { basename } from './path'
+import { getWorktreeAttachmentLabel } from './worktree-attachment-label'
 
 type GitHubWorkItemType = GitHubWorkItem['type']
 
@@ -41,32 +41,9 @@ export function findGithubIssueWorkspaceAttachment(
 }
 
 export function getGithubWorkItemWorkspaceAttachmentLabel(worktree: Worktree): string {
-  const displayName = worktree.displayName.trim()
-  if (displayName) {
-    return displayName
-  }
-
-  const branch = getBranchLabel(worktree.branch)
-  if (branch) {
-    return branch
-  }
-
-  return basename(worktree.path) || worktree.path
+  return getWorktreeAttachmentLabel(worktree)
 }
 
 export function getGithubPrWorkspaceAttachmentLabel(worktree: Worktree): string {
-  return getGithubWorkItemWorkspaceAttachmentLabel(worktree)
-}
-
-function getBranchLabel(branch: string | null | undefined): string | null {
-  const trimmed = branch?.trim()
-  if (!trimmed) {
-    return null
-  }
-
-  if (trimmed.startsWith('refs/heads/')) {
-    return trimmed.slice('refs/heads/'.length)
-  }
-
-  return trimmed
+  return getWorktreeAttachmentLabel(worktree)
 }

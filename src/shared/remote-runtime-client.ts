@@ -21,7 +21,11 @@ import {
   type RuntimeOrchestrationEnvelope,
   type RuntimeRpcResponse
 } from './runtime-rpc-envelope'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from './protocol-version'
+import type { RuntimeStatus } from './runtime-types'
+import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+} from './protocol-version'
 // Re-export so existing value importers of `RemoteRuntimeClientError` are
 // unaffected; the class lives in a ws-free module so type-only consumers
 // (and mobile's typecheck) don't compile this file's Node-only deps.
@@ -79,12 +83,41 @@ export type RemoteRuntimeSubscriptionCallbacks<TResult = unknown> = {
   onClose?: () => void
 }
 
-export async function sendRemoteRuntimeRequest<TResult>(
+export function sendRemoteRuntimeRequest<TResult>(
   pairing: PairingOffer,
   method: string,
   params: unknown,
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope
+): Promise<RuntimeRpcResponse<TResult>> {
+  return sendRemoteRuntimeRequestOnSocket(pairing, method, params, timeoutMs, envelope)
+}
+
+export function sendRemoteRuntimeRequestWithStatusPreflight<TResult>(
+  pairing: PairingOffer,
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  validateStatus: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
+  envelope?: RuntimeOrchestrationEnvelope
+): Promise<RuntimeRpcResponse<TResult>> {
+  return sendRemoteRuntimeRequestOnSocket(
+    pairing,
+    method,
+    params,
+    timeoutMs,
+    envelope,
+    validateStatus
+  )
+}
+
+async function sendRemoteRuntimeRequestOnSocket<TResult>(
+  pairing: PairingOffer,
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  envelope?: RuntimeOrchestrationEnvelope,
+  validateStatus?: (response: RuntimeRpcResponse<RuntimeStatus>) => void
 ): Promise<RuntimeRpcResponse<TResult>> {
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RemoteRuntimeClientError(
@@ -93,10 +126,21 @@ export async function sendRemoteRuntimeRequest<TResult>(
     )
   }
   const requestId = randomUUID()
+  const statusRequestId = validateStatus ? randomUUID() : null
+  const serializedStatusRequest = statusRequestId
+    ? serializeRemoteRuntimePayload({
+        id: statusRequestId,
+        deviceToken: pairing.deviceToken,
+        method: 'status.get'
+      })
+    : null
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',
     deviceToken: pairing.deviceToken,
-    clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+    clientCapabilities: [
+      SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+    ]
   })
   const pendingRequest = {
     preparedRequest: prepareRemoteRuntimeRequest(new Map(), () =>
@@ -114,6 +158,8 @@ export async function sendRemoteRuntimeRequest<TResult>(
     )
   }
   let serializedRequest = takeRemoteRuntimePreparedRequest(pendingRequest)
+  let awaitingRequestId = statusRequestId ?? requestId
+  let awaitingStatus = statusRequestId !== null
   return await new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
     const keyPair = generateKeyPair()
     const serverPublicKey = publicKeyFromBase64(pairing.publicKeyB64)
@@ -359,6 +405,14 @@ export async function sendRemoteRuntimeRequest<TResult>(
         return
       }
       state = 'ready'
+      if (serializedStatusRequest) {
+        ws?.send(encrypt(serializedStatusRequest, sharedKey))
+        return
+      }
+      sendRequestedRpc()
+    }
+
+    function sendRequestedRpc(): void {
       const request = serializedRequest
       serializedRequest = null
       if (request === null) {
@@ -405,8 +459,7 @@ export async function sendRemoteRuntimeRequest<TResult>(
         })
         return
       }
-      const response = parsed.data as RuntimeRpcResponse<TResult>
-      if (response.id !== requestId) {
+      if (parsed.data.id !== awaitingRequestId) {
         finish({
           ok: false,
           error: new RemoteRuntimeClientError(
@@ -417,6 +470,26 @@ export async function sendRemoteRuntimeRequest<TResult>(
         })
         return
       }
+      if (awaitingStatus && validateStatus) {
+        try {
+          validateStatus(parsed.data as RuntimeRpcResponse<RuntimeStatus>)
+        } catch (error) {
+          finish({
+            ok: false,
+            error:
+              error instanceof Error
+                ? error
+                : new RemoteRuntimeClientError('runtime_error', String(error))
+          })
+          return
+        }
+        awaitingStatus = false
+        awaitingRequestId = requestId
+        refreshTimeout()
+        sendRequestedRpc()
+        return
+      }
+      const response = parsed.data as RuntimeRpcResponse<TResult>
       finish({ ok: true, response })
     }
   }).finally(() => releaseRemoteRuntimePreparedRequest(pendingRequest))
@@ -440,7 +513,10 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',
     deviceToken: pairing.deviceToken,
-    clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+    clientCapabilities: [
+      SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+    ]
   })
   return await new Promise((resolve, reject) => {
     const keyPair = generateKeyPair()

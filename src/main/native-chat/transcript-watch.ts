@@ -1,5 +1,9 @@
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
+import {
+  needsWslHostTranslation,
+  toHostReadableTranscriptPath
+} from './host-readable-transcript-path'
 import { resolveSessionFilePath } from './session-file-resolver'
 import { installTranscriptWatcher } from './transcript-watch-engine'
 import type {
@@ -60,6 +64,11 @@ function subscribeViaResolvePoll(
   let delay = args.resolvePollIntervalMs ?? INITIAL_RESOLVE_POLL_MS
   let lastFallbackResolveAt = Date.now()
   const exactPath = exactTranscriptPath(args)
+  // Why: WSL hooks report guest Linux paths the Windows host cannot open; the
+  // UNC twin is resolved lazily (the distro may still be cold) and memoized so
+  // the exact-path install doesn't wait on the slower id-glob (#10326).
+  let hostReadableExactPath: string | null = null
+  let lastWslTranslateAt = 0
 
   function scheduleAttempt(): void {
     if (closed) {
@@ -91,7 +100,24 @@ function subscribeViaResolvePoll(
     }
     let result: NativeChatTranscriptSubscription | null
     try {
-      result = exactPath ? await attemptInstall({ ...args, filePath: exactPath }, decode) : null
+      if (exactPath && !hostReadableExactPath) {
+        if (!needsWslHostTranslation(exactPath)) {
+          // Non-WSL paths stay raw: installTranscriptWatcher already handles a
+          // not-yet-created file, so don't spend an extra probe per tick.
+          hostReadableExactPath = exactPath
+        } else if (Date.now() - lastWslTranslateAt >= FALLBACK_RESOLVE_POLL_MS) {
+          // Why: translating sync-stats the UNC twin per distro over the 9P
+          // share, and the guest file usually appears well after the hook does,
+          // so retry on the slow cadence rather than every fast tick. The raw
+          // guest path is never installed on Windows — it would resolve against
+          // the current drive (`C:\home\…`) and bind chat to a look-alike file.
+          lastWslTranslateAt = Date.now()
+          hostReadableExactPath = await toHostReadableTranscriptPath(exactPath)
+        }
+      }
+      result = hostReadableExactPath
+        ? await attemptInstall({ ...args, filePath: hostReadableExactPath }, decode)
+        : null
       if (
         !result &&
         (!exactPath || Date.now() - lastFallbackResolveAt >= FALLBACK_RESOLVE_POLL_MS)

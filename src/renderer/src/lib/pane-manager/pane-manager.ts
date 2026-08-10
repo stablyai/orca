@@ -280,6 +280,7 @@ export class PaneManager {
       gpuRenderingEnabled: pane.gpuRenderingEnabled,
       webglAttachmentDeferred: pane.webglAttachmentDeferred,
       webglDisabledAfterContextLoss: pane.webglDisabledAfterContextLoss,
+      webglAttachFailedSinceRecovery: pane.webglAttachFailedSinceRecovery === true,
       hasComplexScriptOutput: pane.hasComplexScriptOutput,
       terminalWebglAutoDecision: getTerminalWebglAutoDecision(),
       hasWebgl: Boolean(pane.webglAddon)

@@ -14,7 +14,8 @@
 import { randomUUID } from 'node:crypto'
 import type { SFTPWrapper, FileEntryWithStats } from 'ssh2'
 
-import { isPlainObject, type HooksConfig } from './installer-utils'
+import type { HooksConfig } from './installer-utils'
+import { parseHooksJsonText } from './hooks-json-read'
 
 const DEFAULT_REMOTE_CONFIG_MODE = 0o600
 const REMOTE_SFTP_OPERATION_TIMEOUT_MS = 10_000
@@ -38,12 +39,7 @@ export async function readHooksJsonRemote(
     }
     throw err
   }
-  try {
-    const parsed = JSON.parse(body)
-    return isPlainObject(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+  return parseHooksJsonText(body)
 }
 
 /** Atomically write a JSON config to the remote — write to a tmp path then

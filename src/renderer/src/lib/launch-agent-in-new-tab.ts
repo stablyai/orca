@@ -27,7 +27,7 @@ import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import { resolveNativeChatLaunchSessionOptions } from '@/components/native-chat/native-chat-session-option-enrichment'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 
 export type LaunchAgentInNewTabArgs = {
@@ -115,7 +115,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv,
-    sessionOptions: resolveNativeChatSessionOptionDefaults(
+    sessionOptions: resolveNativeChatLaunchSessionOptions(
       store.settings?.nativeChatSessionOptions,
       agent
     )

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   TERMINAL_INPUT_COALESCE_MAX_CODE_UNITS,
   createPtyInputWriteQueue
@@ -7,6 +7,9 @@ import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES
 } from '../../../../shared/terminal-input'
+import { mode2031SequenceFor } from '../../../../shared/terminal-color-scheme-protocol'
+import { PtyStartupIngress, type PtyIngressEmission } from '../../../../shared/pty-startup-ingress'
+import { extractOnlyCookedEchoSafeQueryReplies } from '../../../../shared/terminal-query-reply'
 
 const WHEEL_UP_REPORT = '\x1b[<64;60;20M'
 
@@ -127,6 +130,92 @@ describe('pty input write queue', () => {
     await queue.waitForDrain()
 
     expect(writes).toEqual([{ id: 'pty-1', data: 'a' }])
+  })
+
+  it('does not coalesce dual color-scheme replies into one host write (#13137)', async () => {
+    const { writes, queue } = createRecordingQueue()
+    const reply = mode2031SequenceFor('dark')
+
+    expect(queue.enqueue('pty-1', reply)).toBe(true)
+    expect(queue.enqueue('pty-1', reply)).toBe(true)
+    await queue.waitForDrain()
+
+    // Atomic writes so each host intercept sees a single extractable reply —
+    // not one coalesced `?997;1n?997;1n` payload.
+    expect(writes).toEqual([
+      { id: 'pty-1', data: reply },
+      { id: 'pty-1', data: reply }
+    ])
+    expect(writes).toHaveLength(2)
+    expect(writes[0]?.data).toBe(reply)
+    expect(writes[1]?.data).toBe(reply)
+  })
+
+  it('does not coalesce a color-scheme reply with a following keystroke', async () => {
+    const { writes, queue } = createRecordingQueue()
+    const reply = mode2031SequenceFor('dark')
+
+    queue.enqueue('pty-1', reply)
+    queue.enqueue('pty-1', 'y')
+    await queue.waitForDrain()
+
+    expect(writes).toEqual([
+      { id: 'pty-1', data: reply },
+      { id: 'pty-1', data: 'y' }
+    ])
+  })
+
+  it('dual mode-2031 enqueues through the real queue never paint 997 under host echo-safe write', async () => {
+    // Issue path: xterm onData + mode-2031 scan each enqueue mode2031SequenceFor.
+    // Drive the real write queue → host intercept (extract + answerLiveQueryReply)
+    // → ingress echo strip, and assert no `997;1n` emission at the confirm prompt.
+    vi.useFakeTimers()
+    const reply = mode2031SequenceFor('dark')
+    const caretEcho = (data: string): string => data.replaceAll('\x1b', '^[')
+    const masterWrites: string[] = []
+    const emissions: PtyIngressEmission[] = []
+    let ingress!: PtyStartupIngress
+    ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => {
+        masterWrites.push(data)
+        ingress.accept(caretEcho(data))
+      },
+      onEmission: (emission) => emissions.push(emission)
+    })
+
+    // Same intercept shape as LocalPtyProvider.write / Session.write / relay writeData.
+    const hostWrite = (_id: string, data: string): void => {
+      if (extractOnlyCookedEchoSafeQueryReplies(data) && ingress.answerLiveQueryReply(data)) {
+        return
+      }
+      masterWrites.push(`RAW:${data}`)
+      ingress.accept(caretEcho(data))
+    }
+
+    const queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: hostWrite
+    })
+
+    expect(queue.enqueue('pty-1', reply)).toBe(true)
+    expect(queue.enqueue('pty-1', reply)).toBe(true)
+    await queue.waitForDrain()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(masterWrites).toEqual([reply, reply])
+    expect(masterWrites.some((write) => write.startsWith('RAW:'))).toBe(false)
+    const visible = emissions.map((emission) => emission.data).join('')
+    expect(visible).toBe('')
+    expect(visible).not.toContain('997')
+
+    ingress.accept('Ok to proceed? (y) ')
+    const afterPrompt = emissions.map((emission) => emission.data).join('')
+    expect(afterPrompt).toBe('Ok to proceed? (y) ')
+    expect(afterPrompt).not.toContain('997;1n')
+    expect(afterPrompt).not.toContain(reply)
+    ingress.drainAndClose()
+    vi.useRealTimers()
   })
 
   it('clear() drops pending input that has not been written yet', async () => {
