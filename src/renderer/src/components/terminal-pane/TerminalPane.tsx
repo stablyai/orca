@@ -824,26 +824,6 @@ function TerminalPane(
     : quickCommandRepoId
       ? 'This Repo'
       : null
-  const {
-    hosts: quickCommandHosts,
-    refreshRemoteHost: refreshQuickCommandRemoteHost,
-    remoteHostLoadFailed: quickCommandHostLoadFailed,
-    remoteHostPending: quickCommandHostOwnershipPending
-  } = useTerminalQuickCommandHosts(worktreeId)
-  const visibleQuickCommandHosts = quickCommandHosts.map((host) => {
-    const commands = host.commands.filter(isTerminalQuickCommandComplete)
-    return {
-      globalCommands: commands.filter(
-        (command) => getTerminalQuickCommandScope(command).type === 'global'
-      ),
-      hostId: host.hostId,
-      label: host.label,
-      repoCommands: commands.filter((command) => {
-        const scope = getTerminalQuickCommandScope(command)
-        return scope.type === 'repo' && terminalQuickCommandMatchesRepo(command, quickCommandRepoId)
-      })
-    }
-  })
   const quickCommandGroupId =
     useAppStore(
       (s) =>
@@ -2569,6 +2549,32 @@ function TerminalPane(
     forceBracketedMultilineTextPaste,
     rightClickToPaste
   })
+  const {
+    hosts: quickCommandHosts,
+    refreshRemoteHost: refreshQuickCommandRemoteHost,
+    remoteHostLoadFailed: quickCommandHostLoadFailed,
+    remoteHostPending: quickCommandHostOwnershipPending
+  } = useTerminalQuickCommandHosts(worktreeId, contextMenu.open)
+  const visibleQuickCommandHosts = useMemo(
+    () =>
+      quickCommandHosts.map((host) => {
+        const commands = host.commands.filter(isTerminalQuickCommandComplete)
+        return {
+          globalCommands: commands.filter(
+            (command) => getTerminalQuickCommandScope(command).type === 'global'
+          ),
+          hostId: host.hostId,
+          label: host.label,
+          repoCommands: commands.filter((command) => {
+            const scope = getTerminalQuickCommandScope(command)
+            return (
+              scope.type === 'repo' && terminalQuickCommandMatchesRepo(command, quickCommandRepoId)
+            )
+          })
+        }
+      }),
+    [quickCommandHosts, quickCommandRepoId]
+  )
   useEffect(() => {
     if (contextMenu.open) {
       refreshQuickCommandRemoteHost()

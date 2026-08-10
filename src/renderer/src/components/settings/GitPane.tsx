@@ -4,6 +4,7 @@ import type { SourceControlAiSettingsPatch } from '../../../../shared/source-con
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../../../../shared/source-control-group-order'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
 import { useAppStore } from '../../store'
 import { getGitPaneSearchEntries } from './git-search'
 import { SearchableSetting } from './SearchableSetting'
@@ -275,26 +276,15 @@ export function GitPane({
             )}
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={settings.refreshLocalBaseRefOnWorktreeCreate}
-          onClick={() =>
+        <Switch
+          aria-label={keepLocalMainUpToDateTitle}
+          checked={settings.refreshLocalBaseRefOnWorktreeCreate}
+          onCheckedChange={(checked) =>
             updateSettings({
-              refreshLocalBaseRefOnWorktreeCreate: !settings.refreshLocalBaseRefOnWorktreeCreate
+              refreshLocalBaseRefOnWorktreeCreate: checked
             })
           }
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            settings.refreshLocalBaseRefOnWorktreeCreate
-              ? 'bg-foreground'
-              : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              settings.refreshLocalBaseRefOnWorktreeCreate ? 'translate-x-4.5' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+        />
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {
@@ -371,24 +361,15 @@ export function GitPane({
             )}
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={settings.enableGitHubAttribution}
-          onClick={() =>
+        <Switch
+          aria-label={translate('auto.components.settings.GitPane.e02ea23a32', 'Orca Attribution')}
+          checked={settings.enableGitHubAttribution}
+          onCheckedChange={(checked) =>
             updateSettings({
-              enableGitHubAttribution: !settings.enableGitHubAttribution
+              enableGitHubAttribution: checked
             })
           }
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            settings.enableGitHubAttribution ? 'bg-foreground' : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              settings.enableGitHubAttribution ? 'translate-x-4.5' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+        />
       </SearchableSetting>
     ) : null
   ].filter(Boolean)

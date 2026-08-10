@@ -61,14 +61,16 @@ import type { MessagePriority, MessageRow, MessageType } from './orchestration/t
 import {
   AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
   appendNormalizedToTailBuffer,
-  appendRecentPtyPathCandidates,
   buildPreview,
   OrcaRuntimeService,
-  recentTerminalPathCandidatesIncludePath,
-  recentTerminalOutputIncludesPath,
   resolveWorktreeScanCacheTtlMs,
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
+import {
+  appendRecentPtyPathCandidates,
+  recentTerminalPathCandidatesIncludePath,
+  recentTerminalOutputIncludesPath
+} from './terminal-output-path-candidates'
 import { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import {

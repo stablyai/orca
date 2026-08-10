@@ -198,7 +198,6 @@
   fill: none;
   pointer-events: none;
   stroke: color-mix(in srgb, var(--muted-foreground) 42%, transparent);
-  stroke-dasharray: 1 4;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1;
@@ -218,12 +217,23 @@
   vector-effect: non-scaling-stroke;
 }
 
-.agent-map-agent-working-glow {
+.agent-map-agent-status-glow {
   fill: none;
   pointer-events: none;
-  stroke: color-mix(in srgb, var(--color-yellow-500) 32%, transparent);
   stroke-width: 7;
   vector-effect: non-scaling-stroke;
+}
+
+.agent-map-agent-status-glow.fleet-status-working {
+  stroke: color-mix(in srgb, var(--color-yellow-500) 32%, transparent);
+}
+
+.agent-map-agent-status-glow.fleet-status-waiting {
+  stroke: color-mix(in srgb, var(--color-amber-500) 42%, transparent);
+}
+
+.agent-map-agent-status-glow.fleet-status-blocked {
+  stroke: color-mix(in srgb, var(--color-red-500) 38%, transparent);
 }
 
 .agent-map-agent-icon {

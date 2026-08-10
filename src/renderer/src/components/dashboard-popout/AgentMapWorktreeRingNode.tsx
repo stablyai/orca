@@ -14,6 +14,7 @@ import type {
   AgentMapWorktreeRing
 } from './agent-map-layout'
 import { AGENT_MAP_LINEAGE_RELATION, shouldAggregateAgentMapWorktree } from './agent-map-layout'
+import { agentMapDirectLineageChevronPath } from './agent-map-lineage-chevron-path'
 import { agentMapWorktreeActiveStatus } from './agent-map-worktree-active-status'
 
 type AgentMapWorktreeRingNodeProps = {
@@ -50,15 +51,8 @@ function formatDuration(minutes: number): string {
   })
 }
 
-// Why direction-aware: packing can place a child level with or above its parent, and
-// a fixed downward elbow would then exit the wrong side and draw back through both
-// nodes. Leaving the rank tie at +1 keeps the common downward case byte-identical.
 function lineagePath(parent: AgentMapAgentNode, child: AgentMapAgentNode): string {
-  const direction = child.y < parent.y ? -1 : 1
-  const startY = parent.y + parent.radius * direction
-  const endY = child.y - child.radius * direction
-  const branchY = (startY + endY) / 2
-  return `M ${parent.x} ${startY} L ${parent.x} ${branchY} L ${child.x} ${branchY} L ${child.x} ${endY}`
+  return agentMapDirectLineageChevronPath(parent, child)
 }
 
 function agentName(card: DashboardCard): string {
@@ -303,6 +297,10 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
             </g>
             {worktree.agents.map((agent) => {
               const iconSize = Math.max(12, Math.min(22, agent.radius * 1.05))
+              const hasStatusGlow =
+                agent.status === 'working' ||
+                agent.status === 'waiting' ||
+                agent.status === 'blocked'
               return (
                 <g
                   key={agent.card.paneKey}
@@ -327,10 +325,11 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
                   }}
                   onKeyDown={(event) => onAgentKeyDown(event, agent)}
                 >
-                  {agent.status === 'working' ? (
+                  {hasStatusGlow ? (
                     <circle
-                      className="agent-map-agent-working-glow"
-                      data-agent-map-agent-working-glow=""
+                      className={`agent-map-agent-status-glow fleet-status-${agent.status}`}
+                      data-agent-map-agent-status-glow=""
+                      data-agent-active-status={agent.status}
                       r={agent.radius + 1}
                       aria-hidden="true"
                     />
