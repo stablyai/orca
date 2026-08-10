@@ -64,6 +64,17 @@ function workspaceBundle(session: WorkspaceSessionState, workspaceKey: string): 
   }
 }
 
+export function workspaceSessionBundlesEquivalent(
+  base: WorkspaceSessionState,
+  source: WorkspaceSessionState,
+  workspaceKey: string
+): boolean {
+  return (
+    canonicalJson(workspaceBundle(base, workspaceKey)) ===
+    canonicalJson(workspaceBundle(source, workspaceKey))
+  )
+}
+
 export type WorkspaceTerminalAuthority = 'base' | 'source' | 'equivalent' | 'ambiguous'
 
 export function workspaceTerminalAuthority(
@@ -94,10 +105,7 @@ export function workspaceTerminalAuthority(
   if (baseTabs.length > 0 && sourceTabs.length === 0) {
     return 'base'
   }
-  return canonicalJson(workspaceBundle(base, workspaceKey)) ===
-    canonicalJson(workspaceBundle(source, workspaceKey))
-    ? 'equivalent'
-    : 'ambiguous'
+  return workspaceSessionBundlesEquivalent(base, source, workspaceKey) ? 'equivalent' : 'ambiguous'
 }
 
 export function findAmbiguousWorkspaceSessionKeys(
@@ -121,4 +129,21 @@ export function findAmbiguousWorkspaceSessionKeys(
     }
   }
   return ambiguous
+}
+
+export function findCrossHostWorkspaceSessionKeyCollisions(
+  sources: readonly WorkspaceSessionState[]
+): Set<string> {
+  const collisions = new Set<string>()
+  const keysBySource = sources.map(collectWorkspaceKeys)
+  for (let left = 0; left < sources.length; left += 1) {
+    for (let right = left + 1; right < sources.length; right += 1) {
+      for (const key of keysBySource[left]) {
+        if (keysBySource[right].has(key)) {
+          collisions.add(key)
+        }
+      }
+    }
+  }
+  return collisions
 }

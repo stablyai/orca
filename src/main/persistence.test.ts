@@ -11907,15 +11907,17 @@ describe('Store host-partitioned workspace sessions', () => {
   it('enumerates every persisted SSH partition including folder-only projects', async () => {
     const store = await createStore()
     const folderKey = folderWorkspaceKey('ssh-folder')
-    const folderSession = makeBoundHostSession('ssh:ssh-folder@@folder-pty')
+    const boundFolderSession = makeBoundHostSession('ssh:ssh-folder@@folder-pty')
+    const folderSession = getDefaultWorkspaceSession()
     folderSession.tabsByWorktree = {
       [folderKey]: [
         {
-          ...folderSession.tabsByWorktree['repo-1::/worktree'][0],
+          ...boundFolderSession.tabsByWorktree['repo-1::/worktree'][0],
           worktreeId: folderKey
         }
       ]
     }
+    folderSession.terminalLayoutsByTabId = boundFolderSession.terminalLayoutsByTabId
     folderSession.openFilesByWorktree = {
       [folderKey]: [
         {
@@ -11957,6 +11959,27 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(store.getWorkspaceSession('ssh:right').tabsByWorktree).toEqual(right.tabsByWorktree)
   })
 
+  it('keeps non-empty local state and unequal-revision duplicate SSH sources partitioned', async () => {
+    const store = await createStore()
+    const left = makeBoundHostSession('ssh:left@@left-pty')
+    const right = makeBoundHostSession('ssh:right@@right-pty')
+    left.terminalTopologyRevisionByRepoId = { 'repo-1': 2 }
+    right.terminalTopologyRevisionByRepoId = { 'repo-1': 7 }
+    right.tabsByWorktree['repo-1::/worktree'][0].id = 'right-tab'
+    store.setWorkspaceSession(structuredClone(left))
+    store.setWorkspaceSession(left, 'ssh:left')
+    store.setWorkspaceSession(right, 'ssh:right')
+
+    const adopted = store.adoptSshWorkspaceSessionPartition()
+
+    expect(adopted.tabsByWorktree['repo-1::/worktree']).toEqual(
+      left.tabsByWorktree['repo-1::/worktree']
+    )
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local', 'ssh:left', 'ssh:right'])
+    expect(store.getWorkspaceSession('ssh:left').tabsByWorktree).toEqual(left.tabsByWorktree)
+    expect(store.getWorkspaceSession('ssh:right').tabsByWorktree).toEqual(right.tabsByWorktree)
+  })
+
   it('does not choose a folder tab between conflicting SSH sources', async () => {
     const store = await createStore()
     const folderKey = folderWorkspaceKey('shared-folder')
@@ -11991,7 +12014,7 @@ describe('Store host-partitioned workspace sessions', () => {
       makeTerminalTab({ id: 'local-folder-tab', worktreeId: folderKey })
     ]
     const accepted = makeBoundHostSession('ssh:accepted@@accepted-pty')
-    const retained = makeBoundHostSession('ssh:retained@@retained-pty')
+    const retained = getDefaultWorkspaceSession()
     retained.tabsByWorktree = {
       [folderKey]: [makeTerminalTab({ id: 'remote-folder-tab', worktreeId: folderKey })]
     }

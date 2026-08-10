@@ -227,6 +227,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
 
   async function callSetForConnectedTargets(args: {
     session?: WorkspaceSessionState
+    sessionTargetId?: string
     hydratedTargetIds?: unknown
   }): Promise<unknown> {
     const handler = handlers.get('remoteWorkspace:setForConnectedTargets')
@@ -249,9 +250,19 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     expect(getActiveMultiplexerMock).not.toHaveBeenCalled()
   })
 
+  it('does not export an explicit session without target provenance', async () => {
+    await expect(
+      callSetForConnectedTargets({ session: baseSession, hydratedTargetIds: ['target-1'] })
+    ).resolves.toEqual([])
+
+    expect(getSshConnectionStoreMock).not.toHaveBeenCalled()
+    expect(getActiveMultiplexerMock).not.toHaveBeenCalled()
+  })
+
   it('writes only to explicitly hydrated connected targets', async () => {
     const result = await callSetForConnectedTargets({
       session: baseSession,
+      sessionTargetId: 'target-1',
       hydratedTargetIds: ['target-1', 'missing-target']
     })
 
@@ -393,6 +404,39 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     }
   })
 
+  it('fails closed when local and target partitions conflict on one workspace key', async () => {
+    const worktreeId = 'duplicate::/repo'
+    getRepoMock.mockImplementation((repoId: string, hostId?: string) =>
+      repoId === 'duplicate' && hostId === 'ssh:target-2'
+        ? ({ id: repoId, connectionId: 'target-2', executionHostId: hostId } as never)
+        : undefined
+    )
+    getWorkspaceSessionMock.mockImplementation((hostId?: string | null) => ({
+      ...baseSession,
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: hostId === 'ssh:target-2' ? 'target-b-tab' : 'target-a-tab',
+            title: hostId ?? 'local',
+            ptyId: null,
+            worktreeId
+          } as never
+        ]
+      },
+      terminalTopologyRevisionByRepoId: { duplicate: 4 }
+    }))
+
+    await expect(callSetForConnectedTargets({ hydratedTargetIds: ['target-2'] })).resolves.toEqual(
+      []
+    )
+
+    expect(getWorkspaceSessionMock).toHaveBeenCalledWith('ssh:target-2')
+    expect(requestByTargetId.get('target-2')).not.toHaveBeenCalledWith(
+      'workspace.patch',
+      expect.anything()
+    )
+  })
+
   it('does not consult ssh partitions when an explicit session argument is provided', async () => {
     const worktreeId = 'repo-target-1::/repo'
     await callSetForConnectedTargets({
@@ -402,6 +446,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
           [worktreeId]: [{ id: 'tab-explicit', title: 'Shell', ptyId: null, worktreeId } as never]
         }
       },
+      sessionTargetId: 'target-1',
       hydratedTargetIds: ['target-1']
     })
 
@@ -418,5 +463,26 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
         })
       })
     )
+  })
+
+  it('does not export a target-qualified explicit session through a conflicting target', async () => {
+    const worktreeId = 'duplicate::/repo'
+    await expect(
+      callSetForConnectedTargets({
+        session: {
+          ...baseSession,
+          tabsByWorktree: {
+            [worktreeId]: [
+              { id: 'target-a-tab', title: 'Target A', ptyId: null, worktreeId } as never
+            ]
+          }
+        },
+        sessionTargetId: 'target-1',
+        hydratedTargetIds: ['target-2']
+      })
+    ).resolves.toEqual([])
+
+    expect(getRepoMock).not.toHaveBeenCalled()
+    expect(requestByTargetId.get('target-2')).toBeUndefined()
   })
 })

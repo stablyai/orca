@@ -18,6 +18,10 @@ import type { WorkspaceSessionState } from '../../shared/types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import { adoptOrphanedWorkspaceSessionPartition } from '../../shared/workspace-session-partition-adoption'
+import {
+  findAmbiguousWorkspaceSessionKeys,
+  workspaceSessionBundlesEquivalent
+} from '../../shared/workspace-session-partition-authority'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 
@@ -407,30 +411,61 @@ export function registerRemoteWorkspaceHandlers(
 
   ipcMain.handle(
     'remoteWorkspace:setForConnectedTargets',
-    async (_event, args: { session?: WorkspaceSessionState; hydratedTargetIds?: unknown }) => {
+    async (
+      _event,
+      args: {
+        session?: WorkspaceSessionState
+        sessionTargetId?: unknown
+        hydratedTargetIds?: unknown
+      }
+    ) => {
       const hydratedTargetIds = getExplicitHydratedTargetIds(args.hydratedTargetIds)
       if (!hydratedTargetIds) {
         // Why: an omitted hydration set used to broadcast one session to every
         // SSH target, overwriting unrelated remote workspace snapshots.
         return []
       }
+      const sessionTargetId =
+        typeof args.sessionTargetId === 'string' && args.sessionTargetId.length > 0
+          ? args.sessionTargetId
+          : null
+      if (args.session && (!sessionTargetId || !hydratedTargetIds.has(sessionTargetId))) {
+        return []
+      }
       const targets =
         getSshConnectionStore()
           ?.listTargets()
           .filter(
-            (target) => hydratedTargetIds.has(target.id) && getActiveMultiplexer(target.id)
+            (target) =>
+              hydratedTargetIds.has(target.id) &&
+              (!args.session || target.id === sessionTargetId) &&
+              getActiveMultiplexer(target.id)
           ) ?? []
 
       const fallbackSession = args.session ?? store.getWorkspaceSession()
       const results = await Promise.all(
         targets.map(async (target) => {
           // Boot owns persistence; export only overlays stranded SSH state.
-          const workspaceSession = args.session
-            ? args.session
-            : adoptOrphanedWorkspaceSessionPartition(
-                fallbackSession,
-                store.getWorkspaceSession(toSshExecutionHostId(target.id))
-              ).session
+          let workspaceSession = args.session
+          if (!workspaceSession) {
+            const targetPartition = store.getWorkspaceSession(toSshExecutionHostId(target.id))
+            const ambiguousKeys = findAmbiguousWorkspaceSessionKeys([
+              fallbackSession,
+              targetPartition
+            ])
+            const hasPopulatedLocalConflict = [...ambiguousKeys].some(
+              (key) =>
+                (fallbackSession.tabsByWorktree[key]?.length ?? 0) > 0 &&
+                !workspaceSessionBundlesEquivalent(fallbackSession, targetPartition, key)
+            )
+            if (hasPopulatedLocalConflict) {
+              return null
+            }
+            workspaceSession = adoptOrphanedWorkspaceSessionPartition(
+              fallbackSession,
+              targetPartition
+            ).session
+          }
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
           const session = exportSessionForTarget(store, target.id, workspaceSession)

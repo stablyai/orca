@@ -212,7 +212,10 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
     expect(harness.setForConnectedTargets).toHaveBeenCalledOnce()
     expect(harness.setForConnectedTargets).toHaveBeenCalledWith(
-      expect.objectContaining({ hydratedTargetIds: ['target-a'] })
+      expect.objectContaining({
+        sessionTargetId: 'target-a',
+        hydratedTargetIds: ['target-a']
+      })
     )
   })
 

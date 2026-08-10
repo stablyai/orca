@@ -136,7 +136,7 @@ import {
 } from '../shared/constants'
 import { parseWorkspaceSessionSalvaging } from '../shared/workspace-session-salvage'
 import { adoptOrphanedWorkspaceSessionPartition } from '../shared/workspace-session-partition-adoption'
-import { findAmbiguousWorkspaceSessionKeys } from '../shared/workspace-session-partition-authority'
+import { findCrossHostWorkspaceSessionKeyCollisions } from '../shared/workspace-session-partition-authority'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
@@ -6305,7 +6305,7 @@ export class Store {
       return originalOwner
     }
 
-    const preservedWorkspaceKeys = findAmbiguousWorkspaceSessionKeys(
+    const preservedWorkspaceKeys = findCrossHostWorkspaceSessionKeyCollisions(
       sshPartitions.map(([, source]) => source)
     )
     const prunableHostIds = new Set<string>()
