@@ -237,7 +237,6 @@ import { createCodexBackfillErrorDetector } from './codex-backfill-error-detecto
 import type { PtyDataMeta } from './pty-dispatcher'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
-import { scheduleTerminalWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import {
   CONPTY_DA1_RESPONSE,
   DEFAULT_DA1_RESPONSE,
@@ -4281,14 +4280,6 @@ export function connectPanePty(
     forwardPtyResize(cols, rows)
   })
 
-  // Why: a rewrite chunk can enter AND exit the alternate screen in one parse
-  // (fast-quitting TUI), netting buffer.active.type back to 'normal'; counting
-  // switches keeps those redraws visible to the atlas-recovery check.
-  let alternateScreenBufferSwitches = 0
-  const onBufferChangeDisposable = pane.terminal.buffer.onBufferChange?.(() => {
-    alternateScreenBufferSwitches += 1
-  })
-
   // Why: renderer resize forwarding is fire-and-forget. A visible pane can
   // finish with xterm at the right grid while the PTY silently kept an older
   // grid, so Codex keeps composing against stale columns. Fit first so xterm's
@@ -5521,96 +5512,6 @@ export function connectPanePty(
       return prefersRefresh
     }
 
-    function resetHiddenRendererRiskState(ptyId: string | null = null): void {
-      hiddenRiskPtyId = ptyId
-      hiddenSynchronizedOutputActive = false
-      hiddenSynchronizedOutputMarkerTail = ''
-      hiddenRewriteChunkEndedWithCarriageReturn = false
-      hiddenRewriteCsiScanTail = ''
-    }
-
-    function ensureHiddenRendererRiskStateForCurrentPty(): void {
-      const ptyId = transport.getPtyId()
-      if (hiddenRiskPtyId === ptyId) {
-        return
-      }
-      resetHiddenRendererRiskState(ptyId)
-    }
-
-    function resetSkippedHiddenRendererRiskState(): void {
-      // Why: skipped/backlog bytes were not parsed by xterm; reset any live hidden
-      // frame instead of letting dropped DEC starts make later plain bytes risky.
-      resetHiddenRendererRiskState(transport.getPtyId())
-    }
-
-    function hiddenSynchronizedOutputTouchesParsedFrame(data: string): boolean {
-      const scanData = hiddenSynchronizedOutputMarkerTail
-        ? `${hiddenSynchronizedOutputMarkerTail}${data}`
-        : data
-      const currentChunkStartIndex = scanData.length - data.length
-      let active = hiddenSynchronizedOutputActive
-      let touchesParsedFrame = active && data.length > 0
-      let offset = 0
-
-      while (offset < scanData.length) {
-        const startIndex = scanData.indexOf(SYNCHRONIZED_OUTPUT_START_SEQUENCE, offset)
-        const endIndex = scanData.indexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE, offset)
-        if (startIndex === -1 && endIndex === -1) {
-          break
-        }
-        if (endIndex !== -1 && (startIndex === -1 || endIndex < startIndex)) {
-          if (
-            active &&
-            endIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length > currentChunkStartIndex
-          ) {
-            touchesParsedFrame = true
-          }
-          active = false
-          offset = endIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
-          continue
-        }
-        if (startIndex !== -1) {
-          active = true
-          if (startIndex + SYNCHRONIZED_OUTPUT_START_SEQUENCE.length > currentChunkStartIndex) {
-            touchesParsedFrame = true
-          }
-          offset = startIndex + SYNCHRONIZED_OUTPUT_START_SEQUENCE.length
-          continue
-        }
-      }
-
-      if (active && data.length > 0) {
-        touchesParsedFrame = true
-      }
-      hiddenSynchronizedOutputActive = active
-      hiddenSynchronizedOutputMarkerTail = scanData.slice(-SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS)
-      return touchesParsedFrame
-    }
-
-    function hiddenTuiRedrawOutputPrefersAtlasRecovery(data: string): boolean {
-      if (!data) {
-        return false
-      }
-      const scanData = hiddenRewriteCsiScanTail ? `${hiddenRewriteCsiScanTail}${data}` : data
-      const decision = terminalRewriteOutputRenderRefreshDecision(data, {
-        previousChunkEndsWithCarriageReturn: hiddenRewriteChunkEndedWithCarriageReturn,
-        previousRewriteCsiScanTail: hiddenRewriteCsiScanTail
-      })
-      hiddenRewriteChunkEndedWithCarriageReturn = decision.nextChunkEndsWithCarriageReturn
-      hiddenRewriteCsiScanTail = decision.nextRewriteCsiScanTail
-      return decision.prefersRenderRefresh || containsCursorPositionSequence(scanData)
-    }
-
-    function hiddenOutputNeedsAtlasRecoveryAfterParse(data: string): boolean {
-      if (!data) {
-        return false
-      }
-      ensureHiddenRendererRiskStateForCurrentPty()
-      const synchronizedOutputTouchesParsedFrame = hiddenSynchronizedOutputTouchesParsedFrame(data)
-      const tuiRedrawOutputPrefersAtlasRecovery = hiddenTuiRedrawOutputPrefersAtlasRecovery(data)
-      return synchronizedOutputTouchesParsedFrame || tuiRedrawOutputPrefersAtlasRecovery
-    }
-
     // The replay path uses the guard so xterm auto-replies to embedded query
     // sequences don't leak into the shell. xterm.write() buffers internally
     // regardless of DOM visibility and the guard stays engaged via the
@@ -6048,11 +5949,6 @@ export function connectPanePty(
     const shouldSnapshotHiddenCodexOutput = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
     let hiddenStartupRendererQueryPending = ''
     let hiddenRendererStateDirty = false
-    let hiddenRiskPtyId: string | null = null
-    let hiddenSynchronizedOutputActive = false
-    let hiddenSynchronizedOutputMarkerTail = ''
-    let hiddenRewriteChunkEndedWithCarriageReturn = false
-    let hiddenRewriteCsiScanTail = ''
     let rendererOrderedPtyId: string | null = null
     let rendererOrderedSeq: number | null = null
     let rendererChannelSeqPtyId: string | null = null
@@ -6416,25 +6312,9 @@ export function connectPanePty(
       return decision.prefersRenderRefresh
     }
 
-    // Why: Vim-style rewrites leave stale WebGL glyphs until the atlas rebuilds; alt-screen membership is only authoritative post-parse (enter/exit can split chunks), so capture pre-parse and decide at parse completion.
-    function alternateScreenRewriteAtlasRecoveryOnParsed(): () => void {
-      const wasAlternateScreenBuffer = pane.terminal.buffer.active.type === 'alternate'
-      const switchesBeforeParse = alternateScreenBufferSwitches
-      return () => {
-        if (
-          wasAlternateScreenBuffer ||
-          alternateScreenBufferSwitches !== switchesBeforeParse ||
-          pane.terminal.buffer.active.type === 'alternate'
-        ) {
-          scheduleTerminalWebglAtlasRecovery()
-        }
-      }
-    }
-
     function shouldForceForegroundRenderRefresh(data: string): {
       refresh: boolean
       inPlaceRewrite: boolean
-      recoverWebglAtlasAfterParse: boolean
     } {
       const rewriteOutputPrefersRenderRefresh = foregroundRewriteOutputPrefersRenderRefresh(data)
       const recentInput =
@@ -6442,13 +6322,12 @@ export function connectPanePty(
       if (foregroundRendererRiskOutputPrefersRenderRefresh(data)) {
         return {
           refresh: true,
-          inPlaceRewrite: rewriteOutputPrefersRenderRefresh,
-          recoverWebglAtlasAfterParse: true
+          inPlaceRewrite: rewriteOutputPrefersRenderRefresh
         }
       }
       if (rewriteOutputPrefersRenderRefresh) {
         // Why: xterm's buffer is right but in-place redraw cells stay stale in the renderer until a repaint (resize fixes it).
-        return { refresh: true, inPlaceRewrite: true, recoverWebglAtlasAfterParse: false }
+        return { refresh: true, inPlaceRewrite: true }
       }
       if (
         windowsEastAsianOutputPrefersRenderRefresh(data, {
@@ -6459,15 +6338,14 @@ export function connectPanePty(
         })
       ) {
         // Why: CJK/Korean from Microsoft Pinyin commits and native ConPTY output can leave stale wide-glyph cells in the Windows DOM renderer.
-        return { refresh: true, inPlaceRewrite: false, recoverWebglAtlasAfterParse: false }
+        return { refresh: true, inPlaceRewrite: false }
       }
       return {
         refresh:
           shouldApplyNativeWindowsRewriteRefresh &&
           containsNonAsciiOutput(data) &&
           containsWindowsRewriteControl(data),
-        inPlaceRewrite: false,
-        recoverWebglAtlasAfterParse: false
+        inPlaceRewrite: false
       }
     }
 
@@ -6516,7 +6394,6 @@ export function connectPanePty(
       kittyKeyboardModes.scan(data)
       if (foreground) {
         resetHiddenOutputRestoreIfPtyChanged()
-        resetHiddenRendererRiskState()
       }
       const parseHiddenStartupOutput =
         !foreground &&
@@ -6546,21 +6423,7 @@ export function connectPanePty(
       }
       const renderRefreshDecision = foregroundOutput
         ? shouldForceForegroundRenderRefresh(data)
-        : { refresh: false, inPlaceRewrite: false, recoverWebglAtlasAfterParse: false }
-      if (!foregroundOutput) {
-        // Advance hidden rewrite state; reveal owns atlas recovery.
-        void hiddenOutputNeedsAtlasRecoveryAfterParse(data)
-      }
-      const recoverWebglAtlasAfterParse =
-        foreground && renderRefreshDecision.recoverWebglAtlasAfterParse
-      // Why: atlas recovery must repaint from the parsed xterm buffer, not a pre-write snapshot a late TUI redraw can stale.
-      const onParsedAtlasRecovery = foreground
-        ? recoverWebglAtlasAfterParse
-          ? scheduleTerminalWebglAtlasRecovery
-          : renderRefreshDecision.inPlaceRewrite
-            ? alternateScreenRewriteAtlasRecoveryOnParsed()
-            : undefined
-        : undefined
+        : { refresh: false, inPlaceRewrite: false }
       const foregroundRenderRefreshNeeded = renderRefreshDecision.refresh
       // Why: Claude Code's in-place prompt redraws on Windows ConPTY can paint one frame late; a follow-up repaint fixes the column desync without a resize.
       const nativeWindowsInPlaceRewriteFollowup = nativeWindowsRewriteNeedsFollowupRenderRefresh({
@@ -6600,7 +6463,6 @@ export function connectPanePty(
           nativeWindowsCursorRestore || nativeWindowsInPlaceRewriteFollowup,
         // Why: xterm already queued a WebGL frame parsing this chunk; merge the repair into it instead of rendering the grid twice.
         shouldRefreshForegroundSynchronously,
-        onParsed: onParsedAtlasRecovery,
         stripTransientCursorShows: shouldProtectNativeWindowsSynchronizedOutput && foreground,
         coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
         holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
@@ -6618,7 +6480,6 @@ export function connectPanePty(
     }
 
     function markHiddenOutputRestoreNeeded(): void {
-      resetSkippedHiddenRendererRiskState()
       const ptyId = transport.getPtyId()
       if (!canUseHiddenOutputSnapshot(ptyId)) {
         return
@@ -7174,7 +7035,6 @@ export function connectPanePty(
       hiddenOutputRestoreScheduled = false
       hiddenStartupRendererQueryPending = ''
       hiddenRendererStateDirty = false
-      resetHiddenRendererRiskState()
       cancelScheduledHiddenOutputRestore(pane.terminal)
       clearHiddenOutputRestoreDeferredRetryTimer()
       clearHiddenOutputRestoreForegroundDeadlineTimer()
@@ -7249,7 +7109,6 @@ export function connectPanePty(
       hiddenOutputRestoreLocalGateAttempts = 0
       hiddenStartupRendererQueryPending = ''
       hiddenRendererStateDirty = false
-      resetHiddenRendererRiskState()
       hiddenOutputRestoreNeeded = false
       hiddenOutputRestorePtyId = null
       hiddenOutputRestoreReplayingSnapshot = null
@@ -7300,7 +7159,6 @@ export function connectPanePty(
 
     function skipBackgroundAlternateScreenOutput(data: string): void {
       writeHiddenStartupRendererQueries(data)
-      resetSkippedHiddenRendererRiskState()
       hiddenRendererStateDirty = true
       recordHiddenRendererSkip(data.length)
       const ptyId = transport.getPtyId()
@@ -7414,7 +7272,6 @@ export function connectPanePty(
             }
             hiddenRendererStateDirty = false
             recordRendererOrderedSeq(snapshot)
-            resetHiddenRendererRiskState()
             recordTerminalOutput(pane.terminal)
             await waitForTerminalReplayWritesParsed(pane.terminal)
           },
@@ -7935,7 +7792,6 @@ export function connectPanePty(
           queueLiveChunkDuringRestore(orderedRendererData, rendererMeta)
           requestHiddenOutputRestoreIfNeeded()
         } else if (hiddenOutputRestoreInFlight) {
-          resetSkippedHiddenRendererRiskState()
           hiddenOutputRestoreNeeded = true
           hiddenOutputRestoreFreshSnapshotNeeded = true
         }
@@ -9506,7 +9362,6 @@ export function connectPanePty(
       userInputActivityDisposable?.dispose()
       terminalCapabilityRepliesDisposable.dispose()
       onResizeDisposable.dispose()
-      onBufferChangeDisposable?.dispose()
       pane.container.removeEventListener(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT, onHeldPtyResizeFlush)
       geometryReportObserver?.disconnect()
       if (pendingGeometryReportRaf !== null) {

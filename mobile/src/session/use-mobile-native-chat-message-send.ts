@@ -181,7 +181,7 @@ export function useMobileNativeChatMessageSend(args: {
       })
       // Why (desktop parity): a slash/skill send dispatches into the agent's own
       // TUI, not the conversation — the transcript never echoes it as a user
-      // turn, so an optimistic bubble would sit at "Queued" forever and the
+      // turn, so an optimistic bubble would never reconcile and the
       // unconfirmed hold could never observe a landing.
       const classification = classifyMobileNativeChatSend(agent, text)
       if (outcome === 'unknown') {

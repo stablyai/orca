@@ -8,6 +8,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { readBranchRenameFailureOutputForDisplay } from '../agent-hooks/branch-rename-failure-output'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
+import { planWorktreeSortOrderUpdates } from '../../shared/worktree-sort-order-update'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
 import { TaskSourceContextSchema } from '../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../shared/workspace-linked-item-schema'
@@ -3142,18 +3143,13 @@ export function registerWorktreeHandlers(
     if (!Array.isArray(args?.orderedIds) || args.orderedIds.length === 0) {
       return
     }
-    const now = Date.now()
-    for (let i = 0; i < args.orderedIds.length; i++) {
-      // Why: a sidebar-order snapshot must only reorder worktrees that already
-      // exist — it must never create one. Without this guard a stale id the
-      // renderer still lists (e.g. a removed repo's `${repoId}::${path}`) gets a
-      // fresh worktreeMeta entry minted here, resurrecting an orphan/duplicate
-      // workspace on the next launch. setWorktreeMeta has no repo-existence check.
-      if (!store.getWorktreeMeta(args.orderedIds[i])) {
-        continue
-      }
-      // Descending timestamps: first item gets highest sortOrder so b - a sorts first-wins on cold start.
-      store.setWorktreeMeta(args.orderedIds[i], { sortOrder: now - i * 1000 })
+    const updates = planWorktreeSortOrderUpdates(
+      args.orderedIds,
+      (worktreeId) => store.getWorktreeMeta(worktreeId),
+      Date.now()
+    )
+    for (const update of updates) {
+      store.setWorktreeMeta(update.worktreeId, { sortOrder: update.sortOrder })
     }
   })
 

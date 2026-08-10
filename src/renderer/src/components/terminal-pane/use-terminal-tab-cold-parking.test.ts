@@ -6,7 +6,9 @@ import type { TerminalTab } from '../../../../shared/types'
 const mocks = vi.hoisted(() => ({
   storeState: {
     pendingStartupByTabId: {} as Record<string, unknown>,
+    ptyIdsByTabId: {} as Record<string, string[]>,
     runtimeStatusByEnvironmentId: new Map(),
+    runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
     settings: {} as Record<string, unknown>,
     terminalLayoutsByTabId: {} as Record<string, { ptyIdsByLeafId?: Record<string, string> }>,
     sleepingAgentSessionsByPaneKey: {} as Record<
