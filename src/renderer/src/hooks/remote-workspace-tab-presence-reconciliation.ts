@@ -1,5 +1,15 @@
+import type { RemoteWorkspaceSnapshot } from '../../../shared/remote-workspace-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { AppState } from '../store/types'
+
+export type PendingTabPresence = 'present' | 'absent'
+
+export type DirectSshTabMutationReconciliation = {
+  acknowledgeSnapshot: (targetId: string, snapshot: RemoteWorkspaceSnapshot) => void
+  beginSnapshotApply: (targetId: string) => () => void
+  canApplySnapshot?: (targetId: string) => boolean
+  pendingTabPresence: (targetId: string) => ReadonlyMap<string, PendingTabPresence>
+}
 
 export function postBoundaryLocalTabIds(
   remoteTabsByWorktree: WorkspaceSessionState['tabsByWorktree'],
@@ -16,6 +26,19 @@ export function postBoundaryLocalTabIds(
     .flatMap((worktreeId) => localTabsByWorktree[worktreeId] ?? [])
     .map((tab) => tab.id)
     .filter((tabId) => !preexistingLocalTabIds.has(tabId) && !remoteTabIds.has(tabId))
+}
+
+export function postBoundaryDeletedTabIds(
+  worktreeIds: ReadonlySet<string>,
+  localTabsByWorktree: AppState['tabsByWorktree'],
+  preexistingLocalTabIds: ReadonlySet<string>
+): string[] {
+  const currentTabIds = new Set(
+    [...worktreeIds].flatMap((worktreeId) =>
+      (localTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+    )
+  )
+  return [...preexistingLocalTabIds].filter((tabId) => !currentTabIds.has(tabId))
 }
 
 export function graftLocalTabsIntoRemoteSession(

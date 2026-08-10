@@ -239,6 +239,7 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyListedSession } from '../../shared/pty-listed-session'
+import { ptyProcessIncarnationById as ptyIncarnationById } from './pty-process-incarnation-registry'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
@@ -264,8 +265,6 @@ const SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS = 30_000
 const PRODUCER_FLOW_CONTROL_ENABLED = true
 // Why: post-spawn write/resize/kill calls carry only the PTY ID; map it to its connectionId so ops route to the right provider.
 const ptyOwnership = new Map<string, string | null>()
-const ptyIncarnationById = new Map<string, string>()
-
 export function isCurrentPtyExit(payload: { id: string; incarnationId?: string }): boolean {
   const current = ptyIncarnationById.get(payload.id)
   return !current || payload.incarnationId === current

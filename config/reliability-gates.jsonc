@@ -2694,7 +2694,7 @@
       "maturity": "experimental",
       "protection": "partial",
       "owner": "desktop-ssh",
-      "layer": "renderer-remote-workspace-session",
+      "layer": "main-process-remote-workspace-patch-owner",
       "surfaces": [
         "direct SSH reconnect",
         "remote workspace snapshots",
@@ -2705,18 +2705,19 @@
       "providers": ["ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "Deterministic renderer tests cover target-scoped addition/deletion acknowledgement, request fencing, authoritative deletion, bounded overflow, write release, duplicate repair, and the fixed suppression deadline. A visible and headless macOS Electron client reached a throwaway Linux Docker OpenSSH target and real Git repository without ssh localhost; both preserved the exact new tab and PTY through a held stale snapshot and proved terminal input on the target. Linux and Windows client journeys remain gaps.",
+      "coverageNotes": "Deterministic main/renderer tests cover causal patch acknowledgement, renderer restart, workspace/tab/process identity reuse, target isolation, fail-closed overflow, pre-delivery creation/deletion, request fencing, authoritative deletion, bounded writes, duplicate repair, and hot-title target-scan isolation. A visible and headless macOS Electron client reached a throwaway Linux Docker OpenSSH target and real Git repository without ssh localhost; both preserved the exact new tab and PTY through a held stale snapshot and proved terminal input on the target. Physical Linux/Windows clients and paired-Orca-server topology remain unrun.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/13013"],
       "invariant": "A direct SSH snapshot may change acknowledged terminal-tab presence, but it cannot erase an unacknowledged target-local creation or resurrect an unacknowledged target-local deletion. A relevant session write suppressed by snapshot application must persist after the trailing idle window or at one fixed 60-second ceiling that later mutations cannot postpone.",
       "oracle": "Hold a requested snapshot, close one of its tabs, release it, and require the close to remain absent. Create a local tab before unsolicited-event delivery, apply a snapshot that omits it, and require the tab to survive until a returned or incoming snapshot acknowledges its presence. Also hold a real remoteWorkspace:get, create a terminal through the visible UI, require its exact tab and PTY identity in the next remote snapshot, and write a proof file through that PTY on a real SSH target.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
-        "pnpm exec electron-vite build --mode e2e",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
+        "VITE_EXPOSE_STORE=true pnpm exec electron-vite build --mode e2e",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-remote-workspace-snapshot-race.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-remote-workspace-snapshot-race.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts",
+        "src/main/ipc/remote-workspace-tab-intent-store.test.ts",
+        "src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts",
         "src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts",
         "src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts",
         "src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts",
@@ -2729,11 +2730,19 @@
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts",
+          "file": "src/main/ipc/remote-workspace-tab-intent-store.test.ts",
           "assertions": [
-            "tab presence mutations remain scoped to one direct SSH target until a matching snapshot acknowledges them",
-            "snapshot hydration records no local mutation and per-target overflow fails closed until a full local snapshot is acknowledged",
-            "target removal clears retained mutation and snapshot-apply state"
+            "unacknowledged intent survives renderer restart and only a causally captured successful patch acknowledges it",
+            "worktree, tab, PTY, and process-incarnation reuse cannot acknowledge an older intent",
+            "target isolation, explicit cleanup, and overflow remain bounded and fail closed"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts",
+          "assertions": [
+            "only the target owning a changed worktree is scanned and live title churn emits no observation",
+            "snapshot hydration establishes an authoritative baseline without creating local intent",
+            "immutable worktree identity replacement is reported even when raw path and tab ids are reused"
           ]
         },
         {
@@ -2771,10 +2780,10 @@
           "date": "2026-08-10",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/direct-ssh-tab-mutation-ledger.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-tab-intent-store.test.ts src/renderer/src/hooks/direct-ssh-tab-intent-observer.test.ts src/renderer/src/hooks/remote-workspace-bidirectional-race-oracle.test.ts src/renderer/src/hooks/remote-workspace-snapshot-apply.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/relay/workspace-session-handler.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 2,
-          "summary": "Nine focused files passed 73 mutation-ledger, race-oracle, snapshot, target-sync, persistence, patch-queue, and relay-handler tests."
+          "summary": "Ten focused files passed 81 persistent-intent, renderer-restart, identity-reuse, race-oracle, snapshot, target-sync, persistence, patch-queue, and relay-handler tests."
         },
         {
           "date": "2026-08-10",
@@ -2805,7 +2814,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical two-barrier oracle fails 0/2 on baseline c21dce152d and published 5a95f0aae8, passes 2/2 on corrected 215a897933, and fails 0/2 on disabled control 2935e9afd2. The failures are exactly post-request close resurrection and pre-delivery local creation erasure. Corrected also passes the complete focused gate and both real-SSH Electron journeys."
+        "evidence": "The byte-identical oracle blob 2a9c2c077e9718cadec4058eedbb05fb93fd4e33 fails 0/2 on base bbcf89e221ad5e759b1933bbd4b04b07f770f379, published 587ea496d48b60f9c9473f47092f1246e66687eb (rebased as 7daf37968d), and disabled db33977876a68a3aef519ad4da73b8a450ce1a3d; it passes 2/2 on rejected candidate 630900af3db5a385a5c8816d0de7bbfe724f9a35. The failures are exactly post-request close resurrection and pre-delivery local creation erasure; the correction pass additionally requires the persistent-main ownership controls above."
       },
       "performanceBudget": {
         "required": true,

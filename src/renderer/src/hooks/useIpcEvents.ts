@@ -184,7 +184,7 @@ import {
   subscribeDirectSshRemoteWorkspaceApplyIdle,
   type RemoteWorkspaceTargetSync
 } from './remote-workspace-target-sync'
-import type { DirectSshTabMutationReconciliation } from './direct-ssh-tab-mutation-ledger'
+import { createDirectSshTabIntentObserver } from './direct-ssh-tab-intent-observer'
 import {
   registerDirectSshWakeRouting,
   routeDirectSshConnectedState,
@@ -619,14 +619,20 @@ function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined):
   return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
 
-export function useIpcEvents(
-  options: {
-    tabMutations?: DirectSshTabMutationReconciliation
-  } = {}
-): void {
-  const { tabMutations } = options
+export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
+    const remoteWorkspaceApi = window.api.remoteWorkspace
+    const tabIntentObserver = remoteWorkspaceApi
+      ? createDirectSshTabIntentObserver(remoteWorkspaceApi)
+      : null
+    let unsubscribeTabIntentObserver = (): void => {}
+    if (tabIntentObserver) {
+      tabIntentObserver.observeState(useAppStore.getState())
+      unsubscribeTabIntentObserver = useAppStore.subscribe((state) =>
+        tabIntentObserver.observeState(state)
+      )
+    }
     const reconnectAuthorityByTarget = new Map<string, DirectSshAuthority>()
     const authorityReconciliationDeadlines = new Set<{
       timer: ReturnType<typeof setTimeout>
@@ -725,7 +731,6 @@ export function useIpcEvents(
         remoteWorkspaceTargetSync?.syncAfterConnect(token),
       onTelemetry: createDirectSshReconnectProductTelemetryAdapter()
     })
-    const remoteWorkspaceApi = window.api.remoteWorkspace
     if (remoteWorkspaceApi) {
       remoteWorkspaceTargetSync = createRemoteWorkspaceTargetSync({
         store: useAppStore,
@@ -735,7 +740,7 @@ export function useIpcEvents(
         capturePreparationInput: (authority, reason, snapshotRevision) =>
           hostHydration.capturePreparationInput(authority, reason, snapshotRevision),
         prepareOnly: reconnectCoordinator.prepareOnly,
-        tabMutations,
+        ...(tabIntentObserver ? { tabIntentObserver } : {}),
         finalizeHydratedTerminals: (authority) =>
           directSshAuthoritiesEqual(reconnectAuthorityByTarget.get(authority.targetId), authority)
             ? reconnectCoordinator.finalizeHydratedTerminals(authority)
@@ -3845,6 +3850,8 @@ export function useIpcEvents(
       liveAgentStatusBurstQueue.length = 0
       mobileStateHydrationDisposed = true
       pendingMobileStateEvents.length = 0
+      unsubscribeTabIntentObserver()
+      tabIntentObserver?.clear()
       unsubscribeRuntimeEnvironmentStore()
       unsubscribeAgentStatusStore()
       unsubs.forEach((fn) => fn())
@@ -3860,7 +3867,7 @@ export function useIpcEvents(
       reconnectAuthorityByTarget.clear()
       resetAgentHookCompletionNotificationCoordinators()
     }
-  }, [tabMutations])
+  }, [])
 }
 
 function hasRuntimeBackedWorktreeAttribution(data: AgentStatusIpcPayload): boolean {

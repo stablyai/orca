@@ -50,7 +50,6 @@ import {
   useIpcEvents
 } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
-import { createDirectSshTabMutationLedger } from './hooks/direct-ssh-tab-mutation-ledger'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import { AgentHibernationGate } from './components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from './components/AiVaultTabTitleSyncGate'
@@ -453,7 +452,6 @@ function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
 }
 
 function App(): React.JSX.Element {
-  const directSshTabMutations = useMemo(createDirectSshTabMutationLedger, [])
   const clearUnreadDockBadge = useUnreadDockBadge()
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
@@ -782,7 +780,7 @@ function App(): React.JSX.Element {
   }, [activeModal, shouldMountAddRepoDialog])
 
   // Subscribe to IPC push events
-  useIpcEvents({ tabMutations: directSshTabMutations })
+  useIpcEvents()
   useRemoteRuntimeRecoveryTriggers()
   useAutomationDispatchEvents()
   // Why: retention runs at App level (in <RetainedAgentsSyncGate />, a null leaf) so "done" agents survive card collapse and its high-churn subscriptions don't re-render App.
@@ -1293,10 +1291,6 @@ function App(): React.JSX.Element {
 
   // Why: session persistence only writes to disk; a Zustand subscribe() outside React drops ~15 render-cycle subscriptions and their re-renders on every tab/file/browser change.
   useEffect(() => {
-    directSshTabMutations.observeState(useAppStore.getState())
-    const unsubscribeMutations = useAppStore.subscribe((state) =>
-      directSshTabMutations.observeState(state)
-    )
     const unsubscribeWrites = createSessionWriteSubscriber({
       store: useAppStore,
       shouldSchedulePersist: () => !isRemoteWorkspaceSnapshotApplyInProgress(),
@@ -1314,9 +1308,6 @@ function App(): React.JSX.Element {
             .then(() => window.api.remoteWorkspace?.setForConnectedTargets({ hydratedTargetIds }))
             .then((results) => {
               for (const { targetId, result } of results ?? []) {
-                if (result.snapshot) {
-                  directSshTabMutations.acknowledgeSnapshot(targetId, result.snapshot)
-                }
                 applyRemoteWorkspacePatchStatus(targetId, result)
               }
             })
@@ -1334,10 +1325,8 @@ function App(): React.JSX.Element {
     })
     return () => {
       unsubscribeWrites()
-      unsubscribeMutations()
-      directSshTabMutations.clear()
     }
-  }, [directSshTabMutations])
+  }, [])
 
   // On shutdown, capture terminal scrollback buffers and flush all durable
   // renderer state through one synchronous main-process checkpoint.

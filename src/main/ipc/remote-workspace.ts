@@ -11,13 +11,16 @@ import type {
   RemoteWorkspaceConnectedClient,
   RemoteWorkspacePatchResult,
   RemoteWorkspaceSession,
-  RemoteWorkspaceSnapshot
+  RemoteWorkspaceSnapshot,
+  RemoteWorkspaceTabObservation
 } from '../../shared/remote-workspace-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
+import { RemoteWorkspaceTabIntentStore } from './remote-workspace-tab-intent-store'
+import { getPtyProcessIncarnation } from './pty-process-incarnation-registry'
 
 const CLIENT_ID = randomUUID()
 const CLIENT_NAME = hostname() || 'This device'
@@ -27,7 +30,32 @@ export const REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES = 64
 let mainWindowGetter: (() => BrowserWindow | null) | null = null
 const latestSnapshotByTargetId = new Map<string, RemoteWorkspaceSnapshot>()
 const remoteWorkspacePatchTailByTargetId = new Map<string, Promise<void>>()
+const remoteWorkspaceTabIntents = new RemoteWorkspaceTabIntentStore()
 let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
+
+function attachPtyIncarnations(
+  observation: RemoteWorkspaceTabObservation
+): RemoteWorkspaceTabObservation {
+  return {
+    ...observation,
+    worktrees: observation.worktrees.map((worktree) => ({
+      ...worktree,
+      tabs: worktree.tabs.map((entry) => {
+        const ptyIds = new Set([
+          ...(entry.tab.ptyId ? [entry.tab.ptyId] : []),
+          ...Object.values(entry.layout?.ptyIdsByLeafId ?? {})
+        ])
+        return {
+          ...entry,
+          processIdentity: JSON.stringify([
+            entry.processIdentity,
+            [...ptyIds].sort().map((ptyId) => [ptyId, getPtyProcessIncarnation(ptyId)] as const)
+          ])
+        }
+      })
+    }))
+  }
+}
 
 function rememberRemoteWorkspaceSnapshot(
   targetId: string,
@@ -60,6 +88,13 @@ function getCachedRemoteWorkspaceSnapshot(targetId: string): RemoteWorkspaceSnap
 export function _resetRemoteWorkspaceCachesForTests(): void {
   latestSnapshotByTargetId.clear()
   remoteWorkspacePatchTailByTargetId.clear()
+  remoteWorkspaceTabIntents.resetForTests()
+}
+
+export function _getRemoteWorkspaceTabIntentStateForTests(
+  targetId: string
+): { intents: number; overflowed: boolean } | null {
+  return remoteWorkspaceTabIntents.stateForTests(targetId)
 }
 
 export function _getRemoteWorkspaceCacheSizesForTests(): {
@@ -288,7 +323,11 @@ async function patchRemoteWorkspaceSession(
   const namespace = getRemoteWorkspaceNamespace(target)
   const current =
     getCachedRemoteWorkspaceSnapshot(target.id) ?? (await getRemoteSnapshot(target)) ?? undefined
-  if (current && remoteWorkspaceSessionMatchesSnapshot(current, session)) {
+  if (
+    current &&
+    !remoteWorkspaceTabIntents.hasPending(target.id) &&
+    remoteWorkspaceSessionMatchesSnapshot(current, session)
+  ) {
     // Why: a pulled workspace snapshot rehydrates local state and can trigger
     // session persistence. Identical target sessions must stay a local no-op or
     // two clients will echo revisions indefinitely.
@@ -320,9 +359,11 @@ async function patchRemoteWorkspaceSession(
     }
   }
 
+  const intentCapture = remoteWorkspaceTabIntents.capturePatch(target.id, session)
   const result = await requestPatch(current?.revision)
   if (result.ok) {
     rememberRemoteWorkspaceSnapshot(target.id, result.snapshot)
+    remoteWorkspaceTabIntents.acknowledgePatch(target.id, intentCapture, result)
     return result
   }
   if (result.snapshot) {
@@ -345,6 +386,7 @@ async function patchRemoteWorkspaceSession(
     const retry = await requestPatch(result.snapshot.revision)
     if (retry.ok) {
       rememberRemoteWorkspaceSnapshot(target.id, retry.snapshot)
+      remoteWorkspaceTabIntents.acknowledgePatch(target.id, intentCapture, retry)
     } else if (retry.snapshot) {
       rememberRemoteWorkspaceSnapshot(target.id, retry.snapshot)
     }
@@ -369,9 +411,13 @@ export function handleRemoteWorkspaceNotification(
   const namespace = getRemoteWorkspaceNamespace(target)
   const snapshot = normalizeSnapshot(params.snapshot, namespace)
   rememberRemoteWorkspaceSnapshot(targetId, snapshot)
+  const reconciled = remoteWorkspaceTabIntents.reconcile(targetId, snapshot)
+  if (!reconciled) {
+    return
+  }
   const event: RemoteWorkspaceChangedEvent = {
     targetId,
-    snapshot,
+    snapshot: reconciled,
     sourceClientId: typeof params.sourceClientId === 'string' ? params.sourceClientId : undefined
   }
   const win = mainWindowGetter?.()
@@ -394,13 +440,18 @@ export function registerRemoteWorkspaceHandlers(
   ipcMain.removeHandler('remoteWorkspace:listEnabledConnectedTargets')
   ipcMain.removeHandler('remoteWorkspace:listConnectedClients')
   ipcMain.removeHandler('remoteWorkspace:clientId')
+  ipcMain.removeHandler('remoteWorkspace:observeTabState')
+  ipcMain.removeHandler('remoteWorkspace:forgetTabState')
+  ipcMain.removeHandler('remoteWorkspace:flushTabState')
+  ipcMain.removeHandler('remoteWorkspace:reconcileSnapshot')
 
   ipcMain.handle('remoteWorkspace:get', async (_event, args: { targetId: string }) => {
     const target = getSshConnectionStore()?.getTarget(args.targetId)
     if (!target) {
       return null
     }
-    return getRemoteSnapshot(target)
+    const snapshot = await getRemoteSnapshot(target)
+    return snapshot ? remoteWorkspaceTabIntents.reconcile(target.id, snapshot) : null
   })
 
   ipcMain.handle(
@@ -484,4 +535,26 @@ export function registerRemoteWorkspaceHandlers(
   )
 
   ipcMain.handle('remoteWorkspace:clientId', () => CLIENT_ID)
+
+  ipcMain.handle(
+    'remoteWorkspace:observeTabState',
+    (_event, observation: RemoteWorkspaceTabObservation) => {
+      remoteWorkspaceTabIntents.observe(attachPtyIncarnations(observation))
+    }
+  )
+
+  ipcMain.handle('remoteWorkspace:forgetTabState', (_event, args: { targetId: string }) => {
+    remoteWorkspaceTabIntents.forgetTarget(args.targetId)
+  })
+
+  ipcMain.handle('remoteWorkspace:flushTabState', () => undefined)
+
+  ipcMain.handle(
+    'remoteWorkspace:reconcileSnapshot',
+    (
+      _event,
+      args: { targetId: string; snapshot: RemoteWorkspaceSnapshot }
+    ): RemoteWorkspaceSnapshot | null =>
+      remoteWorkspaceTabIntents.reconcile(args.targetId, args.snapshot)
+  )
 }

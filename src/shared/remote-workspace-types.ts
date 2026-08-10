@@ -48,3 +48,23 @@ export type RemoteWorkspaceChangedEvent = {
   snapshot: RemoteWorkspaceSnapshot
   sourceClientId?: string
 }
+
+export type RemoteWorkspaceObservedTab = {
+  tab: RemoteWorkspaceTerminalTab
+  layout?: TerminalLayoutSnapshot
+  processIdentity: string
+}
+
+export type RemoteWorkspaceObservedWorktree = {
+  worktreeId: string
+  worktreeInstanceId: string | null
+  worktreePath: string
+  tabs: RemoteWorkspaceObservedTab[]
+}
+
+export type RemoteWorkspaceTabObservation = {
+  authoritative?: boolean
+  rendererInstanceId: string
+  targetId: string
+  worktrees: RemoteWorkspaceObservedWorktree[]
+}

@@ -3078,6 +3078,11 @@ const api = {
     listConnectedClients: (args) =>
       ipcRenderer.invoke('remoteWorkspace:listConnectedClients', args),
     clientId: () => ipcRenderer.invoke('remoteWorkspace:clientId'),
+    observeTabState: (observation) =>
+      ipcRenderer.invoke('remoteWorkspace:observeTabState', observation),
+    forgetTabState: (args) => ipcRenderer.invoke('remoteWorkspace:forgetTabState', args),
+    flushTabState: () => ipcRenderer.invoke('remoteWorkspace:flushTabState'),
+    reconcileSnapshot: (args) => ipcRenderer.invoke('remoteWorkspace:reconcileSnapshot', args),
     onChanged: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, data: RemoteWorkspaceChangedEvent) =>
         callback(data)

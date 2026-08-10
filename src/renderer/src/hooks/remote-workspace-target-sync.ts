@@ -16,7 +16,8 @@ import type {
 import { buildDirectSshSnapshotApplyToken } from './direct-ssh-reconnect-coordinator'
 import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
 import { applyDirectSshRemoteWorkspaceSnapshot } from './remote-workspace-snapshot-apply'
-import type { DirectSshTabMutationReconciliation } from './direct-ssh-tab-mutation-ledger'
+import type { DirectSshTabMutationReconciliation } from './remote-workspace-tab-presence-reconciliation'
+import type { DirectSshTabIntentObserver } from './direct-ssh-tab-intent-observer'
 export {
   isDirectSshRemoteWorkspaceApplyInProgress,
   subscribeDirectSshRemoteWorkspaceApplyIdle
@@ -30,6 +31,10 @@ type RemoteWorkspaceApi = {
     session?: WorkspaceSessionState
     hydratedTargetIds?: string[]
   }) => Promise<{ targetId: string; result: RemoteWorkspacePatchResult }[]>
+  reconcileSnapshot?: (args: {
+    targetId: string
+    snapshot: RemoteWorkspaceSnapshot
+  }) => Promise<RemoteWorkspaceSnapshot | null>
 }
 
 export type RemoteWorkspaceTargetSyncDeps = {
@@ -45,6 +50,7 @@ export type RemoteWorkspaceTargetSyncDeps = {
   prepareOnly: (input: DirectSshPreparationInput) => Promise<DirectSshPreparationOutcome>
   finalizeHydratedTerminals: (authority: DirectSshAuthority) => number
   tabMutations?: DirectSshTabMutationReconciliation
+  tabIntentObserver?: Pick<DirectSshTabIntentObserver, 'beginSnapshotApply'>
 }
 
 export type RemoteWorkspaceTargetSync = {
@@ -196,7 +202,8 @@ export function createRemoteWorkspaceTargetSync(
           waitForWorkspaceSessionReady,
           finalizeHydratedTerminals: deps.finalizeHydratedTerminals,
           preexistingLocalTabIds,
-          tabMutations: deps.tabMutations
+          tabMutations: deps.tabMutations,
+          tabIntentObserver: deps.tabIntentObserver
         })
       }
       return
@@ -233,6 +240,12 @@ export function createRemoteWorkspaceTargetSync(
     snapshot: RemoteWorkspaceSnapshot
   ): Promise<void> => {
     const arrival = beginArrival(targetId)
+    const reconciledSnapshot = deps.remoteWorkspace.reconcileSnapshot
+      ? await deps.remoteWorkspace.reconcileSnapshot({ targetId, snapshot })
+      : snapshot
+    if (!reconciledSnapshot || !isArrivalCurrent(targetId, arrival)) {
+      return
+    }
     const authority = deps.getCurrentAuthority(targetId)
     if (!authority) {
       return
@@ -245,7 +258,7 @@ export function createRemoteWorkspaceTargetSync(
     const input = await deps.capturePreparationInput(
       authority,
       'workspace-snapshot',
-      snapshot.revision
+      reconciledSnapshot.revision
     )
     if (!input || !isArrivalCurrent(targetId, arrival)) {
       return
@@ -254,11 +267,11 @@ export function createRemoteWorkspaceTargetSync(
     if (!prepared.token || !isArrivalCurrent(targetId, arrival)) {
       return
     }
-    const applyToken = buildDirectSshSnapshotApplyToken(prepared.token, snapshot.revision)
+    const applyToken = buildDirectSshSnapshotApplyToken(prepared.token, reconciledSnapshot.revision)
     if (applyToken) {
       await applyDirectSshRemoteWorkspaceSnapshot({
         store: deps.store,
-        snapshot,
+        snapshot: reconciledSnapshot,
         token: applyToken,
         arrival,
         isArrivalCurrent,
@@ -266,7 +279,8 @@ export function createRemoteWorkspaceTargetSync(
         waitForWorkspaceSessionReady,
         finalizeHydratedTerminals: deps.finalizeHydratedTerminals,
         preexistingLocalTabIds,
-        tabMutations: deps.tabMutations
+        tabMutations: deps.tabMutations,
+        tabIntentObserver: deps.tabIntentObserver
       })
     }
   }

@@ -16,10 +16,12 @@ import {
   mergeDirectSshRemoteWorkspaceSession,
   uniqueWorktreeIdByPath
 } from './remote-workspace-session-merge'
-import type { DirectSshTabMutationReconciliation } from './direct-ssh-tab-mutation-ledger'
+import type { DirectSshTabMutationReconciliation } from './remote-workspace-tab-presence-reconciliation'
+import type { DirectSshTabIntentObserver } from './direct-ssh-tab-intent-observer'
 import {
   graftLocalTabsIntoRemoteSession,
   omitPendingLocalTabDeletions,
+  postBoundaryDeletedTabIds,
   postBoundaryLocalTabIds
 } from './remote-workspace-tab-presence-reconciliation'
 
@@ -67,6 +69,7 @@ type RemoteWorkspaceSnapshotApplyInput = {
   finalizeHydratedTerminals: (authority: DirectSshAuthority) => number
   preexistingLocalTabIds: ReadonlySet<string>
   tabMutations?: DirectSshTabMutationReconciliation
+  tabIntentObserver?: Pick<DirectSshTabIntentObserver, 'beginSnapshotApply'>
 }
 
 function exactTargetWorktreeIds(state: AppState, authority: DirectSshAuthority): Set<string> {
@@ -115,7 +118,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   waitForWorkspaceSessionReady,
   finalizeHydratedTerminals,
   preexistingLocalTabIds,
-  tabMutations
+  tabMutations,
+  tabIntentObserver
 }: RemoteWorkspaceSnapshotApplyInput): Promise<void> {
   const { authority } = token
   if (!isArrivalCurrent(authority.targetId, arrival)) {
@@ -161,9 +165,12 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
       .map(([tabId]) => tabId)
       .filter((tabId) => localTabIds.has(tabId))
   )
-  const pendingDeletedTabIds = new Set(
-    [...pendingTabPresence].filter(([, presence]) => presence === 'absent').map(([tabId]) => tabId)
-  )
+  const pendingDeletedTabIds = new Set([
+    ...[...pendingTabPresence]
+      .filter(([, presence]) => presence === 'absent')
+      .map(([tabId]) => tabId),
+    ...postBoundaryDeletedTabIds(worktreeIds, state.tabsByWorktree, preexistingLocalTabIds)
+  ])
   const remoteSession = omitPendingLocalTabDeletions(importedRemoteSession, pendingDeletedTabIds)
   const recoveryTabIds = currentRecoveryTabIds(state, authority, worktreeIds)
   const postBoundaryTabIds = postBoundaryLocalTabIds(
@@ -196,6 +203,7 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     const currentStore = store.getState()
     const replaceWorkspaceKeys = [...worktreeIds]
     const finishMutationReconciliation = tabMutations?.beginSnapshotApply(authority.targetId)
+    const finishIntentObservation = tabIntentObserver?.beginSnapshotApply(authority.targetId)
     try {
       currentStore.hydrateWorkspaceSession(merged, {
         directSshAuthority: authority,
@@ -204,6 +212,7 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
       currentStore.hydrateTabsSession(merged, { replaceWorkspaceKeys })
     } finally {
       finishMutationReconciliation?.()
+      finishIntentObservation?.()
     }
     // Why: direct SSH snapshots project terminal state only; global editor/browser hydration would reset unrelated hosts.
     currentStore.markRemoteWorkspaceHydrated(authority.targetId)

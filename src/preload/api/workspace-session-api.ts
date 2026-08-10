@@ -8,7 +8,8 @@ import type {
   RemoteWorkspaceChangedEvent,
   RemoteWorkspaceConnectedClient,
   RemoteWorkspacePatchResult,
-  RemoteWorkspaceSnapshot
+  RemoteWorkspaceSnapshot,
+  RemoteWorkspaceTabObservation
 } from '../../shared/remote-workspace-types'
 
 export type WorkspaceSessionApi = {
@@ -44,6 +45,13 @@ export type WorkspaceSessionApi = {
       targetIds?: string[]
     }) => Promise<{ targetId: string; clients: RemoteWorkspaceConnectedClient[] }[]>
     clientId: () => Promise<string>
+    observeTabState: (observation: RemoteWorkspaceTabObservation) => Promise<void>
+    forgetTabState: (args: { targetId: string }) => Promise<void>
+    flushTabState: () => Promise<void>
+    reconcileSnapshot: (args: {
+      targetId: string
+      snapshot: RemoteWorkspaceSnapshot
+    }) => Promise<RemoteWorkspaceSnapshot | null>
     onChanged: (callback: (event: RemoteWorkspaceChangedEvent) => void) => () => void
   }
 }

@@ -129,7 +129,11 @@ function appState(overrides: Record<string, unknown> = {}): AppState {
 function createHarness(
   state: AppState,
   get: (args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>,
-  patchResult: RemoteWorkspacePatchResult = { ok: true, snapshot: snapshot(1) }
+  patchResult: RemoteWorkspacePatchResult = { ok: true, snapshot: snapshot(1) },
+  reconcileSnapshot?: (args: {
+    targetId: string
+    snapshot: RemoteWorkspaceSnapshot
+  }) => Promise<RemoteWorkspaceSnapshot | null>
 ) {
   const setForConnectedTargets = vi.fn(async () => [
     {
@@ -169,7 +173,11 @@ function createHarness(
   const finalizeHydratedTerminals = vi.fn(() => 1)
   const sync = createRemoteWorkspaceTargetSync({
     store: { getState: () => state },
-    remoteWorkspace: { get, setForConnectedTargets },
+    remoteWorkspace: {
+      get,
+      setForConnectedTargets,
+      ...(reconcileSnapshot ? { reconcileSnapshot } : {})
+    },
     getCurrentAuthority: () => (current ? owner : null),
     isPreparationTokenCurrent: () => current,
     capturePreparationInput,
@@ -320,6 +328,39 @@ describe('createRemoteWorkspaceTargetSync', () => {
     })
   })
 
+  it('keeps a terminal tab closed after the snapshot request starts absent', async () => {
+    const hydrateTabsSession = vi.fn()
+    const staleTab = {
+      id: 'closed-locally',
+      worktreeId: 'repo-a::/remote/work',
+      ptyId: 'ssh:target-a@@pty-stale',
+      generation: 1,
+      title: 'Closed locally',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    const state = appState({
+      tabsByWorktree: { 'repo-a::/remote/work': [staleTab] },
+      hydrateTabsSession
+    })
+    const pendingGet = deferred<RemoteWorkspaceSnapshot | null>()
+    const harness = createHarness(state, () => pendingGet.promise)
+
+    const pending = harness.sync.syncAfterConnect(token())
+    await flush()
+    state.tabsByWorktree = { 'repo-a::/remote/work': [] }
+    pendingGet.resolve(
+      snapshot(4, {
+        '/remote/work': [{ ...staleTab, worktreePath: '/remote/work' }]
+      })
+    )
+    await pending
+
+    expect(hydrateTabsSession.mock.calls[0][0].tabsByWorktree['repo-a::/remote/work']).toEqual([])
+  })
+
   it('accepts a newer snapshot that deletes a pre-request live tab', async () => {
     const hydrateTabsSession = vi.fn()
     const state = appState({
@@ -356,6 +397,42 @@ describe('createRemoteWorkspaceTargetSync', () => {
     expect(
       merged.tabsByWorktree['repo-a::/remote/work'].map((tab: { id: string }) => tab.id)
     ).toEqual(['remote-tab'])
+  })
+
+  it('reconciles an unsolicited snapshot with main-process intent before delivery apply', async () => {
+    const hydrateTabsSession = vi.fn()
+    const state = appState({ hydrateTabsSession })
+    const raw = snapshot(5)
+    const protectedSnapshot = snapshot(5, {
+      '/remote/work': [
+        {
+          id: 'pre-delivery-created',
+          worktreePath: '/remote/work',
+          ptyId: 'ssh:target-a@@pty-created',
+          title: 'Created',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    })
+    const reconcileSnapshot = vi.fn(async () => protectedSnapshot)
+    const harness = createHarness(
+      state,
+      async () => null,
+      { ok: true, snapshot: snapshot(1) },
+      reconcileSnapshot
+    )
+
+    await harness.sync.applyUnsolicitedSnapshot('target-a', raw)
+
+    expect(reconcileSnapshot).toHaveBeenCalledWith({ targetId: 'target-a', snapshot: raw })
+    expect(
+      hydrateTabsSession.mock.calls[0][0].tabsByWorktree['repo-a::/remote/work'].map(
+        (entry: { id: string }) => entry.id
+      )
+    ).toEqual(['pre-delivery-created'])
   })
 
   it('prepares an unsolicited snapshot once and preserves newer local terminal fields', async () => {
