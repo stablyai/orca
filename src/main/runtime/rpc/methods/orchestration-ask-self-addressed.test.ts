@@ -145,6 +145,41 @@ describe('orchestration.ask self-addressed refusal', () => {
     expect(questionMessages(runId)).toMatchObject([{ to_handle: `run:${runId}` }])
   })
 
+  // Why: the guard must not shadow a more specific error — an invalid request has to report
+  // what is wrong with the request, not that the caller happens to coordinate its own Run.
+  it('reports a resume id from another Dispatch as question_not_found', async () => {
+    setup()
+    const runId = createRun('term_captain')
+    dispatchTo(runId, 'term_captain')
+    const otherRunId = createRun('term_general')
+    const otherDispatchId = dispatchTo(otherRunId, 'term_worker')
+    const foreign = db.createQuestion({
+      runId: otherRunId,
+      dispatchId: otherDispatchId,
+      askerHandle: 'term_worker',
+      question: 'not yours'
+    })
+
+    await expect(
+      ask({ from: 'term_captain', resume: foreign.question.message_id })
+    ).rejects.toMatchObject({ code: 'question_not_found' })
+  })
+
+  it('reports an explicit Run target that is not the caller Dispatch Run as dispatch_run_mismatch', async () => {
+    setup()
+    const runId = createRun('term_captain')
+    dispatchTo(runId, 'term_captain')
+    const otherRunId = createRun('term_general')
+
+    await expect(
+      ask({ from: 'term_captain', question: 'proceed?', run: otherRunId })
+    ).rejects.toMatchObject({ code: 'dispatch_run_mismatch' })
+    await expect(
+      ask({ from: 'term_captain', question: 'proceed?', to: `run:${otherRunId}` })
+    ).rejects.toMatchObject({ code: 'dispatch_run_mismatch' })
+    expect(questionMessages(runId)).toHaveLength(0)
+  })
+
   it('leaves the undispatched coordinator error unchanged', async () => {
     setup()
     createRun('term_captain')
