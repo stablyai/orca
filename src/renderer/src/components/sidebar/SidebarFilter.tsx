@@ -29,6 +29,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { FilterToggleRow } from './FilterToggleRow'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import { searchRepos } from '@/lib/repo-search'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import { isSleepingSweepExemptionNarrowingList } from './visible-worktrees'
@@ -224,7 +225,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
           label={translate('auto.components.sidebar.SidebarFilter.638a2d221d', 'Hide sleeping')}
           checked={!showSleepingWorkspaces}
           onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
-          shortcutLabel={sleepingShortcut === 'Unassigned' ? undefined : sleepingShortcut}
+          shortcutLabel={isUnassignedShortcutLabel(sleepingShortcut) ? undefined : sleepingShortcut}
         />
         {/* Why gated: the exemption only has an effect while sleeping workspaces
             are being swept, so it stays hidden until its parent row is on. */}

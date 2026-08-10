@@ -120,7 +120,13 @@ export function WorktreeCardStatusSlot({
         ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel())
         : statusLabel
   const passiveStatusTooltip =
-    newCardStyle && isUnread ? `${passiveStatusLabel} · Unread` : passiveStatusLabel
+    newCardStyle && isUnread
+      ? translate(
+          'auto.components.sidebar.WorktreeCardStatusSlot.statusUnread',
+          '{{status}} · Unread',
+          { status: passiveStatusLabel }
+        )
+      : passiveStatusLabel
   // Why: working and permission already own the new-card status lane, but
   // unread state should still surface in tooltip/sr-only copy and reappear afterward.
   const showNewCardUnreadAlert =
@@ -180,7 +186,9 @@ export function WorktreeCardStatusSlot({
     return overlayNewCardUnreadStatus(passiveStatus, showNewCardUnreadAlert)
   }
 
-  const actionLabel = isUnread ? 'Mark as read' : 'Mark as unread'
+  const actionLabel = isUnread
+    ? translate('auto.components.sidebar.WorktreeCardStatusSlot.markAsRead', 'Mark as read')
+    : translate('auto.components.sidebar.WorktreeCardStatusSlot.markAsUnread', 'Mark as unread')
   const tooltip =
     showStatus && !isUnread ? `${passiveStatusLabel} · ${unreadTooltip}` : unreadTooltip
 

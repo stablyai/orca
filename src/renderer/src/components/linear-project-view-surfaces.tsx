@@ -26,6 +26,7 @@ import type {
   LinearWorkspaceError
 } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 
 type LinearProjectLike = LinearProjectSummary & {
   content?: string
@@ -349,8 +350,7 @@ export function LinearProjectTable({
               {priorityLabel(projectLike.priority, projectLike.priorityLabel)}
             </span>
             <span className="truncate text-[12px] text-muted-foreground">
-              {textFromUnknown(projectLike.lead) ??
-                translate('auto.components.linear.project.view.surfaces.df4bd63c1d', 'Unassigned')}
+              {textFromUnknown(projectLike.lead) ?? translateUnassignedLabel()}
             </span>
             <span className="truncate text-[12px] text-muted-foreground">
               {dateLabel(project.targetDate)}
@@ -783,7 +783,7 @@ export function LinearProjectOverview({
               />
               <PropertyRow
                 label={translate('auto.components.linear.project.view.surfaces.111bef9aa8', 'Lead')}
-                value={textFromUnknown(projectLike.lead) ?? 'Unassigned'}
+                value={textFromUnknown(projectLike.lead) ?? translateUnassignedLabel()}
                 icon={<UserRound className="size-3.5" />}
               />
               <PropertyRow

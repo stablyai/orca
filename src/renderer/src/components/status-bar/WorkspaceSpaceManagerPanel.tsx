@@ -1689,7 +1689,14 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
                 ? translate(
                     'auto.components.status.bar.WorkspaceSpaceManagerPanel.34174bd83d',
                     '{{value0}}. You can leave this page; the last result stays visible.',
-                    { value0: progressLabel ?? 'Scanning workspace sizes' }
+                    {
+                      value0:
+                        progressLabel ??
+                        translate(
+                          'auto.components.statusBar.workspaceSpaceFormat.scanningWorkspaceSizes',
+                          'Scanning workspace sizes'
+                        )
+                    }
                   )
                 : translate(
                     'auto.components.status.bar.WorkspaceSpaceManagerPanel.d595295d7d',
@@ -1700,7 +1707,14 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
                 ? translate(
                     'auto.components.status.bar.WorkspaceSpaceManagerPanel.265d956765',
                     '{{value0}}. You can leave this page.',
-                    { value0: progressLabel ?? 'Scanning workspace sizes' }
+                    {
+                      value0:
+                        progressLabel ??
+                        translate(
+                          'auto.components.statusBar.workspaceSpaceFormat.scanningWorkspaceSizes',
+                          'Scanning workspace sizes'
+                        )
+                    }
                   )
                 : translate(
                     'auto.components.status.bar.WorkspaceSpaceManagerPanel.e91dd2a9ae',

@@ -58,6 +58,7 @@ import {
 import type { PortForwardEntry, EnrichedDetectedPort } from '../../../../shared/ssh-types'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { translate } from '@/i18n/i18n'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 
 export {
   killWorkspacePortForTarget,
@@ -566,7 +567,7 @@ function LocalPortRow({
       ? port.owner.displayName
       : port.kind === 'container'
         ? 'Container or forwarded service'
-        : 'Unassigned'
+        : translateUnassignedLabel()
   const openBrowserLabel = translate(
     'auto.components.right.sidebar.PortsPanel.b22b128b2a',
     'Open in Browser'

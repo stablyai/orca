@@ -28,6 +28,7 @@ import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-m
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from '../native-chat/native-chat-shortcut'
@@ -129,9 +130,9 @@ export default function TerminalContextMenu({
     }),
     [keybindings]
   )
-  const showEqualizeShortcut = shortcuts.equalize !== 'Unassigned'
-  const showSetTitleShortcut = shortcuts.setTitle !== 'Unassigned'
-  const showClearPaneTitleShortcut = shortcuts.clearPaneTitle !== 'Unassigned'
+  const showEqualizeShortcut = !isUnassignedShortcutLabel(shortcuts.equalize)
+  const showSetTitleShortcut = !isUnassignedShortcutLabel(shortcuts.setTitle)
+  const showClearPaneTitleShortcut = !isUnassignedShortcutLabel(shortcuts.clearPaneTitle)
   return (
     <DropdownMenu
       open={open}

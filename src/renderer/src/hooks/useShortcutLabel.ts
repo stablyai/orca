@@ -8,6 +8,7 @@ import {
 } from '../../../shared/keybindings'
 import { useAppStore } from '../store'
 import { getShortcutPlatform } from '../lib/shortcut-platform'
+import { localizeUnassignedDisplay } from '@/i18n/unassigned-label'
 
 export { getShortcutPlatform }
 
@@ -21,9 +22,8 @@ export function formatShortcutLabel(
   overrides?: KeybindingOverrides
 ): string {
   const platform = getShortcutPlatform()
-  return formatKeybindingList(
-    getEffectiveKeybindingsForAction(actionId, platform, overrides),
-    platform
+  return localizeUnassignedDisplay(
+    formatKeybindingList(getEffectiveKeybindingsForAction(actionId, platform, overrides), platform)
   )
 }
 
@@ -33,7 +33,9 @@ export function formatPrimaryShortcutLabel(
 ): string {
   const platform = getShortcutPlatform()
   const [binding] = getEffectiveKeybindingsForAction(actionId, platform, overrides)
-  return binding ? formatKeybindingList([binding], platform) : 'Unassigned'
+  return localizeUnassignedDisplay(
+    binding ? formatKeybindingList([binding], platform) : 'Unassigned'
+  )
 }
 
 export function useShortcutLabel(actionId: KeybindingActionId): string {

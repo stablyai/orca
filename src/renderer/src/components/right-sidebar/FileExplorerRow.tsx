@@ -35,6 +35,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { openFileInBrowserTab } from '@/lib/file-preview'
@@ -704,7 +705,7 @@ export function FileExplorerRow({
           {selectionSize > 1
             ? translate('auto.components.right.sidebar.FileExplorerRow.f9d7ca753d', 'Copy Paths')
             : translate('auto.components.right.sidebar.FileExplorerRow.b5d436aa30', 'Copy Path')}
-          {copyPathShortcutLabel !== 'Unassigned' ? (
+          {!isUnassignedShortcutLabel(copyPathShortcutLabel) ? (
             <ContextMenuShortcut>{copyPathShortcutLabel}</ContextMenuShortcut>
           ) : null}
         </ContextMenuItem>
@@ -719,7 +720,7 @@ export function FileExplorerRow({
                 'auto.components.right.sidebar.FileExplorerRow.66a29dde82',
                 'Copy Relative Path'
               )}
-          {copyRelativePathShortcutLabel !== 'Unassigned' ? (
+          {!isUnassignedShortcutLabel(copyRelativePathShortcutLabel) ? (
             <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
           ) : null}
         </ContextMenuItem>
@@ -807,7 +808,7 @@ export function FileExplorerRow({
               'auto.components.right.sidebar.FileExplorerRow.0df0e5abac',
               'Find in Folder'
             )}
-            {findInFolderShortcutLabel !== 'Unassigned' ? (
+            {!isUnassignedShortcutLabel(findInFolderShortcutLabel) ? (
               <ContextMenuShortcut>{findInFolderShortcutLabel}</ContextMenuShortcut>
             ) : null}
           </ContextMenuItem>

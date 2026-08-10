@@ -27,6 +27,7 @@ import {
 } from './monaco-conflict-decorations'
 import { getDiffContentSignature } from './diff-content-signature'
 import { translate } from '@/i18n/i18n'
+import { formatFileLoadErrorMessage } from './file-load-error-copy'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 
@@ -104,7 +105,7 @@ function FileLoadErrorView({
           <div className="font-medium text-foreground">
             {translate('auto.components.editor.EditorContent.39f018b052', 'Unable to load file')}
           </div>
-          <div className="mt-1 break-words">{message}</div>
+          <div className="mt-1 break-words">{formatFileLoadErrorMessage(message)}</div>
           <Button type="button" variant="outline" size="sm" className="mt-3" onClick={onRetry}>
             <RefreshCw className="size-3.5" />
             {translate('auto.components.editor.EditorContent.2a512bb46a', 'Retry')}

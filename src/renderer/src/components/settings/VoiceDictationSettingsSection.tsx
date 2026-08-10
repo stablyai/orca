@@ -4,6 +4,7 @@ import { Separator } from '../ui/separator'
 import { Switch } from '../ui/switch'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { localizeUnassignedDisplay } from '@/i18n/unassigned-label'
 import { VoiceMicrophoneSetting } from './VoiceMicrophoneSetting'
 
 type VoiceDictationSettingsSectionProps = {
@@ -19,7 +20,7 @@ export function VoiceDictationSettingsSection({
   onToggleVoiceDictation,
   onUpdateVoiceSettings
 }: VoiceDictationSettingsSectionProps): React.JSX.Element {
-  const shortcutLabel = useShortcutLabel('voice.dictation')
+  const shortcutLabel = localizeUnassignedDisplay(useShortcutLabel('voice.dictation'))
 
   return (
     <>

@@ -1,5 +1,6 @@
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitBranchChangeEntry, GitStatusEntry } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 import { getEditorDisplayLabel } from './editor-labels'
 
 export type EditorHeaderCopyState = {
@@ -17,17 +18,25 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
   if (file.mode === 'conflict-review') {
     return {
       copyText: file.filePath,
-      copyToastLabel: 'Worktree path copied',
-      pathLabel: 'Conflict Review',
+      copyToastLabel: translate(
+        'auto.components.editor.editorHeader.worktreePathCopied',
+        'Worktree path copied'
+      ),
+      pathLabel: translate('auto.components.editor.editorHeader.conflictReview', 'Conflict Review'),
       pathTitle: file.filePath
     }
   }
 
   if (file.mode === 'check-details') {
-    const label = file.checkRunDetails?.check.name ?? 'Check details'
+    const label =
+      file.checkRunDetails?.check.name ??
+      translate('auto.components.editor.editorHeader.checkDetails', 'Check details')
     return {
       copyText: null,
-      copyToastLabel: 'Check details copied',
+      copyToastLabel: translate(
+        'auto.components.editor.editorHeader.checkDetailsCopied',
+        'Check details copied'
+      ),
       pathLabel: label,
       pathTitle: label
     }
@@ -43,7 +52,10 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
   if (isCombinedDiff) {
     return {
       copyText: file.filePath,
-      copyToastLabel: 'Worktree path copied',
+      copyToastLabel: translate(
+        'auto.components.editor.editorHeader.worktreePathCopied',
+        'Worktree path copied'
+      ),
       pathLabel: file.relativePath,
       pathTitle: file.filePath
     }
@@ -53,7 +65,10 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
 
   return {
     copyText: file.filePath,
-    copyToastLabel: 'File path copied',
+    copyToastLabel: translate(
+      'auto.components.editor.editorHeader.filePathCopied',
+      'File path copied'
+    ),
     pathLabel: displayLabel,
     pathTitle: displayLabel
   }

@@ -1,4 +1,21 @@
+import { translate } from '@/i18n/i18n'
+import { stageAtLeastOneFileToCommitTitle } from './source-control-primary-action-titles'
+
+/** Stable English sentinel for equality checks; localize at display via localizeCommitDisabledReason(). */
 export const COMMIT_MESSAGE_REQUIRED_REASON = 'Enter a commit message to commit' as const
+
+export function localizeCommitDisabledReason(reason: string | null): string | null {
+  if (reason === null) {
+    return null
+  }
+  if (reason === COMMIT_MESSAGE_REQUIRED_REASON) {
+    return translate(
+      'auto.components.rightSidebar.sourceControl.enterCommitMessage',
+      'Enter a commit message to commit'
+    )
+  }
+  return reason
+}
 
 export type CommitEligibilityInputs = {
   stagedCount: number
@@ -17,10 +34,13 @@ export function resolveCommitDisabledReason(
   >
 ): string | null {
   if (inputs.hasUnresolvedConflicts) {
-    return 'Resolve conflicts before committing'
+    return translate(
+      'auto.components.rightSidebar.sourceControl.resolveConflictsBeforeCommitting',
+      'Resolve conflicts before committing'
+    )
   }
   if (inputs.stagedCount === 0) {
-    return 'Stage at least one file to commit'
+    return stageAtLeastOneFileToCommitTitle()
   }
   if (!inputs.hasMessage) {
     return COMMIT_MESSAGE_REQUIRED_REASON

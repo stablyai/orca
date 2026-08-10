@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import type { ComponentType, JSX, ReactNode } from 'react'
 import { Files, GitBranch, ListChecks, MessageSquare, Search } from 'lucide-react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import { ReviewPRViewVisualStyles } from './review-animated-visual-pr-view-styles'
 import { CheckTinyIcon, ChevDownIcon, CursorIcon } from './review-animated-visual-shared'
 import { useReviewPrViewAnimation } from './review-pr-view-animation'
@@ -58,8 +59,9 @@ const SIDEBAR_TABS: readonly {
 
 function SidebarTabs(props: { active: SidebarTabId; interactiveChecks?: boolean }): JSX.Element {
   const checksShortcutLabel = useShortcutLabel('sidebar.checks.toggle')
-  const checksTooltip =
-    checksShortcutLabel === 'Unassigned' ? 'Checks' : `Checks (${checksShortcutLabel})`
+  const checksTooltip = isUnassignedShortcutLabel(checksShortcutLabel)
+    ? 'Checks'
+    : `Checks (${checksShortcutLabel})`
 
   return (
     <div className="ravpr-tabs">

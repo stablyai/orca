@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import { cn } from '@/lib/utils'
 import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/types'
 
@@ -157,8 +158,7 @@ function JiraIssueRow({
               translate('auto.components.TaskPage.713179dfdc', 'No priority')}
           </span>
           <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-            {issue.assignee?.displayName ??
-              translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+            {issue.assignee?.displayName ?? translateUnassignedLabel()}
           </span>
         </div>
         <div className="mt-1 flex min-w-0 items-center gap-1 max-lg:!hidden">
@@ -209,8 +209,7 @@ function JiraIssueRow({
           </span>
         )}
         <span className="truncate">
-          {issue.assignee?.displayName ??
-            translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+          {issue.assignee?.displayName ?? translateUnassignedLabel()}
         </span>
       </div>
 

@@ -32,6 +32,7 @@ import {
   usePluginPanelsStore
 } from '@/store/plugin-panels'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import {
   RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
   RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME,
@@ -110,7 +111,7 @@ function RightSidebarInner(): React.JSX.Element {
         id: 'explorer',
         icon: Files,
         title: translate('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
-        shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
+        shortcut: isUnassignedShortcutLabel(explorerShortcut) ? '' : explorerShortcut
       },
       {
         id: 'vault',
@@ -139,21 +140,21 @@ function RightSidebarInner(): React.JSX.Element {
         id: 'source-control',
         icon: GitBranch,
         title: translate('auto.components.right.sidebar.index.0314901467', 'Source Control'),
-        shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
+        shortcut: isUnassignedShortcutLabel(sourceControlShortcut) ? '' : sourceControlShortcut,
         gitOnly: true
       },
       {
         id: 'checks',
         icon: ListChecks,
         title: translate('auto.components.right.sidebar.index.83a10e3c44', 'Checks'),
-        shortcut: checksShortcut === 'Unassigned' ? '' : checksShortcut,
+        shortcut: isUnassignedShortcutLabel(checksShortcut) ? '' : checksShortcut,
         gitOnly: true
       },
       {
         id: 'ports',
         icon: Plug,
         title: translate('auto.components.right.sidebar.index.441733b630', 'Ports'),
-        shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
+        shortcut: isUnassignedShortcutLabel(portsShortcut) ? '' : portsShortcut,
         sshOnly: true
       },
       // Why: plugin panels append after the built-in tabs so core navigation

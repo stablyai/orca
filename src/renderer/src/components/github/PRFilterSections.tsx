@@ -193,7 +193,10 @@ export function SectionMenu({
       ? [
           {
             key: 'reviewer' as SectionKey,
-            label: reviewerKind === 'reviewed-by' ? 'Reviewed by' : 'Review from',
+            label:
+              reviewerKind === 'reviewed-by'
+                ? translate('auto.components.github.PRFilterDropdowns.7f1ba66c3e', 'Reviewed by')
+                : translate('auto.components.github.PRFilterDropdowns.b27b7e526c', 'Review from'),
             value: reviewerActive
           }
         ]

@@ -259,12 +259,20 @@ export function buildRemediation(
 
   // Plain missing-scope case on a keyring login — refresh will work.
   if (diag.missingScopes.length > 0) {
+    const scopes = diag.missingScopes.map((s) => `\`${s}\``).join(', ')
     return {
-      summary: `Your \`gh\` token is missing the ${diag.missingScopes
-        .map((s) => `\`${s}\``)
-        .join(
-          ', '
-        )} scope${diag.missingScopes.length === 1 ? '' : 's'} needed for GitHub Projects.`,
+      summary:
+        diag.missingScopes.length === 1
+          ? translate(
+              'auto.components.github.project.GhAuthErrorHelp.missingScope.one',
+              'Your `gh` token is missing the {{scopes}} scope needed for GitHub Projects.',
+              { scopes }
+            )
+          : translate(
+              'auto.components.github.project.GhAuthErrorHelp.missingScope.other',
+              'Your `gh` token is missing the {{scopes}} scopes needed for GitHub Projects.',
+              { scopes }
+            ),
       detail: translate(
         'auto.components.github.project.GhAuthErrorHelp.8d8191ec6f',
         'Run the refresh command in a terminal. It will open a browser to authorize the new scopes, then come back here and reload.'

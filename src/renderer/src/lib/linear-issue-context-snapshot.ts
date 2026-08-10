@@ -1,4 +1,5 @@
 import type { LinearComment, LinearIssue } from '../../../shared/types'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 
 export const LINEAR_ISSUE_CONTEXT_CAPS = {
   descriptionChars: 3000,
@@ -164,7 +165,9 @@ export function buildLinearIssueContextSnapshot(
     `Priority: ${getPriorityLabel(issue.priority)} (${issue.priority})`,
     `Estimate: ${issue.estimate ?? 'None'}`,
     `Assignee: ${
-      issue.assignee?.displayName ? normalizeInline(issue.assignee.displayName) : 'Unassigned'
+      issue.assignee?.displayName
+        ? normalizeInline(issue.assignee.displayName)
+        : translateUnassignedLabel()
     }`,
     `Team: ${normalizeInline(issue.team.name)} (${normalizeInline(issue.team.key)})`
   ]

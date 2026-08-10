@@ -15,7 +15,8 @@ import {
   describeForcePushWithLease,
   describePullCount,
   describePushCount,
-  describeSyncCounts
+  describeSyncCounts,
+  stageAtLeastOneFileToCommitTitle
 } from './source-control-primary-action-titles'
 
 export type {
@@ -194,10 +195,7 @@ function resolvePrimaryActionTitle(
         'Stage all changes'
       )
     case 'stage_file_to_commit':
-      return translate(
-        'auto.components.right.sidebar.source.control.primary.action.fa3bd4f40c',
-        'Stage at least one file to commit'
-      )
+      return stageAtLeastOneFileToCommitTitle()
     case 'checkout_branch_before_publish':
       return translate(
         'auto.components.right.sidebar.source.control.primary.action.e61b0d7a3c',

@@ -2483,7 +2483,11 @@
             "f25b51ca76": "Your token has the required scopes but GitHub still denied access. If the project is in an org with SAML SSO, you must authorize this token for the org under Settings → Developer settings → Personal access tokens → Configure SSO.",
             "945fe2619a": "Unset `{{value0}}` in the shell that launches Orca{{value1}}, then restart Orca.",
             "7e3d5e0045": " (or in your user environment variables)",
-            "593e49967c": " (or in your shell rc file)"
+            "593e49967c": " (or in your shell rc file)",
+            "missingScope": {
+              "one": "Your `gh` token is missing the {{scopes}} scope needed for GitHub Projects.",
+              "other": "Your `gh` token is missing the {{scopes}} scopes needed for GitHub Projects."
+            }
           },
           "ProjectCell": {
             "4b5b871da8": "No labels in this repo.",
@@ -2537,7 +2541,8 @@
             "d34ef9b554": "Board (unsupported)",
             "43a88ae574": "BOARD_LAYOUT",
             "1a2b8e512e": "Table",
-            "cafb908f34": "TABLE_LAYOUT"
+            "cafb908f34": "TABLE_LAYOUT",
+            "chooseAProject": "Choose a project"
           },
           "ProjectRow": {
             "75b5d816e3": "Start work",
@@ -5056,7 +5061,9 @@
           "automationCreated": "Created by automation",
           "branchIdentity": "Branch",
           "branchFolderPathIdentity": "Branch or folder path",
-          "ef18787206": "Queued for deletion"
+          "ef18787206": "Queued for deletion",
+          "markRead": "Mark read",
+          "markUnread": "Mark unread"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -5563,7 +5570,10 @@
           "setParentFor": "Set parent for"
         },
         "WorktreeCardStatusSlot": {
-          "branchIdentity": "Branch"
+          "branchIdentity": "Branch",
+          "statusUnread": "{{status}} · Unread",
+          "markAsRead": "Mark as read",
+          "markAsUnread": "Mark as unread"
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Hide external worktrees permanently for {{value0}}",
@@ -5743,6 +5753,16 @@
         "worktreeCount": {
           "one": "1 worktree",
           "other": "{{count}} worktrees"
+        },
+        "workspaceBoardStatus": {
+          "todo": "Todo",
+          "inProgress": "In progress",
+          "inReview": "In review",
+          "done": "Done"
+        },
+        "workspaceKanbanStatusLane": {
+          "newWorkspaceInStatus": "New workspace in {{status}}",
+          "addProjectToCreate": "Add a project to create workspaces"
         }
       },
       "shared": {
@@ -11246,7 +11266,8 @@
             "740aca88ab": "Workspace port scan failed.",
             "5be4f7f727": "Port {{value0}} menu",
             "7550998473": "Copy",
-            "1004af16ab": "Copy {{value0}}"
+            "1004af16ab": "Copy {{value0}}",
+            "unassigned": "Unassigned"
           },
           "Search": {
             "1abfb25a66": "Type to search in files",
@@ -11512,7 +11533,8 @@
             "86794572dc": "Search text is too large",
             "ad0504a58a": "Use a shorter file filter.",
             "362b97ec5c": "No matching files",
-            "d5103e47c1": "No changed files match \"{{value0}}\""
+            "d5103e47c1": "No changed files match \"{{value0}}\"",
+            "stageAtLeastOneFileToGenerate": "Stage at least one file to generate a message."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -14338,6 +14360,21 @@
           "insertColumnRight": "Insert column right",
           "deleteRow": "Delete row",
           "deleteColumn": "Delete column"
+        },
+        "richMarkdown": {
+          "placeholder": {
+            "writeMarkdown": "Write markdown… Type / for blocks."
+          }
+        },
+        "fileLoadError": {
+          "pathAccessDenied": "Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue."
+        },
+        "editorHeader": {
+          "worktreePathCopied": "Worktree path copied",
+          "conflictReview": "Conflict Review",
+          "checkDetails": "Check details",
+          "checkDetailsCopied": "Check details copied",
+          "filePathCopied": "File path copied"
         }
       },
       "diff": {
@@ -14477,6 +14514,34 @@
             "parallelTask": {
               "title": "Start another task in parallel",
               "body": "Each worktree gets its own branch, so parallel work stays separate."
+            }
+          },
+          "workspaceCreation": {
+            "project": {
+              "title": "Pick a project",
+              "body": "Orca isolates each task in its own worktree, branched off your base."
+            },
+            "name": {
+              "title": "Name it, or start from existing work",
+              "body": "Start from a linked task for a short issue or PR name. Or leave it blank to auto-name it from your first agent message."
+            },
+            "agent": {
+              "title": "Choose what agent starts the work",
+              "body": "Pick the agent that should be opened when this worktree is created."
+            }
+          },
+          "tasks": {
+            "workSource": {
+              "title": "Choose the work source",
+              "body": "Switch between connected providers and project filters without changing pages."
+            },
+            "filterWork": {
+              "title": "Filter to the work you need",
+              "body": "Use presets and search to narrow issues, reviews, merge requests, or tasks."
+            },
+            "startFromItems": {
+              "title": "Start from work items",
+              "body": "Use Start or Open on a task, issue, review, or merge request to bring its context into a workspace."
             }
           }
         }
@@ -15222,6 +15287,96 @@
           "actionsUnavailable": "Plugin actions are not available in this client.",
           "messageTooLarge": "Message exceeds the size limit.",
           "tooManyRequests": "Too many requests."
+        },
+        "sourceControl": {
+          "resolveConflictsBeforeCommitting": "Resolve conflicts before committing",
+          "pushCount": {
+            "one": "Push {{count}} commit",
+            "other": "Push {{count}} commits"
+          },
+          "pullCount": {
+            "one": "Pull {{count}} commit",
+            "other": "Pull {{count}} commits"
+          },
+          "fastForwardCount": {
+            "one": "Fast-forward {{count}} commit",
+            "other": "Fast-forward {{count}} commits"
+          },
+          "syncCounts": "Pull {{behind}}, push {{ahead}}",
+          "theRemoteBranch": "the remote branch",
+          "branchCommit": {
+            "one": "{{count}} branch commit",
+            "other": "{{count}} branch commits"
+          },
+          "thisBranch": "this branch",
+          "forcePushOlderRemote": "Remote only has older copies of local commits. Force push {{countText}} with lease to update {{remoteTarget}}.",
+          "localCommit": {
+            "one": "1 local commit",
+            "other": "{{count}} local commits"
+          },
+          "forcePushReplaceRemote": "Force push {{commitText}} with lease to update {{remoteTarget}} and replace remote-only commits.",
+          "forcePushUpdateRemote": "Force push {{commitText}} with lease to update {{remoteTarget}}.",
+          "forcePushSetUpstream": "Force push {{countText}} with lease and set an upstream if needed.",
+          "nothingToPull": "Nothing to pull",
+          "nothingToFastForward": "Nothing to fast-forward",
+          "tryRebasingDirty": "Try rebasing; git may require committing or stashing local changes first",
+          "branchAlreadyPublished": "Branch is already published",
+          "switchToFeatureBranch": "Switch to a feature branch",
+          "stageAtLeastOneFileToCommit": "Stage at least one file to commit",
+          "enterCommitMessage": "Enter a commit message to commit",
+          "commitStagedChanges": "Commit staged changes",
+          "checkingBranchStatus": "Checking branch status…",
+          "checkingPrStatus": "Checking PR status…",
+          "prAlreadyMerged": "PR is already merged",
+          "checkoutBeforePush": "Check out a branch before pushing commits",
+          "checkoutBeforeForcePush": "Check out a branch before force pushing commits",
+          "checkoutBeforePull": "Check out a branch before pulling commits",
+          "checkoutBeforeFastForward": "Check out a branch before fast-forwarding",
+          "checkoutBeforeSync": "Check out a branch before syncing commits",
+          "checkoutBeforePublish": "Check out a branch before publishing commits",
+          "linkedReviewTargetUnavailable": "Linked review branch target is unavailable",
+          "publishFirstToPush": "Publish the branch first to push commits",
+          "publishFirstToPull": "Publish the branch first to pull commits",
+          "publishFirstToFastForward": "Publish the branch first to fast-forward",
+          "publishFirstToSync": "Publish the branch first to sync commits",
+          "commitAndForcePushWithLease": "Commit staged changes and force push with lease",
+          "commitAndTryPush": "Commit staged changes and try to push",
+          "commitAndPush": "Commit staged changes and push",
+          "useCommitAndForcePush": "Use Commit & Force Push — remote only has older copies of local commits",
+          "commitThenPullPush": "Commit, then pull and push",
+          "pushSetUpstream": "Push this branch and set an upstream if needed",
+          "pushLinkedReviewUpdates": "Push updates to the linked review branch",
+          "tryRegularPushMayForce": "Try a regular push; git may require force push",
+          "pushMayRequireSync": "Push local commits; git may require syncing first",
+          "nothingToPushTo": "Nothing to push to {{upstream}}",
+          "nothingToPush": "Nothing to push",
+          "nothingToForcePushTo": "Nothing to force push to {{upstream}}",
+          "nothingToForcePush": "Nothing to force push",
+          "nothingNewToPullOlderRemote": "Nothing new to pull — remote only has older copies of local commits",
+          "nothingNewToFastForwardOlderRemote": "Nothing new to fast-forward — remote only has older copies of local commits",
+          "tryFastForwardMayReject": "Try a fast-forward pull; git may reject local commits",
+          "useForcePushOlderRemote": "Use Force Push — remote only has older copies of local commits",
+          "branchUpToDate": "Branch is up to date",
+          "chooseRemoteBaseToRebase": "Choose a remote base branch to rebase from",
+          "rebaseCurrentFromBase": "Rebase current branch with latest commits from {{base}}",
+          "linkedReviewBranchExists": "Linked review branch already exists",
+          "publishBranchToOrigin": "Publish this branch to origin",
+          "commitChangesFirst": "Commit changes first",
+          "checkoutBranchFirst": "Check out a branch first",
+          "pushFirst": "Push first",
+          "forcePushFirst": "Force Push first",
+          "syncFirst": "Sync first",
+          "authRequiredInEnvironment": "{{instruction}} in this environment",
+          "unsupportedProvider": "Unsupported provider",
+          "reviewAlreadyExists": "A {{reviewLabel}} already exists",
+          "forkHeadUnsupported": "Fork head unsupported",
+          "baseBranchNotOnRemote": "Base branch is not on the remote",
+          "branchNotReady": "Branch is not ready",
+          "createReviewForBranch": "Create a {{reviewLabel}} for this branch",
+          "forcePushBeforeCreateReview": "Force push with lease before creating a {{reviewLabel}}",
+          "pushBeforeCreateReview": "Push local commits before creating a {{reviewLabel}}",
+          "operationInProgress": "Operation in progress…",
+          "abortConflictInProgress": "Abort the {{operation}} in progress"
         }
       },
       "link": {
@@ -15715,6 +15870,31 @@
       "jiraConnectDialog": {
         "tokenStoredRemote": "Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.",
         "tokenStoredLocal": "Your token is stored locally and encrypted when local runtime storage supports it."
+      },
+      "statusBar": {
+        "workspaceSpaceFormat": {
+          "cancellingScan": "Cancelling scan",
+          "workspaces": "workspaces",
+          "scanningWorktrees": "Scanning {{scanned}} of {{total}} · {{current}}",
+          "scanningRepos": "Scanning {{scanned}} of {{total}} repos · {{current}}",
+          "scanningWorkspaceSizes": "Scanning workspace sizes",
+          "statusScanned": "Scanned",
+          "statusMissing": "Missing",
+          "statusNoAccess": "No access",
+          "statusUnavailable": "Unavailable",
+          "statusFailed": "Failed",
+          "mainWorktree": "main worktree",
+          "detached": "detached"
+        }
+      },
+      "lib": {
+        "worktreeStatus": {
+          "active": "Active",
+          "working": "Working",
+          "needsPermission": "Needs permission",
+          "done": "Done",
+          "inactive": "Inactive"
+        }
       }
     },
     "i18n": {
@@ -16120,5 +16300,8 @@
       "settingsInstruction": "Change the model, dictation mode, or shortcut anytime in",
       "settingsLink": "Settings → Voice"
     }
+  },
+  "common": {
+    "unassigned": "Unassigned"
   }
 }

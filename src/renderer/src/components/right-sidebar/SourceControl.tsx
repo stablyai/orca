@@ -6649,7 +6649,10 @@ export function CommitArea({
   } else if (isCommitting) {
     generateTooltip = 'Commit in progress…'
   } else if (stagedCount === 0) {
-    generateTooltip = 'Stage at least one file to generate a message.'
+    generateTooltip = translate(
+      'auto.components.right.sidebar.SourceControl.stageAtLeastOneFileToGenerate',
+      'Stage at least one file to generate a message.'
+    )
   } else if (hasMessage) {
     generateTooltip = 'Clear the message to regenerate.'
   } else if (!aiAgentConfigured) {

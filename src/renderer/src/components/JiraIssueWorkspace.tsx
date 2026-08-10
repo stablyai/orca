@@ -48,6 +48,7 @@ import type {
 } from '../../../shared/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 
 type JiraIssueWorkspaceProps = {
@@ -559,7 +560,7 @@ export default function JiraIssueWorkspace({
                     }
                     className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
                   >
-                    {translate('auto.components.JiraIssueWorkspace.0b6b5646ed', 'Unassigned')}
+                    {translateUnassignedLabel()}
                   </button>
                   {users.map((user) => (
                     <button
@@ -653,8 +654,7 @@ export default function JiraIssueWorkspace({
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {displayed.project.key} ·{' '}
-                      {displayed.assignee?.displayName ??
-                        translate('auto.components.JiraIssueWorkspace.0b6b5646ed', 'Unassigned')}
+                      {displayed.assignee?.displayName ?? translateUnassignedLabel()}
                     </span>
                   </div>
                   {displayed.description?.trim() ? (

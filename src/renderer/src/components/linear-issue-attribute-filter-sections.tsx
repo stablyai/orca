@@ -7,6 +7,7 @@ import {
 } from '@/components/github/PRFilterPickers'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import {
   canonicalizeLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
@@ -73,10 +74,7 @@ export function linearIssueAttributeFilterPillLabels(options: {
         'auto.components.linear-issue-attribute-filter-sections.assignee',
         'Assignee'
       ),
-      value: translate(
-        'auto.components.linear-issue-attribute-filter-sections.unassigned',
-        'Unassigned'
-      )
+      value: translateUnassignedLabel()
     })
   } else if (canonical.assignee?.kind === 'user') {
     pills.push({
@@ -148,10 +146,7 @@ export function LinearIssueFilterSectionMenu({
       ),
       summary: value.assignee
         ? value.assignee.kind === 'unassigned'
-          ? translate(
-              'auto.components.linear-issue-attribute-filter-sections.unassigned',
-              'Unassigned'
-            )
+          ? translateUnassignedLabel()
           : translate('auto.components.linear-issue-attribute-filter-sections.selected', 'selected')
         : ''
     },
@@ -270,10 +265,7 @@ export function LinearIssueFilterSectionDetail({
                 })
               }
             >
-              {translate(
-                'auto.components.linear-issue-attribute-filter-sections.unassigned',
-                'Unassigned'
-              )}
+              {translateUnassignedLabel()}
             </button>
           </div>
         ) : null}
@@ -334,10 +326,7 @@ export function LinearIssueFilterSectionDetail({
         options={[
           {
             key: '__unassigned__',
-            primary: translate(
-              'auto.components.linear-issue-attribute-filter-sections.unassigned',
-              'Unassigned'
-            )
+            primary: translateUnassignedLabel()
           },
           ...assigneeOptions
         ]}

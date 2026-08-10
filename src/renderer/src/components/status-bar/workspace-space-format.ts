@@ -4,6 +4,7 @@ import type {
   WorkspaceSpaceWorktree
 } from '../../../../shared/workspace-space-types'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
+import { translate } from '@/i18n/i18n'
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'] as const
 const fullDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
@@ -55,36 +56,68 @@ export function getWorkspaceSpaceProgressLabel(
     return null
   }
   if (progress.state === 'cancelling') {
-    return 'Cancelling scan'
+    return translate(
+      'auto.components.statusBar.workspaceSpaceFormat.cancellingScan',
+      'Cancelling scan'
+    )
   }
 
   const current =
-    progress.currentWorktreeDisplayName ?? progress.currentRepoDisplayName ?? 'workspaces'
+    progress.currentWorktreeDisplayName ??
+    progress.currentRepoDisplayName ??
+    translate('auto.components.statusBar.workspaceSpaceFormat.workspaces', 'workspaces')
   if (progress.totalWorktreeCount > 0) {
-    return `Scanning ${progress.scannedWorktreeCount} of ${progress.totalWorktreeCount} · ${current}`
+    return translate(
+      'auto.components.statusBar.workspaceSpaceFormat.scanningWorktrees',
+      'Scanning {{scanned}} of {{total}} · {{current}}',
+      {
+        scanned: progress.scannedWorktreeCount,
+        total: progress.totalWorktreeCount,
+        current
+      }
+    )
   }
   if (progress.totalRepoCount > 0) {
-    return `Scanning ${progress.scannedRepoCount} of ${progress.totalRepoCount} repos · ${current}`
+    return translate(
+      'auto.components.statusBar.workspaceSpaceFormat.scanningRepos',
+      'Scanning {{scanned}} of {{total}} repos · {{current}}',
+      {
+        scanned: progress.scannedRepoCount,
+        total: progress.totalRepoCount,
+        current
+      }
+    )
   }
-  return 'Scanning workspace sizes'
+  return translate(
+    'auto.components.statusBar.workspaceSpaceFormat.scanningWorkspaceSizes',
+    'Scanning workspace sizes'
+  )
 }
 
 export function getWorkspaceSpaceStatusLabel(status: WorkspaceSpaceScanStatus): string {
   switch (status) {
     case 'ok':
-      return 'Scanned'
+      return translate('auto.components.statusBar.workspaceSpaceFormat.statusScanned', 'Scanned')
     case 'missing':
-      return 'Missing'
+      return translate('auto.components.statusBar.workspaceSpaceFormat.statusMissing', 'Missing')
     case 'permission-denied':
-      return 'No access'
+      return translate('auto.components.statusBar.workspaceSpaceFormat.statusNoAccess', 'No access')
     case 'unavailable':
-      return 'Unavailable'
+      return translate(
+        'auto.components.statusBar.workspaceSpaceFormat.statusUnavailable',
+        'Unavailable'
+      )
     case 'error':
-      return 'Failed'
+      return translate('auto.components.statusBar.workspaceSpaceFormat.statusFailed', 'Failed')
   }
 }
 
 export function getWorkspaceSpaceBranchLabel(worktree: WorkspaceSpaceWorktree): string {
   const branch = worktree.branch.replace(/^refs\/heads\//, '').trim()
-  return branch || (worktree.isMainWorktree ? 'main worktree' : 'detached')
+  if (branch) {
+    return branch
+  }
+  return worktree.isMainWorktree
+    ? translate('auto.components.statusBar.workspaceSpaceFormat.mainWorktree', 'main worktree')
+    : translate('auto.components.statusBar.workspaceSpaceFormat.detached', 'detached')
 }

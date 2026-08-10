@@ -128,17 +128,20 @@ export const CONTEXTUAL_TOURS = [
     id: 'tasks',
     steps: [
       {
+        id: 'tasks-work-source',
         title: 'Choose the work source',
         body: 'Switch between connected providers and project filters without changing pages.',
         targetSelector: '[data-contextual-tour-target="tasks-source-filters"]',
         requiredForStart: true
       },
       {
+        id: 'tasks-filter-work',
         title: 'Filter to the work you need',
         body: 'Use presets and search to narrow issues, reviews, merge requests, or tasks.',
         targetSelector: '[data-contextual-tour-target="tasks-search-presets"]'
       },
       {
+        id: 'tasks-start-from-items',
         title: 'Start from work items',
         body: 'Use Start or Open on a task, issue, review, or merge request to bring its context into a workspace.',
         targetSelector:
@@ -191,18 +194,21 @@ export const CONTEXTUAL_TOURS = [
     allowedActiveModals: ['new-workspace-composer'],
     steps: [
       {
+        id: 'workspace-creation-project',
         title: 'Pick a project',
         body: 'Orca isolates each task in its own worktree, branched off your base.',
         targetSelector: '[data-contextual-tour-target="workspace-creation-project"]',
         requiredForStart: true
       },
       {
+        id: 'workspace-creation-name',
         title: 'Name it, or start from existing work',
         body: 'Start from a linked task for a short issue or PR name. Or leave it blank to auto-name it from your first agent message.',
         targetSelector: '[data-contextual-tour-target="workspace-creation-name"]',
         control: { kind: 'auto-rename-branch-from-work' }
       },
       {
+        id: 'workspace-creation-agent',
         title: 'Choose what agent starts the work',
         body: 'Pick the agent that should be opened when this worktree is created.',
         targetSelector: '[data-contextual-tour-target="workspace-creation-agent"]'

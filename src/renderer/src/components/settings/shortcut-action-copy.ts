@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import type { KeybindingActionId } from '../../../../shared/keybindings'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/tui-agent-display-names'
 import type { ShortcutFilter } from './ShortcutFilterRail'
@@ -68,7 +69,7 @@ export function translateShortcutFilterLabel(filter: ShortcutFilter): string {
     case 'modified':
       return translate('settings.shortcuts.filters.modified', 'Modified')
     case 'unassigned':
-      return translate('settings.shortcuts.filters.unassigned', 'Unassigned')
+      return translateUnassignedLabel()
     case 'conflicts':
       return translate('settings.shortcuts.filters.conflicts', 'Conflicts')
   }

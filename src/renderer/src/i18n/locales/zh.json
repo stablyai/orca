@@ -1946,13 +1946,13 @@
       "TaskPage": {
         "513cddfa7a": "正在验证...",
         "ff69a30681": "取消",
-        "2abe22ef76": "您的 token 通过操作系统钥匙串加密并存储在本地。",
+        "2abe22ef76": "您的 token 通过操作系统钥匙串加密并存储在本地",
         "246c2b3dd3": "Atlassian 账户设置",
         "59c14d34a2": "创建一个 token",
         "b95623e93f": "Atlassian API 令牌",
         "68df347677": "你@example.com",
         "163df31e0e": "https://example.atlassian.net",
-        "33fc2bcb30": "使用 Jira Cloud 站点 URL、Atlassian 电子邮件和 API token 来浏览议题。",
+        "33fc2bcb30": "使用 Jira Cloud 站点 URL、Atlassian 电子邮件和 API token 来浏览议题",
         "60f806ce99": "连接 Jira 站点",
         "8ff6fdc368": "创建中…",
         "fc0d8a1fa4": "提交。",
@@ -2011,7 +2011,7 @@
         "6244a02f46": "在 Linear 中打开",
         "606a85c774": "开放",
         "5e8061b088": "从 {{value0}} {{value1}} 开始工作区",
-        "592a55611b": "尝试选择更多的团队或者刷新；团队筛选条件适用于当前获取的议题集。",
+        "592a55611b": "尝试选择更多的团队或者刷新，团队筛选条件适用于当前获取的议题集",
         "618107fab3": "没有获取到与所选团队匹配的议题",
         "903c7af49f": "未找到 Linear 议题",
         "5ed38a49e5": "查看下面的工作区错误，然后刷新。",
@@ -2038,7 +2038,7 @@
         "dfc0c79bd8": "议题",
         "8a07f21e76": "健康",
         "851017590d": "添加 Linear 访问",
-        "228b25028f": "直接从这里浏览并开始处理分配给您的 Linear 议题。",
+        "228b25028f": "直接从这里浏览并开始处理分配给您的 Linear 议题",
         "6d56559467": "连接您的 Linear 账户",
         "eee68073b2": "在 Jira 中打开",
         "9497f2787c": "启动工作区",
@@ -2046,7 +2046,7 @@
         "63b2abd3aa": "Jira 议题",
         "e7115334aa": "隐藏 Jira",
         "83bce6be5c": "连接 Jira",
-        "b518ae6307": "直接从此处浏览、编辑、创建 Jira 议题并开始工作。",
+        "b518ae6307": "直接从此处浏览、编辑、创建 Jira 议题并开始工作",
         "a150c59da7": "连接您的 Jira 站点",
         "bcdc1330b2": "在 GitLab 中打开",
         "00b7ffb952": "类型/状态",
@@ -2092,18 +2092,18 @@
         "3f594861a5": "无法保存团队选择。",
         "d0d570b306": "无法切换 Linear 工作区。",
         "cb98f0350c": "创建 {{value0}}",
-        "1e1b2ad8f2": "在提交此议题之前，请从项目工作区选择一个团队。",
+        "1e1b2ad8f2": "在提交此议题之前，请从项目工作区选择一个团队",
         "3ca9b424a3": "创建项目失败。",
         "3f9604efc7": "已打开议题 #{{value0}}",
         "585dba2989": "无法打开此议题所附的工作区。",
-        "534a9c6017": "无法打开附加到此拉取请求的工作区。",
+        "534a9c6017": "无法打开附加到此拉取请求的工作区",
         "fe380f306c": "无法保存默认任务视图。",
         "af2a8371de": "无法加载 Jira 议题类型。",
         "6775c05483": "无法更新 Linear 状态",
         "745ae567d4": "\"{{value0}}\"不适用于 {{value1}}",
         "669e419d65": "Linear 视图缺少工作区上下文。",
         "cba2a2b7fb": "Linear 项目缺少工作区上下文。",
-        "f4374519ae": "您的首选议题源(upstream)已不再为 {{value0}} 配置。将使用 origin。",
+        "f4374519ae": "您的首选议题源(upstream)已不再为 {{value0}} 配置。将使用 origin",
         "e9139db03f": "无法隐藏 {{value0}}。",
         "b73717af92": "下一步",
         "0c8df28045": "前往下一页",
@@ -2172,8 +2172,8 @@
         "6459faa8b3": "错误",
         "e15ba2d2eb": "创建议题",
         "3b11c8e8fc": "数组",
-        "e178c0a953": "在创建议题之前选择一个 Jira 项目。",
-        "0f7b0d964a": "在 {{value0}} 中创建一个新议题。",
+        "e178c0a953": "在创建议题之前选择一个 Jira 项目",
+        "0f7b0d964a": "在 {{value0}} 中创建一个新议题",
         "eff9800d4b": "{{value0}} 标签{{value1}}",
         "d7f16d0e32": "选择团队",
         "5301ca0f20": "创建项目",
@@ -2181,28 +2181,28 @@
         "5af6f0ae5b": "选择团队",
         "cfb730b73e": "议题",
         "3659f9792a": "看板",
-        "d079be2dc8": "没有分配的议题。请尝试搜索。",
+        "d079be2dc8": "没有分配的议题。请尝试搜索",
         "2bdefbcac3": "尝试不同的搜索查询。",
-        "25ff84769a": "没有议题与此 Linear 上下文匹配。",
+        "25ff84769a": "没有议题与此 Linear 上下文匹配",
         "cbce2bc9cd": "没有任何",
         "51411113df": "列表",
         "60f68a2ef4": "Linear 议题",
         "b2007ba885": "项目",
         "6edf402e11": "概述",
         "9ae151b26b": "Linear",
-        "94d900518d": "没有与所选预设匹配的议题。",
+        "94d900518d": "没有与所选预设匹配的议题",
         "f51e254d35": "尝试不同的 JQL 查询。",
         "4645a7814f": "Jira",
         "e224d76876": "MR",
         "bbec4717ee": "mr",
-        "d6d08c1650": "选择一个项目以查看 GitLab 工作项。",
-        "f294c500ef": "没有 GitLab 工作与此筛选条件匹配。",
-        "cd7dc432a3": "没有 GitLab MR 与此筛选条件匹配。",
+        "d6d08c1650": "选择一个项目以查看 GitLab 工作项",
+        "f294c500ef": "没有 GitLab 工作与此筛选条件匹配",
+        "cd7dc432a3": "没有 GitLab MR 与此筛选条件匹配",
         "171b7739d8": "mrs",
-        "a9f256ecea": "没有与此筛选条件匹配的 GitLab 议题。",
+        "a9f256ecea": "没有与此筛选条件匹配的 GitLab 议题",
         "2007e14d95": "GitLab",
         "456b8512da": "合并请求",
-        "03da966159": "选择一个项目，以便我们可以向 GitLab 进行身份验证。",
+        "03da966159": "选择一个项目，以便我们可以向 GitLab 进行身份验证",
         "d591aac6ae": "没有待办事项，你全部处理完啦！",
         "33a4bd7f5c": "待办事项",
         "66ae7330f6": "更多操作",
@@ -2241,38 +2241,38 @@
         "closeAsDuplicateDescription": "与此仓库中的另一个议题重复",
         "duplicateIssueNumberPlaceholder": "议题编号",
         "closeAsDuplicateSubmit": "关闭重复项",
-        "duplicateIssueMissing": "请输入此仓库中的议题编号。",
-        "duplicateIssueNotInteger": "请使用整数议题编号。",
-        "duplicateIssueNotPositive": "请使用正数议题编号。",
-        "duplicateIssueSameIssue": "请选择另一个议题。",
+        "duplicateIssueMissing": "请输入此仓库中的议题编号",
+        "duplicateIssueNotInteger": "请使用整数议题编号",
+        "duplicateIssueNotPositive": "请使用正数议题编号",
+        "duplicateIssueSameIssue": "请选择另一个议题",
         "repository": "仓库",
         "backToCloseReasons": "返回",
         "searchIssues": "搜索议题",
         "useIssueNumber": "使用议题 #{{value0}}",
-        "noMatchingIssuesLoaded": "没有加载到匹配的议题。",
+        "noMatchingIssuesLoaded": "没有加载到匹配的议题",
         "editReviewersWithCurrent": "编辑评审人：{{value0}}",
-        "linearEmptyAttributeFilter": "没有匹配所选筛选条件的问题。请清除筛选条件或尝试其他条件。",
+        "linearEmptyAttributeFilter": "没有匹配所选筛选条件的问题。请清除筛选条件或尝试其他条件",
         "linearEmptyUnfilteredScope": "此工作区范围内没有问题。请尝试搜索或调整团队。",
         "linearFetchMore": "加载更多",
         "linearHasWorktreeLoadFailed": "无法加载关联到 Orca 工作区的 Linear 议题。",
-        "linearHasWorktreePartialLoadFailed": "部分关联到 Orca 工作区的 Linear 议题无法加载。请刷新后重试。",
+        "linearHasWorktreePartialLoadFailed": "部分关联到 Orca 工作区的 Linear 议题无法加载。请刷新后重试",
         "linearHasWorktreeSearchPlaceholder": "筛选关联到 Orca 工作区的议题...",
         "linearModeHasWorktree": "有工作区",
         "linearModeHasWorktreeTooltip": "已关联 Orca 工作区的 Linear 工单",
-        "linearEmptyHasWorktree": "还没有关联到 Orca 工作区的 Linear 工单。从 Linear 议题开始工作后会显示在这里。",
+        "linearEmptyHasWorktree": "还没有关联到 Orca 工作区的 Linear 工单。从 Linear 议题开始工作后会显示在这里",
         "linearOpenAttachedWorkspace": "打开关联到 {{value0}} 的工作区",
         "linearWorktreesColumn": "工作区",
         "jiraSortAscending": "升序",
         "jiraSortDescending": "降序",
         "jiraSortBy": "排序方式",
         "jiraToggleSortDirection": "按{{value0}}排序",
-        "75a38d7df8": "GitHub 数据暂时不可用，其 API 可能已宕机、被限流或无法访问。请稍后重试。",
+        "75a38d7df8": "GitHub 数据暂时不可用，其 API 可能已宕机、被限流或无法访问。请稍后重试",
         "noGithubSourceDetected": "未检测到 GitHub 来源：",
         "noGithubSourceDetectedHint": "它可能没有 GitHub 远程仓库，或来源无法解析",
-        "jiraLinkSourceUnavailable": "无法关联此 Jira 议题。请重新连接 Jira 或选择匹配的站点，然后重试。",
-        "loadPageUnreachable": "第 {{value0}} 页超出了 GitHub 搜索可返回的范围。",
-        "loadPageFailed": "无法从 GitHub 加载第 {{value0}} 页。",
-        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。"
+        "jiraLinkSourceUnavailable": "无法关联此 Jira 议题。请重新连接 Jira 或选择匹配的站点，然后重试",
+        "loadPageUnreachable": "第 {{value0}} 页超出了 GitHub 搜索可返回的范围",
+        "loadPageFailed": "无法从 GitHub 加载第 {{value0}} 页",
+        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -2456,7 +2456,11 @@
             "f25b51ca76": "你的 token 已有所需 scope，但 GitHub 仍拒绝访问。如果项目在启用了 SAML SSO 的组织中，必须在 Settings → Developer settings → Personal access tokens → Configure SSO 下为此 token 授权该组织。",
             "945fe2619a": "在启动 Orca 的 shell 中取消设置 `{{value0}}`{{value1}}，然后重启 Orca。",
             "7e3d5e0045": "(或在用户环境变量中)",
-            "593e49967c": "(或在 shell rc 文件中)"
+            "593e49967c": "(或在 shell rc 文件中)",
+            "missingScope": {
+              "one": "你的 gh 令牌缺少 GitHub Projects 所需的 {{scopes}} 权限范围。",
+              "other": "你的 gh 令牌缺少 GitHub Projects 所需的 {{scopes}} 权限范围。"
+            }
           },
           "ProjectCell": {
             "4b5b871da8": "此仓库中没有标签。",
@@ -2510,7 +2514,8 @@
             "d34ef9b554": "看板(不支持)",
             "43a88ae574": "板布局",
             "1a2b8e512e": "表格",
-            "cafb908f34": "表布局"
+            "cafb908f34": "表布局",
+            "chooseAProject": "选择项目"
           },
           "ProjectRow": {
             "75b5d816e3": "开始工作",
@@ -4870,9 +4875,9 @@
           "b451c8b162": "最近的",
           "6664282a7b": "拖动项目进行排列",
           "7b316bdd51": "手动的",
-          "7153d07485": "拖动工作区以将它们排列在每个组中。",
+          "7153d07485": "拖动工作区以将它们排列在每个组中",
           "2170d553cf": "项目",
-          "b759bb87ee": "需要关注的代理，然后是最近的活动。",
+          "b759bb87ee": "需要关注的代理，然后是最近的活动",
           "503462f2b4": "代理活动",
           "3728165cdd": "名称",
           "2a81e07366": "完整列表",
@@ -4921,12 +4926,12 @@
         },
         "WorkspaceKanbanDrawerHeader": {
           "f369f5c5a3": "关闭",
-          "e1a34450fc": "按状态组织工作区并打开工作区卡。",
+          "e1a34450fc": "按状态组织工作区并打开工作区卡",
           "81870af08f": "已选择",
           "c6a77ab0f4": "工作区板"
         },
         "WorkspaceKanbanPinDropTarget": {
-          "c30151c5ee": "拖放到此处即可固定，无需更改状态。",
+          "c30151c5ee": "拖放到此处即可固定，无需更改状态",
           "8fae2d0862": "已固定"
         },
         "WorkspaceKanbanSettingsMenu": {
@@ -4935,10 +4940,10 @@
           "b45b350eb0": "向左手机 {{value0}}",
           "8ce44af9a8": "重命名 {{value0}}",
           "395e541d5d": "状态",
-          "34f03eb0de": "董事会设置",
+          "34f03eb0de": "看板设置",
           "26cbc92150": "工作区板设置",
           "87d24a0c2f": "同步看板和议题状态",
-          "4c2eaa78cc": "移动已关联的工作区时，如果存在匹配的工作流状态，将更新其 Linear 议题状态。"
+          "4c2eaa78cc": "移动已关联的工作区时，如果存在匹配的工作流状态，将更新其 Linear 议题状态"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空的",
@@ -4979,7 +4984,9 @@
           "automationCreated": "由自动化创建",
           "branchIdentity": "分支",
           "branchFolderPathIdentity": "分支或文件夹路径",
-          "ef18787206": "已排队删除"
+          "ef18787206": "已排队删除",
+          "markRead": "标为已读",
+          "markUnread": "标为未读"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "代理"
@@ -5536,7 +5543,10 @@
           "setParentFor": "为以下工作树设置父级"
         },
         "WorktreeCardStatusSlot": {
-          "branchIdentity": "分支"
+          "branchIdentity": "分支",
+          "statusUnread": "{{status}} · 未读",
+          "markAsRead": "标为已读",
+          "markAsUnread": "标为未读"
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "永久隐藏 {{value0}} 的外部工作树",
@@ -5716,6 +5726,16 @@
         "worktreeCount": {
           "one": "1 个工作树",
           "other": "{{count}} 个工作树"
+        },
+        "workspaceBoardStatus": {
+          "todo": "待办",
+          "inProgress": "进行中",
+          "inReview": "评审中",
+          "done": "已完成"
+        },
+        "workspaceKanbanStatusLane": {
+          "newWorkspaceInStatus": "在「{{status}}」中新建工作区",
+          "addProjectToCreate": "添加项目以创建工作区"
         }
       },
       "shared": {
@@ -8114,8 +8134,8 @@
           "1ba81c0ff0": "受到推崇的",
           "cfde55c7b0": "下载模型失败。",
           "43fd4f454b": "语音模型",
-          "7cf715f891": "举行",
-          "295d84b849": "一次开始，再次停止。按住：指示同时",
+          "7cf715f891": "保持按住",
+          "295d84b849": "一次开始，再次停止。保持：",
           "ff9a680010": "切换：按下",
           "ba4a900d1d": "听写模式",
           "0121960365": "启用语音听写",
@@ -8132,7 +8152,7 @@
           "d504ab05f0": "流媒体",
           "fbe5990716": "选择型号",
           "e24f7d43d2": "选择语音模型，本地模型离线运行；云模型需要 API 密钥",
-          "174da92062": "抓住",
+          "174da92062": "保持",
           "118b3c2dee": "切换",
           "901985625d": "切换",
           "ad5d036ecc": "无法请求麦克风权限。未启用语音听写",
@@ -9138,7 +9158,7 @@
               "dbccde3a60": "关闭",
               "9e16be01d6": "背景",
               "3a5e31e84b": "离开",
-              "8015fd9523": "抓住",
+              "8015fd9523": "保持",
               "aa3f736042": "调整大小",
               "356c31d6dc": "宽度",
               "fadcbfdd99": "合身",
@@ -9790,7 +9810,7 @@
               "56defcd6c3": "选择用于听写的本地或云语音转文本模型",
               "7e62cd7c41": "语音模型",
               "931b1a9e53": "即按即说",
-              "064a9bd94a": "抓住",
+              "064a9bd94a": "保持",
               "6fa48bcd41": "切换",
               "d86f5600da": "模式",
               "089d31a45b": "听写",
@@ -11125,7 +11145,7 @@
             "cf7cad58d2": "尚无提交",
             "781a8bcf7b": "正在加载图表...",
             "d0fb0f4bf2": "刷新提交记录",
-            "9f7535d22b": "引用是指向该确切提交的分支或标签名称。它们仅出现在 Git 具有该提交的命名引用的位置。",
+            "9f7535d22b": "引用是指向该确切提交的分支或标签名称，它们仅出现在 Git 具有该提交的命名引用的位置",
             "9289ba0cb9": "什么是参考文献？",
             "d836037d02": "提交",
             "8232c8b2f2": "打开 commit {{value0}}: {{value1}}",
@@ -11219,7 +11239,8 @@
             "740aca88ab": "工作区端口扫描失败。",
             "5be4f7f727": "端口 {{value0}} 菜单",
             "7550998473": "复制",
-            "1004af16ab": "复制 {{value0}}"
+            "1004af16ab": "复制 {{value0}}",
+            "unassigned": "未分配"
           },
           "Search": {
             "1abfb25a66": "输入要在文件中搜索的内容",
@@ -11258,11 +11279,11 @@
             "1406954883": "清除所有笔记...",
             "conflictsSection": "冲突",
             "cc05b2d088": "在文件资源管理器中打开",
-            "03194cfff4": "本地会话状态源自您在此处打开的冲突。",
+            "03194cfff4": "本地会话状态源自您在此处打开的冲突",
             "413a3ba113": "冲突",
             "27a50fe970": "评审冲突",
             "f6cb48b6fe": "用AI解决",
-            "3eeccbb221": "已解决的文件在离开实时冲突状态后会恢复正常更改。",
+            "3eeccbb221": "已解决的文件在离开实时冲突状态后会恢复正常更改",
             "c321542ee2": "删除第 {{value0}} 行的注释",
             "b656381c18": "删除注释",
             "c085946bda": "复制行 {{value0}} 上的注释",
@@ -11271,7 +11292,7 @@
             "3eb9b2805e": "打开 {{value0}} 上的注释",
             "0d963bf982": "打开{{value0}}",
             "59654650d3": "清除 {{value0}} 的注释",
-            "ac8cbe3bf5": "将鼠标悬停在差异视图中的一行上，然后单击 + 添加注释。",
+            "ac8cbe3bf5": "将鼠标悬停在差异视图中的一行上，然后单击 + 添加注释",
             "286dbda4d6": "重试",
             "476b77745b": "更改基础参考",
             "ed34038d0d": "刷新分支比较",
@@ -11284,10 +11305,10 @@
             "011f9713fc": "提交被阻止",
             "cc199ccc5f": "更多提交和远程操作",
             "4d6e1fd7f3": "更多操作",
-            "37a81f29ad": "正在生成提交信息。单击停止。",
+            "37a81f29ad": "正在生成提交信息。单击停止",
             "b94112eb9e": "提交信息",
             "0d0a8359d3": "信息",
-            "15b7f210d7": "启动代理前请查看并编辑完整提示词。",
+            "15b7f210d7": "启动代理前请查看并编辑完整提示词",
             "054ead86b1": "使用 AI 修复提交失败",
             "9e5ccd00aa": "提交失败的上下文不可用",
             "f0a2dc9e46": "自定义启动...",
@@ -11295,10 +11316,10 @@
             "dd43c47089": "选择针对此提交失败的代理",
             "30b8d4f181": "使用 AI 修复提交失败",
             "4b37ae99b0": "启动默认 AI 代理来修复此提交失败",
-            "ae743199cd": "在创建 {{value0}} 之前，请选择其他基础分支。",
-            "318e2a7f88": "请等待 AI 生成完成。",
+            "ae743199cd": "在创建 {{value0}} 之前，请选择其他基础分支",
+            "318e2a7f88": "请等待 AI 生成完成",
             "f76307c1f7": "请选择基础分支。",
-            "4f76c0a9de": "基础分支必须与 head 分支不同。",
+            "4f76c0a9de": "基础分支必须与 head 分支不同",
             "c5e4175139": "更多 {{value0}} 和远程操作",
             "78ddfd0bb4": "创建为草稿",
             "e64a632456": "main",
@@ -11315,13 +11336,13 @@
             "b355e740b2": "停止生成 {{value0}} 详细信息",
             "527e130b6f": "停止生成",
             "e1970d327d": "新建 {{value0}}",
-            "f4c766f1ca": "为此运行选择代理和提示词模板。",
+            "f4c766f1ca": "为此运行选择代理和提示词模板",
             "1a6a6e0bc5": "生成托管评论详细信息",
             "6b122529d4": "生成提交信息",
-            "e48caaf0dd": "已启动 AI 代理处理冲突。",
-            "901140f47d": "启动代理前请查看并编辑完整提示词。",
+            "e48caaf0dd": "已启动 AI 代理处理冲突",
+            "901140f47d": "启动代理前请查看并编辑完整提示词",
             "19652ddd76": "用 AI 解决冲突",
-            "c9ad22888e": "选择此存储库的分支比较目标。",
+            "c9ad22888e": "选择此存储库的分支比较目标",
             "574d2f4413": "清晰的笔记",
             "05bb8f4a48": "取消",
             "48db37cca9": "查看全部",
@@ -11340,7 +11361,7 @@
             "fe5bd1a610": "创建 {{value0}}...",
             "812cb992ee": "打开于 {{value0}}",
             "eef5446523": "{{value0}} #{{value1}} 已开放",
-            "0453ca3a9a": "{{value0}} 已创建，但 Orca 尚无法刷新它。",
+            "0453ca3a9a": "{{value0}} 已创建，但 Orca 尚无法刷新它",
             "f99560ab29": "中止 {{value0}} 失败",
             "eae7a1da5f": "无法清除笔记。",
             "657e0c90ad": "{{value0}} 注{{value1}}",
@@ -11416,7 +11437,7 @@
             "e2b7a1c0d9f4": "创建 {{value0}} 失败",
             "hugeRepoIgnorePrompt": "此存储库的活动更改过多。是否将 \"{{value0}}\" 添加到 .gitignore？",
             "hugeRepoIgnoreAction": "添加到 .gitignore",
-            "tooManyChanges": "已检测过多更改。仅显示前 {{value0}} 项。",
+            "tooManyChanges": "已检测过多更改。仅显示前 {{value0}} 项",
             "submoduleTruncated": "已省略更多子模块更改",
             "bf5082de46": "已复制{{value0}}",
             "c06193ef57": "无法复制{{value0}}",
@@ -11427,23 +11448,23 @@
             "15b6e834ac": "无法在浏览器中打开提交",
             "d37e68f61d": "正在准备分支以供评审…",
             "8d8f5c6c94": "正在生成提交信息…",
-            "fda060d6ce": "请先检查提交信息，然后重试创建 PR。",
+            "fda060d6ce": "请先检查提交信息，然后重试创建 PR",
             "b75cb1fd0c": "正在提交更改…",
-            "995c5e67ec": "评审设置需要处理。",
-            "d7492cafce": "无法刷新 Source Control。请重试创建 PR。",
+            "995c5e67ec": "评审设置需要处理",
+            "d7492cafce": "无法刷新 Source Control。请重试创建 PR",
             "473f18758e": "Source Control AI 设置",
-            "createPrIntentConfigureAi": "请添加提交信息或配置源代码管理 AI 设置。",
-            "createPrIntentGenerateFailed": "无法生成提交信息。请添加一条信息后重试。",
-            "createPrIntentCommitFailed": "无法提交更改。请修复问题后重试创建 PR。",
-            "createPrIntentNeedsSync": "创建评审前请先同步此分支。",
-            "createPrIntentBranchNotReady": "分支尚未准备好创建评审。",
+            "createPrIntentConfigureAi": "请添加提交信息或配置源代码管理 AI 设置",
+            "createPrIntentGenerateFailed": "无法生成提交信息。请添加一条信息后重试",
+            "createPrIntentCommitFailed": "无法提交更改。请修复问题后重试创建 PR",
+            "createPrIntentNeedsSync": "创建评审前请先同步此分支",
+            "createPrIntentBranchNotReady": "分支尚未准备好创建评审",
             "createPrIntentPublishing": "正在发布分支…",
             "createPrIntentForcePushing": "正在使用 lease 强制推送…",
             "createPrIntentPushing": "正在推送提交…",
             "createPrIntentFastForwarding": "正在更新分支…",
-            "createPrIntentRemoteFailed": "无法更新远程分支。请重试创建 PR。",
+            "createPrIntentRemoteFailed": "无法更新远程分支。请重试创建 PR",
             "createPrIntentGeneratingDetails": "正在生成审查详情…",
-            "createPrIntentBranchChangedDuringDetails": "生成审查详情时分支已更改。请重试创建 PR。",
+            "createPrIntentBranchChangedDuringDetails": "生成审查详情时分支已更改。请重试创建 PR",
             "createPrIntentCreatingReview": "正在创建审查…",
             "a91f8e2b01": "以列表查看",
             "b82e9f3c12": "以树形查看",
@@ -11457,7 +11478,7 @@
             "c1a8f3e204": "落后 {{value0}} 1 个提交",
             "d2b9g4f315": "落后 {{value1}} {{value0}} 个提交",
             "4b4a7de138": "在浏览器中打开审查页面",
-            "createPrIntentCommitBlockedSummary": "提交被阻止：{{value0}} 修复问题后重试创建 PR。",
+            "createPrIntentCommitBlockedSummary": "提交被阻止：{{value0}} 修复问题后重试创建 PR",
             "pushRecovery": {
               "4b37ae99b0": "启动默认 AI 代理修复此推送失败",
               "30b8d4f181": "使用 AI 修复推送失败",
@@ -11465,7 +11486,7 @@
               "ec7bfced55": "选择代理修复推送失败",
               "9e5ccd00aa": "推送失败上下文不可用",
               "054ead86b1": "使用 AI 修复推送失败",
-              "15b7f210d7": "选择代理并在启动前编辑完整命令输入。",
+              "15b7f210d7": "选择代理并在启动前编辑完整命令输入",
               "011f9713fc": "推送已阻止",
               "60bd988f0b": "AI 修复",
               "03d238218c": "详情",
@@ -11473,19 +11494,20 @@
               "834cb3f23d": "使用 AI 修复",
               "783a808870": "关闭"
             },
-            "97e7124eac": "无法刷新 Source Control。请重试。",
+            "97e7124eac": "无法刷新 Source Control，请重试！",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "当前分支：{{value0}}",
             "c7d4e2f801": "更改基引用：{{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentEmptyGeneratedBody": "生成的评审详情未包含描述。请重试创建 PR。",
-            "createPrIntentGenerateDetailsFailed": "无法生成评审详情。请重试创建 PR。",
+            "createPrIntentEmptyGeneratedBody": "生成的评审详情未包含描述。请重试创建 PR",
+            "createPrIntentGenerateDetailsFailed": "无法生成评审详情。请重试创建 PR",
             "f2fd70c988": "此分支没有更改",
             "72e0c73b4e": "此工作区是干净的，该分支相对 {{value0}} 没有超前更改",
             "86794572dc": "搜索文本过长",
             "ad0504a58a": "请使用更短的文件筛选。",
             "362b97ec5c": "没有匹配的文件",
-            "d5103e47c1": "没有与\"{{value0}}\"匹配的已更改文件"
+            "d5103e47c1": "没有与\"{{value0}}\"匹配的已更改文件",
+            "stageAtLeastOneFileToGenerate": "请先暂存至少一个文件以生成提交说明"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理。",
@@ -11958,30 +11980,30 @@
               "dropdown": {
                 "items": {
                   "7aad2c0240": "托管评审操作进行中…",
-                  "9e779995dd": "创建 {{value0}}",
-                  "226b85a3a7": "fetch",
-                  "323bb614aa": "提交并同步",
-                  "2b8e6595fd": "提交",
+                  "9e779995dd": "Create {{value0}}",
+                  "226b85a3a7": "Fetch",
+                  "323bb614aa": "Commit & Sync",
+                  "2b8e6595fd": "Commit",
                   "04d709801d": "从远程获取但不合并"
                 }
               },
               "primary": {
                 "action": {
-                  "ed93b4f14f": "提交",
+                  "ed93b4f14f": "Commit",
                   "946a8a05ea": "为此分支创建 {{value0}}",
-                  "e7ffa46946": "创建 {{value0}}",
-                  "95550cff15": "推",
-                  "d64292a938": "拉",
-                  "795f1509c5": "同步",
-                  "390abeab93": "强力推",
+                  "e7ffa46946": "Create {{value0}}",
+                  "95550cff15": "Push",
+                  "d64292a938": "Pull",
+                  "795f1509c5": "Sync",
+                  "390abeab93": "Force Push",
                   "1884cf34af": "将此分支发布到 origin",
-                  "7b4d02e6b8": "发布分支",
-                  "3d5dccef0b": "没有可提交的内容。PR 已合并。",
+                  "7b4d02e6b8": "Publish Branch",
+                  "3d5dccef0b": "没有可提交的内容。PR 已合并",
                   "41d4bcf157": "检查 PR 状态...",
-                  "acce237921": "没有可提交的内容。分支没有可发布的更改。",
+                  "acce237921": "没有可提交的内容。分支没有可发布的更改",
                   "fa3bd4f40c": "暂存至少一个要提交的文件",
                   "5a477d80cb": "暂存所有更改",
-                  "18a0fca877": "暂存全部",
+                  "18a0fca877": "Stage All",
                   "f01f16d77f": "输入提交信息以进行提交",
                   "ab41fb926b": "提交已暂存的更改",
                   "2d8f185fbc": "在提交部分暂存的文件之前暂存所有更改",
@@ -11989,26 +12011,26 @@
                   "484f45c439": "{{value0}} 正在进行中...",
                   "6f7a8b9c0d": "远程操作进行中…",
                   "7f8a9b0c1d": "远程操作进行中——请等它完成后重试",
-                  "74fc171e99": "强制推送正在进行中...",
-                  "16aee3a5c1": "正在提交…",
+                  "74fc171e99": "Force Push 正在进行中...",
+                  "16aee3a5c1": "Commit 正在进行中…",
                   "e61b0d7a3c": "请先检出分支再发布提交。",
                   "1d47e850cf": "将更新推送到已关联的评审分支",
                   "c39d0c75c3": "已关联的评审分支目标不可用。",
-                  "8c6d15a07d": "创建 PR",
+                  "8c6d15a07d": "Create PR",
                   "d37e68f61d": "正在准备分支以供评审…",
                   "c72e5e65d1": "准备此分支并创建 {{value0}}",
                   "b8e4f2a901": "等待远程操作完成。",
                   "c9f3a1b802": "在创建 {{value0}} 之前解决冲突。",
-                  "d2a8c4e703": "此分支上没有需要包含在 {{value0}} 中的更改。",
-                  "e3b9d5f814": "无法从默认分支创建 {{value0}}。",
-                  "f4c0e6a925": "在创建 {{value0}} 之前提交更改。",
-                  "a5d1f7b036": "在创建 {{value0}} 之前发布提交。",
-                  "b6e2a8c147": "在创建 {{value0}} 之前推送提交。",
-                  "c7f3b9d258": "在创建 {{value0}} 之前同步此分支。",
-                  "d8a4c0e369": "在创建 {{value0}} 之前进行身份验证。",
-                  "e9b5d1f470": "在创建 {{value0}} 之前检出一个分支。",
-                  "f0c6e2a581": "此分支尚未准备好创建 {{value0}}。",
-                  "8f9a0b1c2d": "没有可提交的内容。分支已是最新状态。",
+                  "d2a8c4e703": "此分支上没有需要包含在 {{value0}} 中的更改",
+                  "e3b9d5f814": "无法从默认分支创建 {{value0}}",
+                  "f4c0e6a925": "在创建 {{value0}} 之前提交更改",
+                  "a5d1f7b036": "在创建 {{value0}} 之前发布提交",
+                  "b6e2a8c147": "在创建 {{value0}} 之前推送提交",
+                  "c7f3b9d258": "在创建 {{value0}} 之前同步此分支",
+                  "d8a4c0e369": "在创建 {{value0}} 之前进行身份验证",
+                  "e9b5d1f470": "在创建 {{value0}} 之前检出一个分支",
+                  "f0c6e2a581": "此分支尚未准备好创建 {{value0}}",
+                  "8f9a0b1c2d": "没有可提交的内容。分支已是最新状态",
                   "h3i4j5k607": "正在检查此分支是否可以创建 {{value0}}…"
                 }
               },
@@ -12664,11 +12686,11 @@
             "2319d87718": "合并",
             "622864b52a": "开放",
             "fda67f0b61": "当前项目",
-            "3e8bb1176a": "在设置中连接 Linear 以搜索议题。",
+            "3e8bb1176a": "在设置中连接 Linear 以搜索议题",
             "69ce292138": "Linear",
             "9c004911c3": "GitLab",
             "switchTaskSourceTitle": "切换任务来源？",
-            "differentTaskSource": "，与所选任务来源不同。",
+            "differentTaskSource": "，与所选任务来源不同",
             "currentTaskSource": "当前任务来源",
             "placeholderNameOrLinearUrl": "输入名称、Linear URL 或 Jira URL",
             "placeholderWorkspaceName": "输入工作区名称",
@@ -12693,14 +12715,14 @@
             "retryJira": "重试",
             "searchJira": "搜索 Jira 议题或粘贴议题 URL",
             "jiraMode": "Jira",
-            "jiraSelectBindFailed": "无法关联此 Jira 议题。请选择匹配的站点或重新连接 Jira，然后重试。",
+            "jiraSelectBindFailed": "无法关联此 Jira 议题。请选择匹配的站点或重新连接 Jira，然后重试",
             "emoji": "Emoji",
             "emptyHintSmart": "开始输入以创建名称或查找来源。",
-            "emptyHintGithub": "开始输入以搜索 GitHub PR 和 Issue。",
-            "emptyHintGitlab": "开始输入以搜索 GitLab MR 和 Issue。",
+            "emptyHintGithub": "开始输入以搜索 GitHub PR 和 Issue",
+            "emptyHintGitlab": "开始输入以搜索 GitLab MR 和 Issue",
             "emptyHintBranches": "没有匹配的分支。",
-            "emptyHintLinear": "开始输入以搜索 Linear Issue。",
-            "emptyHintJira": "开始输入以搜索 Jira Issue，或粘贴 Issue URL。"
+            "emptyHintLinear": "开始输入以搜索 Linear Issue",
+            "emptyHintJira": "开始输入以搜索 Jira Issue，或粘贴 Issue URL"
           },
           "ProjectHostSetupCombobox": {
             "empty": "此项目没有已就绪的主机。",
@@ -14268,7 +14290,7 @@
           "5a8e1d4f23": " · "
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "此文件在您有未保存编辑时在磁盘上发生了更改。保存将覆盖较新的磁盘内容。",
+          "7c41e90d12": "此文件在您有未保存编辑时在磁盘上发生了更改。保存将覆盖较新的磁盘内容",
           "3fa2b8d417": "从磁盘重新加载",
           "a95d02c644": "保留我的编辑",
           "5c02de9b31": "已从磁盘重新加载",
@@ -14280,13 +14302,13 @@
           "90cc31e4d7": "左侧为磁盘版本，右侧为您的未保存编辑。",
           "8fe30ab254": "正在从磁盘读取文件...",
           "e2b1cd0393": "无法从磁盘读取文件：{{value0}}",
-          "b6cf20d514": "磁盘上的文件是二进制文件 — 无法进行文本比较。",
+          "b6cf20d514": "磁盘上的文件是二进制文件 — 无法进行文本比较",
           "3fa2b8d417": "从磁盘重新加载",
           "a95d02c644": "保留我的编辑",
           "2c8f1e07b9": "正在加载比较..."
         },
         "RichMarkdownEditor": {
-          "citationLinkAvailable": "{{value0}}，链接到 {{value1}}。按 Enter 打开，或按 Tab 移至链接操作。",
+          "citationLinkAvailable": "{{value0}}，链接到 {{value1}}。按 Enter 打开，或按 Tab 移至链接操作",
           "citationFallbackLabel": "引用",
           "citationLinkUnavailable": "{{value0}}，引用链接不可用。{{value1}}",
           "tabForCitationActions": "按 Tab 移至可用操作。",
@@ -14301,16 +14323,31 @@
           "copyLinkFailed": "复制链接失败"
         },
         "richMarkdownSourceOwningCutFeedback": {
-          "selectLessContent": "请选择较少的内容，或使用代码模式剪切保留的 HTML 引用。"
+          "selectLessContent": "请选择较少的内容，或使用代码模式剪切保留的 HTML 引用"
         },
         "editor": {
           "save": {
             "failure": {
               "notice": {
-                "8c59ce5075": "保存文件失败。请重试。"
+                "8c59ce5075": "保存文件失败，请重试！"
               }
             }
           }
+        },
+        "richMarkdown": {
+          "placeholder": {
+            "writeMarkdown": "编写 Markdown… 输入 / 插入块"
+          }
+        },
+        "fileLoadError": {
+          "pathAccessDenied": "拒绝访问：路径解析到允许目录之外。如果这阻碍了合法工作流，请提交 GitHub issue"
+        },
+        "editorHeader": {
+          "worktreePathCopied": "工作树路径已复制",
+          "conflictReview": "冲突审查",
+          "checkDetails": "检查详情",
+          "checkDetailsCopied": "检查详情已复制",
+          "filePathCopied": "文件路径已复制"
         }
       },
       "diff": {
@@ -14450,6 +14487,34 @@
             "parallelTask": {
               "title": "并行开始另一项任务",
               "body": "每个工作树都有自己的分支，因此并行工作可以彼此隔离。"
+            }
+          },
+          "workspaceCreation": {
+            "project": {
+              "title": "选择项目",
+              "body": "Orca 会把每个任务隔离到独立的工作树中，并从你的基线分支创建。"
+            },
+            "name": {
+              "title": "命名，或从现有工作开始",
+              "body": "从关联任务开始可得到简短的议题或 PR 名称。也可留空，以便根据你的第一条代理消息自动命名。"
+            },
+            "agent": {
+              "title": "选择启动工作的代理",
+              "body": "选择创建此工作树时要打开的代理。"
+            }
+          },
+          "tasks": {
+            "workSource": {
+              "title": "选择工作来源",
+              "body": "可在不切换页面的情况下，在已连接的提供方与项目筛选之间切换。"
+            },
+            "filterWork": {
+              "title": "筛选你需要的工作",
+              "body": "使用预设和搜索缩小议题、评审、合并请求或任务范围。"
+            },
+            "startFromItems": {
+              "title": "从工作项开始",
+              "body": "在任务、议题、评审或合并请求上使用「开始」或「打开」，将其上下文带入工作区。"
             }
           }
         }
@@ -14665,7 +14730,7 @@
             "a759d8f866": "选定的元素",
             "9c6ce0632a": "所选元素屏幕截图",
             "50f7114f99": "附加前请先检查。捕获的页面上下文可以包括可见的站点内容。",
-            "f3575229df": "抓住",
+            "f3575229df": "保持",
             "405bb315da": "无题"
           },
           "browser": {
@@ -15195,6 +15260,96 @@
           "actionsUnavailable": "此客户端不支持插件操作。",
           "messageTooLarge": "消息超过大小限制。",
           "tooManyRequests": "请求过多。"
+        },
+        "sourceControl": {
+          "resolveConflictsBeforeCommitting": "提交前请先解决冲突",
+          "pushCount": {
+            "one": "Push {{count}} 个提交",
+            "other": "Push {{count}} 个提交"
+          },
+          "pullCount": {
+            "one": "Pull {{count}} 个提交",
+            "other": "Pull {{count}} 个提交"
+          },
+          "fastForwardCount": {
+            "one": "Fast-forward {{count}} 个提交",
+            "other": "Fast-forward {{count}} 个提交"
+          },
+          "syncCounts": "Pull {{behind}}，Push {{ahead}}",
+          "theRemoteBranch": "远程分支",
+          "branchCommit": {
+            "one": "{{count}} 个分支提交",
+            "other": "{{count}} 个分支提交"
+          },
+          "thisBranch": "此分支",
+          "forcePushOlderRemote": "远程仅有较旧的本地提交副本。Force push {{countText}}(带 lease)以更新 {{remoteTarget}}",
+          "localCommit": {
+            "one": "1 个本地提交",
+            "other": "{{count}} 个本地提交"
+          },
+          "forcePushReplaceRemote": "Force push {{commitText}}(带 lease)以更新 {{remoteTarget}} 并替换仅存在于远程的提交",
+          "forcePushUpdateRemote": "Force push {{commitText}}(带 lease)以更新 {{remoteTarget}}",
+          "forcePushSetUpstream": "Force push {{countText}}(带 lease)，并在需要时设置上游分支",
+          "nothingToPull": "没有可 Pull 的内容",
+          "nothingToFastForward": "没有可 Fast-forward 的内容",
+          "tryRebasingDirty": "尝试 Rebase，Git 可能要求先提交或 stash 本地更改",
+          "branchAlreadyPublished": "分支已发布",
+          "switchToFeatureBranch": "请切换到功能分支",
+          "stageAtLeastOneFileToCommit": "请先暂存至少一个文件再提交",
+          "commitStagedChanges": "提交已暂存的更改",
+          "checkingBranchStatus": "正在检查分支状态…",
+          "checkingPrStatus": "正在检查 PR 状态…",
+          "prAlreadyMerged": "PR 已合并",
+          "checkoutBeforePush": "请先检出分支再 Push 提交",
+          "checkoutBeforeForcePush": "请先检出分支再 Force Push 提交",
+          "checkoutBeforePull": "请先检出分支再 Pull 提交",
+          "checkoutBeforeFastForward": "请先检出分支再 Fast-forward",
+          "checkoutBeforeSync": "请先检出分支再 Sync 提交",
+          "checkoutBeforePublish": "请先检出分支再发布提交",
+          "linkedReviewTargetUnavailable": "关联评审分支目标不可用",
+          "publishFirstToPush": "请先 Publish Branch 再 Push 提交",
+          "publishFirstToPull": "请先 Publish Branch 再 Pull 提交",
+          "publishFirstToFastForward": "请先 Publish Branch 再 Fast-forward",
+          "publishFirstToSync": "请先 Publish Branch 再 Sync 提交",
+          "commitAndForcePushWithLease": "提交已暂存更改并 Force push(带 lease)",
+          "commitAndTryPush": "提交已暂存更改并尝试 Push",
+          "commitAndPush": "提交已暂存更改并 Push",
+          "useCommitAndForcePush": "请使用 Commit & Force Push — 远程仅有较旧的本地提交副本",
+          "commitThenPullPush": "先 Commit，再 Pull 和 Push",
+          "pushSetUpstream": "Push 此分支，并在需要时设置上游",
+          "pushLinkedReviewUpdates": "Push 更新到关联评审分支",
+          "tryRegularPushMayForce": "尝试常规 Push；Git 可能要求 Force push",
+          "pushMayRequireSync": "Push 本地提交；Git 可能要求先 Sync",
+          "nothingToPush": "没有可 Push 的内容",
+          "nothingToPushTo": "没有可 Push 到 {{upstream}} 的内容",
+          "nothingToForcePush": "没有可 Force push 的内容",
+          "nothingToForcePushTo": "没有可 Force push 到 {{upstream}} 的内容",
+          "nothingNewToPullOlderRemote": "没有新的可 Pull 内容 — 远程仅有较旧的本地提交副本",
+          "nothingNewToFastForwardOlderRemote": "没有新的可 Fast-forward 内容 — 远程仅有较旧的本地提交副本",
+          "tryFastForwardMayReject": "尝试 Fast-forward Pull；Git 可能拒绝本地提交",
+          "useForcePushOlderRemote": "请使用 Force Push — 远程仅有较旧的本地提交副本",
+          "branchUpToDate": "分支已是最新",
+          "chooseRemoteBaseToRebase": "请选择要 Rebase 的远程基础分支",
+          "rebaseCurrentFromBase": "用 {{base}} 的最新提交 Rebase 当前分支",
+          "linkedReviewBranchExists": "关联评审分支已存在",
+          "publishBranchToOrigin": "将此分支发布到 origin",
+          "commitChangesFirst": "请先提交更改",
+          "checkoutBranchFirst": "请先检出分支",
+          "pushFirst": "请先 Push",
+          "forcePushFirst": "请先 Force Push",
+          "syncFirst": "请先 Sync",
+          "authRequiredInEnvironment": "请在此环境中{{instruction}}",
+          "unsupportedProvider": "不支持的提供方",
+          "reviewAlreadyExists": "已存在 {{reviewLabel}}",
+          "forkHeadUnsupported": "不支持 fork head",
+          "baseBranchNotOnRemote": "基础分支不在远程上",
+          "branchNotReady": "分支尚未就绪",
+          "createReviewForBranch": "为此分支创建 {{reviewLabel}}",
+          "forcePushBeforeCreateReview": "创建 {{reviewLabel}} 前先 Force push(带 lease)",
+          "pushBeforeCreateReview": "创建 {{reviewLabel}} 前先 Push 本地提交",
+          "operationInProgress": "操作进行中…",
+          "abortConflictInProgress": "中止进行中的 {{operation}}",
+          "enterCommitMessage": "请输入提交说明后再提交"
         }
       },
       "link": {
@@ -15688,6 +15843,31 @@
       "jiraConnectDialog": {
         "tokenStoredRemote": "你的令牌会发送到所选远程运行时，并由该运行时支持的加密方式存储。",
         "tokenStoredLocal": "你的令牌保存在本地，并在本地运行时存储支持时加密。"
+      },
+      "statusBar": {
+        "workspaceSpaceFormat": {
+          "cancellingScan": "正在取消扫描",
+          "workspaces": "工作区",
+          "scanningWorktrees": "正在扫描 {{scanned}} / {{total}} · {{current}}",
+          "scanningRepos": "正在扫描 {{scanned}} / {{total}} 个仓库 · {{current}}",
+          "scanningWorkspaceSizes": "正在扫描工作区大小",
+          "statusScanned": "已扫描",
+          "statusMissing": "缺失",
+          "statusNoAccess": "无权限",
+          "statusUnavailable": "不可用",
+          "statusFailed": "失败",
+          "mainWorktree": "主工作树",
+          "detached": "分离头指针"
+        }
+      },
+      "lib": {
+        "worktreeStatus": {
+          "active": "活动",
+          "working": "工作中",
+          "needsPermission": "需要权限",
+          "done": "已完成",
+          "inactive": "未活动"
+        }
       }
     },
     "i18n": {
@@ -16120,5 +16300,8 @@
       "settingsInstruction": "随时可在此处更改模型、听写模式或快捷键",
       "settingsLink": "设置 → 语音"
     }
+  },
+  "common": {
+    "unassigned": "未分配"
   }
 }

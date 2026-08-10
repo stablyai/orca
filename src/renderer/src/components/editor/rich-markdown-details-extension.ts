@@ -16,8 +16,14 @@ import {
   type ToggleHeadingVariant
 } from './details-markdown-html'
 
-const RICH_MARKDOWN_PLACEHOLDER = 'Write markdown… Type / for blocks.'
 const TOGGLE_TEXT_PLACEHOLDER = 'text'
+
+function richMarkdownPlaceholder(): string {
+  return translate(
+    'auto.components.editor.richMarkdown.placeholder.writeMarkdown',
+    'Write markdown… Type / for blocks.'
+  )
+}
 const TOGGLE_HEADING_PLACEHOLDERS: Record<ToggleHeadingVariant, readonly [string, string]> = {
   'heading-1': ['auto.components.editor.rich.markdown.slash.commands.e66e7f04c6', 'Heading 1'],
   'heading-2': ['auto.components.editor.rich.markdown.slash.commands.c209a116b7', 'Heading 2'],
@@ -39,7 +45,7 @@ export function getRichMarkdownPlaceholder({
   Extract<PlaceholderOptions['placeholder'], (...args: never[]) => string>
 >[0]): string {
   if (node.type.name !== 'detailsSummary') {
-    return RICH_MARKDOWN_PLACEHOLDER
+    return richMarkdownPlaceholder()
   }
 
   const parent = editor.state.doc.resolve(pos).parent

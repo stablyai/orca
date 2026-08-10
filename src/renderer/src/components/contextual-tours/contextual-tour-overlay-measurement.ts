@@ -11,7 +11,7 @@ import {
   getVisibleContextualTourStepIndexes
 } from './contextual-tour-gate'
 import type { ActiveTourRenderState } from './ContextualTourOverlaySurface'
-import { translate } from '@/i18n/i18n'
+import { LOCALIZED_STEP_COPY, localizeTourActionLabel } from './contextual-tour-step-localized-copy'
 
 export type ContextualTourMeasurementAction =
   | { kind: 'wait' }
@@ -27,76 +27,6 @@ export type ContextualTourOverlayMeasurementResult =
       renderState: ActiveTourRenderState
       telemetryTotalSteps: number
     }
-
-// Why: keyed by the step's stable id, not its position — inserting a step must
-// not shift localized copy onto a neighbour. Thunks keep translate() out of
-// module scope so the lookup resolves in the language active at render time.
-const LOCALIZED_STEP_COPY: Record<string, { title: () => string; body: () => string }> = {
-  'automations-intro': {
-    title: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.title',
-        'What is an automation?'
-      ),
-    body: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.body',
-        'Automations run agent work on a schedule. Add an automation by clicking this button.'
-      )
-  },
-  'automations-results': {
-    title: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.title',
-        'Find the results'
-      ),
-    body: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body',
-        'Runs show when automations ran, what happened, and where to inspect their output.'
-      )
-  },
-  'workspace-agent-sessions-split-pane': {
-    title: () =>
-      translate(
-        'auto.components.contextual.tours.workspaceAgentSessions.splitPane.title',
-        'Split a terminal pane'
-      ),
-    body: () =>
-      translate(
-        'auto.components.contextual.tours.workspaceAgentSessions.splitPane.body',
-        'Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.'
-      )
-  },
-  'workspace-agent-sessions-parallel-task': {
-    title: () =>
-      translate(
-        'auto.components.contextual.tours.workspaceAgentSessions.parallelTask.title',
-        'Start another task in parallel'
-      ),
-    body: () =>
-      translate(
-        'auto.components.contextual.tours.workspaceAgentSessions.parallelTask.body',
-        'Each worktree gets its own branch, so parallel work stays separate.'
-      )
-  }
-}
-
-function localizeTourActionLabel(label: string): string {
-  if (label === 'Split terminal') {
-    return translate(
-      'auto.components.contextual.tours.workspaceAgentSessions.splitPane.action',
-      'Split terminal'
-    )
-  }
-  if (label === 'Next') {
-    return translate(
-      'auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418',
-      'Next'
-    )
-  }
-  return label
-}
 
 export function getContextualTourDisplayProgress(args: {
   tour: ContextualTour
@@ -197,10 +127,7 @@ export function measureContextualTourOverlayRenderState(args: {
   const primaryAction = sidebarAlreadyVisible
     ? ({
         kind: 'next',
-        label: translate(
-          'auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418',
-          'Next'
-        )
+        label: localizeTourActionLabel('Next')
       } as const)
     : activeStep.primaryAction
       ? {

@@ -432,7 +432,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
 
   const buttonLabel = activeProject
     ? `${activeProject.owner} / ${activeProject.title ?? `#${activeProject.number}`}`
-    : 'Choose a project'
+    : translate('auto.components.github.project.ProjectPicker.chooseAProject', 'Choose a project')
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

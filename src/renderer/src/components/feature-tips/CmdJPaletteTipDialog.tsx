@@ -10,6 +10,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { formatShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
 import { FeatureTipActions } from './FeatureTipActions'
 import { translate } from '@/i18n/i18n'
@@ -34,10 +35,9 @@ export function CmdJPaletteTipDialog({
   // Why: read the live binding so the title chip stays correct after a rebind
   // and on Linux/Windows (Ctrl+Shift+J) — matching the visual's key chips.
   const worktreePaletteShortcutLabel = useShortcutLabel('worktree.palette')
-  const displayShortcutLabel =
-    worktreePaletteShortcutLabel !== 'Unassigned'
-      ? worktreePaletteShortcutLabel
-      : formatShortcutLabel('worktree.palette')
+  const displayShortcutLabel = !isUnassignedShortcutLabel(worktreePaletteShortcutLabel)
+    ? worktreePaletteShortcutLabel
+    : formatShortcutLabel('worktree.palette')
   // The tip's title uses "<shortcut>" as a placeholder token; split it so we
   // can render the live label as a styled <kbd> chip inline. Missing token
   // degrades to the plain title.

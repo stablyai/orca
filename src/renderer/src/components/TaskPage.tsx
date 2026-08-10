@@ -423,6 +423,7 @@ import {
   resolveVisibleTaskProvider
 } from '../../../shared/task-providers'
 import { translate } from '@/i18n/i18n'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import {
   getGitHubModeButtons,
@@ -867,7 +868,7 @@ function getLinearIssueGroup(
   if (groupBy === 'assignee') {
     return {
       key: `assignee:${issue.assignee?.id ?? 'unassigned'}`,
-      label: issue.assignee?.displayName ?? 'Unassigned'
+      label: issue.assignee?.displayName ?? translateUnassignedLabel()
     }
   }
   if (groupBy === 'priority') {
@@ -1595,9 +1596,7 @@ function GitHubIssueAssigneeSelector({
             className="h-auto min-h-9 justify-start gap-2 px-3 py-2 text-left"
           >
             {selectedAssignees.length === 0 ? (
-              <span className="text-muted-foreground">
-                {translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
-              </span>
+              <span className="text-muted-foreground">{translateUnassignedLabel()}</span>
             ) : (
               <span className="flex min-w-0 items-center gap-1.5">
                 <span className="flex -space-x-1">
@@ -11700,11 +11699,7 @@ export default function TaskPage(): React.JSX.Element {
                                   ) : null}
                                   {effectiveLinearDisplayProperties.has('assignee') ? (
                                     <span>
-                                      {issue.assignee?.displayName ??
-                                        translate(
-                                          'auto.components.TaskPage.42a9160321',
-                                          'Unassigned'
-                                        )}
+                                      {issue.assignee?.displayName ?? translateUnassignedLabel()}
                                     </span>
                                   ) : null}
                                   {effectiveLinearDisplayProperties.has('team') ? (
@@ -11832,8 +11827,7 @@ export default function TaskPage(): React.JSX.Element {
                               ) : null}
                               {effectiveLinearDisplayProperties.has('assignee') ? (
                                 <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                                  {issue.assignee?.displayName ??
-                                    translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+                                  {issue.assignee?.displayName ?? translateUnassignedLabel()}
                                 </span>
                               ) : null}
                               {effectiveLinearDisplayProperties.has('team') ? (
@@ -11891,8 +11885,7 @@ export default function TaskPage(): React.JSX.Element {
                                   <div
                                     className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px] text-muted-foreground"
                                     aria-label={
-                                      issue.assignee?.displayName ??
-                                      translate('auto.components.TaskPage.42a9160321', 'Unassigned')
+                                      issue.assignee?.displayName ?? translateUnassignedLabel()
                                     }
                                   >
                                     {issue.assignee?.avatarUrl ? (
@@ -11907,8 +11900,7 @@ export default function TaskPage(): React.JSX.Element {
                                   </div>
                                 </TooltipTrigger>
                                 <TooltipContent side="bottom" sideOffset={6}>
-                                  {issue.assignee?.displayName ??
-                                    translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+                                  {issue.assignee?.displayName ?? translateUnassignedLabel()}
                                 </TooltipContent>
                               </Tooltip>
                             </div>
@@ -12953,9 +12945,7 @@ export default function TaskPage(): React.JSX.Element {
                       >
                         <div className="flex items-center gap-2">
                           <UserRound className="size-3.5 text-muted-foreground/50" />
-                          <span>
-                            {translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
-                          </span>
+                          <span>{translateUnassignedLabel()}</span>
                         </div>
                         {newLinearIssueAssigneeId === null && (
                           <Check className="size-3 text-foreground" />
