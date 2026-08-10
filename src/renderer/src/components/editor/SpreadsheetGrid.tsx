@@ -3,8 +3,10 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
 import { getSpreadsheetCellAlignmentClass } from './spreadsheet-cell-alignment'
 import {
+  SPREADSHEET_GRID_COLUMN_OVERSCAN,
   SPREADSHEET_GRID_OVERSCAN,
   SPREADSHEET_GRID_ROW_HEIGHT,
+  SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX,
   buildSpreadsheetGridTemplate,
   computeSpreadsheetColumnWidths,
   padSpreadsheetHeader
@@ -17,19 +19,35 @@ type SpreadsheetGridProps = {
   rows: readonly (readonly string[])[]
   columnCount: number
   /**
+   * Per-cell fill, text colour and bold, positionally matching `rows`. Rows and
+   * cells may be absent; a workbook with no styling at all passes nothing.
+   */
+  cellStyles?: readonly (readonly (SpreadsheetCellStyle | undefined)[])[]
+  /**
    * `center` for the generated column letters of a workbook; `left` for a CSV,
    * whose heading row holds the file's own first row of text.
    */
   headerAlignment?: 'left' | 'center'
 }
 
+/** Visual styling a data file declares for one cell. */
+export type SpreadsheetCellStyle = {
+  backgroundColor?: string
+  textColor?: string
+  bold?: boolean
+}
+
 // Why: shared by CsvViewer and XlsxViewer — both render a read-only sheet of
 // strings, and duplicating a virtualized grid twice would let the two drift.
-// Row virtualization via @tanstack/react-virtual keeps large files (100k+ rows)
-// responsive. We use CSS grid with a shared grid-template-columns rather than a
-// <table>, because absolutely-positioned virtualized rows break a table's
-// column-width synchronization — the header would size itself independently of
-// the body, leaving values squashed together.
+// Both axes are virtualized via @tanstack/react-virtual: rows because a file can
+// have 100k+ of them, and columns because a sheet whose last used cell sits far
+// to the right reports thousands, which would otherwise put a cell element in
+// every rendered row for each one. We use CSS grid with a shared
+// grid-template-columns rather than a <table>, because absolutely-positioned
+// virtualized rows break a table's column-width synchronization — the header
+// would size itself independently of the body, leaving values squashed together.
+// The off-screen columns collapse into one spacer track on each side, which keeps
+// the sticky row-number column in normal flow.
 //
 // Callers that switch the rendered sheet should pass a `key` so scroll position
 // and virtualizer measurements reset with the data.
@@ -37,6 +55,7 @@ export function SpreadsheetGrid({
   header,
   rows,
   columnCount,
+  cellStyles,
   headerAlignment = 'left'
 }: SpreadsheetGridProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -44,34 +63,56 @@ export function SpreadsheetGrid({
     () => padSpreadsheetHeader(header, columnCount),
     [header, columnCount]
   )
-  const gridTemplate = useMemo(
-    () =>
-      buildSpreadsheetGridTemplate(
-        computeSpreadsheetColumnWidths({ header: paddedHeader, rows, columnCount })
-      ),
+  const columnWidths = useMemo(
+    () => computeSpreadsheetColumnWidths({ header: paddedHeader, rows, columnCount }),
     [paddedHeader, rows, columnCount]
   )
 
-  const virtualizer = useVirtualizer({
+  const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => SPREADSHEET_GRID_ROW_HEIGHT,
     overscan: SPREADSHEET_GRID_OVERSCAN,
     getItemKey: (index) => index
   })
-  const virtualRows = virtualizer.getVirtualItems()
+  const columnVirtualizer = useVirtualizer({
+    horizontal: true,
+    count: columnCount,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => columnWidths[index] ?? 0,
+    overscan: SPREADSHEET_GRID_COLUMN_OVERSCAN,
+    getItemKey: (index) => index
+  })
+  const virtualRows = rowVirtualizer.getVirtualItems()
+  const virtualColumns = columnVirtualizer.getVirtualItems()
+  const columnsTotalWidth = columnVirtualizer.getTotalSize()
+  const leadingSpacerPx = virtualColumns[0]?.start ?? 0
+  const lastVirtualColumn = virtualColumns.at(-1)
+  const trailingSpacerPx =
+    lastVirtualColumn === undefined
+      ? 0
+      : Math.max(0, columnsTotalWidth - lastVirtualColumn.start - lastVirtualColumn.size)
+  const gridTemplate = useMemo(
+    () =>
+      buildSpreadsheetGridTemplate({
+        columnWidths: virtualColumns.map((virtualColumn) => virtualColumn.size),
+        leadingSpacerPx,
+        trailingSpacerPx
+      }),
+    [virtualColumns, leadingSpacerPx, trailingSpacerPx]
+  )
 
   return (
     <div
       ref={scrollRef}
-      className="relative min-h-0 flex-1 overflow-auto scrollbar-editor font-mono text-xs"
+      className="relative min-h-0 flex-1 overflow-auto scrollbar-editor bg-editor-surface font-mono text-xs"
     >
       <div
         role="table"
         aria-rowcount={rows.length + 1}
         aria-colcount={columnCount + 1}
         className="inline-block min-w-full"
-        style={{ width: 'max-content' }}
+        style={{ width: SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX + columnsTotalWidth }}
       >
         <div
           role="row"
@@ -85,25 +126,34 @@ export function SpreadsheetGrid({
           >
             #
           </div>
-          {paddedHeader.map((cell, columnIndex) => (
-            <div
-              role="columnheader"
-              key={columnIndex}
-              className={cn(
-                'flex items-center overflow-hidden border-b border-r border-border px-2 font-medium text-foreground',
-                headerAlignment === 'center' ? 'justify-center' : 'justify-start'
-              )}
-            >
-              <span className="truncate" title={cell}>
-                {cell}
-              </span>
-            </div>
-          ))}
+          <div aria-hidden className="border-b border-border" />
+          {virtualColumns.map((virtualColumn) => {
+            const cell = paddedHeader[virtualColumn.index] ?? ''
+            return (
+              <div
+                role="columnheader"
+                aria-colindex={virtualColumn.index + 2}
+                key={virtualColumn.key}
+                className={cn(
+                  'flex items-center overflow-hidden border-b border-r border-border px-2 font-medium text-foreground',
+                  headerAlignment === 'center' ? 'justify-center' : 'justify-start'
+                )}
+              >
+                <span className="truncate" title={cell}>
+                  {cell}
+                </span>
+              </div>
+            )
+          })}
+          <div aria-hidden className="border-b border-border" />
         </div>
         {/* Why: role="rowgroup" keeps the table's owned-row relationship intact —
         a generic element between role="table" and the data rows can stop
         assistive technology from exposing them. */}
-        <div role="rowgroup" style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+        <div
+          role="rowgroup"
+          style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}
+        >
           {virtualRows.map((virtualRow) => {
             const row = rows[virtualRow.index] ?? []
             return (
@@ -119,6 +169,7 @@ export function SpreadsheetGrid({
                   top: 0,
                   left: 0,
                   height: SPREADSHEET_GRID_ROW_HEIGHT,
+                  width: '100%',
                   transform: `translateY(${virtualRow.start}px)`
                 }}
               >
@@ -128,22 +179,40 @@ export function SpreadsheetGrid({
                 >
                   {virtualRow.index + 1}
                 </div>
-                {Array.from({ length: columnCount }).map((_, columnIndex) => {
+                <div aria-hidden className="border-b border-border" />
+                {virtualColumns.map((virtualColumn) => {
+                  const columnIndex = virtualColumn.index
                   const cell = row[columnIndex] ?? ''
+                  const cellStyle = cellStyles?.[virtualRow.index]?.[columnIndex]
                   return (
                     <div
                       role="cell"
-                      key={columnIndex}
+                      aria-colindex={columnIndex + 2}
+                      key={virtualColumn.key}
                       className={cn(
-                        'flex items-center overflow-hidden border-b border-r border-border px-2 text-foreground',
-                        getSpreadsheetCellAlignmentClass(cell)
+                        'flex items-center overflow-hidden border-b border-r border-border px-2',
+                        getSpreadsheetCellAlignmentClass(cell),
+                        cellStyle?.bold === true && 'font-semibold',
+                        cellStyle?.textColor === undefined && 'text-foreground'
                       )}
+                      // Why: these colours come from the opened file, not from the
+                      // design system, so no token can express them. A cell that
+                      // declares none keeps the theme's own foreground above.
+                      style={
+                        cellStyle?.backgroundColor === undefined
+                          ? undefined
+                          : {
+                              backgroundColor: cellStyle.backgroundColor,
+                              color: cellStyle.textColor
+                            }
+                      }
                       title={cell}
                     >
                       <span className="truncate">{cell}</span>
                     </div>
                   )
                 })}
+                <div aria-hidden className="border-b border-border" />
               </div>
             )
           })}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseXlsxCellStyles } from './xlsx-cell-styles'
 import { parseXlsxNumberFormats } from './xlsx-number-formats'
 import { parseXlsxWorksheetGrid, type XlsxWorksheetContext } from './xlsx-worksheet-grid'
 
@@ -6,15 +7,69 @@ function context(overrides: Partial<XlsxWorksheetContext> = {}): XlsxWorksheetCo
   return {
     sharedStrings: [],
     numberFormats: parseXlsxNumberFormats(''),
+    cellStyles: parseXlsxCellStyles('', ''),
     use1904DateSystem: false,
     maxRows: 1000,
     ...overrides
   }
 }
 
+const FILL_STYLES_XML =
+  '<styleSheet><fonts count="1"><font/></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/></patternFill></fill></fills><cellXfs count="2"><xf fontId="0" fillId="0"/><xf fontId="0" fillId="1"/></cellXfs></styleSheet>'
+
 const DATE_STYLES = parseXlsxNumberFormats(
   '<styleSheet><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>'
 )
+
+describe('parseXlsxWorksheetGrid cell styles', () => {
+  it('emits a style per cell, positionally matching the rows', () => {
+    const xml =
+      '<row r="1"><c r="A1" s="1" t="str"><v>filled</v></c><c r="B1" s="0" t="str"><v>plain</v></c></row>'
+
+    const grid = parseXlsxWorksheetGrid(
+      xml,
+      context({ cellStyles: parseXlsxCellStyles(FILL_STYLES_XML, '') })
+    )
+
+    expect(grid.rows).toEqual([['filled', 'plain']])
+    expect(grid.styles[0]?.[0]).toEqual({ backgroundColor: '#ffff00', textColor: '#000000' })
+    expect(grid.styles[0]?.[1]).toBeUndefined()
+  })
+
+  it('leaves the style matrix empty when the workbook declares no styling', () => {
+    // Why: an unstyled sheet must not pay for a parallel matrix of undefined.
+    const grid = parseXlsxWorksheetGrid('<row r="1"><c r="A1"><v>1</v></c></row>', context())
+
+    expect(grid.styles).toEqual([])
+  })
+
+  it('keeps the style matrix as tall as the row matrix across skipped rows', () => {
+    const xml =
+      '<row r="1"><c r="A1" s="1" t="str"><v>a</v></c></row><row r="3"><c r="A3" s="1" t="str"><v>b</v></c></row>'
+
+    const grid = parseXlsxWorksheetGrid(
+      xml,
+      context({ cellStyles: parseXlsxCellStyles(FILL_STYLES_XML, '') })
+    )
+
+    expect(grid.rows).toHaveLength(3)
+    expect(grid.styles).toHaveLength(3)
+    expect(grid.styles[1]).toEqual([])
+    expect(grid.styles[2]?.[0]?.backgroundColor).toBe('#ffff00')
+  })
+
+  it('reuses one style object across every cell that shares a style index', () => {
+    const xml =
+      '<row r="1"><c r="A1" s="1" t="str"><v>a</v></c><c r="B1" s="1" t="str"><v>b</v></c></row>'
+
+    const grid = parseXlsxWorksheetGrid(
+      xml,
+      context({ cellStyles: parseXlsxCellStyles(FILL_STYLES_XML, '') })
+    )
+
+    expect(grid.styles[0]?.[0]).toBe(grid.styles[0]?.[1])
+  })
+})
 
 describe('parseXlsxWorksheetGrid', () => {
   it('reads numbers, shared strings and inline strings into a dense grid', () => {
@@ -233,11 +288,13 @@ describe('parseXlsxWorksheetGrid', () => {
   it('returns an empty grid for a missing or empty sheet part', () => {
     expect(parseXlsxWorksheetGrid('', context())).toEqual({
       rows: [],
+      styles: [],
       maxColumns: 0,
       truncated: false
     })
     expect(parseXlsxWorksheetGrid('<worksheet><sheetData/></worksheet>', context())).toEqual({
       rows: [],
+      styles: [],
       maxColumns: 0,
       truncated: false
     })

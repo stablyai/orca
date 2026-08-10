@@ -1,5 +1,9 @@
 export const SPREADSHEET_GRID_ROW_HEIGHT = 28
 export const SPREADSHEET_GRID_OVERSCAN = 12
+// Why: a couple of columns of overscan is enough horizontally — columns are far
+// wider than rows are tall, so few fit on screen and each one costs a cell in
+// every rendered row.
+export const SPREADSHEET_GRID_COLUMN_OVERSCAN = 3
 export const SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX = 48
 
 const MIN_COLUMN_PX = 80
@@ -52,8 +56,35 @@ export function computeSpreadsheetColumnWidths({
   return widths
 }
 
-export function buildSpreadsheetGridTemplate(columnWidths: readonly number[]): string {
-  return `${SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX}px ${columnWidths.map((width) => `${width}px`).join(' ')}`
+export type SpreadsheetGridTemplateInput = {
+  /** Widths of the columns actually rendered, in order. */
+  columnWidths: readonly number[]
+  /** Width of the columns scrolled off to the left, collapsed into one spacer. */
+  leadingSpacerPx?: number
+  /** Width of the columns still off to the right. */
+  trailingSpacerPx?: number
+}
+
+/**
+ * Builds the row template: the sticky row-number column, a spacer standing in
+ * for the columns scrolled past, the rendered columns, then a spacer for the
+ * rest.
+ *
+ * Why spacers instead of one entry per column: a sheet whose last used cell sits
+ * far to the right has thousands of columns, and a full template would put a
+ * six-figure-character string in the inline style of every rendered row.
+ */
+export function buildSpreadsheetGridTemplate({
+  columnWidths,
+  leadingSpacerPx = 0,
+  trailingSpacerPx = 0
+}: SpreadsheetGridTemplateInput): string {
+  return [
+    `${SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX}px`,
+    `${leadingSpacerPx}px`,
+    ...columnWidths.map((width) => `${width}px`),
+    `${trailingSpacerPx}px`
+  ].join(' ')
 }
 
 /** Pads a header row out to the widest row so every column gets a heading cell. */

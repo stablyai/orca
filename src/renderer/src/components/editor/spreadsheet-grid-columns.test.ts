@@ -65,14 +65,28 @@ describe('computeSpreadsheetColumnWidths', () => {
 })
 
 describe('buildSpreadsheetGridTemplate', () => {
-  it('puts the row-number column first', () => {
-    expect(buildSpreadsheetGridTemplate([80, 120])).toBe(
-      `${SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX}px 80px 120px`
+  it('puts the row-number column first and a spacer track on each side', () => {
+    expect(buildSpreadsheetGridTemplate({ columnWidths: [80, 120] })).toBe(
+      `${SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX}px 0px 80px 120px 0px`
     )
   })
 
+  it('sizes the spacers to the columns scrolled out of view on each side', () => {
+    // Why: the spacers stand in for the virtualized columns, so the rendered ones
+    // stay under their own headings while scrolled.
+    expect(
+      buildSpreadsheetGridTemplate({
+        columnWidths: [100],
+        leadingSpacerPx: 240,
+        trailingSpacerPx: 560
+      })
+    ).toBe(`${SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX}px 240px 100px 560px`)
+  })
+
   it('still emits the row-number column for an empty sheet', () => {
-    expect(buildSpreadsheetGridTemplate([])).toBe(`${SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX}px `)
+    expect(buildSpreadsheetGridTemplate({ columnWidths: [] })).toBe(
+      `${SPREADSHEET_GRID_ROW_NUMBER_COLUMN_PX}px 0px 0px`
+    )
   })
 })
 

@@ -1,3 +1,4 @@
+import { parseXlsxCellFormats } from './xlsx-cell-formats'
 import { forEachXlsxXmlElement } from './xlsx-xml-elements'
 
 /**
@@ -19,8 +20,6 @@ const BUILTIN_DATE_NUMBER_FORMAT_IDS = new Set([
   14, 15, 16, 17, 18, 19, 20, 21, 22, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 45, 46, 47, 50, 51,
   52, 53, 54, 55, 56, 57, 58
 ])
-
-const GENERAL_NUMBER_FORMAT_ID = 0
 
 export function parseXlsxNumberFormats(stylesXml: string): XlsxNumberFormats {
   const dateNumberFormatIds = new Set(BUILTIN_DATE_NUMBER_FORMAT_IDS)
@@ -45,7 +44,9 @@ export function parseXlsxNumberFormats(stylesXml: string): XlsxNumberFormats {
     return false
   })
 
-  const styleNumberFormatIds = parseCellFormatNumberFormatIds(stylesXml)
+  const styleNumberFormatIds = parseXlsxCellFormats(stylesXml).map(
+    (cellFormat) => cellFormat.numberFormatId
+  )
   return {
     isDateStyle: (styleIndex) => {
       if (styleIndex === undefined) {
@@ -55,24 +56,6 @@ export function parseXlsxNumberFormats(stylesXml: string): XlsxNumberFormats {
       return numberFormatId !== undefined && dateNumberFormatIds.has(numberFormatId)
     }
   }
-}
-
-// Why: a cell's `s` attribute indexes `<cellXfs>`, not `<cellStyleXfs>`, and
-// both use `<xf>` children — so the scan has to be scoped to the cellXfs block.
-function parseCellFormatNumberFormatIds(stylesXml: string): number[] {
-  const numberFormatIds: number[] = []
-
-  forEachXlsxXmlElement(stylesXml, 'cellXfs', (cellFormats) => {
-    forEachXlsxXmlElement(cellFormats.inner, 'xf', (cellFormat) => {
-      const numberFormatId = Number.parseInt(cellFormat.attributes.numFmtId ?? '', 10)
-      numberFormatIds.push(
-        Number.isInteger(numberFormatId) ? numberFormatId : GENERAL_NUMBER_FORMAT_ID
-      )
-    })
-    return false
-  })
-
-  return numberFormatIds
 }
 
 // Why: strip the parts of a format code that can contain a stray `d`/`m`/`y`

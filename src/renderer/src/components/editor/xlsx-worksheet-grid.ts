@@ -1,10 +1,16 @@
 import { parseXlsxCellReference } from './xlsx-cell-reference'
+import type { XlsxCellStyle, XlsxCellStyles } from './xlsx-cell-styles'
 import type { XlsxNumberFormats } from './xlsx-number-formats'
 import { formatXlsxSerialDate } from './xlsx-serial-date'
 import { decodeXlsxXmlText, forEachXlsxXmlElement, readXlsxXmlTextRuns } from './xlsx-xml-elements'
 
 export type XlsxWorksheetGrid = {
   rows: string[][]
+  /**
+   * Visual style per cell, positionally matching `rows`. Empty when the workbook
+   * declares no fills, font colours or bold, so an unstyled sheet costs nothing.
+   */
+  styles: (XlsxCellStyle | undefined)[][]
   maxColumns: number
   /** True when the sheet has more rows than `maxRows` allowed through. */
   truncated: boolean
@@ -13,6 +19,7 @@ export type XlsxWorksheetGrid = {
 export type XlsxWorksheetContext = {
   sharedStrings: string[]
   numberFormats: XlsxNumberFormats
+  cellStyles: XlsxCellStyles
   use1904DateSystem: boolean
   maxRows: number
 }
@@ -30,6 +37,8 @@ export function parseXlsxWorksheetGrid(
   context: XlsxWorksheetContext
 ): XlsxWorksheetGrid {
   const rows: string[][] = []
+  const styles: (XlsxCellStyle | undefined)[][] = []
+  const collectStyles = context.cellStyles.hasVisualStyles
   let maxColumns = 0
   let truncated = false
 
@@ -50,22 +59,37 @@ export function parseXlsxWorksheetGrid(
       rows.push([])
     }
 
-    const cells = readRowCells(rowElement.inner, context)
+    const row = readRowCells(rowElement.inner, context, collectStyles)
     // Why: a row element can repeat or arrive out of order in a hand-written
     // sheet; merging into the slot keeps the last writer's values instead of
     // pushing a duplicate row.
-    rows[rowIndex] = mergeRowCells(rows[rowIndex], cells)
+    rows[rowIndex] = mergeRowCells(rows[rowIndex], row.cells)
+    if (collectStyles) {
+      styles[rowIndex] = row.styles
+    }
     if (rows[rowIndex]!.length > maxColumns) {
       maxColumns = rows[rowIndex]!.length
     }
     return true
   })
 
-  return { rows: padRows(rows, maxColumns), maxColumns, truncated }
+  return {
+    rows: padRows(rows, maxColumns),
+    styles: collectStyles ? padStyleRows(styles, rows.length) : [],
+    maxColumns,
+    truncated
+  }
 }
 
-function readRowCells(rowXml: string, context: XlsxWorksheetContext): string[] {
+type XlsxWorksheetRow = { cells: string[]; styles: (XlsxCellStyle | undefined)[] }
+
+function readRowCells(
+  rowXml: string,
+  context: XlsxWorksheetContext,
+  collectStyles: boolean
+): XlsxWorksheetRow {
   const cells: string[] = []
+  const styles: (XlsxCellStyle | undefined)[] = []
   let nextColumnIndex = 0
 
   forEachXlsxXmlElement(rowXml, 'c', (cellElement) => {
@@ -77,9 +101,17 @@ function readRowCells(rowXml: string, context: XlsxWorksheetContext): string[] {
       cells.push('')
     }
     cells[columnIndex] = readCellText(cellElement.attributes, cellElement.inner, context)
+    if (collectStyles) {
+      styles[columnIndex] = context.cellStyles.getStyle(readStyleIndex(cellElement.attributes.s))
+    }
   })
 
-  return cells
+  return { cells, styles }
+}
+
+function readStyleIndex(styleIndexAttribute: string | undefined): number | undefined {
+  const styleIndex = Number.parseInt(styleIndexAttribute ?? '', 10)
+  return Number.isInteger(styleIndex) ? styleIndex : undefined
 }
 
 function readCellText(
@@ -123,8 +155,7 @@ function formatNumericCellText(
   styleIndexAttribute: string | undefined,
   context: XlsxWorksheetContext
 ): string {
-  const styleIndex = Number.parseInt(styleIndexAttribute ?? '', 10)
-  if (!context.numberFormats.isDateStyle(Number.isInteger(styleIndex) ? styleIndex : undefined)) {
+  if (!context.numberFormats.isDateStyle(readStyleIndex(styleIndexAttribute))) {
     return rawValue
   }
   const serial = Number(rawValue)
@@ -155,6 +186,19 @@ function mergeRowCells(existing: string[] | undefined, cells: string[]): string[
     }
   }
   return merged.map((cell) => cell ?? '')
+}
+
+// Why: keep the style matrix the same height as the row matrix so a lookup by
+// row index never lands on a hole.
+function padStyleRows(
+  styles: (XlsxCellStyle | undefined)[][],
+  rowCount: number
+): (XlsxCellStyle | undefined)[][] {
+  const padded = styles.slice(0, rowCount)
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    padded[rowIndex] ??= []
+  }
+  return padded as (XlsxCellStyle | undefined)[][]
 }
 
 function padRows(rows: string[][], maxColumns: number): string[][] {

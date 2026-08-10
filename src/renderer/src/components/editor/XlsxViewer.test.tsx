@@ -4,11 +4,23 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const spreadsheetGridMock = vi.hoisted(() => ({
-  latestProps: null as { header: string[]; rows: string[][]; columnCount: number } | null
+  latestProps: null as {
+    header: string[]
+    rows: string[][]
+    columnCount: number
+    cellStyles?: unknown[][]
+    headerAlignment?: string
+  } | null
 }))
 
 vi.mock('./SpreadsheetGrid', () => ({
-  SpreadsheetGrid: (props: { header: string[]; rows: string[][]; columnCount: number }) => {
+  SpreadsheetGrid: (props: {
+    header: string[]
+    rows: string[][]
+    columnCount: number
+    cellStyles?: unknown[][]
+    headerAlignment?: string
+  }) => {
     spreadsheetGridMock.latestProps = props
     return <div data-testid="spreadsheet-grid-probe" />
   }
@@ -98,6 +110,30 @@ describe('XlsxViewer', () => {
       ['North', '7']
     ])
     expect(spreadsheetGridMock.latestProps?.columnCount).toBe(2)
+  })
+
+  it('centers the generated column letters over their columns', async () => {
+    // Why: a workbook's heading row is labels we generate, unlike a CSV's, whose
+    // heading row is the file's own first row of text.
+    await render(toBase64(TWO_SHEET_WORKBOOK))
+
+    expect(spreadsheetGridMock.latestProps?.headerAlignment).toBe('center')
+  })
+
+  it('passes the sheet cell styles through to the grid', async () => {
+    const bytes = buildXlsxWorkbook({
+      stylesXml:
+        '<styleSheet><fonts count="1"><font/></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/></patternFill></fill></fills><cellXfs count="2"><xf fillId="0"/><xf fillId="1"/></cellXfs></styleSheet>',
+      sheets: [
+        { name: 'Styled', sheetXml: '<row r="1"><c r="A1" s="1" t="str"><v>filled</v></c></row>' }
+      ]
+    })
+    await render(toBase64(bytes))
+
+    expect(spreadsheetGridMock.latestProps?.cellStyles?.[0]?.[0]).toEqual({
+      backgroundColor: '#ffff00',
+      textColor: '#000000'
+    })
   })
 
   it('shows a tab per worksheet and switches the rendered sheet', async () => {

@@ -92,6 +92,8 @@ export type WorkbookInput = {
   sheets: WorkbookSheetInput[]
   sharedStrings?: string[]
   stylesXml?: string
+  /** Contents of `xl/theme/theme1.xml`, for themed colours. */
+  themeXml?: string
   use1904DateSystem?: boolean
   /** Omits `xl/_rels/workbook.xml.rels`, as minimal writers do. */
   omitWorkbookRels?: boolean
@@ -101,6 +103,7 @@ export function buildXlsxWorkbook({
   sheets,
   sharedStrings,
   stylesXml,
+  themeXml,
   use1904DateSystem,
   omitWorkbookRels
 }: WorkbookInput): Uint8Array {
@@ -131,6 +134,9 @@ export function buildXlsxWorkbook({
   }
   if (stylesXml !== undefined) {
     entries.push({ name: 'xl/styles.xml', content: stylesXml })
+  }
+  if (themeXml !== undefined) {
+    entries.push({ name: 'xl/theme/theme1.xml', content: themeXml })
   }
 
   return buildZipArchive(entries)

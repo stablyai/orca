@@ -3,7 +3,8 @@ import {
   resolveXlsxRelationshipTargetPath,
   resolveXlsxRelationshipsPartPath
 } from './xlsx-part-paths'
-import { parseXlsxNumberFormats, type XlsxNumberFormats } from './xlsx-number-formats'
+import { parseXlsxCellStyles, type XlsxCellStyle, type XlsxCellStyles } from './xlsx-cell-styles'
+import { parseXlsxNumberFormats } from './xlsx-number-formats'
 import { parseXlsxSharedStrings } from './xlsx-shared-strings'
 import { parseXlsxWorksheetGrid } from './xlsx-worksheet-grid'
 import { forEachXlsxXmlElement } from './xlsx-xml-elements'
@@ -14,6 +15,8 @@ export type XlsxSheet = {
   /** `hidden` and `veryHidden` sheets exist in the file but are not shown by Excel. */
   hidden: boolean
   rows: string[][]
+  /** Per-cell fill, text colour and bold; empty when the workbook has none. */
+  styles: (XlsxCellStyle | undefined)[][]
   maxColumns: number
   truncated: boolean
 }
@@ -29,6 +32,8 @@ const SHARED_STRINGS_RELATIONSHIP_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings'
 const STYLES_RELATIONSHIP_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles'
+const THEME_RELATIONSHIP_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme'
 const FALLBACK_WORKBOOK_PART_PATH = 'xl/workbook.xml'
 const RELATIONSHIP_ID_ATTRIBUTE = 'r:id'
 const EXTERNAL_TARGET_MODE = 'External'
@@ -48,7 +53,15 @@ export async function parseXlsxWorkbook(bytes: Uint8Array): Promise<XlsxWorkbook
 
   const relationships = await readWorkbookRelationships(archive, workbookPartPath)
   const sharedStrings = await readSharedStrings(archive, workbookPartPath, relationships)
-  const numberFormats = await readNumberFormats(archive, workbookPartPath, relationships)
+  const stylesXml = await readSupportingPartText(
+    archive,
+    workbookPartPath,
+    relationships,
+    STYLES_RELATIONSHIP_TYPE,
+    'styles.xml'
+  )
+  const numberFormats = parseXlsxNumberFormats(stylesXml)
+  const cellStyles = await readCellStyles(archive, workbookPartPath, relationships, stylesXml)
   const use1904DateSystem = readUse1904DateSystem(workbookXml)
 
   const sheets: XlsxSheet[] = []
@@ -64,6 +77,7 @@ export async function parseXlsxWorkbook(bytes: Uint8Array): Promise<XlsxWorkbook
     const grid = parseXlsxWorksheetGrid(worksheetXml ?? '', {
       sharedStrings,
       numberFormats,
+      cellStyles,
       use1904DateSystem,
       maxRows: MAX_XLSX_SHEET_ROWS
     })
@@ -155,36 +169,53 @@ function resolveSupportingPartPath(
   )
 }
 
+async function readSupportingPartText(
+  archive: XlsxZipArchive,
+  workbookPartPath: string,
+  relationships: XlsxWorkbookRelationships,
+  relationshipType: string,
+  conventionalName: string
+): Promise<string> {
+  const xml = await archive.readPartText(
+    resolveSupportingPartPath(workbookPartPath, relationships, relationshipType, conventionalName)
+  )
+  return xml ?? ''
+}
+
 async function readSharedStrings(
   archive: XlsxZipArchive,
   workbookPartPath: string,
   relationships: XlsxWorkbookRelationships
 ): Promise<string[]> {
-  const xml = await archive.readPartText(
-    resolveSupportingPartPath(
-      workbookPartPath,
-      relationships,
-      SHARED_STRINGS_RELATIONSHIP_TYPE,
-      'sharedStrings.xml'
-    )
+  const xml = await readSupportingPartText(
+    archive,
+    workbookPartPath,
+    relationships,
+    SHARED_STRINGS_RELATIONSHIP_TYPE,
+    'sharedStrings.xml'
   )
-  return xml === null ? [] : parseXlsxSharedStrings(xml)
+  return xml === '' ? [] : parseXlsxSharedStrings(xml)
 }
 
-async function readNumberFormats(
+// Why: themed colours resolve against the theme part, so it is only worth
+// reading when the styles actually exist.
+async function readCellStyles(
   archive: XlsxZipArchive,
   workbookPartPath: string,
-  relationships: XlsxWorkbookRelationships
-): Promise<XlsxNumberFormats> {
-  const xml = await archive.readPartText(
-    resolveSupportingPartPath(
-      workbookPartPath,
-      relationships,
-      STYLES_RELATIONSHIP_TYPE,
-      'styles.xml'
-    )
-  )
-  return parseXlsxNumberFormats(xml ?? '')
+  relationships: XlsxWorkbookRelationships,
+  stylesXml: string
+): Promise<XlsxCellStyles> {
+  const themeXml =
+    stylesXml === ''
+      ? ''
+      : await readSupportingPartText(
+          archive,
+          workbookPartPath,
+          relationships,
+          THEME_RELATIONSHIP_TYPE,
+          'theme/theme1.xml'
+        )
+  return parseXlsxCellStyles(stylesXml, themeXml)
 }
 
 // Why: workbooks saved by older Mac Excel count days from 1904-01-01 instead of

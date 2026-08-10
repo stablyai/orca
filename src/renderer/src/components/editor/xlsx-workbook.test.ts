@@ -161,6 +161,47 @@ describe('parseXlsxWorkbook', () => {
     expect(workbook.sheets[0]).toMatchObject({ name: 'Elsewhere', rows: [['found']] })
   })
 
+  it('reads cell fills, font colours and bold from styles and theme', async () => {
+    const bytes = buildXlsxWorkbook({
+      stylesXml: `<styleSheet>
+        <fonts count="2"><font><color theme="1"/></font><font><b/><color rgb="FFFFFFFF"/></font></fonts>
+        <fills count="3">
+          <fill><patternFill patternType="none"/></fill>
+          <fill><patternFill patternType="solid"><fgColor theme="4"/></patternFill></fill>
+          <fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/></patternFill></fill>
+        </fills>
+        <cellXfs count="3"><xf fontId="0" fillId="0"/><xf fontId="1" fillId="1"/><xf fontId="0" fillId="2"/></cellXfs>
+      </styleSheet>`,
+      themeXml:
+        '<a:clrScheme><a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2><a:accent1><a:srgbClr val="4472C4"/></a:accent1></a:clrScheme>',
+      sheets: [
+        {
+          name: 'Styled',
+          sheetXml:
+            '<row r="1"><c r="A1" s="1" t="str"><v>Header</v></c><c r="B1" s="2" t="str"><v>Input</v></c><c r="C1" s="0" t="str"><v>Plain</v></c></row>'
+        }
+      ]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.styles[0]).toEqual([
+      { backgroundColor: '#4472c4', textColor: '#ffffff', bold: true },
+      { backgroundColor: '#ffff00', textColor: '#000000' },
+      undefined
+    ])
+  })
+
+  it('leaves styles empty for a workbook with no visual styling', async () => {
+    const bytes = buildXlsxWorkbook({
+      sheets: [{ name: 'Plain', sheetXml: '<row r="1"><c r="A1"><v>1</v></c></row>' }]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.styles).toEqual([])
+  })
+
   it('resolves sharedStrings and styles through their relationship types', async () => {
     // Why: a producer may name these parts anything. Assuming the conventional
     // file name would silently lose every string and every date format.

@@ -96,6 +96,7 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
           header={columnHeader}
           rows={activeSheet.rows}
           columnCount={activeSheet.maxColumns}
+          cellStyles={activeSheet.styles}
           headerAlignment="center"
         />
       ) : (
