@@ -112,6 +112,8 @@
   --color-git-graph-lane-4: var(--git-graph-lane-4);
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
+  --text-caption: 11px;
+  --opacity-muted: 0.72;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -129,6 +131,8 @@
   --font-mono:
     'SF Mono', SFMono-Regular, ui-monospace, 'Cascadia Code', Menlo, Consolas, 'Liberation Mono',
     monospace;
+  --text-caption: 11px;
+  --opacity-muted: 0.72;
   --radius: 0.625rem;
   --orca-security-background: #fff;
   --orca-security-foreground: #0a0a0a;
@@ -233,6 +237,8 @@
 /* ── Dark Mode ───────────────────────────────────────── */
 
 .dark {
+  --text-caption: 11px;
+  --opacity-muted: 0.72;
   --orca-security-background: #0a0a0a;
   --orca-security-foreground: #fafafa;
   --orca-security-card: #171717;
@@ -2128,8 +2134,8 @@ html.native-shell .app-layout {
 
 .monaco-editor .orca-git-blame {
   color: var(--muted-foreground);
-  font-size: 11px;
-  opacity: 0.72;
+  font-size: var(--text-caption);
+  opacity: var(--opacity-muted);
 }
 
 .monaco-editor .orca-conflict-marker-line {

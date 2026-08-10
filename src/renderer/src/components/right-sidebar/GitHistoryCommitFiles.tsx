@@ -13,14 +13,11 @@ import { translate } from '@/i18n/i18n'
 import { formatGitHistoryTimestamp } from './git-history-format'
 import type { GitBranchChangeEntry, GitFileStatus } from '../../../../shared/types'
 
-// State for a single commit's lazily-loaded file list. Owned by GitHistoryPanel,
-// populated through the onLoadCommitFiles loader supplied by SourceControl.
 export type GitHistoryCommitFilesState =
   | { status: 'loading' }
   | { status: 'error'; error: string }
   | { status: 'ready'; entries: GitBranchChangeEntry[] }
 
-/** A single row inside an expanded commit's file list. */
 function CommitFileRow({
   entry,
   onOpen,
@@ -84,7 +81,6 @@ function CommitFileRow({
   )
 }
 
-/** Body states for a commit's lazily loaded file list. */
 function CommitFilesBody({
   state,
   onOpenFile,
@@ -153,7 +149,6 @@ function CommitFilesBody({
   )
 }
 
-/** Expanded commit files section with optional per-file history actions. */
 export function GitHistoryCommitFiles({
   state,
   author,
@@ -169,7 +164,6 @@ export function GitHistoryCommitFiles({
   onHistory?: (entry: GitBranchChangeEntry) => void
   onOpenAll?: () => void
 }): React.JSX.Element {
-  // Author and date move off the dense commit row and surface here on expand.
   const meta = [author, formatGitHistoryTimestamp(timestamp)].filter(Boolean).join(' · ')
   return (
     <div className="border-l border-border/60 bg-muted/20">

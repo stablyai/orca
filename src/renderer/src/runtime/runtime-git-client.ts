@@ -312,9 +312,6 @@ export async function getRuntimeGitHistory(
   )
 }
 
-/**
- * Reads inline blame for one file through local IPC or the active runtime.
- */
 export async function getRuntimeGitBlame(
   context: RuntimeGitContext,
   filePath: string

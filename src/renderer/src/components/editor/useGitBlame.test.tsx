@@ -174,4 +174,63 @@ describe('useGitBlame', () => {
 
     await waitFor(() => expect(mocks.getRuntimeGitBlame).toHaveBeenCalledTimes(2))
   })
+
+  it('does not evict a newer pending cache entry when a stale request resolves', async () => {
+    let resolveFirst!: (result: GitBlameResult) => void
+    const firstPending = new Promise<GitBlameResult>((resolve) => {
+      resolveFirst = resolve
+    })
+    let resolveSecond!: (result: GitBlameResult) => void
+    const secondPending = new Promise<GitBlameResult>((resolve) => {
+      resolveSecond = resolve
+    })
+    mocks.getRuntimeGitBlame.mockReturnValueOnce(firstPending)
+    mocks.getRuntimeGitBlame.mockReturnValueOnce(secondPending)
+
+    const first = createEditor()
+    const firstView = renderHook(() =>
+      useGitBlame({
+        editor: first.editor,
+        worktreeId: 'wt-1',
+        filePath: '/repo/stale.ts',
+        enabled: true
+      })
+    )
+    await act(async () => {
+      first.triggerContentChange()
+    })
+
+    const second = createEditor()
+    const secondView = renderHook(() =>
+      useGitBlame({
+        editor: second.editor,
+        worktreeId: 'wt-1',
+        filePath: '/repo/stale.ts',
+        enabled: true
+      })
+    )
+    await act(async () => {
+      resolveFirst(blameResult())
+    })
+
+    secondView.unmount()
+    firstView.unmount()
+
+    const third = createEditor()
+    const thirdView = renderHook(() =>
+      useGitBlame({
+        editor: third.editor,
+        worktreeId: 'wt-1',
+        filePath: '/repo/stale.ts',
+        enabled: true
+      })
+    )
+    await act(async () => {})
+
+    expect(mocks.getRuntimeGitBlame).toHaveBeenCalledTimes(2)
+    thirdView.unmount()
+    await act(async () => {
+      resolveSecond(blameResult())
+    })
+  })
 })

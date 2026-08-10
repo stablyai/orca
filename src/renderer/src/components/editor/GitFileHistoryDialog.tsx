@@ -24,7 +24,6 @@ type FileHistoryState =
   | { status: 'error'; error: string }
   | { status: 'ready'; items: GitHistoryItem[] }
 
-/** Formats a history timestamp as a compact relative label. */
 function formatRelativeTimestamp(timestamp: number | undefined): string {
   if (!timestamp || !Number.isFinite(timestamp)) {
     return ''
@@ -32,11 +31,7 @@ function formatRelativeTimestamp(timestamp: number | undefined): string {
   return formatPrCommentRelativeTime(new Date(timestamp).toISOString(), Date.now())
 }
 
-/**
- * Modal listing commits that touched a single file.
- * The target worktree and path are captured by the caller to stay stable when
- * the active worktree changes while the dialog is open.
- */
+/** Keeps the dialog target stable when the active worktree changes. */
 export function GitFileHistoryDialog({
   open,
   onOpenChange,

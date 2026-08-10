@@ -11,7 +11,6 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 /** Coalesces in-flight blame reads across Monaco remounts for the same file. */
 const blameCache = new Map<string, Promise<GitBlameResult>>()
 
-/** Formats a blame line as `author · relative time · summary`. */
 function blameLabel(author: string, authorTime: number, summary: string): string {
   const relativeTime = formatPrCommentRelativeTime(
     new Date(authorTime * 1000).toISOString(),
@@ -20,7 +19,6 @@ function blameLabel(author: string, authorTime: number, summary: string): string
   return [author, relativeTime, summary].filter(Boolean).join(' · ')
 }
 
-/** Props consumed by the inline Git blame hook. */
 type UseGitBlameProps = {
   editor: editor.IStandaloneCodeEditor | null
   worktreeId?: string
@@ -111,7 +109,9 @@ export function useGitBlame({ editor, worktreeId, filePath, enabled }: UseGitBla
         }
         const currentVersionId = ed.getModel()?.getVersionId() ?? null
         if (fetchVersionId !== null && currentVersionId !== fetchVersionId) {
-          blameCache.delete(cacheKey)
+          if (blameCache.get(cacheKey) === promise) {
+            blameCache.delete(cacheKey)
+          }
           return
         }
         latestResult = result

@@ -3,15 +3,11 @@ import { translate } from '@/i18n/i18n'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitchRow } from './SettingsFormControls'
 
-/** Props for the inline Git blame editor setting. */
 type InlineGitBlameSettingProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-/**
- * Editor setting controlling inline Git blame on the active Monaco line.
- */
 export function InlineGitBlameSetting({
   settings,
   updateSettings
