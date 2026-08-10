@@ -184,6 +184,28 @@ export async function readNativeChatTranscriptTailFile(
   }
 }
 
+/**
+ * Byte offset just past the last COMPLETE record in a transcript, which is the
+ * only safe cursor to resume an incremental read from: a window read includes a
+ * half-written trailing record (it decodes to nothing), so resuming at the raw
+ * file end would start mid-record and lose that record once its newline lands.
+ */
+export async function completedRecordEnd(filePath: string, end: number): Promise<number> {
+  if (end <= 0) {
+    return 0
+  }
+  const handle = await open(filePath, 'r')
+  try {
+    // Why: `end` comes from a stat this function did not take, so the file can
+    // have shrunk since. Clamp to what the open handle actually holds rather
+    // than probing past EOF.
+    const live = Math.min(end, (await handle.stat()).size)
+    return live <= 0 ? 0 : await findLastCompleteLineEnd(handle, live)
+  } finally {
+    await handle.close()
+  }
+}
+
 async function findLastCompleteLineEnd(
   handle: Awaited<ReturnType<typeof open>>,
   end: number,
@@ -191,9 +213,12 @@ async function findLastCompleteLineEnd(
 ): Promise<number> {
   signal?.throwIfAborted()
   const lastByte = Buffer.allocUnsafe(1)
-  await handle.read(lastByte, 0, 1, end - 1)
+  const { bytesRead: lastByteRead } = await handle.read(lastByte, 0, 1, end - 1)
   signal?.throwIfAborted()
-  if (lastByte[0] === 0x0a) {
+  // Why: allocUnsafe leaves the buffer uninitialized, so a short read past EOF
+  // would compare heap garbage against a newline and report a cursor beyond the
+  // file. Treat "nothing there" as "no complete line here" and scan back.
+  if (lastByteRead === 1 && lastByte[0] === 0x0a) {
     return end
   }
   let cursor = end

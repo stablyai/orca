@@ -145,6 +145,63 @@ describe('subscribeRoutedNativeChatTranscript', () => {
     expect(subscribeNativeChatTranscript).not.toHaveBeenCalled()
   })
 
+  it('strips a client-supplied transcript path before it can reach the relay', async () => {
+    // The owner matched by session id alone, so it carries no hook path: a spread
+    // of args would have carried the client's own path through to the SSH host.
+    resolveNativeChatSshOwner.mockReturnValue({ connectionId: 'dev-box' })
+
+    await subscribeRoutedNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'abc',
+      transcriptPath: '/etc/anything/else.jsonl',
+      onAppend: () => {}
+    })
+
+    expect(subscribeSshNativeChatTranscript).toHaveBeenCalledWith(
+      'dev-box',
+      expect.not.objectContaining({ transcriptPath: expect.anything() }),
+      expect.anything()
+    )
+  })
+
+  it('forwards the hook path when the owning row reported one', async () => {
+    resolveNativeChatSshOwner.mockReturnValue({
+      connectionId: 'dev-box',
+      transcriptPath: '/home/dev/.claude/projects/repo/file.jsonl'
+    })
+
+    await subscribeRoutedNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'abc',
+      transcriptPath: '/etc/anything/else.jsonl',
+      onAppend: () => {}
+    })
+
+    expect(subscribeSshNativeChatTranscript).toHaveBeenCalledWith(
+      'dev-box',
+      expect.objectContaining({
+        transcriptPath: '/home/dev/.claude/projects/repo/file.jsonl'
+      }),
+      expect.anything()
+    )
+  })
+
+  it('forwards the setup signal so a cancelled subscribe stops both branches', async () => {
+    resolveNativeChatSshOwner.mockReturnValue({ connectionId: 'dev-box' })
+    const controller = new AbortController()
+
+    await subscribeRoutedNativeChatTranscript(
+      { agent: 'claude', sessionId: 'abc', onAppend: () => {} },
+      controller.signal
+    )
+
+    expect(subscribeSshNativeChatTranscript).toHaveBeenCalledWith(
+      'dev-box',
+      expect.anything(),
+      expect.objectContaining({ signal: controller.signal })
+    )
+  })
+
   it('watches the local file for a local session', async () => {
     resolveNativeChatSshOwner.mockReturnValue(null)
 

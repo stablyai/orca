@@ -230,6 +230,201 @@ describe('subscribeSshNativeChatTranscript', () => {
     subscription.unsubscribe()
   })
 
+  it('does not advance the cursor when a subscriber throws on the frame', async () => {
+    readSshNativeChatTranscript.mockResolvedValue(window([message('a')], 10))
+    const callbacks = harness()
+    callbacks.onInitialSnapshot.mockImplementation(() => {
+      throw new Error('renderer blew up')
+    })
+
+    const subscription = subscribeSshNativeChatTranscript(
+      'dev-box',
+      { agent: 'claude', sessionId: 'abc', ...callbacks },
+      { pollIntervalMs: 5 }
+    )
+    await vi.advanceTimersByTimeAsync(6)
+
+    expect(readSshNativeChatTranscript).toHaveBeenNthCalledWith(
+      2,
+      'dev-box',
+      expect.not.objectContaining({ knownFileSize: expect.anything() }),
+      expect.anything()
+    )
+    subscription.unsubscribe()
+  })
+
+  it('retries the initial snapshot when the subscriber throws on the first frame', async () => {
+    // Flipping snapshotDelivered before the callback would route the retry to
+    // onReplace, leave the client with no snapshot, and mute the silence report.
+    readSshNativeChatTranscript.mockResolvedValue(window([message('a')], 10))
+    const callbacks = harness()
+    callbacks.onInitialSnapshot.mockImplementationOnce(() => {
+      throw new Error('renderer not mounted')
+    })
+
+    const subscription = subscribeSshNativeChatTranscript(
+      'dev-box',
+      { agent: 'claude', sessionId: 'abc', ...callbacks },
+      { pollIntervalMs: 5 }
+    )
+    // Two polls: the throwing first frame, then the retry that must land on the
+    // same branch. A third would legitimately be a replacement.
+    await vi.advanceTimersByTimeAsync(6)
+
+    expect(callbacks.onInitialSnapshot).toHaveBeenCalledTimes(2)
+    expect(callbacks.onReplace).not.toHaveBeenCalled()
+    subscription.unsubscribe()
+  })
+
+  it('does not blame the remote host when a subscriber throws', async () => {
+    readSshNativeChatTranscript.mockResolvedValue(window([message('a')], 10))
+    const callbacks = harness()
+    callbacks.onInitialSnapshot.mockImplementation(() => {
+      throw new Error('renderer blew up')
+    })
+
+    const subscription = subscribeSshNativeChatTranscript(
+      'dev-box',
+      { agent: 'claude', sessionId: 'abc', ...callbacks },
+      { pollIntervalMs: 5, reportUnavailableAfterMs: 0 }
+    )
+    await vi.advanceTimersByTimeAsync(40)
+
+    expect(callbacks.onInitialSnapshot).not.toHaveBeenCalledWith(
+      [],
+      false,
+      0,
+      'Transcript unavailable on the remote host'
+    )
+    subscription.unsubscribe()
+  })
+
+  it('carries the file generation forward so a same-length rewrite is caught', async () => {
+    readSshNativeChatTranscript.mockResolvedValue({
+      ...window([message('a')], 10),
+      generation: '1:2:3'
+    })
+    const callbacks = harness()
+
+    const subscription = subscribeSshNativeChatTranscript(
+      'dev-box',
+      { agent: 'claude', sessionId: 'abc', ...callbacks },
+      { pollIntervalMs: 5 }
+    )
+    await vi.advanceTimersByTimeAsync(6)
+
+    expect(readSshNativeChatTranscript).toHaveBeenNthCalledWith(
+      2,
+      'dev-box',
+      expect.objectContaining({ generation: '1:2:3' }),
+      expect.anything()
+    )
+    subscription.unsubscribe()
+  })
+
+  it('does not start polling when setup was already aborted', async () => {
+    readSshNativeChatTranscript.mockResolvedValue(window([message('a')], 10))
+    const callbacks = harness()
+    const controller = new AbortController()
+    controller.abort()
+
+    const subscription = subscribeSshNativeChatTranscript(
+      'dev-box',
+      { agent: 'claude', sessionId: 'abc', ...callbacks },
+      { pollIntervalMs: 5, signal: controller.signal }
+    )
+    await vi.advanceTimersByTimeAsync(20)
+
+    expect(subscription.watching).toBe(false)
+    expect(readSshNativeChatTranscript).not.toHaveBeenCalled()
+  })
+
+  it('stops polling when the setup signal aborts later', async () => {
+    readSshNativeChatTranscript.mockResolvedValue({ unchanged: true, fileSize: 10 })
+    const callbacks = harness()
+    const controller = new AbortController()
+
+    const subscription = subscribeSshNativeChatTranscript(
+      'dev-box',
+      { agent: 'claude', sessionId: 'abc', ...callbacks },
+      { pollIntervalMs: 5, signal: controller.signal }
+    )
+    await vi.advanceTimersByTimeAsync(6)
+    controller.abort()
+    const callsAtAbort = readSshNativeChatTranscript.mock.calls.length
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(readSshNativeChatTranscript).toHaveBeenCalledTimes(callsAtAbort)
+    subscription.unsubscribe()
+  })
+
+  it('keeps polling when the unavailable frame itself throws', async () => {
+    // The report is emitted from the transport-failure path; a throw there used
+    // to escape before schedule() and kill the loop for good.
+    readSshNativeChatTranscript.mockRejectedValue(new Error('SSH relay is not ready'))
+    const callbacks = harness()
+    callbacks.onInitialSnapshot.mockImplementation(() => {
+      throw new Error('renderer blew up')
+    })
+
+    const subscription = subscribeSshNativeChatTranscript(
+      'dev-box',
+      { agent: 'claude', sessionId: 'abc', ...callbacks },
+      { pollIntervalMs: 5, reportUnavailableAfterMs: 0 }
+    )
+    await vi.advanceTimersByTimeAsync(30)
+    const callsAfterThrow = readSshNativeChatTranscript.mock.calls.length
+    await vi.advanceTimersByTimeAsync(20)
+
+    expect(readSshNativeChatTranscript.mock.calls.length).toBeGreaterThan(callsAfterThrow)
+    subscription.unsubscribe()
+  })
+
+  it('offers the unavailable frame again when the subscriber threw on it', async () => {
+    readSshNativeChatTranscript.mockRejectedValue(new Error('SSH relay is not ready'))
+    const callbacks = harness()
+    callbacks.onInitialSnapshot.mockImplementationOnce(() => {
+      throw new Error('renderer not mounted')
+    })
+
+    const subscription = subscribeSshNativeChatTranscript(
+      'dev-box',
+      { agent: 'claude', sessionId: 'abc', ...callbacks },
+      { pollIntervalMs: 5, reportUnavailableAfterMs: 0 }
+    )
+    await vi.advanceTimersByTimeAsync(20)
+
+    expect(callbacks.onInitialSnapshot.mock.calls.length).toBeGreaterThan(1)
+    expect(callbacks.onInitialSnapshot).toHaveBeenLastCalledWith(
+      [],
+      false,
+      0,
+      'Transcript unavailable on the remote host'
+    )
+    subscription.unsubscribe()
+  })
+
+  it('backs off instead of hammering the relay when every frame throws', async () => {
+    // Production cadence: resetting the backoff before the callback pinned a
+    // permanently throwing subscriber at one full remote window per second.
+    readSshNativeChatTranscript.mockResolvedValue(window([message('a')], 10))
+    const callbacks = harness()
+    callbacks.onInitialSnapshot.mockImplementation(() => {
+      throw new Error('renderer blew up')
+    })
+
+    const subscription = subscribeSshNativeChatTranscript('dev-box', {
+      agent: 'claude',
+      sessionId: 'abc',
+      ...callbacks
+    })
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    // 1s, 2s, 4s, 5s, 5s… rather than 30 ticks at 1s.
+    expect(readSshNativeChatTranscript.mock.calls.length).toBeLessThan(12)
+    subscription.unsubscribe()
+  })
+
   it('stops polling once unsubscribed', async () => {
     readSshNativeChatTranscript.mockResolvedValue({ unchanged: true, fileSize: 10 })
     const callbacks = harness()

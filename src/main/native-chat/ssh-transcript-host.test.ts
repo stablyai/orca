@@ -114,6 +114,44 @@ describe('resolveNativeChatSshOwner', () => {
     expect(resolveNativeChatSshOwner({ sessionId: 'abc' })).toBeNull()
   })
 
+  it('picks the freshest row when two connections report the same session id', () => {
+    getStatusSnapshot.mockReturnValue([
+      hookRow({
+        connectionId: 'stale-box',
+        receivedAt: 100,
+        providerSession: { key: 'session_id', id: 'abc' }
+      }),
+      hookRow({
+        connectionId: 'live-box',
+        receivedAt: 500,
+        providerSession: { key: 'session_id', id: 'abc' }
+      })
+    ])
+
+    expect(resolveNativeChatSshOwner({ sessionId: 'abc' })).toMatchObject({
+      connectionId: 'live-box'
+    })
+  })
+
+  it('picks the freshest row when two hosts report the same transcript path', () => {
+    getStatusSnapshot.mockReturnValue([
+      hookRow({
+        connectionId: 'stale-box',
+        receivedAt: 100,
+        providerSession: { key: 'session_id', id: 'a', transcriptPath: '/home/dev/t.jsonl' }
+      }),
+      hookRow({
+        connectionId: 'live-box',
+        receivedAt: 900,
+        providerSession: { key: 'session_id', id: 'b', transcriptPath: '/home/dev/t.jsonl' }
+      })
+    ])
+
+    expect(
+      resolveNativeChatSshOwner({ sessionId: 'zzz', transcriptPath: '/home/dev/t.jsonl' })
+    ).toMatchObject({ connectionId: 'live-box' })
+  })
+
   it('does not claim a session no hook row knows about', () => {
     getStatusSnapshot.mockReturnValue([
       hookRow({ connectionId: 'dev-box', providerSession: { key: 'session_id', id: 'other' } })
@@ -152,11 +190,27 @@ describe('readSshNativeChatTranscript', () => {
   })
 
   it('accepts an append delta', async () => {
-    relayRead.mockResolvedValue({ appended: [remoteMessage], fileSize: 200 })
+    relayRead.mockResolvedValue({
+      appended: [remoteMessage],
+      fileSize: 200,
+      generation: '4:5:6'
+    })
 
     await expect(
       readSshNativeChatTranscript('dev-box', { agent: 'claude', sessionId: 'abc', limit: 40 })
-    ).resolves.toMatchObject({ appended: [{ id: 'assistant-1' }], fileSize: 200 })
+    ).resolves.toMatchObject({
+      appended: [{ id: 'assistant-1' }],
+      fileSize: 200,
+      generation: '4:5:6'
+    })
+  })
+
+  it('accepts a relay that reports no generation, so an older one still works', async () => {
+    relayRead.mockResolvedValue({ unchanged: true, fileSize: 120 })
+
+    await expect(
+      readSshNativeChatTranscript('dev-box', { agent: 'claude', sessionId: 'abc', limit: 40 })
+    ).resolves.toEqual({ unchanged: true, fileSize: 120 })
   })
 
   it('returns null when the deployed relay predates the method, so the caller can fall back', async () => {
@@ -167,12 +221,43 @@ describe('readSshNativeChatTranscript', () => {
     ).resolves.toBeNull()
   })
 
-  it('treats an unparseable payload as a retry-worthy miss instead of rendering junk', async () => {
+  it('reports an unparseable payload as a real error, not as a not-yet-written transcript', async () => {
+    // `notFound` means "the agent has not flushed it yet" and makes the poll loop
+    // wait silently, so a broken relay must not borrow that shape.
     relayRead.mockResolvedValue({ messages: 'not-an-array' })
 
     await expect(
       readSshNativeChatTranscript('dev-box', { agent: 'claude', sessionId: 'abc', limit: 40 })
+    ).resolves.toEqual({ error: 'Transcript unavailable' })
+  })
+
+  it('passes a genuinely absent transcript through as notFound', async () => {
+    relayRead.mockResolvedValue({ error: 'Transcript unavailable', notFound: true })
+
+    await expect(
+      readSshNativeChatTranscript('dev-box', { agent: 'claude', sessionId: 'abc', limit: 40 })
     ).resolves.toEqual({ error: 'Transcript unavailable', notFound: true })
+  })
+
+  it('forwards the file generation so a same-length replacement is still detected', async () => {
+    relayRead.mockResolvedValue({ unchanged: true, fileSize: 120, generation: '1:2:3' })
+
+    // The envelope must keep `generation` on the way back too: a schema that
+    // strips it silently degrades the cursor to size-only.
+    await expect(
+      readSshNativeChatTranscript('dev-box', {
+        agent: 'claude',
+        sessionId: 'abc',
+        limit: 40,
+        knownFileSize: 120,
+        generation: '1:2:3'
+      })
+    ).resolves.toEqual({ unchanged: true, fileSize: 120, generation: '1:2:3' })
+
+    expect(relayRead).toHaveBeenCalledWith(
+      expect.objectContaining({ generation: '1:2:3' }),
+      expect.anything()
+    )
   })
 
   it('forwards the poll cursor so an unchanged transcript costs one stat', async () => {

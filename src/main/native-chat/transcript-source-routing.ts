@@ -1,5 +1,4 @@
 import type { AgentType } from '../../shared/native-chat-types'
-import { isSshNativeChatUnchangedResult } from '../../shared/ssh-native-chat-relay'
 import type { ResolveSessionFileOptions } from './session-file-resolver'
 import { readSshNativeChatTranscript, resolveNativeChatSshOwner } from './ssh-transcript-host'
 import { subscribeSshNativeChatTranscript } from './ssh-transcript-subscription'
@@ -66,9 +65,6 @@ export async function readRoutedNativeChatTranscriptTail(
   // hit a look-alike: the same session id, or the same absolute path under a
   // matching home layout. Report the miss instead of rendering another machine's
   // conversation. `unchanged` and `appended` cannot answer a windowed read.
-  if (remote && !isSshNativeChatUnchangedResult(remote)) {
-    return TRANSCRIPT_MISS
-  }
   return TRANSCRIPT_MISS
 }
 
@@ -87,10 +83,19 @@ export async function subscribeRoutedNativeChatTranscript(
   if (!nativeChatLineDecoderForAgent(args.agent) || !args.sessionId.trim()) {
     return { unsubscribe: () => {}, watching: false }
   }
-  return subscribeSshNativeChatTranscript(owner.connectionId, {
-    ...args,
-    ...(owner.transcriptPath === undefined ? {} : { transcriptPath: owner.transcriptPath })
-  })
+  // Why: `transcriptPath` is destructured OUT of args before the spread. A
+  // client-supplied path must never reach the relay, and a spread would carry it
+  // through whenever the owner matched by session id alone and has no hook path
+  // of its own.
+  const { transcriptPath: _clientPath, ...routableArgs } = args
+  return subscribeSshNativeChatTranscript(
+    owner.connectionId,
+    {
+      ...routableArgs,
+      ...(owner.transcriptPath === undefined ? {} : { transcriptPath: owner.transcriptPath })
+    },
+    setupSignal ? { signal: setupSignal } : {}
+  )
 }
 
 /** An explicit `filePath` is a host-local read (tests, already-resolved paths),

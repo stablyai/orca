@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -35,7 +35,12 @@ async function writeTranscript(records: unknown[]): Promise<string> {
 
 function read(
   transcriptPath: string,
-  extra: { limit?: number; knownFileSize?: number; beforeOffset?: number } = {}
+  extra: {
+    limit?: number
+    knownFileSize?: number
+    beforeOffset?: number
+    generation?: string
+  } = {}
 ): ReturnType<typeof readRelayNativeChatTranscript> {
   return readRelayNativeChatTranscript({
     agent: 'claude',
@@ -43,8 +48,19 @@ function read(
     transcriptPath,
     limit: extra.limit ?? 40,
     ...(extra.knownFileSize === undefined ? {} : { knownFileSize: extra.knownFileSize }),
-    ...(extra.beforeOffset === undefined ? {} : { beforeOffset: extra.beforeOffset })
+    ...(extra.beforeOffset === undefined ? {} : { beforeOffset: extra.beforeOffset }),
+    ...(extra.generation === undefined ? {} : { generation: extra.generation })
   })
+}
+
+function cursorOf(result: Awaited<ReturnType<typeof readRelayNativeChatTranscript>>): {
+  fileSize: number
+  generation?: string
+} {
+  if ('error' in result) {
+    throw new Error(`expected a read, got ${result.error}`)
+  }
+  return { fileSize: result.fileSize, generation: result.generation }
 }
 
 describe('readRelayNativeChatTranscript', () => {
@@ -66,7 +82,7 @@ describe('readRelayNativeChatTranscript', () => {
     const first = await read(transcriptPath)
     const fileSize = 'fileSize' in first ? first.fileSize : 0
 
-    await expect(read(transcriptPath, { knownFileSize: fileSize })).resolves.toEqual({
+    await expect(read(transcriptPath, { knownFileSize: fileSize })).resolves.toMatchObject({
       unchanged: true,
       fileSize
     })
@@ -121,6 +137,69 @@ describe('readRelayNativeChatTranscript', () => {
 
     expect('unchanged' in paged).toBe(false)
     expect('appended' in paged).toBe(false)
+  })
+
+  it('stops the window cursor at the last complete record, so the next tick keeps it', async () => {
+    const transcriptPath = await writeTranscript([assistantRecord('a-1', 'one')])
+    const completeEnd = (await stat(transcriptPath)).size
+    // The agent is mid-write: this record has no newline yet.
+    await appendFile(transcriptPath, JSON.stringify(assistantRecord('a-2', 'two')))
+
+    const first = await read(transcriptPath)
+    const cursor = cursorOf(first)
+    expect(cursor.fileSize).toBe(completeEnd)
+
+    // Finish the record; it must arrive whole rather than as a decoded fragment.
+    await appendFile(transcriptPath, '\n')
+    const delta = await read(transcriptPath, {
+      knownFileSize: cursor.fileSize,
+      generation: cursor.generation
+    })
+
+    expect(delta).toMatchObject({ appended: [{ id: 'a-2' }] })
+  })
+
+  it('re-windows a transcript replaced by one of the same length', async () => {
+    const transcriptPath = await writeTranscript([assistantRecord('a-1', 'one')])
+    const first = await read(transcriptPath)
+    const cursor = cursorOf(first)
+    // Same byte length, different content: a size-only cursor would call this
+    // unchanged and never show the replacement.
+    await writeFile(transcriptPath, `${JSON.stringify(assistantRecord('a-1', 'ONE'))}\n`)
+    expect((await stat(transcriptPath)).size).toBe(cursor.fileSize)
+    const now = new Date(Date.now() + 5_000)
+    await utimes(transcriptPath, now, now)
+
+    const result = await read(transcriptPath, {
+      knownFileSize: cursor.fileSize,
+      generation: cursor.generation
+    })
+
+    expect('unchanged' in result).toBe(false)
+    expect(result).toMatchObject({ messages: [{ id: 'a-1' }] })
+  })
+
+  it('still answers unchanged when the generation matches', async () => {
+    const transcriptPath = await writeTranscript([assistantRecord('a-1', 'one')])
+    const cursor = cursorOf(await read(transcriptPath))
+
+    await expect(
+      read(transcriptPath, { knownFileSize: cursor.fileSize, generation: cursor.generation })
+    ).resolves.toMatchObject({ unchanged: true })
+  })
+
+  it('stamps the generation after the read, so a concurrent append is not a false replacement', async () => {
+    const transcriptPath = await writeTranscript([assistantRecord('a-1', 'one')])
+    const first = await read(transcriptPath)
+    const cursor = cursorOf(first)
+    const stamped = (await stat(transcriptPath)).mtimeMs
+
+    // The stamp must describe the state the caller actually received, so the
+    // next poll can answer unchanged instead of re-windowing for nothing.
+    expect(cursor.generation?.endsWith(`:${stamped}`)).toBe(true)
+    await expect(
+      read(transcriptPath, { knownFileSize: cursor.fileSize, generation: cursor.generation })
+    ).resolves.toMatchObject({ unchanged: true })
   })
 
   it('reports an unresolvable transcript as a retry-worthy miss', async () => {

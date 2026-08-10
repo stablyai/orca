@@ -21,6 +21,7 @@ export type SshNativeChatReadArgs = {
   limit: number
   beforeOffset?: number
   knownFileSize?: number
+  generation?: string
 }
 
 export type NativeChatSshOwner = {
@@ -55,7 +56,14 @@ export function resolveNativeChatSshOwner(args: {
   if (!sessionId && !transcriptPath) {
     return null
   }
+  // Why: two connections can report the same provider session id or the same
+  // absolute transcript path (a resumed session, a stale row from a dropped
+  // target, two hosts with the same home layout). Snapshot order carries no
+  // meaning, so the most recent hook event wins deterministically on both keys.
+  let pathMatch: NativeChatSshOwner | null = null
+  let pathMatchReceivedAt = Number.NEGATIVE_INFINITY
   let idMatch: NativeChatSshOwner | null = null
+  let idMatchReceivedAt = Number.NEGATIVE_INFINITY
   for (const status of agentHookServer.getStatusSnapshot()) {
     const connectionId = status.connectionId
     if (!connectionId || isWslHookRelayConnectionId(connectionId)) {
@@ -67,13 +75,20 @@ export function resolveNativeChatSshOwner(args: {
     }
     const hookPath = providerSession.transcriptPath
     if (transcriptPath && hookPath === transcriptPath) {
-      return { connectionId, transcriptPath: hookPath }
+      if (status.receivedAt > pathMatchReceivedAt) {
+        pathMatch = { connectionId, transcriptPath: hookPath }
+        pathMatchReceivedAt = status.receivedAt
+      }
+      continue
     }
-    if (!idMatch && sessionId && providerSession.id === sessionId) {
+    if (sessionId && providerSession.id === sessionId && status.receivedAt > idMatchReceivedAt) {
       idMatch = { connectionId, ...(hookPath ? { transcriptPath: hookPath } : {}) }
+      idMatchReceivedAt = status.receivedAt
     }
   }
-  return idMatch
+  // A path match is the stronger key: recent Claude Code names the transcript
+  // file with a UUID that differs from the hook session id.
+  return pathMatch ?? idMatch
 }
 
 /** Reads the transcript on the SSH host. Null means the relay gave no answer:
@@ -89,7 +104,8 @@ export async function readSshNativeChatTranscript(
     limit: args.limit,
     ...(args.transcriptPath === undefined ? {} : { transcriptPath: args.transcriptPath }),
     ...(args.beforeOffset === undefined ? {} : { beforeOffset: args.beforeOffset }),
-    ...(args.knownFileSize === undefined ? {} : { knownFileSize: args.knownFileSize })
+    ...(args.knownFileSize === undefined ? {} : { knownFileSize: args.knownFileSize }),
+    ...(args.generation === undefined ? {} : { generation: args.generation })
   }
   const reader = getSshNativeChatTranscriptReader(connectionId)
   if (!reader) {
@@ -100,9 +116,11 @@ export async function readSshNativeChatTranscript(
     return null
   }
   const parsed = relayReadResultSchema.safeParse(raw)
-  // A payload this process cannot read is a miss, not content: rendering junk
-  // would be worse than retrying.
-  return parsed.success ? parsed.data : { error: 'Transcript unavailable', notFound: true }
+  // Why: a payload this process cannot read is a real failure, NOT the
+  // "agent has not written the transcript yet" case. `notFound` tells the poll
+  // loop to keep waiting silently, so encoding a broken relay as `notFound`
+  // would suppress its unavailable report and spin the view forever.
+  return parsed.success ? parsed.data : { error: 'Transcript unavailable' }
 }
 
 // Why: the relay is deployed by this desktop build, so the payload is our own
@@ -127,12 +145,17 @@ const lifecycleSchema = z.object({
 })
 
 const relayReadResultSchema = z.union([
-  z.object({ unchanged: z.literal(true), fileSize: z.number().nonnegative() }),
+  z.object({
+    unchanged: z.literal(true),
+    fileSize: z.number().nonnegative(),
+    generation: z.string().optional()
+  }),
   z.object({
     appended: z.array(messageSchema),
     fileSize: z.number().nonnegative(),
     lifecycle: lifecycleSchema.optional(),
-    filePath: z.string().optional()
+    filePath: z.string().optional(),
+    generation: z.string().optional()
   }),
   z.object({
     messages: z.array(messageSchema),
@@ -140,7 +163,8 @@ const relayReadResultSchema = z.union([
     beforeOffset: z.number().nonnegative(),
     lifecycle: lifecycleSchema.optional(),
     fileSize: z.number().nonnegative(),
-    filePath: z.string().optional()
+    filePath: z.string().optional(),
+    generation: z.string().optional()
   }),
   z.object({ error: z.string(), notFound: z.literal(true).optional() })
 ])
