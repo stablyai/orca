@@ -3991,7 +3991,7 @@
           "e643b30398": "Proyecto agregado en host SSH"
         },
         "AddRepoCreateStep": {
-          "0ae45b8238": "mi-proyecto",
+          "0ae45b8238": "my-project",
           "a8149a3a5a": "Nombre",
           "11fd2a7db8": "Repositorio Git",
           "5e97f0c4b9": "Proyecto creado",
@@ -6060,7 +6060,7 @@
           "a6c2816115": "y",
           "b8a7efb3f6": "ORCA_BITBUCKET_EMAIL",
           "8489c0aa49": "Bitbucket",
-          "e74de656ce": "inicio de sesión de autenticación glab",
+          "e74de656ce": "glab auth login",
           "05e5245af7": "La CLI de GitLab está instalada pero no autenticada. Ejecute este comando en una terminal:",
           "a83cac5726": "Instalar la CLI de GitLab",
           "35a3379372": "Instale la CLI de GitLab para habilitar solicitudes de fusión, problemas y canalizaciones.",
@@ -6068,7 +6068,7 @@
           "a3326f6f1b": "glabro",
           "027440e1cb": "Fusionar solicitudes, problemas, todos y canalizaciones a través de",
           "513abfe47d": "GitLab",
-          "51000487c4": "inicio de sesión de autenticación gh",
+          "51000487c4": "gh auth login",
           "09285e9fe6": "La CLI de GitHub está instalada pero no autenticada. Ejecute este comando en una terminal:",
           "399cf46867": "Instalar la CLI de GitHub",
           "c0c8575e05": "Instale la CLI de GitHub para habilitar solicitudes de extracción, problemas y comprobaciones.",
@@ -6475,12 +6475,12 @@
           "07ba35bc68": "Revisa la indentación bajo `scripts:`. Las claves de hooks deben usar dos espacios y las líneas de comandos deben usar cuatro.",
           "787ca433ef": "Define solo las claves admitidas: `scripts`, `setup`, `archive` e `issueCommand`.",
           "ecc73d9125": "Compara tu archivo con la plantilla funcional de abajo y copia esa estructura si hace falta.",
-          "925f9e0dc4": "texto-primer plano",
+          "925f9e0dc4": "text-foreground",
           "0cc712b823": "El archivo de configuración principal existe en la raíz del repositorio, pero Orca aún no pudo analizar las definiciones de hooks admitidas.",
-          "c90b858573": "texto-ámbar-700 oscuro:texto-ámbar-300",
+          "c90b858573": "text-amber-700 dark:text-amber-300",
           "aba825233f": "El archivo contiene claves de configuración que esta versión de Orca no reconoce. Es posible que necesites actualizar Orca o revisar el archivo en busca de errores tipográficos.",
           "ca424ff135": "Los valores predeterminados compartidos de hooks y automatización de Issues están definidos en el repositorio y disponibles para todos los que lo usan.",
-          "32f417fe17": "texto-esmeralda-700 oscuro:texto-esmeralda-300",
+          "32f417fe17": "text-emerald-700 dark:text-emerald-300",
           "8bfe65fc60": "Usar comandos locales",
           "8d6c56bff8": "Ejecutar ambos",
           "0fa21e19ec": "Nombre del workspace, normalmente basado en el nombre de la rama.",
@@ -6524,7 +6524,7 @@
           "2b7d27b93c": "Usar {{value0}} como color del repositorio",
           "fde066a63b": "Las cargas PNG deben tener un tamaño de 256 KB o menos.",
           "cc1286e263": "Favicon",
-          "03ca1a4e9b": "ejemplo.com",
+          "03ca1a4e9b": "example.com",
           "381b4844fd": "Subir PNG",
           "7da623abcc": "Se usa de forma predeterminada: GitHub siempre proporciona uno, incluso cuando el propietario no configuró una imagen personalizada.",
           "39da8a10bf": "Usar avatar de GitHub",
@@ -10951,7 +10951,7 @@
             "9fffaf17c1": "Alternar barra lateral derecha ({{value0}})",
             "b37ff4a89a": "puertos",
             "9f83375839": "cheques",
-            "6306b48afd": "control de fuente",
+            "6306b48afd": "source-control",
             "ef182dcb12": "buscar",
             "fc3095d2ed": "explorador",
             "aiVaultSessionHistory": "Agentes",
@@ -12421,7 +12421,7 @@
             "9220794f6a": "laboral"
           },
           "ReviewAnimatedVisual": {
-            "8df4d52b68": "pr-vista",
+            "8df4d52b68": "pr-view",
             "8ab622e4d6": "notas"
           },
           "FeatureWallBrowserAction": {
@@ -12697,7 +12697,7 @@
           "19c45cfdc0": "Expandir todo",
           "982d14bfa5": "Abrir todos los cambios",
           "3d909843bb": "Abrir diff de rama",
-          "8368d256ec": "rama combinada",
+          "8368d256ec": "combined-branch",
           "8f68ad9ca9": "Mostrar {{value0}} AI {{value1}}",
           "724a13568d": "en {{value0}}",
           "6094135eec": "frente a {{value0}}",
@@ -12889,7 +12889,7 @@
           "8f4d2c1a9b": "Redimensionar tabla de contenido"
         },
         "MarkdownTemplatePicker": {
-          "22cd94426f": "sin título.md",
+          "22cd94426f": "untitled.md",
           "6e2e6c04ad": "Markdown en blanco",
           "df667919ca": "No hay plantillas que coincidan.",
           "22fd4890ad": "Buscar plantillas...",
