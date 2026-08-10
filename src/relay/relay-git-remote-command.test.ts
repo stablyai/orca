@@ -8,19 +8,23 @@ vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 import { runRelayGitRemoteCommand } from './relay-git-remote-command'
 
 type MockChild = EventEmitter & {
-  stdout: EventEmitter
-  stderr: EventEmitter
+  stdout: EventEmitter & { pause: ReturnType<typeof vi.fn> }
+  stderr: EventEmitter & { pause: ReturnType<typeof vi.fn> }
   pid: number
+  exitCode: number | null
+  signalCode: NodeJS.Signals | null
   kill: ReturnType<typeof vi.fn>
   unref?: ReturnType<typeof vi.fn>
 }
 
 function mockChild(pid = 1234): MockChild {
   const child = new EventEmitter() as MockChild
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
+  child.stdout = Object.assign(new EventEmitter(), { pause: vi.fn() })
+  child.stderr = Object.assign(new EventEmitter(), { pause: vi.fn() })
   child.pid = pid
-  child.kill = vi.fn()
+  child.exitCode = null
+  child.signalCode = null
+  child.kill = vi.fn(() => true)
   return child
 }
 
@@ -58,8 +62,13 @@ describe('relay remote git command', () => {
         })
         const rejection = expect(result).rejects.toThrow('git timed out.')
 
+        let settled = false
+        void result
+          .catch(() => {})
+          .finally(() => {
+            settled = true
+          })
         await vi.advanceTimersByTimeAsync(1000)
-        await rejection
 
         expect(spawnMock).toHaveBeenCalledWith(
           'git',
@@ -67,7 +76,9 @@ describe('relay remote git command', () => {
           expect.objectContaining({ cwd: '/repo', detached: true })
         )
         expect(processKill).toHaveBeenCalledWith(-1234, 'SIGTERM')
+        expect(settled).toBe(false)
         await vi.advanceTimersByTimeAsync(2000)
+        await rejection
         expect(processKill).toHaveBeenCalledWith(-1234, 'SIGKILL')
       } finally {
         processKill.mockRestore()
@@ -90,9 +101,9 @@ describe('relay remote git command', () => {
         const rejection = expect(result).rejects.toThrow('git timed out.')
 
         await vi.advanceTimersByTimeAsync(1000)
-        await rejection
         child.emit('close', null)
         await vi.advanceTimersByTimeAsync(2000)
+        await rejection
 
         expect(processKill).toHaveBeenCalledTimes(2)
         expect(processKill).toHaveBeenCalledWith(-1234, 'SIGKILL')
@@ -119,12 +130,12 @@ describe('relay remote git command', () => {
         const rejection = expect(result).rejects.toMatchObject({ name: 'AbortError' })
 
         controller.abort()
-        await rejection
         await vi.advanceTimersByTimeAsync(1000)
 
         expect(processKill).toHaveBeenCalledTimes(1)
         expect(processKill).toHaveBeenCalledWith(-1234, 'SIGTERM')
         await vi.advanceTimersByTimeAsync(1000)
+        await rejection
         expect(processKill).toHaveBeenCalledWith(-1234, 'SIGKILL')
       } finally {
         processKill.mockRestore()
@@ -147,6 +158,7 @@ describe('relay remote git command', () => {
         const rejection = expect(result).rejects.toThrow('git stdout exceeded maxBuffer.')
 
         child.stdout.emit('data', Buffer.from('12345'))
+        await vi.advanceTimersByTimeAsync(2000)
         await rejection
 
         expect(processKill).toHaveBeenCalledWith(-1234, 'SIGTERM')
@@ -172,11 +184,19 @@ describe('relay remote git command', () => {
         timeout: 1000
       })
       const rejection = expect(result).rejects.toThrow('git timed out.')
+      const observedError = result.catch((error: unknown) => error)
 
       await vi.advanceTimersByTimeAsync(1000)
       await vi.advanceTimersByTimeAsync(0)
+      expect(command.stdout.listenerCount('data')).toBe(0)
+      expect(command.stderr.listenerCount('data')).toBe(0)
+      expect(command.stdout.pause).toHaveBeenCalledOnce()
+      expect(command.stderr.pause).toHaveBeenCalledOnce()
+      command.stdout.emit('data', Buffer.alloc(1024 * 1024))
+      command.stderr.emit('data', Buffer.alloc(1024 * 1024))
       taskkill.emit('close', 0)
       await rejection
+      await expect(observedError).resolves.toMatchObject({ stdout: '', stderr: '' })
 
       expect(spawnMock).toHaveBeenCalledWith(
         'taskkill',
@@ -187,14 +207,11 @@ describe('relay remote git command', () => {
     })
   })
 
-  it('falls back when Windows process-tree termination fails', async () => {
+  it('refuses taskkill after the spawned Windows process identity is stale', async () => {
     await withPlatform('win32', async () => {
       const command = mockChild()
-      const taskkill = mockChild(9000)
-      taskkill.unref = vi.fn()
-      spawnMock.mockImplementation((executable: string) =>
-        executable === 'taskkill' ? taskkill : command
-      )
+      command.exitCode = 0
+      spawnMock.mockReturnValue(command)
 
       const result = runRelayGitRemoteCommand(['push'], {
         cwd: 'C:\\repo',
@@ -205,11 +222,65 @@ describe('relay remote git command', () => {
       const rejection = expect(result).rejects.toThrow('git timed out.')
 
       await vi.advanceTimersByTimeAsync(1000)
-      await vi.advanceTimersByTimeAsync(0)
-      taskkill.emit('close', 1)
       await rejection
+      expect(spawnMock).toHaveBeenCalledOnce()
+      expect(command.kill).not.toHaveBeenCalledWith()
+    })
+  })
 
-      expect(command.kill).toHaveBeenCalled()
+  it('refuses taskkill when the retained Windows process handle reports PID reuse', async () => {
+    await withPlatform('win32', async () => {
+      const command = mockChild()
+      command.kill.mockImplementation((signal?: NodeJS.Signals | number) => signal !== 0)
+      spawnMock.mockReturnValue(command)
+
+      const result = runRelayGitRemoteCommand(['push'], {
+        cwd: 'C:\\repo',
+        env: {},
+        maxBuffer: 1024,
+        timeout: 1000
+      })
+      const rejection = expect(result).rejects.toThrow('git timed out.')
+
+      await vi.advanceTimersByTimeAsync(1000)
+      await rejection
+      expect(spawnMock).toHaveBeenCalledOnce()
+      expect(command.kill).not.toHaveBeenCalledWith()
+    })
+  })
+
+  it('falls back when Windows process-tree termination fails', async () => {
+    await withPlatform('win32', async () => {
+      const command = mockChild()
+      const taskkills = [mockChild(9000), mockChild(9001)]
+      taskkills.forEach((taskkill) => {
+        taskkill.unref = vi.fn()
+      })
+      spawnMock.mockImplementation((executable: string) =>
+        executable === 'taskkill' ? taskkills.shift() : command
+      )
+
+      const result = runRelayGitRemoteCommand(['push'], {
+        cwd: 'C:\\repo',
+        env: {},
+        maxBuffer: 1024,
+        timeout: 1000
+      })
+      const rejection = expect(result).rejects.toThrow('git timed out.')
+      const observedError = result.catch((error: unknown) => error)
+
+      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(0)
+      const firstTaskkill = spawnMock.mock.results[1]?.value as MockChild
+      firstTaskkill.emit('close', 1)
+      await vi.advanceTimersByTimeAsync(0)
+      const secondTaskkill = spawnMock.mock.results[2]?.value as MockChild
+      secondTaskkill.emit('close', 1)
+      await rejection
+      const error = await observedError
+
+      expect(command.kill).toHaveBeenCalledWith()
+      expect(error).toMatchObject({ cleanupError: expect.any(Error) })
     })
   })
 
@@ -228,5 +299,9 @@ describe('relay remote git command', () => {
     child.emit('close', 0)
 
     await expect(result).resolves.toEqual({ stdout: 'café', stderr: '' })
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+    expect(child.listenerCount('error')).toBe(0)
   })
 })

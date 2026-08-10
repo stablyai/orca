@@ -385,6 +385,7 @@ export class GitHandler {
     timeout?: number
   ): Promise<{ stdout: string; stderr: string }> {
     return runRelayGitRemoteCommand(args, {
+      cleanupDeadlineMs: context.deadline.expiresAtMs,
       cwd: expandTilde(cwd),
       env: buildRelayUnattendedGitEnv(),
       maxBuffer: MAX_GIT_BUFFER,

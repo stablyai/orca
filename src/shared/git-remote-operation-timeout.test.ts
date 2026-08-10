@@ -53,4 +53,40 @@ describe('Git remote operation deadline', () => {
     ).rejects.toMatchObject({ name: 'AbortError' })
     expect(run).not.toHaveBeenCalled()
   })
+
+  it('waits for aborted work cleanup before rejecting caller cancellation', async () => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    let cleanupSettled = false
+    const operation = runWithGitRemoteOperationDeadline(
+      1_000,
+      ({ signal }) =>
+        new Promise<never>((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              setTimeout(() => {
+                cleanupSettled = true
+                reject(new Error('cleanup complete'))
+              }, 100)
+            },
+            { once: true }
+          )
+        }),
+      controller.signal
+    )
+    let rejected = false
+    void operation.catch(() => {
+      rejected = true
+    })
+
+    controller.abort()
+    await vi.advanceTimersByTimeAsync(99)
+    expect(rejected).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(operation).rejects.toMatchObject({ name: 'AbortError' })
+    expect(cleanupSettled).toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })

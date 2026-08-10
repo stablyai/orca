@@ -12,6 +12,7 @@ export function gitRemoteOperationOptionsForWorktree(
 ): ReturnType<typeof gitOptionsForWorktree> & {
   timeout: number
   killProcessTree: true
+  processTreeCleanupDeadlineMs: number
   useConfiguredSshCommandForNetwork: true
 } {
   const deadline = options.remoteOperationDeadline
@@ -24,6 +25,7 @@ export function gitRemoteOperationOptionsForWorktree(
     // returning control to Source Control; bound and clean up the whole tree.
     timeout: gitRemoteOperationExecutionTimeoutMs(deadline),
     killProcessTree: true,
+    processTreeCleanupDeadlineMs: deadline.expiresAtMs,
     useConfiguredSshCommandForNetwork: true
   }
 }

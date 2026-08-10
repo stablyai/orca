@@ -1,7 +1,12 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
+import {
+  cleanupSpawnedProcessTree,
+  preserveProcessCleanupFailure
+} from '../shared/spawned-process-tree-cleanup'
 
 type RelayGitRemoteCommandOptions = {
+  cleanupDeadlineMs?: number
   cwd: string
   env: NodeJS.ProcessEnv
   maxBuffer: number
@@ -9,83 +14,10 @@ type RelayGitRemoteCommandOptions = {
   timeout: number
 }
 
-const FORCE_KILL_DELAY_MS = 2_000
-
 function abortError(): Error {
   const error = new Error('The operation was aborted.')
   error.name = 'AbortError'
   return error
-}
-
-function terminateGitProcessTree(child: ChildProcess): Promise<void> {
-  const pid = child.pid
-  if (!pid) {
-    child.kill()
-    return Promise.resolve()
-  }
-  if (process.platform === 'win32') {
-    return new Promise((resolve) => {
-      let killer: ChildProcess
-      try {
-        killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
-          stdio: 'ignore',
-          windowsHide: true
-        })
-      } catch {
-        child.kill()
-        resolve()
-        return
-      }
-      let settled = false
-      let fallbackTimer: NodeJS.Timeout | null = null
-      const fallback = (): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        if (fallbackTimer) {
-          clearTimeout(fallbackTimer)
-        }
-        child.kill()
-        resolve()
-      }
-      fallbackTimer = setTimeout(() => {
-        killer.kill()
-        fallback()
-      }, FORCE_KILL_DELAY_MS)
-      killer.once('error', fallback)
-      killer.once('close', (code) => {
-        if (code !== 0) {
-          fallback()
-          return
-        }
-        settled = true
-        if (fallbackTimer) {
-          clearTimeout(fallbackTimer)
-        }
-        resolve()
-      })
-      fallbackTimer.unref?.()
-      killer.unref()
-    })
-  }
-  try {
-    // Why: a remote Git command can leave ssh, credential helpers, or hooks
-    // behind; detached groups let cancellation terminate all descendants.
-    process.kill(-pid, 'SIGTERM')
-  } catch {
-    child.kill()
-    return Promise.resolve()
-  }
-  const forceKillTimer = setTimeout(() => {
-    try {
-      process.kill(-pid, 'SIGKILL')
-    } catch {
-      /* process group already exited */
-    }
-  }, FORCE_KILL_DELAY_MS)
-  forceKillTimer.unref?.()
-  return Promise.resolve()
 }
 
 function commandFailure(args: string[], stderr: string, code: number | null): Error {
@@ -158,9 +90,15 @@ export function runRelayGitRemoteCommand(
         return
       }
       terminating = true
-      void terminateGitProcessTree(child).then(() => {
+      cleanup()
+      child.stdout?.pause()
+      child.stderr?.pause()
+      void cleanupSpawnedProcessTree(child, {
+        deadlineMs: options.cleanupDeadlineMs,
+        killPosixProcessGroup: true
+      }).then((result) => {
         terminating = false
-        finish(error)
+        finish(preserveProcessCleanupFailure(error, result))
       })
     }
     function onStdout(chunk: Buffer): void {

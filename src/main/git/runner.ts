@@ -42,6 +42,10 @@ import {
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
 import { endSubprocessStdin } from '../../shared/subprocess-stdin-write'
 import {
+  cleanupSpawnedProcessTree,
+  preserveProcessCleanupFailure
+} from '../../shared/spawned-process-tree-cleanup'
+import {
   disableWslGitReadEnvironment,
   getWslGitReadEnvironment,
   invalidateWslGitReadEnvironment,
@@ -309,6 +313,7 @@ type GitExecOptions = {
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
   killProcessTree?: boolean
+  processTreeCleanupDeadlineMs?: number
   wslDistro?: string
   preferWslDirectGit?: boolean
   useConfiguredSshCommandForNetwork?: boolean
@@ -323,6 +328,7 @@ type CommandExecOptions = {
   signal?: AbortSignal
   wslDistro?: string
   killProcessTree?: boolean
+  processTreeCleanupDeadlineMs?: number
 }
 
 function wslDistroForCommand(cwd: string | undefined, override?: string): string | null {
@@ -432,83 +438,19 @@ function createAbortError(): Error {
   return error
 }
 
-const PROCESS_TREE_TERMINATION_WAIT_MS = 2_000
-
-function killSpawnedCommandTree(child: ChildProcess, killPosixProcessGroup = false): Promise<void> {
-  const pid = child.pid
-  if (!pid) {
-    child.kill()
-    return Promise.resolve()
-  }
-  if (process.platform !== 'win32') {
-    if (!killPosixProcessGroup) {
-      child.kill()
-      return Promise.resolve()
-    }
-    try {
-      process.kill(-pid, 'SIGTERM')
-    } catch {
-      child.kill()
-      return Promise.resolve()
-    }
-    const forceKillTimer = setTimeout(() => {
-      try {
-        process.kill(-pid, 'SIGKILL')
-      } catch {
-        /* process group already exited */
-      }
-    }, PROCESS_TREE_TERMINATION_WAIT_MS)
-    forceKillTimer.unref?.()
-    return Promise.resolve()
-  }
-  return new Promise((resolve) => {
-    let killer: ChildProcess
-    try {
-      // Why: Windows shims/wsl.exe own descendants; wait for /t tree cleanup so a timed-out command can't outlive its probe.
-      killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
-      if (!killer || typeof killer.unref !== 'function') {
-        child.kill()
-        resolve()
-        return
-      }
-    } catch {
-      child.kill()
-      resolve()
-      return
-    }
-    let settled = false
-    let timer: NodeJS.Timeout | null = null
-    const finish = (fallbackToChildKill: boolean): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
-      killer.removeAllListeners()
-      if (fallbackToChildKill) {
-        child.kill()
-      }
-      resolve()
-    }
-    killer.once('error', () => finish(true))
-    killer.once('close', (code) => finish(code !== 0))
-    timer = setTimeout(() => {
-      killer.kill()
-      finish(true)
-    }, PROCESS_TREE_TERMINATION_WAIT_MS)
-    killer.unref()
-  })
+function killSpawnedCommandTree(
+  child: ChildProcess,
+  killPosixProcessGroup = false,
+  deadlineMs?: number
+) {
+  return cleanupSpawnedProcessTree(child, { deadlineMs, killPosixProcessGroup })
 }
 
 type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
   stdin?: string
   killProcessTree?: boolean
+  processTreeCleanupDeadlineMs?: number
 }
 
 function emptyExecFileOutput(options: ExecFileCaptureOptions): string | Buffer {
@@ -548,6 +490,7 @@ function execFileCapture(
         timer = null
       }
       options.signal?.removeEventListener('abort', onAbort)
+      child?.off('error', onChildError)
     }
     const finish = (
       error: Error | null,
@@ -579,10 +522,21 @@ function execFileCapture(
         finish(abortError)
         return
       }
-      void killSpawnedCommandTree(child, options.killProcessTree).then(() => {
+      child.stdout?.pause()
+      child.stderr?.pause()
+      void killSpawnedCommandTree(
+        child,
+        options.killProcessTree,
+        options.processTreeCleanupDeadlineMs
+      ).then((result) => {
         terminating = false
-        finish(abortError)
+        finish(preserveProcessCleanupFailure(abortError, result))
       })
+    }
+    function onChildError(error: Error): void {
+      if (!terminating) {
+        finish(error)
+      }
     }
 
     try {
@@ -607,10 +561,14 @@ function execFileCapture(
           }
           if (error && child && options.killProcessTree) {
             terminating = true
-            void killSpawnedCommandTree(child, true).then(() => {
-              terminating = false
-              finish(error, stdout, stderr)
-            })
+            child.stdout?.pause()
+            child.stderr?.pause()
+            void killSpawnedCommandTree(child, true, options.processTreeCleanupDeadlineMs).then(
+              (result) => {
+                terminating = false
+                finish(preserveProcessCleanupFailure(error, result), stdout, stderr)
+              }
+            )
             return
           }
           finish(error, stdout, stderr)
@@ -622,11 +580,7 @@ function execFileCapture(
       return
     }
 
-    child.once('error', (error) => {
-      if (!terminating) {
-        finish(error)
-      }
-    })
+    child.once('error', onChildError)
 
     if (options.stdin !== undefined) {
       endSubprocessStdin(child.stdin, options.stdin)
@@ -645,9 +599,15 @@ function execFileCapture(
           finish(timeoutError)
           return
         }
-        void killSpawnedCommandTree(child, options.killProcessTree).then(() => {
+        child.stdout?.pause()
+        child.stderr?.pause()
+        void killSpawnedCommandTree(
+          child,
+          options.killProcessTree,
+          options.processTreeCleanupDeadlineMs
+        ).then((result) => {
           terminating = false
-          finish(timeoutError)
+          finish(preserveProcessCleanupFailure(timeoutError, result))
         })
       }, options.timeout)
     }
@@ -693,9 +653,13 @@ async function spawnCommandCapture(
       cleanupListeners()
       child.stdout?.pause()
       child.stderr?.pause()
-      void killSpawnedCommandTree(child, options.killProcessTree).then(() => {
+      void killSpawnedCommandTree(
+        child,
+        options.killProcessTree,
+        options.processTreeCleanupDeadlineMs
+      ).then((result) => {
         terminating = false
-        finish(error)
+        finish(preserveProcessCleanupFailure(error, result))
       })
     }
     const onAbort = (): void => {
@@ -1054,7 +1018,8 @@ export async function gitExecFileAsync(
               timeout: remainingGitCommandTimeoutMs(expiresAtMs),
               env: policy.env,
               signal: options.signal,
-              killProcessTree: true
+              killProcessTree: true,
+              processTreeCleanupDeadlineMs: options.processTreeCleanupDeadlineMs
             })
           : execFileCapture(command.binary, command.args, {
               cwd: command.cwd,
@@ -1064,7 +1029,8 @@ export async function gitExecFileAsync(
               stdin: options.stdin,
               env: policy.env,
               signal: options.signal,
-              killProcessTree: options.killProcessTree
+              killProcessTree: options.killProcessTree,
+              processTreeCleanupDeadlineMs: options.processTreeCleanupDeadlineMs
             })
       let result: { stdout: string | Buffer; stderr: string | Buffer }
       try {
@@ -1115,7 +1081,8 @@ export async function commandExecFileAsync(
       maxBuffer: execOptions.maxBuffer,
       timeout: execOptions.timeout,
       env: execOptions.env,
-      signal: execOptions.signal
+      signal: execOptions.signal,
+      processTreeCleanupDeadlineMs: execOptions.processTreeCleanupDeadlineMs
     })
     return { stdout: stdout as string, stderr: stderr as string }
   } catch (error) {

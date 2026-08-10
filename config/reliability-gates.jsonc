@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-09",
+  "updatedAt": "2026-08-10",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -10253,6 +10253,111 @@
         "Physical Windows, WSL, SSH, and paired-runtime-host journeys were not run."
       ],
       "demotionRule": "Demote if any exit duration can evade the spawn budget, concurrent children or timers appear, cleanup retains resources, or a transient failure cannot recover within the budget."
+    },
+    {
+      "id": "git.remote-operation-owned-cleanup",
+      "title": "Remote Git failures settle owned process cleanup before returning",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "source-control",
+      "layer": "native-and-relay-process-lifecycle",
+      "surfaces": [
+        "desktop remote Git operations",
+        "SSH relay Git operations",
+        "mobile and web remote Git requests"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "paired-runtime", "mobile-relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh", "paired-runtime", "mobile-relay"],
+      "coverageNotes": "Deterministic local coverage drives native and relay runners through timeout, AbortSignal, output overflow, refusal stderr, Windows taskkill success/retry/failure, retained-handle stale-PID refusal, POSIX escalation settlement, listener removal, and shared-deadline precedence. A real macOS Git hook tree proves bounded timeout and descendant death. The rejected candidate also passed a native Windows owned-tree/sentinel journey, but the corrected Windows runner and physical SSH relay flood still require fresh native verification; WSL is intentionally held.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/5490",
+        "https://github.com/stablyai/orca/pull/5742"
+      ],
+      "invariant": "A remote Git timeout, cancellation, output overflow, or command failure must first quiesce captured output and settle bounded cleanup of the process authority Orca actually owns. POSIX detached groups reach SIGKILL before rejection; Windows taskkill requires the retained spawned-process handle to prove the PID incarnation, retries once, and records cleanup failure without replacing the primary Git error. Unproven or stale PIDs never reach taskkill, unrelated processes survive, and one action deadline remains authoritative across local, SSH relay, paired, mobile, and web callers without a wire change.",
+      "oracle": "Start blocking and flooding Git-shaped children with descendants plus an unrelated sentinel. Trigger timeout, cancellation, refusal, and maxBuffer independently; require streams and listeners to quiesce before cleanup, the promise to remain pending through POSIX escalation or taskkill, owned descendants to stop, and the sentinel to survive. Inject an exited root and a live handle that refuses signal 0, and require no taskkill. Fail two bounded taskkill attempts, require incarnation-safe root fallback, preserve the original timeout or AbortError, and retain an inspectable cleanup error. Repeat shared-deadline cancellation with delayed cleanup and require no timer or listener remains after settlement.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/git/remote-operation-real-git.integration.test.ts src/main/git/remote.test.ts src/main/git/runner-command-exec.test.ts src/main/providers/ssh-git-provider.test.ts src/main/runtime/orca-runtime-git-remote-deadline.test.ts src/main/runtime/rpc/methods/git.test.ts src/relay/git-handler.test.ts src/relay/relay-git-remote-command.test.ts src/renderer/src/runtime/runtime-git-client.test.ts src/renderer/src/runtime/runtime-rpc-timeout-routing.test.ts src/renderer/src/web/web-preload-api.test.ts src/shared/git-remote-error.test.ts src/shared/git-remote-operation-timeout.test.ts"
+      ],
+      "testFiles": [
+        "src/main/git/remote-operation-real-git.integration.test.ts",
+        "src/main/git/remote.test.ts",
+        "src/main/git/runner-command-exec.test.ts",
+        "src/main/providers/ssh-git-provider.test.ts",
+        "src/main/runtime/orca-runtime-git-remote-deadline.test.ts",
+        "src/main/runtime/rpc/methods/git.test.ts",
+        "src/relay/git-handler.test.ts",
+        "src/relay/relay-git-remote-command.test.ts",
+        "src/renderer/src/runtime/runtime-git-client.test.ts",
+        "src/renderer/src/runtime/runtime-rpc-timeout-routing.test.ts",
+        "src/renderer/src/web/web-preload-api.test.ts",
+        "src/shared/git-remote-error.test.ts",
+        "src/shared/git-remote-operation-timeout.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/relay/relay-git-remote-command.test.ts",
+          "assertions": [
+            "relay flooding is detached and paused while Windows taskkill is pending",
+            "retained-handle stale or recycled PID evidence refuses taskkill",
+            "two taskkill failures preserve the primary Git error and expose cleanup failure",
+            "POSIX timeout and cancellation settle only after SIGKILL escalation"
+          ]
+        },
+        {
+          "file": "src/shared/git-remote-operation-timeout.test.ts",
+          "assertions": [
+            "caller cancellation waits for owned cleanup while preserving AbortError",
+            "cleanup settlement clears every deadline timer"
+          ]
+        },
+        {
+          "file": "src/main/git/remote-operation-real-git.integration.test.ts",
+          "assertions": [
+            "a blocking real Git push times out with normalized precedence and removes its hook tree",
+            "native Windows maxBuffer cleanup removes the owned tree and preserves an unrelated sentinel"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-10",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/git/remote-operation-real-git.integration.test.ts src/main/git/remote.test.ts src/main/git/runner-command-exec.test.ts src/main/providers/ssh-git-provider.test.ts src/main/runtime/orca-runtime-git-remote-deadline.test.ts src/main/runtime/rpc/methods/git.test.ts src/relay/git-handler.test.ts src/relay/relay-git-remote-command.test.ts src/renderer/src/runtime/runtime-git-client.test.ts src/renderer/src/runtime/runtime-rpc-timeout-routing.test.ts src/renderer/src/web/web-preload-api.test.ts src/shared/git-remote-error.test.ts src/shared/git-remote-operation-timeout.test.ts",
+          "durationSeconds": 21,
+          "summary": "Thirteen focused files passed 447 tests with one non-Windows skip, including the real Git descendant-cleanup oracle and deterministic Windows, relay, deadline, SSH-provider, paired-runtime, mobile, and web contracts."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "13 focused deterministic and real-Git contract files on a local development runner"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "One corrected local run is recorded; CI and soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "On rejected final 2fafeba28b, the added byte-identical probes failed because shared cancellation rejected before a 100 ms cleanup, POSIX timeout rejected before its 2 s SIGKILL, relay retained both flooding data listeners while taskkill was pending, and a stale Windows PID still launched taskkill. The corrected implementation passes those probes and the unchanged real-Git, timeout-message, refusal-stderr, and sentinel contracts."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Success paths add no subprocess, scan, polling, listener, wire field, or recurring work. Failure cleanup remains bounded by the existing 2.5 s reserve: POSIX sends at most TERM plus KILL, and Windows launches at most two one-second taskkill attempts before an incarnation-safe root fallback."
+      },
+      "promotionCriteria": [
+        "Collect two fresh final-verifier decisions against the corrected commit.",
+        "Run the private bundle on native Windows with relay flood, stale PID, taskkill failure, maxBuffer, and sentinel journeys.",
+        "Collect live SSH relay and later WSL evidence, plus 100 consecutive focused CI passes or 14 days of soak."
+      ],
+      "knownGaps": [
+        "The corrected Windows authority and relay-flood paths have deterministic mocks but await fresh native Windows execution.",
+        "No arbitrary server-owned descendant is claimed after the spawned root authority is lost.",
+        "WSL validation is intentionally held for the coordinator-owned topology."
+      ],
+      "demotionRule": "Demote if a remote Git failure returns while owned escalation or taskkill remains active, if stale PID evidence can launch taskkill, if cleanup replaces the primary Git error, if output listeners survive termination, if an unrelated sentinel dies, or if action and wire budgets diverge."
     },
     {
       "id": "ssh-managed-hooks.node18-runtime-compatibility",

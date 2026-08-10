@@ -61,6 +61,23 @@ function gitRemoteOperationAbortError(): Error {
   return error
 }
 
+function waitForOperationCleanup<T>(operation: Promise<T>, timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      resolve()
+    }
+    const timer = setTimeout(finish, timeoutMs)
+    timer.unref?.()
+    void operation.then(finish, finish)
+  })
+}
+
 export async function runWithGitRemoteOperationDeadline<T>(
   timeoutMs: number,
   run: (context: GitRemoteOperationContext) => Promise<T>,
@@ -71,24 +88,55 @@ export async function runWithGitRemoteOperationDeadline<T>(
   }
   const deadline = createGitRemoteOperationDeadline(timeoutMs)
   const controller = new AbortController()
-  let rejectBoundary!: (error: Error) => void
-  const boundary = new Promise<never>((_resolve, reject) => {
-    rejectBoundary = reject
+  let resolveBoundary!: (value: { boundaryError: Error }) => void
+  const boundary = new Promise<{ boundaryError: Error }>((resolve) => {
+    resolveBoundary = resolve
   })
-  const expire = (): void => {
+  let boundaryError: Error | null = null
+  const requestStop = (error: Error): void => {
+    if (boundaryError) {
+      return
+    }
+    boundaryError = error
     controller.abort()
-    rejectBoundary(gitRemoteOperationTimeoutError())
+    resolveBoundary({ boundaryError: error })
+  }
+  const expire = (): void => {
+    requestStop(gitRemoteOperationTimeoutError())
   }
   const abort = (): void => {
-    controller.abort()
-    rejectBoundary(gitRemoteOperationAbortError())
+    requestStop(gitRemoteOperationAbortError())
   }
+  const operation = run({ deadline, signal: controller.signal }).then(
+    (value) => ({ status: 'fulfilled' as const, value }),
+    (reason: unknown) => ({ status: 'rejected' as const, reason })
+  )
   const timer = setTimeout(expire, timeoutMs)
   const nodeTimer = timer as unknown as { unref?: () => void }
   nodeTimer.unref?.()
   externalSignal?.addEventListener('abort', abort, { once: true })
+  if (externalSignal?.aborted) {
+    abort()
+  }
   try {
-    return await Promise.race([run({ deadline, signal: controller.signal }), boundary])
+    const first = await Promise.race([operation, boundary])
+    if ('boundaryError' in first) {
+      const cleanupBudgetMs =
+        first.boundaryError.name === 'AbortError'
+          ? GIT_REMOTE_OPERATION_CLEANUP_RESERVE_MS
+          : Math.min(
+              GIT_REMOTE_OPERATION_CLEANUP_RESERVE_MS,
+              gitRemoteOperationRemainingMs(deadline)
+            )
+      if (cleanupBudgetMs > 0) {
+        await waitForOperationCleanup(operation, cleanupBudgetMs)
+      }
+      throw first.boundaryError
+    }
+    if (first.status === 'rejected') {
+      throw first.reason
+    }
+    return first.value
   } finally {
     clearTimeout(timer)
     externalSignal?.removeEventListener('abort', abort)

@@ -26,6 +26,8 @@ type MockChildProcess = EventEmitter & {
   stdout: EventEmitter & { pause: ReturnType<typeof vi.fn> }
   stderr: EventEmitter & { pause: ReturnType<typeof vi.fn> }
   pid: number
+  exitCode: number | null
+  signalCode: NodeJS.Signals | null
   kill: ReturnType<typeof vi.fn>
   unref?: ReturnType<typeof vi.fn>
 }
@@ -35,7 +37,9 @@ function createMockChildProcess(pid: number): MockChildProcess {
   child.stdout = Object.assign(new EventEmitter(), { pause: vi.fn() })
   child.stderr = Object.assign(new EventEmitter(), { pause: vi.fn() })
   child.pid = pid
-  child.kill = vi.fn()
+  child.exitCode = null
+  child.signalCode = null
+  child.kill = vi.fn(() => true)
   return child
 }
 
@@ -274,8 +278,8 @@ describe('runner execFile timeout handling', () => {
       await vi.advanceTimersByTimeAsync(2_000)
 
       await expect(promise).rejects.toThrow('git stderr exceeded maxBuffer.')
-      expect(taskkill.kill).toHaveBeenCalledOnce()
-      expect(command.kill).toHaveBeenCalledOnce()
+      expect(taskkill.kill).toHaveBeenCalledTimes(2)
+      expect(command.kill).toHaveBeenCalledWith()
     })
   })
 
@@ -343,7 +347,6 @@ describe('runner execFile timeout handling', () => {
         const rejection = expect(promise).rejects.toThrow('git timed out.')
 
         await vi.advanceTimersByTimeAsync(1000)
-        await rejection
         expect(processKill).toHaveBeenCalledWith(-1234, 'SIGTERM')
         expect(spawnMock).toHaveBeenCalledWith(
           expect.any(String),
@@ -352,6 +355,7 @@ describe('runner execFile timeout handling', () => {
         )
 
         await vi.advanceTimersByTimeAsync(2000)
+        await rejection
         expect(processKill).toHaveBeenCalledWith(-1234, 'SIGKILL')
       } finally {
         processKill.mockRestore()
@@ -374,9 +378,9 @@ describe('runner execFile timeout handling', () => {
         const rejection = expect(promise).rejects.toThrow('git timed out.')
 
         await vi.advanceTimersByTimeAsync(1000)
-        await rejection
         child.emit('close', null, 'SIGTERM')
         await vi.advanceTimersByTimeAsync(2000)
+        await rejection
 
         expect(processKill).toHaveBeenCalledTimes(2)
         expect(processKill).toHaveBeenCalledWith(-1234, 'SIGTERM')
@@ -454,7 +458,9 @@ describe('runner execFile timeout handling', () => {
     vi.useFakeTimers()
     await withPlatform('win32', async () => {
       const child = createMockChildProcess(1234)
+      const taskkill = createMockTaskkillProcess()
       execFileMock.mockReturnValue(child)
+      spawnMock.mockReturnValue(taskkill)
       let settled = false
 
       void gitExecFileAsync(['fetch', 'origin'], {
@@ -469,6 +475,8 @@ describe('runner execFile timeout handling', () => {
         })
 
       await vi.advanceTimersByTimeAsync(100)
+      taskkill.emit('close', 0)
+      await vi.advanceTimersByTimeAsync(0)
 
       expect(settled).toBe(true)
     })
