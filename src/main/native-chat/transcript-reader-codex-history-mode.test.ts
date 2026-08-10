@@ -182,6 +182,71 @@ describe('Codex transcript history modes', () => {
     expect(tail).toMatchObject({ messages: 'messages' in result ? result.messages : [] })
   })
 
+  it('keeps model-only response copies hidden across public pagination calls', async () => {
+    const filePath = await writeCodexFixture([
+      {
+        timestamp: '2026-08-09T10:00:00.000Z',
+        type: 'session_meta',
+        payload: { id: 'session-1', history_mode: 'paginated' }
+      },
+      {
+        type: 'response_item',
+        payload: {
+          id: 'response-user-1',
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'model user copy' }]
+        }
+      },
+      completedItem(
+        {
+          type: 'UserMessage',
+          id: 'user-1',
+          content: [{ type: 'text', text: 'Visible prompt' }]
+        },
+        '2026-08-09T10:00:01.000Z'
+      ),
+      {
+        type: 'response_item',
+        payload: {
+          id: 'response-assistant-1',
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'output_text', text: 'model assistant copy' }]
+        }
+      },
+      completedItem(
+        {
+          type: 'AgentMessage',
+          id: 'assistant-1',
+          content: [{ type: 'Text', text: 'Visible response' }]
+        },
+        '2026-08-09T10:00:02.000Z'
+      )
+    ])
+
+    const newest = await readNativeChatTranscriptTail({
+      agent: 'codex',
+      sessionId: 'session-1',
+      filePath,
+      limit: 1
+    })
+    expect(newest).toMatchObject({ messages: [{ id: 'assistant-1' }], hasMore: true })
+    if (!('beforeOffset' in newest)) {
+      throw new Error('Expected a pagination cursor')
+    }
+
+    const older = await readNativeChatTranscriptTail({
+      agent: 'codex',
+      sessionId: 'session-1',
+      filePath,
+      limit: 1,
+      beforeOffset: newest.beforeOffset
+    })
+
+    expect(older).toMatchObject({ messages: [{ id: 'user-1' }], hasMore: false })
+  })
+
   it('keeps legacy event messages without duplicating response copies', async () => {
     const filePath = await writeCodexFixture([
       {

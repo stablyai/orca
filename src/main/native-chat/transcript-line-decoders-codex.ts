@@ -40,12 +40,25 @@ export function decodeCodexTranscriptLine(
  * canonical copy, so their Response API text blocks remain a fallback until a
  * paginated marker is observed.
  */
-export function createCodexTranscriptLineDecoder(): CodexTranscriptLineDecoder {
-  const state: CodexTranscriptDecodeState = { paginated: false }
+export function createCodexTranscriptLineDecoder(
+  options: { paginated?: boolean } = {}
+): CodexTranscriptLineDecoder {
+  const state: CodexTranscriptDecodeState = { paginated: options.paginated === true }
   const decode: CodexTranscriptLineDecoder = (line, fallbackId) =>
     decodeCodexTranscriptLineWithState(line, fallbackId, state)
   codexTranscriptDecoderStates.set(decode, state)
   return decode
+}
+
+export function isCodexPaginatedHistoryMarker(line: string): boolean {
+  const record = parseJsonObject(line)
+  const payload = asRecord(record?.payload)
+  return Boolean(
+    record &&
+    payload &&
+    ((record.type === 'session_meta' && payload.history_mode === 'paginated') ||
+      (record.type === 'event_msg' && payload.type === 'item_completed'))
+  )
 }
 
 export function isCodexTranscriptLineDecoder(decode: CodexTranscriptLineDecoder): boolean {

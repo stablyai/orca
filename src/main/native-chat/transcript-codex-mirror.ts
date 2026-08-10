@@ -70,10 +70,46 @@ export function areCodexTextMirrors(
 export function consumeCodexTextMirror(
   previous: CodexTextMirrorRecord | null,
   line: string
-): { duplicate: boolean; current: CodexTextMirrorRecord | null } {
-  const current = codexTextMirrorRecord(line)
-  const duplicate = areCodexTextMirrors(previous, current)
+): {
+  duplicate: boolean
+  candidate: CodexTextMirrorRecord | null
+  current: CodexTextMirrorRecord | null
+} {
+  const candidate = codexTextMirrorRecord(line)
+  const duplicate = areCodexTextMirrors(previous, candidate)
   // A matched pair consumes both records. Clearing the cursor prevents a third,
   // deliberately repeated record from being folded into the same pair.
-  return { duplicate, current: duplicate ? null : current }
+  return { duplicate, candidate, current: duplicate ? null : candidate }
+}
+
+/**
+ * Collapse a physical Codex mirror pair without making the result depend on
+ * scan direction. The earlier JSONL record owns identity and ordering; blocks
+ * found only on the later copy (most importantly user image attachments) are
+ * folded into it.
+ */
+export function mergeCodexTextMirrorMessages(
+  earlierRecord: CodexTextMirrorRecord | null,
+  earlierMessage: NativeChatMessage | null,
+  laterRecord: CodexTextMirrorRecord | null,
+  laterMessage: NativeChatMessage | null
+): NativeChatMessage | null {
+  if (!areCodexTextMirrors(earlierRecord, laterRecord)) {
+    return earlierMessage ?? laterMessage
+  }
+  const base = earlierMessage ?? laterMessage
+  const supplement = base === earlierMessage ? laterMessage : earlierMessage
+  if (!base || !supplement) {
+    return base
+  }
+  const seen = new Set(base.blocks.map((block) => JSON.stringify(block)))
+  const additional = supplement.blocks.filter((block) => {
+    const key = JSON.stringify(block)
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
+  return additional.length > 0 ? { ...base, blocks: [...base.blocks, ...additional] } : base
 }

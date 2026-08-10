@@ -4,19 +4,17 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
-  decodeClaudeTranscriptLine,
-  createCodexTranscriptLineDecoder,
-  decodeGrokTranscriptLine,
-  decodeOmpTranscriptLine
-} from './transcript-line-decoders'
+  nativeChatLineDecoderForAgent,
+  nativeChatLineDecoderForTranscript,
+  type NativeChatLineDecoder
+} from './transcript-line-decoder-resolver'
 import { transcriptFallbackId } from './transcript-fallback-id'
 import {
-  codexTextMirrorRecord,
   consumeCodexTextMirror,
   isCodexTranscriptDecoder,
+  mergeCodexTextMirrorMessages,
   type CodexTextMirrorRecord
 } from './transcript-codex-mirror'
 import {
@@ -27,24 +25,8 @@ import {
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 const TAIL_CHUNK_BYTES = 64 * 1024
 
-export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
-
-export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
-  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  if (transcriptAgent === 'claude') {
-    return decodeClaudeTranscriptLine
-  }
-  if (transcriptAgent === 'codex') {
-    return createCodexTranscriptLineDecoder()
-  }
-  if (transcriptAgent === 'grok') {
-    return decodeGrokTranscriptLine
-  }
-  if (transcriptAgent === 'omp') {
-    return decodeOmpTranscriptLine
-  }
-  return null
-}
+export { nativeChatLineDecoderForAgent, nativeChatLineDecoderForTranscript }
+export type { NativeChatLineDecoder }
 
 export async function readNativeChatTranscriptTailFile(
   filePath: string,
@@ -63,6 +45,7 @@ export async function readNativeChatTranscriptTailFile(
   malformedRecordCount?: number
   oversizedRecordCount?: number
   lastCodexRecord?: CodexTextMirrorRecord | null
+  lastCodexMessage?: NativeChatMessage | null
 }> {
   signal?.throwIfAborted()
   const deduplicateCodexMirrors = isCodexTranscriptDecoder(decode)
@@ -80,8 +63,11 @@ export async function readNativeChatTranscriptTailFile(
   let oversizedRecordCount = 0
   let ignoreNextMalformedRecord = false
   let previousCodexRecord: CodexTextMirrorRecord | null = null
+  let previousCodexMessage: NativeChatMessage | null = null
   let capturedLastRecord = false
+  let resolvedLastRecordPair = false
   let lastCodexRecord: CodexTextMirrorRecord | null = null
+  let lastCodexMessage: NativeChatMessage | null = null
   try {
     signal?.throwIfAborted()
     const consumedTo = includeTrailingLine
@@ -112,8 +98,11 @@ export async function readNativeChatTranscriptTailFile(
           decodeLine(start + index + 1, newestFirst)
         } else if (deduplicateCodexMirrors) {
           previousCodexRecord = null
+          previousCodexMessage = null
           if (!capturedLastRecord) {
             capturedLastRecord = true
+          } else if (!resolvedLastRecordPair) {
+            resolvedLastRecordPair = true
           }
         }
         resetLine()
@@ -139,7 +128,7 @@ export async function readNativeChatTranscriptTailFile(
       beforeOffset: selected[0]?.offset ?? end,
       ...(malformedRecordCount > 0 ? { malformedRecordCount } : {}),
       ...(oversizedRecordCount > 0 ? { oversizedRecordCount } : {}),
-      ...(deduplicateCodexMirrors ? { lastCodexRecord } : {})
+      ...(deduplicateCodexMirrors ? { lastCodexRecord, lastCodexMessage } : {})
     }
   } finally {
     await handle.close()
@@ -176,14 +165,18 @@ export async function readNativeChatTranscriptTailFile(
     if (!line) {
       return
     }
-    if (deduplicateCodexMirrors && !capturedLastRecord) {
-      capturedLastRecord = true
-      lastCodexRecord = codexTextMirrorRecord(line)
-    }
     try {
       JSON.parse(line)
     } catch {
       previousCodexRecord = null
+      previousCodexMessage = null
+      if (deduplicateCodexMirrors) {
+        if (!capturedLastRecord) {
+          capturedLastRecord = true
+        } else if (!resolvedLastRecordPair) {
+          resolvedLastRecordPair = true
+        }
+      }
       if (ignoreNextMalformedRecord) {
         ignoreNextMalformedRecord = false
         return
@@ -198,20 +191,44 @@ export async function readNativeChatTranscriptTailFile(
     // from the last visible assistant message.
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
     const message = decode(line, fallbackId)
-    const mirror = deduplicateCodexMirrors
-      ? consumeCodexTextMirror(previousCodexRecord, line)
-      : null
+    const previousRecord = previousCodexRecord
+    const previousMessage = previousCodexMessage
+    const mirror = deduplicateCodexMirrors ? consumeCodexTextMirror(previousRecord, line) : null
     if (mirror) {
       previousCodexRecord = mirror.current
-    }
-    if (message && !mirror?.duplicate) {
-      messages.push({ message, offset: lineOffset })
-    } else if (mirror?.duplicate) {
-      // The pagination cursor must skip both physical records in the pair.
-      const retained = messages.at(-1)
-      if (retained) {
-        retained.offset = lineOffset
+      previousCodexMessage = mirror.duplicate ? null : message
+      if (!capturedLastRecord) {
+        capturedLastRecord = true
+        lastCodexRecord = mirror.candidate
+        lastCodexMessage = message
+      } else if (!resolvedLastRecordPair) {
+        resolvedLastRecordPair = true
+        if (mirror.duplicate) {
+          // The newest two physical records form one consumed pair, so no raw
+          // mirror candidate remains pending at EOF for the incremental reader.
+          lastCodexRecord = null
+          lastCodexMessage = null
+        }
       }
+    }
+    if (mirror?.duplicate) {
+      const merged = mergeCodexTextMirrorMessages(
+        mirror.candidate,
+        message,
+        previousRecord,
+        previousMessage
+      )
+      const retained = messages.at(-1)
+      if (merged && retained && previousMessage && retained.message.id === previousMessage.id) {
+        retained.message = merged
+        // Reverse scan: the current record is the older physical edge and must
+        // own both stable identity and the pagination cursor.
+        retained.offset = lineOffset
+      } else if (merged) {
+        messages.push({ message: merged, offset: lineOffset })
+      }
+    } else if (message) {
+      messages.push({ message, offset: lineOffset })
     }
   }
 }
@@ -263,20 +280,20 @@ export async function readNativeChatTranscriptTail(
     }
   | { error: string; notFound?: true }
 > {
-  const decode = nativeChatLineDecoderForAgent(args.agent)
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
   const filePath =
     args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
   signal?.throwIfAborted()
-  if (!decode) {
-    return { error: 'Transcript unavailable' }
-  }
   // Why: a new agent session can report its id before the first JSONL flush;
   // callers keep that miss in loading/retry rather than showing a false error.
   if (!filePath) {
     return { error: 'Transcript unavailable', notFound: true }
   }
   try {
+    const decode = await nativeChatLineDecoderForTranscript(args.agent, filePath)
+    if (!decode) {
+      return { error: 'Transcript unavailable' }
+    }
     const result = await readNativeChatTranscriptTailFile(
       filePath,
       args.limit,

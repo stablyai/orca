@@ -68,7 +68,8 @@ export async function installTranscriptWatcher(
     pendingStart: 0,
     pendingBytes: 0,
     droppingOversizedRecord: false,
-    previousCodexRecord: null
+    previousCodexRecord: null,
+    previousCodexMessage: null
   }
   let watchedVersion: TranscriptFileVersion | null = null
   let watchedBoundary = ''
@@ -181,6 +182,7 @@ export async function installTranscriptWatcher(
       state.offset = replacementSnapshot.consumedTo
       state.pendingStart = state.offset
       state.previousCodexRecord = replacementSnapshot.lastCodexRecord ?? null
+      state.previousCodexMessage = replacementSnapshot.lastCodexMessage ?? null
       onReplace(
         replacementSnapshot.messages,
         replacementSnapshot.hasMore,
@@ -212,6 +214,7 @@ export async function installTranscriptWatcher(
         state.offset = initialSnapshot.consumedTo
         state.pendingStart = state.offset
         state.previousCodexRecord = initialSnapshot.lastCodexRecord ?? null
+        state.previousCodexMessage = initialSnapshot.lastCodexMessage ?? null
         onInitialSnapshot(
           initialSnapshot.messages,
           initialSnapshot.hasMore,

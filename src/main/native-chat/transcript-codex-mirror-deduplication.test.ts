@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { readNativeChatTranscript } from './transcript-reader'
 import {
   nativeChatLineDecoderForAgent,
+  readNativeChatTranscriptTail,
   readNativeChatTranscriptTailFile
 } from './transcript-tail-reader'
 import { subscribeNativeChatTranscript } from './transcript-watch'
@@ -137,8 +138,25 @@ describe('Codex mirrored transcript messages', () => {
     const filePath = await writeFixture([eventMessage('Continue', 'user'), response])
 
     const result = await readNativeChatTranscript('codex', 'user-image-pair', { filePath })
+    const tail = await readNativeChatTranscriptTail({
+      agent: 'codex',
+      sessionId: 'user-image-pair',
+      filePath,
+      limit: 10
+    })
 
-    expect('messages' in result && result.messages.map(textOf)).toEqual(['Continue'])
+    expect(result).toMatchObject({
+      messages: [
+        {
+          role: 'user',
+          blocks: [
+            { type: 'text', text: 'Continue' },
+            { type: 'image-ref', url: 'data:image/png;base64,eA==' }
+          ]
+        }
+      ]
+    })
+    expect(tail).toMatchObject({ messages: 'messages' in result ? result.messages : [] })
   })
 
   it('does not collapse matching records separated by another raw record', async () => {

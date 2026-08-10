@@ -5,7 +5,7 @@ import type { OrchestrationWorkerReadFallbackReason } from '../../../shared/orch
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
-  nativeChatLineDecoderForAgent,
+  nativeChatLineDecoderForTranscript,
   readNativeChatTranscriptTailFile,
   type NativeChatLineDecoder
 } from '../../native-chat/transcript-tail-reader'
@@ -46,10 +46,6 @@ export async function readWorkerTranscript(args: {
   if (!transcriptAgent) {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }
   }
-  const decode = nativeChatLineDecoderForAgent(args.agent)
-  if (!decode) {
-    return { ok: false, reason: 'provider_unsupported', warnings: [] }
-  }
   let filePath: string | null
   try {
     filePath = await resolveSessionFilePath(args.agent, args.sessionId, {
@@ -60,6 +56,15 @@ export async function readWorkerTranscript(args: {
   }
   if (!filePath) {
     return { ok: false, reason: 'transcript_missing', warnings: [] }
+  }
+  let decode: NativeChatLineDecoder | null
+  try {
+    decode = await nativeChatLineDecoderForTranscript(args.agent, filePath)
+  } catch {
+    return { ok: false, reason: 'transcript_unreadable', warnings: [] }
+  }
+  if (!decode) {
+    return { ok: false, reason: 'provider_unsupported', warnings: [] }
   }
   const limit = clampWorkerTranscriptLimit(args.limit)
   try {

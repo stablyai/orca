@@ -3,13 +3,12 @@ import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/na
 import {
   consumeCodexTextMirror,
   isCodexTranscriptDecoder,
+  mergeCodexTextMirrorMessages,
   type CodexTextMirrorRecord
 } from './transcript-codex-mirror'
 import { transcriptFallbackId } from './transcript-fallback-id'
-import {
-  MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
-  type NativeChatLineDecoder
-} from './transcript-tail-reader'
+import { MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES } from './transcript-tail-reader'
+import type { NativeChatLineDecoder } from './transcript-line-decoder-resolver'
 
 const APPEND_BATCH_MESSAGE_LIMIT = 40
 
@@ -20,6 +19,7 @@ export type IncrementalTranscriptState = {
   pendingBytes: number
   droppingOversizedRecord: boolean
   previousCodexRecord: CodexTextMirrorRecord | null
+  previousCodexMessage: NativeChatMessage | null
 }
 
 export function resetIncrementalTranscriptState(state: IncrementalTranscriptState): void {
@@ -29,6 +29,7 @@ export function resetIncrementalTranscriptState(state: IncrementalTranscriptStat
   state.pendingBytes = 0
   state.droppingOversizedRecord = false
   state.previousCodexRecord = null
+  state.previousCodexMessage = null
 }
 
 export async function readIncrementalTranscriptMessages(
@@ -59,6 +60,7 @@ export async function readIncrementalTranscriptMessages(
           decodeLine()
         } else if (deduplicateCodexMirrors) {
           state.previousCodexRecord = null
+          state.previousCodexMessage = null
         }
         resetPendingLine(absoluteOffset + newline + 1)
         segmentStart = newline + 1
@@ -109,13 +111,32 @@ export async function readIncrementalTranscriptMessages(
       onLifecycle?.(lifecycle)
     }
     const message = decode(line, fallbackId)
-    const mirror = deduplicateCodexMirrors
-      ? consumeCodexTextMirror(state.previousCodexRecord, line)
-      : null
+    const previousRecord = state.previousCodexRecord
+    const previousMessage = state.previousCodexMessage
+    const mirror = deduplicateCodexMirrors ? consumeCodexTextMirror(previousRecord, line) : null
     if (mirror) {
       state.previousCodexRecord = mirror.current
+      state.previousCodexMessage = mirror.duplicate ? null : message
     }
-    if (!message || mirror?.duplicate) {
+    if (mirror?.duplicate) {
+      const merged = mergeCodexTextMirrorMessages(
+        previousRecord,
+        previousMessage,
+        mirror.candidate,
+        message
+      )
+      const retained = messages.at(-1)
+      // Only replace a message still buffered in this drain. If the first half
+      // was already emitted by an earlier filesystem event, keeping it avoids
+      // turning a duplicate suppression into an append/update protocol change.
+      if (merged && retained && previousMessage && retained.id === previousMessage.id) {
+        messages[messages.length - 1] = merged
+      } else if (merged && !previousMessage) {
+        messages.push(merged)
+      }
+      return
+    }
+    if (!message) {
       return
     }
     messages.push(message)

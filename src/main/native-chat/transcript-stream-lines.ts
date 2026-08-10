@@ -3,6 +3,7 @@ import type { NativeChatMessage } from '../../shared/native-chat-types'
 import {
   consumeCodexTextMirror,
   isCodexTranscriptDecoder,
+  mergeCodexTextMirrorMessages,
   type CodexTextMirrorRecord
 } from './transcript-codex-mirror'
 import { transcriptFallbackId } from './transcript-fallback-id'
@@ -19,6 +20,7 @@ export async function decodeTranscriptStream(
   const messages: NativeChatMessage[] = []
   const deduplicateCodexMirrors = isCodexTranscriptDecoder(decode)
   let previousCodexRecord: CodexTextMirrorRecord | null = null
+  let previousCodexMessage: NativeChatMessage | null = null
   let pending = ''
   let consumedBytes = 0
 
@@ -47,13 +49,27 @@ export async function decodeTranscriptStream(
       return
     }
     const message = decode(line, transcriptFallbackId(filePath, start + relativeOffset))
-    const mirror = deduplicateCodexMirrors
-      ? consumeCodexTextMirror(previousCodexRecord, line)
-      : null
+    const previousRecord = previousCodexRecord
+    const previousMessage = previousCodexMessage
+    const mirror = deduplicateCodexMirrors ? consumeCodexTextMirror(previousRecord, line) : null
     if (mirror) {
       previousCodexRecord = mirror.current
+      previousCodexMessage = mirror.duplicate ? null : message
     }
-    if (message && !mirror?.duplicate) {
+    if (mirror?.duplicate) {
+      const merged = mergeCodexTextMirrorMessages(
+        previousRecord,
+        previousMessage,
+        mirror.candidate,
+        message
+      )
+      const retained = messages.at(-1)
+      if (merged && retained && previousMessage && retained.id === previousMessage.id) {
+        messages[messages.length - 1] = merged
+      } else if (merged && !previousMessage) {
+        messages.push(merged)
+      }
+    } else if (message) {
       messages.push(message)
     }
   }
