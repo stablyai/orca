@@ -643,8 +643,9 @@
   height: 0;
 }
 
-/* Why: overflowing Space indicators recede before reaching adjacent toolbar controls. */
-.sidebar-space-switcher-scroll {
+/* Why: overflowing Space indicators recede before reaching adjacent toolbar controls;
+   an edge that cannot scroll stays unmasked so its focus ring is not faded away. */
+.sidebar-space-switcher-scroll--fade-start.sidebar-space-switcher-scroll--fade-end {
   -webkit-mask-image: linear-gradient(
     to right,
     transparent,
@@ -659,6 +660,16 @@
     #000 calc(100% - 0.75rem),
     transparent
   );
+}
+
+.sidebar-space-switcher-scroll--fade-start:not(.sidebar-space-switcher-scroll--fade-end) {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 0.75rem, #000 100%);
+  mask-image: linear-gradient(to right, transparent, #000 0.75rem, #000 100%);
+}
+
+.sidebar-space-switcher-scroll--fade-end:not(.sidebar-space-switcher-scroll--fade-start) {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 0.75rem), transparent);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 0.75rem), transparent);
 }
 
 /* Why: mask fades avoid painting card-colored overlays that mismatch active tabs. */

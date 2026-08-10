@@ -35,7 +35,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
-import SidebarSpaceSwitcher from './SidebarSpaceSwitcher'
+import SidebarSpaceSwitcher, { getSpaceStripFadeClassName } from './SidebarSpaceSwitcher'
 
 function space(overrides: Partial<Space> & Pick<Space, 'id' | 'name' | 'emoji'>): Space {
   return { createdAt: 0, updatedAt: 0, ...overrides }
@@ -99,15 +99,18 @@ describe('SidebarSpaceSwitcher', () => {
   })
 
   // Why: happy-dom reports zero-sized rects, so the strip geometry has to be simulated.
-  // The strip viewport is 0..100; the active indicator is 24 wide at `activeLeft`.
-  function stubGeometry(activeLeft: number): () => void {
+  // The strip viewport is 0..100; the matched indicator is 24 wide at `left`.
+  function stubGeometry(
+    left: number,
+    matches = (el: Element) => el.getAttribute('aria-current') === 'true'
+  ) {
     const original = Element.prototype.getBoundingClientRect
     Element.prototype.getBoundingClientRect = function (this: Element) {
       if (this.getAttribute('role') === 'group') {
         return { left: 0, right: 100 } as DOMRect
       }
-      if (this.getAttribute('aria-current') === 'true') {
-        return { left: activeLeft, right: activeLeft + 24 } as DOMRect
+      if (matches(this)) {
+        return { left, right: left + 24 } as DOMRect
       }
       return original.call(this)
     }
@@ -141,6 +144,44 @@ describe('SidebarSpaceSwitcher', () => {
     } finally {
       restore()
     }
+  })
+
+  it('reveals a Space that Tab focuses under the strip edge', () => {
+    setSpaces(MANY_SPACES, 'space-0')
+    const restore = stubGeometry(260, (el) => el.getAttribute('aria-label') === 'S9')
+    try {
+      render(<SidebarSpaceSwitcher />)
+      screen.getByRole('button', { name: 'S9' }).focus()
+      expect(screen.getByRole('group', { name: 'Spaces' }).scrollLeft).toBe(196)
+    } finally {
+      restore()
+    }
+  })
+
+  it('scrolls Space creation with the strip and reveals it on focus', () => {
+    setSpaces(MANY_SPACES, 'space-0')
+    const restore = stubGeometry(260, (el) => el.getAttribute('aria-label') === 'New Space')
+    try {
+      render(<SidebarSpaceSwitcher />)
+      const strip = screen.getByRole('group', { name: 'Spaces' })
+      const newSpace = screen.getByRole('button', { name: 'New Space' })
+      expect(strip.contains(newSpace)).toBe(true)
+
+      newSpace.focus()
+      expect(strip.scrollLeft).toBe(196)
+    } finally {
+      restore()
+    }
+  })
+
+  it('fades only the edges the strip can still scroll toward', () => {
+    expect(getSpaceStripFadeClassName({ canScrollStart: false, canScrollEnd: false })).toBe('')
+    expect(getSpaceStripFadeClassName({ canScrollStart: false, canScrollEnd: true })).toBe(
+      'sidebar-space-switcher-scroll--fade-end'
+    )
+    expect(getSpaceStripFadeClassName({ canScrollStart: true, canScrollEnd: true })).toBe(
+      'sidebar-space-switcher-scroll--fade-start sidebar-space-switcher-scroll--fade-end'
+    )
   })
 
   it('keeps paired web clients on the all-project view', () => {

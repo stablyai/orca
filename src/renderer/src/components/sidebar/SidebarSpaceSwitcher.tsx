@@ -14,8 +14,26 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
+import {
+  computeTabStripScrollMetrics,
+  type TabStripScrollMetrics
+} from '../tab-bar/tab-strip-scroll-metrics'
 import { isDefaultSpaceId } from '../../../../shared/spaces'
 import type { Space } from '../../../../shared/types'
+
+/** Mask width of one edge fade; revealed indicators stop short of it. */
+const SPACE_STRIP_FADE_PX = 12
+
+export function getSpaceStripFadeClassName(
+  metrics: Pick<TabStripScrollMetrics, 'canScrollStart' | 'canScrollEnd'>
+): string {
+  return [
+    metrics.canScrollStart ? 'sidebar-space-switcher-scroll--fade-start' : '',
+    metrics.canScrollEnd ? 'sidebar-space-switcher-scroll--fade-end' : ''
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
 
 type SpaceIndicatorProps = {
   space: Space
@@ -105,24 +123,56 @@ export const SidebarSpaceSwitcher = React.memo(
     const handleCreate = React.useCallback(() => openModal('space-editor'), [openModal])
 
     const scrollRef = React.useRef<HTMLDivElement>(null)
+    const [fadeClassName, setFadeClassName] = React.useState('')
 
-    // Why: a newly created or shortcut-selected Space can sit outside the scrolled strip.
-    React.useLayoutEffect(() => {
+    const reveal = React.useCallback((target: Element | null | undefined): void => {
       const container = scrollRef.current
-      const active = container?.querySelector('[aria-current="true"]')
-      if (!container || !active) {
+      if (!container || !target) {
         return
       }
       const containerRect = container.getBoundingClientRect()
-      const activeRect = active.getBoundingClientRect()
-      // Why: stop short of the mask fade, otherwise the revealed indicator lands under it.
-      const fade = 12
-      if (activeRect.left - fade < containerRect.left) {
-        container.scrollLeft -= containerRect.left - activeRect.left + fade
-      } else if (activeRect.right + fade > containerRect.right) {
-        container.scrollLeft += activeRect.right + fade - containerRect.right
+      const targetRect = target.getBoundingClientRect()
+      if (targetRect.left - SPACE_STRIP_FADE_PX < containerRect.left) {
+        container.scrollLeft = Math.max(
+          0,
+          container.scrollLeft - (containerRect.left - targetRect.left + SPACE_STRIP_FADE_PX)
+        )
+      } else if (targetRect.right + SPACE_STRIP_FADE_PX > containerRect.right) {
+        container.scrollLeft += targetRect.right + SPACE_STRIP_FADE_PX - containerRect.right
       }
-    }, [activeSpaceId, spaces])
+    }, [])
+
+    const updateFades = React.useCallback((): void => {
+      const container = scrollRef.current
+      if (!container) {
+        return
+      }
+      const next = getSpaceStripFadeClassName(computeTabStripScrollMetrics(container))
+      setFadeClassName((previous) => (previous === next ? previous : next))
+    }, [])
+
+    // Why: a newly created or shortcut-selected Space can sit outside the scrolled strip.
+    React.useLayoutEffect(() => {
+      reveal(scrollRef.current?.querySelector('[aria-current="true"]'))
+      updateFades()
+    }, [activeSpaceId, reveal, spaces, updateFades])
+
+    React.useEffect(() => {
+      const container = scrollRef.current
+      if (!container || typeof ResizeObserver === 'undefined') {
+        return
+      }
+      const observer = new ResizeObserver(updateFades)
+      observer.observe(container)
+      return () => observer.disconnect()
+    }, [updateFades])
+
+    // Why: Tab lands on indicators the strip has scrolled past, and a focus ring under
+    // the edge fade reads as no focus at all.
+    const handleFocus = React.useCallback(
+      (event: React.FocusEvent<HTMLDivElement>) => reveal(event.target),
+      [reveal]
+    )
 
     if (isWebClientLocation()) {
       return null
@@ -133,9 +183,15 @@ export const SidebarSpaceSwitcher = React.memo(
         ref={scrollRef}
         role="group"
         aria-label={translate('auto.components.sidebar.SidebarSpaceSwitcher.spaces', 'Spaces')}
-        className="sidebar-space-switcher-scroll min-w-0 flex-1 overflow-x-auto overscroll-x-contain"
+        onFocus={handleFocus}
+        onScroll={updateFades}
+        // Why: the padding pair keeps focus rings out of the scroll clip without growing the toolbar.
+        className={cn(
+          'sidebar-space-switcher-scroll -my-1 min-w-0 flex-1 overflow-x-auto overscroll-x-contain py-1',
+          fadeClassName
+        )}
       >
-        <div className="flex w-max min-w-full items-center justify-center px-3">
+        <div className="flex w-max min-w-full items-center justify-center gap-1 px-1">
           {spaces.map((space) => (
             <SpaceIndicator
               key={space.id}
@@ -146,6 +202,7 @@ export const SidebarSpaceSwitcher = React.memo(
               onDelete={handleDelete}
             />
           ))}
+          {/* Why: creation scrolls with the strip so it costs the toolbar no fixed width. */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
