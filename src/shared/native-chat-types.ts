@@ -112,6 +112,12 @@ export type NativeChatMessage = {
   turnId?: string
   /** Provider-authored API failure, not assistant speech. */
   providerError?: true
+  /** Codex multi-agent transport metadata. Empty transport records stay
+   *  invisible outside the dedicated subagent transcript projection. */
+  subagentEvent?:
+    | { kind: 'turn-boundary'; triggerTurn: boolean }
+    | { kind: 'agent-message'; author: string | null; recipient: string | null }
+    | { kind: 'task'; parentIdentity: string }
 }
 
 export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const

@@ -47,4 +47,26 @@ describe('RoomCompletedActivityTimeline', () => {
     expect(screen.getByText('-old')).toBeTruthy()
     expect(screen.getByText('+new')).toBeTruthy()
   })
+
+  it('shows provider-independent tool labels', () => {
+    const activity: RoomCompletedActivity = {
+      state: 'completed',
+      startedAt: 1_000,
+      completedAt: 2_000,
+      messages: [
+        {
+          id: 'web',
+          role: 'assistant',
+          source: 'transcript',
+          timestamp: 1_500,
+          blocks: [{ type: 'tool-call', name: 'webrun', input: { search_query: [] } }]
+        }
+      ]
+    }
+
+    render(<RoomCompletedActivityTimeline activity={activity} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Worked for 1s' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Searched the web' }))
+    expect(screen.getByText('Search the web')).toBeTruthy()
+  })
 })

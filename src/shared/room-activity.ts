@@ -1,4 +1,5 @@
 import type { RoomActivityKind } from './rooms'
+import { canonicalNativeChatToolName } from './native-chat-tool-name'
 
 export function roomActivityKindFromTool(
   toolName: string | undefined,
@@ -10,7 +11,7 @@ export function roomActivityKindFromTool(
   ) {
     return 'editing'
   }
-  const name = toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() ?? ''
+  const name = canonicalNativeChatToolName(toolName)
   if (READ_TOOLS.has(name)) {
     return 'reading'
   }
@@ -32,7 +33,7 @@ export function roomActivityKindFromTool(
 const READ_TOOLS = new Set(['read', 'readfile'])
 const SEARCH_TOOLS = new Set(['grep', 'glob', 'find', 'search', 'searchcode'])
 const EDIT_TOOLS = new Set(['edit', 'multiedit', 'write', 'applypatch', 'notebookedit'])
-const WEB_TOOLS = new Set(['websearch', 'webfetch', 'searchquery', 'imagequery'])
+const WEB_TOOLS = new Set(['webrun', 'websearch', 'webfetch', 'searchquery', 'imagequery'])
 const COMMAND_TOOLS = new Set([
   'bash',
   'shell',

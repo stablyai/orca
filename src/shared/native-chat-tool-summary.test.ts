@@ -242,7 +242,7 @@ describe('briefToolArg', () => {
     expect(briefToolArg({ cmd: '   ' })).toBe('')
     expect(briefToolArg({ cmd: '', file_path: '' })).toBe('')
     const blocks: NativeChatBlock[] = [{ type: 'tool-call', name: 'Bash', input: { command: '' } }]
-    expect(summarizeToolRun(blocks)).toBe('Bash')
+    expect(summarizeToolRun(blocks)).toBe('Run command')
   })
 
   it('still previews a primary argument that is populated but not a string', () => {
@@ -264,6 +264,12 @@ describe('summarizeToolRun', () => {
       { type: 'tool-call', name: 'Write', input: { file_path: 'c.ts' } }
     ]
     const summary = summarizeToolRun(blocks)
-    expect(summary).toBe('Bash ls  ·  Read a.ts  ·  Edit b.ts')
+    expect(summary).toBe('Run command ls  ·  Read file a.ts  ·  Edit file b.ts')
+  })
+
+  it('keeps coordination plumbing out of the activity header', () => {
+    expect(
+      summarizeToolRun([{ type: 'tool-call', name: 'wait_agent', input: { timeout_ms: 120_000 } }])
+    ).toBe('Wait for subagent')
   })
 })

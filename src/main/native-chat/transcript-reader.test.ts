@@ -218,6 +218,7 @@ describe('readNativeChatTranscript (codex)', () => {
         timestamp: '2026-06-01T10:00:03.000Z',
         payload: {
           type: 'function_call',
+          call_id: 'call-build',
           name: 'shell',
           arguments: '{"command":["bash","-lc","make"]}'
         }
@@ -272,6 +273,7 @@ describe('readNativeChatTranscript (codex)', () => {
       name: 'shell',
       input: '{"command":["bash","-lc","make"]}'
     })
+    expect(call?.turnId).toBe('call-build')
 
     const toolResult = result.messages.find((m) => m.blocks[0]?.type === 'tool-result')
     expect(toolResult?.blocks[0]).toEqual({ type: 'tool-result', output: 'build ok' })

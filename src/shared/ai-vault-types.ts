@@ -80,6 +80,7 @@ export type AiVaultSessionSubagentInfo = {
   parentSessionId: string
   agentType: string | null
   status: AiVaultSubagentRunStatus | null
+  turnStartedAts?: number[]
 }
 
 export type AiVaultSession = {

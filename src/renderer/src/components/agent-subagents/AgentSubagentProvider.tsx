@@ -19,7 +19,10 @@ export function AgentSubagentProvider({
   const [loadedBySource, setLoadedBySource] = useState<
     Record<string, Omit<AgentSubagentSourceData, 'source'>>
   >({})
-  const [openSourceKey, setOpenSourceKey] = useState<string | null>(null)
+  const [openTarget, setOpenTarget] = useState<{ sourceKey?: string; sessionId?: string } | null>(
+    null
+  )
+  const [sheetOpen, setSheetOpen] = useState(false)
   const update = useCallback(
     (key: string, data: Omit<AgentSubagentSourceData, 'source'>) =>
       setLoadedBySource((current) =>
@@ -42,9 +45,23 @@ export function AgentSubagentProvider({
     [loadedBySource, sources]
   )
   const value = useMemo(
-    () => ({ dataBySource, open: (sourceKey: string) => setOpenSourceKey(sourceKey) }),
+    () => ({
+      dataBySource,
+      open: (sourceKey?: string, sessionId?: string) => {
+        setOpenTarget({ sourceKey, sessionId })
+        setSheetOpen(true)
+      }
+    }),
     [dataBySource]
   )
+  const openData = openTarget?.sourceKey
+    ? [dataBySource[openTarget.sourceKey]].filter(Boolean)
+    : Object.values(dataBySource)
+  const initialSource = openTarget?.sourceKey ? dataBySource[openTarget.sourceKey] : null
+  const initialSession = openTarget?.sessionId
+    ? (initialSource?.sessions.find((session) => session.sessionId === openTarget.sessionId) ??
+      null)
+    : null
   return (
     <AgentSubagentContext.Provider value={value}>
       {sources.map((source) => (
@@ -52,10 +69,15 @@ export function AgentSubagentProvider({
       ))}
       {children}
       <AgentSubagentSheet
-        key={openSourceKey ?? 'closed'}
-        open={openSourceKey !== null}
-        data={openSourceKey ? (dataBySource[openSourceKey] ?? null) : null}
-        onOpenChange={(open) => !open && setOpenSourceKey(null)}
+        key={`${openTarget?.sourceKey ?? 'all'}:${openTarget?.sessionId ?? 'list'}`}
+        open={sheetOpen}
+        data={openData}
+        initialSelection={
+          initialSource && initialSession
+            ? { sourceData: initialSource, session: initialSession }
+            : null
+        }
+        onOpenChange={setSheetOpen}
       />
     </AgentSubagentContext.Provider>
   )
@@ -72,7 +94,8 @@ function SourceLoader({
     target: source.target,
     agent: source.agent,
     parentFilePath: source.transcriptPath,
-    liveSubagents: source.liveSubagents
+    liveSubagents: source.liveSubagents,
+    poll: source.working
   })
   useEffect(() => onChange(source.key, data), [data, onChange, source.key])
   return null

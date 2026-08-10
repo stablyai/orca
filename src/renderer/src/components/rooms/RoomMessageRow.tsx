@@ -23,7 +23,7 @@ export function RoomMessageRow({
   data: RoomData
   message: RoomMessage
   onReply: (message: RoomMessage) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(message.body)
   useEffect(() => {
@@ -50,6 +50,9 @@ export function RoomMessageRow({
       window.setTimeout(() => setCopied(false), 1500)
     })
   }, [message.body])
+  if (!message.deletedAt && !message.body.trim() && message.attachments.length === 0 && !activity) {
+    return null
+  }
   if (isUser) {
     return (
       <div className="group flex flex-col items-end gap-0.5 px-3 py-1">
@@ -231,31 +234,27 @@ export function RoomMessageRow({
           </MessageAction>
         </div>
       </div>
-      {message.replyToId ? (
-        <div className="mb-1 border-l-2 border-border pl-2 text-[11px] text-muted-foreground">
-          {translate('rooms.message.threadReply', 'Reply in thread')}
-        </div>
-      ) : null}
       {activity ? <RoomCompletedActivityTimeline activity={activity} /> : null}
       {activity && participant ? (
         <AgentSubagentTurnLink
           sourceKey={participant.id}
           startedAt={activity.startedAt}
           completedAt={activity.completedAt}
+          messages={activity.messages}
         />
       ) : null}
       {message.deletedAt ? (
         <p className="text-sm italic text-muted-foreground">
           {translate('rooms.common.messageDeleted', 'Message deleted')}
         </p>
-      ) : (
+      ) : message.body.trim() ? (
         <CommentMarkdown
           content={message.body}
           variant="document"
           className="text-sm"
           allowFileUriLinks
         />
-      )}
+      ) : null}
       <RoomMessageAttachments data={data} message={message} />
       {failedDelivery ? (
         <button

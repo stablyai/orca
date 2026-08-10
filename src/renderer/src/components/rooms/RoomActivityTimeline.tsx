@@ -13,6 +13,7 @@ import type { NativeChatFileDiff } from '../native-chat/native-chat-diff'
 import { fileDiffsFromToolCall } from '../native-chat/native-chat-diff'
 import { NativeChatDiffView } from '../native-chat/NativeChatDiffView'
 import { briefToolArg, formatToolInput } from '../../../../shared/native-chat-tool-summary'
+import { isSubagentToolName, nativeChatToolLabel } from '../../../../shared/native-chat-tool-name'
 import type {
   NativeChatMessage,
   NativeChatToolResultBlock
@@ -179,9 +180,10 @@ function FileDiffRow({
 
 function ActivityToolRow({ tool }: { tool: RoomActivityToolStep }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
-  const input = formatToolInput(tool.call.input)
-  const output = tool.result?.output ?? ''
-  const preview = briefToolArg(tool.call.input)
+  const coordination = isSubagentToolName(tool.call.name)
+  const input = coordination ? '' : formatToolInput(tool.call.input)
+  const output = coordination ? '' : (tool.result?.output ?? '')
+  const preview = coordination ? '' : briefToolArg(tool.call.input)
   const hasDetails = Boolean(input || output)
   return (
     <div>
@@ -193,7 +195,7 @@ function ActivityToolRow({ tool }: { tool: RoomActivityToolStep }): React.JSX.El
         className="group flex w-full min-w-0 items-center gap-2 rounded px-1 py-0.5 text-left text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <ActivityKindIcon kind={tool.kind} />
-        <span className="shrink-0 font-medium">{tool.call.name}</span>
+        <span className="shrink-0 font-medium">{nativeChatToolLabel(tool.call.name)}</span>
         {preview ? <span className="min-w-0 truncate font-mono">{preview}</span> : null}
         {hasDetails ? (
           <ChevronRight
@@ -245,6 +247,9 @@ function toolGroupPrimaryKind(tools: RoomActivityToolStep[]): RoomActivityKind {
 }
 
 function toolGroupLabel(tools: RoomActivityToolStep[]): string {
+  if (tools.every((tool) => isSubagentToolName(tool.call.name))) {
+    return 'Coordinated subagents'
+  }
   const has = (kind: RoomActivityKind): boolean => tools.some((tool) => tool.kind === kind)
   if (has('editing') && has('command')) {
     return 'Edited files and ran commands'

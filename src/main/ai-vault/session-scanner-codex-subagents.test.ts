@@ -35,7 +35,7 @@ describe('listCodexSubagentSessions', () => {
       {
         timestamp: '2026-08-06T10:00:01.000Z',
         type: 'event_msg',
-        payload: { type: 'user_message', message: 'Inspect the parser' }
+        payload: { type: 'task_started' }
       },
       {
         timestamp: '2026-08-06T10:00:02.000Z',
@@ -45,7 +45,7 @@ describe('listCodexSubagentSessions', () => {
       {
         timestamp: '2026-08-06T10:00:03.000Z',
         type: 'event_msg',
-        payload: { type: 'task_complete' }
+        payload: { type: 'task_complete', last_agent_message: 'Looks correct' }
       }
     ])
 
@@ -59,8 +59,105 @@ describe('listCodexSubagentSessions', () => {
       title: 'Review the parser',
       filePath: childPath,
       messageCount: 2,
-      subagent: { status: 'completed' }
+      subagent: { status: 'completed', turnStartedAts: [Date.UTC(2026, 7, 6, 10, 0, 1)] }
     })
+  })
+
+  it('counts each visible child task and reply', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-codex-subagents-'))
+    const day = join(root, '2026', '08', '10')
+    await mkdir(day, { recursive: true })
+    const parentId = '019f0000-0000-7000-8000-000000000000'
+    const parentPath = join(day, `rollout-parent-${parentId}.jsonl`)
+    const childPath = join(day, `rollout-child-${CHILD_ID}.jsonl`)
+    await writeLines(parentPath, [])
+    await writeLines(childPath, [
+      {
+        timestamp: '2026-08-10T10:00:00.000Z',
+        type: 'session_meta',
+        payload: {
+          id: CHILD_ID,
+          source: { subagent: { thread_spawn: { parent_thread_id: parentId } } }
+        }
+      },
+      {
+        timestamp: '2026-08-10T10:00:01.000Z',
+        type: 'event_msg',
+        payload: { type: 'task_started' }
+      },
+      {
+        timestamp: '2026-08-10T10:00:02.000Z',
+        type: 'event_msg',
+        payload: { type: 'task_complete', last_agent_message: 'First' }
+      },
+      {
+        timestamp: '2026-08-10T10:01:01.000Z',
+        type: 'event_msg',
+        payload: { type: 'task_started' }
+      },
+      {
+        timestamp: '2026-08-10T10:01:02.000Z',
+        type: 'event_msg',
+        payload: { type: 'task_complete', last_agent_message: 'Second' }
+      }
+    ])
+
+    const result = await listCodexSubagentSessions({ parentFilePath: parentPath })
+
+    expect(result.sessions[0]).toMatchObject({
+      messageCount: 4,
+      subagent: {
+        turnStartedAts: [Date.UTC(2026, 7, 10, 10, 0, 1), Date.UTC(2026, 7, 10, 10, 1, 1)]
+      }
+    })
+  })
+
+  it('discovers current Codex children from their parent linkage', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-codex-subagents-'))
+    const day = join(root, '2026', '08', '10')
+    await mkdir(day, { recursive: true })
+    const parentId = '019f0000-0000-7000-8000-000000000000'
+    const parentPath = join(day, `rollout-parent-${parentId}.jsonl`)
+    const childPath = join(day, `rollout-child-${CHILD_ID}.jsonl`)
+    await writeLines(parentPath, [
+      {
+        timestamp: '2026-08-10T10:00:00.000Z',
+        type: 'response_item',
+        payload: { type: 'function_call', name: 'spawn_agent', call_id: 'call-1' }
+      }
+    ])
+    await writeLines(childPath, [
+      {
+        timestamp: '2026-08-10T10:00:01.000Z',
+        type: 'session_meta',
+        payload: {
+          id: CHILD_ID,
+          cwd: '/repo',
+          thread_source: 'subagent',
+          source: {
+            subagent: {
+              thread_spawn: {
+                parent_thread_id: parentId,
+                agent_path: '/root/reviewer',
+                agent_nickname: 'Boole'
+              }
+            }
+          }
+        }
+      },
+      { type: 'event_msg', payload: { type: 'task_complete' } }
+    ])
+
+    const result = await listCodexSubagentSessions({ parentFilePath: parentPath })
+
+    expect(result.sessions).toEqual([
+      expect.objectContaining({
+        sessionId: CHILD_ID,
+        title: 'Boole',
+        filePath: childPath,
+        subagent: expect.objectContaining({ parentSessionId: parentId, status: 'completed' })
+      })
+    ])
   })
 })
 

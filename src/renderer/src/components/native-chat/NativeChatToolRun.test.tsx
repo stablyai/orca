@@ -383,7 +383,8 @@ describe('NativeChatToolRun', () => {
     const glyph = container.querySelector('.lucide-eye')
     expect(glyph).toBeInTheDocument()
     expect(glyph).toHaveAttribute('aria-hidden')
-    expect(screen.getByText('read')).toBeInTheDocument()
+    expect(screen.getByText('Read file')).toBeInTheDocument()
+    expect(leadingGlyphs(container)).toEqual(['lucide-eye', 'lucide-eye'])
   })
 
   it('holds one glyph for a category across running, completed, and failed', () => {

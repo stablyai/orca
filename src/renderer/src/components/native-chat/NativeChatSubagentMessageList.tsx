@@ -27,12 +27,14 @@ export function NativeChatSubagentMessageList({
         target: runtimeEnvironmentId
           ? { kind: 'environment', environmentId: runtimeEnvironmentId }
           : { kind: 'local' },
-        liveSubagents: agentStatus?.subagents ?? []
+        liveSubagents: agentStatus?.subagents ?? [],
+        working: messageListProps.isWorking
       }
     ],
     [
       agent,
       agentStatus?.subagents,
+      messageListProps.isWorking,
       messageListProps.session.sessionId,
       paneKey,
       runtimeEnvironmentId,

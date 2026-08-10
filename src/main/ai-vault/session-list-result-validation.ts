@@ -77,7 +77,8 @@ const aiVaultSessionSchema = z.object({
     .object({
       parentSessionId: z.string(),
       agentType: z.string().nullable(),
-      status: z.enum(['running', 'completed', 'failed', 'stopped']).nullable()
+      status: z.enum(['running', 'completed', 'failed', 'stopped']).nullable(),
+      turnStartedAts: z.array(z.number()).optional()
     })
     .nullable()
     .default(null)

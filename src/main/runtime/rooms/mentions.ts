@@ -44,11 +44,10 @@ function stripSilentBlock(
   mentions: string[]
 ): { body: string; mentions: string[]; silent: boolean } {
   const match = body.match(SILENT_BLOCK)
-  if (!match) {
-    return { body, mentions, silent: false }
-  }
-  const visibleBody = body.slice(0, match.index).trimEnd()
-  return { body: visibleBody, mentions, silent: visibleBody.length === 0 }
+  const visibleBody = (match ? body.slice(0, match.index) : body).trimEnd()
+  return visibleBody.trim()
+    ? { body: visibleBody, mentions, silent: false }
+    : { body: '', mentions: [], silent: true }
 }
 
 export function validateRoomMentions(

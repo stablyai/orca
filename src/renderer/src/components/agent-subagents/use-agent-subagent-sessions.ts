@@ -12,12 +12,14 @@ export function useAgentSubagentSessions({
   target,
   agent,
   parentFilePath,
-  liveSubagents = []
+  liveSubagents = [],
+  poll = false
 }: {
   target: RuntimeClientTarget
   agent: string
   parentFilePath: string | null
   liveSubagents?: readonly AgentSubagentSnapshot[]
+  poll?: boolean
 }): AgentSubagentSessionsState {
   const [state, setState] = useState<AgentSubagentSessionsState>({ loading: false, sessions: [] })
   const liveKey = liveSubagents.map((subagent) => `${subagent.id}:${subagent.state}`).join('|')
@@ -49,7 +51,7 @@ export function useAgentSubagentSessions({
       }
     }
     void load()
-    if (liveSubagents.length > 0) {
+    if (poll || liveSubagents.length > 0) {
       timer = setInterval(() => void load(), 2_000)
     }
     return () => {
@@ -58,7 +60,7 @@ export function useAgentSubagentSessions({
         clearInterval(timer)
       }
     }
-  }, [agent, liveKey, liveSubagents.length, parentFilePath, target, targetKey])
+  }, [agent, liveKey, liveSubagents.length, parentFilePath, poll, target, targetKey])
 
   return state
 }

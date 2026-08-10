@@ -1,16 +1,18 @@
 import { useState } from 'react'
-import { Pin, Users } from 'lucide-react'
+import { Bot, Pin, Users } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { RoomData } from './use-room-data'
 import { PeoplePanel } from './RoomPeoplePanel'
 import { PinsPanel } from './RoomPinsPanel'
+import { useAgentSubagentContext } from '../agent-subagents/AgentSubagentContext'
 
 type Tab = 'people' | 'pins'
 
-const TABS: { id: Tab; copy: [string, string]; icon: typeof Users }[] = [
-  { id: 'people', copy: ['rooms.inspector.people', 'People'], icon: Users },
+const TABS: { id: Tab | 'subagents'; copy: [string, string]; icon: typeof Users }[] = [
+  { id: 'people', copy: ['rooms.inspector.participants', 'Participants'], icon: Users },
+  { id: 'subagents', copy: ['rooms.inspector.subagents', 'Subagents'], icon: Bot },
   { id: 'pins', copy: ['rooms.inspector.pins', 'Pins'], icon: Pin }
 ]
 
@@ -22,6 +24,7 @@ export function RoomInspector({
   onAddAgent: () => void
 }): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('people')
+  const subagents = useAgentSubagentContext()
   return (
     <aside className="flex w-72 shrink-0 flex-col border-l border-border bg-muted/10">
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border px-1.5">
@@ -33,12 +36,12 @@ export function RoomInspector({
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => setTab(item.id)}
+                  onClick={() => (item.id === 'subagents' ? subagents?.open() : setTab(item.id))}
                   aria-label={label}
-                  aria-current={tab === item.id ? 'page' : undefined}
+                  aria-current={item.id !== 'subagents' && tab === item.id ? 'page' : undefined}
                   className={cn(
                     'flex h-7 flex-1 items-center justify-center rounded-md border border-transparent text-muted-foreground',
-                    tab === item.id
+                    item.id !== 'subagents' && tab === item.id
                       ? 'border-border bg-accent text-foreground'
                       : 'hover:border-border hover:text-foreground'
                   )}

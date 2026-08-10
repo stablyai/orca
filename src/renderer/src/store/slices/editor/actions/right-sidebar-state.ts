@@ -9,6 +9,7 @@ import { defaultFileSearchState } from '../search/file-search-state'
 export type RightSidebarState = {
   rightSidebarOpen: boolean
   rightSidebarWidth: number
+  subagentSheetWidth: number
   rightSidebarTab: ActiveRightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarRouteRequestId: number
@@ -18,6 +19,7 @@ export type RightSidebarState = {
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
   setRightSidebarWidth: (width: number) => void
+  setSubagentSheetWidth: (width: number) => void
   setRightSidebarTab: (tab: ActiveRightSidebarTab) => void
   setRightSidebarExplorerView: (view: RightSidebarExplorerView) => void
   showRightSidebarFiles: () => void
@@ -32,6 +34,7 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
   return {
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
+    subagentSheetWidth: 760,
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     rightSidebarRouteRequestId: 0,
@@ -41,6 +44,7 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
     toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
     setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
     setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
+    setSubagentSheetWidth: (width) => set({ subagentSheetWidth: width }),
     setRightSidebarTab: (tab) =>
       set((s) => ({
         rightSidebarTab: tab,

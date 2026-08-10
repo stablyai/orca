@@ -3,8 +3,6 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { roomRpc } from '@/runtime/runtime-rooms-client'
-import { useAppStore } from '@/store'
-import { useShallow } from 'zustand/react/shallow'
 import type {
   RoomAgentActivity,
   RoomDelivery,
@@ -16,16 +14,10 @@ import { RoomActivityCard } from './RoomActivityCard'
 import { RoomMessageRow } from './RoomMessageRow'
 import { showRoomActionError } from './room-action-error'
 import { isRoomDeliveryActive } from './room-delivery-state'
-import {
-  AgentSubagentProvider,
-  type AgentSubagentSource
-} from '../agent-subagents/AgentSubagentProvider'
 
 type RoomFeedItem =
   | { kind: 'message'; key: string; message: RoomMessage }
   | { kind: 'activity'; key: string; activity: RoomAgentActivity }
-
-const EMPTY_SUBAGENTS = [] as const
 
 export function buildRoomFeedItems(
   messages: RoomMessage[],
@@ -105,46 +97,6 @@ export function RoomMessageFeed({
     () => data.snapshot?.participants ?? [],
     [data.snapshot?.participants]
   )
-  const liveSubagentsByPaneKey = useAppStore(
-    useShallow((state) =>
-      Object.fromEntries(
-        participants.flatMap((participant) =>
-          participant.paneKey
-            ? [
-                [
-                  participant.paneKey,
-                  state.agentStatusByPaneKey[participant.paneKey]?.subagents ?? EMPTY_SUBAGENTS
-                ]
-              ]
-            : []
-        )
-      )
-    )
-  )
-  const subagentSources = useMemo<AgentSubagentSource[]>(
-    () =>
-      participants.flatMap((participant) =>
-        participant.actorKind === 'agent' && participant.agent
-          ? [
-              {
-                key: participant.id,
-                identity: participant.identity,
-                agent: participant.agent,
-                paneKey: participant.paneKey ?? `room:${participant.id}`,
-                sessionId: participant.providerSession?.id ?? null,
-                transcriptPath: participant.providerSession?.transcriptPath ?? null,
-                runtimeEnvironmentId:
-                  data.target.kind === 'environment' ? data.target.environmentId : null,
-                target: data.target,
-                liveSubagents: participant.paneKey
-                  ? (liveSubagentsByPaneKey[participant.paneKey] ?? [])
-                  : []
-              }
-            ]
-          : []
-      ),
-    [data.target, liveSubagentsByPaneKey, participants]
-  )
   const activities = useMemo(() => {
     const live = Object.values(data.activities)
     return [
@@ -223,81 +175,79 @@ export function RoomMessageFeed({
   }, [])
 
   return (
-    <AgentSubagentProvider sources={subagentSources}>
-      <div
-        ref={parentRef}
-        className="relative min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
-        onScroll={(event) => {
-          const element = event.currentTarget
-          const next = element.scrollHeight - element.scrollTop - element.clientHeight < 48
-          atBottomRef.current = next
-          setAtBottom(next)
-          if (next) {
-            markRead()
-          }
-        }}
-      >
-        <div ref={contentRef}>
-          {data.hasMore ? (
-            <div className="flex justify-center py-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void data.loadOlder().catch(showRoomActionError)}
-              >
-                {translate('rooms.feed.loadOlder', 'Load older')}
-              </Button>
-            </div>
-          ) : null}
-          <div
-            className="relative mx-auto w-full max-w-4xl"
-            style={{ height: virtualizer.getTotalSize() }}
-          >
-            {virtualizer.getVirtualItems().map((row) => {
-              const item = feedItems[row.index]
-              if (!item) {
-                return null
-              }
-              return (
-                <div
-                  key={row.key}
-                  ref={virtualizer.measureElement}
-                  data-index={row.index}
-                  className="absolute left-0 top-0 w-full px-4 py-2"
-                  style={{ transform: `translateY(${row.start}px)` }}
-                >
-                  {item.kind === 'message' ? (
-                    <RoomMessageRow data={data} message={item.message} onReply={onReply} />
-                  ) : (
-                    <RoomActivityCard
-                      activity={item.activity}
-                      participant={data.snapshot?.participants.find(
-                        (participant) => participant.id === item.activity.participantId
-                      )}
-                    />
-                  )}
-                </div>
-              )
-            })}
+    <div
+      ref={parentRef}
+      className="relative min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
+      onScroll={(event) => {
+        const element = event.currentTarget
+        const next = element.scrollHeight - element.scrollTop - element.clientHeight < 48
+        atBottomRef.current = next
+        setAtBottom(next)
+        if (next) {
+          markRead()
+        }
+      }}
+    >
+      <div ref={contentRef}>
+        {data.hasMore ? (
+          <div className="flex justify-center py-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void data.loadOlder().catch(showRoomActionError)}
+            >
+              {translate('rooms.feed.loadOlder', 'Load older')}
+            </Button>
           </div>
-        </div>
-        {!atBottom && unreadCount > 0 ? (
-          <Button
-            size="sm"
-            className="sticky bottom-3 left-1/2 z-10 -translate-x-1/2 shadow-md"
-            onClick={() => {
-              virtualizer.scrollToIndex(feedItems.length - 1, { align: 'end' })
-              atBottomRef.current = true
-              setAtBottom(true)
-              markRead()
-            }}
-          >
-            {translate('rooms.feed.newMessages', '{{count}} new messages', {
-              count: unreadCount
-            })}
-          </Button>
         ) : null}
+        <div
+          className="relative mx-auto w-full max-w-4xl"
+          style={{ height: virtualizer.getTotalSize() }}
+        >
+          {virtualizer.getVirtualItems().map((row) => {
+            const item = feedItems[row.index]
+            if (!item) {
+              return null
+            }
+            return (
+              <div
+                key={row.key}
+                ref={virtualizer.measureElement}
+                data-index={row.index}
+                className="absolute left-0 top-0 w-full px-4 py-2"
+                style={{ transform: `translateY(${row.start}px)` }}
+              >
+                {item.kind === 'message' ? (
+                  <RoomMessageRow data={data} message={item.message} onReply={onReply} />
+                ) : (
+                  <RoomActivityCard
+                    activity={item.activity}
+                    participant={data.snapshot?.participants.find(
+                      (participant) => participant.id === item.activity.participantId
+                    )}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
-    </AgentSubagentProvider>
+      {!atBottom && unreadCount > 0 ? (
+        <Button
+          size="sm"
+          className="sticky bottom-3 left-1/2 z-10 -translate-x-1/2 shadow-md"
+          onClick={() => {
+            virtualizer.scrollToIndex(feedItems.length - 1, { align: 'end' })
+            atBottomRef.current = true
+            setAtBottom(true)
+            markRead()
+          }}
+        >
+          {translate('rooms.feed.newMessages', '{{count}} new messages', {
+            count: unreadCount
+          })}
+        </Button>
+      ) : null}
+    </div>
   )
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { nativeChatToolLabel } from '../../../../shared/native-chat-tool-name'
 import {
   isToolCallBlock,
   isToolResultBlock,
@@ -64,7 +65,7 @@ function ToolLine({
   const isCall = isToolCallBlock(block)
 
   if (isCall) {
-    name = block.name
+    name = nativeChatToolLabel(block.name)
     const inputDisplay = createToolInputDisplay(block.input)
     preview = inputDisplay.label
     inputHasDetail = inputDisplay.hasDetail
@@ -94,7 +95,7 @@ function ToolLine({
       >
         {isCall ? (
           /* Decorative category glyph; the word beside it is the row's name. */
-          <NativeChatToolIcon rowWord={name} className="text-muted-foreground" />
+          <NativeChatToolIcon rowWord={block.name} className="text-muted-foreground" />
         ) : (
           /* A result's word is translated copy, not a tool name, so there is no
              category to read from it. The empty slot keeps rows aligned. */
