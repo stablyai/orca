@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
-import { getSpaceById, limitSpaceName } from '../../../../shared/spaces'
+import { limitSpaceName } from '../../../../shared/spaces'
 import { SpaceEmojiPickerPopover } from './SpaceEmojiPickerPopover'
 
 type SpaceDraft = { name: string; emoji: string | null }
@@ -30,7 +30,7 @@ export default function SpaceEditorDialog(): React.JSX.Element | null {
 
   const open = activeModal === 'space-editor'
   const spaceId = typeof modalData.spaceId === 'string' ? modalData.spaceId : null
-  const editedSpace = spaceId ? (getSpaceById(spaces, spaceId) ?? null) : null
+  const editedSpace = spaces.find((entry) => entry.id === spaceId) ?? null
   const editedSpaceId = editedSpace?.id ?? null
   const editedSpaceName = editedSpace?.name ?? ''
   const editedSpaceEmoji = editedSpace?.emoji ?? null
@@ -52,8 +52,12 @@ export default function SpaceEditorDialog(): React.JSX.Element | null {
     setSaveFailed(false)
   }, [editedSpaceEmoji, editedSpaceId, editedSpaceName, open])
 
-  const handleContentRef = React.useCallback((node: HTMLDivElement | null): void => {
-    mountedRef.current = node !== null
+  React.useEffect(() => {
+    // Why: StrictMode reuses the ref across its mount/unmount/remount, so this must re-arm on mount.
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
   }, [])
 
   const trimmedName = draft.name.trim()
@@ -94,7 +98,6 @@ export default function SpaceEditorDialog(): React.JSX.Element | null {
       }}
     >
       <DialogContent
-        ref={handleContentRef}
         className="max-w-sm sm:max-w-sm"
         onOpenAutoFocus={(event) => {
           event.preventDefault()

@@ -5314,7 +5314,8 @@
           "reassignSingular": "1 project moves to {{value0}}. Nothing on disk is removed.",
           "reassignPlural": "{{value0}} projects move to {{value1}}. Nothing on disk is removed.",
           "cancel": "Cancel",
-          "deleteFailed": "Couldn't delete the Space. Try again.",
+          "deleteFailedDescription": "The Space \"{{value0}}\" is still available. Try again.",
+          "deleteFailedToast": "Couldn't delete Space",
           "confirm": "Delete Space"
         },
         "SpaceEditorDialog": {

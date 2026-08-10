@@ -36,6 +36,37 @@ export function SpaceEmojiPickerPopover({
     setOpen(false)
   }, [onEmojiSelect])
 
+  // Why: this popover is portaled out of the scroll-locked Space editor dialog,
+  // so the dialog's wheel lock swallows native scrolling over the emoji grid.
+  const handleWheel = React.useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    const body = event.currentTarget.querySelector<HTMLElement>('.epr-body')
+    if (!body || body.scrollHeight <= body.clientHeight) {
+      return
+    }
+    const delta =
+      event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? event.deltaY * 16
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? event.deltaY * body.clientHeight
+          : event.deltaY
+    const previousScrollTop = body.scrollTop
+    const nextScrollTop = Math.max(
+      0,
+      Math.min(body.scrollHeight - body.clientHeight, previousScrollTop + delta)
+    )
+    if (nextScrollTop === previousScrollTop) {
+      return
+    }
+    event.stopPropagation()
+    // Why: stopping propagation can also let the browser scroll natively; apply
+    // the delta only when it didn't, so one wheel tick never scrolls twice.
+    requestAnimationFrame(() => {
+      if (body.scrollTop === previousScrollTop) {
+        body.scrollTop = nextScrollTop
+      }
+    })
+  }, [])
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -44,7 +75,6 @@ export function SpaceEmojiPickerPopover({
           variant="outline"
           size="sm"
           disabled={disabled}
-          data-space-emoji-trigger=""
           className="h-8 w-10 justify-center px-0 text-base"
           aria-label={translate(
             'auto.components.sidebar.SpaceEmojiPickerPopover.chooseEmoji',
@@ -58,12 +88,11 @@ export function SpaceEmojiPickerPopover({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="w-auto border-none p-0"
-        scrollTargetSelector=".epr-body"
-      >
-        <div className="repo-icon-emoji-picker overflow-hidden rounded-md border bg-popover">
+      <PopoverContent align="start" className="w-auto border-none p-0">
+        <div
+          className="repo-icon-emoji-picker overflow-hidden rounded-md border bg-popover"
+          onWheel={handleWheel}
+        >
           <EmojiPicker
             autoFocusSearch
             emojiStyle={EmojiStyle.NATIVE}
@@ -85,7 +114,6 @@ export function SpaceEmojiPickerPopover({
                 type="button"
                 variant="ghost"
                 size="sm"
-                data-space-emoji-clear=""
                 className="h-7 w-full justify-center text-xs text-muted-foreground"
                 onClick={handleClear}
               >

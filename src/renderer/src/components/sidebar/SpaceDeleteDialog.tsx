@@ -1,4 +1,5 @@
 import React from 'react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -13,7 +14,6 @@ import { translate } from '@/i18n/i18n'
 import {
   DEFAULT_SPACE_FALLBACK_NAME,
   DEFAULT_SPACE_ID,
-  getSpaceById,
   isDefaultSpaceId,
   isRepoInSpace
 } from '../../../../shared/spaces'
@@ -26,57 +26,54 @@ export default function SpaceDeleteDialog(): React.JSX.Element | null {
   const repos = useAppStore((s) => s.repos)
   const deleteSpace = useAppStore((s) => s.deleteSpace)
 
-  const [deleting, setDeleting] = React.useState(false)
-  const [deleteFailed, setDeleteFailed] = React.useState(false)
   const confirmButtonRef = React.useRef<HTMLButtonElement>(null)
-  const mountedRef = React.useRef(true)
 
   const spaceId = typeof modalData.spaceId === 'string' ? modalData.spaceId : null
-  const space = spaceId ? (getSpaceById(spaces, spaceId) ?? null) : null
+  const space = spaces.find((entry) => entry.id === spaceId) ?? null
   const defaultSpaceName =
-    getSpaceById(spaces, DEFAULT_SPACE_ID)?.name ?? DEFAULT_SPACE_FALLBACK_NAME
+    spaces.find((entry) => entry.id === DEFAULT_SPACE_ID)?.name ?? DEFAULT_SPACE_FALLBACK_NAME
   const open = activeModal === 'delete-space' && space !== null && !isDefaultSpaceId(space.id)
+  // Why: repos holds one row per (project, host), so a project on both local and SSH would count twice.
   const projectCount = React.useMemo(
-    () => (space ? repos.filter((repo) => isRepoInSpace(repo, space.id)).length : 0),
+    () =>
+      space
+        ? new Set(repos.filter((repo) => isRepoInSpace(repo, space.id)).map((repo) => repo.id)).size
+        : 0,
     [repos, space]
   )
 
-  const handleContentRef = React.useCallback((node: HTMLDivElement | null): void => {
-    mountedRef.current = node !== null
-  }, [])
-
-  const handleConfirm = React.useCallback(async () => {
-    if (!space || deleting) {
+  const handleConfirm = React.useCallback(() => {
+    if (!space) {
       return
     }
-    setDeleteFailed(false)
-    setDeleting(true)
-    const deleted = await deleteSpace(space.id)
-    if (mountedRef.current) {
-      if (deleted) {
-        closeModal()
-      } else {
-        setDeleting(false)
-        setDeleteFailed(true)
+    const deletedSpaceName = space.name
+    closeModal()
+    void deleteSpace(space.id).then((deleted) => {
+      if (!deleted) {
+        toast.error(
+          translate(
+            'auto.components.sidebar.SpaceDeleteDialog.deleteFailedToast',
+            "Couldn't delete Space"
+          ),
+          {
+            description: translate(
+              'auto.components.sidebar.SpaceDeleteDialog.deleteFailedDescription',
+              'The Space "{{value0}}" is still available. Try again.',
+              { value0: deletedSpaceName }
+            )
+          }
+        )
       }
-    }
-  }, [closeModal, deleteSpace, deleting, space])
+    })
+  }, [closeModal, deleteSpace, space])
 
   if (!open || !space) {
     return null
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen && !deleting) {
-          closeModal()
-        }
-      }}
-    >
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && closeModal()}>
       <DialogContent
-        ref={handleContentRef}
         className="max-w-sm sm:max-w-sm"
         showCloseButton={false}
         onOpenAutoFocus={(event) => {
@@ -106,23 +103,8 @@ export default function SpaceDeleteDialog(): React.JSX.Element | null {
                 { value0: projectCount, value1: defaultSpaceName }
               )}
         </p>
-        {deleteFailed ? (
-          <p role="alert" className="text-xs text-destructive">
-            {translate(
-              'auto.components.sidebar.SpaceDeleteDialog.deleteFailed',
-              "Couldn't delete the Space. Try again."
-            )}
-          </p>
-        ) : null}
         <DialogFooter>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="text-xs"
-            disabled={deleting}
-            onClick={closeModal}
-          >
+          <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={closeModal}>
             {translate('auto.components.sidebar.SpaceDeleteDialog.cancel', 'Cancel')}
           </Button>
           <Button
@@ -131,7 +113,6 @@ export default function SpaceDeleteDialog(): React.JSX.Element | null {
             variant="destructive"
             size="sm"
             className="text-xs"
-            disabled={deleting}
             onClick={handleConfirm}
           >
             {translate('auto.components.sidebar.SpaceDeleteDialog.confirm', 'Delete Space')}

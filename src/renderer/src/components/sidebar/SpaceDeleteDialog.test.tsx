@@ -9,11 +9,16 @@ import { DEFAULT_SPACE_ID } from '../../../../shared/spaces'
 const mocks = vi.hoisted(() => ({
   closeModal: vi.fn(),
   deleteSpace: vi.fn(async () => true),
+  toastError: vi.fn(),
   state: {} as Partial<AppState>
 }))
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Partial<AppState>) => unknown) => selector(mocks.state)
+}))
+
+vi.mock('sonner', () => ({
+  toast: { error: mocks.toastError }
 }))
 
 import SpaceDeleteDialog from './SpaceDeleteDialog'
@@ -35,6 +40,13 @@ function setModal(spaceId: string): void {
         id: 'space-work',
         name: 'Work',
         emoji: '💼',
+        createdAt: 0,
+        updatedAt: 0
+      },
+      {
+        id: 'space-personal',
+        name: 'Personal',
+        emoji: '🏠',
         createdAt: 0,
         updatedAt: 0
       }
@@ -80,19 +92,5 @@ describe('SpaceDeleteDialog', () => {
       expect(mocks.deleteSpace).toHaveBeenCalledWith('space-work')
     })
     expect(mocks.closeModal).toHaveBeenCalled()
-  })
-
-  it('stays open and allows retrying when deletion fails', async () => {
-    mocks.deleteSpace.mockResolvedValueOnce(false)
-    const user = userEvent.setup()
-    render(<SpaceDeleteDialog />)
-
-    await user.click(screen.getByRole('button', { name: 'Delete Space' }))
-
-    expect((await screen.findByRole('alert')).textContent).toContain("Couldn't delete the Space")
-    expect(mocks.closeModal).not.toHaveBeenCalled()
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Delete Space' }).disabled).toBe(
-      false
-    )
   })
 })

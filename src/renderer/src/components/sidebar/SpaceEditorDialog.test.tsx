@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { StrictMode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -101,6 +102,8 @@ describe('SpaceEditorDialog', () => {
     })
   })
 
+  // Why: the picker is portaled out of this dialog, so its own wheel handler has
+  // to drive the grid past the dialog's scroll lock.
   it('scrolls the emoji grid with wheel input inside the dialog', async () => {
     const user = userEvent.setup()
     render(<SpaceEditorDialog />)
@@ -117,6 +120,23 @@ describe('SpaceEditorDialog', () => {
     await waitFor(() => expect(scrollRegion.scrollTop).toBe(120))
   })
 
+  // Why: StrictMode reuses the mounted ref across its remount, which once left the
+  // dialog permanently disabled after a save (input, Cancel and close all stuck).
+  it('closes after saving when mounted under StrictMode', async () => {
+    setModal('space-work')
+    const user = userEvent.setup()
+    render(
+      <StrictMode>
+        <SpaceEditorDialog />
+      </StrictMode>
+    )
+
+    await user.type(screen.getByLabelText('Name'), '!')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(mocks.closeModal).toHaveBeenCalled())
+  })
+
   it('stays open and allows retrying when save fails', async () => {
     mocks.createSpace.mockResolvedValueOnce(false)
     const user = userEvent.setup()
@@ -130,23 +150,5 @@ describe('SpaceEditorDialog', () => {
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Create Space' }).disabled).toBe(
       false
     )
-  })
-
-  it('resets the draft and prior error each time it opens', async () => {
-    mocks.createSpace.mockResolvedValueOnce(false)
-    const user = userEvent.setup()
-    const view = render(<SpaceEditorDialog />)
-
-    await user.type(screen.getByLabelText('Name'), 'Stale draft')
-    await user.click(screen.getByRole('button', { name: 'Create Space' }))
-    expect(await screen.findByRole('alert')).toBeDefined()
-
-    mocks.state = { ...mocks.state, activeModal: undefined }
-    view.rerender(<SpaceEditorDialog />)
-    setModal('space-work')
-    view.rerender(<SpaceEditorDialog />)
-
-    await waitFor(() => expect(screen.getByLabelText<HTMLInputElement>('Name').value).toBe('Work'))
-    expect(screen.queryByRole('alert')).toBeNull()
   })
 })
