@@ -28,6 +28,13 @@ function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
 }
 
+// GFM treats an unescaped `|` as a column delimiter even inside code spans and
+// links, so a literal pipe in rendered cell content re-splits the row on reparse
+// (corrupting the table). Backslash-escape it before width calc and formatting.
+function escapeCellPipes(value: string): string {
+  return value.replace(/\|/g, '\\|')
+}
+
 function normalizeAlign(attrs: Record<string, unknown> | undefined): TableCellAlign {
   const value = attrs?.align
   return value === 'left' || value === 'right' || value === 'center' ? value : null
@@ -82,7 +89,7 @@ function extractRows(node: JSONContent, h: MarkdownRendererHelpers): TableCell[]
     for (const cellNode of rowNode.content ?? []) {
       const raw = cellNode.content ? h.renderChildren(cellNode.content) : ''
       cells.push({
-        text: collapseWhitespace(raw),
+        text: escapeCellPipes(collapseWhitespace(raw)),
         isHeader: cellNode.type === 'tableHeader',
         align: normalizeAlign(cellNode.attrs)
       })

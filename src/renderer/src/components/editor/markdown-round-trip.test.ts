@@ -227,6 +227,14 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown('| a | b |\n| - | - |\n| 1 | 2 |\n')).toContain('| a')
   })
 
+  it('keeps table cells stable when content contains a literal pipe', () => {
+    // An unescaped pipe would re-split the row on the next parse, corrupting the
+    // table. The serializer escapes it, so a second round-trip is a fixed point.
+    const once = roundTripMarkdown('| a | b |\n| - | - |\n| `x \\| y` | z |\n')
+    expect(once).toContain('`x \\| y`')
+    expect(roundTripMarkdown(once)).toBe(once)
+  })
+
   it('preserves encoded local image paths with screenshot filenames', () => {
     expect(roundTripMarkdown('![](Screenshot%202026-06-22%20at%203.37.19%20PM%20copy.png)\n')).toBe(
       '![](Screenshot%202026-06-22%20at%203.37.19%20PM%20copy.png)'

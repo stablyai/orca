@@ -124,6 +124,14 @@ describe('renderTableToCompactMarkdown', () => {
     expect(header).toContain('| Status |')
   })
 
+  it('escapes literal pipes in cell content so the row keeps its columns', () => {
+    const md = renderTableToCompactMarkdown(table(['a', 'b'], [['x | y', 'z']]), helpers)
+    const body = lines(md).find((line) => line.includes('x'))!
+    // Pipe is backslash-escaped, so it is not read as a fourth column delimiter.
+    expect(body).toContain('x \\| y')
+    expect(body).not.toContain('x | y')
+  })
+
   it('preserves alignment markers without widening the separator row', () => {
     const alignedHeader = (text: string, align: 'left' | 'center' | 'right'): JSONContent => ({
       type: 'tableHeader',
