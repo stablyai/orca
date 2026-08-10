@@ -5898,6 +5898,7 @@
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-pty-reattach-grid.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
@@ -5950,6 +5951,7 @@
         "src/shared/ssh-types.test.ts",
         "tests/e2e/terminal-cold-activation-deferral.spec.ts",
         "tests/e2e/ssh-cold-activation-restore.spec.ts",
+        "tests/e2e/ssh-pty-reattach-grid.spec.ts",
         "tests/e2e/ssh-docker-relay-perf.spec.ts"
       ],
       "assertionRefs": [
