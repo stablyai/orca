@@ -73,6 +73,35 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
     ingress.drainAndClose()
   })
 
+  it('gives a reply answered after the startup window the tight post-deadline budget', () => {
+    // Why: at the startup budget the projection stays armed for 256 KB, so any later literal
+    // `^[[?997;1n` in ordinary output — a captured session log, `cat -v` — is silently deleted,
+    // and on an idle pane those bytes are never spent so it never disarms.
+    vi.useFakeTimers()
+    const emissions: PtyIngressEmission[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      intent: { colors: { foreground: '#000000', background: '#ffffff' }, deadlineMs: 10 },
+      write: () => {},
+      onEmission: (emission) => emissions.push(emission)
+    })
+
+    // Close the startup window, then answer a query the way a mid-session program would.
+    vi.advanceTimersByTime(11)
+    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    vi.advanceTimersByTime(0)
+
+    ingress.accept('x'.repeat(1024))
+    emissions.length = 0
+
+    // The projection has expired, so output that merely looks like the echo survives.
+    const literal = POSIX_CSI_COOKED_ECHO(COLOR_SCHEME_REPLY)
+    ingress.accept(literal)
+    vi.advanceTimersByTime(600)
+    expect(visible(emissions)).toContain(literal)
+    ingress.drainAndClose()
+  })
+
   it('swallows OSC color reply echoes under both POSIX projections', () => {
     vi.useFakeTimers()
     for (const echoOf of POSIX_OSC_COOKED_ECHOES) {
@@ -159,6 +188,44 @@ describe('PtyStartupIngress live query replies (#13137)', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(probe.calls).toBe(10)
     expect(writes).toEqual([COLOR_SCHEME_REPLY, COLOR_SCHEME_REPLY])
+    ingress.drainAndClose()
+  })
+
+  it('keeps a keystroke behind a reply the echo probe is still holding', async () => {
+    // #13137 from the other direction: a reply overtaken by input lands in the NEXT reader's
+    // stdin, self-inserting `[?997;1n` once the prompt it answered is already gone.
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const emissions: PtyIngressEmission[] = []
+    const probe = scriptedEchoProbe('echoing')
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      echoProbe: probe,
+      write: (data) => writes.push(data),
+      onEmission: (emission) => emissions.push(emission)
+    })
+    // Every host write path in one shape: reply-or-flush, then raw.
+    const hostWrite = (data: string): void => {
+      if (extractOnlyCookedEchoSafeQueryReplies(data) && ingress.answerLiveQueryReply(data)) {
+        return
+      }
+      ingress.flushDeferredQueryReplies()
+      writes.push(data)
+    }
+
+    hostWrite(COLOR_SCHEME_REPLY)
+    await vi.advanceTimersByTimeAsync(20)
+    expect(writes).toEqual([])
+
+    // The user answers the npx confirm prompt while the reply is still withheld.
+    hostWrite('y\r')
+    expect(writes).toEqual([COLOR_SCHEME_REPLY, 'y\r'])
+
+    // The forced write keeps its echo suppressed — only the probe's verdict was given up.
+    ingress.accept(POSIX_CSI_COOKED_ECHO(COLOR_SCHEME_REPLY))
+    await vi.advanceTimersByTimeAsync(600)
+    expect(visible(emissions)).toBe('')
+    expect(writes).toEqual([COLOR_SCHEME_REPLY, 'y\r'])
     ingress.drainAndClose()
   })
 

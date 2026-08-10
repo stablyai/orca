@@ -100,6 +100,11 @@ export class PtyStartupIngress {
       : false
   }
 
+  /** Hosts call this before every raw write, so input can never overtake a held reply. */
+  flushDeferredQueryReplies(): void {
+    this.delivery.flushDeferredReplies()
+  }
+
   drainAndClose(): number {
     this.enqueue({ kind: 'teardown' })
     return this.rawHighWater
@@ -368,12 +373,8 @@ export class PtyStartupIngress {
   }
 
   private emit(span: PtyIngressSourceSpan, transformed: boolean, data = span.data): void {
-    this.onEmission({
-      data,
-      rawStartSeq: span.rawStartSeq,
-      rawEndSeq: span.rawEndSeq,
-      transformed
-    })
+    const { rawStartSeq, rawEndSeq } = span
+    this.onEmission({ data, rawStartSeq, rawEndSeq, transformed })
   }
 
   private clearDeadline(): void {

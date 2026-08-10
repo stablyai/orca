@@ -234,6 +234,10 @@ export class Session {
       return
     }
 
+    // Why flush first, and before the queue too: a reply still waiting on the echo probe must
+    // reach the pty ahead of anything submitted after it, or it lands in the next reader's stdin.
+    this.startupIngress.flushDeferredQueryReplies()
+
     // Why: keep queuing during the post-ready flush-gate window ('ready' but not yet flushed); a
     // direct write would race fresh input ahead of the buffered startup command.
     if (this._shellState === 'pending' || this.postReadyFlushGate.isPending) {
@@ -507,6 +511,8 @@ export class Session {
     if (!this.emulator.isCursorOnEmptyPromptLine()) {
       return
     }
+    // Same ordering rule as write(): nothing may reach the pty ahead of a held reply.
+    this.startupIngress.flushDeferredQueryReplies()
     this.subprocess.write('\x0c')
   }
 

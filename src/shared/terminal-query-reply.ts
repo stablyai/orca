@@ -43,9 +43,14 @@ const OSC_RESPONSE_RE = new RegExp('^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u00
 const DCS_RESPONSE_RE = new RegExp('^\\u001bP(?:[01]\\$r[^\\u001b]*|>\\|[^\\u001b]*)\\u001b\\\\$')
 // Private-mode DSR (CSI ? … n) — e.g. color-scheme `?997;1n` — often lands cooked.
 // Prefix form peels consecutive replies out of one coalesced payload.
-const COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9;]*n')
+// Why: sticky rather than anchored so peeling consecutive replies out of a coalesced payload
+// costs no substring per reply, and bounded so an oversized OSC body cannot be retained as an
+// echo projection — everything past the cap falls through to the raw write path instead.
+export const MAX_COOKED_ECHO_SAFE_REPLY_CHARS = 64
+const COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE = new RegExp('\\u001b\\[\\?[0-9;]{0,61}n', 'y')
 const COOKED_ECHO_RISK_OSC_PREFIX_RE = new RegExp(
-  '^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)'
+  '\\u001b\\][0-9]{1,4};[^\\u0007\\u001b]{0,57}(?:\\u0007|\\u001b\\\\)',
+  'y'
 )
 /* oxlint-enable no-control-regex */
 
@@ -79,14 +84,12 @@ function cookedEchoSafeReplyEnd(data: string, start: number): number {
   if (start >= data.length || data[start] !== ESC) {
     return -1
   }
-  const slice = data.slice(start)
-  const dsr = COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE.exec(slice)
-  if (dsr?.[0]) {
-    return start + dsr[0].length
-  }
-  const osc = COOKED_ECHO_RISK_OSC_PREFIX_RE.exec(slice)
-  if (osc?.[0]) {
-    return start + osc[0].length
+  for (const pattern of [COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE, COOKED_ECHO_RISK_OSC_PREFIX_RE]) {
+    pattern.lastIndex = start
+    const matched = pattern.exec(data)?.[0]
+    if (matched && matched.length <= MAX_COOKED_ECHO_SAFE_REPLY_CHARS) {
+      return start + matched.length
+    }
   }
   return -1
 }

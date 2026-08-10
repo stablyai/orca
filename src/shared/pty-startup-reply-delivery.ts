@@ -120,7 +120,14 @@ function suffixPrefixOffset(projection: string, data: string): number {
     offset < data.length;
     offset += 1
   ) {
-    if (projection.startsWith(data.slice(offset))) {
+    // Why compare in place: this runs per projection per read, and slicing here allocated a
+    // substring for every candidate offset of every PTY chunk.
+    const length = data.length - offset
+    let index = 0
+    while (index < length && data.charCodeAt(offset + index) === projection.charCodeAt(index)) {
+      index += 1
+    }
+    if (index === length) {
       return offset
     }
   }
@@ -177,6 +184,7 @@ export class PtyStartupReplyDelivery {
   private echoProbeWindowStartedAt: number | null = null
   private echoProbeStartsInWindow = 0
   private closed = false
+  private startupWindowClosed = false
 
   constructor(
     private readonly ownerBackend: PtyOwnerBackend,
@@ -253,11 +261,26 @@ export class PtyStartupReplyDelivery {
   }
 
   /**
+   * A non-reply write is about to reach this PTY, so anything still held must go first.
+   *
+   * Deferral only ever reorders Orca's own bytes against the querying program's turn; it
+   * must never reorder them against the user's. A reply overtaken by a keystroke lands in
+   * whatever reads next — self-inserting `[?997;1n` at the shell prompt once the prompt
+   * the reply was for has already been answered (#13137, from the other direction).
+   * Suppression survives the forced write: `writeReply` registers the projections either
+   * way, and only the retired-caret optimization a `quiet` probe would have earned is lost.
+   */
+  flushDeferredReplies(): void {
+    this.flushPendingWrites()
+  }
+
+  /**
    * Startup window closed. Replies already on the wire stay recognizable, but only
    * across the next few hundred bytes: an unbounded projection would keep deleting
    * matching spans out of ordinary output for the rest of the session.
    */
   reset(): void {
+    this.startupWindowClosed = true
     this.flushPendingWrites()
     for (const expected of this.expectedEchoes) {
       expected.remainingBytes = Math.min(expected.remainingBytes, ECHO_POST_DEADLINE_BUDGET_BYTES)
@@ -376,9 +399,15 @@ export class PtyStartupReplyDelivery {
       return false
     }
     const projections = replyEchoProjections(reply, this.ownerBackend, kernelEchoImpossible)
+    // Why: a reply answered mid-session gets the same tight budget reset() imposes on the startup
+    // ones — at the startup budget it would keep deleting matching spans out of ordinary output,
+    // and on an idle pane those bytes are never spent, so the projection would stay armed forever.
+    const searchBudget = this.startupWindowClosed
+      ? ECHO_POST_DEADLINE_BUDGET_BYTES
+      : ECHO_SEARCH_BUDGET_BYTES
     // Why: register before write because node-pty can synchronously re-enter onData.
     const expected: ExpectedEcho | null =
-      projections.length > 0 ? { projections, remainingBytes: ECHO_SEARCH_BUDGET_BYTES } : null
+      projections.length > 0 ? { projections, remainingBytes: searchBudget } : null
     if (expected) {
       this.expectedEchoes.push(expected)
     }

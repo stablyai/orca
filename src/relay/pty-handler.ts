@@ -671,6 +671,8 @@ export class PtyHandler {
       bracketedPasteSafe: startup.waitForShellReady
     })
     managed.startupCommand = undefined
+    // Same ordering rule as writeData: nothing may reach the pty ahead of a held reply.
+    managed.startupIngress?.flushDeferredQueryReplies()
     managed.pty.write(payload)
   }
 
@@ -1696,6 +1698,9 @@ export class PtyHandler {
       ) {
         return
       }
+      // Why flush first: a reply still waiting on the echo probe must not be overtaken by input
+      // typed after it, or it arrives in the next reader's stdin instead of the querying program.
+      managed.startupIngress?.flushDeferredQueryReplies()
       managed.pty.write(data)
     }
   }

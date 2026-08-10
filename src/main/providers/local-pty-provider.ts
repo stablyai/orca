@@ -1076,13 +1076,14 @@ export class LocalPtyProvider implements IPtyProvider {
     return ptyProcesses.has(id)
   }
   write(id: string, data: string): void {
+    const ingress = startupIngressByPty.get(id)
     // Cooked PTYs echo private DSR/OSC replies; CPR/DA remain immediate (#13137, #7329).
-    if (extractOnlyCookedEchoSafeQueryReplies(data)) {
-      const ingress = startupIngressByPty.get(id)
-      if (ingress?.answerLiveQueryReply(data)) {
-        return
-      }
+    if (extractOnlyCookedEchoSafeQueryReplies(data) && ingress?.answerLiveQueryReply(data)) {
+      return
     }
+    // Why flush first: a reply still waiting on the echo probe must not be overtaken by input
+    // typed after it, or it arrives in the next reader's stdin instead of the querying program.
+    ingress?.flushDeferredQueryReplies()
     ptyProcesses.get(id)?.write(data)
   }
   resize(id: string, cols: number, rows: number): void {

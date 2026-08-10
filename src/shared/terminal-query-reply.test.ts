@@ -2,6 +2,7 @@ import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
 import {
   extractOnlyCookedEchoSafeQueryReplies,
+  MAX_COOKED_ECHO_SAFE_REPLY_CHARS,
   isTerminalQueryReply,
   needsCookedEchoSafeQueryReply
 } from './terminal-query-reply'
@@ -87,6 +88,21 @@ describe('isTerminalQueryReply', () => {
       '\x1b[?997;1n'
     ])
     expect(extractOnlyCookedEchoSafeQueryReplies('\x1b[?997;1ny')).toBe(null)
+  })
+
+  it('refuses oversized replies so no unbounded payload is retained as an echo projection', () => {
+    // Why: this path admits any client write, so an arbitrarily long OSC body would otherwise be
+    // held as a projection (x2 shapes, x64 tracked replies) and rescanned on every PTY read.
+    const withinCap = `\x1b]0;${'a'.repeat(40)}\x07`
+    expect(withinCap.length).toBeLessThanOrEqual(MAX_COOKED_ECHO_SAFE_REPLY_CHARS)
+    expect(needsCookedEchoSafeQueryReply(withinCap)).toBe(true)
+
+    const overCap = `\x1b]0;${'a'.repeat(4096)}\x07`
+    expect(needsCookedEchoSafeQueryReply(overCap)).toBe(false)
+    expect(extractOnlyCookedEchoSafeQueryReplies(overCap)).toBe(null)
+
+    // An oversized reply must not poison a payload that also carries a valid one.
+    expect(extractOnlyCookedEchoSafeQueryReplies(`\x1b[?997;1n${overCap}`)).toBe(null)
   })
 
   it('does NOT match ordinary typed input or navigation sequences', () => {
