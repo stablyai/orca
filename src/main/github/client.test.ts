@@ -500,6 +500,39 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'pr')).toHaveLength(3)
   })
 
+  it('caches failed REST stack probes across linked PR refreshes', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'pr') {
+        return {
+          stdout: JSON.stringify({
+            number: 99,
+            title: 'Linked PR',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/99',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'feature',
+            headRefOid: 'head-oid'
+          })
+        }
+      }
+      throw new Error('GitHub is temporarily unavailable')
+    })
+
+    await getPRForBranch('/repo-root', 'feature', 99)
+    await getPRForBranch('/repo-root', 'feature', 99)
+
+    expect(
+      ghExecFileAsyncMock.mock.calls.filter(
+        ([args]) => args[0] === 'api' && args[1]?.includes('/99')
+      )
+    ).toHaveLength(1)
+  })
+
   it('hydrates repository merge method settings for exact PR lookups', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
@@ -563,6 +596,54 @@ describe('getPRForBranch', () => {
       ]),
       { cwd: '/repo-root' }
     )
+  })
+
+  it('isolates viewer-dependent merge metadata across SSH connections', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    let metadataProbe = 0
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.includes('graphql')) {
+        metadataProbe += 1
+        return {
+          stdout: JSON.stringify({
+            data: {
+              repository: {
+                autoMergeAllowed: metadataProbe === 1,
+                mergeQueue: null
+              }
+            }
+          })
+        }
+      }
+      if (args[0] === 'pr') {
+        return {
+          stdout: JSON.stringify({
+            number: 99,
+            title: 'Linked PR',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/99',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            reviewDecision: 'APPROVED',
+            mergeStateStatus: 'CLEAN',
+            autoMergeRequest: null,
+            baseRefName: 'main',
+            headRefName: 'feature',
+            headRefOid: 'head-oid'
+          })
+        }
+      }
+      return { stdout: JSON.stringify({ number: 99, state: 'open', stack: null }) }
+    })
+
+    const firstAccount = await getPRForBranch('/repo-root', 'feature', 99, 'ssh-account-1')
+    const secondAccount = await getPRForBranch('/repo-root', 'feature', 99, 'ssh-account-2')
+
+    expect(firstAccount?.autoMergeAllowed).toBe(true)
+    expect(secondAccount?.autoMergeAllowed).toBe(false)
+    expect(metadataProbe).toBe(2)
   })
 
   it('treats linked PR metadata as authoritative even when the branch head differs', async () => {
@@ -4392,9 +4473,10 @@ describe('GitHub GraphQL rate-limit guard', () => {
       ]
     })
     expect(pr?.mergeQueueRequired).toBe(true)
-    expect(ghExecFileAsyncMock.mock.calls[3]?.[0]).toEqual(
-      expect.arrayContaining(['-f', 'branch=main'])
+    const mergeQueueMetadataCall = ghExecFileAsyncMock.mock.calls.find(
+      ([args]) => args.includes('graphql') && args.includes('branch=main')
     )
+    expect(mergeQueueMetadataCall?.[0]).toEqual(expect.arrayContaining(['-f', 'branch=main']))
   })
 
   it('uses async merge only for GitHub-registered stacks', async () => {
@@ -4429,15 +4511,20 @@ describe('GitHub GraphQL rate-limit guard', () => {
       })
     ).resolves.toEqual({ ok: true })
 
-    expect(ghExecFileAsyncMock.mock.calls[2]?.[0]).toEqual(
+    const mergeCall = ghExecFileAsyncMock.mock.calls.find(([args]) =>
+      args.includes('repos/stablyai/orca/pulls/202/merge-async')
+    )
+    expect(mergeCall?.[0]).toEqual(
       expect.arrayContaining([
         'PUT',
         'repos/stablyai/orca/pulls/202/merge-async',
-        'merge_method=squash',
         'merge_action=merge_queue',
         'sha=api-sha'
       ])
     )
+    expect(mergeCall?.[0]).not.toContain('merge_method=squash')
+    expect(acquireMock).toHaveBeenCalledTimes(2)
+    expect(releaseMock).toHaveBeenCalledTimes(2)
     expect(
       ghExecFileAsyncMock.mock.calls.some(([args]) => args[0] === 'pr' && args[1] === 'merge')
     ).toBe(false)

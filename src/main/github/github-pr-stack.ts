@@ -268,6 +268,7 @@ export async function hydrateGitHubPRStack(
   stackDetailsInFlight.set(key, request)
   try {
     const value = await request
+    stackDetailsCache.delete(key)
     stackDetailsCache.set(key, { value, expiresAt: Date.now() + STACK_CACHE_TTL_MS })
     pruneStackCache()
     return value ? { ...value, position: summary.position, baseSha: summary.baseSha } : summary

@@ -1,5 +1,6 @@
 import type { GitHubPRMergeMethod } from '../../shared/types'
 import { ghExecFileAsync } from '../git/runner'
+import { acquire, release } from './gh-utils'
 import {
   githubHostExecOptions,
   type GitHubApiRepository,
@@ -58,6 +59,18 @@ function waitForNextPoll(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
 }
 
+async function runStackMergeCommand(
+  command: string[],
+  options: NonNullable<Parameters<typeof ghExecFileAsync>[1]>
+) {
+  await acquire()
+  try {
+    return await ghExecFileAsync(command, options)
+  } finally {
+    release()
+  }
+}
+
 export async function mergeGitHubPRStack(args: {
   repository: GitHubApiRepository
   prNumber: number
@@ -67,23 +80,17 @@ export async function mergeGitHubPRStack(args: {
   ghOptions: GitHubRepoExecOptions
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const endpoint = `repos/${args.repository.owner}/${args.repository.repo}/pulls/${args.prNumber}/merge-async`
-  const command = [
-    'api',
-    '-X',
-    'PUT',
-    endpoint,
-    '-f',
-    `merge_method=${args.method}`,
-    '-f',
-    `merge_action=${args.mergeAction}`
-  ]
+  const command = ['api', '-X', 'PUT', endpoint, '-f', `merge_action=${args.mergeAction}`]
+  if (args.mergeAction === 'direct_merge') {
+    command.push('-f', `merge_method=${args.method}`)
+  }
   if (args.headSha) {
     command.push('-f', `sha=${args.headSha}`)
   }
 
   let submitted: AsyncMergeResponse | null
   try {
-    const { stdout } = await ghExecFileAsync(command, {
+    const { stdout } = await runStackMergeCommand(command, {
       ...args.ghOptions,
       ...githubHostExecOptions(args.repository),
       env: { ...process.env, GH_PROMPT_DISABLED: '1' }
@@ -109,11 +116,20 @@ export async function mergeGitHubPRStack(args: {
   const uuid = encodeURIComponent(result.uuid)
   for (let poll = 0; poll < MAX_POLLS; poll++) {
     await waitForNextPoll()
-    const { stdout } = await ghExecFileAsync(['api', `${endpoint}/${uuid}`], {
-      ...args.ghOptions,
-      ...githubHostExecOptions(args.repository)
-    })
-    const response = parseResponse(stdout)
+    let response: AsyncMergeResponse | null
+    try {
+      const { stdout } = await runStackMergeCommand(['api', `${endpoint}/${uuid}`], {
+        ...args.ghOptions,
+        ...githubHostExecOptions(args.repository)
+      })
+      response = parseResponse(stdout)
+    } catch (error) {
+      // Why: the merge was submitted; a transient poll failure cannot make it fail.
+      response = errorResponseBody(error)
+      if (!response) {
+        continue
+      }
+    }
     if (!response) {
       return { ok: false, error: 'GitHub returned an invalid stack merge response.' }
     }

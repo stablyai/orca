@@ -19,7 +19,7 @@ export function buildGitHubPRStackMergeConfirmation({
   const included =
     scope.complete && numbers
       ? translate(
-          'auto.components.right.sidebar.useHostedReviewActions.stackIncluded',
+          'auto.components.right.sidebar.github.pr.stack.confirmation.84f6f5b9eb',
           'Included: {{numbers}}. ',
           { numbers }
         )
@@ -28,31 +28,31 @@ export function buildGitHubPRStackMergeConfirmation({
   if (usesMergeQueue) {
     return {
       title: translate(
-        'auto.components.right.sidebar.useHostedReviewActions.queueThroughTitle',
+        'auto.components.right.sidebar.github.pr.stack.confirmation.541984b2eb',
         'Queue through #{{pr}}?',
         { pr: currentPRNumber }
       ),
       description:
         scope.count === 1
           ? translate(
-              'auto.components.right.sidebar.useHostedReviewActions.queueDescriptionOne',
+              'auto.components.right.sidebar.github.pr.stack.confirmation.4809f55cdb',
               '{{included}}GitHub will add {{count}} pull request to the merge queue together. The queue chooses the merge method and may merge them in separate groups.',
               { included, count: scope.count }
             )
           : translate(
-              'auto.components.right.sidebar.useHostedReviewActions.queueDescriptionOther',
+              'auto.components.right.sidebar.github.pr.stack.confirmation.be8f2621be',
               '{{included}}GitHub will add {{count}} pull requests to the merge queue together. The queue chooses the merge method and may merge them in separate groups.',
               { included, count: scope.count }
             ),
       confirmLabel:
         scope.count === 1
           ? translate(
-              'auto.components.right.sidebar.useHostedReviewActions.queueLabelOne',
+              'auto.components.right.sidebar.github.pr.stack.confirmation.92ca033e72',
               'Queue {{count}} PR',
               { count: scope.count }
             )
           : translate(
-              'auto.components.right.sidebar.useHostedReviewActions.queueLabelOther',
+              'auto.components.right.sidebar.github.pr.stack.confirmation.478a527b15',
               'Queue {{count}} PRs',
               { count: scope.count }
             )
@@ -61,31 +61,31 @@ export function buildGitHubPRStackMergeConfirmation({
 
   return {
     title: translate(
-      'auto.components.right.sidebar.useHostedReviewActions.mergeThroughTitle',
+      'auto.components.right.sidebar.github.pr.stack.confirmation.1feef35ca4',
       'Merge through #{{pr}}?',
       { pr: currentPRNumber }
     ),
     description:
       scope.count === 1
         ? translate(
-            'auto.components.right.sidebar.useHostedReviewActions.mergeDescriptionOne',
+            'auto.components.right.sidebar.github.pr.stack.confirmation.c3e036c99f',
             '{{included}}GitHub will merge {{count}} pull request atomically using {{method}}. If it cannot merge, nothing will be merged.',
             { included, count: scope.count, method }
           )
         : translate(
-            'auto.components.right.sidebar.useHostedReviewActions.mergeDescriptionOther',
+            'auto.components.right.sidebar.github.pr.stack.confirmation.369aba4b32',
             '{{included}}GitHub will merge {{count}} pull requests atomically using {{method}}. If any cannot merge, none will.',
             { included, count: scope.count, method }
           ),
     confirmLabel:
       scope.count === 1
         ? translate(
-            'auto.components.right.sidebar.useHostedReviewActions.mergeLabelOne',
+            'auto.components.right.sidebar.github.pr.stack.confirmation.493c78f521',
             'Merge {{count}} PR',
             { count: scope.count }
           )
         : translate(
-            'auto.components.right.sidebar.useHostedReviewActions.mergeLabelOther',
+            'auto.components.right.sidebar.github.pr.stack.confirmation.eb7051d268',
             'Merge {{count}} PRs',
             { count: scope.count }
           )

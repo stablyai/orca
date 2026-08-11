@@ -28,7 +28,11 @@ import {
   RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
 } from './right-sidebar-primary-action-layout'
 import { translate } from '@/i18n/i18n'
-import { getGitHubPRStackMergeBlocker, getGitHubPRStackMergeScope } from './github-pr-stack-merge'
+import {
+  getGitHubPRStackMergeBlocker,
+  getGitHubPRStackMergeScope,
+  isGitHubPRStackMergeQueueRequired
+} from './github-pr-stack-merge'
 
 export default function HostedReviewActions({
   review,
@@ -53,18 +57,20 @@ export default function HostedReviewActions({
     () => (githubPR?.stack ? getGitHubPRStackMergeScope(githubPR.stack, review.number) : null),
     [githubPR?.stack, review.number]
   )
-  const stackUsesMergeQueue =
-    review.mergeQueueRequired === true || githubPR?.mergeQueueRequired === true
+  const stackUsesMergeQueue = isGitHubPRStackMergeQueueRequired(
+    review.mergeQueueRequired,
+    githubPR?.mergeQueueRequired
+  )
   const stackMergeLabel =
     stackMergeScope && stackUsesMergeQueue
       ? stackMergeScope.count === 1
         ? translate(
-            'auto.components.right.sidebar.HostedReviewActions.queueThroughOne',
+            'auto.components.right.sidebar.HostedReviewActions.9a41a687b7',
             'Queue through #{{pr}} · {{count}} PR',
             { pr: review.number, count: stackMergeScope.count }
           )
         : translate(
-            'auto.components.right.sidebar.HostedReviewActions.queueThroughOther',
+            'auto.components.right.sidebar.HostedReviewActions.38a1bccb14',
             'Queue through #{{pr}} · {{count}} PRs',
             { pr: review.number, count: stackMergeScope.count }
           )
@@ -95,18 +101,16 @@ export default function HostedReviewActions({
         stackBlocker ??
         (stackUsesMergeQueue
           ? translate(
-              'auto.components.right.sidebar.HostedReviewActions.stackQueueTooltip',
+              'auto.components.right.sidebar.HostedReviewActions.3de88351c5',
               'GitHub will add this pull request and every pull request below it to the merge queue.'
             )
           : translate(
-              'auto.components.right.sidebar.HostedReviewActions.stackMergeTooltip',
+              'auto.components.right.sidebar.HostedReviewActions.a32fe6dba6',
               'GitHub will merge this pull request and every pull request below it in the stack.'
             )),
       directMergeAvailable:
         !stackBlocker &&
-        (stackMergeScope.complete ||
-          presentation.directMergeAvailable ||
-          review.mergeQueueRequired === true),
+        (stackMergeScope.complete || presentation.directMergeAvailable || stackUsesMergeQueue),
       autoMergeAction: null
     }
   }, [githubPR, isGitLab, review, stackMergeLabel, stackMergeScope, stackUsesMergeQueue])
@@ -189,11 +193,11 @@ export default function HostedReviewActions({
                         ? stackMergeScope
                           ? stackUsesMergeQueue
                             ? translate(
-                                'auto.components.right.sidebar.HostedReviewActions.queueingStack',
+                                'auto.components.right.sidebar.HostedReviewActions.73e0e1819d',
                                 'Queueing stack...'
                               )
                             : translate(
-                                'auto.components.right.sidebar.HostedReviewActions.mergingStack',
+                                'auto.components.right.sidebar.HostedReviewActions.e555a41d32',
                                 'Merging stack...'
                               )
                           : translate(

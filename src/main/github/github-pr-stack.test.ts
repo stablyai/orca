@@ -263,4 +263,69 @@ describe('mergeGitHubPRStack', () => {
       })
     ).resolves.toEqual({ ok: false, error: 'A pull request has merge conflicts.' })
   })
+
+  it('omits the unsupported merge method when queueing a stack', async () => {
+    ghExecFileAsyncMock.mockResolvedValue({
+      stdout: JSON.stringify({ status: 'enqueued', details: { message: 'Queued' } })
+    })
+
+    await expect(
+      mergeGitHubPRStack({
+        repository,
+        prNumber: 202,
+        method: 'squash',
+        mergeAction: 'merge_queue',
+        ghOptions: { cwd: '/repo' }
+      })
+    ).resolves.toEqual({ ok: true })
+
+    const command = ghExecFileAsyncMock.mock.calls[0]?.[0]
+    expect(command).toContain('merge_action=merge_queue')
+    expect(command).not.toContain('merge_method=squash')
+  })
+
+  it('continues polling after a transient transport failure', async () => {
+    vi.useFakeTimers()
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ status: 'pending', details: { uuid: 'merge-uuid' } })
+      })
+      .mockRejectedValueOnce(new Error('temporary gateway failure'))
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ status: 'merged' }) })
+
+    const result = mergeGitHubPRStack({
+      repository,
+      prNumber: 202,
+      method: 'squash',
+      mergeAction: 'direct_merge',
+      ghOptions: { cwd: '/repo' }
+    })
+    await vi.advanceTimersByTimeAsync(1_000)
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    await expect(result).resolves.toEqual({ ok: true })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('reports an in-progress merge after polling is exhausted', async () => {
+    vi.useFakeTimers()
+    ghExecFileAsyncMock.mockResolvedValue({
+      stdout: JSON.stringify({ status: 'pending', details: { uuid: 'merge-uuid' } })
+    })
+
+    const result = mergeGitHubPRStack({
+      repository,
+      prNumber: 202,
+      method: 'squash',
+      mergeAction: 'direct_merge',
+      ghOptions: { cwd: '/repo' }
+    })
+    await vi.advanceTimersByTimeAsync(180_000)
+
+    await expect(result).resolves.toEqual({
+      ok: false,
+      error: 'GitHub is still merging this stack. Refresh to check its status.'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(181)
+  })
 })

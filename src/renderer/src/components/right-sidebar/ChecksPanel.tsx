@@ -42,7 +42,7 @@ import {
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { githubProjectHost } from '../../../../shared/github-project-identity'
 import HostedReviewActions from './HostedReviewActions'
-import { GitHubPRStackMap } from './GitHubPRStackMap'
+import { GitHubPRStackMap, type GitHubPRStackMapNavigationModifiers } from './GitHubPRStackMap'
 import {
   PullRequestIcon,
   prStateColor,
@@ -3736,10 +3736,10 @@ export default function ChecksPanel(): React.JSX.Element {
   )
 
   const handleOpenStackPR = useCallback(
-    (url: string, event: React.MouseEvent<HTMLButtonElement>) => {
+    (url: string, modifiers: GitHubPRStackMapNavigationModifiers) => {
       openChecksPanelHostedReviewUrl({
         url,
-        event: event.nativeEvent,
+        event: modifiers,
         isMac: isMacPlatform(),
         worktreeId: activeWorktreeId
       })

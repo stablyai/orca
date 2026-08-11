@@ -2445,7 +2445,8 @@ async function detectRepositoryMergeMetadata(
 async function hydratePullRequestLookupData(
   ownerRepo: OwnerRepo,
   data: PullRequestLookupData,
-  ghOptions: GhExecOptions
+  ghOptions: GhExecOptions,
+  executionScope: string
 ): Promise<PullRequestLookupData> {
   const normalized = normalizePullRequestLookupData(data)
   const hasRichMergeFields =
@@ -2454,7 +2455,8 @@ async function hydratePullRequestLookupData(
     ? await detectRepositoryMergeMetadata(
         ownerRepo,
         normalized.stack?.baseRefName ?? normalized.baseRefName,
-        ghOptions
+        ghOptions,
+        executionScope
       )
     : undefined
   return {
@@ -2470,13 +2472,17 @@ async function hydratePullRequestLookupData(
 async function hydrateBranchLookupWithExactPR(
   ownerRepo: OwnerRepo,
   branchData: PullRequestLookupData | null,
-  ghOptions: GhExecOptions
+  ghOptions: GhExecOptions,
+  executionScope: string
 ): Promise<PullRequestLookupData | null> {
   if (!branchData) {
     return null
   }
   try {
-    return (await getPRByNumber(ownerRepo, branchData.number, ghOptions, branchData)) ?? branchData
+    return (
+      (await getPRByNumber(ownerRepo, branchData.number, ghOptions, executionScope, branchData)) ??
+      branchData
+    )
   } catch {
     return branchData
   }
@@ -2829,6 +2835,7 @@ async function lookupPRByBranchName(args: {
   headRepo: OwnerRepo | null
   branchName: string
   ghOptions: GhExecOptions
+  executionScope: string
 }): Promise<{
   data: PullRequestLookupData | null
   dataRepo: OwnerRepo | null
@@ -2848,7 +2855,12 @@ async function lookupPRByBranchName(args: {
             )
           : await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
         // Why: REST/list branch lookup identifies the PR cheaply; exact `gh pr view` carries review, merge-queue, and auto-merge state.
-        const data = await hydrateBranchLookupWithExactPR(candidate, branchData, args.ghOptions)
+        const data = await hydrateBranchLookupWithExactPR(
+          candidate,
+          branchData,
+          args.ghOptions,
+          args.executionScope
+        )
         if (data) {
           return { data, dataRepo: candidate }
         }
@@ -2867,7 +2879,12 @@ async function lookupPRByBranchName(args: {
             args.branchName,
             args.ghOptions
           )
-          const data = await hydrateBranchLookupWithExactPR(candidate, branchData, args.ghOptions)
+          const data = await hydrateBranchLookupWithExactPR(
+            candidate,
+            branchData,
+            args.ghOptions,
+            args.executionScope
+          )
           if (data) {
             return { data, dataRepo: candidate }
           }
@@ -2957,6 +2974,15 @@ async function getCachedGitHubPRStackSummary(
     })
     prunePRStackSummaryCache()
     return value
+  } catch (err) {
+    // Why: avoid repeating a failed REST probe on every review poll.
+    prStackSummaryCache.delete(key)
+    prStackSummaryCache.set(key, {
+      value: undefined,
+      expiresAt: Date.now() + PR_STACK_SUMMARY_CACHE_TTL_MS
+    })
+    prunePRStackSummaryCache()
+    throw err
   } finally {
     if (prStackSummaryInFlight.get(key) === request) {
       prStackSummaryInFlight.delete(key)
@@ -2968,7 +2994,8 @@ async function getPRByNumber(
   ownerRepo: GitHubApiRepository,
   number: number,
   ghOptions: ReturnType<typeof ghRepoExecOptions>,
-  restHint?: PullRequestLookupData | null
+  executionScope: string,
+  knownPullRequestData?: PullRequestLookupData | null
 ): Promise<PullRequestLookupData | null> {
   try {
     const { stdout } = await ghExecFileAsync(
@@ -2987,11 +3014,12 @@ async function getPRByNumber(
     return hydratePullRequestLookupData(
       ownerRepo,
       {
-        ...restHint,
+        ...knownPullRequestData,
         ...exactData,
-        ...(restHint?.stack ? { stack: restHint.stack } : {})
+        ...(knownPullRequestData?.stack ? { stack: knownPullRequestData.stack } : {})
       },
-      ghOptions
+      ghOptions,
+      executionScope
     )
   } catch (err) {
     // Why: deleted/edited linked PR metadata falls back to branch discovery; quota/auth/network failures get one cheaper REST exact lookup.
@@ -3000,8 +3028,12 @@ async function getPRByNumber(
     }
     try {
       const restData =
-        restHint === undefined ? await getRestPRByNumber(ownerRepo, number, ghOptions) : restHint
-      return restData ? hydratePullRequestLookupData(ownerRepo, restData, ghOptions) : null
+        knownPullRequestData === undefined
+          ? await getRestPRByNumber(ownerRepo, number, ghOptions)
+          : knownPullRequestData
+      return restData
+        ? hydratePullRequestLookupData(ownerRepo, restData, ghOptions, executionScope)
+        : null
     } catch (restErr) {
       if (isNotFoundGhError(restErr)) {
         return null
@@ -3018,10 +3050,16 @@ async function lookupPRByNumber(args: {
   candidates: OwnerRepo[]
   number: number
   ghOptions: ReturnType<typeof ghRepoExecOptions>
+  executionScope: string
 }): Promise<{ data: PullRequestLookupData | null; dataRepo: OwnerRepo | null }> {
   for (const candidate of args.candidates) {
     try {
-      const linkedData = await getPRByNumber(candidate, args.number, args.ghOptions)
+      const linkedData = await getPRByNumber(
+        candidate,
+        args.number,
+        args.ghOptions,
+        args.executionScope
+      )
       if (!linkedData) {
         continue
       }
@@ -3120,6 +3158,7 @@ export async function getPRForBranchOutcome(
   const localGitOptions = localGitArgs[0] ?? {}
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
   const ghOptions = ghRepoExecOptions(context)
+  const executionScope = githubPRStackExecutionScope(connectionId, localGitOptions)
 
   await acquire()
   try {
@@ -3223,7 +3262,8 @@ export async function getPRForBranchOutcome(
       const exactLookup = await lookupPRByNumber({
         candidates,
         number: linkedPRNumber,
-        ghOptions
+        ghOptions,
+        executionScope
       })
       data = exactLookup.data
       dataRepo = exactLookup.dataRepo
@@ -3233,7 +3273,8 @@ export async function getPRForBranchOutcome(
         candidates,
         headRepo,
         branchName,
-        ghOptions
+        ghOptions,
+        executionScope
       })
       data = branchLookup.data
       dataRepo = branchLookup.dataRepo
@@ -3265,7 +3306,8 @@ export async function getPRForBranchOutcome(
               candidates,
               headRepo: upstreamHeadRepo,
               branchName: upstreamBranch.branchName,
-              ghOptions
+              ghOptions,
+              executionScope
             })
             data = upstreamLookup.data
             dataRepo = upstreamLookup.dataRepo
@@ -3292,7 +3334,8 @@ export async function getPRForBranchOutcome(
       const fallbackLookup = await lookupPRByNumber({
         candidates,
         number: fallbackPRNumber,
-        ghOptions
+        ghOptions,
+        executionScope
       })
       data = fallbackLookup.data
       dataRepo = fallbackLookup.dataRepo
@@ -3344,7 +3387,7 @@ export async function getPRForBranchOutcome(
           dataRepo,
           data.number,
           ghOptions,
-          githubPRStackExecutionScope(connectionId, localGitOptions)
+          executionScope
         )
         data.stackMetadataChecked = true
       } catch {
@@ -3360,7 +3403,7 @@ export async function getPRForBranchOutcome(
             data.stack,
             ghOptions,
             data.updatedAt,
-            githubPRStackExecutionScope(connectionId, localGitOptions)
+            executionScope
           )
         : data.stack
     const stackMergeQueueRequired =
@@ -3370,7 +3413,7 @@ export async function getPRForBranchOutcome(
               dataRepo,
               stack.baseRefName,
               ghOptions,
-              githubPRStackExecutionScope(connectionId, localGitOptions)
+              executionScope
             )
           ).mergeQueueRequired
         : undefined
@@ -4918,6 +4961,7 @@ export async function mergePR(
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
   await acquire()
+  let concurrencySlotHeld = true
   try {
     let stackSummary: GitHubPRStack | undefined
     let stackHeadSha: string | undefined
@@ -4935,6 +4979,8 @@ export async function mergePR(
         ghOptions,
         githubPRStackExecutionScope(connectionId, localGitOptions)
       )
+      release()
+      concurrencySlotHeld = false
       return await mergeGitHubPRStack({
         repository: ownerRepo,
         prNumber,
@@ -4971,7 +5017,9 @@ export async function mergePR(
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
     return { ok: false, error: message }
   } finally {
-    release()
+    if (concurrencySlotHeld) {
+      release()
+    }
   }
 }
 
@@ -5147,7 +5195,12 @@ async function getPRMergeBlocker(
   }
 
   try {
-    const pr = await getPRByNumber(ownerRepo, prNumber, ghOptions)
+    const pr = await getPRByNumber(
+      ownerRepo,
+      prNumber,
+      ghOptions,
+      githubPRStackExecutionScope(connectionId, localGitOptions)
+    )
     if (!pr) {
       return null
     }

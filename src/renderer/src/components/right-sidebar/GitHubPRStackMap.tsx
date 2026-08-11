@@ -5,47 +5,43 @@ import { cn } from '@/lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
 
+export type GitHubPRStackMapNavigationModifiers = Pick<
+  React.MouseEvent<HTMLButtonElement>,
+  'metaKey' | 'ctrlKey' | 'shiftKey'
+>
+
 function stackEntryStatus(entry: GitHubPRStackEntry): string {
   if (entry.state === 'merged') {
-    return translate('auto.components.right.sidebar.GitHubPRStackMap.status.merged', 'merged')
+    return translate('auto.components.right.sidebar.GitHubPRStackMap.8a9bdc36c0', 'merged')
   }
   if (entry.state === 'closed') {
-    return translate('auto.components.right.sidebar.GitHubPRStackMap.status.closed', 'closed')
+    return translate('auto.components.right.sidebar.GitHubPRStackMap.3511405914', 'closed')
   }
   if (entry.state === 'draft') {
-    return translate('auto.components.right.sidebar.GitHubPRStackMap.status.draft', 'draft')
+    return translate('auto.components.right.sidebar.GitHubPRStackMap.568c647ccd', 'draft')
   }
   if (entry.mergeable === 'CONFLICTING') {
-    return translate('auto.components.right.sidebar.GitHubPRStackMap.status.conflicts', 'conflicts')
+    return translate('auto.components.right.sidebar.GitHubPRStackMap.bea9ade223', 'conflicts')
   }
   if (entry.checksStatus === 'failure') {
-    return translate(
-      'auto.components.right.sidebar.GitHubPRStackMap.status.checksFailed',
-      'checks failed'
-    )
+    return translate('auto.components.right.sidebar.GitHubPRStackMap.838aadf512', 'checks failed')
   }
   if (entry.checksStatus === 'pending') {
-    return translate(
-      'auto.components.right.sidebar.GitHubPRStackMap.status.checksPending',
-      'checks pending'
-    )
+    return translate('auto.components.right.sidebar.GitHubPRStackMap.316039b5db', 'checks pending')
   }
   if (entry.reviewDecision === 'CHANGES_REQUESTED') {
     return translate(
-      'auto.components.right.sidebar.GitHubPRStackMap.status.changesRequested',
+      'auto.components.right.sidebar.GitHubPRStackMap.4b1e5ee9d3',
       'changes requested'
     )
   }
   if (entry.reviewDecision === 'REVIEW_REQUIRED') {
-    return translate(
-      'auto.components.right.sidebar.GitHubPRStackMap.status.reviewNeeded',
-      'review needed'
-    )
+    return translate('auto.components.right.sidebar.GitHubPRStackMap.9a17b5255c', 'review needed')
   }
   if (entry.reviewDecision === 'APPROVED') {
-    return translate('auto.components.right.sidebar.GitHubPRStackMap.status.approved', 'approved')
+    return translate('auto.components.right.sidebar.GitHubPRStackMap.d3d97cf3f2', 'approved')
   }
-  return translate('auto.components.right.sidebar.GitHubPRStackMap.status.open', 'open')
+  return translate('auto.components.right.sidebar.GitHubPRStackMap.e6cb964305', 'open')
 }
 
 export function GitHubPRStackMap({
@@ -55,7 +51,7 @@ export function GitHubPRStackMap({
 }: {
   stack: GitHubPRStack
   currentPRNumber: number
-  onOpenPullRequest: (url: string, event: React.MouseEvent<HTMLButtonElement>) => void
+  onOpenPullRequest: (url: string, modifiers: GitHubPRStackMapNavigationModifiers) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const entries = useMemo(
@@ -76,12 +72,12 @@ export function GitHubPRStackMap({
           aria-label={
             open
               ? translate(
-                  'auto.components.right.sidebar.GitHubPRStackMap.collapse',
+                  'auto.components.right.sidebar.GitHubPRStackMap.7737bd66be',
                   'Collapse stack #{{value0}}',
                   { value0: stack.number }
                 )
               : translate(
-                  'auto.components.right.sidebar.GitHubPRStackMap.expand',
+                  'auto.components.right.sidebar.GitHubPRStackMap.0c1645ebd0',
                   'Expand stack #{{value0}}',
                   { value0: stack.number }
                 )
@@ -90,14 +86,14 @@ export function GitHubPRStackMap({
           <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="font-semibold text-foreground">
             {translate(
-              'auto.components.right.sidebar.GitHubPRStackMap.title',
+              'auto.components.right.sidebar.GitHubPRStackMap.e3ee2daa32',
               'Stack #{{value0}}',
               { value0: stack.number }
             )}
           </span>
           <span className="text-muted-foreground">
             {translate(
-              'auto.components.right.sidebar.GitHubPRStackMap.position',
+              'auto.components.right.sidebar.GitHubPRStackMap.cb440931b7',
               '{{value0}} of {{value1}} · {{value2}}',
               { value0: stack.position, value1: stack.size, value2: stack.baseRefName }
             )}
@@ -125,7 +121,13 @@ export function GitHubPRStackMap({
                     'flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left text-[11px] hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                     current && 'bg-accent'
                   )}
-                  onClick={(event) => onOpenPullRequest(entry.url, event)}
+                  onClick={(event) =>
+                    onOpenPullRequest(entry.url, {
+                      metaKey: event.metaKey,
+                      ctrlKey: event.ctrlKey,
+                      shiftKey: event.shiftKey
+                    })
+                  }
                 >
                   <span className="w-8 shrink-0 font-medium text-foreground">#{entry.number}</span>
                   <span className="min-w-0 flex-1 truncate text-foreground">{entry.title}</span>
@@ -143,7 +145,7 @@ export function GitHubPRStackMap({
         ) : (
           <div className="px-2 py-2 text-[11px] text-muted-foreground">
             {translate(
-              'auto.components.right.sidebar.GitHubPRStackMap.unavailable',
+              'auto.components.right.sidebar.GitHubPRStackMap.525259fa17',
               'Stack details are temporarily unavailable.'
             )}
           </div>

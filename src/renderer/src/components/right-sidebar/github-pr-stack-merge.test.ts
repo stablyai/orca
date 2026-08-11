@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { GitHubPRStack } from '../../../../shared/types'
-import { getGitHubPRStackMergeBlocker, getGitHubPRStackMergeScope } from './github-pr-stack-merge'
+import {
+  getGitHubPRStackMergeBlocker,
+  getGitHubPRStackMergeScope,
+  isGitHubPRStackMergeQueueRequired
+} from './github-pr-stack-merge'
 
 function makeStack(): GitHubPRStack {
   return {
@@ -41,6 +45,10 @@ function makeStack(): GitHubPRStack {
 }
 
 describe('GitHub stack merge scope', () => {
+  it('uses stack metadata when review metadata has not observed the merge queue', () => {
+    expect(isGitHubPRStackMergeQueueRequired(false, true)).toBe(true)
+  })
+
   it('includes the current PR and downstack entries, never upstack entries', () => {
     const scope = getGitHubPRStackMergeScope(makeStack(), 202)
 
