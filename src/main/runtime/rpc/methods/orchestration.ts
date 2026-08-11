@@ -855,7 +855,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           timedOut: false,
           cancelled: false,
           connectionLost: false,
-          ...(params.format && current
+          // Why: --inject formats too, so a Delivery that arrives during the wait
+          // must carry the banner the pre-wait path already returns for it.
+          ...((params.format || params.inject) && current
             ? { formatted: arrived.map(formatMessageBanner).join('\n\n') }
             : {})
         }

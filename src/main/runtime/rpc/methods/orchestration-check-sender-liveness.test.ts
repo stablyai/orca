@@ -247,6 +247,23 @@ describe('orchestration.check sender liveness', () => {
     expect(result.formatted).toContain('via agent_status')
   })
 
+  it('still formats an injected Delivery that arrives during a wait', async () => {
+    setup()
+    startReadyWorker()
+    workerIsWorking()
+
+    const waiting = check({ wait: true, inject: true, timeoutMs: 5_000 })
+    // Why: the waiter resolves on notify, so publish the message the way the send path does.
+    await Promise.resolve()
+    send('arrived mid-wait')
+    runtime.notifyMessageArrived(`run:${runId}`, 'status')
+    const result = await waiting
+
+    expect(result.messages.map((message) => message.subject)).toEqual(['arrived mid-wait'])
+    expect(result.formatted).toContain('From: TERM_WORKER')
+    expect(result.formatted).toContain('[Sender: working,')
+  })
+
   it('carries evidence on a non-consuming peek', async () => {
     setup()
     startReadyWorker()
