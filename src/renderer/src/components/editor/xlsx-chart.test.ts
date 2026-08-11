@@ -137,6 +137,57 @@ describe('parseXlsxChart', () => {
     expect(parseXlsxChart(twoAxes, THEME)?.hasSecondaryAxis).toBe(true)
   })
 
+  it('formats a date axis through the code cached beside it', () => {
+    // Why: Excel caches a date axis as serials with its format code; ignoring the
+    // code put 46168 on the axis where the file says 26-5.
+    const xml = chartXml(
+      `<c:areaChart><c:ser>
+        <c:cat><c:numRef><c:numCache><c:formatCode>d\\-m</c:formatCode><c:pt idx="0"><c:v>46168</c:v></c:pt><c:pt idx="1"><c:v>46175</c:v></c:pt></c:numCache></c:numRef></c:cat>
+        <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>176</c:v></c:pt><c:pt idx="1"><c:v>176</c:v></c:pt></c:numCache></c:numRef></c:val>
+      </c:ser></c:areaChart>`
+    )
+
+    expect(parseXlsxChart(xml, THEME, { locale: 'es-ES' })?.categories).toEqual(['26-5', '2-6'])
+  })
+
+  it('leaves a plain numeric axis as its numbers', () => {
+    const xml = chartXml(
+      `<c:barChart><c:ser>
+        <c:cat><c:numRef><c:numCache><c:formatCode>General</c:formatCode><c:pt idx="0"><c:v>10</c:v></c:pt></c:numCache></c:numRef></c:cat>
+        <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>1</c:v></c:pt></c:numCache></c:numRef></c:val>
+      </c:ser></c:barChart>`
+    )
+
+    expect(parseXlsxChart(xml, THEME)?.categories).toEqual(['10'])
+  })
+
+  it('reads a gradient fill, which is what an area series usually carries', () => {
+    const xml = chartXml(
+      `<c:areaChart>${series({
+        name: 'Sombreado',
+        values: [1],
+        fill: '<a:gradFill><a:gsLst><a:gs pos="19000"><a:schemeClr val="accent2"/></a:gs><a:gs pos="100000"><a:srgbClr val="F7B02B"/></a:gs></a:gsLst></a:gsLst></a:gradFill>'
+      })}</c:areaChart>`
+    )
+
+    expect(parseXlsxChart(xml, THEME)?.series[0]?.gradient).toEqual([
+      { position: 0.19, color: '#ed7d31' },
+      { position: 1, color: '#f7b02b' }
+    ])
+  })
+
+  it('ignores a gradient with a single stop, which cannot be one', () => {
+    const xml = chartXml(
+      `<c:areaChart>${series({
+        name: 'S',
+        values: [1],
+        fill: '<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs></a:gsLst></a:gradFill>'
+      })}</c:areaChart>`
+    )
+
+    expect(parseXlsxChart(xml, THEME)?.series[0]?.gradient).toBeUndefined()
+  })
+
   it('returns null for a part with no plot area', () => {
     expect(parseXlsxChart('<c:chartSpace/>', THEME)).toBeNull()
     expect(parseXlsxChart('', THEME)).toBeNull()

@@ -40,7 +40,8 @@ export async function readXlsxSheetDrawings(
   archive: XlsxZipArchive,
   worksheetPartPath: string,
   worksheetXml: string,
-  themePalette: XlsxThemePalette
+  themePalette: XlsxThemePalette,
+  locale: string
 ): Promise<XlsxSheetDrawing[]> {
   const drawingPartPath = await resolveDrawingPartPath(archive, worksheetPartPath, worksheetXml)
   if (drawingPartPath === null) {
@@ -66,7 +67,7 @@ export async function readXlsxSheetDrawings(
     }
     if (anchor.target === 'chart') {
       const chartXml = await archive.readPartText(partPath)
-      const chart = chartXml === null ? null : parseXlsxChart(chartXml, themePalette)
+      const chart = chartXml === null ? null : parseXlsxChart(chartXml, themePalette, { locale })
       if (chart !== null) {
         drawings.push({
           ...anchor.position,

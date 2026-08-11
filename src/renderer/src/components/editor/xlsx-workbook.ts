@@ -133,7 +133,8 @@ export async function parseXlsxWorkbook(
       archive,
       worksheetPartPath,
       worksheetXml ?? '',
-      themePalette
+      themePalette,
+      locale
     )
     sheets.push({
       name: descriptor.name,

@@ -6,6 +6,7 @@ import {
   type XlsxNumericFormat
 } from './xlsx-number-format'
 import type { XlsxNumberFormats } from './xlsx-number-formats'
+import { formatXlsxDate } from './xlsx-date-format'
 import { formatXlsxSerialDate } from './xlsx-serial-date'
 import { decodeXlsxXmlText, forEachXlsxXmlElement, readXlsxXmlTextRuns } from './xlsx-xml-elements'
 
@@ -252,9 +253,17 @@ function formatNumericCellText(
     return rawValue
   }
   if (context.numberFormats.isDateStyle(styleIndex)) {
-    return (
-      formatXlsxSerialDate(serial, { use1904DateSystem: context.use1904DateSystem }) ?? rawValue
-    )
+    // Why: the author's own code decides whether a date reads 26/05/2026 or
+    // 26-5; the ISO form is only the fallback when the code says nothing useful.
+    const formatCode = context.numberFormats.getFormatCode(styleIndex)
+    const formatted =
+      formatCode === undefined
+        ? formatXlsxSerialDate(serial, { use1904DateSystem: context.use1904DateSystem })
+        : formatXlsxDate(serial, formatCode, {
+            use1904DateSystem: context.use1904DateSystem,
+            locale: context.locale
+          })
+    return formatted ?? rawValue
   }
   const numericFormat = getNumericFormat(context, styleIndex)
   if (numericFormat === null) {

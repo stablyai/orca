@@ -383,7 +383,14 @@ export function SpreadsheetGrid({
                       title={cell}
                     >
                       <span
-                        className={cellStyle?.wrapText === true ? 'min-w-0' : 'truncate'}
+                        className={cn(
+                          cellStyle?.wrapText === true ? 'min-w-0' : 'truncate',
+                          // Why: a label may run across empty columns, but never out
+                          // of its own row — a 24pt title in a short row bled over
+                          // the band below it. The span clips its own height while
+                          // still being allowed to be wider than the cell.
+                          overflowWidth === null ? undefined : 'max-h-full overflow-hidden'
+                        )}
                         style={overflowWidth === null ? undefined : { maxWidth: overflowWidth }}
                       >
                         {cell}

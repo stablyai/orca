@@ -42,7 +42,10 @@ export function SpreadsheetChart({
   height
 }: SpreadsheetChartProps): React.JSX.Element {
   const allValues = useMemo(() => chart.series.flatMap((series) => series.values), [chart.series])
-  const usesBaseline = chart.kind === 'column' || chart.kind === 'bar' || chart.kind === 'area'
+  // Why: Excel starts a column or bar at zero, but auto-scales a line or area to
+  // its own data — a weight chart between 172 and 178 is drawn over that range,
+  // not from zero, and forcing zero flattens it into a straight line.
+  const usesBaseline = chart.kind === 'column' || chart.kind === 'bar'
   const scale = useMemo(
     () => buildSpreadsheetChartScale(allValues, { includeZero: usesBaseline }),
     [allValues, usesBaseline]

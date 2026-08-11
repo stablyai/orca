@@ -76,6 +76,16 @@ describe('SpreadsheetChart', () => {
     expect(html).toContain('>0<')
   })
 
+  it('lets a line or area frame its own range instead of starting at zero', () => {
+    // Why: a weight series between 172 and 178 drawn from zero is a flat line —
+    // Excel auto-scales these forms, and matching that is what the file shows.
+    for (const kind of ['line', 'area'] as const) {
+      const html = render(chart({ kind, series: [{ name: 'Peso', values: [172, 178] }] }))
+
+      expect(html).not.toContain('>0</text>')
+    }
+  })
+
   it('draws a line chart as a polyline with round caps and ringed markers', () => {
     const html = render(chart({ kind: 'line' }))
 
@@ -147,5 +157,37 @@ describe('SpreadsheetChart', () => {
     for (const tag of textTags) {
       expect(tag).not.toContain('#4472c4')
     }
+  })
+})
+
+describe('SpreadsheetChart gradients', () => {
+  it('paints an area with the gradient the file declares', () => {
+    const html = render(
+      chart({
+        kind: 'area',
+        series: [
+          {
+            name: 'Sombreado',
+            gradient: [
+              { position: 0.19, color: '#42bac3' },
+              { position: 1, color: '#f7b02b' }
+            ],
+            values: [176, 177.6]
+          }
+        ]
+      })
+    )
+
+    expect(html).toContain('<linearGradient')
+    expect(html).toContain('#42bac3')
+    expect(html).toContain('#f7b02b')
+    expect(html).toContain('offset="19%"')
+  })
+
+  it('keeps the wash for an area with no gradient', () => {
+    const html = render(chart({ kind: 'area' }))
+
+    expect(html).not.toContain('<linearGradient')
+    expect(html).toContain('fill-opacity="0.1"')
   })
 })

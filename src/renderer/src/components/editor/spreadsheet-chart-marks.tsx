@@ -217,13 +217,30 @@ function PointMarks({
         }
         const path = points.map((point) => `${point.x},${point.y}`).join(' ')
         const baselineY = top + height - projectOntoScale(clampToScale(0, scale), scale) * height
+        const gradientId = `spreadsheet-chart-gradient-${seriesIndex}`
+        const gradient = sparklineGradient(chart, seriesIndex)
         return (
           <g key={seriesIndex}>
+            {filled &&
+              gradient !== undefined && (
+                // Why: the file's own gradient, drawn top to bottom as its angle asks.
+                <defs>
+                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                    {gradient.map((stop, stopIndex) => (
+                      <stop
+                        key={stopIndex}
+                        offset={`${stop.position * 100}%`}
+                        stopColor={stop.color}
+                      />
+                    ))}
+                  </linearGradient>
+                </defs>
+              )}
             {filled && (
               <polygon
                 points={`${points[0]!.x},${baselineY} ${path} ${points.at(-1)!.x},${baselineY}`}
-                fill={color}
-                fillOpacity={CHART_AREA_FILL_OPACITY}
+                fill={gradient === undefined ? color : `url(#${gradientId})`}
+                fillOpacity={gradient === undefined ? CHART_AREA_FILL_OPACITY : 1}
               />
             )}
             {showLine && (
@@ -256,6 +273,13 @@ function PointMarks({
       })}
     </>
   )
+}
+
+function sparklineGradient(
+  chart: XlsxChart,
+  seriesIndex: number
+): XlsxChart['series'][number]['gradient'] {
+  return chart.series[seriesIndex]?.gradient
 }
 
 export function CircularPlot({
