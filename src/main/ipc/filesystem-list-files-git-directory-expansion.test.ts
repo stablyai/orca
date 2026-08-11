@@ -161,4 +161,35 @@ describe('main Quick Open git directory expansion', () => {
     expect(primary.kill).toHaveBeenCalled()
     expect(ignored.kill).toHaveBeenCalled()
   })
+
+  it('cancels a pending sibling spawn when the primary scan fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-main-git-sibling-failure-'))
+    tempDirs.push(root)
+    const revParse = createMockProcess()
+    const primary = createMockProcess()
+    let pendingSignal: AbortSignal | undefined
+    gitSpawnMock
+      .mockResolvedValueOnce(revParse)
+      .mockResolvedValueOnce(primary)
+      .mockImplementationOnce(
+        (_args: string[], options: { signal?: AbortSignal }) =>
+          new Promise<ChildProcess>((_resolve, reject) => {
+            pendingSignal = options.signal
+            options.signal?.addEventListener(
+              'abort',
+              () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+              { once: true }
+            )
+          })
+      )
+
+    const promise = listFilesWithGit(root, [], {})
+    await vi.waitFor(() => expect(revParse.listenerCount('close')).toBeGreaterThan(0))
+    revParse.emit('close', 0, null)
+    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(3))
+    primary.emit('error', new Error('primary failed'))
+
+    await expect(promise).rejects.toThrow('primary failed')
+    expect(pendingSignal?.aborted).toBe(true)
+  })
 })

@@ -125,6 +125,7 @@ export async function listFilesWithGit(
     reject: (error: Error) => void
     resolve: () => void
   }[] = []
+  const scanController = new AbortController()
 
   const runGitLsFiles = async (args: string[]): Promise<void> => {
     // Why: git ls-files outputs paths relative to cwd, so we set cwd to
@@ -132,7 +133,7 @@ export async function listFilesWithGit(
     const child = await gitSpawnAfterWindowsEnvironmentReady(['ls-files', ...args], {
       cwd: rootPath,
       ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-      ...(signal ? { signal } : {}),
+      signal: scanController.signal,
       stdio: ['ignore', 'pipe', 'pipe']
     })
     return new Promise((resolve, reject) => {
@@ -251,9 +252,9 @@ export async function listFilesWithGit(
         child.kill()
         rejectPass(new Error('git ls-files timed out'))
       }, 10000)
-      if (signal?.aborted) {
+      if (scanController.signal.aborted) {
         child.kill()
-        rejectPass(fileListingCancellationError(signal))
+        rejectPass(fileListingCancellationError(scanController.signal))
       }
     })
   }
@@ -284,14 +285,17 @@ export async function listFilesWithGit(
     }
   }
 
-  const onAbort = (): void => killSurvivors('git ls-files cancelled')
+  const onAbort = (): void => {
+    scanController.abort(signal?.reason)
+    killSurvivors('git ls-files cancelled')
+  }
   signal?.addEventListener('abort', onAbort, { once: true })
   try {
     const runIgnoredPass = () =>
       // Why: ignored files are supplementary — a failed or timed-out ignored
       // pass must not discard the primary listing the user actually needs.
       runGitLsFiles(ignoredPass).catch((err: Error) => {
-        if (!signal?.aborted) {
+        if (!scanController.signal.aborted) {
           console.warn('[quick-open] git ignored-file pass failed; keeping primary results:', err)
         }
       })
@@ -306,6 +310,7 @@ export async function listFilesWithGit(
       }
     }
   } catch (err) {
+    scanController.abort(err)
     killSurvivors()
     if (signal?.aborted) {
       throw fileListingCancellationError(signal)
