@@ -23,6 +23,7 @@ import { useWorktreeIssueLink } from './use-worktree-issue-link'
 import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
 import { useWorktreeMetaJiraLink } from './use-worktree-meta-jira-link'
 import { WorktreeIssueLinkField } from './WorktreeIssueLinkField'
+import { resizeCommentTextarea } from './comment-textarea-autosize'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -33,11 +34,6 @@ import {
   type IssueLinkProvider
 } from '../../../../shared/issue-link-input'
 import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'
-
-function resizeCommentTextarea(textarea: HTMLTextAreaElement): void {
-  textarea.style.height = 'auto'
-  textarea.style.height = `${textarea.scrollHeight}px`
-}
 
 /** Only read before the first open, when nothing can be saved yet. */
 const EMPTY_SNAPSHOT: WorktreeMetaSnapshot = {
@@ -223,7 +219,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   )
 
   const handleSave = useCallback(async () => {
-    if (!canSave) {
+    // Why: reject re-entry while a save is in flight. The Jira lookup is async, so
+    // a second Enter would capture a newer draft and could persist it over the one
+    // being resolved.
+    if (!canSave || saving) {
       return
     }
     setSaving(true)
@@ -277,6 +276,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   }, [
     worktreeId,
     canSave,
+    saving,
     draft,
     snapshot,
     liveLinks,
@@ -361,6 +361,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
             isInvalid={issueInvalid}
             displacedLinkLabels={displacedLinkLabels}
             isReadOnly={isFolderWorkspace}
+            disabled={saving}
             canOpenIssue={canOpenIssue}
             openingIssue={openingIssue}
             openIssueFailed={openIssueFailed}
@@ -379,6 +380,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
               value={prInput}
               onChange={(e) => setPrInput(e.target.value)}
               onKeyDown={handleIssueKeyDown}
+              disabled={saving}
               placeholder={translate(
                 'auto.components.sidebar.WorktreeMetaDialog.077a4f7b5c',
                 'PR # or GitHub URL'
@@ -402,6 +404,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
               value={commentInput}
               onChange={handleCommentChange}
               onKeyDown={handleCommentKeyDown}
+              disabled={saving}
               placeholder={translate(
                 'auto.components.sidebar.WorktreeMetaDialog.030d484fc0',
                 'Notes about this worktree...'

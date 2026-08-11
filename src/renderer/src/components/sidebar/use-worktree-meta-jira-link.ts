@@ -101,16 +101,29 @@ export function useWorktreeMetaJiraLink(args: {
       if (parsed?.provider !== 'jira' || !jiraSourceContext) {
         return { kind: 'error', error: jiraLinkErrorMessage('not-connected') }
       }
-      const resolved = await resolveJiraIssueLink({
-        parsed,
-        sourceContext: jiraSourceContext,
-        readStatus: readJiraStatus,
-        lookupSummary: lookupJiraIssueSummary
-      })
-      if (!resolved.ok) {
-        return { kind: 'error', error: jiraLinkErrorMessage(resolved.errorKind) }
+      try {
+        const resolved = await resolveJiraIssueLink({
+          parsed,
+          sourceContext: jiraSourceContext,
+          readStatus: readJiraStatus,
+          lookupSummary: lookupJiraIssueSummary
+        })
+        if (!resolved.ok) {
+          return { kind: 'error', error: jiraLinkErrorMessage(resolved.errorKind) }
+        }
+        return { kind: 'updates', updates: buildResolvedJiraIssueLinkUpdates(resolved, input.live) }
+      } catch {
+        // Why: the Jira reads can reject on a dead runtime or transport fault.
+        // Without this the rejection escapes handleSave's finally as an unhandled
+        // rejection and the user is left without an error.
+        return {
+          kind: 'error',
+          error: translate(
+            'auto.components.sidebar.WorktreeMetaDialog.a3d824d1b8',
+            'Could not link the Jira issue. Check your Jira connection and try again.'
+          )
+        }
       }
-      return { kind: 'updates', updates: buildResolvedJiraIssueLinkUpdates(resolved, input.live) }
     },
     [jiraSourceContext, readJiraStatus, lookupJiraIssueSummary]
   )

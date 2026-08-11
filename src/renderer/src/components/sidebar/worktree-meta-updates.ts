@@ -122,7 +122,13 @@ function issueLinkIdentity(
     return `github:${parsed.number}`
   }
   if (parsed.provider === 'jira') {
-    return `jira:${parsed.issueKey.toUpperCase()}`
+    // Why: a URL pins its site, so the same key on two Jira instances must read
+    // as two different links; a bare key omits the site and stays comparable
+    // across a respelling that resolves to the active site.
+    const site = parsed.siteOrigin
+      ? `${parsed.siteOrigin}${parsed.sitePath ?? ''}`.toLowerCase()
+      : ''
+    return `jira:${parsed.issueKey.toUpperCase()}:${site}`
   }
   const organizationUrlKey = parsed.organizationUrlKey ?? storedLinearOrganizationUrlKey ?? ''
   return `linear:${parsed.identifier}:${organizationUrlKey.trim().toLowerCase()}`

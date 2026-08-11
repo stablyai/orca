@@ -68,6 +68,8 @@ export type WorktreeIssueLinkFieldProps = {
   displacedLinkLabels: string[] | null
   /** Folder workspaces have no persisted link slots — see the design doc. */
   isReadOnly: boolean
+  /** True while a save is in flight, so edits cannot race the async Jira lookup. */
+  disabled?: boolean
   canOpenIssue: boolean
   openingIssue: boolean
   /** The last open attempt resolved to nothing — see useWorktreeIssueLink. */
@@ -86,6 +88,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
     isInvalid,
     displacedLinkLabels,
     isReadOnly,
+    disabled = false,
     canOpenIssue,
     openingIssue,
     openIssueFailed,
@@ -161,6 +164,17 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
     }
     // Whole sentences per arity rather than a joined list: a translated " and "
     // fragment would not survive languages that order or punctuate lists differently.
+    if (displacedLinkLabels && displacedLinkLabels.length > 2) {
+      return translate(
+        'auto.components.sidebar.WorktreeIssueLinkField.5089993940',
+        'Saving unlinks {{first}}, {{second}}, and {{third}}. A workspace tracks one issue.',
+        {
+          first: displacedLinkLabels[0],
+          second: displacedLinkLabels[1],
+          third: displacedLinkLabels[2]
+        }
+      )
+    }
     if (displacedLinkLabels && displacedLinkLabels.length > 1) {
       return translate(
         'auto.components.sidebar.WorktreeIssueLinkField.72486800ff',
@@ -194,7 +208,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
           onKeyDown={onKeyDown}
-          disabled={isReadOnly}
+          disabled={isReadOnly || disabled}
           aria-invalid={isInvalid || undefined}
           placeholder={translate(
             'auto.components.sidebar.WorktreeIssueLinkField.0ee31ebf7b',
@@ -212,7 +226,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
                 type="button"
                 variant="ghost"
                 size="xs"
-                disabled={isReadOnly}
+                disabled={isReadOnly || disabled}
                 aria-label={translate(
                   'auto.components.sidebar.WorktreeIssueLinkField.929c98d05a',
                   'Issue provider'
@@ -242,7 +256,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
                 variant="ghost"
                 size="icon-xs"
                 aria-label={openIssueLabel}
-                disabled={!canOpenIssue || openingIssue}
+                disabled={!canOpenIssue || openingIssue || disabled}
                 onClick={onOpenIssue}
                 className="text-muted-foreground"
               >

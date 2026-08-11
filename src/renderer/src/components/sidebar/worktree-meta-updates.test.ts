@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { WorktreeMeta } from '../../../../shared/types'
 import {
   buildWorktreeMetaUpdates,
+  isIssueFieldDirty,
   type WorktreeMetaDraft,
   type WorktreeMetaLiveLinks,
   type WorktreeMetaSnapshot
@@ -377,5 +378,43 @@ describe('buildWorktreeMetaUpdates', () => {
 
   it('clears a comment with empty string, never a present-undefined key', () => {
     expect(buildUpdates({ commentInput: '  ' }, { comment: 'old note' }).comment).toBe('')
+  })
+})
+
+describe('isIssueFieldDirty Jira site identity', () => {
+  // The same key on two Jira instances is two different links, so re-pointing a
+  // URL at another site must resolve and persist rather than read as untouched.
+  it('treats the same key on two Jira sites as a change', () => {
+    expect(
+      isIssueFieldDirty(
+        makeDraft({
+          issueProvider: 'jira',
+          issueInput: 'https://site-b.atlassian.net/browse/PROJ-9'
+        }),
+        makeSnapshot({
+          issueProvider: 'jira',
+          issueInput: 'https://site-a.atlassian.net/browse/PROJ-9'
+        })
+      )
+    ).toBe(true)
+  })
+
+  it('treats an unchanged Jira URL as clean', () => {
+    const url = 'https://acme.atlassian.net/browse/PROJ-9'
+    expect(
+      isIssueFieldDirty(
+        makeDraft({ issueProvider: 'jira', issueInput: url }),
+        makeSnapshot({ issueProvider: 'jira', issueInput: url })
+      )
+    ).toBe(false)
+  })
+
+  it('treats a respelled bare Jira key as clean', () => {
+    expect(
+      isIssueFieldDirty(
+        makeDraft({ issueProvider: 'jira', issueInput: 'proj-9' }),
+        makeSnapshot({ issueProvider: 'jira', issueInput: 'PROJ-9' })
+      )
+    ).toBe(false)
   })
 })

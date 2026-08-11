@@ -20,9 +20,10 @@ type JiraSiteResolution =
   | { errorKind: Exclude<JiraIssueLinkErrorKind, 'not-found'> }
 
 /** Picks the Jira site a link resolves against: a URL pins the site it names, a
- *  bare key uses the active (or single) connection, and several sites with none
- *  active is ambiguous — the same key can exist on two instances, so guessing
- *  would link the wrong ticket. Mirrors the CLI `worktree set --jira` contract. */
+ *  bare key uses the active site, then the selected site, then the only connected
+ *  site. Several connected sites with none active or selected is ambiguous: the
+ *  same key can exist on two instances, so guessing would link the wrong ticket.
+ *  Mirrors the CLI `worktree set --jira` contract. */
 export function selectJiraSiteForLink(
   parsed: Pick<ParsedJiraIssueLink, 'siteOrigin' | 'sitePath'>,
   status: JiraConnectionStatus
@@ -67,6 +68,9 @@ export function buildJiraLinkedWorkItem(issue: JiraIssue): WorkspaceLinkedItem {
   }
 }
 
+/** Binds the resolved site and issue into a Jira task-source context so the card
+ *  can scope reads and match the link. Reuses the base context's project, host,
+ *  and repo, and normalizes to null when those are incomplete. */
 export function buildJiraLinkedTaskSourceContext(
   base: TaskSourceContext,
   site: JiraSite,

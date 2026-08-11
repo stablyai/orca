@@ -315,8 +315,6 @@ describe('WorktreeMetaDialog issue link row', () => {
     expect(updates.linkedIssue).toBeNull()
   })
 
-  // The Jira link's title and URL are resolved from the connected site at save
-  // time, and writing it clears the GitHub slot the workspace held.
   it('resolves a Jira link against the active site and clears the GitHub link', async () => {
     const readJiraStatus = vi.fn().mockResolvedValue({
       connected: true,
@@ -367,8 +365,6 @@ describe('WorktreeMetaDialog issue link row', () => {
     expect(updates.linkedIssue).toBeNull()
   })
 
-  // A resolution failure must block the save and explain itself rather than
-  // writing a partial link or silently dropping the existing one.
   it('shows an error and does not save when Jira is not connected', async () => {
     const readJiraStatus = vi.fn().mockResolvedValue({ connected: false, viewer: null })
     openDialog({ worktree: { linkedIssue: 42 } })
