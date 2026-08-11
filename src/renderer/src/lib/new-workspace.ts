@@ -13,7 +13,7 @@ import {
   queuePendingAgentStartupDelivery,
   resolveAgentStartupTabId
 } from '@/lib/agent-startup-delayed-delivery'
-import type { FolderWorkspaceLinkedTask, OrcaHooks, TaskViewPresetId } from '../../../shared/types'
+import type { FolderWorkspaceLinkedTask, OrcaHooks } from '../../../shared/types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -21,31 +21,7 @@ export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
 export { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 export { getWorkspaceIntentName } from '../../../shared/workspace-name'
 
-/**
- * Why: the TaskPage's preset buttons and the openTaskPage prefetcher both need
- * to compute the same GitHub query string for a given preset id. Keep the
- * mapping here so the prefetch warms exactly the cache key the page will look
- * up on mount.
- */
 export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/work-items'
-
-export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
-  switch (presetId) {
-    case 'all':
-    case 'issues':
-      return 'is:issue is:open'
-    case 'my-issues':
-      return 'assignee:@me is:issue is:open'
-    case 'prs':
-      return 'is:pr is:open'
-    case 'my-prs':
-      return 'author:@me is:pr is:open'
-    case 'review':
-      return 'review-requested:@me is:pr is:open'
-    case null:
-      return 'is:issue is:open'
-  }
-}
 
 export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
   ? 'win32'

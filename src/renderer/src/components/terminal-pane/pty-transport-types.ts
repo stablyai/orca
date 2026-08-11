@@ -18,6 +18,8 @@ import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-
 
 export type PtyBufferSnapshot = {
   data: string
+  /** Live state that can be restored without an alternate-screen frame. */
+  frameRestoreAnsi?: string
   cols: number
   rows: number
   seq?: number
@@ -59,6 +61,12 @@ export type PtyConnectResult = {
   snapshot?: string
   snapshotCols?: number
   snapshotRows?: number
+  /** Normal-buffer history and mode preamble before an alternate-screen frame. */
+  snapshotPrefixAnsi?: string
+  /** Visual alternate-screen frame. Both fields are absent on older hosts. */
+  snapshotFrameAnsi?: string
+  /** Live state to append when omitting `snapshotFrameAnsi`. */
+  snapshotFrameRestoreAnsi?: string
   isAlternateScreen?: boolean
   sessionExpired?: boolean
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }

@@ -633,12 +633,25 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      if (action.type === 'selectAll') {
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        if (!e.repeat) {
+          nativeOnlyShortcutTracker.armKeyDown(e)
+          pane.terminal.selectAll()
+        }
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        return
+      }
+
       if (e.repeat) {
         return
       }
 
-      // Cmd/Ctrl+Shift+C copies terminal selection via Electron clipboard.
-      // This ensures Linux terminal copy works consistently.
+      // Why: bypass xterm's hidden textarea and Kitty encoder for terminal copy bindings.
       if (action.type === 'copySelection') {
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (!pane) {

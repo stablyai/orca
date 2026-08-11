@@ -31,6 +31,8 @@ type AgentMapProps = {
   /** Owned by the board so the shared toolbar filter can drive it. Defaults to
    *  every state, i.e. the map shows whatever it is handed. */
   enabledStates?: ReadonlySet<AgentMapState>
+  /** Owned by the board's filter menu. Defaults to shown. */
+  showOrchestrationLinks?: boolean
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   workspaceContextMenusEnabled?: boolean
   onWorkspaceContextMenuOpenChange?: (open: boolean) => void
@@ -72,6 +74,7 @@ export function AgentMap({
   compact = false,
   selectedPaneKey = null,
   enabledStates = ALL_AGENT_STATES,
+  showOrchestrationLinks = true,
   launchableAgentsByWorktreeId,
   workspaceContextMenusEnabled = false,
   onWorkspaceContextMenuOpenChange,
@@ -169,6 +172,7 @@ export function AgentMap({
           repoIconsByRepoId={repoIconsByRepoId}
           selectedPaneKey={selectedPaneKey}
           allowAggregation
+          showOrchestrationLinks={showOrchestrationLinks}
           launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
           workspaceContextMenusEnabled={workspaceContextMenusEnabled}
           onWorkspaceContextMenuOpenChange={onWorkspaceContextMenuOpenChange}

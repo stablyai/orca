@@ -13,7 +13,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'droid',
   'grok',
   'devin',
-  'omp'
+  'omp',
+  'prime-agent'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -162,7 +163,7 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
 }
 
 /** Compare the provider-owned values that identify the CLI resume target.
- *  Pi's file path is identity; other agents resume by their provider id. */
+ *  Pi-family transcript resumes use file identity; other agents use provider ids. */
 export function agentProviderSessionsEqual(
   agent: string | undefined,
   left: AgentProviderSessionMetadata | undefined,
@@ -174,7 +175,7 @@ export function agentProviderSessionsEqual(
   return (
     left.key === right.key &&
     left.id === right.id &&
-    (agent !== 'pi' || left.transcriptPath === right.transcriptPath)
+    ((agent !== 'pi' && agent !== 'prime-agent') || left.transcriptPath === right.transcriptPath)
   )
 }
 
@@ -208,7 +209,8 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['sessionID'])
       return id ? { key: 'session_id', id } : null
     }
-    case 'pi': {
+    case 'pi':
+    case 'prime-agent': {
       const id = readSessionId(payload, ['session_id'])
       const providerSession = id
         ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file'])
@@ -257,6 +259,10 @@ export function getAgentResumeArgv(
     case 'pi':
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
+        : null
+    case 'prime-agent':
+      return providerSession.key === 'session_id' && providerSession.transcriptPath
+        ? ['prime-agent', '--resume', providerSession.transcriptPath]
         : null
     case 'mimo-code':
       return providerSession.key === 'session_id' ? ['mimo', '--session', id] : null

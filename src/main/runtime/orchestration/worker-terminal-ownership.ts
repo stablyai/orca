@@ -75,36 +75,6 @@ export const WORKER_SETTLED_STATES: readonly WorkerDispatchState[] = [
 
 export const WORKER_RELEASABLE_STATES: readonly WorkerDispatchState[] = ['succeeded', 'failed']
 
-// Same-operation creation evidence: worker-start labels its own agent terminal 'created'
-// (existing worktree) or 'reused_agent_terminal' (agent-first worktree creation). An explicit
-// --terminal reuse is labeled 'reused' and never claims ownership.
-export function residualResourcesClaimAgentTerminal(
-  residualResourcesJson: string,
-  terminalHandle: string
-): boolean {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(residualResourcesJson)
-  } catch {
-    return false
-  }
-  if (!Array.isArray(parsed)) {
-    return false
-  }
-  return parsed.some((effect) => {
-    if (!effect || typeof effect !== 'object') {
-      return false
-    }
-    const candidate = effect as { kind?: unknown; role?: unknown; action?: unknown; id?: unknown }
-    return (
-      candidate.kind === 'terminal' &&
-      candidate.role === 'agent' &&
-      candidate.id === terminalHandle &&
-      (candidate.action === 'created' || candidate.action === 'reused_agent_terminal')
-    )
-  })
-}
-
 // Process accounting for worker-list; deliberately independent of Task/Dispatch outcome.
 export function deriveWorkerTerminalListState(params: {
   workerState: WorkerDispatchState

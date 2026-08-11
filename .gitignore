@@ -94,6 +94,7 @@ docs/**
 !docs/readme/
 !docs/readme/**
 !docs/STYLEGUIDE.md
+!docs/ai-vault-process-isolation-plan.md
 !docs/mobile-terminal-shortcut-bar.md
 !docs/reference/
 !docs/reference/git-compatibility.md

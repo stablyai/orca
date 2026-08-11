@@ -7,6 +7,7 @@ import {
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
+import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
 import {
   aiVaultSessionResultCacheKey,
   cacheAiVaultSessionResult,
@@ -53,6 +54,7 @@ export function useAiVaultSessionRefresh(
   const pendingBackgroundRef = useRef(true)
   const lastAppliedScanRef = useRef<{ scopeKey: string; scannedAt: string } | null>(null)
   const mountedRef = useRef(true)
+  const publicationGateRef = useRef(new AiVaultSessionPublicationGate())
   const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths)}\n${sessionLimit}`
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
   scopePathsRef.current = scopePaths
@@ -89,8 +91,10 @@ export function useAiVaultSessionRefresh(
         const scanKey = `${baseKey}\n${selectedLimit}`
         lastAppliedScanRef.current = { scopeKey: scanKey, scannedAt: cachedResult.scannedAt }
         setError(null)
-        setScanResult(cachedResult)
-        setSessions(cachedResult.sessions)
+        publicationGateRef.current.publish(cachedResult, (published) => {
+          setScanResult(published)
+          setSessions(published.sessions)
+        })
         setLoading(false)
         return
       }
@@ -155,8 +159,12 @@ export function useAiVaultSessionRefresh(
           result,
           replaceHostEntries: args.force === true
         })
-        setScanResult(result)
-        setSessions(result.sessions)
+        publicationGateRef.current.publish(result, (published) => {
+          if (mountedRef.current && scanKey === currentScanScopeKey()) {
+            setScanResult(published)
+            setSessions(published.sessions)
+          }
+        })
       } catch (err) {
         // A cancelled scan is not a failure: another caller's forced refresh
         // preempts the shared scan, and painting its abort would replace the
@@ -214,8 +222,10 @@ export function useAiVaultSessionRefresh(
   useEffect(() => {
     mountedRef.current = true
     const requestToken = requestTokenRef.current
+    const publicationGate = publicationGateRef.current
     return () => {
       mountedRef.current = false
+      publicationGate.cancel()
       refreshIdRef.current += 1
       refreshInFlightRef.current = false
       void window.api.aiVault.cancelListSessions({
@@ -230,6 +240,7 @@ export function useAiVaultSessionRefresh(
 
   // Panel entry reuses the renderer result first, then the host scan cache.
   useEffect(() => {
+    publicationGateRef.current.cancel()
     if (refreshInFlightRef.current) {
       void window.api.aiVault.cancelListSessions({
         requestToken: requestTokenRef.current

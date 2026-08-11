@@ -1321,6 +1321,18 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         source: 'headless'
       })
     })
+
+    it('exposes live state separately from the visible frame', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      lastSubprocess._simulateData('\x1b[?1049h\x1b[?1004h\x1b[?25lframe')
+
+      const snapshot = await adapter.getBufferSnapshot(id)
+
+      expect(snapshot?.frameRestoreAnsi).toContain('\x1b[?1004h')
+      expect(snapshot?.frameRestoreAnsi).toContain('\x1b[?25l')
+      expect(snapshot?.frameRestoreAnsi).not.toContain('frame')
+      expect(snapshot?.data).toContain('frame')
+    })
   })
 
   describe('shutdown', () => {
@@ -1506,6 +1518,33 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.snapshot).toContain('prompt$')
     })
 
+    it('publishes the alt-frame payload as explicit strings', async () => {
+      const sessionId = 'alt-frame-boundary'
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      lastSubprocess._simulateData('\x1b[?1049h\x1b[HSTATIC-ALT-FRAME')
+      await new Promise((r) => setTimeout(r, 50))
+
+      const result = await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      expect(result.snapshotPrefixAnsi).toContain('\x1b[?1049h')
+      expect(result.snapshotFrameAnsi).toContain('STATIC-ALT-FRAME')
+      expect(result.snapshot).toBe([result.snapshotPrefixAnsi, result.snapshotFrameAnsi].join(''))
+      expect(result.snapshotFrameRestoreAnsi).not.toContain('STATIC-ALT-FRAME')
+    })
+
+    it('returns the preserved sequence from attach-only adoption', async () => {
+      const sessionId = 'attach-sequence-handoff'
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      lastSubprocess._simulateData('preserved output')
+      await new Promise((r) => setTimeout(r, 50))
+
+      await expect(adapter.attach(sessionId)).resolves.toEqual({
+        providerSequence: {
+          value: 'preserved output'.length,
+          generation: 'continued'
+        }
+      })
+    })
+
     it('returns plain result for new sessionId', async () => {
       const result = await adapter.spawn({ cols: 80, rows: 24, sessionId: 'brand-new' })
       expect(result.id).toBe('brand-new')
@@ -1667,6 +1706,33 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(lastSubprocess.resize).not.toHaveBeenCalled()
       expect(await adapter2.getAppliedSize(id)).toEqual({ cols: 137, rows: 41 })
       adapter2.dispose()
+    })
+
+    it('keeps legacy attach behavior when no output sequence is available', async () => {
+      const ensureConnected = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const request = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) =>
+          type === 'getSize'
+            ? ({ size: { cols: 100, rows: 30 } } as never)
+            : ({
+                isNew: false,
+                snapshot: null,
+                pid: 4321,
+                shellState: 'unsupported',
+                incarnationId: 'legacy-attach-incarnation'
+              } as never)
+        )
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(legacy.attach('legacy-session')).resolves.toBeUndefined()
+      } finally {
+        legacy.dispose()
+        request.mockRestore()
+        ensureConnected.mockRestore()
+      }
     })
 
     it('refuses to create when the session is absent (attach-only)', async () => {

@@ -4,17 +4,6 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from './rpc-client'
 import { useHostStatusGates, type HostStatusGates } from './host-status-gates'
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => spy.mockRestore()
-}
-
 describe('useHostStatusGates', () => {
   it('clears every prior-host gate and ignores its late response while the client is replaced', async () => {
     let resolveOldStatus: ((response: unknown) => void) | null = null
@@ -43,7 +32,6 @@ describe('useHostStatusGates', () => {
       return null
     }
 
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(createElement(Probe, { hostId: 'host-1', client: oldClient }))
@@ -80,7 +68,6 @@ describe('useHostStatusGates', () => {
       expect(oldSendRequest).toHaveBeenCalledOnce()
       expect(newSendRequest).toHaveBeenCalledOnce()
     } finally {
-      restore()
       renderer?.unmount()
     }
   })
@@ -102,7 +89,6 @@ describe('useHostStatusGates', () => {
       return null
     }
 
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(createElement(Probe, { hostId: 'host-1' }))
@@ -115,7 +101,6 @@ describe('useHostStatusGates', () => {
 
       expect(sendRequest).toHaveBeenCalledOnce()
     } finally {
-      restore()
       renderer?.unmount()
     }
   })
@@ -141,7 +126,6 @@ describe('useHostStatusGates', () => {
       return null
     }
 
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(createElement(Probe, { connState: 'connected' }))
@@ -181,7 +165,6 @@ describe('useHostStatusGates', () => {
         statusPending: false
       })
     } finally {
-      restore()
       renderer?.unmount()
     }
   })
@@ -204,7 +187,6 @@ describe('useHostStatusGates', () => {
       return null
     }
 
-    const restore = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(createElement(Probe, { client: firstClient }))
@@ -217,7 +199,6 @@ describe('useHostStatusGates', () => {
       })
       expect(gates).toMatchObject({ hostCapabilities: [], statusPending: true })
     } finally {
-      restore()
       renderer?.unmount()
     }
   })

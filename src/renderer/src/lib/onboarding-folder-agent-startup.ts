@@ -9,7 +9,7 @@ import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../shared/types'
-import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import { resolveNativeChatLaunchSessionOptions } from '@/components/native-chat/native-chat-session-option-enrichment'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 
 export type OnboardingFolderAgentStartup = {
@@ -48,10 +48,7 @@ export function buildOnboardingFolderAgentStartup(
     cmdOverrides: settings.agentCmdOverrides ?? {},
     agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
     agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-    sessionOptions: resolveNativeChatSessionOptionDefaults(
-      settings.nativeChatSessionOptions,
-      agent
-    ),
+    sessionOptions: resolveNativeChatLaunchSessionOptions(settings.nativeChatSessionOptions, agent),
     platform: getClientPlatform(),
     allowEmptyPromptLaunch: true
   })

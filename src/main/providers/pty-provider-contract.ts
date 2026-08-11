@@ -19,6 +19,8 @@ export type {
 
 export type PtyProviderBufferSnapshot = {
   data: string
+  /** Live state that can be restored without an alternate-screen frame. */
+  frameRestoreAnsi?: string
   /** Authoritative normal buffer captured beside an alternate-screen frame. */
   scrollbackAnsi?: string
   cols: number
@@ -114,7 +116,7 @@ export type IPtyProvider = {
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
-  attach(id: string): Promise<void>
+  attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void>
   hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>

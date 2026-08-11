@@ -10,6 +10,7 @@
     "src/main/speech/stt-worker.ts",
     "src/main/warp-themes/warp-theme-parser-worker.ts",
     "src/main/ai-vault/session-scanner-opencode-sqlite-worker-entry.ts",
+    "src/main/ai-vault/session-scanner-worker-entry.ts",
     "src/main/ports/port-scan-command-worker-entry.ts",
     "src/main/ipc/parcel-watcher-process-entry.ts",
     "src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts",

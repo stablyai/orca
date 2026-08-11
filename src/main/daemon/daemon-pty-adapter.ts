@@ -3,6 +3,7 @@ import { basename } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { DaemonClient } from './client'
+import { DAEMON_ENDPOINT_LOST_MESSAGE } from './daemon-endpoint-ownership'
 import {
   getMacDaemonSystemResolverHealth,
   parseDaemonPidFile,
@@ -107,7 +108,7 @@ function takeRecoveryFreeze(
   historyRecovery.freeze = null
   return freeze
 }
-function providerSequenceForSpawn(
+function providerSequenceFromCreateOrAttach(
   result: CreateOrAttachResult
 ): PtySpawnResult['providerSequence'] {
   if (result.isNew) {
@@ -730,7 +731,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     const wasAlreadyManaged = this.activeSessionIds.has(sessionId)
     this.activeSessionIds.add(sessionId)
-    const providerSequence = providerSequenceForSpawn(result)
+    const providerSequence = providerSequenceFromCreateOrAttach(result)
 
     // Cold restore: daemon made a new session but disk history shows an unclean shutdown → return saved scrollback.
     if (restoreInfo && (result.isNew || result.historySeeded === false)) {
@@ -830,10 +831,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
 
     const isAltScreen = result.snapshot.modes.alternateScreen
-    const snapshotPayload =
-      result.snapshot.scrollbackAnsi +
-      result.snapshot.rehydrateSequences +
-      result.snapshot.snapshotAnsi
+    const snapshotPrefix = result.snapshot.scrollbackAnsi + result.snapshot.rehydrateSequences
+    const snapshotFrame = result.snapshot.snapshotAnsi
+    const snapshotPayload = snapshotPrefix + snapshotFrame
     // Why kitty flags ride beside the payload, not inside it: the snapshot reaches renderer xterms where POST_REPLAY_REATTACH_RESET's kitty reset must win (terminal-query-authority.md §kitty).
     const kittyKeyboardFlags = result.snapshot.modes.kittyKeyboardFlags
     return {
@@ -846,6 +846,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
       snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
       snapshotRows: result.snapshot.rows,
+      // Why only for an alt frame: normal history remains safe to replay at its capture grid.
+      ...(isAltScreen && snapshotFrame && result.snapshot.frameRestoreAnsi
+        ? {
+            snapshotPrefixAnsi: snapshotPrefix,
+            snapshotFrameAnsi: snapshotFrame,
+            snapshotFrameRestoreAnsi: result.snapshot.frameRestoreAnsi
+          }
+        : {}),
       ...(providerSequence ? { providerSequence } : {}),
       ...(typeof kittyKeyboardFlags === 'number' && kittyKeyboardFlags > 0
         ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }
@@ -891,7 +899,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return result.exitedBeforeSpawnReply === true
   }
 
-  async attach(id: string): Promise<void> {
+  async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void> {
     await this.ensureConnected()
     if (!this.canDelegateBackgroundToDaemon) {
       this.setPtyBackgrounded(id, false)
@@ -923,6 +931,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       throw new SessionNotFoundError(id)
     }
     this.clearSessionAwaitingDaemonRecovery(id)
+    const providerSequence = providerSequenceFromCreateOrAttach(result)
+    return providerSequence ? { providerSequence } : undefined
   }
 
   hasPty(id: string): boolean {
@@ -1213,6 +1223,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
       return {
         data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
+        frameRestoreAnsi: snapshot.frameRestoreAnsi,
         scrollbackAnsi: snapshot.scrollbackAnsi,
         cols: snapshot.cols,
         rows: snapshot.rows,
@@ -2492,7 +2503,8 @@ function isUnknownRequestTypeError(err: unknown): boolean {
 
 // Why: syscall='connect' distinguishes a dead-socket ENOENT/ECONNREFUSED from token-file ENOENT (no syscall);
 // message strings incl. wedged-daemon "Hello response timed out" (#8689) also warrant a respawn.
-function isDaemonGoneError(err: unknown): boolean {
+/** Exported so a test can pin it against the server's refusal wording, which it must match. */
+export function isDaemonGoneError(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false
   }
@@ -2505,7 +2517,10 @@ function isDaemonGoneError(err: unknown): boolean {
     msg === 'Connection lost' ||
     msg === 'Not connected' ||
     msg === 'Hello response timed out' ||
-    msg === 'Daemon temporarily unavailable; reconnect'
+    msg === 'Daemon temporarily unavailable; reconnect' ||
+    // Why retry: the daemon refused because the endpoint now resolves elsewhere. Reconnecting
+    // reaches whoever owns it; surfacing this to the user would strand the request instead.
+    msg === DAEMON_ENDPOINT_LOST_MESSAGE
   )
 }
 

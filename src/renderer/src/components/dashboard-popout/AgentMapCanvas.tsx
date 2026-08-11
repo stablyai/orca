@@ -16,13 +16,9 @@ import type {
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import type { TuiAgent } from '../../../../shared/types'
-import {
-  AGENT_MAP_AGENT_RADIUS,
-  type AgentMapAgentNode,
-  type AgentMapProjectRing,
-  type AgentMapLayout
-} from './agent-map-layout'
+import type { AgentMapAgentNode, AgentMapProjectRing, AgentMapLayout } from './agent-map-layout'
 import { AgentMapScene } from './AgentMapScene'
+import { agentFocusZoom, clamp, MAX_ZOOM, MIN_ZOOM } from './agent-map-canvas-zoom'
 import { AgentMapViewportControls } from './AgentMapViewportControls'
 import {
   agentMapAgents,
@@ -32,13 +28,11 @@ import {
 import type { AgentMapViewport } from './agent-map-viewport-transition'
 import { useAgentMapContextMenus } from './useAgentMapContextMenus'
 import { useAgentMapCanvasSize } from './useAgentMapCanvasSize'
+import { useAgentMapMotionLayout } from './useAgentMapMotionLayout'
 import { useAgentMapSelectedFocus } from './useAgentMapSelectedFocus'
 import { useAgentMapViewportTransition } from './useAgentMapViewportTransition'
 
-const MIN_ZOOM = 0.7
-const MAX_ZOOM = 24
 const AGENT_FOCUS_DURATION_MS = 240
-const AGENT_FOCUS_RADIUS_PX = 24
 
 type Point = { x: number; y: number }
 
@@ -52,29 +46,13 @@ type AgentMapCanvasProps = {
   repoIconsByRepoId?: Record<string, RepoIcon | null>
   selectedPaneKey: string | null
   allowAggregation: boolean
+  showOrchestrationLinks: boolean
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   workspaceContextMenusEnabled?: boolean
   onWorkspaceContextMenuOpenChange?: (open: boolean) => void
   onSelectAgent: (card: DashboardCard) => void
   onSpawnAgent?: (args: DashboardSpawnAgentArgs) => void
   onSleepWorkspace?: (args: DashboardSleepWorkspaceArgs) => void
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.max(minimum, Math.min(maximum, value))
-}
-
-function agentFocusZoom(layout: AgentMapLayout, width: number, height: number): number {
-  const aspect = width / Math.max(1, height)
-  const baseWidth = Math.max(layout.width, layout.height * aspect)
-  return clamp(
-    Math.max(
-      2,
-      (baseWidth * AGENT_FOCUS_RADIUS_PX) / (Math.max(1, width) * AGENT_MAP_AGENT_RADIUS)
-    ),
-    MIN_ZOOM,
-    MAX_ZOOM
-  )
 }
 
 export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasProps>(
@@ -84,6 +62,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       repoIconsByRepoId,
       selectedPaneKey,
       allowAggregation,
+      showOrchestrationLinks,
       launchableAgentsByWorktreeId,
       workspaceContextMenusEnabled = false,
       onWorkspaceContextMenuOpenChange,
@@ -116,6 +95,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       zoom: 1
     })
     const prefersReducedMotion = usePrefersReducedMotion()
+    const motionLayout = useAgentMapMotionLayout(layout, prefersReducedMotion)
     const viewportRef = useRef(viewport)
     const { contextMenus, onOpenProjectContextMenu, onOpenWorkspaceContextMenu } =
       useAgentMapContextMenus({
@@ -132,6 +112,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       [allowAggregation, layout, selectedPaneKey, zoom]
     )
     const hasProjects = layout.projects.length > 0
+    const hasMotionProjects = motionLayout.projects.length > 0
     const aspect = size.width / Math.max(1, size.height)
     const baseWidth = Math.max(layout.width, layout.height * aspect)
     const baseHeight = baseWidth / aspect
@@ -320,7 +301,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
 
     return (
       <div ref={containerRef} className="agent-map-canvas relative min-h-0 flex-1 overflow-hidden">
-        {!hasProjects ? (
+        {!hasMotionProjects ? (
           <div className="absolute inset-0 grid place-items-center text-center text-xs text-muted-foreground">
             {translate('dashboardPopout.map.empty', 'No agents match the current filters.')}
           </div>
@@ -384,13 +365,14 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
             }}
           >
             <AgentMapScene
-              layout={layout}
+              layout={motionLayout}
               repoIconsByRepoId={repoIconsByRepoId}
               zoom={zoom}
               labelScale={labelScale}
               mapScale={mapScale}
               selectedPaneKey={selectedPaneKey}
               allowAggregation={allowAggregation}
+              showOrchestrationLinks={showOrchestrationLinks}
               launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
               nodeRefs={nodeRefs}
               onSelectAgent={onSelectAgent}

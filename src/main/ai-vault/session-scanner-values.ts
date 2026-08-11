@@ -157,6 +157,41 @@ export function normalizeAgentSessionsDir(
   return normalized
 }
 
+function defaultPrimeAgentSessionsDir(): string {
+  return join(homedir(), '.prime', 'agent', 'sessions')
+}
+
+// Why: the CLI expands a leading `~` itself, so a value set outside a shell
+// (config file, plist, quoted assignment) still resolves against the home dir.
+// Returns null for anything that is not an absolute root, since a relative value
+// ('', '.', '..', 'sessions') would resolve against the main-process cwd.
+function absoluteConfiguredDir(rawValue: string): string | null {
+  const expanded = rawValue === '~' ? homedir() : rawValue.replace(/^~(?=[\\/])/, homedir())
+  const normalized = expanded.replace(/[\\/]+$/, '')
+  return normalized && isAbsolute(normalized) ? normalized : null
+}
+
+// Prime Agent takes PRIME_AGENT_CODING_AGENT_DIR verbatim as its agent config dir
+// (no `/agent` suffixing) and always writes transcripts to `<agentDir>/sessions` —
+// unconditionally, so a root that is itself named `sessions` still nests one deeper.
+export function normalizePrimeAgentSessionsDir(rawAgentDir: string): string {
+  const agentDir = absoluteConfiguredDir(rawAgentDir.trim())
+  return agentDir ? join(agentDir, 'sessions') : defaultPrimeAgentSessionsDir()
+}
+
+// PRIME_AGENT_SESSION_DIR (and its legacy PRIME_AGENT_CODING_AGENT_SESSION_DIR alias)
+// point straight at the transcripts root and outrank the agent dir upstream, so they
+// are used verbatim with no `sessions` child.
+export function primeAgentSessionsDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
+  const sessionDir =
+    env.PRIME_AGENT_SESSION_DIR?.trim() || env.PRIME_AGENT_CODING_AGENT_SESSION_DIR?.trim()
+  if (sessionDir) {
+    return absoluteConfiguredDir(sessionDir) ?? defaultPrimeAgentSessionsDir()
+  }
+  const agentDir = env.PRIME_AGENT_CODING_AGENT_DIR?.trim()
+  return agentDir ? normalizePrimeAgentSessionsDir(agentDir) : defaultPrimeAgentSessionsDir()
+}
+
 export function clampPositiveInteger(value: number | undefined, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback
 }

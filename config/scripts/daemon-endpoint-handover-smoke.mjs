@@ -1,11 +1,9 @@
 /**
  * Endpoint handover smoke — guards the split-brain failure with real daemon processes.
  *
- * The failure it reproduces: a daemon whose endpoint name is reclaimed while it is still
- * alive used to delete the *replacement's* socket when it finally exited, because libuv
- * unlinks the pathname a server bound to with no ownership check. The replacement stayed
- * alive hosting PTYs that nothing could reach — terminals that acknowledge input and never
- * run it, and that a user cannot fix by restarting the app.
+ * Two starting daemons race to replace one dead endpoint entry. The loser may exit after the
+ * winner has published, but its close must not remove the winner's canonical socket. The survivor
+ * must remain reachable through that path with its own token.
  *
  * Unix only: Windows named pipes are not directory entries, so the mechanism cannot occur.
  *
@@ -14,16 +12,35 @@
 import { fork } from 'node:child_process'
 import { connect } from 'node:net'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdtempSync, rmSync, statSync, unlinkSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 const entryPath = join(repoRoot, 'out', 'main', 'daemon-entry.js')
+
+// Why read it from source: the launcher keys adoption of a live incumbent on this exact code,
+// and hardcoding it here would let the two drift silently — which is the failure the assertion
+// below exists to catch.
+const DAEMON_EXIT_ENDPOINT_OCCUPIED = Number(
+  readFileSync(join(repoRoot, 'src/main/daemon/daemon-endpoint-ownership.ts'), 'utf8').match(
+    /DAEMON_EXIT_ENDPOINT_OCCUPIED = (\d+)/
+  )?.[1]
+)
 const READY_TIMEOUT_MS = 20_000
 const EXIT_TIMEOUT_MS = 15_000
+const REACHABILITY_TIMEOUT_MS = 2_000
 
 const log = (msg) => console.log(`[endpoint-handover-smoke] ${msg}`)
+
+function readProtocolVersion() {
+  const source = readFileSync(join(repoRoot, 'src/main/daemon/daemon-protocol-version.ts'), 'utf8')
+  const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
+  if (!match) {
+    throw new Error('could not read daemon protocol version')
+  }
+  return Number(match[1])
+}
 
 function bootDaemon(tag, dir, socketPath) {
   const tokenPath = join(dir, `${tag}.token`)
@@ -53,7 +70,7 @@ function bootDaemon(tag, dir, socketPath) {
   child.stderr?.on('data', (chunk) => {
     stderr += chunk.toString('utf8')
   })
-  return new Promise((resolveReady, rejectReady) => {
+  const ready = new Promise((resolveReady, rejectReady) => {
     const timer = setTimeout(
       () => rejectReady(new Error(`daemon ${tag} never signaled ready.\nstderr:\n${stderr}`)),
       READY_TIMEOUT_MS
@@ -61,7 +78,7 @@ function bootDaemon(tag, dir, socketPath) {
     child.on('message', (msg) => {
       if (msg && typeof msg === 'object' && msg.type === 'ready') {
         clearTimeout(timer)
-        resolveReady({ child, tokenPath, pidPath })
+        resolveReady()
       }
     })
     child.on('exit', (code) => {
@@ -69,28 +86,80 @@ function bootDaemon(tag, dir, socketPath) {
       rejectReady(new Error(`daemon ${tag} exited with ${code}.\nstderr:\n${stderr}`))
     })
   })
+  return { child, tokenPath, pidPath, ready }
 }
 
 function isReachable(socketPath) {
   return new Promise((resolveReachable) => {
     const socket = connect({ path: socketPath })
-    socket.on('connect', () => {
+    socket.once('connect', () => {
       socket.destroy()
       resolveReachable(true)
     })
-    socket.on('error', () => resolveReachable(false))
+    socket.once('error', () => {
+      socket.destroy()
+      resolveReachable(false)
+    })
   })
 }
 
+function isDaemonReachable(socketPath, tokenPath, protocolVersion) {
+  if (!existsSync(tokenPath)) {
+    return Promise.resolve(false)
+  }
+  const token = readFileSync(tokenPath, 'utf8').trim()
+  return new Promise((resolveReachable) => {
+    let buffer = ''
+    let settled = false
+    const socket = connect({ path: socketPath })
+    const finish = (reachable) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      socket.destroy()
+      resolveReachable(reachable)
+    }
+    const timer = setTimeout(() => finish(false), REACHABILITY_TIMEOUT_MS)
+    socket.once('error', () => finish(false))
+    socket.once('connect', () => {
+      socket.write(
+        `${JSON.stringify({
+          type: 'hello',
+          version: protocolVersion,
+          token,
+          clientId: randomUUID(),
+          role: 'control'
+        })}\n`
+      )
+    })
+    socket.on('data', (chunk) => {
+      buffer += chunk.toString('utf8')
+      const newlineIndex = buffer.indexOf('\n')
+      if (newlineIndex === -1) {
+        return
+      }
+      try {
+        const message = JSON.parse(buffer.slice(0, newlineIndex))
+        finish(message.type === 'hello' && message.ok === true)
+      } catch {
+        finish(false)
+      }
+    })
+  })
+}
+
+/** Resolves with the child's exit code, so callers can assert on it. */
 function killAndWait(child) {
   if (child.exitCode !== null || child.signalCode !== null) {
-    return Promise.resolve()
+    return Promise.resolve(child.exitCode)
   }
   return new Promise((resolveExit, rejectExit) => {
     const timer = setTimeout(() => rejectExit(new Error('daemon did not exit')), EXIT_TIMEOUT_MS)
-    child.on('exit', () => {
+    child.on('exit', (code) => {
       clearTimeout(timer)
-      resolveExit()
+      resolveExit(code)
     })
     child.kill('SIGTERM')
   })
@@ -107,46 +176,103 @@ async function main() {
 
   const dir = mkdtempSync(join(tmpdir(), 'orca-endpoint-handover-'))
   const socketPath = join(dir, 'daemon.sock')
-  let replaced
-  let replacement
+  const protocolVersion = readProtocolVersion()
+  const daemons = []
   try {
-    replaced = await bootDaemon('replaced', dir, socketPath)
-    const replacedInode = statSync(socketPath).ino
-    log('daemon A published the endpoint')
+    const departed = bootDaemon('departed', dir, socketPath)
+    daemons.push(departed)
+    await departed.ready
+    const deadInode = statSync(socketPath).ino
+    await killAndWait(departed.child)
+    if (!existsSync(socketPath) || statSync(socketPath).ino !== deadInode) {
+      throw new Error('departing daemon did not leave its dead endpoint entry in place')
+    }
+    if (await isReachable(socketPath)) {
+      throw new Error('departed daemon remains reachable')
+    }
+    log('daemon A departed and left a dead endpoint entry')
 
-    // Reclaim the endpoint name the way daemon replacement does, while A is still alive.
-    unlinkSync(socketPath)
-    replacement = await bootDaemon('replacement', dir, socketPath)
-    const replacementInode = statSync(socketPath).ino
-    if (replacedInode === replacementInode) {
-      throw new Error('daemon B did not publish a distinct endpoint')
-    }
-    if (!(await isReachable(socketPath))) {
-      throw new Error('daemon B is not reachable through the canonical endpoint')
-    }
-    log('daemon B took over the endpoint and is reachable')
-
-    // A exits long after losing the endpoint. This is the step that used to break B.
-    await killAndWait(replaced.child)
-    await new Promise((r) => setTimeout(r, 300))
-
-    if (!existsSync(socketPath) || statSync(socketPath).ino !== replacementInode) {
-      throw new Error("daemon A's late exit deleted daemon B's endpoint")
-    }
-    if (!(await isReachable(socketPath))) {
-      throw new Error('daemon B became unreachable after daemon A exited')
-    }
-    if (!existsSync(replacement.pidPath)) {
-      throw new Error("daemon A's late exit removed daemon B's ownership record")
-    }
-    if (existsSync(replaced.pidPath)) {
-      throw new Error('daemon A left its own ownership record behind')
+    const racers = [bootDaemon('racer-b', dir, socketPath), bootDaemon('racer-c', dir, socketPath)]
+    daemons.push(...racers)
+    const readiness = await Promise.allSettled(racers.map((daemon) => daemon.ready))
+    if (readiness.every((result) => result.status === 'rejected')) {
+      throw new Error(
+        `neither racing daemon published the endpoint:\n${readiness
+          .map((result) => (result.status === 'rejected' ? result.reason.message : ''))
+          .join('\n')}`
+      )
     }
 
-    log('PASS: the endpoint owner and the session host stayed the same daemon')
+    const owners = []
+    for (const daemon of racers) {
+      if (await isDaemonReachable(socketPath, daemon.tokenPath, protocolVersion)) {
+        owners.push(daemon)
+      }
+    }
+    if (owners.length !== 1) {
+      throw new Error(`expected one reachable racing daemon, found ${owners.length}`)
+    }
+    const survivor = owners[0]
+    const loser = racers.find((daemon) => daemon !== survivor)
+    const survivorInode = statSync(socketPath).ino
+    if (survivorInode === deadInode) {
+      throw new Error('survivor did not replace the dead endpoint entry')
+    }
+    log('racing daemon published over the dead entry and is reachable')
+
+    await killAndWait(loser.child)
+    if (!existsSync(socketPath) || statSync(socketPath).ino !== survivorInode) {
+      throw new Error("losing racer's exit removed the survivor's endpoint")
+    }
+    if (!(await isDaemonReachable(socketPath, survivor.tokenPath, protocolVersion))) {
+      throw new Error("survivor became unreachable after the losing racer's exit")
+    }
+    if (!existsSync(survivor.pidPath)) {
+      throw new Error('survivor lost its ownership record')
+    }
+    if (existsSync(loser.pidPath)) {
+      throw new Error('losing racer left its ownership record behind')
+    }
+
+    // Why a second, non-racing phase: above, both racers are awaited to ready-or-exit before a
+    // winner is identified, so the loser has usually already gone and killing it proves little.
+    // With a known-live incumbent the interleaving is forced rather than hoped for: the newcomer
+    // must find the endpoint occupied, refuse to take it, and damage nothing on its way out.
+    const survivorInodeBeforeBlocked = statSync(socketPath).ino
+    const blocked = bootDaemon('blocked', dir, socketPath)
+    daemons.push(blocked)
+    await blocked.ready.then(
+      () => {
+        throw new Error('a daemon published onto an endpoint a live daemon already owned')
+      },
+      () => {
+        // Expected: it cannot publish onto a live owner's name, so it exits instead.
+      }
+    )
+    // Why pin the code: the launcher keys adoption of a live incumbent on exactly this exit
+    // code, so a silent change to it would strand a concurrently starting app on local
+    // non-persistent terminals with nothing failing.
+    const blockedExit = await killAndWait(blocked.child)
+    if (blockedExit !== DAEMON_EXIT_ENDPOINT_OCCUPIED) {
+      throw new Error(
+        `a daemon that lost the endpoint exited ${blockedExit}, not ${DAEMON_EXIT_ENDPOINT_OCCUPIED}`
+      )
+    }
+    if (!existsSync(socketPath) || statSync(socketPath).ino !== survivorInodeBeforeBlocked) {
+      throw new Error("a daemon that could not publish removed the live owner's endpoint")
+    }
+    if (!(await isDaemonReachable(socketPath, survivor.tokenPath, protocolVersion))) {
+      throw new Error('live owner became unreachable after a newcomer failed to publish')
+    }
+    if (existsSync(blocked.pidPath)) {
+      throw new Error('a daemon that could not publish left an ownership record behind')
+    }
+    log('a newcomer refused the live owner’s endpoint and left it intact')
+
+    log('PASS: the racing survivor remains reachable through the canonical endpoint')
   } finally {
-    for (const daemon of [replaced, replacement]) {
-      if (daemon && daemon.child.exitCode === null && daemon.child.signalCode === null) {
+    for (const daemon of daemons) {
+      if (daemon.child.exitCode === null && daemon.child.signalCode === null) {
         try {
           daemon.child.kill('SIGKILL')
         } catch {

@@ -207,6 +207,12 @@ function chip(): HTMLElement | null {
   return container.querySelector<HTMLElement>('[data-testid="source-control-branch-line-total"]')
 }
 
+function loadingChip(): HTMLElement | null {
+  return container.querySelector<HTMLElement>(
+    '[data-testid="source-control-branch-line-total-loading"]'
+  )
+}
+
 describe('SourceControl branch line total request gate', () => {
   it('asks for a total when the panel is visible and compare is ready', () => {
     renderSourceControl()
@@ -277,14 +283,14 @@ describe('SourceControl branch line total chip', () => {
     })
     renderSourceControl()
 
-    expect(chip()?.getAttribute('aria-label')).toBe('8259 additions, 670 deletions')
+    expect(chip()?.getAttribute('aria-label')).toBe('8259 lines added, 670 lines deleted')
     // Grouping is pinned to the app locale (`en`), not the runner's host locale.
     expect(chip()?.textContent).toBe('+8,259-670')
   })
 
   it('drops a total whose fork point has since moved', () => {
     // Why: status and branch compare refresh on different cadences, so a total
-    // can outlive the merge base it measured. Hidden beats a stale number.
+    // can outlive the merge base it measured. Stale digits must not render.
     resetState({
       gitBranchLineTotalByWorktree: {
         [mocks.activeWorktree.id]: { added: 8259, removed: 670, mergeBase: 'stale-merge-base' }
@@ -293,6 +299,7 @@ describe('SourceControl branch line total chip', () => {
     renderSourceControl()
 
     expect(chip()).toBeNull()
+    expect(loadingChip()).toBeNull()
   })
 
   it('drops a published total while branch compare has no ready summary', () => {
@@ -307,12 +314,27 @@ describe('SourceControl branch line total chip', () => {
     renderSourceControl()
 
     expect(chip()).toBeNull()
+    expect(loadingChip()).toBeNull()
   })
 
-  it('renders nothing when no total was published', () => {
-    renderSourceControl()
+  // Why: a pending total and one this host will never send look identical from
+  // here, so a pulsing placeholder would keep pulsing forever on an old host,
+  // after a hard failure, or during the ranged-diff cooldown.
+  it('shows no placeholder while the total is still pending', () => {
+    vi.useFakeTimers()
+    try {
+      renderSourceControl()
 
-    expect(chip()).toBeNull()
+      expect(chip()).toBeNull()
+      act(() => {
+        vi.advanceTimersByTime(20_000)
+      })
+      expect(chip()).toBeNull()
+      expect(loadingChip()).toBeNull()
+      expect(container.innerHTML).not.toContain('animate-pulse')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('renders nothing for an exact zero total', () => {
@@ -324,6 +346,7 @@ describe('SourceControl branch line total chip', () => {
     renderSourceControl()
 
     expect(chip()).toBeNull()
+    expect(loadingChip()).toBeNull()
   })
 
   it('omits the zero half of a one-sided total', () => {
@@ -335,6 +358,6 @@ describe('SourceControl branch line total chip', () => {
     renderSourceControl()
 
     expect(chip()?.textContent).toBe('+42')
-    expect(chip()?.getAttribute('aria-label')).toBe('42 additions')
+    expect(chip()?.getAttribute('aria-label')).toBe('42 lines added')
   })
 })

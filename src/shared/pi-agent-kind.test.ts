@@ -18,6 +18,15 @@ describe('detectPiAgentKindFromCommand', () => {
     expect(detectPiAgentKindFromCommand('omp.sh')).toBe('omp')
   })
 
+  it('returns "prime-agent" for Prime launches', () => {
+    expect(detectPiAgentKindFromCommand('prime-agent')).toBe('prime-agent')
+    expect(detectPiAgentKindFromCommand('/usr/local/bin/prime-agent --resume session.jsonl')).toBe(
+      'prime-agent'
+    )
+    expect(detectPiAgentKindFromCommand('PRIME-AGENT.EXE')).toBe('prime-agent')
+    expect(detectPiAgentKindFromCommand('prime-agent.cmd')).toBe('prime-agent')
+  })
+
   it('returns "omp" for omp launched via an absolute path', () => {
     expect(detectPiAgentKindFromCommand('/usr/local/bin/omp')).toBe('omp')
     expect(detectPiAgentKindFromCommand('~/bin/omp.sh')).toBe('omp')
@@ -51,10 +60,11 @@ describe('detectPiAgentKindFromCommand', () => {
 })
 
 describe('detectExplicitPiAgentKindFromCommand', () => {
-  it('identifies explicit Pi and OMP launches', () => {
+  it('identifies explicit Pi, OMP, and Prime launches', () => {
     expect(detectExplicitPiAgentKindFromCommand('pi --resume')).toBe('pi')
     expect(detectExplicitPiAgentKindFromCommand('/usr/local/bin/omp.sh')).toBe('omp')
     expect(detectExplicitPiAgentKindFromCommand('PI.CMD')).toBe('pi')
+    expect(detectExplicitPiAgentKindFromCommand('prime-agent.exe')).toBe('prime-agent')
   })
 
   it('does not classify bare shells or other agents as Pi launches', () => {
@@ -69,5 +79,8 @@ describe('detectExplicitPiAgentKindFromCommand', () => {
   it('classifies the launched agent instead of mentions in its arguments', () => {
     expect(detectExplicitPiAgentKindFromCommand('pi "compare omp"')).toBe('pi')
     expect(detectExplicitPiAgentKindFromCommand('omp "compare pi"')).toBe('omp')
+    expect(detectExplicitPiAgentKindFromCommand('prime-agent "compare pi and omp"')).toBe(
+      'prime-agent'
+    )
   })
 })

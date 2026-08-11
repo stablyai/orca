@@ -60,7 +60,8 @@ function resumableStateFactoryFor(
       return () => createDroidSessionResumeState(candidate.file)
     case 'openclaw':
     case 'pi':
-    case 'omp': {
+    case 'omp':
+    case 'prime-agent': {
       const agent = candidate.agent
       return () => createMessageGraphSessionResumeState(agent, candidate.file)
     }
@@ -95,6 +96,12 @@ const cache = new Map<string, SessionParseCacheEntry>()
 
 export function resetSessionParseCacheForTests(): void {
   cache.clear()
+}
+
+// Drops one entry after its file is deleted. Cleanliness, not correctness:
+// discovery walks disk first, so a trashed file is never rediscovered anyway.
+export function invalidateSessionParseCacheEntry(path: string): void {
+  cache.delete(path)
 }
 
 // Persisted subset of a cache entry: the non-serializable `resume` parser

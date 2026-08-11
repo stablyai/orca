@@ -115,6 +115,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/hermes')).toBe('hermes')
     expect(resolveHookSource('/hook/pi')).toBe('pi')
     expect(resolveHookSource('/hook/omp')).toBe('omp')
+    expect(resolveHookSource('/hook/prime-agent')).toBe('prime-agent')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/mimo-code')).toBe('mimo-code')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
@@ -150,6 +151,45 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('hello')
     expect(event!.payload.agentType).toBe('claude')
+  })
+
+  it('normalizes a BOM-prefixed Cursor hook payload to a working state', () => {
+    const event = normalizeHookPayload(
+      state,
+      'cursor',
+      {
+        paneKey: PANE_KEY,
+        payload: '\uFEFF{"hook_event_name":"beforeSubmitPrompt","prompt":"Synthetic Cursor prompt"}'
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      agentType: 'cursor',
+      state: 'working',
+      prompt: 'Synthetic Cursor prompt'
+    })
+    expect(event?.hookEventName).toBe('beforeSubmitPrompt')
+  })
+
+  // Why: pins the allowance to exactly one leading U+FEFF, so nobody widens it into a trim.
+  it('still rejects a hook payload that is malformed once the BOM is removed', () => {
+    const bom = '\uFEFF'
+    const body = '{"hook_event_name":"beforeSubmitPrompt"}'
+    for (const payload of [
+      `${bom}${bom}${body}`,
+      `${bom}not json`,
+      ` ${bom}${body}`,
+      `{"hook_event_name"${bom}:"beforeSubmitPrompt"}`
+    ]) {
+      const event = normalizeHookPayload(
+        state,
+        'cursor',
+        { paneKey: PANE_KEY, payload },
+        'production'
+      )
+      expect(event).toBeNull()
+    }
   })
 
   it('normalizes Gemini BeforeTool to working with tool fields', () => {
@@ -780,6 +820,53 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(next?.payload.prompt).toBe('')
+  })
+
+  it('normalizes Prime status and session identity without Pi-only ask-user behavior', () => {
+    const tool = normalizeHookPayload(
+      state,
+      'prime-agent',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'tool_call',
+          prompt: 'prime task',
+          tool_name: 'ask_user_question',
+          tool_input: { questions: [{ question: 'Choose', options: ['x'] }] },
+          session_id: 'prime-session-1',
+          session_file: '/tmp/prime-session-1.jsonl'
+        }
+      },
+      'production'
+    )
+    expect(tool).toMatchObject({
+      source: 'prime-agent',
+      providerSession: {
+        key: 'session_id',
+        id: 'prime-session-1',
+        transcriptPath: '/tmp/prime-session-1.jsonl'
+      },
+      payload: { state: 'working', agentType: 'prime-agent', prompt: 'prime task' }
+    })
+    expect(tool?.payload.interactivePrompt).toBeUndefined()
+
+    const sessionStart = normalizeHookPayload(
+      state,
+      'prime-agent',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'session_start',
+          session_id: 'prime-session-2',
+          session_file: '/tmp/prime-session-2.jsonl'
+        }
+      },
+      'production'
+    )
+    expect(sessionStart).toMatchObject({
+      providerSessionOnly: true,
+      payload: { state: 'done', prompt: '', agentType: 'prime-agent' }
+    })
   })
 
   it('normalizes Command Code hooks and reads turn text from the transcript', () => {

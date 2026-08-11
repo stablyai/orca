@@ -7,7 +7,7 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/sidebar/WorktreeCard.tsx",
+    "filePath": "src/renderer/src/components/sidebar/worktree-card-meta-row.tsx",
     "kind": "jsx-attribute:label",
     "text": "sidebar",
     "dynamic": false,

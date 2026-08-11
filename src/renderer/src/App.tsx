@@ -69,7 +69,10 @@ import { onOnboardingReopened } from './components/onboarding/show-onboarding-ev
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
-import { OrcaProfileSwitcher } from './components/orca-profiles/OrcaProfileSwitcher'
+import {
+  persistFloatingTerminalPanelOpen,
+  readPersistedFloatingTerminalPanelViewState
+} from './components/floating-terminal/floating-terminal-panel-view-state'
 import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
@@ -99,6 +102,7 @@ import {
   usePrimarySelectionPaste
 } from './hooks/usePrimarySelectionPaste'
 import { useAppMenuPaste } from './hooks/useAppMenuPaste'
+import { useAppMenuSelectionActions } from './hooks/useAppMenuSelectionActions'
 import { useLargeTextControlPaste } from './hooks/useLargeTextControlPaste'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
@@ -335,6 +339,7 @@ const AutomationsPage = lazy(() => import('./components/automations/AutomationsP
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
 const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
+const ArtifactsPage = lazy(() => import('./components/artifacts/ArtifactsPage'))
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
@@ -356,6 +361,9 @@ const AddProjectFromFolderDialog = lazy(
 )
 const ProjectAddedDialog = lazy(() => import('./components/sidebar/ProjectAddedDialog'))
 const DeleteWorktreeDialog = lazy(() => import('./components/sidebar/DeleteWorktreeDialog'))
+const PreservedBranchBatchReviewModal = lazy(
+  () => import('./components/sidebar/PreservedBranchBatchReviewModal')
+)
 const DictationController = lazy(() =>
   import('./components/dictation/DictationController').then((module) => ({
     default: module.DictationController
@@ -440,7 +448,11 @@ function App(): React.JSX.Element {
   const clearUnreadDockBadge = useUnreadDockBadge()
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
-  const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
+  // Why restored: leaving the panel closed forces the user to reopen and re-maximize it,
+  // and that size jump reflows a live TUI's buffer (see floating-terminal-panel-view-state).
+  const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(
+    () => readPersistedFloatingTerminalPanelViewState()?.open === true
+  )
   const floatingWorkspaceTourInteractionSnapshotRef = useRef<{
     wasPreviouslyInteracted?: boolean
     persisted?: Promise<void>
@@ -535,6 +547,10 @@ function App(): React.JSX.Element {
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
   const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')
   const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
+  // Why tracked separately: the flag reads false while settings are still loading, and a
+  // false read at boot must not be treated as the user disabling the feature. The store
+  // initializes `settings` to null (not undefined) - fetchSettings replaces it atomically.
+  const floatingTerminalSettingsHydrated = useAppStore((s) => s.settings != null)
   const floatingTerminalTriggerLocation = useAppStore(
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   )
@@ -632,8 +648,19 @@ function App(): React.JSX.Element {
         restoreFloatingTerminalReturnFocus()
       }
       setFloatingTerminalOpen(resolvedOpen)
+      // Why gated on the flag: `settings` is undefined until it hydrates, so the
+      // feature-off effect force-closes the panel on every boot. Persisting there would
+      // overwrite the user's restored `open` with a value they never chose.
+      if (floatingTerminalEnabled) {
+        persistFloatingTerminalPanelOpen(resolvedOpen)
+      }
     },
-    [floatingTerminalOpen, rememberFloatingTerminalReturnFocus, restoreFloatingTerminalReturnFocus]
+    [
+      floatingTerminalEnabled,
+      floatingTerminalOpen,
+      rememberFloatingTerminalReturnFocus,
+      restoreFloatingTerminalReturnFocus
+    ]
   )
 
   useEffect(() => {
@@ -647,10 +674,13 @@ function App(): React.JSX.Element {
   }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
 
   useEffect(() => {
-    if (!floatingTerminalEnabled) {
+    // Why the hydration gate: this effect fires on every boot while settings are still
+    // undefined, and closing there discards the restored open state before the real flag
+    // value arrives. Only a hydrated flag-off is an actual disable.
+    if (floatingTerminalSettingsHydrated && !floatingTerminalEnabled) {
       setFloatingTerminalOpenWithFocus(false)
     }
-  }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
+  }, [floatingTerminalSettingsHydrated, floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
 
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
@@ -694,6 +724,7 @@ function App(): React.JSX.Element {
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
 
   useAppMenuPaste()
+  useAppMenuSelectionActions()
   useLargeTextControlPaste()
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const petVisible = useAppStore((s) => s.petVisible)
@@ -1525,9 +1556,6 @@ function App(): React.JSX.Element {
   })
   // Full-page navigation surfaces own the whole content area, so suppress right-sidebar controls.
   const showRightSidebarControls = !creationLayoutActive && canShowRightSidebarForView(activeView)
-  const showProfileSwitcherInSidebarFooter = showSidebar && sidebarOpen
-  const showProfileSwitcherInTopRight = !showProfileSwitcherInSidebarFooter
-
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
       return
@@ -2199,33 +2227,12 @@ function App(): React.JSX.Element {
           </TooltipContent>
         </Tooltip>
       )}
-      {showProfileSwitcherInTopRight ? <OrcaProfileSwitcher /> : null}
       {/* Why: the open right sidebar's header renders its own close button, so hide this duplicate. */}
       {!rightSidebarOpen && rightSidebarToggle}
       {/* Why: reserve space so the Windows/Linux window-controls overlay doesn't obscure content. */}
       {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
     </>
   )
-  const workspaceProfileSwitcher =
-    showProfileSwitcherInTopRight &&
-    workspaceChromeActive &&
-    leftTitlebarChromeLayout.shouldMount &&
-    !stackedSidebarOpen ? (
-      <div
-        className="absolute top-0 z-10 flex h-[36px] items-center"
-        style={
-          {
-            right: showRightSidebarControls
-              ? 'calc(var(--window-controls-width) + 42px)'
-              : 'var(--window-controls-width)',
-            WebkitAppRegion: 'no-drag'
-          } as React.CSSProperties
-        }
-      >
-        <OrcaProfileSwitcher />
-      </div>
-    ) : null
-
   return (
     <div
       ref={setAppRootNode}
@@ -2343,7 +2350,8 @@ function App(): React.JSX.Element {
                       )
                     ) : null}
                     <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-                      {stackedSidebarOpen ? (
+                      {/* Why: automations owns its page header; the stacked titlebar would be an empty 36px stripe. */}
+                      {stackedSidebarOpen && activeView !== 'automations' ? (
                         <div className="titlebar">{titlebarMainStrip}</div>
                       ) : null}
                       <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -2362,7 +2370,6 @@ function App(): React.JSX.Element {
                             {rightSidebarToggle}
                           </div>
                         )}
-                        {workspaceProfileSwitcher}
                         <div className="flex flex-1 min-w-0 min-h-0 flex-col">
                           {shouldMountTerminalWorkbench ? (
                             <div
@@ -2404,6 +2411,7 @@ function App(): React.JSX.Element {
                             >
                               {activeView === 'settings' ? <Settings /> : null}
                               {activeView === 'skills' ? <SkillsPage /> : null}
+                              {activeView === 'artifacts' ? <ArtifactsPage /> : null}
                               {activeView === 'tasks' ? <TaskPage /> : null}
                               {activeView === 'automations' ? <AutomationsPage /> : null}
                               {activeView === 'activity' ? <ActivityPrototypePage /> : null}
@@ -2697,6 +2705,16 @@ function App(): React.JSX.Element {
                   compact
                 >
                   <DeleteWorktreeDialog />
+                </RecoverableRenderErrorBoundary>
+              ) : null}
+              {activeModal === 'preserved-branch-review' ? (
+                <RecoverableRenderErrorBoundary
+                  boundaryId="modal.preserved-branch-review"
+                  surface="modal"
+                  resetKey
+                  compact
+                >
+                  <PreservedBranchBatchReviewModal />
                 </RecoverableRenderErrorBoundary>
               ) : null}
             </Suspense>

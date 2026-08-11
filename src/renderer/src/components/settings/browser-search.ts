@@ -3,11 +3,12 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import {
   getBrowserLinkRoutingDescription,
+  getTerminalLinkActionsDescription,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
 } from './browser-link-routing-copy'
 
-type BrowserShortcutPlatform = {
+export type BrowserShortcutPlatform = {
   isMac: boolean
 }
 
@@ -15,6 +16,38 @@ function getDefaultBrowserShortcutPlatform(): BrowserShortcutPlatform {
   return {
     isMac: typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
   }
+}
+
+export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPlatform): string[] {
+  return [
+    ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+    ...translateSearchKeyword('auto.components.settings.browser.search.bea27bac4b', 'links'),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.terminal',
+      'terminal'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.click',
+      'click'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.actions',
+      'actions'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.popover',
+      'popover'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.menu',
+      'menu'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.disable',
+      'disable'
+    ),
+    platform.isMac ? 'cmd' : 'ctrl'
+  ]
 }
 
 export function getBrowserPaneSearchEntries(
@@ -137,6 +170,14 @@ export function getBrowserPaneSearchEntries(
         getLinkRoutingModifierTitle(true),
         platform.isMac ? 'cmd' : 'ctrl'
       ]
+    },
+    {
+      title: translate(
+        'auto.components.settings.BrowserTerminalLinkActionsSetting.title',
+        'Show terminal link actions'
+      ),
+      description: getTerminalLinkActionsDescription(platform),
+      keywords: getTerminalLinkActionSearchKeywords(platform)
     },
     {
       title: translate(
