@@ -71,6 +71,13 @@ const LaunchPreferences = z
 
 const PromptDelivery = z.enum(['auto-submit', 'draft'])
 
+const TerminalColorQueryReplies = z
+  .object({
+    foreground: z.string().max(128).optional(),
+    background: z.string().max(128).optional()
+  })
+  .strict()
+
 const AgentArgs = z
   .string()
   .refine(
@@ -132,6 +139,7 @@ const ExplicitEnsure = z
     ompResumeFilePath: OmpResumeFilePath.optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
+    terminalColorQueryReplies: TerminalColorQueryReplies.optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional()
   })
@@ -176,6 +184,7 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     promptDelivery: PromptDelivery.optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
+    terminalColorQueryReplies: TerminalColorQueryReplies.optional(),
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),

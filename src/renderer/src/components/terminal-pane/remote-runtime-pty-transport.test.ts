@@ -14,7 +14,10 @@ import {
   TERMINAL_INPUT_MAX_BYTES
 } from '../../../../shared/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
-import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  AGENT_SESSION_TERMINAL_COLOR_QUERY_RUNTIME_CAPABILITY,
+  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 
 describe('createRemoteRuntimePtyTransport', () => {
   const runtimeCall = vi.fn()
@@ -4097,6 +4100,53 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
+  it.each([
+    {
+      capabilities: ['agent-session.host-authority.v1'],
+      method: 'terminal.create'
+    },
+    {
+      capabilities: [AGENT_SESSION_TERMINAL_COLOR_QUERY_RUNTIME_CAPABILITY],
+      method: 'terminal.createAgentSession'
+    }
+  ])('preserves startup colors via $method when supported', async ({ capabilities, method }) => {
+    runtimeCall.mockImplementation(async (args: { method?: string }) =>
+      args.method === 'status.get'
+        ? {
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities
+            }
+          }
+        : { ok: true, result: { terminal: { handle: 'terminal-1' } } }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const terminalColorQueryReplies = { foreground: '#b3b1ad', background: '#0a0e14' }
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      launchAgent: 'codex',
+      terminalColorQueryReplies
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method,
+        params: expect.objectContaining({ terminalColorQueryReplies })
+      })
+    )
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: method === 'terminal.create' ? 'terminal.createAgentSession' : 'terminal.create'
+      })
+    )
+  })
+
   it('uses connect-time agent identity while the remote host builds the launch', async () => {
     runtimeCall.mockImplementation(async (args: { method?: string }) =>
       args.method === 'status.get'
@@ -4105,7 +4155,7 @@ describe('createRemoteRuntimePtyTransport', () => {
             result: {
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1', 'agent-session.omp-resume-path.v1']
+              capabilities: [AGENT_SESSION_TERMINAL_COLOR_QUERY_RUNTIME_CAPABILITY]
             }
           }
         : { ok: true, result: { terminal: { handle: 'terminal-1' } } }
@@ -4119,7 +4169,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       launchConfig: { agentArgs: '--old', agentEnv: {} },
       agentArgsOverride: '--profile captured',
       launchToken: 'old-token',
-      launchAgent: 'codex'
+      launchAgent: 'codex',
+      terminalColorQueryReplies: { foreground: '#b3b1ad', background: '#0a0e14' }
     })
 
     await transport.connect({
@@ -4154,6 +4205,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           },
           ompResumeFilePath: '/custom/omp/project/session.jsonl',
           agentArgs: '--profile captured',
+          terminalColorQueryReplies: { foreground: '#b3b1ad', background: '#0a0e14' },
           placement: { tabId: 'tab-1', leafId: 'pane:1' },
           presentation: 'background'
         })

@@ -21,6 +21,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import {
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_TERMINAL_COLOR_QUERY_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import {
@@ -2024,6 +2025,7 @@ export function createRemoteRuntimePtyTransport(
                       ...(agentLaunchPreferences
                         ? { launchPreferences: agentLaunchPreferences }
                         : {}),
+                      ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
                       placement: { tabId, leafId },
                       presentation: 'background'
                     },
@@ -2044,6 +2046,7 @@ export function createRemoteRuntimePtyTransport(
                         ...(agentLaunchPreferences
                           ? { launchPreferences: agentLaunchPreferences }
                           : {}),
+                        ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
                         placement: { tabId, leafId },
                         presentation: 'background'
                       },
@@ -2060,9 +2063,13 @@ export function createRemoteRuntimePtyTransport(
             : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
                 environmentId: createEnvironmentId,
                 hostAuthority: hostAuthorityCreate,
-                ...(resumeProviderSessionToSend && launchAgentToSend === 'omp'
-                  ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
-                  : {}),
+                ...(terminalColorQueryReplies
+                  ? {
+                      hostAuthorityCapability: AGENT_SESSION_TERMINAL_COLOR_QUERY_RUNTIME_CAPABILITY
+                    }
+                  : resumeProviderSessionToSend && launchAgentToSend === 'omp'
+                    ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
+                    : {}),
                 legacy: legacyCreate
               })
           : await legacyCreate()

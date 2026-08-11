@@ -13141,7 +13141,8 @@ describe('OrcaRuntimeService', () => {
       worktree: `id:${TEST_WORKTREE_ID}`,
       agent: 'omp' as const,
       providerSession: { key: 'session_id' as const, id: 'provider-session-1' },
-      ompResumeFilePath: '/custom/omp/project/session.jsonl'
+      ompResumeFilePath: '/custom/omp/project/session.jsonl',
+      terminalColorQueryReplies: { foreground: '#b3b1ad', background: '#0a0e14' }
     }
     const first = await runtime.ensureAgentSession(request)
     const second = await runtime.ensureAgentSession(request)
@@ -13157,6 +13158,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         command: expect.stringContaining("'--resume' '/custom/omp/project/session.jsonl'"),
+        terminalColorQueryReplies: { foreground: '#b3b1ad', background: '#0a0e14' },
         agentSessionEnsure: expect.objectContaining({
           claim: expect.objectContaining({ agent: 'omp' })
         })
@@ -13191,7 +13193,8 @@ describe('OrcaRuntimeService', () => {
         prompt: 'review before sending',
         promptDelivery: 'draft',
         agentArgs: '--permission-mode plan',
-        launchPreferences: { model: 'opus', effort: 'high' }
+        launchPreferences: { model: 'opus', effort: 'high' },
+        terminalColorQueryReplies: { foreground: '#b3b1ad', background: '#0a0e14' }
       },
       { clientId: 'renderer-1', clientKind: 'runtime' }
     )
@@ -13201,7 +13204,8 @@ describe('OrcaRuntimeService', () => {
         command: expect.stringMatching(
           /^host-claude '--model' 'opus'.*'--permission-mode' 'plan'.*--prefill 'review before sending'/
         ),
-        env: expect.objectContaining({ HOST_PROFILE: 'true' })
+        env: expect.objectContaining({ HOST_PROFILE: 'true' }),
+        terminalColorQueryReplies: { foreground: '#b3b1ad', background: '#0a0e14' }
       })
     )
     expect(spawn.mock.calls[0]?.[0]?.command).not.toContain('--host-default')

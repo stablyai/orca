@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_TERMINAL_COLOR_QUERY_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION
@@ -56,6 +57,7 @@ describe('agent session RPC methods', () => {
         ompResumeFilePath: '/custom/omp/project/session.jsonl',
         agentArgs: '--profile review',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
+        terminalColorQueryReplies: { foreground: '#b3b1ad', background: '#0a0e14' },
         presentation: 'focused',
         placement: { tabId: 'tab-1', leafId: 'leaf-1' }
       })
@@ -71,6 +73,7 @@ describe('agent session RPC methods', () => {
         ompResumeFilePath: '/custom/omp/project/session.jsonl',
         agentArgs: '--profile review',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
+        terminalColorQueryReplies: { foreground: '#b3b1ad', background: '#0a0e14' },
         presentation: 'focused',
         placement: { tabId: 'tab-1', leafId: 'leaf-1' }
       },
@@ -286,6 +289,7 @@ describe('agent session RPC methods', () => {
         promptDelivery: 'draft',
         agentArgs: '--profile review',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
+        terminalColorQueryReplies: { foreground: '#b3b1ad', background: '#0a0e14' },
         viewMode: 'chat'
       }),
       (response) => replies.push(JSON.parse(response) as RpcResponse),
@@ -303,6 +307,7 @@ describe('agent session RPC methods', () => {
         promptDelivery: 'draft',
         agentArgs: '--profile review',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
+        terminalColorQueryReplies: { foreground: '#b3b1ad', background: '#0a0e14' },
         viewMode: 'chat'
       },
       { clientId: 'authenticated-device', clientKind: 'runtime' }
@@ -373,5 +378,6 @@ describe('agent session RPC methods', () => {
     expect(MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION).toBe(2)
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_TERMINAL_COLOR_QUERY_RUNTIME_CAPABILITY)
   })
 })

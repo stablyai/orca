@@ -7,6 +7,7 @@ import {
 import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runtime-types'
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import type { TerminalOscColorQueryReplyColors } from './terminal-osc-color-reply'
 import type { TuiAgent } from './types'
 
 export { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY as AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from './protocol-version'
@@ -110,6 +111,7 @@ export type RuntimeEnsureAgentSessionRequest =
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
       launchPreferences?: AgentLaunchPreferences
+      terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
     }
@@ -128,6 +130,7 @@ export type RuntimeCreateAgentSessionRequest = {
   /** Explicit client override. Omission keeps launch defaults host-owned. */
   agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
+  terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   startupCwd?: string
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }
