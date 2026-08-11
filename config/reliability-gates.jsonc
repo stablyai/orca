@@ -7243,6 +7243,7 @@
       "invariant": "A guarded note send writes only to the exact PTY binding checked by the guard and only while permission/wait evidence allows input; fresh hook state conflicting with an ordinary shell foreground requires fresh provider confirmation of a recognized agent in that PTY.",
       "oracle": "Fresh explicit state plus ordinary PowerShell plus confirmed recognized agent is sendable on the same PTY. Confirmed shell/non-agent, unavailable confirmation, PTY exit, handle rebind, or a callback PTY mismatch returns a refusal or not-writable result and writes zero bytes.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send.test.ts src/renderer/src/lib/active-agent-note-terminal-binding.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
       ],
       "testFiles": [
@@ -7255,6 +7256,7 @@
         "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
         "src/main/daemon/pty-subprocess.test.ts",
         "src/renderer/src/lib/active-agent-note-send.test.ts",
+        "src/renderer/src/lib/active-agent-note-terminal-binding.test.ts",
         "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
       ],
       "assertionRefs": [
@@ -7314,7 +7316,17 @@
         },
         {
           "file": "src/renderer/src/lib/active-agent-note-send.test.ts",
-          "assertions": ["selected active-agent note sends retain guarded paste and submit routing"]
+          "assertions": [
+            "selected active-agent note sends retain guarded paste and submit routing",
+            "a host restart before the first accepted write remints once, while a restart after an accepted paste never replays prompt bytes"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/active-agent-note-terminal-binding.test.ts",
+          "assertions": [
+            "direct and paired SSH reconnect generations invalidate only the affected folder or worktree pane binding",
+            "retained pane bindings remain bounded under worktree churn"
+          ]
         },
         {
           "file": "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",

@@ -36,6 +36,9 @@ export async function getTerminalAgentSendReadiness(
     }
     return { status: 'sendable', supportsGuardedSend: true }
   } catch (error) {
+    if (isRuntimeTerminalStale(error)) {
+      throw error
+    }
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       if (!options.allowLegacyFallback) {
         // Why: selected-target sends are immediate; without terminal.agentStatus
@@ -69,6 +72,9 @@ async function getLegacyTerminalAgentSendStatus(
     )
     return isRunningAgent ? 'sendable' : 'no-agent'
   } catch (error) {
+    if (isRuntimeTerminalStale(error)) {
+      throw error
+    }
     if (isRuntimeTerminalUnavailable(error)) {
       return 'no-active-terminal'
     }
@@ -84,11 +90,15 @@ export function isRuntimeTimeout(error: unknown): boolean {
 export function isRuntimeTerminalUnavailable(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return (
-    message.includes('terminal_handle_stale') ||
     message.includes('terminal_exited') ||
     message.includes('terminal_gone') ||
     message.includes('no_active_terminal')
   )
+}
+
+export function isRuntimeTerminalStale(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('terminal_handle_stale')
 }
 
 export function isRuntimeTerminalNotWritable(error: unknown): boolean {

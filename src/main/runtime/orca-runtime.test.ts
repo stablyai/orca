@@ -2800,6 +2800,56 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('remints a terminal handle when a replacement runtime owns the same pane', async () => {
+    const tabId = 'tab-runtime-rebind'
+    const leafId = HEADLESS_LEAF_ID
+    const graph = {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-runtime-rebind'
+        }
+      ]
+    } satisfies RuntimeSyncWindowGraph
+
+    const oldRuntime = new OrcaRuntimeService(store)
+    oldRuntime.attachWindow(1)
+    oldRuntime.syncWindowGraph(1, graph)
+    const oldHandle = (await oldRuntime.listTerminals(`id:${TEST_WORKTREE_ID}`)).terminals[0]
+      ?.handle
+    expect(oldHandle).toBeTruthy()
+
+    const replacementRuntime = new OrcaRuntimeService(store)
+    replacementRuntime.attachWindow(1)
+    replacementRuntime.syncWindowGraph(1, graph)
+    const replacement = await replacementRuntime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    const newHandle = replacement.terminals[0]?.handle
+    expect(newHandle).toBeTruthy()
+    expect(newHandle).not.toBe(oldHandle)
+
+    await expect(replacementRuntime.showTerminal(oldHandle!)).rejects.toThrow(
+      'terminal_handle_stale'
+    )
+    await expect(replacementRuntime.showTerminal(newHandle!)).resolves.toMatchObject({
+      handle: newHandle,
+      tabId,
+      leafId,
+      ptyId: 'pty-runtime-rebind'
+    })
+  })
+
   it('rejects pane resolution when leaf and PTY ownership disagree', () => {
     const runtime = new OrcaRuntimeService(store)
     const tabId = 'tab-1'

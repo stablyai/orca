@@ -3,10 +3,13 @@ import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import {
-  findActiveRuntimeTerminal,
   getActiveTerminalNoteTarget,
   type ActiveTerminalNoteTarget
 } from './active-agent-note-target'
+import {
+  clearActiveAgentTerminalBinding,
+  resolveActiveAgentTerminal
+} from './active-agent-note-terminal-binding'
 import {
   BRACKETED_PASTE_BEGIN,
   BRACKETED_PASTE_END,
@@ -18,10 +21,10 @@ import {
   ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS,
   getTerminalAgentSendReadiness,
   isRuntimeTerminalNotWritable,
+  isRuntimeTerminalStale,
   isRuntimeTerminalUnavailable,
   isRuntimeTimeout
 } from './active-agent-terminal-send-readiness'
-
 export {
   getActiveAgentNoteTarget,
   getActiveAgentRuntimeProbeDescriptor,
@@ -34,9 +37,9 @@ export {
   type ActiveAgentNotesSendResult,
   type ActiveAgentNotesSendStatus
 } from './active-agent-note-send-result'
-
 const ACTIVE_AGENT_SEND_TIMEOUT_MS = 8000
 const ORCA_DESKTOP_TERMINAL_CLIENT = { id: 'orca-desktop', type: 'desktop' as const }
+class ActiveAgentPostPasteStaleError extends Error {}
 
 export async function sendNotesToActiveAgentSession({
   worktreeId,
@@ -53,6 +56,22 @@ export async function sendNotesToActiveAgentSession({
   if (!trimmedPrompt) {
     return { status: 'empty' }
   }
+  return await sendNotesToActiveAgentSessionAttempt(
+    { worktreeId, prompt: trimmedPrompt, noteTarget: explicitNoteTarget, timeoutMs },
+    0
+  )
+}
+
+async function sendNotesToActiveAgentSessionAttempt(
+  args: {
+    worktreeId: string
+    prompt: string
+    noteTarget?: ActiveTerminalNoteTarget
+    timeoutMs?: number
+  },
+  staleRetryCount: number
+): Promise<ActiveAgentNotesSendResult> {
+  const { worktreeId, prompt, noteTarget: explicitNoteTarget, timeoutMs } = args
 
   const state = useAppStore.getState()
   // Why: an explicit target lets the notes dropdown address ANY running agent of
@@ -68,71 +87,79 @@ export async function sendNotesToActiveAgentSession({
   const runtimeTarget = getActiveRuntimeTarget(
     getSettingsForWorktreeRuntimeOwner(state, worktreeId)
   )
-  const terminal = await findActiveRuntimeTerminal(
-    runtimeTarget,
-    worktreeId,
-    noteTarget,
-    ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS
-  )
+  const terminal = await resolveActiveAgentTerminal(state, runtimeTarget, worktreeId, noteTarget)
   if (!terminal) {
     return { status: 'no-active-terminal' }
   }
-
-  if (explicitNoteTarget) {
-    return await sendPromptToExplicitAgentTarget(runtimeTarget, terminal.handle, trimmedPrompt)
-  }
-
-  const effectiveTimeoutMs = timeoutMs ?? ACTIVE_AGENT_SEND_TIMEOUT_MS
-  const initialAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminal.handle, {
-    allowLegacyFallback: true
-  })
-  if (initialAgentStatus.status !== 'sendable') {
-    return { status: initialAgentStatus.status }
-  }
-
   try {
-    const { wait } = await callRuntimeRpc<{ wait: RuntimeTerminalWait }>(
-      runtimeTarget,
-      'terminal.wait',
-      { terminal: terminal.handle, for: 'tui-idle', timeoutMs: effectiveTimeoutMs },
-      { timeoutMs: effectiveTimeoutMs + 5000 }
-    )
-    if (wait.status !== 'running') {
-      return { status: 'no-active-terminal' }
+    if (explicitNoteTarget) {
+      return await sendPromptToExplicitAgentTarget(runtimeTarget, terminal.handle, prompt)
     }
-    if (wait.blockedReason) {
-      return { status: 'permission' }
-    }
-    if (!wait.satisfied) {
-      return { status: 'not-ready' }
-    }
-  } catch (error) {
-    if (isRuntimeTerminalUnavailable(error)) {
-      return { status: 'no-active-terminal' }
-    }
-    if (isRuntimeTimeout(error)) {
-      return { status: 'not-ready' }
-    }
-    throw error
-  }
-
-  const finalAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminal.handle, {
-    allowLegacyFallback: true
-  })
-  if (finalAgentStatus.status !== 'sendable') {
-    return { status: finalAgentStatus.status }
-  }
-
-  if (finalAgentStatus.supportsGuardedSend) {
-    return await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminal.handle, trimmedPrompt, {
-      allowLegacyFallback: false
+    const effectiveTimeoutMs = timeoutMs ?? ACTIVE_AGENT_SEND_TIMEOUT_MS
+    const initialAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminal.handle, {
+      allowLegacyFallback: true
     })
-  }
+    if (initialAgentStatus.status !== 'sendable') {
+      return { status: initialAgentStatus.status }
+    }
+    try {
+      const { wait } = await callRuntimeRpc<{ wait: RuntimeTerminalWait }>(
+        runtimeTarget,
+        'terminal.wait',
+        { terminal: terminal.handle, for: 'tui-idle', timeoutMs: effectiveTimeoutMs },
+        { timeoutMs: effectiveTimeoutMs + 5000 }
+      )
+      if (wait.status !== 'running') {
+        return { status: 'no-active-terminal' }
+      }
+      if (wait.blockedReason) {
+        return { status: 'permission' }
+      }
+      if (!wait.satisfied) {
+        return { status: 'not-ready' }
+      }
+    } catch (error) {
+      if (isRuntimeTerminalStale(error)) {
+        throw error
+      }
+      if (isRuntimeTerminalUnavailable(error)) {
+        return { status: 'no-active-terminal' }
+      }
+      if (isRuntimeTimeout(error)) {
+        return { status: 'not-ready' }
+      }
+      throw error
+    }
+    const finalAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminal.handle, {
+      allowLegacyFallback: true
+    })
+    if (finalAgentStatus.status !== 'sendable') {
+      return { status: finalAgentStatus.status }
+    }
+    if (finalAgentStatus.supportsGuardedSend) {
+      return await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminal.handle, prompt, {
+        allowLegacyFallback: false
+      })
+    }
 
-  // Why: protocol-compatible older SSH runtimes do not know the guarded send
-  // option. They already passed terminal.wait + legacy isRunningAgent checks,
-  // so preserve the old active-focused send path for remote compatibility.
-  return await sendPromptWithLegacyCombinedSend(runtimeTarget, terminal.handle, trimmedPrompt)
+    // Why: protocol-compatible older SSH runtimes do not know the guarded send
+    // option. They already passed terminal.wait + legacy isRunningAgent checks,
+    // so preserve the old active-focused send path for remote compatibility.
+    return await sendPromptWithLegacyCombinedSend(runtimeTarget, terminal.handle, prompt)
+  } catch (error) {
+    if (error instanceof ActiveAgentPostPasteStaleError) {
+      clearActiveAgentTerminalBinding(worktreeId, noteTarget, runtimeTarget)
+      return { status: 'partial-submit-failed' }
+    }
+    if (!isRuntimeTerminalStale(error)) {
+      throw error
+    }
+    clearActiveAgentTerminalBinding(worktreeId, noteTarget, runtimeTarget)
+    if (staleRetryCount > 0) {
+      return { status: 'no-active-terminal' }
+    }
+    return await sendNotesToActiveAgentSessionAttempt(args, staleRetryCount + 1)
+  }
 }
 
 async function sendPromptWithLegacyCombinedSend(
@@ -154,6 +181,9 @@ async function sendPromptWithLegacyCombinedSend(
     )
     return send.accepted ? { status: 'sent' } : { status: 'not-writable' }
   } catch (error) {
+    if (isRuntimeTerminalStale(error)) {
+      throw error
+    }
     if (isRuntimeTerminalUnavailable(error)) {
       return { status: 'no-active-terminal' }
     }
@@ -205,6 +235,9 @@ async function sendPromptWithGuardedPasteAndEnter(
       return { status: 'not-writable' }
     }
   } catch (error) {
+    if (isRuntimeTerminalStale(error)) {
+      throw error
+    }
     if (isRuntimeTerminalUnavailable(error)) {
       return { status: 'no-active-terminal' }
     }
@@ -227,6 +260,9 @@ async function sendPromptWithGuardedPasteAndEnter(
       return { status: 'partial-submit-failed' }
     }
   } catch (error) {
+    if (isRuntimeTerminalStale(error)) {
+      throw new ActiveAgentPostPasteStaleError()
+    }
     if (isRuntimeTerminalUnavailable(error)) {
       return { status: 'partial-submit-failed' }
     }
@@ -247,6 +283,9 @@ async function sendPromptWithGuardedPasteAndEnter(
     )
     return send.accepted ? { status: 'sent' } : { status: 'partial-submit-failed' }
   } catch (error) {
+    if (isRuntimeTerminalStale(error)) {
+      throw new ActiveAgentPostPasteStaleError()
+    }
     if (isRuntimeTerminalUnavailable(error) || isRuntimeTerminalNotWritable(error)) {
       return { status: 'partial-submit-failed' }
     }
