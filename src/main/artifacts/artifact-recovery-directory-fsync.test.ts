@@ -4,20 +4,32 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 
-const fsyncMockState = vi.hoisted(() => ({ directoryErrorCode: 'EINVAL' }))
+const fsyncMockState = vi.hoisted(() => ({
+  directoryDescriptor: -1,
+  directoryErrorCode: 'EINVAL'
+}))
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
   return {
     ...actual,
+    closeSync: (descriptor: number) => {
+      if (descriptor !== fsyncMockState.directoryDescriptor) {
+        actual.closeSync(descriptor)
+      }
+    },
     fsyncSync: (descriptor: number) => {
-      if (actual.fstatSync(descriptor).isDirectory()) {
+      if (descriptor === fsyncMockState.directoryDescriptor) {
         throw Object.assign(new Error('directory fsync failed'), {
           code: fsyncMockState.directoryErrorCode
         })
       }
       return actual.fsyncSync(descriptor)
-    }
+    },
+    openSync: (path: string, flags: string | number) =>
+      actual.statSync(path).isDirectory()
+        ? fsyncMockState.directoryDescriptor
+        : actual.openSync(path, flags)
   }
 })
 
