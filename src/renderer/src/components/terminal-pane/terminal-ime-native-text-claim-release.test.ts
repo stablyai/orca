@@ -52,7 +52,9 @@ describe('the claim is retired by releases the bypass rules would otherwise skip
     const { forwarder, sendInput } = install(() => composing)
 
     expect(forwarder.claimKeyEvent(keyEvent({ key: 'ㅇ', code: 'KeyD' }))).toBe(true)
-    textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+    // The composition boundaries are the isComposing flag alone. Dispatching
+    // compositionstart/compositionend here would imply a retirement path the forwarder does
+    // not have: it listens for input, blur, and the two xterm transaction events, nothing else.
     composing = true
 
     expect(
@@ -61,7 +63,6 @@ describe('the claim is retired by releases the bypass rules would otherwise skip
       )
     ).toBe(false)
 
-    textarea.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
     composing = false
 
     // The keydown for this press was refused while the composition was still live, so
