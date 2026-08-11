@@ -10,6 +10,11 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { parseHostAccessLink } from '../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing-verification'
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
+import type {
+  GitStashEntry,
+  GitStashMutationResult,
+  GitStashPushResult
+} from '../../../shared/git-stash-types'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import type {
   AiVaultSessionTitlesArgs,
@@ -2265,6 +2270,38 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         await mutateGitPath('git.discard', worktreePath, filePath)
       }
     },
+    stashList: async ({ worktreePath }) => {
+      const { entries } = await callRuntimeResult<{ entries: GitStashEntry[] }>(
+        'git.stashList',
+        await stashParams(worktreePath)
+      )
+      return entries
+    },
+    stashPush: async ({ worktreePath, includeUntracked, message }) =>
+      callRuntimeResult<GitStashPushResult>('git.stashPush', {
+        ...(await stashParams(worktreePath)),
+        includeUntracked: includeUntracked === true,
+        ...(message !== undefined ? { message } : {})
+      }),
+    stashApply: async ({ worktreePath, ref, expectedCommitOid }) =>
+      callRuntimeResult<GitStashMutationResult>('git.stashApply', {
+        ...(await stashParams(worktreePath)),
+        ...stashTargetParams(ref, expectedCommitOid)
+      }),
+    stashPop: async ({ worktreePath, ref, expectedCommitOid }) =>
+      callRuntimeResult<GitStashMutationResult>('git.stashPop', {
+        ...(await stashParams(worktreePath)),
+        ...stashTargetParams(ref, expectedCommitOid)
+      }),
+    stashDrop: async ({ worktreePath, ref, expectedCommitOid }) => {
+      await callRuntimeResult('git.stashDrop', {
+        ...(await stashParams(worktreePath)),
+        ...stashTargetParams(ref, expectedCommitOid)
+      })
+    },
+    stashClear: async ({ worktreePath }) => {
+      await callRuntimeResult('git.stashClear', await stashParams(worktreePath))
+    },
     remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.remoteFileUrl', {
@@ -4292,6 +4329,25 @@ async function resolveRuntimeFilePath(
     throw new Error(`File is outside runtime worktree: ${filePath}`)
   }
   return { worktree, relativePath }
+}
+
+async function stashParams(
+  worktreePath: string
+): Promise<{ worktree: ReturnType<typeof toRuntimeWorktreeSelector> }> {
+  const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+  return { worktree: toRuntimeWorktreeSelector(worktree.id) }
+}
+
+// Why: omit ref entirely rather than sending null — the RPC schema reads its
+// absence as "target the newest entry".
+function stashTargetParams(
+  ref: string | null | undefined,
+  expectedCommitOid: string | undefined
+): Record<string, string> {
+  return {
+    ...(typeof ref === 'string' ? { ref } : {}),
+    ...(expectedCommitOid ? { expectedCommitOid } : {})
+  }
 }
 
 async function mutateGitPath(

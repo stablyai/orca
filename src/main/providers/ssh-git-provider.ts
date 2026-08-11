@@ -19,6 +19,12 @@ import type {
   RemoveWorktreeResult
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type {
+  GitStashEntry,
+  GitStashMutationResult,
+  GitStashPushOptions,
+  GitStashPushResult
+} from '../../shared/git-stash-types'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
@@ -489,6 +495,87 @@ export class SshGitProvider implements IGitProvider {
     await this.runWithDiffDedupeClear(async () => {
       await this.mux.request('git.checkout', { worktreePath, branch })
     })
+  }
+
+  async listStashes(worktreePath: string): Promise<GitStashEntry[]> {
+    const result = await this.requestStash('git.stashList', { worktreePath })
+    return ((result as { entries?: GitStashEntry[] })?.entries ?? []) as GitStashEntry[]
+  }
+
+  async stashChanges(
+    worktreePath: string,
+    pushOptions: GitStashPushOptions = {}
+  ): Promise<GitStashPushResult> {
+    return (await this.runWithDiffDedupeClear(() =>
+      this.requestStash('git.stashPush', {
+        worktreePath,
+        includeUntracked: pushOptions.includeUntracked === true,
+        ...(pushOptions.message !== undefined ? { message: pushOptions.message } : {})
+      })
+    )) as GitStashPushResult
+  }
+
+  async applyStash(
+    worktreePath: string,
+    ref: string | null,
+    expectedCommitOid?: string
+  ): Promise<GitStashMutationResult> {
+    return this.restoreStashOverSsh('git.stashApply', worktreePath, ref, expectedCommitOid)
+  }
+
+  async popStash(
+    worktreePath: string,
+    ref: string | null,
+    expectedCommitOid?: string
+  ): Promise<GitStashMutationResult> {
+    return this.restoreStashOverSsh('git.stashPop', worktreePath, ref, expectedCommitOid)
+  }
+
+  async dropStash(worktreePath: string, ref: string, expectedCommitOid?: string): Promise<void> {
+    await this.runWithDiffDedupeClear(() =>
+      this.requestStash('git.stashDrop', {
+        worktreePath,
+        ref,
+        ...(expectedCommitOid ? { expectedCommitOid } : {})
+      })
+    )
+  }
+
+  async clearStashes(worktreePath: string): Promise<void> {
+    await this.runWithDiffDedupeClear(() => this.requestStash('git.stashClear', { worktreePath }))
+  }
+
+  private async restoreStashOverSsh(
+    method: string,
+    worktreePath: string,
+    ref: string | null,
+    expectedCommitOid?: string
+  ): Promise<GitStashMutationResult> {
+    return (await this.runWithDiffDedupeClear(() =>
+      this.requestStash(method, {
+        worktreePath,
+        // Why: omit ref entirely rather than sending null — the relay reads its
+        // absence as "target the newest entry".
+        ...(ref !== null ? { ref } : {}),
+        ...(expectedCommitOid ? { expectedCommitOid } : {})
+      })
+    )) as GitStashMutationResult
+  }
+
+  private async requestStash(method: string, params: Record<string, unknown>): Promise<unknown> {
+    try {
+      return await this.mux.request(method, params)
+    } catch (error) {
+      // Why: a newer desktop client may talk to an older relay that predates the
+      // stash methods; surface an actionable reconnect hint rather than a raw
+      // JSON-RPC method-not-found error in Source Control.
+      if (isJsonRpcMethodNotFoundError(error)) {
+        throw new Error(
+          'SSH stash support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+        )
+      }
+      throw error
+    }
   }
 
   async listLocalBranches(

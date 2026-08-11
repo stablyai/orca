@@ -11636,6 +11636,66 @@
                     }
                   }
                 }
+              },
+              "stash": {
+                "actions": {
+                  "applyTitle": "Apply stash",
+                  "applyDescription": "Pick a stash to apply. It stays in the list.",
+                  "dropTitle": "Drop stash",
+                  "dropDescription": "Pick a stash to delete permanently. This cannot be undone.",
+                  "popTitle": "Pop stash",
+                  "popDescription": "Pick a stash to apply and remove from the list.",
+                  "dropConfirmTitle": "Drop this stash?",
+                  "dropConfirmDescription": "{{value0}} will be deleted permanently. This cannot be undone.",
+                  "dropConfirmLabel": "Drop stash",
+                  "dropAllConfirmTitle": "Drop all stashes?",
+                  "dropAllConfirmOne": "1 stash will be deleted permanently. This cannot be undone.",
+                  "dropAllConfirmMany": "{{value0}} stashes will be deleted permanently. This cannot be undone.",
+                  "dropAllConfirmLabel": "Drop all",
+                  "restoreFailed": "Stash could not be restored.",
+                  "conflictNamed": "Stash applied with conflicts. Resolve them, then drop {{value0}} manually — it was kept.",
+                  "conflict": "Stash applied with conflicts. Resolve them, then drop the stash manually — it was kept.",
+                  "pushUntrackedTitle": "Stash tracked and untracked changes",
+                  "pushTitle": "Stash tracked changes",
+                  "pushDescription": "Optionally name this stash. Leave it empty to use Git’s default message.",
+                  "pushConfirmLabel": "Stash",
+                  "noInitialCommit": "This repository has no commits yet. Make an initial commit before stashing.",
+                  "pushFailed": "Could not stash changes.",
+                  "nothingStashed": "Nothing to stash — the working tree is already clean.",
+                  "entryMoved": "The stash list changed since it was opened. Reopen the menu and try again."
+                },
+                "menu": {
+                  "items": {
+                    "busy": "Another git operation is in progress…",
+                    "loading": "Checking stashes…",
+                    "nothing": "Nothing to stash",
+                    "untrackedOnly": "Only untracked files — use Stash (Include Untracked)",
+                    "noPop": "No stashes to pop",
+                    "noApply": "No stashes to apply",
+                    "noDrop": "No stashes to drop",
+                    "stash": "Stash",
+                    "stashHint": "Stash tracked changes and restore a clean working tree",
+                    "stashUntracked": "Stash (Include Untracked)",
+                    "stashUntrackedHint": "Stash tracked and untracked changes",
+                    "popLatest": "Pop Latest Stash",
+                    "popLatestHint": "Apply the most recent stash and remove it from the list",
+                    "popPick": "Pop Stash…",
+                    "popPickHint": "Choose a stash to apply and remove",
+                    "applyLatest": "Apply Latest Stash",
+                    "applyLatestHint": "Apply the most recent stash and keep it in the list",
+                    "applyPick": "Apply Stash…",
+                    "applyPickHint": "Choose a stash to apply and keep",
+                    "dropPick": "Drop Stash…",
+                    "dropPickHint": "Choose a stash to delete permanently",
+                    "dropAll": "Drop All Stashes…",
+                    "dropAllHint": "Delete every stash permanently",
+                    "group": "Stash",
+                    "groupOne": "1 stash available",
+                    "groupMany": "{{value0}} stashes available",
+                    "groupStashOnly": "Stash changes; no stashes to restore yet",
+                    "groupEmpty": "No changes to stash and no stashes to restore"
+                  }
+                }
               }
             }
           },
@@ -12005,6 +12065,18 @@
             "e3ee2daa32": "Stack #{{value0}}",
             "cb440931b7": "{{value0}} of {{value1}} · {{value2}}",
             "525259fa17": "Stack details are temporarily unavailable."
+          },
+          "SourceControlStashMessageDialog": {
+            "placeholder": "Stash message",
+            "cancel": "Cancel"
+          },
+          "SourceControlStashPicker": {
+            "loadFailed": "Could not read the stash list.",
+            "loading": "Reading stashes…",
+            "empty": "No stashes."
+          },
+          "useSourceControlStash": {
+            "failed": "Stash operation failed."
           }
         }
       },

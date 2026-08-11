@@ -15,10 +15,11 @@ import type {
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
+import type { GitStashProvider } from './git-stash-provider'
 
 export type { GitProviderStatusOptions } from './git-provider-status-options'
 
-export type IGitProvider = {
+export type IGitProvider = GitStashProvider & {
   getStatus(worktreePath: string, options?: GitProviderStatusOptions): Promise<GitStatusResult>
   getSubmoduleStatus(
     worktreePath: string,

@@ -51,7 +51,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import {
@@ -69,6 +68,10 @@ import {
   type DropdownActionKind,
   type DropdownEntry
 } from './source-control-dropdown-items'
+import { SourceControlDropdownEntries } from './source-control-dropdown-entries'
+import { useSourceControlStash } from './useSourceControlStash'
+import { SourceControlStashPicker } from './SourceControlStashPicker'
+import { SourceControlStashMessageDialog } from './SourceControlStashMessageDialog'
 import { isCommitMessageFieldDisabled } from './source-control-commit-eligibility'
 import { BulkActionBar } from './BulkActionBar'
 import { useSourceControlSelection, type FlatEntry } from './useSourceControlSelection'
@@ -1320,6 +1323,19 @@ function SourceControlInner(): React.JSX.Element {
       console.warn('[SourceControl] post-mutation git status refresh failed', error)
     }
   }, [refreshActiveGitStatus])
+
+  const stash = useSourceControlStash(
+    {
+      // Why: route by the repo OWNER host, matching every other git mutation here.
+      settings: activeRepoSettings,
+      worktreeId: activeWorktreeId ?? null,
+      worktreePath: worktreePath ?? null,
+      connectionId: getConnectionId(activeWorktreeId ?? null) ?? undefined,
+      isGitWorkspace: !isFolder
+    },
+    confirmAction,
+    refreshActiveGitStatusAfterMutation
+  )
 
   // Why: when status is truncated, offer once per worktree to .gitignore the flooding folder; local-only since the SSH huge-folder write path isn't wired.
   useEffect(() => {
@@ -4358,7 +4374,10 @@ function SourceControlInner(): React.JSX.Element {
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
         hasCurrentBranch: Boolean(branchName),
         canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
-        rebaseBaseRef: effectiveBaseRef
+        rebaseBaseRef: effectiveBaseRef,
+        untrackedCount: grouped.untracked.length,
+        trackedChangeCount: grouped.staged.length + grouped.unstaged.length,
+        stashCount: stash.stashCount
       }),
     [
       commitMessage,
@@ -4383,8 +4402,23 @@ function SourceControlInner(): React.JSX.Element {
       branchName,
       effectiveBaseRef,
       remoteStatusForActions,
+      grouped.untracked.length,
+      grouped.unstaged.length,
+      stash.stashCount,
       unresolvedConflicts.length
     ]
+  )
+
+  // Why: read the stash count when the menu opens rather than polling it for
+  // every worktree — it is only ever displayed here.
+  const { refreshStashCount, runStashAction } = stash
+  const handleDropdownOpenChange = useCallback(
+    (open: boolean): void => {
+      if (open) {
+        void refreshStashCount()
+      }
+    },
+    [refreshStashCount]
   )
 
   // Dispatch primary + dropdown action kinds to their handlers.
@@ -4415,6 +4449,16 @@ function SourceControlInner(): React.JSX.Element {
         case 'push_create_pr':
           void runCreatePrIntent()
           return
+        case 'stash':
+        case 'stash_include_untracked':
+        case 'stash_pop_latest':
+        case 'stash_pop_pick':
+        case 'stash_apply_latest':
+        case 'stash_apply_pick':
+        case 'stash_drop_pick':
+        case 'stash_drop_all':
+          void runStashAction(kind)
+          return
         case 'push':
         case 'force_push':
         case 'pull':
@@ -4427,6 +4471,7 @@ function SourceControlInner(): React.JSX.Element {
       }
     },
     [
+      runStashAction,
       handleCommit,
       handleCreatePullRequest,
       handleAbortMerge,
@@ -5898,6 +5943,7 @@ function SourceControlInner(): React.JSX.Element {
                 onFixPushFailureWithAI={handleFixPushFailureWithAI}
                 onPrimaryAction={handlePrimaryClick}
                 onDropdownAction={handleActionInvoke}
+                onDropdownOpenChange={handleDropdownOpenChange}
               />
             ))}
 
@@ -6334,6 +6380,19 @@ function SourceControlInner(): React.JSX.Element {
         onConfirm={confirmPendingDiscard}
       />
 
+      <SourceControlStashPicker
+        mode={stash.pickerMode}
+        loadEntries={stash.listEntries}
+        onSelect={(entry) => void stash.selectPickedStash(entry)}
+        onClose={stash.closePicker}
+      />
+
+      <SourceControlStashMessageDialog
+        mode={stash.messagePromptMode}
+        onSubmit={(message) => void stash.submitStashMessage(message)}
+        onCancel={stash.cancelStashMessage}
+      />
+
       <Dialog open={baseRefDialogOpen} onOpenChange={setBaseRefDialogOpen}>
         <DialogContent className="flex max-h-[min(85vh,36rem)] max-w-xl flex-col overflow-hidden">
           <DialogHeader className="shrink-0">
@@ -6523,6 +6582,8 @@ type CommitAreaProps = {
   onFixPushFailureWithAI: (promptOverride?: string) => Promise<boolean> | boolean
   onPrimaryAction: () => void
   onDropdownAction: (kind: DropdownActionKind) => void
+  /** Why: the stash count is read on demand, so the menu opening is the trigger. */
+  onDropdownOpenChange?: (open: boolean) => void
 }
 
 export function CommitArea({
@@ -6564,7 +6625,8 @@ export function CommitArea({
   onFixCommitFailureWithAI,
   onFixPushFailureWithAI,
   onPrimaryAction,
-  onDropdownAction
+  onDropdownAction,
+  onDropdownOpenChange
 }: CommitAreaProps): React.JSX.Element {
   // Why: cap at 12 rows so a pasted multi-page message doesn't push the Commit button off-screen (textarea scrolls internally past that).
   const rows = getCommitMessageTextareaRows(commitMessage)
@@ -6647,43 +6709,11 @@ export function CommitArea({
   )
   const dropdownMenuContent = (
     <DropdownMenuContent align="end" className="min-w-[14rem]">
-      {dropdownItems.map((entry, index) =>
-        entry.kind === 'separator' ? (
-          <DropdownMenuSeparator key={`sep-${index}`} />
-        ) : (
-          <Tooltip key={entry.kind}>
-            <TooltipTrigger asChild>
-              <div className="block">
-                <DropdownMenuItem
-                  disabled={entry.disabled}
-                  title={entry.title}
-                  variant={entry.variant}
-                  className="w-full"
-                  onSelect={(event) => {
-                    if (entry.disabled) {
-                      event.preventDefault()
-                      return
-                    }
-                    onDropdownAction(entry.kind)
-                  }}
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span>{entry.label}</span>
-                    {entry.hint ? (
-                      <span className="truncate text-[10px] text-muted-foreground">
-                        {entry.hint}
-                      </span>
-                    ) : null}
-                  </span>
-                </DropdownMenuItem>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="left" sideOffset={8} className="max-w-72">
-              {entry.title}
-            </TooltipContent>
-          </Tooltip>
-        )
-      )}
+      <SourceControlDropdownEntries
+        entries={dropdownItems}
+        onAction={onDropdownAction}
+        withTooltips
+      />
     </DropdownMenuContent>
   )
 
@@ -6818,7 +6848,7 @@ export function CommitArea({
               ) : null}
             </TooltipContent>
           </Tooltip>
-          <DropdownMenu>
+          <DropdownMenu onOpenChange={onDropdownOpenChange}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="inline-flex shrink-0">

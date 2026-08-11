@@ -25,7 +25,7 @@ import {
 } from '../../shared/source-control-ai'
 import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
-import type { GitProviderStatusOptions } from '../providers/types'
+import type { GitProviderStatusOptions, IGitProvider } from '../providers/types'
 import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
 import {
   abortMerge,
@@ -48,6 +48,20 @@ import {
   unstageFile
 } from '../git/status'
 import { checkoutBranch, listLocalBranches } from '../git/checkout'
+import {
+  applyStash,
+  clearStashes,
+  dropStash,
+  listStashes,
+  popStash,
+  stashChanges
+} from '../git/stash'
+import type {
+  GitStashEntry,
+  GitStashMutationResult,
+  GitStashPushOptions,
+  GitStashPushResult
+} from '../../shared/git-stash-types'
 import type { RuntimeGitCheckoutResult, RuntimeGitLocalBranches } from '../../shared/runtime-types'
 import { getHistory as getGitHistory } from '../git/history'
 import { getUpstreamStatus } from '../git/upstream'
@@ -331,6 +345,83 @@ export class RuntimeGitCommands {
     }
     await checkoutBranch(target.worktree.path, branch, localGitOptionsForTarget(target))
     return { ok: true, branch }
+  }
+
+  // ─── Stash ─────────────────────────────────────────────────────────
+  // Why: ref/message validation lives in the shared stash commands that both
+  // hosts run, so these only resolve the target and pick the transport.
+
+  async listRuntimeGitStashes(worktreeSelector: string): Promise<GitStashEntry[]> {
+    const { target, provider } = await this.resolveStashTarget(worktreeSelector)
+    return provider
+      ? provider.listStashes(target.worktree.path)
+      : listStashes(target.worktree.path, localGitOptionsForTarget(target))
+  }
+
+  async pushRuntimeGitStash(
+    worktreeSelector: string,
+    pushOptions: GitStashPushOptions
+  ): Promise<GitStashPushResult> {
+    const { target, provider } = await this.resolveStashTarget(worktreeSelector)
+    return provider
+      ? provider.stashChanges(target.worktree.path, pushOptions)
+      : stashChanges(target.worktree.path, pushOptions, localGitOptionsForTarget(target))
+  }
+
+  async applyRuntimeGitStash(
+    worktreeSelector: string,
+    ref: string | null,
+    expectedCommitOid?: string
+  ): Promise<GitStashMutationResult> {
+    const { target, provider } = await this.resolveStashTarget(worktreeSelector)
+    return provider
+      ? provider.applyStash(target.worktree.path, ref, expectedCommitOid)
+      : applyStash(target.worktree.path, ref, expectedCommitOid, localGitOptionsForTarget(target))
+  }
+
+  async popRuntimeGitStash(
+    worktreeSelector: string,
+    ref: string | null,
+    expectedCommitOid?: string
+  ): Promise<GitStashMutationResult> {
+    const { target, provider } = await this.resolveStashTarget(worktreeSelector)
+    return provider
+      ? provider.popStash(target.worktree.path, ref, expectedCommitOid)
+      : popStash(target.worktree.path, ref, expectedCommitOid, localGitOptionsForTarget(target))
+  }
+
+  async dropRuntimeGitStash(
+    worktreeSelector: string,
+    ref: string,
+    expectedCommitOid?: string
+  ): Promise<void> {
+    const { target, provider } = await this.resolveStashTarget(worktreeSelector)
+    if (provider) {
+      return provider.dropStash(target.worktree.path, ref, expectedCommitOid)
+    }
+    await dropStash(target.worktree.path, ref, expectedCommitOid, localGitOptionsForTarget(target))
+  }
+
+  async clearRuntimeGitStashes(worktreeSelector: string): Promise<void> {
+    const { target, provider } = await this.resolveStashTarget(worktreeSelector)
+    if (provider) {
+      return provider.clearStashes(target.worktree.path)
+    }
+    await clearStashes(target.worktree.path, localGitOptionsForTarget(target))
+  }
+
+  private async resolveStashTarget(
+    worktreeSelector: string
+  ): Promise<{ target: RuntimeGitTarget; provider: IGitProvider | null }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    if (!target.connectionId) {
+      return { target, provider: null }
+    }
+    const provider = getSshGitProvider(target.connectionId)
+    if (!provider) {
+      throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    }
+    return { target, provider }
   }
 
   async listRuntimeGitLocalBranches(worktreeSelector: string): Promise<RuntimeGitLocalBranches> {

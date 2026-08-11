@@ -18,6 +18,11 @@ import type {
   DashboardSpawnAgentArgs
 } from '../shared/dashboard-snapshot'
 import type {
+  GitStashEntry,
+  GitStashMutationResult,
+  GitStashPushResult
+} from '../shared/git-stash-types'
+import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../shared/terminal-preview'
@@ -3086,6 +3091,33 @@ export type PreloadApi = {
       filePaths: string[]
       connectionId?: string
     }) => Promise<void>
+    stashList: (args: { worktreePath: string; connectionId?: string }) => Promise<GitStashEntry[]>
+    stashPush: (args: {
+      worktreePath: string
+      includeUntracked?: boolean
+      message?: string
+      connectionId?: string
+    }) => Promise<GitStashPushResult>
+    /** `ref` omitted or null targets the newest entry. */
+    stashApply: (args: {
+      worktreePath: string
+      ref?: string | null
+      expectedCommitOid?: string
+      connectionId?: string
+    }) => Promise<GitStashMutationResult>
+    stashPop: (args: {
+      worktreePath: string
+      ref?: string | null
+      expectedCommitOid?: string
+      connectionId?: string
+    }) => Promise<GitStashMutationResult>
+    stashDrop: (args: {
+      worktreePath: string
+      ref: string
+      expectedCommitOid?: string
+      connectionId?: string
+    }) => Promise<void>
+    stashClear: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     remoteFileUrl: (args: {
       worktreePath: string
       relativePath: string

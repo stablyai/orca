@@ -11,8 +11,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
@@ -24,6 +22,7 @@ import { translate } from '@/i18n/i18n'
 import type { HostedReviewProvider } from '../../../../shared/hosted-review'
 import { stripBaseRef } from './useCreatePullRequestDialogFields'
 import type { DropdownActionKind, DropdownEntry } from './source-control-dropdown-items'
+import { SourceControlDropdownEntries } from './source-control-dropdown-entries'
 import { CreateHostedReviewComposerFields } from './CreateHostedReviewComposerFields'
 import {
   RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS,
@@ -294,34 +293,10 @@ export function CreateHostedReviewComposer({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[14rem]">
-                {effectiveDropdownItems.map((entry, index) =>
-                  entry.kind === 'separator' ? (
-                    <DropdownMenuSeparator key={`sep-${index}`} />
-                  ) : (
-                    <DropdownMenuItem
-                      key={entry.kind}
-                      disabled={entry.disabled}
-                      title={entry.title}
-                      variant={entry.variant}
-                      onSelect={(event) => {
-                        if (entry.disabled) {
-                          event.preventDefault()
-                          return
-                        }
-                        onDropdownAction(entry.kind)
-                      }}
-                    >
-                      <span className="flex min-w-0 flex-col">
-                        <span>{entry.label}</span>
-                        {entry.hint ? (
-                          <span className="truncate text-[10px] text-muted-foreground">
-                            {entry.hint}
-                          </span>
-                        ) : null}
-                      </span>
-                    </DropdownMenuItem>
-                  )
-                )}
+                <SourceControlDropdownEntries
+                  entries={effectiveDropdownItems}
+                  onAction={onDropdownAction}
+                />
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}

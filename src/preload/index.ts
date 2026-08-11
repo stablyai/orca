@@ -3485,6 +3485,34 @@ const api = {
       filePaths: string[]
       connectionId?: string
     }): Promise<void> => ipcRenderer.invoke('git:bulkDiscard', args),
+    stashList: (args: { worktreePath: string; connectionId?: string }) =>
+      ipcRenderer.invoke('git:stashList', args),
+    stashPush: (args: {
+      worktreePath: string
+      includeUntracked?: boolean
+      message?: string
+      connectionId?: string
+    }) => ipcRenderer.invoke('git:stashPush', args),
+    stashApply: (args: {
+      worktreePath: string
+      ref?: string | null
+      expectedCommitOid?: string
+      connectionId?: string
+    }) => ipcRenderer.invoke('git:stashApply', args),
+    stashPop: (args: {
+      worktreePath: string
+      ref?: string | null
+      expectedCommitOid?: string
+      connectionId?: string
+    }) => ipcRenderer.invoke('git:stashPop', args),
+    stashDrop: (args: {
+      worktreePath: string
+      ref: string
+      expectedCommitOid?: string
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:stashDrop', args),
+    stashClear: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
+      ipcRenderer.invoke('git:stashClear', args),
     remoteFileUrl: (args: {
       worktreePath: string
       relativePath: string
