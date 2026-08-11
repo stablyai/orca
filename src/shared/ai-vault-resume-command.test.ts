@@ -26,6 +26,20 @@ describe('getAiVaultAgentProviderSession', () => {
       id: 'codex-1'
     })
     expect(getAiVaultAgentProviderSession({ agent: 'pi', sessionId: 'pi-1' })).toBeNull()
+    expect(
+      getAiVaultAgentProviderSession({
+        agent: 'prime-agent',
+        sessionId: 'prime-1',
+        filePath: '/home/ada/.prime/agent/sessions/prime-1.jsonl'
+      })
+    ).toEqual({
+      key: 'session_id',
+      id: 'prime-1',
+      transcriptPath: '/home/ada/.prime/agent/sessions/prime-1.jsonl'
+    })
+    expect(
+      getAiVaultAgentProviderSession({ agent: 'prime-agent', sessionId: 'prime-1' })
+    ).toBeNull()
     expect(getAiVaultAgentProviderSession({ agent: 'cursor', sessionId: 'cursor-1' })).toBeNull()
   })
 })
